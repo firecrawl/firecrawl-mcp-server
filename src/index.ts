@@ -412,6 +412,35 @@ Check the status of a crawl job.
   },
 };
 
+const CANCEL_CRAWL_TOOL: Tool = {
+  name: 'firecrawl_cancel_crawl',
+  description: `
+Cancel a running crawl job.
+
+**Best for:** Stopping crawl operations that are taking too long or are no longer needed.
+**Usage Example:**
+\`\`\`json
+{
+  "name": "firecrawl_cancel_crawl",
+  "arguments": {
+    "id": "550e8400-e29b-41d4-a716-446655440000"
+  }
+}
+\`\`\`
+**Returns:** Confirmation that the crawl job has been cancelled.
+`,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      id: {
+        type: 'string',
+        description: 'Crawl job ID to cancel',
+      },
+    },
+    required: ['id'],
+  },
+};
+
 const SEARCH_TOOL: Tool = {
   name: 'firecrawl_search',
   description: `
@@ -818,6 +847,15 @@ function isStatusCheckOptions(args: unknown): args is StatusCheckOptions {
   );
 }
 
+function isCancelCrawlOptions(args: unknown): args is StatusCheckOptions {
+  return (
+    typeof args === 'object' &&
+    args !== null &&
+    'id' in args &&
+    typeof (args as { id: unknown }).id === 'string'
+  );
+}
+
 function isSearchOptions(args: unknown): args is SearchOptions {
   return (
     typeof args === 'object' &&
@@ -965,6 +1003,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     MAP_TOOL,
     CRAWL_TOOL,
     CHECK_CRAWL_STATUS_TOOL,
+    CANCEL_CRAWL_TOOL,
     SEARCH_TOOL,
     EXTRACT_TOOL,
     DEEP_RESEARCH_TOOL,
@@ -1151,6 +1190,28 @@ ${
 }`;
         return {
           content: [{ type: 'text', text: trimResponseText(status) }],
+          isError: false,
+        };
+      }
+
+      case 'firecrawl_cancel_crawl': {
+        if (!isCancelCrawlOptions(args)) {
+          throw new Error('Invalid arguments for firecrawl_cancel_crawl');
+        }
+        const response = await withRetry(
+          async () => client.cancelCrawl(args.id),
+          'cancel crawl operation'
+        );
+        if (!response.success) {
+          throw new Error(response.error || 'Failed to cancel crawl');
+        }
+        return {
+          content: [
+            {
+              type: 'text',
+              text: trimResponseText(`Crawl job ${args.id} has been cancelled successfully.`),
+            },
+          ],
           isError: false,
         };
       }

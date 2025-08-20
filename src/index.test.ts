@@ -76,6 +76,7 @@ interface MockFirecrawlClient {
   checkBatchScrapeStatus(id: string): Promise<BatchScrapeStatusResponse>;
   asyncCrawlUrl(url: string, options?: any): Promise<CrawlResponse>;
   checkCrawlStatus(id: string): Promise<CrawlStatusResponse>;
+  cancelCrawl(id: string): Promise<{ success: boolean; error?: string }>;
   mapUrl(url: string, options?: any): Promise<{ links: string[] }>;
 }
 
@@ -257,6 +258,27 @@ describe('Firecrawl Tool Tests', () => {
     });
   });
 
+  // Test cancel crawl functionality
+  test('should handle cancel crawl request', async () => {
+    const crawlId = 'test-crawl-id';
+
+    mockClient.cancelCrawl.mockResolvedValueOnce({
+      success: true,
+    });
+
+    const response = await requestHandler({
+      method: 'call_tool',
+      params: {
+        name: 'firecrawl_cancel_crawl',
+        arguments: { id: crawlId },
+      },
+    });
+
+    expect(response.isError).toBe(false);
+    expect(response.content[0].text).toContain('cancelled successfully');
+    expect(mockClient.cancelCrawl).toHaveBeenCalledWith(crawlId);
+  });
+
   // Test error handling
   test('should handle API errors', async () => {
     const url = 'https://example.com';
@@ -365,6 +387,22 @@ async function handleRequest(
             {
               type: 'text',
               text: `Started crawl for ${args.url} with job ID: ${response.id}`,
+            },
+          ],
+          isError: false,
+        };
+      }
+
+      case 'firecrawl_cancel_crawl': {
+        const response = await client.cancelCrawl(args.id);
+        if (!response.success) {
+          throw new Error(response.error || 'Failed to cancel crawl');
+        }
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Crawl job ${args.id} has been cancelled successfully.`,
             },
           ],
           isError: false,
