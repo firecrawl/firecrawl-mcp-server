@@ -222,14 +222,29 @@ export class MCPStreamableHTTPServer {
       // Handle the request based on method
       const response = await this.processRequest(request, req, res);
       
-      // Send response only if there is one (notifications don't get responses per JSON-RPC 2.0)
-      if (response !== null) {
-        res.json(response);
-      } else {
-        // For notifications, per MCP STREAMABLE_HTTP spec:
-        // "MUST return HTTP status code 202 Accepted with no body" if accepted
-        res.status(202).end();
+      // Handle notification responses according to MCP spec and client compatibility
+      if (request.method === 'notifications/initialized') {
+        const sessionId = req.headers['mcp-session-id'] as string;
+        const session = this.sessions.get(sessionId);
+        const protocolVersion = session?.protocolVersion || MCP_PROTOCOL_VERSION;
+        
+        // For newer protocol versions (2025-06-18, 2025-03-26), return HTTP 202 per spec
+        // For older protocols and unknown clients, return JSON response for compatibility
+        if (protocolVersion === '2025-06-18' || protocolVersion === '2025-03-26') {
+          // Check if client is Cursor (needs JSON response even for new protocols)
+          const userAgent = req.headers['user-agent'] || '';
+          const isCursor = userAgent.includes('Cursor');
+          
+          if (!isCursor) {
+            // Return HTTP 202 Accepted with no body per MCP spec
+            res.status(202).end();
+            return;
+          }
+        }
       }
+      
+      // Send standard JSON response
+      res.json(response);
       
     } catch (error) {
       console.error('Error handling MCP request:', error);
@@ -281,7 +296,7 @@ export class MCPStreamableHTTPServer {
     request: JSONRPCRequest, 
     req: Request, 
     res: Response
-  ): Promise<JSONRPCResponse | null> {
+  ): Promise<JSONRPCResponse> {
     
     const sessionId = req.headers['mcp-session-id'] as string;
     
@@ -325,24 +340,16 @@ export class MCPStreamableHTTPServer {
   private handleInitialize(request: JSONRPCRequest, res: Response): JSONRPCResponse {
     const params = request.params || {};
     
-    // Validate initialization parameters
-    if (!params.protocolVersion) {
-      return {
-        jsonrpc: '2.0',
-        id: request.id,
-        error: {
-          code: JSONRPC_ERRORS.INVALID_PARAMS,
-          message: 'Missing required parameter: protocolVersion'
-        }
-      };
-    }
-
-    // Check protocol version compatibility
-    const clientVersion = params.protocolVersion;
+    // Use default protocol version if not specified (2025-06-18 is the latest/default)
+    const clientVersion = params.protocolVersion || MCP_PROTOCOL_VERSION;
     const supportedVersion = this.negotiateProtocolVersion(clientVersion);
     
     // Log protocol version negotiation for debugging
-    console.log(`Protocol version negotiation: Client requested "${clientVersion}", using "${supportedVersion}"`);
+    if (params.protocolVersion) {
+      console.log(`Protocol version negotiation: Client requested "${clientVersion}", using "${supportedVersion}"`);
+    } else {
+      console.log(`Protocol version negotiation: Client didn't specify version, using default "${supportedVersion}"`);
+    }
     
     if (!supportedVersion) {
       console.warn(`Unsupported protocol version: ${clientVersion}. Supported versions: ${SUPPORTED_VERSIONS.join(', ')}`);
@@ -592,7 +599,7 @@ export class MCPStreamableHTTPServer {
     }
   }
 
-  private handleInitializedNotification(request: JSONRPCRequest, sessionId?: string): JSONRPCResponse | null {
+  private handleInitializedNotification(request: JSONRPCRequest, sessionId?: string): JSONRPCResponse {
     console.log('✅ Client initialized notification received');
     
     // This is a notification, so no response is needed per JSON-RPC 2.0 spec
@@ -605,9 +612,14 @@ export class MCPStreamableHTTPServer {
       }
     }
     
-    // JSON-RPC 2.0: Notifications must not receive a response
-    // Return null to indicate no response should be sent
-    return null;
+    // For compatibility with clients like Cursor, return a success response
+    // Even though JSON-RPC 2.0 spec says notifications shouldn't have responses
+    // Handle null id for Dify compatibility (Dify requires valid id in responses)
+    return {
+      jsonrpc: '2.0',
+      id: request.id !== null ? request.id : 0,
+      result: {}
+    };
   }
 
   private handlePromptsList(request: JSONRPCRequest, sessionId?: string): JSONRPCResponse {

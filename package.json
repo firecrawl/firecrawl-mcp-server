@@ -44,7 +44,7 @@
     "jest-mock-extended": "^4.0.0-beta1",
     "prettier": "^3.1.1",
     "ts-jest": "^29.1.1",
-    "typescript": "^5.3.3"
+    "typescript": "^5.9.2"
   },
   "engines": {
     "node": ">=18.0.0"
