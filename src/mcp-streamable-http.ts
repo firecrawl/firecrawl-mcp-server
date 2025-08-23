@@ -4,14 +4,26 @@
  * MCP STREAMABLE_HTTP Standard Implementation
  * 
  * This module implements the MCP STREAMABLE_HTTP transport protocol
- * according to the official MCP specification (2025-06-18).
+ * according to the official MCP specification with backward compatibility.
+ * 
+ * Protocol Version Support:
+ * - 2025-06-18: Latest specification (preferred)
+ * - 2025-03-26: Streamable HTTP transport specification  
+ * - 2024-11-05: Previous stable version
+ * - 2024-10-07: Legacy support
+ * 
+ * Version Negotiation Strategy:
+ * 1. Exact match preferred - use client's requested version if supported
+ * 2. Smart negotiation - find highest supported version ≤ client version
+ * 3. Maximum compatibility - use oldest version for very old clients
  * 
  * Key features:
  * - Strict JSON-RPC 2.0 compliance
  * - Standard MCP initialization flow
+ * - Intelligent protocol version negotiation
  * - Proper session management
- * - Protocol version negotiation
  * - Standardized error handling
+ * - Full backward compatibility
  */
 
 import express, { Request, Response } from 'express';
@@ -23,9 +35,14 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 
-// MCP Protocol Constants
+// MCP Protocol Constants - Backward Compatible
 const MCP_PROTOCOL_VERSION = '2025-06-18';
-const SUPPORTED_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
+const SUPPORTED_VERSIONS = [
+  '2025-06-18',  // Latest specification
+  '2025-03-26',  // Streamable HTTP transport specification  
+  '2024-11-05',  // Previous stable version
+  '2024-10-07'   // Legacy support
+];
 
 // JSON-RPC Error Codes (standard)
 const JSONRPC_ERRORS = {
@@ -205,8 +222,14 @@ export class MCPStreamableHTTPServer {
       // Handle the request based on method
       const response = await this.processRequest(request, req, res);
       
-      // Send response
-      res.json(response);
+      // Send response only if there is one (notifications don't get responses per JSON-RPC 2.0)
+      if (response !== null) {
+        res.json(response);
+      } else {
+        // For notifications, per MCP STREAMABLE_HTTP spec:
+        // "MUST return HTTP status code 202 Accepted with no body" if accepted
+        res.status(202).end();
+      }
       
     } catch (error) {
       console.error('Error handling MCP request:', error);
@@ -258,7 +281,7 @@ export class MCPStreamableHTTPServer {
     request: JSONRPCRequest, 
     req: Request, 
     res: Response
-  ): Promise<JSONRPCResponse> {
+  ): Promise<JSONRPCResponse | null> {
     
     const sessionId = req.headers['mcp-session-id'] as string;
     
@@ -318,7 +341,11 @@ export class MCPStreamableHTTPServer {
     const clientVersion = params.protocolVersion;
     const supportedVersion = this.negotiateProtocolVersion(clientVersion);
     
+    // Log protocol version negotiation for debugging
+    console.log(`Protocol version negotiation: Client requested "${clientVersion}", using "${supportedVersion}"`);
+    
     if (!supportedVersion) {
+      console.warn(`Unsupported protocol version: ${clientVersion}. Supported versions: ${SUPPORTED_VERSIONS.join(', ')}`);
       return {
         jsonrpc: '2.0',
         id: request.id,
@@ -483,13 +510,27 @@ export class MCPStreamableHTTPServer {
   }
 
   private negotiateProtocolVersion(clientVersion: string): string | null {
-    // Exact match preferred
+    // Exact match preferred - return client's preferred version if supported
     if (SUPPORTED_VERSIONS.includes(clientVersion)) {
       return clientVersion;
     }
     
-    // Fallback to latest supported version
-    return SUPPORTED_VERSIONS[0];
+    // Smart version negotiation for backward compatibility
+    const clientVersionParts = clientVersion.split('-');
+    const clientDate = clientVersionParts[0];
+    
+    // Find the highest supported version that's not newer than client
+    for (const supportedVersion of SUPPORTED_VERSIONS) {
+      const supportedDate = supportedVersion.split('-')[0];
+      
+      // If supported version is same or older than client's, use it
+      if (supportedDate <= clientDate) {
+        return supportedVersion;
+      }
+    }
+    
+    // If client is too old, use the oldest supported version for maximum compatibility  
+    return SUPPORTED_VERSIONS[SUPPORTED_VERSIONS.length - 1];
   }
 
   private async executeToolCall(toolName: string, args: any): Promise<any> {
@@ -551,10 +592,10 @@ export class MCPStreamableHTTPServer {
     }
   }
 
-  private handleInitializedNotification(request: JSONRPCRequest, sessionId?: string): JSONRPCResponse {
+  private handleInitializedNotification(request: JSONRPCRequest, sessionId?: string): JSONRPCResponse | null {
     console.log('✅ Client initialized notification received');
     
-    // This is a notification, so no response is needed
+    // This is a notification, so no response is needed per JSON-RPC 2.0 spec
     // But we can use this to do any post-initialization setup
     if (sessionId) {
       const session = this.sessions.get(sessionId);
@@ -564,12 +605,9 @@ export class MCPStreamableHTTPServer {
       }
     }
     
-    // For notifications, we return a success response (though it's not strictly required)
-    return {
-      jsonrpc: '2.0',
-      id: request.id,
-      result: {}
-    };
+    // JSON-RPC 2.0: Notifications must not receive a response
+    // Return null to indicate no response should be sent
+    return null;
   }
 
   private handlePromptsList(request: JSONRPCRequest, sessionId?: string): JSONRPCResponse {

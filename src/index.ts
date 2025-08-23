@@ -1453,8 +1453,13 @@ function isValidOrigin(origin: string): boolean {
 }
 
 function isValidProtocolVersion(version: string): boolean {
-  // Support current and future protocol versions
-  const supportedVersions = ['2025-06-18', '2025-03-26', '2024-11-05', '2024-10-07'];
+  // Support current and future protocol versions with backward compatibility
+  const supportedVersions = [
+    '2025-06-18',  // Latest specification
+    '2025-03-26',  // Streamable HTTP transport specification
+    '2024-11-05',  // Previous stable version
+    '2024-10-07'   // Legacy support
+  ];
   return supportedVersions.includes(version);
 }
 
