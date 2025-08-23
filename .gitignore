@@ -24,6 +24,9 @@ claude_desktop_config.json
 IMPLEMENTATION.md
 v1.2.md
 
+# PromptX
+.promptx/
+
 # OS
 .DS_Store
 Thumbs.db 

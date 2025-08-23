@@ -93,7 +93,27 @@ Add this to your `./codeium/windsurf/model_config.json`:
 }
 ```
 
-### Running with SSE Local Mode
+### Running with Streamable HTTP Mode (Recommended)
+
+To run the server using the new Streamable HTTP transport (MCP 2025-06-18 protocol):
+
+```bash
+env STREAMABLE_HTTP=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY FIRECRAWL_API_URL=http://10.10.1.81:3002 HOST=0.0.0.0 PORT=3000 npx -y firecrawl-mcp
+```
+
+**Features:**
+- ✅ Full MCP 2025-06-18 protocol compliance
+- ✅ Protocol version header support
+- ✅ Session management
+- ✅ Security headers validation
+- ✅ Health check endpoint
+- ✅ Configurable host and port
+
+**Endpoints:**
+- MCP endpoint: `http://localhost:3000/mcp`
+- Health check: `http://localhost:3000/health`
+
+### Running with SSE Local Mode (Legacy)
 
 To run the server using Server-Sent Events (SSE) locally instead of the default stdio transport:
 
@@ -179,6 +199,20 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 - `FIRECRAWL_API_URL` (Optional): Custom API endpoint for self-hosted instances
   - Example: `https://firecrawl.your-domain.com`
   - If not provided, the cloud API will be used (requires API key)
+
+#### Transport Configuration
+
+##### Streamable HTTP Transport
+- `STREAMABLE_HTTP`: Enable Streamable HTTP transport (MCP 2025-06-18)
+  - Set to `true` to use the new Streamable HTTP transport
+  - Default: `false` (uses stdio transport)
+- `HOST`: Server host binding (default: `0.0.0.0`)
+- `PORT`: Server port (default: `3000`)
+- `ALLOWED_ORIGINS`: Comma-separated list of allowed origins for CORS
+
+##### Legacy SSE Transport
+- `SSE_LOCAL`: Enable local SSE transport (legacy)
+- `CLOUD_SERVICE`: Enable cloud SSE transport (legacy)
 
 #### Optional Configuration
 
