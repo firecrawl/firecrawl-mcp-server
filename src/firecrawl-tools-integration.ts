@@ -5,12 +5,7 @@
  * MCP STREAMABLE_HTTP server implementation.
  */
 
-import FirecrawlApp, {
-  type ScrapeParams,
-  type MapParams,
-  type CrawlParams,
-  type FirecrawlDocument,
-} from '@mendable/firecrawl-js';
+import Firecrawl from '@mendable/firecrawl-js';
 
 // Configuration
 const CONFIG = {
@@ -62,8 +57,8 @@ async function withRetry<T>(
   }
 }
 
-// Type guards
-function isScrapeOptions(args: unknown): args is ScrapeParams & { url: string } {
+// Type guards (using any type for v2 compatibility)
+function isScrapeOptions(args: unknown): args is any {
   return (
     typeof args === 'object' &&
     args !== null &&
@@ -72,7 +67,7 @@ function isScrapeOptions(args: unknown): args is ScrapeParams & { url: string } 
   );
 }
 
-function isMapOptions(args: unknown): args is MapParams & { url: string } {
+function isMapOptions(args: unknown): args is any {
   return (
     typeof args === 'object' &&
     args !== null &&
@@ -81,7 +76,7 @@ function isMapOptions(args: unknown): args is MapParams & { url: string } {
   );
 }
 
-function isCrawlOptions(args: unknown): args is CrawlParams & { url: string } {
+function isCrawlOptions(args: unknown): args is any {
   return (
     typeof args === 'object' &&
     args !== null &&
@@ -158,13 +153,34 @@ function isDeepResearchOptions(args: unknown): args is {
   );
 }
 
+function isBatchScrapeOptions(args: unknown): args is {
+  urls: string[];
+  scrapeOptions?: any;
+} {
+  if (typeof args !== 'object' || args === null) return false;
+  const { urls } = args as { urls?: unknown };
+  return Array.isArray(urls) && urls.every((url): url is string => typeof url === 'string');
+}
+
+function isCrawlParamsPreviewOptions(args: unknown): args is {
+  url: string;
+  prompt?: string;
+} {
+  return (
+    typeof args === 'object' &&
+    args !== null &&
+    'url' in args &&
+    typeof (args as { url: unknown }).url === 'string'
+  );
+}
+
 // Utility function to trim trailing whitespace from text responses
 function trimResponseText(text: string): string {
   return text.trim();
 }
 
-// Format results helper
-function formatResults(data: FirecrawlDocument[]): string {
+// Format results helper  
+function formatResults(data: any[]): string {
   return data
     .map((doc) => {
       const content = doc.markdown || doc.html || doc.rawHtml || 'No content';
@@ -176,14 +192,14 @@ ${doc.metadata?.title ? `Title: ${doc.metadata.title}` : ''}`;
 }
 
 export class FirecrawlToolsIntegration {
-  private client: FirecrawlApp;
+  private client: Firecrawl;
 
   constructor() {
     const FIRECRAWL_API_URL = process.env.FIRECRAWL_API_URL;
     const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY;
 
-    // Initialize Firecrawl client
-    this.client = new FirecrawlApp({
+    // Initialize Firecrawl client (v2 SDK)
+    this.client = new Firecrawl({
       apiKey: FIRECRAWL_API_KEY,
       ...(FIRECRAWL_API_URL ? { apiUrl: FIRECRAWL_API_URL } : {}),
     });
@@ -228,6 +244,15 @@ export class FirecrawlToolsIntegration {
         case 'firecrawl_generate_llmstxt':
           result = await this.handleGenerateLLMsText(args);
           break;
+        case 'firecrawl_batch_scrape':
+          result = await this.handleBatchScrape(args);
+          break;
+        case 'firecrawl_check_batch_status':
+          result = await this.handleCheckBatchStatus(args);
+          break;
+        case 'firecrawl_crawl_params_preview':
+          result = await this.handleCrawlParamsPreview(args);
+          break;
         default:
           throw new Error(`Unknown tool: ${toolName}`);
       }
@@ -266,33 +291,61 @@ export class FirecrawlToolsIntegration {
 
     const { url, ...options } = args;
     
+    // Set default formats if not specified
+    if (!options.formats || options.formats.length === 0) {
+      options.formats = ['markdown'];
+    }
+    
     return withRetry(async () => {
-      // Pass url as string and options as separate parameter
-      const response = await this.client.scrapeUrl(url, options);
+      // Use v2 SDK method: scrape instead of scrapeUrl
+      const response = await this.client.scrape(url, options);
 
-      if ('success' in response && !response.success) {
-        throw new Error(response.error || 'Scraping failed');
+      if ('success' in response && !(response as any).success) {
+        throw new Error((response as any).error || 'Scraping failed');
       }
 
+      // Handle v2 response structure: response.data.*
+      const data = (response as any).data || response;
+      
       // Format content based on requested formats
       const contentParts = [];
-      if (options.formats?.includes('markdown') && response.markdown) {
-        contentParts.push(response.markdown);
+      
+      // Try to extract content in priority order
+      const formats = options.formats || ['markdown'];
+      for (const format of formats) {
+        if (format === 'markdown' && data.markdown) {
+          contentParts.push(data.markdown);
+        } else if (format === 'html' && data.html) {
+          contentParts.push(data.html);
+        } else if (format === 'rawHtml' && data.rawHtml) {
+          contentParts.push(data.rawHtml);
+        } else if (format === 'summary' && data.summary) {
+          contentParts.push(data.summary);
+        } else if (format === 'links' && data.links) {
+          contentParts.push(JSON.stringify(data.links, null, 2));
+        }
       }
-      if (options.formats?.includes('html') && response.html) {
-        contentParts.push(response.html);
-      }
-      if (options.formats?.includes('rawHtml') && response.rawHtml) {
-        contentParts.push(response.rawHtml);
+      
+      // Fallback: if no content found but data exists, try to extract any available content
+      if (contentParts.length === 0 && data) {
+        if (data.markdown) {
+          contentParts.push(data.markdown);
+        } else if (data.html) {
+          contentParts.push(data.html);
+        } else if (data.rawHtml) {
+          contentParts.push(data.rawHtml);
+        } else if (data.content) {
+          contentParts.push(data.content);
+        }
       }
 
       return {
         url,
         content: contentParts.join('\n\n'),
-        metadata: response.metadata,
-        formats: options.formats || ['markdown']
+        metadata: data.metadata,
+        rawResponse: data // Include raw response for debugging
       };
-    }, `scrape ${url}`);
+    }, 'scrape operation');
   }
 
   private async handleMap(args: any): Promise<any> {
@@ -303,16 +356,20 @@ export class FirecrawlToolsIntegration {
     const { url, ...options } = args;
     
     return withRetry(async () => {
-      const response = await this.client.mapUrl(url, options);
+      // Use v2 SDK method: map instead of mapUrl
+      const response = await this.client.map(url, options);
       
-      if ('success' in response && !response.success) {
-        throw new Error(response.error || 'Mapping failed');
+      if ('success' in response && !(response as any).success) {
+        throw new Error((response as any).error || 'Mapping failed');
       }
 
+      // Handle v2 response structure
+      const data = (response as any).data || response;
+      
       return {
         url,
-        links: response.links || [],
-        totalLinks: response.links?.length || 0
+        links: data.links || [],
+        totalLinks: data.links?.length || 0
       };
     }, `map ${url}`);
   }
@@ -325,20 +382,21 @@ export class FirecrawlToolsIntegration {
     const { url, ...options } = args;
     
     return withRetry(async () => {
-      const response = await this.client.crawlUrl(url, options);
+      // Use v2 SDK method: startCrawl instead of crawlUrl
+      const response = await this.client.startCrawl(url, options);
       
-      if ('success' in response && !response.success) {
-        throw new Error(response.error || 'Crawl failed');
+      if ('success' in response && !(response as any).success) {
+        throw new Error((response as any).error || 'Crawl failed');
       }
 
-      // Handle different response formats - some versions return 'id', others return 'jobId'
-      const jobId = (response as any).id || (response as any).jobId || 'unknown';
+      // v2 returns {id: "..."}
+      const jobId = response.id || 'unknown';
       
       return {
         jobId,
         status: 'started',
         url,
-        message: `Crawl started with job ID: ${jobId}`
+        message: `Crawl started for ${url} with ID: ${jobId}`
       };
     }, `crawl ${url}`);
   }
@@ -349,18 +407,19 @@ export class FirecrawlToolsIntegration {
     }
 
     return withRetry(async () => {
-      const response = await this.client.checkCrawlStatus(args.id);
+      // Use v2 SDK method: getCrawlStatus instead of checkCrawlStatus
+      const response = await this.client.getCrawlStatus(args.id);
       
-      if ('success' in response && !response.success) {
-        throw new Error(response.error || 'Status check failed');
+      if ('success' in response && !(response as any).success) {
+        throw new Error((response as any).error || 'Status check failed');
       }
 
       return {
         jobId: args.id,
         status: response.status,
-        data: response.data,
-        total: response.total,
-        completed: response.completed,
+        total: response.total || 0,
+        completed: response.completed || 0,
+        data: response.data || [],
         creditsUsed: response.creditsUsed
       };
     }, `check crawl status ${args.id}`);
@@ -372,25 +431,23 @@ export class FirecrawlToolsIntegration {
     }
 
     return withRetry(async () => {
-      // Pass the query string directly as the first parameter
+      // Pass the query string directly as the first parameter, with minimal options
       const response = await this.client.search(args.query, {
         limit: args.limit,
-        lang: args.lang,
-        country: args.country,
-        tbs: args.tbs,
-        filter: args.filter,
-        location: args.location,
         scrapeOptions: args.scrapeOptions
       });
       
       if ('success' in response && !response.success) {
-        throw new Error(response.error || 'Search failed');
+        throw new Error((response as any).error || 'Search failed');
       }
+
+      // Handle v2 response structure
+      const results = (response as any).data || [];
 
       return {
         query: args.query,
-        results: response.data || [],
-        totalResults: response.data?.length || 0
+        results: results,
+        totalResults: results.length || 0
       };
     }, `search ${args.query}`);
   }
@@ -401,72 +458,42 @@ export class FirecrawlToolsIntegration {
     }
 
     return withRetry(async () => {
-      // Pass URLs as the first parameter, then options
-      const response = await this.client.extract(args.urls, {
+      // Use v2 SDK method: extract with proper parameters
+      const response = await this.client.extract({
+        urls: args.urls,
         prompt: args.prompt,
-        systemPrompt: args.systemPrompt,
-        schema: args.schema,
-        allowExternalLinks: args.allowExternalLinks,
-        enableWebSearch: args.enableWebSearch,
-        includeSubdomains: args.includeSubdomains
+        schema: args.schema as any
       });
       
-      if ('success' in response && !response.success) {
-        throw new Error(response.error || 'Extract failed');
+      if ('success' in response && !(response as any).success) {
+        throw new Error((response as any).error || 'Extract failed');
       }
 
       return {
         urls: args.urls,
-        extractedData: response.data,
+        extractedData: (response as any).data,
         schema: args.schema
       };
     }, `extract from ${args.urls.length} URLs`);
   }
 
   private async handleDeepResearch(args: any): Promise<any> {
-    if (!isDeepResearchOptions(args)) {
-      throw new Error('Invalid arguments for firecrawl_deep_research');
-    }
-
-    const { query, ...params } = args;
-    
-    return withRetry(async () => {
-      const response = await this.client.deepResearch(query, params);
-      
-      if ('success' in response && !response.success) {
-        throw new Error(response.error || 'Deep research failed');
-      }
-
-      return {
-        query,
-        analysis: response.data?.finalAnalysis,
-        sources: response.data?.sources,
-        activities: response.data?.activities
-      };
-    }, `deep research: ${query}`);
+    throw new Error('Deep research is not supported in this version. This feature may be available in future releases.');
   }
 
   private async handleGenerateLLMsText(args: any): Promise<any> {
-    if (!isGenerateLLMsTextOptions(args)) {
-      throw new Error('Invalid arguments for firecrawl_generate_llmstxt');
-    }
+    throw new Error('LLMs.txt generation is not supported in this version. This feature may be available in future releases.');
+  }
 
-    return withRetry(async () => {
-      // Pass URL as the first parameter, then options
-      const response = await this.client.generateLLMsText(args.url, {
-        maxUrls: args.maxUrls,
-        showFullText: args.showFullText
-      });
-      
-      if ('success' in response && !response.success) {
-        throw new Error(response.error || 'LLMs.txt generation failed');
-      }
+  private async handleBatchScrape(args: any): Promise<any> {
+    throw new Error('Batch scrape is not supported in this version. This feature may be available in future releases.');
+  }
 
-      return {
-        url: args.url,
-        llmstxt: response.data?.llmstxt,
-        llmsfulltxt: args.showFullText ? response.data?.llmsfulltxt : undefined
-      };
-    }, `generate LLMs.txt for ${args.url}`);
+  private async handleCheckBatchStatus(args: any): Promise<any> {
+    throw new Error('Batch status check is not supported in this version. This feature may be available in future releases.');
+  }
+
+  private async handleCrawlParamsPreview(args: any): Promise<any> {
+    throw new Error('Crawl params preview is not supported in this version. This feature may be available in future releases.');
   }
 }
