@@ -27,7 +27,7 @@
     "@mendable/firecrawl-js": "^1.19.0",
     "@modelcontextprotocol/sdk": "^1.4.1",
     "dotenv": "^16.4.7",
-    "express": "^5.1.0",
+    "express": "^4.21.2",
     "shx": "^0.3.4",
     "ws": "^8.18.1"
   },

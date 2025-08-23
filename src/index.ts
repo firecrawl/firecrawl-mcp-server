@@ -3,6 +3,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import {
   Tool,
   CallToolRequestSchema,
@@ -15,10 +16,21 @@ import FirecrawlApp, {
   type FirecrawlDocument,
 } from '@mendable/firecrawl-js';
 
-import express, { Request, Response } from 'express';
+import express, { Request, Response, RequestHandler } from 'express';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
+
+// Extend global type for FirecrawlApp
+declare global {
+  var firecrawlApp: FirecrawlApp | undefined;
+}
 
 dotenv.config();
+
+// Environment variables for streamable-http support
+const STREAMABLE_HTTP = process.env.STREAMABLE_HTTP === 'true';
+const HOST = process.env.HOST || '0.0.0.0';
+const PORT = parseInt(process.env.PORT || '3000', 10);
 
 // Tool definitions
 const SCRAPE_TOOL: Tool = {
@@ -855,7 +867,9 @@ const server = new Server(
   },
   {
     capabilities: {
-      tools: {},
+      tools: {
+        listChanged: true
+      },
       logging: {},
     },
   }
@@ -1598,7 +1612,91 @@ async function runSSECloudServer() {
   });
 }
 
-if (process.env.CLOUD_SERVICE === 'true') {
+async function runStreamableHttpServer() {
+  console.log('🚀 Starting MCP STREAMABLE_HTTP Server (Standards Compliant)');
+  
+  // Import the standardized implementation
+  const { MCPStreamableHTTPServer } = await import('./mcp-streamable-http.js');
+  const { FirecrawlToolsIntegration } = await import('./firecrawl-tools-integration.js');
+  
+  // Initialize Firecrawl tools integration
+  const firecrawlTools = new FirecrawlToolsIntegration();
+  
+  // Create standardized MCP server with tool integration
+  const mcpHttpServer = new MCPStreamableHTTPServer(server, [
+    SCRAPE_TOOL,
+    MAP_TOOL,
+    CRAWL_TOOL,
+    CHECK_CRAWL_STATUS_TOOL,
+    SEARCH_TOOL,
+    EXTRACT_TOOL,
+    DEEP_RESEARCH_TOOL,
+    GENERATE_LLMSTXT_TOOL,
+  ]);
+  
+  // Set the tool executor to use Firecrawl integration
+  mcpHttpServer.setToolExecutor(async (toolName: string, args: any) => {
+    return await firecrawlTools.executeToolCall(toolName, args);
+  });
+  
+  // Start the server
+  mcpHttpServer.listen(PORT, HOST);
+  
+  // Setup periodic cleanup
+  setInterval(() => {
+    mcpHttpServer.cleanup();
+  }, 60 * 60 * 1000); // Every hour
+  
+  console.log('✅ MCP STREAMABLE_HTTP Server started successfully');
+  console.log(`📡 Protocol: MCP 2025-06-18 (Standards Compliant)`);
+  console.log(`🔧 Firecrawl API: ${FIRECRAWL_API_URL || 'default'}`);
+}
+
+// Helper functions for security and validation
+function isValidOrigin(origin: string): boolean {
+  // For development, allow all localhost origins
+  if (origin.startsWith('http://localhost:') || origin.startsWith('https://localhost:')) {
+    return true;
+  }
+  
+  // Allow 127.0.0.1 origins for local development
+  if (origin.startsWith('http://127.0.0.1:') || origin.startsWith('https://127.0.0.1:')) {
+    return true;
+  }
+  
+  // Allow file:// protocol for local file access
+  if (origin.startsWith('file://')) {
+    return true;
+  }
+  
+  // Allow null origin for direct requests (like curl, Postman)
+  if (!origin || origin === 'null') {
+    return true;
+  }
+  
+  // For production, check allowed origins from environment
+  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
+  if (allowedOrigins.length > 0) {
+    return allowedOrigins.includes(origin);
+  }
+  
+  // If no specific origins configured, allow all for development
+  console.log('No ALLOWED_ORIGINS configured, allowing origin:', origin);
+  return true;
+}
+
+function isValidProtocolVersion(version: string): boolean {
+  // Support current and future protocol versions
+  const supportedVersions = ['2025-06-18', '2025-03-26', '2024-11-05', '2024-10-07'];
+  return supportedVersions.includes(version);
+}
+
+if (STREAMABLE_HTTP) {
+  runStreamableHttpServer().catch((error: any) => {
+    console.error('Fatal error running streamable HTTP server:', error);
+    process.exit(1);
+  });
+} else if (process.env.CLOUD_SERVICE === 'true') {
   runSSECloudServer().catch((error: any) => {
     console.error('Fatal error running server:', error);
     process.exit(1);
