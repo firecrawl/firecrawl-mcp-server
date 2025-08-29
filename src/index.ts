@@ -1427,6 +1427,10 @@ async function runSSELocalServer() {
   let transport: SSEServerTransport | null = null;
   const app = express();
 
+  app.get('/health', (req, res) => {
+    res.status(200).send('OK');
+  });
+
   app.get('/sse', async (req, res) => {
     transport = new SSEServerTransport(`/messages`, res);
     res.on('close', () => {
@@ -1443,13 +1447,15 @@ async function runSSELocalServer() {
     }
   });
 
-  const PORT = process.env.PORT || 3000;
+  const PORT = parseInt(process.env.PORT || "3000", 10);
+  const HOST = process.env.HOST || 'localhost';
   console.log('Starting server on port', PORT);
+  console.log('Starting server on host', HOST)
   try {
-    app.listen(PORT, () => {
-      console.log(`MCP SSE Server listening on http://localhost:${PORT}`);
-      console.log(`SSE endpoint: http://localhost:${PORT}/sse`);
-      console.log(`Message endpoint: http://localhost:${PORT}/messages`);
+    app.listen(PORT, HOST, () => {
+      console.log(`MCP SSE Server listening on http://${HOST}:${PORT}`);
+      console.log(`SSE endpoint: http://${HOST}:${PORT}/sse`);
+      console.log(`Message endpoint: http://${HOST}:${PORT}/messages`);
     });
   } catch (error) {
     console.error('Error starting server:', error);
@@ -1582,3 +1588,4 @@ if (process.env.CLOUD_SERVICE === 'true') {
     process.exit(1);
   });
 }
+
