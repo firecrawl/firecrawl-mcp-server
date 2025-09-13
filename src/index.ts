@@ -298,7 +298,7 @@ Search the web and optionally extract content from search results. This is the m
 **Not recommended for:** When you need to search the filesystem. When you already know which website to scrape (use scrape); when you need comprehensive coverage of a single website (use map or crawl.
 **Common mistakes:** Using crawl or map for open-ended questions (use search instead).
 **Prompt Example:** "Find the latest research papers on AI published in 2023."
-**Sources:** web, images, news, default to web unless needed images or news.
+**Sources:** web, images, news, default to web unless needed images or news. Can be provided as strings (e.g., ["web"]) or objects (e.g., [{"type": "web"}]).
 **Scrape Options:** Only use scrapeOptions when you think it is absolutely necessary. When you do so default to a lower limit to avoid timeouts, 5 or lower.
 **Usage Example without formats:**
 \`\`\`json
@@ -334,6 +334,16 @@ Search the web and optionally extract content from search results. This is the m
   }
 }
 \`\`\`
+**Alternative sources format (also supported):**
+\`\`\`json
+{
+  "sources": [
+    {"type": "web"},
+    {"type": "images"},
+    {"type": "news"}
+  ]
+}
+\`\`\`
 **Returns:** Array of search results (with optional scraped content).
 `,
   parameters: z.object({
@@ -343,7 +353,12 @@ Search the web and optionally extract content from search results. This is the m
     filter: z.string().optional(),
     location: z.string().optional(),
     sources: z
-      .array(z.object({ type: z.enum(['web', 'images', 'news']) }))
+      .array(
+        z.union([
+          z.enum(['web', 'images', 'news']),
+          z.object({ type: z.enum(['web', 'images', 'news']) })
+        ])
+      )
       .optional(),
     scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
   }),
@@ -352,8 +367,21 @@ Search the web and optionally extract content from search results. This is the m
     { session, log }: { session?: SessionData; log: Logger }
   ): Promise<string> => {
     const client = getClient(session);
-    const { query, ...opts } = args as Record<string, unknown>;
-    const cleaned = removeEmptyTopLevel(opts as Record<string, unknown>);
+    const { query, sources, ...opts } = args as Record<string, unknown>;
+    
+    // Normalize sources to object format if they are strings
+    let normalizedSources = sources;
+    if (Array.isArray(sources)) {
+      normalizedSources = sources.map(source => 
+        typeof source === 'string' ? { type: source } : source
+      );
+    }
+    
+    const cleaned = removeEmptyTopLevel({
+      ...opts,
+      ...(normalizedSources ? { sources: normalizedSources } : {})
+    } as Record<string, unknown>);
+    
     log.info('Searching', { query: String(query) });
     const res = await client.search(query as string, {
       ...(cleaned as any),
