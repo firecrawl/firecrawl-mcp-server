@@ -308,7 +308,7 @@ Search the web and optionally extract content from search results. This is the m
     "query": "top AI companies",
     "limit": 5,
     "sources": [
-      "web"
+      {"type": "web"}
     ]
   }
 }
@@ -323,9 +323,9 @@ Search the web and optionally extract content from search results. This is the m
     "lang": "en",
     "country": "us",
     "sources": [
-      "web",
-      "images",
-      "news"
+      {"type": "web"},
+      {"type": "images"},
+      {"type": "news"}
     ],
     "scrapeOptions": {
       "formats": ["markdown"],
