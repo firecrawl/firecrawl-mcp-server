@@ -21,6 +21,25 @@ A Model Context Protocol (MCP) server implementation that integrates with [Firec
 - Automatic retries and rate limiting
 - Cloud and self-hosted support
 - SSE support
+- **Context limit support for MCP compatibility**
+
+## Context Limiting for MCP
+
+All tools now support the `maxResponseSize` parameter to limit response size for better MCP compatibility. This is especially useful for large responses that may exceed MCP context limits.
+
+**Example Usage:**
+```json
+{
+  "name": "firecrawl_scrape",
+  "arguments": {
+    "url": "https://example.com",
+    "formats": ["markdown"],
+    "maxResponseSize": 50000
+  }
+}
+```
+
+When the response exceeds the specified limit, content will be truncated with a clear message indicating truncation occurred. This parameter is optional and preserves full backward compatibility.
 
 > Play around with [our MCP Server on MCP.so's playground](https://mcp.so/playground?server=firecrawl-mcp-server) or on [Klavis AI](https://www.klavis.ai/mcp-servers).
 
