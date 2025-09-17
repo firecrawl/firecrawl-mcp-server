@@ -22,6 +22,60 @@ A Model Context Protocol (MCP) server implementation that integrates with [Firec
 - Cloud and self-hosted support
 - SSE support
 
+## Context Limit Support
+
+To ensure compatibility with MCP (Model Context Protocol), all endpoints now support context limiting parameters that control the size of returned content. This feature is particularly useful when integrating with LLMs or other systems that have context window limitations.
+
+### Context Limit Parameters
+
+All Firecrawl tools now support the following parameters:
+
+- `contextLimit`: Maximum number of tokens to include in the response. Response will be truncated if it exceeds this limit.
+- `truncationMode`: How to truncate content if needed:
+  - `smart` (default): Try to keep sentences intact
+  - `hard`: Exact cut at token limit
+- `includeTruncationMessage`: Whether to include a message indicating the content was truncated (default: true)
+
+### Example Usage
+
+```json
+{
+  "name": "firecrawl_scrape",
+  "arguments": {
+    "url": "https://example.com",
+    "formats": ["markdown"],
+    "contextLimit": 8000,
+    "truncationMode": "smart"
+  }
+}
+```
+
+```json
+{
+  "name": "firecrawl_search",
+  "arguments": {
+    "query": "latest AI research papers",
+    "limit": 5,
+    "contextLimit": 5000
+  }
+}
+```
+
+### How It Works
+
+When a `contextLimit` is specified:
+
+1. The endpoint processes the request normally
+2. Before returning the response, the content is intelligently truncated to fit within the specified token limit
+3. String values are truncated while preserving sentence structure (in `smart` mode)
+4. A truncation message is added to indicate that content was limited (unless `includeTruncationMessage` is set to `false`)
+
+### Notes
+
+- Token counting is approximate and based on a character estimation heuristic
+- The default behavior (without specifying `contextLimit`) remains unchanged
+- Complex nested objects and arrays are properly handled with deep truncation
+
 > Play around with [our MCP Server on MCP.so's playground](https://mcp.so/playground?server=firecrawl-mcp-server) or on [Klavis AI](https://www.klavis.ai/mcp-servers).
 
 ## Installation

@@ -4,6 +4,8 @@ import { FastMCP, type Logger } from 'firecrawl-fastmcp';
 import { z } from 'zod';
 import FirecrawlApp from '@mendable/firecrawl-js';
 import type { IncomingHttpHeaders } from 'http';
+// Import our new utility functions
+import { truncateDeep, TruncateOptions } from './utils/truncateContent.js';
 
 dotenv.config({ debug: false, quiet: true });
 
@@ -49,6 +51,32 @@ function removeEmptyTopLevel<T extends Record<string, any>>(
     out[k] = v;
   }
   return out;
+}
+
+// Create a utility function to get truncation options from request params
+function getTruncateOptions(args: Record<string, unknown>): TruncateOptions | undefined {
+  if (args.contextLimit === undefined) {
+    return undefined; // No limit specified
+  }
+
+  return {
+    maxTokens: typeof args.contextLimit === 'number' 
+      ? args.contextLimit 
+      : typeof args.contextLimit === 'string'
+        ? parseInt(args.contextLimit, 10)
+        : undefined,
+    mode: args.truncationMode === 'hard' ? 'hard' : 'smart',
+    includeTruncationMessage: args.includeTruncationMessage !== false
+  };
+}
+
+// Apply truncation to the response if necessary
+function applyContentLimit(response: any, options?: TruncateOptions): any {
+  if (!options?.maxTokens) {
+    return response; // No truncation needed
+  }
+
+  return truncateDeep(response, options);
 }
 
 class ConsoleLogger implements Logger {
@@ -157,6 +185,19 @@ function asText(data: unknown): string {
   return JSON.stringify(data, null, 2);
 }
 
+// Define the common context limit schema parts that will be reused across tools
+const contextLimitSchema = {
+  contextLimit: z.union([z.number(), z.string()]).optional().describe(
+    'Maximum number of tokens to include in the response (approximate). Response will be truncated if it exceeds this limit.'
+  ),
+  truncationMode: z.enum(['smart', 'hard']).optional().describe(
+    "How to truncate content if needed: 'smart' (try to keep sentences intact) or 'hard' (exact cut at token limit)"
+  ),
+  includeTruncationMessage: z.boolean().optional().describe(
+    'Whether to include a message indicating the content was truncated (default: true)'
+  )
+};
+
 // scrape tool (v2 semantics, minimal args)
 // Centralized scrape params (used by scrape, and referenced in search/crawl scrapeOptions)
 
@@ -168,6 +209,7 @@ const allActionTypes = [...safeActionTypes, ...otherActions] as const;
 // Use appropriate action types based on safe mode
 const allowedActionTypes = SAFE_MODE ? safeActionTypes : allActionTypes;
 
+// Add the context limit fields to the scrape params schema
 const scrapeParamsSchema = z.object({
   url: z.string().url(),
   formats: z
@@ -229,6 +271,8 @@ const scrapeParamsSchema = z.object({
     .optional(),
   storeInCache: z.boolean().optional(),
   maxAge: z.number().optional(),
+  // Add context limit fields
+  ...contextLimitSchema
 });
 
 server.addTool({
@@ -248,11 +292,13 @@ This is the most powerful, fastest and most reliable scraper tool, if available 
   "arguments": {
     "url": "https://example.com",
     "formats": ["markdown"],
-    "maxAge": 172800000
+    "maxAge": 172800000,
+    "contextLimit": 8000
   }
 }
 \`\`\`
 **Performance:** Add maxAge parameter for 500% faster scrapes using cached data.
+**MCP Compatibility:** Use contextLimit to ensure response fits within MCP context window.
 **Returns:** Markdown, HTML, or other formats as specified.
 ${SAFE_MODE ? '**Safe Mode:** Read-only content extraction. Interactive actions (click, write, executeJavascript) are disabled for security.' : ''}
 `,
@@ -261,12 +307,25 @@ ${SAFE_MODE ? '**Safe Mode:** Read-only content extraction. Interactive actions 
     args: unknown,
     { session, log }: { session?: SessionData; log: Logger }
   ): Promise<string> => {
-    const { url, ...options } = args as { url: string } & Record<string, unknown>;
+    const { url, contextLimit, truncationMode, includeTruncationMessage, ...options } = 
+      args as { url: string; contextLimit?: number | string; truncationMode?: 'smart' | 'hard'; includeTruncationMessage?: boolean } & Record<string, unknown>;
+    
     const client = getClient(session);
     const cleaned = removeEmptyTopLevel(options as Record<string, unknown>);
     log.info('Scraping URL', { url: String(url) });
+    
+    // Get response from Firecrawl
     const res = await client.scrape(String(url), { ...cleaned, origin: ORIGIN } as any);
-    return asText(res);
+    
+    // Apply content limiting if contextLimit is specified
+    const truncateOptions = getTruncateOptions(args as Record<string, unknown>);
+    const limitedRes = applyContentLimit(res, truncateOptions);
+    
+    if (truncateOptions?.maxTokens) {
+      log.info('Applied context limit', { limit: truncateOptions.maxTokens });
+    }
+    
+    return asText(limitedRes);
   },
 });
 
@@ -284,10 +343,12 @@ Map a website to discover all indexed URLs on the site.
 {
   "name": "firecrawl_map",
   "arguments": {
-    "url": "https://example.com"
+    "url": "https://example.com",
+    "contextLimit": 5000
   }
 }
 \`\`\`
+**MCP Compatibility:** Use contextLimit to ensure response fits within MCP context window.
 **Returns:** Array of URLs found on the site.
 `,
   parameters: z.object({
@@ -297,17 +358,32 @@ Map a website to discover all indexed URLs on the site.
     includeSubdomains: z.boolean().optional(),
     limit: z.number().optional(),
     ignoreQueryParameters: z.boolean().optional(),
+    // Add context limit fields
+    ...contextLimitSchema
   }),
   execute: async (
     args: unknown,
     { session, log }: { session?: SessionData; log: Logger }
   ): Promise<string> => {
-    const { url, ...options } = args as { url: string } & Record<string, unknown>;
+    const { url, contextLimit, truncationMode, includeTruncationMessage, ...options } = 
+      args as { url: string; contextLimit?: number | string; truncationMode?: 'smart' | 'hard'; includeTruncationMessage?: boolean } & Record<string, unknown>;
+    
     const client = getClient(session);
     const cleaned = removeEmptyTopLevel(options as Record<string, unknown>);
     log.info('Mapping URL', { url: String(url) });
+    
+    // Get response from Firecrawl
     const res = await client.map(String(url), { ...cleaned, origin: ORIGIN } as any);
-    return asText(res);
+    
+    // Apply content limiting if contextLimit is specified
+    const truncateOptions = getTruncateOptions(args as Record<string, unknown>);
+    const limitedRes = applyContentLimit(res, truncateOptions);
+    
+    if (truncateOptions?.maxTokens) {
+      log.info('Applied context limit', { limit: truncateOptions.maxTokens });
+    }
+    
+    return asText(limitedRes);
   },
 });
 
@@ -322,6 +398,7 @@ Search the web and optionally extract content from search results. This is the m
 **Prompt Example:** "Find the latest research papers on AI published in 2023."
 **Sources:** web, images, news, default to web unless needed images or news.
 **Scrape Options:** Only use scrapeOptions when you think it is absolutely necessary. When you do so default to a lower limit to avoid timeouts, 5 or lower.
+**MCP Compatibility:** Use contextLimit to ensure response fits within MCP context window.
 **Usage Example without formats:**
 \`\`\`json
 {
@@ -331,7 +408,8 @@ Search the web and optionally extract content from search results. This is the m
     "limit": 5,
     "sources": [
       "web"
-    ]
+    ],
+    "contextLimit": 8000
   }
 }
 \`\`\`
@@ -352,7 +430,8 @@ Search the web and optionally extract content from search results. This is the m
     "scrapeOptions": {
       "formats": ["markdown"],
       "onlyMainContent": true
-    }
+    },
+    "contextLimit": 8000
   }
 }
 \`\`\`
@@ -368,20 +447,35 @@ Search the web and optionally extract content from search results. This is the m
       .array(z.object({ type: z.enum(['web', 'images', 'news']) }))
       .optional(),
     scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+    // Add context limit fields
+    ...contextLimitSchema
   }),
   execute: async (
     args: unknown,
     { session, log }: { session?: SessionData; log: Logger }
   ): Promise<string> => {
     const client = getClient(session);
-    const { query, ...opts } = args as Record<string, unknown>;
+    const { query, contextLimit, truncationMode, includeTruncationMessage, ...opts } = 
+      args as { query: string; contextLimit?: number | string; truncationMode?: 'smart' | 'hard'; includeTruncationMessage?: boolean } & Record<string, unknown>;
+    
     const cleaned = removeEmptyTopLevel(opts as Record<string, unknown>);
     log.info('Searching', { query: String(query) });
+    
+    // Get response from Firecrawl
     const res = await client.search(query as string, {
       ...(cleaned as any),
       origin: ORIGIN,
     });
-    return asText(res);
+    
+    // Apply content limiting if contextLimit is specified
+    const truncateOptions = getTruncateOptions(args as Record<string, unknown>);
+    const limitedRes = applyContentLimit(res, truncateOptions);
+    
+    if (truncateOptions?.maxTokens) {
+      log.info('Applied context limit', { limit: truncateOptions.maxTokens });
+    }
+    
+    return asText(limitedRes);
   },
 });
 
@@ -395,6 +489,7 @@ server.addTool({
  **Warning:** Crawl responses can be very large and may exceed token limits. Limit the crawl depth and number of pages, or use map + batch_scrape for better control.
  **Common mistakes:** Setting limit or maxDiscoveryDepth too high (causes token overflow) or too low (causes missing pages); using crawl for a single page (use scrape instead). Using a /* wildcard is not recommended.
  **Prompt Example:** "Get all blog posts from the first two levels of example.com/blog."
+ **MCP Compatibility:** Use contextLimit to ensure response fits within MCP context window.
  **Usage Example:**
  \`\`\`json
  {
@@ -405,7 +500,8 @@ server.addTool({
      "limit": 20,
      "allowExternalLinks": false,
      "deduplicateSimilarURLs": true,
-     "sitemap": "include"
+     "sitemap": "include",
+     "contextLimit": 10000
    }
  }
  \`\`\`
@@ -439,17 +535,32 @@ server.addTool({
     deduplicateSimilarURLs: z.boolean().optional(),
     ignoreQueryParameters: z.boolean().optional(),
     scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+    // Add context limit fields
+    ...contextLimitSchema
   }),
   execute: async (args, { session, log }) => {
-    const { url, ...options } = args as Record<string, unknown>;
+    const { url, contextLimit, truncationMode, includeTruncationMessage, ...options } = 
+      args as { url: string; contextLimit?: number | string; truncationMode?: 'smart' | 'hard'; includeTruncationMessage?: boolean } & Record<string, unknown>;
+    
     const client = getClient(session);
     const cleaned = removeEmptyTopLevel(options as Record<string, unknown>);
     log.info('Starting crawl', { url: String(url) });
+    
+    // Get response from Firecrawl
     const res = await client.crawl(String(url), {
       ...(cleaned as any),
       origin: ORIGIN,
     });
-    return asText(res);
+    
+    // Apply content limiting if contextLimit is specified
+    const truncateOptions = getTruncateOptions(args as Record<string, unknown>);
+    const limitedRes = applyContentLimit(res, truncateOptions);
+    
+    if (truncateOptions?.maxTokens) {
+      log.info('Applied context limit', { limit: truncateOptions.maxTokens });
+    }
+    
+    return asText(limitedRes);
   },
 });
 
@@ -463,20 +574,35 @@ Check the status of a crawl job.
 {
   "name": "firecrawl_check_crawl_status",
   "arguments": {
-    "id": "550e8400-e29b-41d4-a716-446655440000"
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "contextLimit": 10000
   }
 }
 \`\`\`
+**MCP Compatibility:** Use contextLimit to ensure response fits within MCP context window.
 **Returns:** Status and progress of the crawl job, including results if available.
 `,
-  parameters: z.object({ id: z.string() }),
+  parameters: z.object({ 
+    id: z.string(),
+    // Add context limit fields
+    ...contextLimitSchema
+  }),
   execute: async (
     args: unknown,
     { session }: { session?: SessionData }
   ): Promise<string> => {
     const client = getClient(session);
-    const res = await client.getCrawlStatus((args as any).id as string);
-    return asText(res);
+    const { id, contextLimit, truncationMode, includeTruncationMessage } = 
+      args as { id: string; contextLimit?: number | string; truncationMode?: 'smart' | 'hard'; includeTruncationMessage?: boolean };
+    
+    // Get response from Firecrawl
+    const res = await client.getCrawlStatus(id);
+    
+    // Apply content limiting if contextLimit is specified
+    const truncateOptions = getTruncateOptions(args as Record<string, unknown>);
+    const limitedRes = applyContentLimit(res, truncateOptions);
+    
+    return asText(limitedRes);
   },
 });
 
@@ -494,6 +620,7 @@ Extract structured information from web pages using LLM capabilities. Supports b
 - allowExternalLinks: Allow extraction from external links
 - enableWebSearch: Enable web search for additional context
 - includeSubdomains: Include subdomains in extraction
+- contextLimit: Maximum number of tokens to include in the response
 **Prompt Example:** "Extract the product name, price, and description from these product pages."
 **Usage Example:**
 \`\`\`json
@@ -513,10 +640,12 @@ Extract structured information from web pages using LLM capabilities. Supports b
     },
     "allowExternalLinks": false,
     "enableWebSearch": false,
-    "includeSubdomains": false
+    "includeSubdomains": false,
+    "contextLimit": 8000
   }
 }
 \`\`\`
+**MCP Compatibility:** Use contextLimit to ensure response fits within MCP context window.
 **Returns:** Extracted structured data as defined by your schema.
 `,
   parameters: z.object({
@@ -526,29 +655,56 @@ Extract structured information from web pages using LLM capabilities. Supports b
     allowExternalLinks: z.boolean().optional(),
     enableWebSearch: z.boolean().optional(),
     includeSubdomains: z.boolean().optional(),
+    // Add context limit fields
+    ...contextLimitSchema
   }),
   execute: async (
     args: unknown,
     { session, log }: { session?: SessionData; log: Logger }
   ): Promise<string> => {
     const client = getClient(session);
-    const a = args as Record<string, unknown>;
+    const { urls, prompt, schema, allowExternalLinks, enableWebSearch, includeSubdomains, contextLimit, truncationMode, includeTruncationMessage } = 
+      args as { 
+        urls: string[]; 
+        prompt?: string; 
+        schema?: Record<string, unknown>; 
+        allowExternalLinks?: boolean; 
+        enableWebSearch?: boolean; 
+        includeSubdomains?: boolean;
+        contextLimit?: number | string;
+        truncationMode?: 'smart' | 'hard';
+        includeTruncationMessage?: boolean;
+      };
+    
     log.info('Extracting from URLs', {
-      count: Array.isArray(a.urls) ? a.urls.length : 0,
+      count: Array.isArray(urls) ? urls.length : 0,
     });
+    
     const extractBody = removeEmptyTopLevel({
-      urls: a.urls as string[],
-      prompt: a.prompt as string | undefined,
-      schema: (a.schema as Record<string, unknown>) || undefined,
-      allowExternalLinks: a.allowExternalLinks as boolean | undefined,
-      enableWebSearch: a.enableWebSearch as boolean | undefined,
-      includeSubdomains: a.includeSubdomains as boolean | undefined,
+      urls: urls as string[],
+      prompt: prompt as string | undefined,
+      schema: (schema as Record<string, unknown>) || undefined,
+      allowExternalLinks: allowExternalLinks as boolean | undefined,
+      enableWebSearch: enableWebSearch as boolean | undefined,
+      includeSubdomains: includeSubdomains as boolean | undefined,
       origin: ORIGIN,
     });
+    
+    // Get response from Firecrawl
     const res = await client.extract(extractBody as any);
-    return asText(res);
+    
+    // Apply content limiting if contextLimit is specified
+    const truncateOptions = getTruncateOptions(args as Record<string, unknown>);
+    const limitedRes = applyContentLimit(res, truncateOptions);
+    
+    if (truncateOptions?.maxTokens) {
+      log.info('Applied context limit', { limit: truncateOptions.maxTokens });
+    }
+    
+    return asText(limitedRes);
   },
 });
+
 const PORT = Number(process.env.PORT || 3000);
 const HOST =
   process.env.CLOUD_SERVICE === 'true'
