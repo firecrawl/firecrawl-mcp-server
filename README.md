@@ -26,7 +26,9 @@ A Model Context Protocol (MCP) server implementation that integrates with [Firec
 
 ## Installation
 
-### Running with npx
+📖 **[Complete Installation Guide](./INSTALLATION.md)** - Comprehensive instructions for 50+ MCP-compatible environments
+
+### Quick Start
 
 ```bash
 env FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
@@ -37,6 +39,21 @@ env FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
 ```bash
 npm install -g firecrawl-mcp
 ```
+
+### Popular Platforms
+
+The installation guide covers all major platforms including:
+
+- **Desktop AI**: Claude Desktop, Claude Code CLI
+- **Editors**: Cursor, VS Code, Windsurf, Zed, IntelliJ IDEA, PyCharm, Neovim, Emacs
+- **Extensions**: Cline, Continue.dev, CodeGPT, GitHub Copilot
+- **Cloud**: AWS, Azure, GCP, Replit
+- **Containers**: Docker, Kubernetes
+- **Mobile**: iOS, Android
+- **Enterprise**: Slack, Teams, Discord
+- **And many more...**
+
+[→ View Complete Installation Guide](./INSTALLATION.md)
 
 ### Running on Cursor
 
