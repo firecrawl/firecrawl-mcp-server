@@ -26,82 +26,60 @@ A Model Context Protocol (MCP) server implementation that integrates with [Firec
 
 ## Installation
 
-### Running with npx
+### 📚 Comprehensive Installation Guide
+
+For detailed installation instructions across 26+ MCP-compatible environments, see our comprehensive [Installation Guide](docs/installation/index.md).
+
+**Supported Environments:**
+- **AI Assistants**: Claude Desktop, Claude Code, BoltAI, Perplexity Desktop, Warp
+- **Code Editors**: Cursor, VS Code, Zed, JetBrains AI Assistant, Windsurf, Augment Code, Roo Code, Trae, Opencode
+- **Development Tools**: Crush, Amazon Q Developer CLI, Gemini CLI, OpenAI Codex, Kiro
+- **Enterprise**: Copilot Coding Agent, Smithery
+- **Deployment**: Docker, Windows, NPX
+
+### Quick Start Options
+
+#### Running with npx
 
 ```bash
 env FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
 ```
 
-### Manual Installation
+#### Manual Installation
 
 ```bash
 npm install -g firecrawl-mcp
 ```
 
-### Running on Cursor
+### Quick Environment Setup
 
-Configuring Cursor 🖥️
-Note: Requires Cursor version 0.45.6+
-For the most up-to-date configuration instructions, please refer to the official Cursor documentation on configuring MCP servers:
-[Cursor MCP Server Configuration Guide](https://docs.cursor.com/context/model-context-protocol#configuring-mcp-servers)
+For **detailed environment-specific instructions**, see our [Installation Guide](docs/installation/index.md). Here are a few quick examples:
 
-To configure Firecrawl MCP in Cursor **v0.48.6**
+#### Cursor (One-Click Installation)
+[![Install with Cursor](https://img.shields.io/badge/Cursor-One_Click-007ACC?style=flat-square&logo=cursor&logoColor=white)](https://cursor.sh/firecrawl-mcp)
 
-1. Open Cursor Settings
-2. Go to Features > MCP Servers
-3. Click "+ Add new global MCP server"
-4. Enter the following code:
-   ```json
-   {
-     "mcpServers": {
-       "firecrawl-mcp": {
-         "command": "npx",
-         "args": ["-y", "firecrawl-mcp"],
-         "env": {
-           "FIRECRAWL_API_KEY": "YOUR-API-KEY"
-         }
-       }
-     }
-   }
-   ```
-   
-To configure Firecrawl MCP in Cursor **v0.45.6**
+#### VS Code (One-Click Installation)
+[![Install with VS Code](https://img.shields.io/badge/VS_Code-One_Click-007ACC?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=firecrawl&inputs=%5B%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22apiKey%22%2C%22description%22%3A%22Firecrawl%20API%20Key%22%2C%22password%22%3Atrue%7D%5D&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22firecrawl-mcp%22%5D%2C%22env%22%3A%7B%22FIRECRAWL_API_KEY%22%3A%22%24%7Binput%3AapiKey%7D%22%7D%7D)
 
-1. Open Cursor Settings
-2. Go to Features > MCP Servers
-3. Click "+ Add New MCP Server"
-4. Enter the following:
-   - Name: "firecrawl-mcp" (or your preferred name)
-   - Type: "command"
-   - Command: `env FIRECRAWL_API_KEY=your-api-key npx -y firecrawl-mcp`
+#### Claude Desktop
+See [Claude Desktop Installation Guide](docs/installation/claude-desktop.md) for manual configuration.
 
-
-
-> If you are using Windows and are running into issues, try `cmd /c "set FIRECRAWL_API_KEY=your-api-key && npx -y firecrawl-mcp"`
-
-Replace `your-api-key` with your Firecrawl API key. If you don't have one yet, you can create an account and get it from https://www.firecrawl.dev/app/api-keys
-
-After adding, refresh the MCP server list to see the new tools. The Composer Agent will automatically use Firecrawl MCP when appropriate, but you can explicitly request it by describing your web scraping needs. Access the Composer via Command+L (Mac), select "Agent" next to the submit button, and enter your query.
-
-### Running on Windsurf
-
-Add this to your `./codeium/windsurf/model_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "mcp-server-firecrawl": {
-      "command": "npx",
-      "args": ["-y", "firecrawl-mcp"],
-      "env": {
-        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
-      }
-    }
-  }
-}
+#### Claude Code
+```bash
+claude mcp add firecrawl npx -y firecrawl-mcp
 ```
 
-### Running with SSE Local Mode
+#### Other Environments
+Visit the [Installation Guide](docs/installation/index.md) for instructions on:
+- **AI Assistants**: BoltAI, Perplexity Desktop, Warp
+- **Code Editors**: Zed, JetBrains AI Assistant, Windsurf, Augment Code, Roo Code, Trae, Opencode
+- **Development Tools**: Crush, Amazon Q Developer CLI, Gemini CLI, OpenAI Codex, Kiro
+- **Enterprise**: Copilot Coding Agent, Smithery
+- **Deployment**: Docker, Windows
+
+### Alternative Installation Methods
+
+#### Running with SSE Local Mode
 
 To run the server using Server-Sent Events (SSE) locally instead of the default stdio transport:
 
@@ -111,68 +89,12 @@ env SSE_LOCAL=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
 
 Use the url: http://localhost:3000/sse
 
-### Installing via Smithery (Legacy)
+#### Installing via Smithery (Legacy)
 
 To install Firecrawl for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@mendableai/mcp-server-firecrawl):
 
 ```bash
 npx -y @smithery/cli install @mendableai/mcp-server-firecrawl --client claude
-```
-
-### Running on VS Code
-
-For one-click installation, click one of the install buttons below...
-
-[![Install with NPX in VS Code](https://img.shields.io/badge/VS_Code-NPM-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=firecrawl&inputs=%5B%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22apiKey%22%2C%22description%22%3A%22Firecrawl%20API%20Key%22%2C%22password%22%3Atrue%7D%5D&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22firecrawl-mcp%22%5D%2C%22env%22%3A%7B%22FIRECRAWL_API_KEY%22%3A%22%24%7Binput%3AapiKey%7D%22%7D%7D) [![Install with NPX in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-NPM-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=firecrawl&inputs=%5B%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22apiKey%22%2C%22description%22%3A%22Firecrawl%20API%20Key%22%2C%22password%22%3Atrue%7D%5D&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22firecrawl-mcp%22%5D%2C%22env%22%3A%7B%22FIRECRAWL_API_KEY%22%3A%22%24%7Binput%3AapiKey%7D%22%7D%7D&quality=insiders)
-
-For manual installation, add the following JSON block to your User Settings (JSON) file in VS Code. You can do this by pressing `Ctrl + Shift + P` and typing `Preferences: Open User Settings (JSON)`.
-
-```json
-{
-  "mcp": {
-    "inputs": [
-      {
-        "type": "promptString",
-        "id": "apiKey",
-        "description": "Firecrawl API Key",
-        "password": true
-      }
-    ],
-    "servers": {
-      "firecrawl": {
-        "command": "npx",
-        "args": ["-y", "firecrawl-mcp"],
-        "env": {
-          "FIRECRAWL_API_KEY": "${input:apiKey}"
-        }
-      }
-    }
-  }
-}
-```
-
-Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others:
-
-```json
-{
-  "inputs": [
-    {
-      "type": "promptString",
-      "id": "apiKey",
-      "description": "Firecrawl API Key",
-      "password": true
-    }
-  ],
-  "servers": {
-    "firecrawl": {
-      "command": "npx",
-      "args": ["-y", "firecrawl-mcp"],
-      "env": {
-        "FIRECRAWL_API_KEY": "${input:apiKey}"
-      }
-    }
-  }
-}
 ```
 
 ## Configuration
@@ -235,31 +157,35 @@ export FIRECRAWL_RETRY_MAX_ATTEMPTS=10
 export FIRECRAWL_RETRY_INITIAL_DELAY=500     # Start with faster retries
 ```
 
-### Usage with Claude Desktop
+### Environment-Specific Configuration
 
-Add this to your `claude_desktop_config.json`:
+For detailed configuration examples for your specific environment, see the [Installation Guide](docs/installation/index.md). Each environment has its own configuration format and requirements.
+
+#### Common Configuration Pattern
+
+Most environments use a variation of this JSON configuration:
 
 ```json
 {
   "mcpServers": {
-    "mcp-server-firecrawl": {
+    "firecrawl": {
       "command": "npx",
       "args": ["-y", "firecrawl-mcp"],
       "env": {
-        "FIRECRAWL_API_KEY": "YOUR_API_KEY_HERE",
-
-        "FIRECRAWL_RETRY_MAX_ATTEMPTS": "5",
-        "FIRECRAWL_RETRY_INITIAL_DELAY": "2000",
-        "FIRECRAWL_RETRY_MAX_DELAY": "30000",
-        "FIRECRAWL_RETRY_BACKOFF_FACTOR": "3",
-
-        "FIRECRAWL_CREDIT_WARNING_THRESHOLD": "2000",
-        "FIRECRAWL_CREDIT_CRITICAL_THRESHOLD": "500"
+        "FIRECRAWL_API_KEY": "your-api-key-here"
       }
     }
   }
 }
 ```
+
+**Note:** The exact format varies by environment. Some use:
+- `"mcp"` instead of `"mcpServers"`
+- `"servers"` instead of nested objects
+- HTTP connections for remote servers
+- TOML configuration instead of JSON
+
+Always refer to the [environment-specific documentation](docs/installation/index.md) for exact configuration requirements.
 
 ### System Configuration
 
