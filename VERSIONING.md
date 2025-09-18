@@ -7,7 +7,7 @@ This document explains the versioning system for the Firecrawl MCP Server, which
 The server provides versioned endpoints to maintain backward compatibility while supporting the latest Firecrawl features:
 
 - **V1 (Legacy)**: Uses Firecrawl JS 1.29.3 with extended tools
-- **V2 (Current)**: Uses Firecrawl JS 3.1.0 with modern API
+- **V2 (Current)**: Uses Firecrawl JS 3.1.0 with modern API + content limiting
 
 ## Endpoints
 
@@ -64,6 +64,12 @@ Local services (stdio, SSE local, HTTP streamable) use the V2 implementation by 
 - Improved format handling
 - Better caching with `maxAge` defaults
 - Support for multiple search sources (web, images, news)
+- **NEW**: Content limiting for MCP compatibility
+  - `maxResponseLength` parameter to control response size
+  - `maxArrayItems` parameter to limit array results
+  - Intelligent content truncation that preserves structure
+  - Environment variable support for global limits
+  - Backward compatible (0 = no limit)
 
 ## Migration Guide
 
