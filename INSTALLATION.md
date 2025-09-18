@@ -135,7 +135,7 @@ claude-code --mcp "npx -y firecrawl-mcp"
 </details>
 
 <details>
-<summary><img src="https://windsurf-editor.com/favicon.ico" width="16" height="16" alt="Windsurf" style="vertical-align: middle; margin-right: 8px;"> <strong>Windsurf</strong></summary>
+<summary><img src="https://windsurf.com/favicon.svg" width="16" height="16" alt="Windsurf" style="vertical-align: middle; margin-right: 8px;"> <strong>Windsurf</strong></summary>
 
 **Location:** `~/.codeium/windsurf/model_config.json`
 
@@ -268,7 +268,7 @@ claude-code --mcp "npx -y firecrawl-mcp"
 </details>
 
 <details>
-<summary><img src="https://zed.dev/img/logo.svg" width="16" height="16" alt="Zed" style="vertical-align: middle; margin-right: 8px;"> <strong>Zed</strong></summary>
+<summary><img src="https://zed.dev/favicon_black_16.png" width="16" height="16" alt="Zed" style="vertical-align: middle; margin-right: 8px;"> <strong>Zed</strong></summary>
 
 1. Open Zed settings (`Cmd/Ctrl + ,`)
 2. Navigate to Extensions → MCP
@@ -335,7 +335,7 @@ servers:
 </details>
 
 <details>
-<summary><img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/visualstudiocode.svg" width="16" height="16" alt="Roo Code" style="vertical-align: middle; margin-right: 8px;"> <strong>Roo Code</strong></summary>
+<summary><img src="https://avatars.githubusercontent.com/u/211522643?s=200&v=4" width="16" height="16" alt="Roo Code" style="vertical-align: middle; margin-right: 8px;"> <strong>Roo Code</strong></summary>
 
 **Location:** `~/.roo/mcp-config.json`
 
@@ -371,7 +371,7 @@ servers:
 </details>
 
 <details>
-<summary><img src="https://opencode.dev/favicon.ico" width="16" height="16" alt="Opencode" style="vertical-align: middle; margin-right: 8px;"> <strong>Opencode</strong></summary>
+<summary><img src="https://opencode.ai/favicon.svg" width="16" height="16" alt="Opencode" style="vertical-align: middle; margin-right: 8px;"> <strong>Opencode</strong></summary>
 
 1. Open Opencode preferences
 2. Navigate to MCP Servers
@@ -487,7 +487,7 @@ Same as IntelliJ IDEA configuration, adapted for Android Studio's settings locat
 </details>
 
 <details>
-<summary><img src="https://continue.dev/favicon.ico" width="16" height="16" alt="Continue.dev" style="vertical-align: middle; margin-right: 8px;"> <strong>Continue.dev</strong></summary>
+<summary><img src="https://cdn.prod.website-files.com/663e06c56841363663ffbbcf/664c918ec47bacdd3acdc167_favicon%408x.png" width="16" height="16" alt="Continue.dev" style="vertical-align: middle; margin-right: 8px;"> <strong>Continue.dev</strong></summary>
 
 1. Install Continue extension
 2. Open Continue config (gear icon → "Open config.json")
@@ -814,7 +814,7 @@ gcloud functions deploy firecrawl-mcp \
 </details>
 
 <details>
-<summary><img src="https://replit.com/public/images/replit-logo-bg.png" width="16" height="16" alt="Replit" style="vertical-align: middle; margin-right: 8px;"> <strong>Replit</strong></summary>
+<summary><img src="https://cdn.replit.com/dotcom/favicon-196.png" width="16" height="16" alt="Replit" style="vertical-align: middle; margin-right: 8px;"> <strong>Replit</strong></summary>
 
 **Create `.replit` file:**
 ```toml
@@ -863,7 +863,7 @@ app.start();
 </details>
 
 <details>
-<summary><img src="https://assets-global.website-files.com/6257adef93867e50d84d30e2/636e0a6918e57475a843dcf5_icon_clyde_black_RGB.svg" width="16" height="16" alt="Discord" style="vertical-align: middle; margin-right: 8px;"> <strong>Discord Bot</strong></summary>
+<summary><img src="https://discord.com/assets/f9bb9c4af2b9c32a2c5ee0014661546d.ico" width="16" height="16" alt="Discord" style="vertical-align: middle; margin-right: 8px;"> <strong>Discord Bot</strong></summary>
 
 **Bot setup:**
 ```javascript
