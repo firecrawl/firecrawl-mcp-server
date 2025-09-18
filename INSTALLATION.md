@@ -863,7 +863,7 @@ app.start();
 </details>
 
 <details>
-<summary><img src="https://discord.com/assets/f9bb9c4af2b9c32a2c5ee0014661546d.ico" width="16" height="16" alt="Discord" style="vertical-align: middle; margin-right: 8px;"> <strong>Discord Bot</strong></summary>
+<summary><img src="https://cdn.prod.website-files.com/6257adef93867e50d84d30e2/6266bc493fb42d4e27bb8393_847541504914fd33810e70a0ea73177e.ico" width="16" height="16" alt="Discord" style="vertical-align: middle; margin-right: 8px;"> <strong>Discord Bot</strong></summary>
 
 **Bot setup:**
 ```javascript
