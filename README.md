@@ -223,9 +223,9 @@ npm install -g firecrawl-mcp
 </details>
 
 <details>
-<summary><img src="https://www.jetbrains.com/favicon.ico" width="16" height="16" alt="IntelliJ IDEA" style="vertical-align: middle; margin-right: 8px;"> <strong>IntelliJ IDEA / PyCharm / WebStorm</strong></summary>
+<summary><img src="https://www.jetbrains.com/favicon.ico" width="16" height="16" alt="JetBrains IDEs" style="vertical-align: middle; margin-right: 8px;"> <strong>JetBrains IDEs (IntelliJ IDEA / PyCharm / WebStorm / Android Studio)</strong></summary>
 
-**For IntelliJ IDEA 2025.2+ with GitHub Copilot:**
+**For JetBrains IDEs 2025.2+ with GitHub Copilot:**
 
 1. Open Settings → Tools → GitHub Copilot → MCP Servers
 2. Add new server:
@@ -552,26 +552,6 @@ mcp_servers:
 
 </details>
 
-<details>
-<summary><img src="https://resources.jetbrains.com/storage/products/pycharm/img/meta/pycharm_logo_300x300.png" width="16" height="16" alt="PyCharm" style="vertical-align: middle; margin-right: 8px;"> <strong>PyCharm</strong></summary>
-
-Same as IntelliJ IDEA configuration above.
-
-</details>
-
-<details>
-<summary><img src="https://resources.jetbrains.com/storage/products/webstorm/img/meta/webstorm_logo_300x300.png" width="16" height="16" alt="WebStorm" style="vertical-align: middle; margin-right: 8px;"> <strong>WebStorm</strong></summary>
-
-Same as IntelliJ IDEA configuration above.
-
-</details>
-
-<details>
-<summary><img src="https://developer.android.com/favicon.ico" width="16" height="16" alt="Android Studio" style="vertical-align: middle; margin-right: 8px;"> <strong>Android Studio</strong></summary>
-
-Same as IntelliJ IDEA configuration, adapted for Android Studio's settings location.
-
-</details>
 
 <details>
 <summary><img src="https://codegpt.co/favicon.ico" width="16" height="16" alt="CodeGPT" style="vertical-align: middle; margin-right: 8px;"> <strong>CodeGPT</strong></summary>
