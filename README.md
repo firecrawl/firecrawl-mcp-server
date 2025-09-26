@@ -26,24 +26,838 @@ A Model Context Protocol (MCP) server implementation that integrates with [Firec
 
 ## Installation
 
-### 📚 Comprehensive Installation Guide
+### 📚 Quick Start
 
-For detailed installation instructions across 26+ MCP-compatible environments, see our comprehensive [Installation Guide](docs/installation/index.md).
+Choose your preferred environment from the comprehensive installation guides below:
 
-**Supported Environments:**
-- **AI Assistants**: Claude Desktop, Claude Code, BoltAI, Perplexity Desktop, Warp
-- **Code Editors**: Cursor, VS Code, Zed, JetBrains AI Assistant, Windsurf, Augment Code, Roo Code, Trae, Opencode
-- **Development Tools**: Crush, Amazon Q Developer CLI, Gemini CLI, OpenAI Codex, Kiro
-- **Enterprise**: Copilot Coding Agent, Smithery
-- **Deployment**: Docker, Windows, NPX
+| Environment                                         | Quick Install  | Status |
+| --------------------------------------------------- | -------------- | ------ |
+| [Claude Desktop](#claude-desktop)                  | Manual Config  | ✅     |
+| [Claude Code](#claude-code)                        | CLI Command    | ✅     |
+| [Cursor](#cursor)                                  | One-Click     | ✅     |
+| [VS Code](#vs-code)                                | One-Click     | ✅     |
+| [Zed](#zed)                                        | Extensions    | ✅     |
+| [Windsurf](#windsurf)                              | Manual Config | ✅     |
+| [Cline](#cline)                                    | Marketplace   | ✅     |
+| [NPX](#npx)                                        | One-line      | ✅     |
+| [Docker](#docker)                                  | Container     | ✅     |
+| [Windows](#windows)                                | Windows Config| ✅     |
+| [Smithery](#smithery)                              | Universal     | ✅     |
+| [Augment Code](#augment-code)                      | Marketplace   | ✅     |
+| [Roo Code](#roo-code)                              | Manual Config | ✅     |
+| [Gemini CLI](#gemini-cli)                          | Manual Config | ✅     |
+| [Opencode](#opencode)                              | Manual Config | ✅     |
+| [OpenAI Codex](#openai-codex)                      | Manual Config | ✅     |
+| [JetBrains AI Assistant](#jetbrains-ai-assistant)  | GUI Config    | ✅     |
+| [Kiro](#kiro)                                      | GUI Config    | ✅     |
+| [Trae](#trae)                                      | Manual Config | ✅     |
+| [Amazon Q Developer CLI](#amazon-q-cli)            | Manual Config | ✅     |
+| [Warp](#warp)                                      | GUI Config    | ✅     |
+| [Copilot Coding Agent](#copilot-coding-agent)      | Enterprise    | ✅     |
+| [Crush](#crush)                                    | Manual Config | ✅     |
+| [BoltAI](#boltai)                                  | Manual Config | ✅     |
+| [Perplexity Desktop](#perplexity-desktop)          | Manual Config | ✅     |
 
-### Quick Start Options
+### Prerequisites
 
-#### Running with npx
+Before installing Firecrawl MCP, ensure you have:
 
+- **Firecrawl API Key**: Get your free API key from [firecrawl.dev](https://www.firecrawl.dev/app/api-keys)
+- **Node.js**: Version 18 or higher
+- **npm**: Latest version recommended
+
+---
+
+## Environment-Specific Installation Guides
+
+### Claude Desktop
+
+**Overview**: Anthropic's official desktop application with MCP support
+
+**Prerequisites**:
+- Claude Desktop (latest version)
+- Firecrawl API Key
+- macOS or Windows
+
+**Installation**:
+
+1. **Get Firecrawl API Key**
+   - Visit [firecrawl.dev/app/api-keys](https://www.firecrawl.dev/app/api-keys)
+   - Copy your API key (starts with `fc-`)
+
+2. **Locate Configuration File**
+   - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+3. **Create/Edit Configuration**
+   ```json
+   {
+     "mcpServers": {
+       "firecrawl": {
+         "command": "npx",
+         "args": ["-y", "firecrawl-mcp"],
+         "env": {
+           "FIRECRAWL_API_KEY": "fc-your-api-key-here"
+         }
+       }
+     }
+   }
+   ```
+
+4. **Restart Claude Desktop**
+
+**Verification**: Test with `Can you scrape https://httpbin.org/json and show me the content?`
+
+---
+
+### Claude Code
+
+**Overview**: Anthropic Claude's command-line interface
+
+**Prerequisites**:
+- Claude Code (latest version)
+- Firecrawl API Key
+- Node.js 18+ (for npx)
+
+**Installation**:
 ```bash
-env FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
+claude mcp add firecrawl npx -y firecrawl-mcp
 ```
+
+**Configuration**: Set your API key when prompted or via environment variable:
+```bash
+export FIRECRAWL_API_KEY=fc-your-api-key-here
+```
+
+**Verification**:
+1. Open Claude Code and start a new session
+2. Check if Firecrawl MCP tools are available
+3. Test with: `Can you scrape https://httpbin.org/json and show me the content?`
+
+---
+
+### Cursor
+
+**Overview**: AI-powered code editor with one-click MCP installation
+
+**Quick Install**:
+[![Install Firecrawl MCP in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=firecrawl&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsImZpcmVjcmF3bC1tY3AiXSwiZW52Ijp7IkZJUkVDUkFMTF9BUElfS0VZIjoiJHtpbnB1dDphcGlLZXl9In19)
+
+**Manual Configuration**:
+
+1. **Global Installation** (`~/.cursor/mcp.json`):
+   ```json
+   {
+     "mcpServers": {
+       "firecrawl": {
+         "command": "npx",
+         "args": ["-y", "firecrawl-mcp"],
+         "env": {
+           "FIRECRAWL_API_KEY": "fc-your-api-key-here"
+         }
+       }
+     }
+   }
+   ```
+
+2. **Project-Specific** (`.cursor/mcp.json`):
+   ```json
+   {
+     "mcpServers": {
+       "firecrawl": {
+         "command": "npx",
+         "args": ["-y", "firecrawl-mcp", "--api-key", "fc-your-api-key-here"]
+       }
+     }
+   }
+   ```
+
+**Windows Configuration**:
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "cmd",
+      "args": ["/c", "set FIRECRAWL_API_KEY=fc-your-api-key-here && npx -y firecrawl-mcp"]
+    }
+  }
+}
+```
+
+---
+
+### VS Code
+
+**Overview**: Microsoft's popular code editor with built-in MCP support
+
+**Quick Install**:
+[![Install with VS Code](https://img.shields.io/badge/VS_Code-One_Click-007ACC?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=firecrawl&inputs=%5B%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22apiKey%22%2C%22description%22%3A%22Firecrawl%20API%20Key%22%2C%22password%22%3Atrue%7D%5D&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22firecrawl-mcp%22%5D%2C%22env%22%3A%7B%22FIRECRAWL_API_KEY%22%3A%22%24%7Binput%3AapiKey%7D%22%7D%7D)
+
+**Manual Configuration**:
+
+1. **Open Settings**: Press `Ctrl + Shift + P` → "Preferences: Open User Settings (JSON)"
+2. **Add Configuration**:
+   ```json
+   {
+     "mcp": {
+       "servers": {
+         "firecrawl": {
+           "type": "stdio",
+           "command": "npx",
+           "args": ["-y", "firecrawl-mcp@latest"],
+           "env": {
+             "FIRECRAWL_API_KEY": "fc-your-api-key-here"
+           }
+         }
+       }
+     }
+   }
+   ```
+
+---
+
+### Zed
+
+**Overview**: Modern high-performance code editor
+
+**Prerequisites**:
+- Zed (latest version)
+- Firecrawl API Key
+- Node.js 18+ (for npx)
+
+**Installation**:
+
+1. **Install via Extension Manager**:
+   - Open Zed
+   - Go to `Extensions` → `Marketplace`
+   - Search for "Firecrawl MCP"
+   - Click `Install`
+
+2. **Manual Configuration** (`.zed/settings.json`):
+   ```json
+   {
+     "mcp_servers": {
+       "firecrawl": {
+         "command": "npx",
+         "args": ["-y", "firecrawl-mcp"],
+         "env": {
+           "FIRECRAWL_API_KEY": "fc-your-api-key-here"
+         }
+       }
+     }
+   }
+   ```
+
+**Verification**:
+1. Restart Zed after installation
+2. Check that Firecrawl MCP tools appear in the command palette
+3. Test with a scraping request
+
+---
+
+### Windsurf
+
+**Overview**: Codeium's AI development environment
+
+**Prerequisites**:
+- Windsurf (latest version)
+- Firecrawl API Key
+- Node.js 18+ (for npx)
+
+**Installation**:
+
+1. **Global Configuration** (`~/.windsurf/mcp.json`):
+   ```json
+   {
+     "mcpServers": {
+       "firecrawl": {
+         "command": "npx",
+         "args": ["-y", "firecrawl-mcp"],
+         "env": {
+           "FIRECRAWL_API_KEY": "fc-your-api-key-here"
+         }
+       }
+     }
+   }
+   ```
+
+2. **Project Configuration** (`.windsurf/mcp.json`):
+   - Create file in project root
+   - Use same configuration as global
+
+**Verification**:
+1. Restart Windsurf after configuration
+2. Check that Firecrawl MCP tools appear in the available tools
+3. Test with: `Scrape https://httpbin.org/json`
+
+---
+
+### Cline
+
+**Overview**: AI assistant with MCP marketplace
+
+**Prerequisites**:
+- Cline (latest version)
+- Firecrawl API Key
+- Node.js 18+ (for npx)
+
+**Installation**:
+
+1. **Via Marketplace**:
+   - Open Cline
+   - Go to `Extensions` → `Marketplace`
+   - Search for "Firecrawl MCP"
+   - Click `Install`
+
+2. **Manual Configuration**:
+   ```json
+   {
+     "mcpServers": {
+       "firecrawl": {
+         "command": "npx",
+         "args": ["-y", "firecrawl-mcp"],
+         "env": {
+           "FIRECRAWL_API_KEY": "fc-your-api-key-here"
+         }
+       }
+     }
+   }
+   ```
+
+**Verification**:
+1. Restart Cline after installation
+2. Check that Firecrawl MCP tools appear in the tools panel
+3. Test with: `Scrape https://httpbin.org/json`
+
+---
+
+### NPX
+
+**Overview**: Run directly without installation
+
+**Prerequisites**:
+- Node.js 18+
+- npm (latest version recommended)
+- Firecrawl API Key
+
+**Installation**:
+```bash
+env FIRECRAWL_API_KEY=fc-your-api-key-here npx -y firecrawl-mcp
+```
+
+**For SSE Local Mode**:
+```bash
+env SSE_LOCAL=true FIRECRAWL_API_KEY=fc-your-api-key-here npx -y firecrawl-mcp
+```
+Use URL: `http://localhost:3000/sse`
+
+**Verification**:
+1. Run the command above and look for "Firecrawl MCP Server initialized successfully" message
+2. The server should start and be ready to accept MCP connections
+
+---
+
+### Docker
+
+**Overview**: Containerized deployment
+
+**Prerequisites**:
+- Docker (latest version)
+- Docker Compose (optional)
+- Firecrawl API Key
+
+**Installation**:
+
+1. **Create Dockerfile**:
+   ```dockerfile
+   FROM node:18-alpine
+
+   WORKDIR /app
+   RUN npm install -g firecrawl-mcp
+
+   CMD ["firecrawl-mcp"]
+   ```
+
+2. **Build and Run**:
+   ```bash
+   docker build -t firecrawl-mcp .
+   docker run -e FIRECRAWL_API_KEY=your-api-key firecrawl-mcp
+   ```
+
+3. **Docker Compose**:
+   ```yaml
+   version: '3.8'
+   services:
+     firecrawl-mcp:
+       image: firecrawl-mcp
+       environment:
+         - FIRECRAWL_API_KEY=your-api-key
+   ```
+
+**Verification**:
+1. Check that the container starts successfully: `docker ps | grep firecrawl-mcp`
+2. View container logs: `docker logs firecrawl-mcp`
+3. Look for "Firecrawl MCP Server initialized successfully" message
+
+---
+
+### Windows
+
+**Overview**: Windows-specific configuration
+
+**Prerequisites**:
+- Windows 10/11
+- Node.js 18+ (for npx)
+- Firecrawl API Key
+- PowerShell or Command Prompt
+
+**Installation**:
+
+1. **PowerShell**:
+   ```powershell
+   $env:FIRECRAWL_API_KEY="fc-your-api-key-here"
+   npx -y firecrawl-mcp
+   ```
+
+2. **Command Prompt**:
+   ```cmd
+   set FIRECRAWL_API_KEY=fc-your-api-key-here
+   npx -y firecrawl-mcp
+   ```
+
+3. **Windows Services**:
+   ```json
+   {
+     "mcpServers": {
+       "firecrawl": {
+         "command": "cmd",
+         "args": ["/c", "set FIRECRAWL_API_KEY=fc-your-api-key-here && npx -y firecrawl-mcp"]
+       }
+     }
+   }
+   ```
+
+**Verification**:
+1. Run one of the installation commands above
+2. Look for "Firecrawl MCP Server initialized successfully" message
+3. Test with a simple URL scrape in your MCP client
+
+---
+
+### Smithery
+
+**Overview**: Universal installation across all MCP clients
+
+**Prerequisites**:
+- Node.js 18+
+- npm (latest version recommended)
+- Firecrawl API Key
+- Smithery CLI access
+
+**Installation**:
+```bash
+npx -y @smithery/cli install @mendableai/mcp-server-firecrawl --client claude
+```
+
+**Configuration**: Smithery handles the configuration automatically for your chosen client.
+
+**Verification**:
+1. After installation, restart your chosen MCP client
+2. Check that Firecrawl MCP tools appear in the available tools list
+3. Test with a basic scraping request in your client
+
+---
+
+### Augment Code
+
+**Overview**: AI-powered coding assistant
+
+**Prerequisites**:
+- Augment Code (latest version)
+- Firecrawl API Key
+- Node.js 18+ (for npx)
+
+**Installation**:
+
+1. **Via Marketplace**:
+   - Open Augment Code
+   - Go to `Extensions` → `Marketplace`
+   - Search for "Firecrawl MCP"
+   - Click `Install`
+
+2. **Manual Configuration**:
+   ```json
+   {
+     "mcpServers": {
+       "firecrawl": {
+         "command": "npx",
+         "args": ["-y", "firecrawl-mcp"],
+         "env": {
+           "FIRECRAWL_API_KEY": "fc-your-api-key-here"
+         }
+       }
+     }
+   }
+   ```
+
+**Verification**:
+1. Restart Augment Code after installation
+2. Check that Firecrawl MCP tools appear in the tools panel
+3. Test with: `Scrape https://httpbin.org/json`
+
+---
+
+### Roo Code
+
+**Overview**: AI-powered coding assistant
+
+**Installation**:
+
+1. **Configuration File** (`.roo/mcp.json`):
+   ```json
+   {
+     "mcpServers": {
+       "firecrawl": {
+         "command": "npx",
+         "args": ["-y", "firecrawl-mcp"],
+         "env": {
+           "FIRECRAWL_API_KEY": "fc-your-api-key-here"
+         }
+       }
+     }
+   }
+   ```
+
+2. **Restart Roo Code**
+
+---
+
+### Gemini CLI
+
+**Overview**: Google Gemini's command-line interface
+
+**Installation**:
+
+1. **Configuration File** (`~/.gemini/mcp.json`):
+   ```json
+   {
+     "mcpServers": {
+       "firecrawl": {
+         "command": "npx",
+         "args": ["-y", "firecrawl-mcp"],
+         "env": {
+           "FIRECRAWL_API_KEY": "fc-your-api-key-here"
+         }
+       }
+     }
+   }
+   ```
+
+2. **Set Environment Variable**:
+   ```bash
+   export FIRECRAWL_API_KEY=fc-your-api-key-here
+   ```
+
+---
+
+### Opencode
+
+**Overview**: AI-powered development environment
+
+**Installation**:
+
+1. **Configuration File** (`.opencode/mcp.json`):
+   ```json
+   {
+     "mcpServers": {
+       "firecrawl": {
+         "command": "npx",
+         "args": ["-y", "firecrawl-mcp"],
+         "env": {
+           "FIRECRAWL_API_KEY": "fc-your-api-key-here"
+         }
+       }
+     }
+   }
+   ```
+
+2. **Restart Opencode**
+
+---
+
+### OpenAI Codex
+
+**Overview**: AI-powered code completion tool
+
+**Installation**:
+
+1. **Configuration File** (`.codex/mcp.json`):
+   ```json
+   {
+     "mcpServers": {
+       "firecrawl": {
+         "command": "npx",
+         "args": ["-y", "firecrawl-mcp"],
+         "env": {
+           "FIRECRAWL_API_KEY": "fc-your-api-key-here"
+         }
+       }
+     }
+   }
+   ```
+
+---
+
+### JetBrains AI Assistant
+
+**Overview**: JetBrains IDE AI assistant
+
+**Installation**:
+
+1. **Open Settings** → `Plugins` → `Marketplace`
+2. **Search for "Firecrawl MCP"**
+3. **Install and restart IDE**
+
+**Manual Configuration** (`.idea/mcp.xml`):
+```xml
+<mcp>
+  <servers>
+    <server name="firecrawl">
+      <command>npx</command>
+      <args>-y firecrawl-mcp</args>
+      <env>
+        <FIRECRAWL_API_KEY>fc-your-api-key-here</FIRECRAWL_API_KEY>
+      </env>
+    </server>
+  </servers>
+</mcp>
+```
+
+---
+
+### Kiro
+
+**Overview**: AI-powered development environment
+
+**Installation**:
+
+1. **Configuration File** (`.kiro/mcp.json`):
+   ```json
+   {
+     "mcpServers": {
+       "firecrawl": {
+         "command": "npx",
+         "args": ["-y", "firecrawl-mcp"],
+         "env": {
+           "FIRECRAWL_API_KEY": "fc-your-api-key-here"
+         }
+       }
+     }
+   }
+   ```
+
+2. **Restart Kiro**
+
+---
+
+### Trae
+
+**Overview**: AI-powered development environment
+
+**Installation**:
+
+1. **Configuration File** (`.trae/mcp.json`):
+   ```json
+   {
+     "mcpServers": {
+       "firecrawl": {
+         "command": "npx",
+         "args": ["-y", "firecrawl-mcp"],
+         "env": {
+           "FIRECRAWL_API_KEY": "fc-your-api-key-here"
+         }
+       }
+     }
+   }
+   ```
+
+2. **Restart Trae**
+
+---
+
+### Amazon Q Developer CLI
+
+**Overview**: AWS AI-powered CLI
+
+**Installation**:
+
+1. **Configuration File** (`~/.amazonq/mcp.json`):
+   ```json
+   {
+     "mcpServers": {
+       "firecrawl": {
+         "command": "npx",
+         "args": ["-y", "firecrawl-mcp"],
+         "env": {
+           "FIRECRAWL_API_KEY": "fc-your-api-key-here"
+         }
+       }
+     }
+   }
+   ```
+
+2. **Set AWS Credentials** (if needed):
+   ```bash
+   aws configure
+   ```
+
+---
+
+### Warp
+
+**Overview**: AI-powered terminal
+
+**Installation**:
+
+1. **Open Warp Settings**
+2. **Go to `Features` → `MCP Servers`**
+3. **Add Configuration**:
+   ```json
+   {
+     "mcpServers": {
+       "firecrawl": {
+         "command": "npx",
+         "args": ["-y", "firecrawl-mcp"],
+         "env": {
+           "FIRECRAWL_API_KEY": "fc-your-api-key-here"
+         }
+       }
+     }
+   }
+   ```
+
+---
+
+### Copilot Coding Agent
+
+**Overview**: GitHub's enterprise AI assistant
+
+**Installation**:
+
+1. **Enterprise Configuration**:
+   ```json
+   {
+     "mcpServers": {
+       "firecrawl": {
+         "command": "npx",
+         "args": ["-y", "firecrawl-mcp"],
+         "env": {
+           "FIRECRAWL_API_KEY": "fc-your-api-key-here"
+         }
+       }
+     }
+   }
+   ```
+
+2. **Deploy via Enterprise Management Console**
+
+---
+
+### Crush
+
+**Overview**: Modern AI-powered development environment
+
+**Installation**:
+
+1. **Configuration File** (`.crush/mcp.json`):
+   ```json
+   {
+     "mcpServers": {
+       "firecrawl": {
+         "command": "npx",
+         "args": ["-y", "firecrawl-mcp"],
+         "env": {
+           "FIRECRAWL_API_KEY": "fc-your-api-key-here"
+         }
+       }
+     }
+   }
+   ```
+
+2. **Restart Crush**
+
+---
+
+### BoltAI
+
+**Overview**: AI assistant with plugin-based MCP support
+
+**Prerequisites**:
+- BoltAI (latest version)
+- Firecrawl API Key
+- Node.js 18+ (for npx)
+
+**Installation**:
+
+1. **Configuration File** (`.boltai/mcp.json`):
+   ```json
+   {
+     "mcpServers": {
+       "firecrawl": {
+         "command": "npx",
+         "args": ["-y", "firecrawl-mcp"],
+         "env": {
+           "FIRECRAWL_API_KEY": "fc-your-api-key-here"
+         }
+       }
+     }
+   }
+   ```
+
+2. **Restart BoltAI**
+
+**Verification**:
+1. Open BoltAI and check for Firecrawl MCP tools in the available tools list
+2. Test with a simple scraping request like `Scrape https://httpbin.org/json`
+
+---
+
+### Perplexity Desktop
+
+**Overview**: Research-focused AI assistant with connector support
+
+**Prerequisites**:
+- Perplexity Desktop (latest version)
+- Firecrawl API Key
+- Node.js 18+ (for npx)
+
+**Installation**:
+
+1. **Configuration File** (`.perplexity/mcp.json`):
+   ```json
+   {
+     "mcpServers": {
+       "firecrawl": {
+         "command": "npx",
+         "args": ["-y", "firecrawl-mcp"],
+         "env": {
+           "FIRECRAWL_API_KEY": "fc-your-api-key-here"
+         }
+       }
+     }
+   }
+   ```
+
+2. **Restart Perplexity Desktop**
+
+**Verification**:
+1. Open Perplexity Desktop and start a new conversation
+2. Check if Firecrawl tools are available (firecrawl_scrape, firecrawl_search, etc.)
+3. Test with: `Can you scrape https://httpbin.org/json?`
+
+---
+
+### Alternative Installation Methods
 
 #### Manual Installation
 
@@ -51,57 +865,26 @@ env FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
 npm install -g firecrawl-mcp
 ```
 
-### Quick Environment Setup
-
-For **detailed environment-specific instructions**, see our [Installation Guide](docs/installation/index.md). Here are a few quick examples:
-
-#### Cursor (One-Click Installation)
-[![Install with Cursor](https://img.shields.io/badge/Cursor-One_Click-007ACC?style=flat-square&logo=cursor&logoColor=white)](https://cursor.sh/firecrawl-mcp)
-
-#### VS Code (One-Click Installation)
-[![Install with VS Code](https://img.shields.io/badge/VS_Code-One_Click-007ACC?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=firecrawl&inputs=%5B%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22apiKey%22%2C%22description%22%3A%22Firecrawl%20API%20Key%22%2C%22password%22%3Atrue%7D%5D&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22firecrawl-mcp%22%5D%2C%22env%22%3A%7B%22FIRECRAWL_API_KEY%22%3A%22%24%7Binput%3AapiKey%7D%22%7D%7D)
-
-#### Claude Desktop
-See [Claude Desktop Installation Guide](docs/installation/claude-desktop.md) for manual configuration.
-
-#### Claude Code
-```bash
-claude mcp add firecrawl npx -y firecrawl-mcp
-```
-
-#### Other Environments
-Visit the [Installation Guide](docs/installation/index.md) for instructions on:
-- **AI Assistants**: BoltAI, Perplexity Desktop, Warp
-- **Code Editors**: Zed, JetBrains AI Assistant, Windsurf, Augment Code, Roo Code, Trae, Opencode
-- **Development Tools**: Crush, Amazon Q Developer CLI, Gemini CLI, OpenAI Codex, Kiro
-- **Enterprise**: Copilot Coding Agent, Smithery
-- **Deployment**: Docker, Windows
-
-### Alternative Installation Methods
-
 #### Running with SSE Local Mode
 
-To run the server using Server-Sent Events (SSE) locally instead of the default stdio transport:
-
 ```bash
-env SSE_LOCAL=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
+env SSE_LOCAL=true FIRECRAWL_API_KEY=fc-your-api-key-here npx -y firecrawl-mcp
 ```
-
-Use the url: http://localhost:3000/sse
+Use the url: `http://localhost:3000/sse`
 
 #### Installing via Smithery (Legacy)
-
-To install Firecrawl for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@mendableai/mcp-server-firecrawl):
 
 ```bash
 npx -y @smithery/cli install @mendableai/mcp-server-firecrawl --client claude
 ```
 
-## Configuration
+---
 
-### Environment Variables
+### Configuration
 
-#### Required for Cloud API
+#### Environment Variables
+
+**Required for Cloud API**:
 
 - `FIRECRAWL_API_KEY`: Your Firecrawl API key
   - Required when using cloud API (default)
@@ -110,21 +893,16 @@ npx -y @smithery/cli install @mendableai/mcp-server-firecrawl --client claude
   - Example: `https://firecrawl.your-domain.com`
   - If not provided, the cloud API will be used (requires API key)
 
-#### Optional Configuration
-
-##### Retry Configuration
+**Optional Configuration**:
 
 - `FIRECRAWL_RETRY_MAX_ATTEMPTS`: Maximum number of retry attempts (default: 3)
 - `FIRECRAWL_RETRY_INITIAL_DELAY`: Initial delay in milliseconds before first retry (default: 1000)
 - `FIRECRAWL_RETRY_MAX_DELAY`: Maximum delay in milliseconds between retries (default: 10000)
 - `FIRECRAWL_RETRY_BACKOFF_FACTOR`: Exponential backoff multiplier (default: 2)
-
-##### Credit Usage Monitoring
-
 - `FIRECRAWL_CREDIT_WARNING_THRESHOLD`: Credit usage warning threshold (default: 1000)
 - `FIRECRAWL_CREDIT_CRITICAL_THRESHOLD`: Credit usage critical threshold (default: 100)
 
-### Configuration Examples
+**Configuration Examples**:
 
 For cloud API usage with custom retry and credit monitoring:
 
@@ -157,10 +935,6 @@ export FIRECRAWL_RETRY_MAX_ATTEMPTS=10
 export FIRECRAWL_RETRY_INITIAL_DELAY=500     # Start with faster retries
 ```
 
-### Environment-Specific Configuration
-
-For detailed configuration examples for your specific environment, see the [Installation Guide](docs/installation/index.md). Each environment has its own configuration format and requirements.
-
 #### Common Configuration Pattern
 
 Most environments use a variation of this JSON configuration:
@@ -179,51 +953,72 @@ Most environments use a variation of this JSON configuration:
 }
 ```
 
-**Note:** The exact format varies by environment. Some use:
+**Note**: The exact format varies by environment. Some use:
 - `"mcp"` instead of `"mcpServers"`
 - `"servers"` instead of nested objects
 - HTTP connections for remote servers
 - TOML configuration instead of JSON
 
-Always refer to the [environment-specific documentation](docs/installation/index.md) for exact configuration requirements.
+#### Verification
 
-### System Configuration
+After installation, verify that Firecrawl MCP is working:
 
-The server includes several configurable parameters that can be set via environment variables. Here are the default values if not configured:
+1. **Check Server Status**: Look for "Firecrawl MCP Server initialized successfully" in logs
+2. **Test Tools**: Try using `firecrawl_scrape` with a test URL like `https://httpbin.org/json`
+3. **Verify API Connection**: Ensure your API key is valid
 
-```typescript
-const CONFIG = {
-  retry: {
-    maxAttempts: 3, // Number of retry attempts for rate-limited requests
-    initialDelay: 1000, // Initial delay before first retry (in milliseconds)
-    maxDelay: 10000, // Maximum delay between retries (in milliseconds)
-    backoffFactor: 2, // Multiplier for exponential backoff
-  },
-  credit: {
-    warningThreshold: 1000, // Warn when credit usage reaches this level
-    criticalThreshold: 100, // Critical alert when credit usage reaches this level
-  },
-};
+---
+
+### Troubleshooting
+
+#### Common Issues
+
+- **API Key Issues**: Verify your key is valid and not expired
+- **Network Problems**: Check firewall and proxy settings
+- **Permission Errors**: Ensure proper Node.js/npm permissions
+- **Version Conflicts**: Update Node.js to v18+
+- **Windows Command Issues**: Use `cmd /c` format for Windows configurations
+- **JSON Syntax Errors**: Validate JSON syntax before saving configuration files
+
+#### Debug Mode
+
+Enable debug logging to troubleshoot issues:
+
+```bash
+export DEBUG=firecrawl-mcp:*
 ```
 
-These configurations control:
+Then restart your MCP client.
 
-1. **Retry Behavior**
+### Advanced Configuration
 
-   - Automatically retries failed requests due to rate limits
-   - Uses exponential backoff to avoid overwhelming the API
-   - Example: With default settings, retries will be attempted at:
-     - 1st retry: 1 second delay
-     - 2nd retry: 2 seconds delay
-     - 3rd retry: 4 seconds delay (capped at maxDelay)
+The server includes several configurable parameters that can be set via environment variables:
 
-2. **Credit Usage Monitoring**
-   - Tracks API credit consumption for cloud API usage
-   - Provides warnings at specified thresholds
-   - Helps prevent unexpected service interruption
-   - Example: With default settings:
-     - Warning at 1000 credits remaining
-     - Critical alert at 100 credits remaining
+**Retry Configuration**:
+- `FIRECRAWL_RETRY_MAX_ATTEMPTS`: Number of retry attempts for rate-limited requests (default: 3)
+- `FIRECRAWL_RETRY_INITIAL_DELAY`: Initial delay before first retry in milliseconds (default: 1000)
+- `FIRECRAWL_RETRY_MAX_DELAY`: Maximum delay between retries in milliseconds (default: 10000)
+- `FIRECRAWL_RETRY_BACKOFF_FACTOR`: Multiplier for exponential backoff (default: 2)
+
+**Credit Usage Monitoring**:
+- `FIRECRAWL_CREDIT_WARNING_THRESHOLD`: Warn when credit usage reaches this level (default: 1000)
+- `FIRECRAWL_CREDIT_CRITICAL_THRESHOLD`: Critical alert when credit usage reaches this level (default: 100)
+
+**Retry Behavior**:
+- Automatically retries failed requests due to rate limits
+- Uses exponential backoff to avoid overwhelming the API
+- Example: With default settings, retries will be attempted at:
+  - 1st retry: 1 second delay
+  - 2nd retry: 2 seconds delay
+  - 3rd retry: 4 seconds delay (capped at maxDelay)
+
+**Credit Usage Monitoring**:
+- Tracks API credit consumption for cloud API usage
+- Provides warnings at specified thresholds
+- Helps prevent unexpected service interruption
+- Example: With default settings:
+  - Warning at 1000 credits remaining
+  - Critical alert at 100 credits remaining
 
 ### Rate Limiting and Batch Processing
 
