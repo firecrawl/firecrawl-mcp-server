@@ -26,97 +26,545 @@ A Model Context Protocol (MCP) server implementation that integrates with [Firec
 
 ## Installation
 
-📖 **[Complete Installation Guide](./INSTALLATION.md)** - Comprehensive instructions for 50+ MCP-compatible environments
+### Prerequisites
+
+- Node.js (version 18.0.0 or higher)
+- npm or yarn package manager
+- Firecrawl API Key from [https://www.firecrawl.dev/app/api-keys](https://www.firecrawl.dev/app/api-keys)
 
 ### Quick Start
 
 ```bash
+# Using npx (recommended)
 env FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
-```
 
-### Manual Installation
-
-```bash
+# Or install globally
 npm install -g firecrawl-mcp
 ```
 
-### Popular Platforms
+### Platform Installation Guides
 
-The installation guide covers all major platforms including:
+<details>
+<summary><img src="https://claude.ai/favicon.ico" width="16" height="16" alt="Claude" style="vertical-align: middle; margin-right: 8px;"> <strong>Claude Desktop</strong></summary>
 
-- **Desktop AI**: Claude Desktop, Claude Code CLI
-- **Editors**: Cursor, VS Code, Windsurf, Zed, IntelliJ IDEA, PyCharm, Neovim, Emacs
-- **Extensions**: Cline, Continue.dev, CodeGPT, GitHub Copilot
-- **Cloud**: AWS, Azure, GCP, Replit
-- **Containers**: Docker, Kubernetes
-- **Mobile**: iOS, Android
-- **Enterprise**: Slack, Teams, Discord
-- **And many more...**
+**Location of config file:**
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+- Linux: `~/.config/claude/claude_desktop_config.json`
 
-[→ View Complete Installation Guide](./INSTALLATION.md)
-
-### Running on Cursor
-
-Configuring Cursor 🖥️
-Note: Requires Cursor version 0.45.6+
-For the most up-to-date configuration instructions, please refer to the official Cursor documentation on configuring MCP servers:
-[Cursor MCP Server Configuration Guide](https://docs.cursor.com/context/model-context-protocol#configuring-mcp-servers)
-
-To configure Firecrawl MCP in Cursor **v0.48.6**
-
-1. Open Cursor Settings
-2. Go to Features > MCP Servers
-3. Click "+ Add new global MCP server"
-4. Enter the following code:
-   ```json
-   {
-     "mcpServers": {
-       "firecrawl-mcp": {
-         "command": "npx",
-         "args": ["-y", "firecrawl-mcp"],
-         "env": {
-           "FIRECRAWL_API_KEY": "YOUR-API-KEY"
-         }
-       }
-     }
-   }
-   ```
-   
-To configure Firecrawl MCP in Cursor **v0.45.6**
-
-1. Open Cursor Settings
-2. Go to Features > MCP Servers
-3. Click "+ Add New MCP Server"
-4. Enter the following:
-   - Name: "firecrawl-mcp" (or your preferred name)
-   - Type: "command"
-   - Command: `env FIRECRAWL_API_KEY=your-api-key npx -y firecrawl-mcp`
-
-
-
-> If you are using Windows and are running into issues, try `cmd /c "set FIRECRAWL_API_KEY=your-api-key && npx -y firecrawl-mcp"`
-
-Replace `your-api-key` with your Firecrawl API key. If you don't have one yet, you can create an account and get it from https://www.firecrawl.dev/app/api-keys
-
-After adding, refresh the MCP server list to see the new tools. The Composer Agent will automatically use Firecrawl MCP when appropriate, but you can explicitly request it by describing your web scraping needs. Access the Composer via Command+L (Mac), select "Agent" next to the submit button, and enter your query.
-
-### Running on Windsurf
-
-Add this to your `./codeium/windsurf/model_config.json`:
-
+**Configuration:**
 ```json
 {
   "mcpServers": {
-    "mcp-server-firecrawl": {
+    "firecrawl-mcp": {
       "command": "npx",
       "args": ["-y", "firecrawl-mcp"],
       "env": {
-        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+        "FIRECRAWL_API_KEY": "fc-YOUR_API_KEY"
       }
     }
   }
 }
 ```
+
+**Restart Claude Desktop after adding the configuration.**
+
+</details>
+
+<details>
+<summary><img src="https://www.cursor.com/favicon.ico" width="16" height="16" alt="Cursor" style="vertical-align: middle; margin-right: 8px;"> <strong>Cursor</strong></summary>
+
+**Cursor v0.48.6+:**
+1. Open Cursor Settings (`Cmd/Ctrl + ,`)
+2. Go to Features → MCP Servers
+3. Click "+ Add new global MCP server"
+4. Enter the following:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "fc-YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+**Cursor v0.45.6:**
+1. Open Cursor Settings
+2. Go to Features → MCP Servers
+3. Click "+ Add New MCP Server"
+4. Enter:
+   - Name: `firecrawl-mcp`
+   - Type: `command`
+   - Command: `env FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp`
+
+**Windows users:** Use `cmd /c "set FIRECRAWL_API_KEY=fc-YOUR_API_KEY && npx -y firecrawl-mcp"`
+
+</details>
+
+<details>
+<summary><img src="https://windsurf.com/favicon.svg" width="16" height="16" alt="Windsurf" style="vertical-align: middle; margin-right: 8px;"> <strong>Windsurf</strong></summary>
+
+**Location:** `~/.codeium/windsurf/model_config.json`
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "fc-YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+**Restart Windsurf after adding configuration.**
+
+</details>
+
+<details>
+<summary><img src="https://code.visualstudio.com/favicon.ico" width="16" height="16" alt="VS Code" style="vertical-align: middle; margin-right: 8px;"> <strong>VS Code</strong></summary>
+
+**One-click install:**
+
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install-0098FF?style=flat-square&logo=visualstudiocode)](https://vscode.dev/redirect/mcp/install?name=firecrawl&inputs=%5B%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22apiKey%22%2C%22description%22%3A%22Firecrawl%20API%20Key%22%2C%22password%22%3Atrue%7D%5D&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22firecrawl-mcp%22%5D%2C%22env%22%3A%7B%22FIRECRAWL_API_KEY%22%3A%22%24%7Binput%3AapiKey%7D%22%7D%7D)
+
+**Manual setup:**
+1. Open User Settings (`Ctrl/Cmd + Shift + P` → "Preferences: Open User Settings (JSON)")
+2. Add:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "firecrawl": {
+        "command": "npx",
+        "args": ["-y", "firecrawl-mcp"],
+        "env": {
+          "FIRECRAWL_API_KEY": "fc-YOUR_API_KEY"
+        }
+      }
+    }
+  }
+}
+```
+
+**Workspace config (`.vscode/mcp.json`):**
+```json
+{
+  "servers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "${env:FIRECRAWL_API_KEY}"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><img src="https://marketplace.visualstudio.com/favicon.ico" width="16" height="16" alt="Cline" style="vertical-align: middle; margin-right: 8px;"> <strong>Cline</strong></summary>
+
+1. Install Cline extension in VS Code
+2. Open Cline settings (`Cmd/Ctrl + Shift + P` → "Cline: Open Settings")
+3. Add:
+
+```json
+{
+  "cline.mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "fc-YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><img src="https://zed.dev/favicon_black_16.png" width="16" height="16" alt="Zed" style="vertical-align: middle; margin-right: 8px;"> <strong>Zed</strong></summary>
+
+1. Open Zed settings (`Cmd/Ctrl + ,`)
+2. Navigate to Extensions → MCP
+3. Add:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "firecrawl": {
+        "command": "npx",
+        "args": ["-y", "firecrawl-mcp"],
+        "env": {
+          "FIRECRAWL_API_KEY": "fc-YOUR_API_KEY"
+        }
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><img src="https://www.jetbrains.com/favicon.ico" width="16" height="16" alt="IntelliJ IDEA" style="vertical-align: middle; margin-right: 8px;"> <strong>IntelliJ IDEA / PyCharm / WebStorm</strong></summary>
+
+**For IntelliJ IDEA 2025.2+ with GitHub Copilot:**
+
+1. Open Settings → Tools → GitHub Copilot → MCP Servers
+2. Add new server:
+
+```yaml
+name: firecrawl
+type: command
+command: npx -y firecrawl-mcp
+environment:
+  FIRECRAWL_API_KEY: fc-YOUR_API_KEY
+```
+
+**Project config (`.idea/mcp.xml`):**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="MCPSettings">
+    <servers>
+      <server name="firecrawl">
+        <option name="command" value="npx" />
+        <option name="args">
+          <list>
+            <option value="-y" />
+            <option value="firecrawl-mcp" />
+          </list>
+        </option>
+        <option name="env">
+          <map>
+            <entry key="FIRECRAWL_API_KEY" value="fc-YOUR_API_KEY" />
+          </map>
+        </option>
+      </server>
+    </servers>
+  </component>
+</project>
+```
+
+</details>
+
+<details>
+<summary><img src="https://cdn.prod.website-files.com/663e06c56841363663ffbbcf/664c918ec47bacdd3acdc167_favicon%408x.png" width="16" height="16" alt="Continue.dev" style="vertical-align: middle; margin-right: 8px;"> <strong>Continue.dev</strong></summary>
+
+1. Install Continue extension
+2. Open Continue config (gear icon → "Open config.json")
+3. Location: `~/.continue/config.json`
+4. Add:
+
+```json
+{
+  "models": [...],
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "fc-YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><img src="https://github.githubassets.com/favicons/favicon.svg" width="16" height="16" alt="GitHub Copilot" style="vertical-align: middle; margin-right: 8px;"> <strong>GitHub Copilot</strong></summary>
+
+**VS Code:**
+```json
+{
+  "github.copilot.chat.mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "fc-YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+**JetBrains IDEs:** Follow IntelliJ IDEA instructions above.
+
+</details>
+
+<details>
+<summary><img src="https://neovim.io/logos/neovim-mark-flat.png" width="16" height="16" alt="Neovim" style="vertical-align: middle; margin-right: 8px;"> <strong>Neovim</strong></summary>
+
+**Prerequisites:** Neovim 0.10.0+, Node.js
+
+**Plugin installation (lazy.nvim):**
+```lua
+-- ~/.config/nvim/lua/plugins/mcp.lua
+return {
+  "sourcegraph/mcp.nvim",
+  config = function()
+    require("mcp").setup({
+      servers = {
+        firecrawl = {
+          command = "npx",
+          args = { "-y", "firecrawl-mcp" },
+          env = {
+            FIRECRAWL_API_KEY = "fc-YOUR_API_KEY"
+          }
+        }
+      }
+    })
+  end
+}
+```
+
+</details>
+
+<details>
+<summary><img src="https://www.gnu.org/software/emacs/favicon.png" width="16" height="16" alt="Emacs" style="vertical-align: middle; margin-right: 8px;"> <strong>Emacs</strong></summary>
+
+**Prerequisites:** Emacs 29+
+
+**Package installation:**
+```elisp
+;; Using use-package
+(use-package mcp
+  :ensure t
+  :config
+  (add-to-list 'mcp-server-configurations
+    '(firecrawl . ((command . "npx -y firecrawl-mcp")
+                   (env . ((FIRECRAWL_API_KEY . "fc-YOUR_API_KEY")))))))
+```
+
+</details>
+
+<details>
+<summary><img src="https://www.docker.com/favicon.ico" width="16" height="16" alt="Docker" style="vertical-align: middle; margin-right: 8px;"> <strong>Docker</strong></summary>
+
+**Dockerfile:**
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+RUN npm install -g firecrawl-mcp
+ENV FIRECRAWL_API_KEY=""
+CMD ["firecrawl-mcp"]
+```
+
+**Build and run:**
+```bash
+docker build -t firecrawl-mcp .
+docker run -e FIRECRAWL_API_KEY=fc-YOUR_API_KEY firecrawl-mcp
+```
+
+**Docker Compose:**
+```yaml
+version: '3.8'
+services:
+  firecrawl-mcp:
+    image: firecrawl-mcp
+    environment:
+      - FIRECRAWL_API_KEY=fc-YOUR_API_KEY
+    restart: unless-stopped
+```
+
+</details>
+
+<details>
+<summary><img src="https://raw.githubusercontent.com/kubernetes/kubernetes/master/logo/logo.png" width="16" height="16" alt="Kubernetes" style="vertical-align: middle; margin-right: 8px;"> <strong>Kubernetes</strong></summary>
+
+**Create secret:**
+```bash
+kubectl create secret generic firecrawl-secret \
+  --from-literal=api-key=fc-YOUR_API_KEY
+```
+
+**Deployment:**
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firecrawl-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: firecrawl-mcp
+  template:
+    metadata:
+      labels:
+        app: firecrawl-mcp
+    spec:
+      containers:
+      - name: firecrawl-mcp
+        image: node:18-alpine
+        command: ["npx", "-y", "firecrawl-mcp"]
+        env:
+        - name: FIRECRAWL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: firecrawl-secret
+              key: api-key
+```
+
+</details>
+
+<details>
+<summary><img src="https://cdn.replit.com/dotcom/favicon-196.png" width="16" height="16" alt="Replit" style="vertical-align: middle; margin-right: 8px;"> <strong>Replit</strong></summary>
+
+**Create `.replit` file:**
+```toml
+run = "npx -y firecrawl-mcp"
+
+[env]
+FIRECRAWL_API_KEY = "fc-YOUR_API_KEY"
+
+[nix]
+channel = "stable-24_11"
+
+[deployment]
+run = ["sh", "-c", "npx -y firecrawl-mcp"]
+```
+
+Add `FIRECRAWL_API_KEY` to Secrets tab.
+
+</details>
+
+<details>
+<summary>⚙️ <strong>Other Platforms</strong></summary>
+
+### Claude Code CLI
+```bash
+export FIRECRAWL_API_KEY="fc-YOUR_API_KEY"
+claude-code --mcp "npx -y firecrawl-mcp"
+```
+
+### Android Studio
+Same as IntelliJ IDEA configuration.
+
+### CodeGPT
+```json
+{
+  "codegpt.mcpServers": [
+    {
+      "name": "firecrawl",
+      "command": "npx -y firecrawl-mcp",
+      "env": {
+        "FIRECRAWL_API_KEY": "fc-YOUR_API_KEY"
+      }
+    }
+  ]
+}
+```
+
+### AWS Lambda
+```javascript
+const { FirecrawlMCP } = require('firecrawl-mcp');
+
+exports.handler = async (event) => {
+  const mcp = new FirecrawlMCP({
+    apiKey: process.env.FIRECRAWL_API_KEY
+  });
+  return await mcp.handle(event);
+};
+```
+
+### Azure Functions
+```javascript
+module.exports = async function (context, req) {
+  const { FirecrawlMCP } = require('firecrawl-mcp');
+  const mcp = new FirecrawlMCP({
+    apiKey: process.env.FIRECRAWL_API_KEY
+  });
+  // Implementation
+};
+```
+
+### Google Cloud Functions
+```javascript
+const { FirecrawlMCP } = require('firecrawl-mcp');
+
+exports.firecrawlMCP = async (req, res) => {
+  const mcp = new FirecrawlMCP({
+    apiKey: process.env.FIRECRAWL_API_KEY
+  });
+  // Implementation
+};
+```
+
+### Slack Bot
+```javascript
+const { App } = require('@slack/bolt');
+const { FirecrawlMCP } = require('firecrawl-mcp');
+
+const app = new App({
+  token: process.env.SLACK_BOT_TOKEN,
+  signingSecret: process.env.SLACK_SIGNING_SECRET
+});
+
+const firecrawl = new FirecrawlMCP({
+  apiKey: process.env.FIRECRAWL_API_KEY
+});
+
+app.command('/scrape', async ({ command, ack, respond }) => {
+  await ack();
+  const result = await firecrawl.scrape(command.text);
+  await respond(result);
+});
+
+app.start();
+```
+
+### Discord Bot
+```javascript
+const { Client, Intents } = require('discord.js');
+const { FirecrawlMCP } = require('firecrawl-mcp');
+
+const client = new Client({ intents: [Intents.FLAGS.GUILDS] });
+const firecrawl = new FirecrawlMCP({
+  apiKey: process.env.FIRECRAWL_API_KEY
+});
+
+client.on('messageCreate', async (message) => {
+  if (message.content.startsWith('!scrape ')) {
+    const url = message.content.slice(8);
+    const result = await firecrawl.scrape(url);
+    message.reply(result);
+  }
+});
+
+client.login(process.env.DISCORD_TOKEN);
+```
+
+</details>
+
+### Installing via Smithery (Legacy)
+
+To install Firecrawl for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@mendableai/mcp-server-firecrawl):
+
+```bash
+npx -y @smithery/cli install @mendableai/mcp-server-firecrawl --client claude
+```
+
 
 ### Running with SSE Local Mode
 
