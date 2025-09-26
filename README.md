@@ -450,18 +450,136 @@ Add `FIRECRAWL_API_KEY` to Secrets tab.
 </details>
 
 <details>
-<summary>⚙️ <strong>Other Platforms</strong></summary>
+<summary><img src="https://claude.ai/favicon.ico" width="16" height="16" alt="Claude Code CLI" style="vertical-align: middle; margin-right: 8px;"> <strong>Claude Code CLI</strong></summary>
 
-### Claude Code CLI
+**Setup:**
 ```bash
 export FIRECRAWL_API_KEY="fc-YOUR_API_KEY"
 claude-code --mcp "npx -y firecrawl-mcp"
 ```
 
-### Android Studio
-Same as IntelliJ IDEA configuration.
+**Config file (`~/.claude-code/config.json`):**
+```json
+{
+  "mcpServers": [
+    {
+      "name": "firecrawl",
+      "command": "npx -y firecrawl-mcp"
+    }
+  ]
+}
+```
 
-### CodeGPT
+</details>
+
+<details>
+<summary><img src="https://augmentcode.com/favicon.ico" width="16" height="16" alt="Augment Code" style="vertical-align: middle; margin-right: 8px;"> <strong>Augment Code</strong></summary>
+
+1. Open Augment settings
+2. Navigate to Extensions → MCP
+
+**Configuration:**
+```yaml
+servers:
+  - name: firecrawl
+    command: npx -y firecrawl-mcp
+    env:
+      FIRECRAWL_API_KEY: fc-YOUR_API_KEY
+```
+
+</details>
+
+<details>
+<summary><img src="https://avatars.githubusercontent.com/u/211522643?s=200&v=4" width="16" height="16" alt="Roo Code" style="vertical-align: middle; margin-right: 8px;"> <strong>Roo Code</strong></summary>
+
+**Location:** `~/.roo/mcp-config.json`
+
+```json
+{
+  "servers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "fc-YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><img src="https://opencode.ai/favicon.svg" width="16" height="16" alt="Opencode" style="vertical-align: middle; margin-right: 8px;"> <strong>Opencode</strong></summary>
+
+1. Open Opencode preferences
+2. Navigate to MCP Servers
+
+**Configuration:**
+```toml
+[servers.firecrawl]
+command = "npx"
+args = ["-y", "firecrawl-mcp"]
+
+[servers.firecrawl.env]
+FIRECRAWL_API_KEY = "fc-YOUR_API_KEY"
+```
+
+</details>
+
+<details>
+<summary><img src="https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg" width="16" height="16" alt="Gemini CLI" style="vertical-align: middle; margin-right: 8px;"> <strong>Gemini CLI</strong></summary>
+
+**Environment setup:**
+```bash
+export FIRECRAWL_API_KEY="fc-YOUR_API_KEY"
+```
+
+**Run with MCP:**
+```bash
+gemini --mcp-server "npx -y firecrawl-mcp" "Scrape example.com"
+```
+
+**Config file (`~/.gemini/config.yaml`):**
+```yaml
+mcp_servers:
+  firecrawl:
+    command: npx -y firecrawl-mcp
+    env:
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY}
+```
+
+</details>
+
+<details>
+<summary><img src="https://resources.jetbrains.com/storage/products/pycharm/img/meta/pycharm_logo_300x300.png" width="16" height="16" alt="PyCharm" style="vertical-align: middle; margin-right: 8px;"> <strong>PyCharm</strong></summary>
+
+Same as IntelliJ IDEA configuration above.
+
+</details>
+
+<details>
+<summary><img src="https://resources.jetbrains.com/storage/products/webstorm/img/meta/webstorm_logo_300x300.png" width="16" height="16" alt="WebStorm" style="vertical-align: middle; margin-right: 8px;"> <strong>WebStorm</strong></summary>
+
+Same as IntelliJ IDEA configuration above.
+
+</details>
+
+<details>
+<summary><img src="https://developer.android.com/favicon.ico" width="16" height="16" alt="Android Studio" style="vertical-align: middle; margin-right: 8px;"> <strong>Android Studio</strong></summary>
+
+Same as IntelliJ IDEA configuration, adapted for Android Studio's settings location.
+
+</details>
+
+<details>
+<summary><img src="https://codegpt.co/favicon.ico" width="16" height="16" alt="CodeGPT" style="vertical-align: middle; margin-right: 8px;"> <strong>CodeGPT</strong></summary>
+
+1. Open CodeGPT settings
+2. Navigate to MCP Servers
+
+**Configuration:**
 ```json
 {
   "codegpt.mcpServers": [
@@ -476,7 +594,21 @@ Same as IntelliJ IDEA configuration.
 }
 ```
 
-### AWS Lambda
+</details>
+
+<details>
+<summary><img src="https://aws.amazon.com/favicon.ico" width="16" height="16" alt="AWS Lambda" style="vertical-align: middle; margin-right: 8px;"> <strong>AWS Lambda</strong></summary>
+
+**package.json:**
+```json
+{
+  "dependencies": {
+    "firecrawl-mcp": "latest"
+  }
+}
+```
+
+**Lambda handler:**
 ```javascript
 const { FirecrawlMCP } = require('firecrawl-mcp');
 
@@ -488,7 +620,29 @@ exports.handler = async (event) => {
 };
 ```
 
-### Azure Functions
+**Deploy:**
+```bash
+zip -r function.zip .
+aws lambda create-function \
+  --function-name firecrawl-mcp \
+  --runtime nodejs18.x \
+  --handler index.handler \
+  --environment Variables={FIRECRAWL_API_KEY=fc-YOUR_API_KEY}
+```
+
+</details>
+
+<details>
+<summary><img src="https://azure.microsoft.com/favicon.ico" width="16" height="16" alt="Azure Functions" style="vertical-align: middle; margin-right: 8px;"> <strong>Azure Functions</strong></summary>
+
+**Create function:**
+```bash
+func init FirecrawlMCP --javascript
+cd FirecrawlMCP
+npm install firecrawl-mcp
+```
+
+**Function code:**
 ```javascript
 module.exports = async function (context, req) {
   const { FirecrawlMCP } = require('firecrawl-mcp');
@@ -499,7 +653,17 @@ module.exports = async function (context, req) {
 };
 ```
 
-### Google Cloud Functions
+**Deploy:**
+```bash
+func azure functionapp publish FirecrawlMCP
+```
+
+</details>
+
+<details>
+<summary><img src="https://cloud.google.com/favicon.ico" width="16" height="16" alt="Google Cloud Functions" style="vertical-align: middle; margin-right: 8px;"> <strong>Google Cloud Functions</strong></summary>
+
+**index.js:**
 ```javascript
 const { FirecrawlMCP } = require('firecrawl-mcp');
 
@@ -511,7 +675,20 @@ exports.firecrawlMCP = async (req, res) => {
 };
 ```
 
-### Slack Bot
+**Deploy:**
+```bash
+gcloud functions deploy firecrawl-mcp \
+  --runtime nodejs18 \
+  --trigger-http \
+  --set-env-vars FIRECRAWL_API_KEY=fc-YOUR_API_KEY
+```
+
+</details>
+
+<details>
+<summary><img src="https://slack.com/favicon.ico" width="16" height="16" alt="Slack Bot" style="vertical-align: middle; margin-right: 8px;"> <strong>Slack Bot</strong></summary>
+
+**Bot implementation:**
 ```javascript
 const { App } = require('@slack/bolt');
 const { FirecrawlMCP } = require('firecrawl-mcp');
@@ -534,7 +711,12 @@ app.command('/scrape', async ({ command, ack, respond }) => {
 app.start();
 ```
 
-### Discord Bot
+</details>
+
+<details>
+<summary><img src="https://cdn.prod.website-files.com/6257adef93867e50d84d30e2/6266bc493fb42d4e27bb8393_847541504914fd33810e70a0ea73177e.ico" width="16" height="16" alt="Discord Bot" style="vertical-align: middle; margin-right: 8px;"> <strong>Discord Bot</strong></summary>
+
+**Bot setup:**
 ```javascript
 const { Client, Intents } = require('discord.js');
 const { FirecrawlMCP } = require('firecrawl-mcp');
@@ -556,6 +738,103 @@ client.login(process.env.DISCORD_TOKEN);
 ```
 
 </details>
+
+<details>
+<summary><img src="https://www.google.com/favicon.ico" width="16" height="16" alt="Chrome Extension" style="vertical-align: middle; margin-right: 8px;"> <strong>Chrome Extension</strong></summary>
+
+**manifest.json:**
+```json
+{
+  "manifest_version": 3,
+  "name": "Firecrawl MCP",
+  "version": "1.0",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": ["https://api.firecrawl.dev/*"],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
+```
+
+**background.js:**
+```javascript
+const FIRECRAWL_API_KEY = 'fc-YOUR_API_KEY';
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'scrape') {
+    fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ url: request.url })
+    }).then(response => response.json())
+      .then(data => sendResponse(data));
+    return true;
+  }
+});
+```
+
+</details>
+
+<details>
+<summary><img src="https://developer.apple.com/favicon.ico" width="16" height="16" alt="iOS (Swift)" style="vertical-align: middle; margin-right: 8px;"> <strong>iOS (Swift)</strong></summary>
+
+**Swift Package Manager:**
+```swift
+// Package.swift
+dependencies: [
+    .package(url: "https://github.com/firecrawl/firecrawl-mcp-swift", from: "1.0.0")
+]
+```
+
+**Initialize in app:**
+```swift
+import FirecrawlMCP
+
+class MCPManager {
+    let firecrawl = FirecrawlMCPServer(
+        apiKey: "fc-YOUR_API_KEY"
+    )
+
+    func start() {
+        firecrawl.start()
+    }
+}
+```
+
+</details>
+
+<details>
+<summary><img src="https://developer.android.com/favicon.ico" width="16" height="16" alt="Android" style="vertical-align: middle; margin-right: 8px;"> <strong>Android</strong></summary>
+
+**Gradle dependency:**
+```gradle
+dependencies {
+    implementation 'com.firecrawl:mcp-android:1.0.0'
+}
+```
+
+**Initialize:**
+```kotlin
+import com.firecrawl.mcp.FirecrawlMCP
+
+class MainActivity : AppCompatActivity() {
+    private lateinit var firecrawlMCP: FirecrawlMCP
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        firecrawlMCP = FirecrawlMCP.Builder()
+            .apiKey("fc-YOUR_API_KEY")
+            .build()
+    }
+}
+```
+
+</details>
+
 
 ### Installing via Smithery (Legacy)
 
