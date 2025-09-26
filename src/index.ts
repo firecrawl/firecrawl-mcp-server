@@ -151,14 +151,42 @@ function getClient(session?: SessionData): FirecrawlApp {
 }
 
 function asText(data: unknown, maxResponseSize?: number): string {
-  const text = JSON.stringify(data, null, 2);
-
-  if (maxResponseSize && maxResponseSize > 0 && text.length > maxResponseSize) {
-    const truncatedText = text.substring(0, maxResponseSize - 100); // Reserve space for truncation message
-    return truncatedText + '\n\n[Content truncated due to size limit. Increase maxResponseSize parameter to see full content.]';
+  // If no size limit, return full JSON
+  if (!maxResponseSize || maxResponseSize <= 0) {
+    return JSON.stringify(data, null, 2);
   }
 
-  return text;
+  // Deep clone to avoid modifying original data
+  const dataCopy = JSON.parse(JSON.stringify(data));
+
+  // Function to recursively truncate markdown/content fields
+  function truncateMarkdown(obj: any): void {
+    if (!obj || typeof obj !== 'object') return;
+
+    if (Array.isArray(obj)) {
+      obj.forEach(truncateMarkdown);
+    } else {
+      // Truncate markdown and other content fields if they exist
+      const contentFields = ['markdown', 'html', 'rawHtml', 'content', 'text'];
+
+      for (const field of contentFields) {
+        if (obj[field] && typeof obj[field] === 'string' && obj[field].length > maxResponseSize!) {
+          obj[field] = obj[field].substring(0, maxResponseSize! - 100) +
+            '\n\n[Content truncated due to size limit. Increase maxResponseSize parameter to see full content.]';
+        }
+      }
+
+      // Recurse into nested objects
+      for (const key in obj) {
+        if (typeof obj[key] === 'object') {
+          truncateMarkdown(obj[key]);
+        }
+      }
+    }
+  }
+
+  truncateMarkdown(dataCopy);
+  return JSON.stringify(dataCopy, null, 2);
 }
 
 // scrape tool (v2 semantics, minimal args)
