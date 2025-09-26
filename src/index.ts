@@ -133,6 +133,9 @@ function createClient(apiKey?: string): FirecrawlApp {
 
 const ORIGIN = 'mcp-fastmcp';
 
+// Safe mode is enabled by default for cloud service to comply with ChatGPT safety requirements
+const SAFE_MODE = process.env.CLOUD_SERVICE === 'true';
+
 function getClient(session?: SessionData): FirecrawlApp {
   // For cloud service, API key is required
   if (process.env.CLOUD_SERVICE === 'true') {
@@ -191,6 +194,15 @@ function asText(data: unknown, maxResponseSize?: number): string {
 
 // scrape tool (v2 semantics, minimal args)
 // Centralized scrape params (used by scrape, and referenced in search/crawl scrapeOptions)
+
+// Define safe action types
+const safeActionTypes = ['wait', 'screenshot', 'scroll', 'scrape'] as const;
+const otherActions = ['click', 'write', 'press', 'executeJavascript', 'generatePDF'] as const;
+const allActionTypes = [...safeActionTypes, ...otherActions] as const;
+
+// Use appropriate action types based on safe mode
+const allowedActionTypes = SAFE_MODE ? safeActionTypes : allActionTypes;
+
 const scrapeParamsSchema = z.object({
   url: z.string().url(),
   formats: z
@@ -225,30 +237,22 @@ const scrapeParamsSchema = z.object({
   includeTags: z.array(z.string()).optional(),
   excludeTags: z.array(z.string()).optional(),
   waitFor: z.number().optional(),
-  actions: z
-    .array(
-      z.object({
-        type: z.enum([
-          'wait',
-          'click',
-          'screenshot',
-          'write',
-          'press',
-          'scroll',
-          'scrape',
-          'executeJavascript',
-          'generatePDF',
-        ]),
-        selector: z.string().optional(),
-        milliseconds: z.number().optional(),
-        text: z.string().optional(),
-        key: z.string().optional(),
-        direction: z.enum(['up', 'down']).optional(),
-        script: z.string().optional(),
-        fullPage: z.boolean().optional(),
-      })
-    )
-    .optional(),
+  ...(SAFE_MODE ? {} : {
+    actions: z
+      .array(
+        z.object({
+          type: z.enum(allowedActionTypes),
+          selector: z.string().optional(),
+          milliseconds: z.number().optional(),
+          text: z.string().optional(),
+          key: z.string().optional(),
+          direction: z.enum(['up', 'down']).optional(),
+          script: z.string().optional(),
+          fullPage: z.boolean().optional(),
+        })
+      )
+      .optional(),
+  }),
   mobile: z.boolean().optional(),
   skipTlsVerification: z.boolean().optional(),
   removeBase64Images: z.boolean().optional(),
@@ -288,6 +292,7 @@ This is the most powerful, fastest and most reliable scraper tool, if available 
 **Performance:** Add maxAge parameter for 500% faster scrapes using cached data.
 **Context Limiting:** Use maxResponseSize parameter to limit response size for MCP compatibility (e.g., 50000 characters).
 **Returns:** Markdown, HTML, or other formats as specified.
+${SAFE_MODE ? '**Safe Mode:** Read-only content extraction. Interactive actions (click, write, executeJavascript) are disabled for security.' : ''}
 `,
   parameters: scrapeParamsSchema,
   execute: async (
@@ -351,6 +356,20 @@ server.addTool({
   name: 'firecrawl_search',
   description: `
 Search the web and optionally extract content from search results. This is the most powerful web search tool available, and if available you should always default to using this tool for any web search needs.
+
+The query also supports search operators, that you can use if needed to refine the search:
+| Operator | Functionality | Examples |
+---|-|-|
+| \`"\"\` | Non-fuzzy matches a string of text | \`"Firecrawl"\`
+| \`-\` | Excludes certain keywords or negates other operators | \`-bad\`, \`-site:firecrawl.dev\`
+| \`site:\` | Only returns results from a specified website | \`site:firecrawl.dev\`
+| \`inurl:\` | Only returns results that include a word in the URL | \`inurl:firecrawl\`
+| \`allinurl:\` | Only returns results that include multiple words in the URL | \`allinurl:git firecrawl\`
+| \`intitle:\` | Only returns results that include a word in the title of the page | \`intitle:Firecrawl\`
+| \`allintitle:\` | Only returns results that include multiple words in the title of the page | \`allintitle:firecrawl playground\`
+| \`related:\` | Only returns results that are related to a specific domain | \`related:firecrawl.dev\`
+| \`imagesize:\` | Only returns images with exact dimensions | \`imagesize:1920x1080\`
+| \`larger:\` | Only returns images larger than specified dimensions | \`larger:1920x1080\`
 
 **Best for:** Finding specific information across multiple websites, when you don't know which website has the information; when you need the most relevant content for a query.
 **Not recommended for:** When you need to search the filesystem. When you already know which website to scrape (use scrape); when you need comprehensive coverage of a single website (use map or crawl.
@@ -451,6 +470,7 @@ server.addTool({
  \`\`\`
  **Context Limiting:** Use maxResponseSize parameter to limit response size for MCP compatibility.
  **Returns:** Operation ID for status checking; use firecrawl_check_crawl_status to check progress.
+ ${SAFE_MODE ? '**Safe Mode:** Read-only crawling. Webhooks and interactive actions are disabled for security.' : ''}
  `,
   parameters: z.object({
     url: z.string(),
@@ -465,15 +485,17 @@ server.addTool({
     crawlEntireDomain: z.boolean().optional(),
     delay: z.number().optional(),
     maxConcurrency: z.number().optional(),
-    webhook: z
-      .union([
-        z.string(),
-        z.object({
-          url: z.string(),
-          headers: z.record(z.string(), z.string()).optional(),
-        }),
-      ])
-      .optional(),
+    ...(SAFE_MODE ? {} : {
+      webhook: z
+        .union([
+          z.string(),
+          z.object({
+            url: z.string(),
+            headers: z.record(z.string(), z.string()).optional(),
+          }),
+        ])
+        .optional(),
+    }),
     deduplicateSimilarURLs: z.boolean().optional(),
     ignoreQueryParameters: z.boolean().optional(),
     scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
