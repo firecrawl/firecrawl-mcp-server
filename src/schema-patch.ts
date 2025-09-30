@@ -5,6 +5,8 @@
  * to ensure compatibility with VS Code's MCP validator.
  */
 
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+
 /**
  * Recursively converts JSON Schema draft 2020-12 to draft-07
  * @param schema - The schema object to convert
@@ -47,35 +49,55 @@ export function convertSchemaToDraft07(schema: any): any {
 }
 
 /**
- * Patches the FastMCP server to convert all tool schemas to draft-07
+ * Patches the MCP SDK Server class directly by monkey-patching its setRequestHandler method
+ * This must be called BEFORE any Server instances are created
  */
-export function patchFastMCPSchemas(server: any): void {
-  console.log('[Schema Patch] Applying VS Code compatibility patches...');
+export function patchFastMCPSchemas(_server?: any): void {
+  console.error('[Schema Patch] Applying VS Code compatibility patches...');
   
-  // Patch the protocol handler's listTools method
-  const originalSend = server.send?.bind(server);
-  if (!originalSend) {
-    console.warn('[Schema Patch] send method not found, trying alternate approach');
+  // Patch the Server prototype's setRequestHandler method
+  const originalSetRequestHandler = Server.prototype.setRequestHandler;
+  if (!originalSetRequestHandler) {
+    console.error('[Schema Patch] ERROR: Server.prototype.setRequestHandler not found');
     return;
   }
-
-  server.send = function(message: any) {
-    // Intercept tools/list responses
-    if (message && message.result && message.result.tools && Array.isArray(message.result.tools)) {
-      console.log(`[Schema Patch] Intercepted tools/list response with ${message.result.tools.length} tools`);
+  
+  console.error('[Schema Patch] Patching Server.prototype.setRequestHandler...');
+  
+  Server.prototype.setRequestHandler = function(requestSchema: any, handler: any) {
+    // Extract the method name from the Zod schema
+    const method = requestSchema?.shape?.method?.value;
+    
+    console.error(`[Schema Patch] setRequestHandler called for method: ${method}`);
+    
+    if (method === 'tools/list') {
+      console.error('[Schema Patch] ✓ Intercepting tools/list handler registration');
       
-      message.result.tools = message.result.tools.map((tool: any) => {
-        if (tool.inputSchema) {
-          const originalSchema = tool.inputSchema.$schema || 'unknown';
-          tool.inputSchema = convertSchemaToDraft07(tool.inputSchema);
-          console.log(`[Schema Patch] ✓ Converted ${tool.name}: ${originalSchema} -> draft-07`);
+      const wrappedHandler = async (...args: any[]) => {
+        console.error('[Schema Patch] tools/list handler called, converting schemas...');
+        const response = await handler(...args);
+        
+        if (response && response.tools && Array.isArray(response.tools)) {
+          console.error(`[Schema Patch] Converting ${response.tools.length} tool schemas to draft-07`);
+          
+          response.tools = response.tools.map((tool: any) => {
+            if (tool.inputSchema) {
+              const before = tool.inputSchema.$schema || 'unknown';
+              tool.inputSchema = convertSchemaToDraft07(tool.inputSchema);
+              console.error(`[Schema Patch] ✓ ${tool.name}: ${before} -> draft-07`);
+            }
+            return tool;
+          });
         }
-        return tool;
-      });
+        
+        return response;
+      };
+      
+      return originalSetRequestHandler.call(this, requestSchema, wrappedHandler);
     }
     
-    return originalSend(message);
+    return originalSetRequestHandler.call(this, requestSchema, handler);
   };
-
-  console.log('[Schema Patch] Successfully installed schema conversion interceptor');
+  
+  console.error('[Schema Patch] Successfully patched Server.prototype.setRequestHandler');
 }

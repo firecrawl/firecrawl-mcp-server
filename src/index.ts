@@ -1,10 +1,15 @@
 #!/usr/bin/env node
 import dotenv from 'dotenv';
+import { patchFastMCPSchemas } from './schema-patch.js';
+
+// CRITICAL: Apply MCP SDK patches BEFORE importing FastMCP
+// This patches the Server.prototype.setRequestHandler method
+patchFastMCPSchemas();
+
 import { FastMCP, type Logger } from 'firecrawl-fastmcp';
 import { z } from 'zod';
 import FirecrawlApp from '@mendable/firecrawl-js';
 import type { IncomingHttpHeaders } from 'http';
-import { patchFastMCPSchemas } from './schema-patch.js';
 
 dotenv.config({ debug: false, quiet: true });
 
@@ -591,8 +596,5 @@ if (
     transportType: 'stdio',
   };
 }
-
-// Apply VS Code JSON Schema compatibility patch (after all tools are added)
-patchFastMCPSchemas(server);
 
 await server.start(args);
