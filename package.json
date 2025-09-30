@@ -31,7 +31,8 @@
     "dotenv": "^17.2.2",
     "firecrawl-fastmcp": "^1.0.3",
     "typescript": "^5.9.2",
-    "zod": "^4.1.5"
+    "zod": "^4.1.5",
+    "zod-to-json-schema": "^3.24.6"
   },
   "engines": {
     "node": ">=18.0.0"
