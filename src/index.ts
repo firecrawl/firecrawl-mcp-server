@@ -52,12 +52,11 @@ function removeEmptyTopLevel<T extends Record<string, any>>(
 }
 
 class ConsoleLogger implements Logger {
-  private shouldLog = (
+  private shouldLog =
     process.env.CLOUD_SERVICE === 'true' ||
     process.env.SSE_LOCAL === 'true' ||
-    process.env.HTTP_STREAMABLE_SERVER === 'true'
-  );
-  
+    process.env.HTTP_STREAMABLE_SERVER === 'true';
+
   debug(...args: unknown[]): void {
     if (this.shouldLog) {
       console.debug('[DEBUG]', new Date().toISOString(), ...args);
@@ -90,7 +89,9 @@ const server = new FastMCP<SessionData>({
   version: '3.0.0',
   logger: new ConsoleLogger(),
   roots: { enabled: false },
-  authenticate: async (request: { headers: IncomingHttpHeaders }): Promise<SessionData> => {
+  authenticate: async (request: {
+    headers: IncomingHttpHeaders;
+  }): Promise<SessionData> => {
     if (process.env.CLOUD_SERVICE === 'true') {
       const apiKey = extractApiKey(request.headers);
 
@@ -101,7 +102,9 @@ const server = new FastMCP<SessionData>({
     } else {
       // For self-hosted instances, API key is optional if FIRECRAWL_API_URL is provided
       if (!process.env.FIRECRAWL_API_KEY && !process.env.FIRECRAWL_API_URL) {
-        console.error('Either FIRECRAWL_API_KEY or FIRECRAWL_API_URL must be provided');
+        console.error(
+          'Either FIRECRAWL_API_KEY or FIRECRAWL_API_URL must be provided'
+        );
         process.exit(1);
       }
       return { firecrawlApiKey: process.env.FIRECRAWL_API_KEY };
@@ -122,12 +125,12 @@ function createClient(apiKey?: string): FirecrawlApp {
       apiUrl: process.env.FIRECRAWL_API_URL,
     }),
   };
-  
+
   // Only add apiKey if it's provided (required for cloud, optional for self-hosted)
   if (apiKey) {
     config.apiKey = apiKey;
   }
-  
+
   return new FirecrawlApp(config);
 }
 
@@ -144,12 +147,17 @@ function getClient(session?: SessionData): FirecrawlApp {
     }
     return createClient(session.firecrawlApiKey);
   }
-  
+
   // For self-hosted instances, API key is optional if FIRECRAWL_API_URL is provided
-  if (!process.env.FIRECRAWL_API_URL && (!session || !session.firecrawlApiKey)) {
-    throw new Error('Unauthorized: API key is required when not using a self-hosted instance');
+  if (
+    !process.env.FIRECRAWL_API_URL &&
+    (!session || !session.firecrawlApiKey)
+  ) {
+    throw new Error(
+      'Unauthorized: API key is required when not using a self-hosted instance'
+    );
   }
-  
+
   return createClient(session?.firecrawlApiKey);
 }
 
@@ -162,7 +170,13 @@ function asText(data: unknown): string {
 
 // Define safe action types
 const safeActionTypes = ['wait', 'screenshot', 'scroll', 'scrape'] as const;
-const otherActions = ['click', 'write', 'press', 'executeJavascript', 'generatePDF'] as const;
+const otherActions = [
+  'click',
+  'write',
+  'press',
+  'executeJavascript',
+  'generatePDF',
+] as const;
 const allActionTypes = [...safeActionTypes, ...otherActions] as const;
 
 // Use appropriate action types based on safe mode
@@ -198,26 +212,39 @@ const scrapeParamsSchema = z.object({
       ])
     )
     .optional(),
+  parsers: z
+    .array(
+      z.union([
+        z.enum(['pdf']),
+        z.object({
+          type: z.enum(['pdf']),
+          maxPages: z.number().int().min(1).max(10000).optional(),
+        }),
+      ])
+    )
+    .optional(),
   onlyMainContent: z.boolean().optional(),
   includeTags: z.array(z.string()).optional(),
   excludeTags: z.array(z.string()).optional(),
   waitFor: z.number().optional(),
-  ...(SAFE_MODE ? {} : {
-    actions: z
-      .array(
-        z.object({
-          type: z.enum(allowedActionTypes),
-          selector: z.string().optional(),
-          milliseconds: z.number().optional(),
-          text: z.string().optional(),
-          key: z.string().optional(),
-          direction: z.enum(['up', 'down']).optional(),
-          script: z.string().optional(),
-          fullPage: z.boolean().optional(),
-        })
-      )
-      .optional(),
-  }),
+  ...(SAFE_MODE
+    ? {}
+    : {
+        actions: z
+          .array(
+            z.object({
+              type: z.enum(allowedActionTypes),
+              selector: z.string().optional(),
+              milliseconds: z.number().optional(),
+              text: z.string().optional(),
+              key: z.string().optional(),
+              direction: z.enum(['up', 'down']).optional(),
+              script: z.string().optional(),
+              fullPage: z.boolean().optional(),
+            })
+          )
+          .optional(),
+      }),
   mobile: z.boolean().optional(),
   skipTlsVerification: z.boolean().optional(),
   removeBase64Images: z.boolean().optional(),
@@ -254,18 +281,28 @@ This is the most powerful, fastest and most reliable scraper tool, if available 
 \`\`\`
 **Performance:** Add maxAge parameter for 500% faster scrapes using cached data.
 **Returns:** Markdown, HTML, or other formats as specified.
-${SAFE_MODE ? '**Safe Mode:** Read-only content extraction. Interactive actions (click, write, executeJavascript) are disabled for security.' : ''}
+${
+  SAFE_MODE
+    ? '**Safe Mode:** Read-only content extraction. Interactive actions (click, write, executeJavascript) are disabled for security.'
+    : ''
+}
 `,
   parameters: scrapeParamsSchema,
   execute: async (
     args: unknown,
     { session, log }: { session?: SessionData; log: Logger }
   ): Promise<string> => {
-    const { url, ...options } = args as { url: string } & Record<string, unknown>;
+    const { url, ...options } = args as { url: string } & Record<
+      string,
+      unknown
+    >;
     const client = getClient(session);
     const cleaned = removeEmptyTopLevel(options as Record<string, unknown>);
     log.info('Scraping URL', { url: String(url) });
-    const res = await client.scrape(String(url), { ...cleaned, origin: ORIGIN } as any);
+    const res = await client.scrape(String(url), {
+      ...cleaned,
+      origin: ORIGIN,
+    } as any);
     return asText(res);
   },
 });
@@ -302,11 +339,17 @@ Map a website to discover all indexed URLs on the site.
     args: unknown,
     { session, log }: { session?: SessionData; log: Logger }
   ): Promise<string> => {
-    const { url, ...options } = args as { url: string } & Record<string, unknown>;
+    const { url, ...options } = args as { url: string } & Record<
+      string,
+      unknown
+    >;
     const client = getClient(session);
     const cleaned = removeEmptyTopLevel(options as Record<string, unknown>);
     log.info('Mapping URL', { url: String(url) });
-    const res = await client.map(String(url), { ...cleaned, origin: ORIGIN } as any);
+    const res = await client.map(String(url), {
+      ...cleaned,
+      origin: ORIGIN,
+    } as any);
     return asText(res);
   },
 });
@@ -424,7 +467,11 @@ server.addTool({
  }
  \`\`\`
  **Returns:** Operation ID for status checking; use firecrawl_check_crawl_status to check progress.
- ${SAFE_MODE ? '**Safe Mode:** Read-only crawling. Webhooks and interactive actions are disabled for security.' : ''}
+ ${
+   SAFE_MODE
+     ? '**Safe Mode:** Read-only crawling. Webhooks and interactive actions are disabled for security.'
+     : ''
+ }
  `,
   parameters: z.object({
     url: z.string(),
@@ -439,17 +486,19 @@ server.addTool({
     crawlEntireDomain: z.boolean().optional(),
     delay: z.number().optional(),
     maxConcurrency: z.number().optional(),
-    ...(SAFE_MODE ? {} : {
-      webhook: z
-        .union([
-          z.string(),
-          z.object({
-            url: z.string(),
-            headers: z.record(z.string(), z.string()).optional(),
-          }),
-        ])
-        .optional(),
-    }),
+    ...(SAFE_MODE
+      ? {}
+      : {
+          webhook: z
+            .union([
+              z.string(),
+              z.object({
+                url: z.string(),
+                headers: z.record(z.string(), z.string()).optional(),
+              }),
+            ])
+            .optional(),
+        }),
     deduplicateSimilarURLs: z.boolean().optional(),
     ignoreQueryParameters: z.boolean().optional(),
     scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
