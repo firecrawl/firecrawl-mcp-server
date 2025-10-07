@@ -80,6 +80,27 @@ Replace `your-api-key` with your Firecrawl API key. If you don't have one yet, y
 
 After adding, refresh the MCP server list to see the new tools. The Composer Agent will automatically use Firecrawl MCP when appropriate, but you can explicitly request it by describing your web scraping needs. Access the Composer via Command+L (Mac), select "Agent" next to the submit button, and enter your query.
 
+### Running on Warp
+
+1. Open Warp Settings
+2. Go to AI > Manage MCP servers
+3. Click "+ Add"
+4. Enter the following code:
+
+```json
+{
+  "mcp-server-firecrawl": {
+    "command": "npx",
+    "args": ["-y", "firecrawl-mcp"],
+    "env": {
+      "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+    }
+  }
+}
+```
+
+Alternatively, use the slash command `/add-mcp` in the Warp Agent prompt.
+
 ### Running on Windsurf
 
 Add this to your `./codeium/windsurf/model_config.json`:
