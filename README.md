@@ -100,7 +100,14 @@ Add this to your `./codeium/windsurf/model_config.json`:
 
 ### Running on Codex CLI
 
-Add this to your Codex configuration (by default, in `~/.codex/codex.toml`) to register the Firecrawl MCP server:
+Run this command:
+
+```bash
+# replace with actual firecrawl api key
+codex mcp add firecrawl --env FIRECRAWL_API_KEY=fc-YOUR_API_KEY-- npx -y firecrawl-mcp
+```
+
+Or add this lines to your Codex configuration (by default, in `~/.codex/codex.toml`) to register the Firecrawl MCP server:
 
 ```toml
 [mcp_servers.firecrawl]
