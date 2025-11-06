@@ -195,6 +195,7 @@ const scrapeParamsSchema = z.object({
           'links',
           'summary',
           'changeTracking',
+          'branding',
         ]),
         z.object({
           type: z.literal('json'),
