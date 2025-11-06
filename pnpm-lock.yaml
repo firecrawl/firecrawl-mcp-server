@@ -15,8 +15,8 @@ importers:
         specifier: ^17.2.2
         version: 17.2.2
       firecrawl-fastmcp:
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: ^1.0.3
+        version: 1.0.3
       typescript:
         specifier: ^5.9.2
         version: 5.9.2
@@ -32,10 +32,6 @@ packages:
 
   '@borewit/text-codec@0.1.1':
     resolution: {integrity: sha512-5L/uBxmjaCIX5h8Z+uu+kA9BQLkc/Wl06UGR5ajNRxu+/XjonB5i8JpgFMrPj3LXTCPA0pv8yxUvbUi+QthGGA==}
-
-  '@fastify/busboy@2.1.1':
-    resolution: {integrity: sha512-vBZP4NlzfOlerQTnba4aqZoMhE/a9HY7HRqoOPaETQcSQuWEIyZMHGfVu6w9wGtGK5fED5qRs2DteVCjOH60sA==}
-    engines: {node: '>=14'}
 
   '@mendable/firecrawl-js@4.3.6':
     resolution: {integrity: sha512-gha1nICp+yJJt/fjLj1EsptTvlYdjkJRa66clEV+R2F5hJlDOWOjdGAPUU7IO/RXJ+coR1JmxUJ3P6R/ziPyLg==}
@@ -239,8 +235,8 @@ packages:
     resolution: {integrity: sha512-/t88Ty3d5JWQbWYgaOGCCYfXRwV1+be02WqYYlL6h0lEiUAMPM8o8qKGO01YIkOHzka2up08wvgYD0mDiI+q3Q==}
     engines: {node: '>= 0.8'}
 
-  firecrawl-fastmcp@1.0.2:
-    resolution: {integrity: sha512-3PMumDOS41+MLZdQHkpdvbeAzGOw56SksDcbLeaKxVkG7fkEKfrd/NdHTldQjLkh+WZUBt9wBXt29VLbZDuRdQ==}
+  firecrawl-fastmcp@1.0.3:
+    resolution: {integrity: sha512-S1BvlzXRp71rR+u90bIVOMm3kdTjkrzAgPqRkOPJKUq8hqgP/uECEOsPiIh/GliXXPZ3sNInDCRV7JlIVLovEg==}
     hasBin: true
 
   follow-redirects@1.15.11:
@@ -565,10 +561,6 @@ packages:
   undici-types@7.12.0:
     resolution: {integrity: sha512-goOacqME2GYyOZZfb5Lgtu+1IDmAlAEu5xnD3+xTzS10hT0vzpf0SPjkXwAw9Jm+4n/mQGDP3LO8CPbYROeBfQ==}
 
-  undici@5.29.0:
-    resolution: {integrity: sha512-raqeBD6NQK4SkWhQzeYKd1KmIG6dllBOTt55Rmkt4HtI9mwdWtJljnrXjAFUBLTSN67HWrOIZ3EPF4kjUw80Bg==}
-    engines: {node: '>=14.0'}
-
   unicorn-magic@0.3.0:
     resolution: {integrity: sha512-+QBBXBCvifc56fsbuxZQ6Sic3wqqc3WWaqxs58gvJrcOuN83HGTCwz3oS5phzU9LthRNE9VrJCFCLUgHeeFnfA==}
     engines: {node: '>=18'}
@@ -652,8 +644,6 @@ packages:
 snapshots:
 
   '@borewit/text-codec@0.1.1': {}
-
-  '@fastify/busboy@2.1.1': {}
 
   '@mendable/firecrawl-js@4.3.6':
     dependencies:
@@ -914,7 +904,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  firecrawl-fastmcp@1.0.2:
+  firecrawl-fastmcp@1.0.3:
     dependencies:
       '@modelcontextprotocol/sdk': 1.18.2
       '@standard-schema/spec': 1.0.0
@@ -923,7 +913,6 @@ snapshots:
       fuse.js: 7.1.0
       mcp-proxy: 5.6.1
       strict-event-emitter-types: 2.0.0
-      undici: 5.29.0
       uri-templates: 0.2.0
       xsschema: 0.3.5(zod-to-json-schema@3.24.6(zod@3.25.76))(zod@3.25.76)
       yargs: 18.0.0
@@ -1228,10 +1217,6 @@ snapshots:
   uint8array-extras@1.5.0: {}
 
   undici-types@7.12.0: {}
-
-  undici@5.29.0:
-    dependencies:
-      '@fastify/busboy': 2.1.1
 
   unicorn-magic@0.3.0: {}
 
