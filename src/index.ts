@@ -1,5 +1,11 @@
 #!/usr/bin/env node
 import dotenv from 'dotenv';
+import { patchFastMCPSchemas } from './schema-patch.js';
+
+// CRITICAL: Apply MCP SDK patches BEFORE importing FastMCP
+// This patches the Server.prototype.setRequestHandler method
+patchFastMCPSchemas();
+
 import { FastMCP, type Logger } from 'firecrawl-fastmcp';
 import { z } from 'zod';
 import FirecrawlApp from '@mendable/firecrawl-js';
