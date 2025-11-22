@@ -4,15 +4,18 @@
 # Claude AI API
 anthropic>=0.39.0
 
-# Speech Recognition
-SpeechRecognition>=3.10.0
-pyaudio>=0.2.14
-
-# Text-to-Speech
-pyttsx3>=2.90
+# Web Server (for web interface)
+flask>=3.0.0
+flask-cors>=4.0.0
 
 # Environment management
 python-dotenv>=1.0.0
+
+# Desktop Voice Assistant (optional - for CLI version)
+# Uncomment these if you want to use the desktop Python voice assistant
+# SpeechRecognition>=3.10.0
+# pyaudio>=0.2.14
+# pyttsx3>=2.90
 
 # Optional: Better audio handling
 # sounddevice>=0.4.6  # For advanced audio stream handling
