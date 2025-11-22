@@ -1,0 +1,1879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔥 MONSTER SUPER AI - ULTIMATE BEAST EDITION</title>
+
+    <!-- External Libraries -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/monokai-sublime.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #000;
+            color: #00ffff;
+            min-height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* ============================================
+           EPIC INTRO SEQUENCE - ENHANCED!
+        ============================================ */
+
+        #introSequence {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10000;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            perspective: 2000px;
+            overflow: hidden;
+        }
+
+        #introSequence.hidden {
+            display: none;
+        }
+
+        /* Atmospheric Fog Effect */
+        .fog-layer {
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(ellipse at center,
+                rgba(0, 255, 255, 0.05) 0%,
+                rgba(0, 255, 255, 0.02) 25%,
+                transparent 50%
+            );
+            animation: fogDrift 20s infinite alternate;
+            pointer-events: none;
+        }
+
+        .fog-layer:nth-child(2) {
+            animation-duration: 15s;
+            animation-delay: -5s;
+        }
+
+        @keyframes fogDrift {
+            0% { transform: translate(-20%, -20%) scale(1); }
+            100% { transform: translate(20%, 20%) scale(1.2); }
+        }
+
+        /* Light Rays */
+        .light-ray {
+            position: absolute;
+            width: 2px;
+            height: 100%;
+            background: linear-gradient(180deg,
+                transparent,
+                rgba(0, 255, 255, 0.3),
+                transparent
+            );
+            animation: lightRayMove 3s infinite;
+            opacity: 0;
+        }
+
+        @keyframes lightRayMove {
+            0%, 100% { opacity: 0; transform: translateY(-100%); }
+            50% { opacity: 1; transform: translateY(100%); }
+        }
+
+        /* Elevator shaft with enhanced parallax */
+        .elevator-shaft {
+            position: absolute;
+            width: 100%;
+            height: 300%;
+            background:
+                linear-gradient(90deg, rgba(0, 255, 255, 0.1) 0px, transparent 1px, transparent 99px, rgba(0, 255, 255, 0.1) 100px),
+                linear-gradient(0deg, rgba(0, 255, 255, 0.1) 0px, transparent 1px, transparent 99px, rgba(0, 255, 255, 0.1) 100px),
+                linear-gradient(180deg, #000 0%, #001a1a 30%, #003333 50%, #001a1a 70%, #000 100%);
+            background-size: 100px 100px, 100px 100px, 100% 100%;
+            animation: elevatorRise 5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+            opacity: 0;
+            transform-style: preserve-3d;
+        }
+
+        @keyframes elevatorRise {
+            0% {
+                transform: translateY(0) translateZ(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-66%) translateZ(200px);
+                opacity: 0.8;
+            }
+        }
+
+        /* Enhanced floor indicator with parallax */
+        .floor-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) translateZ(100px);
+            font-size: 180px;
+            font-weight: bold;
+            color: #00ffff;
+            text-shadow:
+                0 0 30px #00ffff,
+                0 0 60px #00ffff,
+                0 0 90px #00ffff,
+                0 0 120px #00ffff,
+                0 0 150px rgba(0, 255, 255, 0.5);
+            animation: floorPulse 5s ease-out forwards;
+            z-index: 10;
+            transform-style: preserve-3d;
+        }
+
+        @keyframes floorPulse {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5) rotateX(45deg); }
+            10% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotateX(0deg); }
+            90% { opacity: 1; transform: translate(-50%, -50%) scale(1.2) rotateX(-10deg); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5) rotateX(-20deg); }
+        }
+
+        /* Enhanced Doors with 3D parallax */
+        .doors-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            animation: doorsAppear 1.5s 5s cubic-bezier(0.68, -0.55, 0.27, 1.55) forwards;
+            transform-style: preserve-3d;
+        }
+
+        @keyframes doorsAppear {
+            0% { opacity: 0; transform: translateZ(-500px) scale(0.5); }
+            100% { opacity: 1; transform: translateZ(0) scale(1); }
+        }
+
+        /* Main Doors with enhanced 3D effects */
+        .door {
+            position: absolute;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(180deg,
+                #0a3d4d 0%,
+                #0d5266 15%,
+                #106680 30%,
+                #1399b3 45%,
+                #106680 60%,
+                #0d5266 75%,
+                #0a3d4d 90%,
+                #072833 100%
+            );
+            border: 4px solid #00ffff;
+            box-shadow:
+                inset 0 0 150px rgba(0, 255, 255, 0.3),
+                inset 0 0 50px rgba(0, 255, 255, 0.5),
+                0 0 100px rgba(0, 255, 255, 0.6),
+                0 20px 50px rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            transform-style: preserve-3d;
+        }
+
+        .door-left {
+            left: 0;
+            border-right: 2px solid #00ffff;
+            animation: doorOpenLeft 2.5s 6.5s cubic-bezier(0.65, 0.05, 0.36, 1) forwards;
+            transform-origin: left center;
+        }
+
+        .door-right {
+            right: 0;
+            border-left: 2px solid #00ffff;
+            animation: doorOpenRight 2.5s 6.5s cubic-bezier(0.65, 0.05, 0.36, 1) forwards;
+            transform-origin: right center;
+        }
+
+        @keyframes doorOpenLeft {
+            0% { transform: translateX(0) rotateY(0deg); }
+            100% { transform: translateX(-100%) rotateY(-15deg); }
+        }
+
+        @keyframes doorOpenRight {
+            0% { transform: translateX(0) rotateY(0deg); }
+            100% { transform: translateX(100%) rotateY(15deg); }
+        }
+
+        /* Enhanced door panels with depth */
+        .door-panel {
+            position: absolute;
+            width: 85%;
+            height: 92%;
+            border: 3px solid rgba(0, 255, 255, 0.4);
+            border-radius: 15px;
+            background: radial-gradient(ellipse at center,
+                rgba(0, 255, 255, 0.05),
+                transparent 70%
+            );
+            box-shadow:
+                inset 0 0 50px rgba(0, 255, 255, 0.1),
+                0 0 30px rgba(0, 255, 255, 0.2);
+        }
+
+        /* Multiple inner panels for depth */
+        .door-panel-inner {
+            position: absolute;
+            width: 90%;
+            height: 90%;
+            top: 5%;
+            left: 5%;
+            border: 2px solid rgba(0, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        .door-center-line {
+            position: absolute;
+            width: 3px;
+            height: 85%;
+            background: linear-gradient(180deg,
+                transparent,
+                rgba(0, 255, 255, 0.3),
+                #00ffff,
+                rgba(0, 255, 255, 0.3),
+                transparent
+            );
+            top: 7.5%;
+            left: 50%;
+            transform: translateX(-50%);
+            animation: centerLinePulse 2s infinite;
+            box-shadow: 0 0 20px #00ffff;
+        }
+
+        @keyframes centerLinePulse {
+            0%, 100% {
+                opacity: 0.5;
+                box-shadow: 0 0 20px #00ffff;
+            }
+            50% {
+                opacity: 1;
+                box-shadow: 0 0 40px #00ffff, 0 0 60px #00ffff;
+            }
+        }
+
+        /* Enhanced scan line with multiple passes */
+        .scan-line {
+            position: absolute;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg,
+                transparent,
+                rgba(0, 255, 255, 0.3),
+                #00ffff,
+                rgba(0, 255, 255, 0.3),
+                transparent
+            );
+            box-shadow:
+                0 0 30px #00ffff,
+                0 0 60px rgba(0, 255, 255, 0.5);
+            top: 0;
+            animation: scanDown 2s 4.5s ease-in-out;
+        }
+
+        @keyframes scanDown {
+            0% { top: 0%; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        /* Secondary door layers for epic depth effect */
+        .door-layer-2 {
+            position: absolute;
+            width: 45%;
+            height: 90%;
+            background: linear-gradient(180deg,
+                #053344 0%,
+                #086b80 50%,
+                #053344 100%
+            );
+            border: 2px solid rgba(0, 255, 255, 0.6);
+            opacity: 0;
+            animation: doorLayer2Reveal 1.5s 7s forwards;
+            box-shadow: 0 0 50px rgba(0, 255, 255, 0.4);
+        }
+
+        .door-layer-2-left {
+            left: 2.5%;
+            animation: doorLayer2Reveal 1.5s 7s forwards, doorLayer2OpenLeft 1.5s 8s forwards;
+        }
+
+        .door-layer-2-right {
+            right: 2.5%;
+            animation: doorLayer2Reveal 1.5s 7s forwards, doorLayer2OpenRight 1.5s 8s forwards;
+        }
+
+        @keyframes doorLayer2Reveal {
+            to { opacity: 1; }
+        }
+
+        @keyframes doorLayer2OpenLeft {
+            to { transform: scaleX(0); transform-origin: left; }
+        }
+
+        @keyframes doorLayer2OpenRight {
+            to { transform: scaleX(0); transform-origin: right; }
+        }
+
+        /* Third door layer */
+        .door-layer-3 {
+            position: absolute;
+            width: 40%;
+            height: 80%;
+            background: linear-gradient(180deg,
+                #031a22 0%,
+                #04455a 50%,
+                #031a22 100%
+            );
+            border: 2px solid rgba(0, 255, 255, 0.8);
+            opacity: 0;
+            animation: doorLayer3Reveal 1s 8.5s forwards;
+            box-shadow: 0 0 60px rgba(0, 255, 255, 0.6);
+        }
+
+        .door-layer-3-left {
+            left: 5%;
+            animation: doorLayer3Reveal 1s 8.5s forwards, doorLayer3OpenLeft 1s 9.5s forwards;
+        }
+
+        .door-layer-3-right {
+            right: 5%;
+            animation: doorLayer3Reveal 1s 8.5s forwards, doorLayer3OpenRight 1s 9.5s forwards;
+        }
+
+        @keyframes doorLayer3Reveal {
+            to { opacity: 1; }
+        }
+
+        @keyframes doorLayer3OpenLeft {
+            to { transform: scaleY(0); transform-origin: top; }
+        }
+
+        @keyframes doorLayer3OpenRight {
+            to { transform: scaleY(0); transform-origin: bottom; }
+        }
+
+        /* Enhanced Hologram Reveal with insane effects */
+        .hologram-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            animation: hologramReveal 2s 10.5s cubic-bezier(0.68, -0.55, 0.27, 1.55) forwards;
+            transform-style: preserve-3d;
+        }
+
+        @keyframes hologramReveal {
+            0% {
+                opacity: 0;
+                transform: rotateX(90deg) scale(0.5) translateZ(-500px);
+            }
+            100% {
+                opacity: 1;
+                transform: rotateX(0deg) scale(1) translateZ(0);
+            }
+        }
+
+        /* Hexagon grid background with parallax */
+        .hex-grid {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(30deg, transparent 48%, rgba(0, 255, 255, 0.1) 49%, rgba(0, 255, 255, 0.1) 51%, transparent 52%),
+                linear-gradient(90deg, transparent 48%, rgba(0, 255, 255, 0.1) 49%, rgba(0, 255, 255, 0.1) 51%, transparent 52%),
+                linear-gradient(150deg, transparent 48%, rgba(0, 255, 255, 0.1) 49%, rgba(0, 255, 255, 0.1) 51%, transparent 52%);
+            background-size: 60px 104px;
+            opacity: 0;
+            animation: hexGridAppear 1.5s 10s forwards, hexGridMove 20s 11s infinite linear;
+        }
+
+        @keyframes hexGridAppear {
+            to { opacity: 1; }
+        }
+
+        @keyframes hexGridMove {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(60px, 104px); }
+        }
+
+        /* Enhanced energy rings with multiple layers */
+        .energy-ring {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            border: 3px solid rgba(0, 255, 255, 0.8);
+            border-radius: 50%;
+            box-shadow:
+                0 0 30px #00ffff,
+                inset 0 0 30px rgba(0, 255, 255, 0.4);
+            animation: ringExpand 2.5s ease-out infinite;
+            opacity: 0;
+        }
+
+        .energy-ring:nth-child(2) {
+            animation-delay: 0.5s;
+            border-color: rgba(0, 255, 255, 0.6);
+        }
+
+        .energy-ring:nth-child(3) {
+            animation-delay: 1s;
+            border-color: rgba(0, 255, 255, 0.4);
+        }
+
+        .energy-ring:nth-child(4) {
+            animation-delay: 1.5s;
+            border-color: rgba(0, 255, 255, 0.2);
+        }
+
+        @keyframes ringExpand {
+            0% {
+                width: 100px;
+                height: 100px;
+                opacity: 0;
+            }
+            20% {
+                opacity: 1;
+            }
+            100% {
+                width: 1200px;
+                height: 1200px;
+                opacity: 0;
+            }
+        }
+
+        /* Enhanced holographic logo with insane effects */
+        .hologram-logo {
+            font-size: 120px;
+            font-weight: 900;
+            letter-spacing: 20px;
+            background: linear-gradient(45deg,
+                #00ffff 0%,
+                #00ff88 15%,
+                #00ffff 30%,
+                #00ccff 45%,
+                #0099ff 60%,
+                #00ffff 75%,
+                #00ff88 90%,
+                #00ffff 100%
+            );
+            background-size: 400% 400%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow:
+                0 0 50px rgba(0, 255, 255, 0.8),
+                0 0 100px rgba(0, 255, 255, 0.6),
+                0 0 150px rgba(0, 255, 255, 0.4);
+            animation:
+                hologramGradient 4s ease-in-out infinite,
+                hologramFloat 4s ease-in-out infinite,
+                hologramGlitch 6s infinite;
+            position: relative;
+            z-index: 10;
+            filter: drop-shadow(0 0 30px #00ffff);
+        }
+
+        @keyframes hologramGradient {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        @keyframes hologramFloat {
+            0%, 100% { transform: translateY(0) rotateX(0deg); }
+            50% { transform: translateY(-30px) rotateX(5deg); }
+        }
+
+        @keyframes hologramGlitch {
+            0%, 90%, 100% {
+                transform: translate(0, 0);
+                opacity: 1;
+            }
+            91% {
+                transform: translate(-5px, 2px);
+                opacity: 0.8;
+            }
+            92% {
+                transform: translate(3px, -2px);
+                opacity: 0.9;
+            }
+            93% {
+                transform: translate(-2px, 1px);
+                opacity: 1;
+            }
+        }
+
+        /* Hologram subtitle */
+        .hologram-subtitle {
+            font-size: 28px;
+            letter-spacing: 12px;
+            color: #00ffff;
+            text-transform: uppercase;
+            margin-top: 30px;
+            opacity: 0;
+            animation: subtitleAppear 1.5s 11.5s forwards, subtitleScan 2.5s 12s infinite;
+            text-shadow:
+                0 0 20px #00ffff,
+                0 0 40px rgba(0, 255, 255, 0.6);
+        }
+
+        @keyframes subtitleAppear {
+            to { opacity: 1; }
+        }
+
+        @keyframes subtitleScan {
+            0%, 100% { opacity: 1; text-shadow: 0 0 20px #00ffff, 0 0 40px rgba(0, 255, 255, 0.6); }
+            50% { opacity: 0.8; text-shadow: 0 0 40px #00ffff, 0 0 80px rgba(0, 255, 255, 0.8); }
+        }
+
+        /* Orbiting hologram particles - MORE! */
+        .hologram-particle {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: #00ffff;
+            border-radius: 50%;
+            box-shadow: 0 0 20px #00ffff, 0 0 40px rgba(0, 255, 255, 0.6);
+            animation: particleOrbit 5s linear infinite;
+        }
+
+        @keyframes particleOrbit {
+            0% {
+                transform: rotate(0deg) translateX(350px) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: rotate(360deg) translateX(350px) rotate(-360deg);
+                opacity: 0;
+            }
+        }
+
+        /* Skip intro button */
+        .skip-intro {
+            position: fixed;
+            bottom: 40px;
+            right: 40px;
+            padding: 15px 30px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #00ffff;
+            color: #00ffff;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 8px;
+            z-index: 10001;
+            transition: all 0.3s;
+            animation: skipPulse 2s infinite;
+            backdrop-filter: blur(10px);
+        }
+
+        .skip-intro:hover {
+            background: rgba(0, 255, 255, 0.2);
+            box-shadow: 0 0 30px #00ffff;
+            transform: scale(1.1);
+        }
+
+        @keyframes skipPulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(0, 255, 255, 0.5); }
+            50% { box-shadow: 0 0 40px rgba(0, 255, 255, 0.8); }
+        }
+
+        /* ============================================
+           MAIN APP INTERFACE - Enhanced with Parallax
+        ============================================ */
+
+        #app {
+            display: none;
+            width: 100%;
+            height: 100vh;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #app.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Enhanced parallax background layers */
+        .parallax-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .parallax-layer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+
+        .parallax-layer-1 {
+            background: radial-gradient(ellipse at 20% 30%,
+                rgba(0, 255, 255, 0.03) 0%,
+                transparent 50%
+            );
+            animation: parallaxMove1 30s infinite alternate;
+        }
+
+        .parallax-layer-2 {
+            background: radial-gradient(ellipse at 80% 70%,
+                rgba(0, 255, 255, 0.05) 0%,
+                transparent 50%
+            );
+            animation: parallaxMove2 25s infinite alternate;
+        }
+
+        .parallax-layer-3 {
+            background:
+                linear-gradient(90deg, transparent 48%, rgba(0, 255, 255, 0.02) 49%, rgba(0, 255, 255, 0.02) 51%, transparent 52%),
+                linear-gradient(0deg, transparent 48%, rgba(0, 255, 255, 0.02) 49%, rgba(0, 255, 255, 0.02) 51%, transparent 52%);
+            background-size: 80px 80px;
+            animation: parallaxGrid 20s infinite linear;
+        }
+
+        @keyframes parallaxMove1 {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(30px, 30px) scale(1.1); }
+        }
+
+        @keyframes parallaxMove2 {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(-30px, -30px) scale(1.1); }
+        }
+
+        @keyframes parallaxGrid {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(80px, 80px); }
+        }
+
+        /* Floating particles in main app - 100 of them! */
+        .app-particle {
+            position: fixed;
+            width: 3px;
+            height: 3px;
+            background: #00ffff;
+            border-radius: 50%;
+            opacity: 0.3;
+            pointer-events: none;
+            box-shadow: 0 0 10px #00ffff;
+        }
+
+        /* Enhanced header with glassmorphism */
+        header {
+            background: rgba(0, 20, 20, 0.7);
+            backdrop-filter: blur(20px);
+            padding: 25px;
+            text-align: center;
+            border-bottom: 2px solid #00ffff;
+            box-shadow:
+                0 5px 30px rgba(0, 255, 255, 0.3),
+                inset 0 -1px 10px rgba(0, 255, 255, 0.2);
+            position: relative;
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 48px;
+            font-weight: 900;
+            letter-spacing: 8px;
+            background: linear-gradient(45deg, #00ffff, #00ff88, #00ffff);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: headerShine 3s linear infinite;
+            filter: drop-shadow(0 0 20px rgba(0, 255, 255, 0.6));
+        }
+
+        @keyframes headerShine {
+            to { background-position: 200% center; }
+        }
+
+        .subtitle {
+            font-size: 16px;
+            letter-spacing: 4px;
+            margin-top: 10px;
+            color: rgba(0, 255, 255, 0.8);
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+
+        /* Service status indicators */
+        .service-status {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .service-badge {
+            padding: 6px 12px;
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 20px;
+            font-size: 11px;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.3s;
+        }
+
+        .service-badge:hover {
+            background: rgba(0, 255, 255, 0.2);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.4);
+        }
+
+        .service-badge.active::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: #00ff88;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #00ff88;
+            animation: statusPulse 2s infinite;
+        }
+
+        @keyframes statusPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Enhanced control panel */
+        .controls {
+            padding: 20px;
+            background: rgba(0, 20, 20, 0.5);
+            backdrop-filter: blur(15px);
+            border-bottom: 1px solid rgba(0, 255, 255, 0.2);
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            z-index: 10;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            background: rgba(0, 255, 255, 0.1);
+            border: 2px solid #00ffff;
+            color: #00ffff;
+            cursor: pointer;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(0, 255, 255, 0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn:hover {
+            background: rgba(0, 255, 255, 0.2);
+            box-shadow:
+                0 0 30px rgba(0, 255, 255, 0.5),
+                inset 0 0 20px rgba(0, 255, 255, 0.2);
+            transform: translateY(-3px);
+        }
+
+        .btn:active {
+            transform: translateY(-1px);
+        }
+
+        .btn.active {
+            background: rgba(0, 255, 255, 0.3);
+            box-shadow:
+                0 0 40px rgba(0, 255, 255, 0.8),
+                inset 0 0 30px rgba(0, 255, 255, 0.4);
+        }
+
+        /* Model selector */
+        select {
+            padding: 12px 20px;
+            background: rgba(0, 255, 255, 0.1);
+            border: 2px solid #00ffff;
+            color: #00ffff;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        select:hover {
+            background: rgba(0, 255, 255, 0.2);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.4);
+        }
+
+        select option {
+            background: #001a1a;
+            color: #00ffff;
+        }
+
+        /* Enhanced chat container */
+        #chatContainer {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        #chatContainer::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        #chatContainer::-webkit-scrollbar-track {
+            background: rgba(0, 20, 20, 0.5);
+        }
+
+        #chatContainer::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #00ffff, #00ff88);
+            border-radius: 10px;
+            box-shadow: 0 0 10px #00ffff;
+        }
+
+        /* Enhanced message bubbles with depth */
+        .message {
+            padding: 20px;
+            border-radius: 15px;
+            max-width: 85%;
+            position: relative;
+            backdrop-filter: blur(10px);
+            animation: messageSlide 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s;
+        }
+
+        .message:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        @keyframes messageSlide {
+            from {
+                opacity: 0;
+                transform: translateX(-50px) scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0) scale(1);
+            }
+        }
+
+        .user-message {
+            background: rgba(0, 255, 255, 0.15);
+            border: 2px solid rgba(0, 255, 255, 0.4);
+            border-left: 4px solid #00ffff;
+            margin-left: auto;
+            box-shadow:
+                0 5px 20px rgba(0, 255, 255, 0.2),
+                inset 0 0 20px rgba(0, 255, 255, 0.05);
+        }
+
+        .assistant-message {
+            background: rgba(0, 255, 136, 0.1);
+            border: 2px solid rgba(0, 255, 136, 0.3);
+            border-left: 4px solid #00ff88;
+            margin-right: auto;
+            box-shadow:
+                0 5px 20px rgba(0, 255, 136, 0.2),
+                inset 0 0 20px rgba(0, 255, 136, 0.05);
+        }
+
+        /* Message actions */
+        .message-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(0, 255, 255, 0.2);
+        }
+
+        .action-btn {
+            padding: 6px 12px;
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            color: #00ffff;
+            border-radius: 5px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .action-btn:hover {
+            background: rgba(0, 255, 255, 0.2);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.4);
+        }
+
+        /* Enhanced input area */
+        .input-container {
+            padding: 25px;
+            background: rgba(0, 20, 20, 0.7);
+            backdrop-filter: blur(20px);
+            border-top: 2px solid #00ffff;
+            box-shadow:
+                0 -5px 30px rgba(0, 255, 255, 0.3),
+                inset 0 1px 10px rgba(0, 255, 255, 0.2);
+            position: relative;
+            z-index: 10;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        #messageInput {
+            flex: 1;
+            padding: 15px 20px;
+            background: rgba(0, 255, 255, 0.05);
+            border: 2px solid rgba(0, 255, 255, 0.3);
+            color: #00ffff;
+            font-size: 16px;
+            border-radius: 10px;
+            resize: none;
+            font-family: inherit;
+            transition: all 0.3s;
+        }
+
+        #messageInput:focus {
+            outline: none;
+            border-color: #00ffff;
+            box-shadow:
+                0 0 30px rgba(0, 255, 255, 0.4),
+                inset 0 0 20px rgba(0, 255, 255, 0.1);
+            background: rgba(0, 255, 255, 0.1);
+        }
+
+        #messageInput::placeholder {
+            color: rgba(0, 255, 255, 0.4);
+        }
+
+        /* Voice orb button - EPIC! */
+        #voiceBtn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: radial-gradient(circle,
+                rgba(0, 255, 255, 0.3) 0%,
+                rgba(0, 255, 255, 0.1) 50%,
+                transparent 100%
+            );
+            border: 3px solid #00ffff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            color: #00ffff;
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            position: relative;
+            box-shadow:
+                0 0 30px rgba(0, 255, 255, 0.5),
+                inset 0 0 20px rgba(0, 255, 255, 0.2);
+            animation: orbPulse 3s infinite;
+        }
+
+        #voiceBtn::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 2px solid #00ffff;
+            opacity: 0;
+            animation: orbRing 2s infinite;
+        }
+
+        @keyframes orbPulse {
+            0%, 100% {
+                box-shadow:
+                    0 0 30px rgba(0, 255, 255, 0.5),
+                    inset 0 0 20px rgba(0, 255, 255, 0.2);
+            }
+            50% {
+                box-shadow:
+                    0 0 50px rgba(0, 255, 255, 0.8),
+                    inset 0 0 30px rgba(0, 255, 255, 0.4);
+            }
+        }
+
+        @keyframes orbRing {
+            0% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+            100% {
+                transform: scale(1.5);
+                opacity: 0;
+            }
+        }
+
+        #voiceBtn:hover {
+            transform: scale(1.15);
+            box-shadow:
+                0 0 60px rgba(0, 255, 255, 1),
+                inset 0 0 40px rgba(0, 255, 255, 0.6);
+        }
+
+        #voiceBtn.listening {
+            animation: listening 0.8s infinite alternate;
+            background: radial-gradient(circle,
+                rgba(255, 0, 255, 0.4) 0%,
+                rgba(0, 255, 255, 0.2) 50%,
+                transparent 100%
+            );
+            border-color: #ff00ff;
+            box-shadow:
+                0 0 50px rgba(255, 0, 255, 0.8),
+                inset 0 0 30px rgba(255, 0, 255, 0.4);
+        }
+
+        @keyframes listening {
+            0% {
+                transform: scale(1);
+                box-shadow:
+                    0 0 50px rgba(255, 0, 255, 0.8),
+                    inset 0 0 30px rgba(255, 0, 255, 0.4);
+            }
+            100% {
+                transform: scale(1.2);
+                box-shadow:
+                    0 0 80px rgba(255, 0, 255, 1),
+                    inset 0 0 50px rgba(255, 0, 255, 0.6);
+            }
+        }
+
+        /* Send button */
+        #sendBtn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: rgba(0, 255, 255, 0.2);
+            border: 3px solid #00ffff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #00ffff;
+            transition: all 0.4s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #sendBtn::before {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 0;
+            background: rgba(0, 255, 255, 0.4);
+            border-radius: 50%;
+            transition: width 0.6s, height 0.6s;
+        }
+
+        #sendBtn:hover::before {
+            width: 200px;
+            height: 200px;
+        }
+
+        #sendBtn:hover {
+            box-shadow:
+                0 0 40px rgba(0, 255, 255, 0.8),
+                inset 0 0 20px rgba(0, 255, 255, 0.4);
+            transform: scale(1.1) rotate(90deg);
+        }
+
+        /* Code blocks with enhanced styling */
+        pre {
+            background: rgba(0, 0, 0, 0.6) !important;
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-left: 4px solid #00ffff;
+            border-radius: 8px;
+            padding: 20px !important;
+            overflow-x: auto;
+            margin: 15px 0;
+            box-shadow:
+                0 5px 20px rgba(0, 0, 0, 0.4),
+                inset 0 0 15px rgba(0, 255, 255, 0.05);
+        }
+
+        code {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+
+        /* Loading indicator */
+        .loading {
+            display: none;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .loading.active {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .loading-dot {
+            width: 12px;
+            height: 12px;
+            background: #00ffff;
+            border-radius: 50%;
+            box-shadow: 0 0 15px #00ffff;
+            animation: loadingDot 1.4s infinite ease-in-out both;
+        }
+
+        .loading-dot:nth-child(1) { animation-delay: -0.32s; }
+        .loading-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes loadingDot {
+            0%, 80%, 100% {
+                transform: scale(0);
+                opacity: 0.5;
+            }
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            h1 { font-size: 32px; letter-spacing: 4px; }
+            .hologram-logo { font-size: 60px; letter-spacing: 10px; }
+            .hologram-subtitle { font-size: 16px; letter-spacing: 6px; }
+            .floor-indicator { font-size: 100px; }
+            .message { max-width: 95%; }
+            .service-status { gap: 8px; }
+            .service-badge { font-size: 10px; padding: 4px 8px; }
+            #voiceBtn, #sendBtn { width: 60px; height: 60px; font-size: 24px; }
+            .btn { padding: 10px 18px; font-size: 12px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ============================================
+         EPIC INTRO SEQUENCE
+    ============================================ -->
+    <div id="introSequence">
+        <!-- Atmospheric fog layers -->
+        <div class="fog-layer"></div>
+        <div class="fog-layer"></div>
+
+        <!-- Light rays -->
+        <div class="light-ray" style="left: 20%; animation-delay: 0s;"></div>
+        <div class="light-ray" style="left: 40%; animation-delay: 0.5s;"></div>
+        <div class="light-ray" style="left: 60%; animation-delay: 1s;"></div>
+        <div class="light-ray" style="left: 80%; animation-delay: 1.5s;"></div>
+
+        <!-- Elevator shaft -->
+        <div class="elevator-shaft"></div>
+
+        <!-- Floor indicator -->
+        <div class="floor-indicator" id="floorNumber">1</div>
+
+        <!-- Doors container -->
+        <div class="doors-container">
+            <!-- Main doors -->
+            <div class="door door-left">
+                <div class="door-panel">
+                    <div class="door-panel-inner"></div>
+                </div>
+                <div class="door-center-line"></div>
+                <div class="scan-line"></div>
+            </div>
+
+            <div class="door door-right">
+                <div class="door-panel">
+                    <div class="door-panel-inner"></div>
+                </div>
+                <div class="door-center-line"></div>
+                <div class="scan-line"></div>
+            </div>
+
+            <!-- Second layer doors -->
+            <div class="door-layer-2 door-layer-2-left"></div>
+            <div class="door-layer-2 door-layer-2-right"></div>
+
+            <!-- Third layer doors -->
+            <div class="door-layer-3 door-layer-3-left"></div>
+            <div class="door-layer-3 door-layer-3-right"></div>
+        </div>
+
+        <!-- Hologram reveal -->
+        <div class="hologram-container">
+            <!-- Hexagon grid -->
+            <div class="hex-grid"></div>
+
+            <!-- Energy rings -->
+            <div class="energy-ring"></div>
+            <div class="energy-ring"></div>
+            <div class="energy-ring"></div>
+            <div class="energy-ring"></div>
+
+            <!-- Hologram logo -->
+            <div class="hologram-logo">MONSTER AI</div>
+            <div class="hologram-subtitle">ULTIMATE BEAST EDITION</div>
+
+            <!-- Orbiting particles -->
+            <div id="hologramParticles"></div>
+        </div>
+
+        <!-- Skip button -->
+        <button class="skip-intro" onclick="skipIntro()">Skip Intro ⏭️</button>
+    </div>
+
+    <!-- ============================================
+         MAIN APPLICATION
+    ============================================ -->
+    <div id="app">
+        <!-- Parallax background -->
+        <div class="parallax-bg">
+            <div class="parallax-layer parallax-layer-1"></div>
+            <div class="parallax-layer parallax-layer-2"></div>
+            <div class="parallax-layer parallax-layer-3"></div>
+        </div>
+
+        <!-- Floating particles container -->
+        <div id="appParticles"></div>
+
+        <!-- Header -->
+        <header>
+            <h1>🔥 MONSTER SUPER AI</h1>
+            <div class="subtitle">ULTIMATE BEAST EDITION</div>
+
+            <!-- Service status badges -->
+            <div class="service-status">
+                <div class="service-badge" id="statusClaude"><span>Claude</span></div>
+                <div class="service-badge" id="statusOpenAI"><span>OpenAI</span></div>
+                <div class="service-badge" id="statusDeepgram"><span>Deepgram</span></div>
+                <div class="service-badge" id="statusCartesia"><span>Cartesia</span></div>
+                <div class="service-badge" id="statusTavily"><span>Tavily</span></div>
+                <div class="service-badge" id="statusLiveKit"><span>LiveKit</span></div>
+            </div>
+        </header>
+
+        <!-- Controls -->
+        <div class="controls">
+            <select id="aiModel">
+                <option value="claude">Claude Sonnet 4.5</option>
+                <option value="openai">GPT-4 Turbo</option>
+            </select>
+
+            <button class="btn" id="searchToggle" onclick="toggleSearch()">
+                <span style="position: relative; z-index: 1;">🔍 Web Search: <span id="searchStatus">OFF</span></span>
+            </button>
+
+            <button class="btn" id="voiceToggle" onclick="toggleVoiceOutput()">
+                <span style="position: relative; z-index: 1;">🔊 Voice: <span id="voiceStatus">OFF</span></span>
+            </button>
+
+            <button class="btn" id="liveKitToggle" onclick="toggleLiveKit()">
+                <span style="position: relative; z-index: 1;">📡 LiveKit: <span id="liveKitStatus">OFF</span></span>
+            </button>
+
+            <button class="btn" onclick="clearChat()">
+                <span style="position: relative; z-index: 1;">🗑️ Clear</span>
+            </button>
+
+            <button class="btn" onclick="exportChat()">
+                <span style="position: relative; z-index: 1;">💾 Export</span>
+            </button>
+        </div>
+
+        <!-- Chat container -->
+        <div id="chatContainer">
+            <div class="message assistant-message" style="max-width: 100%; text-align: center;">
+                <h2 style="margin-bottom: 15px;">🔥 Welcome to Monster Super AI - BEAST MODE! 🔥</h2>
+                <p style="margin: 10px 0;">Powered by <strong>6 cutting-edge AI services</strong>:</p>
+                <ul style="list-style: none; padding: 0; margin: 15px 0;">
+                    <li>⚡ <strong>Claude Sonnet 4.5</strong> - Advanced reasoning & code</li>
+                    <li>🧠 <strong>GPT-4 Turbo</strong> - Multimodal intelligence</li>
+                    <li>🎙️ <strong>Deepgram</strong> - Real-time speech recognition</li>
+                    <li>🔊 <strong>Cartesia</strong> - High-quality voice synthesis</li>
+                    <li>🔍 <strong>Tavily</strong> - Web search & research</li>
+                    <li>📡 <strong>LiveKit</strong> - Real-time audio/video</li>
+                </ul>
+                <p style="margin-top: 15px;"><strong>Type or speak to get started!</strong></p>
+            </div>
+        </div>
+
+        <!-- Loading indicator -->
+        <div class="loading" id="loadingIndicator">
+            <div class="loading-dot"></div>
+            <div class="loading-dot"></div>
+            <div class="loading-dot"></div>
+        </div>
+
+        <!-- Input area -->
+        <div class="input-container">
+            <div class="input-wrapper">
+                <button id="voiceBtn" onclick="toggleVoiceInput()">🎤</button>
+                <textarea
+                    id="messageInput"
+                    placeholder="Ask Monster AI anything..."
+                    rows="1"
+                    onkeypress="handleKeyPress(event)"
+                ></textarea>
+                <button id="sendBtn" onclick="sendMessage()">➤</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // Configuration
+        // ============================================
+        const CONFIG = {
+            serverUrl: 'http://localhost:5001',
+            conversationId: 'session-' + Date.now(),
+            useWebSearch: false,
+            useVoiceOutput: false,
+            liveKitActive: false,
+            currentModel: 'claude'
+        };
+
+        // Speech recognition
+        let recognition = null;
+        let isListening = false;
+
+        // LiveKit
+        let livekitRoom = null;
+
+        // ============================================
+        // Intro Sequence
+        // ============================================
+        function createHologramParticles() {
+            const container = document.getElementById('hologramParticles');
+            const particleCount = 30;
+
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'hologram-particle';
+                particle.style.animationDelay = `${i * 0.15}s`;
+                particle.style.animationDuration = `${5 + (i % 3)}s`;
+                container.appendChild(particle);
+            }
+        }
+
+        function createAppParticles() {
+            const container = document.getElementById('appParticles');
+            const particleCount = 100;
+
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'app-particle';
+
+                // Random position
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+
+                // Random animation
+                const duration = 10 + Math.random() * 20;
+                const delay = Math.random() * 10;
+                particle.style.animation = `
+                    floatParticle ${duration}s ${delay}s infinite ease-in-out
+                `;
+
+                container.appendChild(particle);
+            }
+        }
+
+        // Add particle float animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes floatParticle {
+                0%, 100% {
+                    transform: translate(0, 0);
+                    opacity: 0.3;
+                }
+                25% {
+                    transform: translate(${Math.random() * 50 - 25}px, ${Math.random() * 50 - 25}px);
+                    opacity: 0.6;
+                }
+                50% {
+                    transform: translate(${Math.random() * 100 - 50}px, ${Math.random() * 100 - 50}px);
+                    opacity: 0.3;
+                }
+                75% {
+                    transform: translate(${Math.random() * 50 - 25}px, ${Math.random() * 50 - 25}px);
+                    opacity: 0.6;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Animated floor counter
+        function animateFloorCounter() {
+            const floorNumber = document.getElementById('floorNumber');
+            let floor = 1;
+            const interval = setInterval(() => {
+                floor += Math.floor(Math.random() * 15) + 10;
+                if (floor >= 100) {
+                    floor = 100;
+                    clearInterval(interval);
+                }
+                floorNumber.textContent = floor;
+            }, 100);
+        }
+
+        function skipIntro() {
+            document.getElementById('introSequence').classList.add('hidden');
+            document.getElementById('app').classList.add('active');
+            sessionStorage.setItem('introSeen', 'true');
+        }
+
+        function endIntro() {
+            setTimeout(skipIntro, 13000); // 13 second intro
+        }
+
+        // Check if intro was already seen
+        if (sessionStorage.getItem('introSeen')) {
+            skipIntro();
+        } else {
+            createHologramParticles();
+            animateFloorCounter();
+            endIntro();
+        }
+
+        // ============================================
+        // Service Status Checking
+        // ============================================
+        async function checkServices() {
+            try {
+                const response = await fetch(`${CONFIG.serverUrl}/api/health`);
+                const data = await response.json();
+
+                // Update status badges
+                updateServiceBadge('statusClaude', data.services.claude);
+                updateServiceBadge('statusOpenAI', data.services.openai);
+                updateServiceBadge('statusDeepgram', data.services.deepgram);
+                updateServiceBadge('statusCartesia', data.services.cartesia);
+                updateServiceBadge('statusTavily', data.services.tavily);
+                updateServiceBadge('statusLiveKit', data.services.livekit);
+            } catch (error) {
+                console.error('Service check failed:', error);
+            }
+        }
+
+        function updateServiceBadge(id, isActive) {
+            const badge = document.getElementById(id);
+            if (isActive) {
+                badge.classList.add('active');
+            } else {
+                badge.classList.remove('active');
+            }
+        }
+
+        // ============================================
+        // UI Initialization
+        // ============================================
+        function initializeApp() {
+            createAppParticles();
+            checkServices();
+
+            // Check services every 30 seconds
+            setInterval(checkServices, 30000);
+
+            // Initialize speech recognition if available
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recognition = new SpeechRecognition();
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                recognition.lang = 'en-US';
+
+                recognition.onresult = (event) => {
+                    const transcript = event.results[0][0].transcript;
+                    document.getElementById('messageInput').value = transcript;
+                    sendMessage();
+                };
+
+                recognition.onend = () => {
+                    isListening = false;
+                    document.getElementById('voiceBtn').classList.remove('listening');
+                };
+            }
+
+            // Auto-resize textarea
+            const textarea = document.getElementById('messageInput');
+            textarea.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
+            });
+        }
+
+        // ============================================
+        // Chat Functions
+        // ============================================
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+
+            if (!message) return;
+
+            // Add user message
+            addMessage(message, 'user');
+            input.value = '';
+            input.style.height = 'auto';
+
+            // Show loading
+            document.getElementById('loadingIndicator').classList.add('active');
+
+            try {
+                let endpoint, body;
+
+                if (CONFIG.currentModel === 'claude') {
+                    if (CONFIG.useWebSearch) {
+                        endpoint = '/api/chat/multimodal';
+                        body = {
+                            message,
+                            useSearch: true,
+                            aiModel: 'claude'
+                        };
+                    } else {
+                        endpoint = '/api/claude/chat';
+                        body = {
+                            message,
+                            conversationId: CONFIG.conversationId
+                        };
+                    }
+                } else {
+                    if (CONFIG.useWebSearch) {
+                        endpoint = '/api/chat/multimodal';
+                        body = {
+                            message,
+                            useSearch: true,
+                            aiModel: 'openai'
+                        };
+                    } else {
+                        endpoint = '/api/openai/chat';
+                        body = {
+                            message,
+                            conversationId: CONFIG.conversationId
+                        };
+                    }
+                }
+
+                const response = await fetch(`${CONFIG.serverUrl}${endpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                const data = await response.json();
+
+                // Hide loading
+                document.getElementById('loadingIndicator').classList.remove('active');
+
+                if (data.error) {
+                    addMessage(`Error: ${data.error}`, 'assistant');
+                } else {
+                    addMessage(data.response, 'assistant');
+
+                    // Speak response if voice output enabled
+                    if (CONFIG.useVoiceOutput) {
+                        await speakWithCartesia(data.response);
+                    }
+                }
+            } catch (error) {
+                document.getElementById('loadingIndicator').classList.remove('active');
+                addMessage(`Connection error: ${error.message}. Is the server running?`, 'assistant');
+            }
+        }
+
+        function addMessage(text, type) {
+            const container = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}-message`;
+
+            // Parse markdown and highlight code
+            const parsedContent = marked.parse(text);
+            messageDiv.innerHTML = parsedContent;
+
+            // Highlight code blocks
+            messageDiv.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+
+            // Add action buttons for assistant messages
+            if (type === 'assistant') {
+                const actions = document.createElement('div');
+                actions.className = 'message-actions';
+                actions.innerHTML = `
+                    <button class="action-btn" onclick="copyMessage(this)">📋 Copy</button>
+                    <button class="action-btn" onclick="speakMessage(this)">🔊 Speak</button>
+                `;
+                messageDiv.appendChild(actions);
+            }
+
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function copyMessage(btn) {
+            const messageText = btn.closest('.message').innerText.replace(/📋 Copy\s*🔊 Speak/g, '').trim();
+            navigator.clipboard.writeText(messageText);
+
+            const original = btn.innerHTML;
+            btn.innerHTML = '✅ Copied!';
+            setTimeout(() => {
+                btn.innerHTML = original;
+            }, 2000);
+        }
+
+        async function speakMessage(btn) {
+            const messageText = btn.closest('.message').innerText.replace(/📋 Copy\s*🔊 Speak/g, '').trim();
+            await speakWithCartesia(messageText);
+        }
+
+        // ============================================
+        // Voice Functions
+        // ============================================
+        function toggleVoiceInput() {
+            if (!recognition) {
+                alert('Speech recognition not supported in this browser');
+                return;
+            }
+
+            if (isListening) {
+                recognition.stop();
+                isListening = false;
+                document.getElementById('voiceBtn').classList.remove('listening');
+            } else {
+                recognition.start();
+                isListening = true;
+                document.getElementById('voiceBtn').classList.add('listening');
+            }
+        }
+
+        function toggleVoiceOutput() {
+            CONFIG.useVoiceOutput = !CONFIG.useVoiceOutput;
+            const btn = document.getElementById('voiceToggle');
+            const status = document.getElementById('voiceStatus');
+
+            if (CONFIG.useVoiceOutput) {
+                btn.classList.add('active');
+                status.textContent = 'ON';
+            } else {
+                btn.classList.remove('active');
+                status.textContent = 'OFF';
+            }
+        }
+
+        async function speakWithCartesia(text) {
+            try {
+                const response = await fetch(`${CONFIG.serverUrl}/api/cartesia/speak`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+
+                const data = await response.json();
+
+                if (data.audio) {
+                    const audio = new Audio(`data:audio/mp3;base64,${data.audio}`);
+                    audio.play();
+                }
+            } catch (error) {
+                console.error('Cartesia TTS error:', error);
+            }
+        }
+
+        // ============================================
+        // LiveKit Functions
+        // ============================================
+        async function toggleLiveKit() {
+            CONFIG.liveKitActive = !CONFIG.liveKitActive;
+            const btn = document.getElementById('liveKitToggle');
+            const status = document.getElementById('liveKitStatus');
+
+            if (CONFIG.liveKitActive) {
+                await connectToLiveKit();
+                btn.classList.add('active');
+                status.textContent = 'ON';
+            } else {
+                await disconnectFromLiveKit();
+                btn.classList.remove('active');
+                status.textContent = 'OFF';
+            }
+        }
+
+        async function connectToLiveKit() {
+            try {
+                const response = await fetch(`${CONFIG.serverUrl}/api/livekit/token`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        roomName: 'monster-ai-room',
+                        participantName: 'user-' + Date.now()
+                    })
+                });
+
+                const data = await response.json();
+
+                livekitRoom = new LivekitClient.Room();
+
+                await livekitRoom.connect(data.url, data.token);
+
+                addMessage('🎉 Connected to LiveKit! Real-time voice is active.', 'assistant');
+            } catch (error) {
+                console.error('LiveKit connection error:', error);
+                addMessage(`LiveKit connection failed: ${error.message}`, 'assistant');
+                CONFIG.liveKitActive = false;
+            }
+        }
+
+        async function disconnectFromLiveKit() {
+            if (livekitRoom) {
+                await livekitRoom.disconnect();
+                livekitRoom = null;
+                addMessage('LiveKit disconnected.', 'assistant');
+            }
+        }
+
+        // ============================================
+        // Utility Functions
+        // ============================================
+        function toggleSearch() {
+            CONFIG.useWebSearch = !CONFIG.useWebSearch;
+            const btn = document.getElementById('searchToggle');
+            const status = document.getElementById('searchStatus');
+
+            if (CONFIG.useWebSearch) {
+                btn.classList.add('active');
+                status.textContent = 'ON';
+            } else {
+                btn.classList.remove('active');
+                status.textContent = 'OFF';
+            }
+        }
+
+        function clearChat() {
+            const container = document.getElementById('chatContainer');
+            container.innerHTML = '';
+            fetch(`${CONFIG.serverUrl}/api/conversation/clear`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ conversationId: CONFIG.conversationId })
+            });
+        }
+
+        function exportChat() {
+            const messages = document.querySelectorAll('.message');
+            let chatText = '=== Monster Super AI Chat Export ===\n\n';
+
+            messages.forEach(msg => {
+                const type = msg.classList.contains('user-message') ? 'USER' : 'ASSISTANT';
+                const text = msg.innerText.replace(/📋 Copy\s*🔊 Speak/g, '').trim();
+                chatText += `${type}:\n${text}\n\n`;
+            });
+
+            const blob = new Blob([chatText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `monster-ai-chat-${Date.now()}.txt`;
+            a.click();
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        // Model selector change
+        document.getElementById('aiModel').addEventListener('change', (e) => {
+            CONFIG.currentModel = e.target.value;
+        });
+
+        // Initialize when app becomes active
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.target.classList.contains('active')) {
+                    initializeApp();
+                    observer.disconnect();
+                }
+            });
+        });
+
+        observer.observe(document.getElementById('app'), {
+            attributes: true,
+            attributeFilter: ['class']
+        });
+
+        // If already active (intro skipped), initialize now
+        if (document.getElementById('app').classList.contains('active')) {
+            initializeApp();
+        }
+    </script>
+</body>
+</html>
