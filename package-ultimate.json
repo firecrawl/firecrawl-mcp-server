@@ -1,0 +1,36 @@
+{
+  "name": "monster-super-ai-ultimate",
+  "version": "2.0.0",
+  "description": "Monster Super AI Ultimate - Multi-Service AI Platform with LiveKit, OpenAI, Deepgram, Cartesia, and Tavily",
+  "main": "server-ultimate.js",
+  "scripts": {
+    "start": "node server-ultimate.js",
+    "dev": "nodemon server-ultimate.js"
+  },
+  "keywords": [
+    "ai",
+    "voice",
+    "livekit",
+    "openai",
+    "deepgram",
+    "cartesia",
+    "tavily",
+    "claude"
+  ],
+  "author": "Kings From Earth Development",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@deepgram/sdk": "^3.0.0",
+    "@livekit/rtc-node": "^2.0.0",
+    "axios": "^1.6.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "openai": "^4.20.0",
+    "ws": "^8.14.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

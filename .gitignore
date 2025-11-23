@@ -13,6 +13,7 @@ npm-debug.log*
 .env
 .env.local
 .env.*.local
+.env.ultimate
 claude_desktop_config.json
 
 # IDE
