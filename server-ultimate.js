@@ -4,14 +4,14 @@
  * Built by Kings From Earth Development
  */
 
-const express = require('express');
-const cors = require('cors');
-const dotenv = require('dotenv');
-const Anthropic = require('@anthropic-ai/sdk');
-const { OpenAI } = require('openai');
-const { createClient } = require('@deepgram/sdk');
-const axios = require('axios');
-const { AccessToken, RoomServiceClient } = require('livekit-server-sdk');
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
+import { createClient } from '@deepgram/sdk';
+import axios from 'axios';
+import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
 
 // Load environment variables
 dotenv.config({ path: '.env.ultimate' });
@@ -425,4 +425,4 @@ app.listen(PORT, () => {
     `);
 });
 
-module.exports = app;
+export default app;
