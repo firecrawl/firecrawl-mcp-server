@@ -1,32 +1,45 @@
 @echo off
 cls
-color 0A
+echo.
 echo ╔═══════════════════════════════════════════════════════════╗
 echo ║                                                           ║
-echo ║          🔥 STARTING MONSTER SUPER AI BEAST 🔥           ║
+echo ║       🔥 MONSTER SUPER AI - AUTO LAUNCHER 🔥             ║
 echo ║                                                           ║
 echo ╚═══════════════════════════════════════════════════════════╝
 echo.
-echo ⚡ Server starting on http://localhost:5001
-echo.
-echo 🌐 Auto-opening browser in 3 seconds...
+echo Starting server...
 echo.
 
-REM Start server in background briefly to allow browser open
+REM Start the server in background
 start /B node server-ultimate.js
 
-REM Wait 3 seconds
+REM Wait for server to start
 timeout /t 3 /nobreak >nul
 
+REM Get local IP address
+for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4 Address"') do (
+    set IP=%%a
+    goto :found
+)
+:found
+set IP=%IP:~1%
+
+echo.
+echo ✅ Server is running!
+echo.
+echo 🌐 Opening Monster AI in your browser...
+echo.
+echo 📱 Access from iPhone: http://%IP%:5001
+echo 💻 Access from PC: http://localhost:5001
+echo.
+
 REM Auto-open browser
+timeout /t 2 /nobreak >nul
 start http://localhost:5001
 
 echo.
-echo ✅ Browser opened! Monster AI is LIVE! 🔥
+echo 🔥 Monster Super AI is LIVE! 🔥
 echo.
-echo Press Ctrl+C to stop the server.
+echo Keep this window open. Press Ctrl+C to stop the server.
 echo.
-
-REM Keep running (restart the node process in foreground for logs)
-taskkill /F /IM node.exe >nul 2>&1
-node server-ultimate.js
+pause
