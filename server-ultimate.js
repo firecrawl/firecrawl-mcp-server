@@ -7,6 +7,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import os from 'os';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { createClient } from '@deepgram/sdk';
@@ -400,8 +401,20 @@ app.get('/api/conversation/:id', (req, res) => {
     });
 });
 
-// Start server
-app.listen(PORT, () => {
+// Start server on all network interfaces
+app.listen(PORT, '0.0.0.0', () => {
+    // Get local network IP addresses
+    const networkInterfaces = os.networkInterfaces();
+    const localIPs = [];
+
+    Object.values(networkInterfaces).forEach(interfaces => {
+        interfaces.forEach(iface => {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                localIPs.push(iface.address);
+            }
+        });
+    });
+
     console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
@@ -409,7 +422,13 @@ app.listen(PORT, () => {
 ║                                                           ║
 ║  Multi-Service AI Platform Running                       ║
 ║                                                           ║
-║  Server: http://localhost:${PORT}                       ║
+║  Local Access:                                            ║
+║  • http://localhost:${PORT}                              ║
+${localIPs.map(ip => `║  • http://${ip}:${PORT}${' '.repeat(Math.max(0, 47 - ip.length - PORT.toString().length))}║`).join('\n')}
+║                                                           ║
+║  📱 iPhone Access:                                        ║
+║  Open Safari and go to:                                   ║
+${localIPs.length > 0 ? `║  http://${localIPs[0]}:${PORT}${' '.repeat(Math.max(0, 47 - localIPs[0].length - PORT.toString().length))}║` : '║  (Enable WiFi to see iPhone URL)                         ║'}
 ║                                                           ║
 ║  Services Active:                                         ║
 ║  ✅ LiveKit (Real-time Audio/Video)                      ║
