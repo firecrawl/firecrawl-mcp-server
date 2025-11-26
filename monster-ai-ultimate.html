@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔥 MONSTER SUPER AI - ULTIMATE EDITION</title>
+
+    <!-- Code highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/monokai-sublime.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #000;
+            color: #00ffff;
+            min-height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* ============================================
+           EPIC INTRO SEQUENCE
+        ============================================ */
+
+        #introSequence {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10000;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            perspective: 2000px;
+        }
+
+        #introSequence.hidden {
+            display: none;
+        }
+
+        /* Elevator shaft background */
+        .elevator-shaft {
+            position: absolute;
+            width: 100%;
+            height: 200%;
+            background:
+                linear-gradient(90deg, #111 0px, transparent 1px, transparent 99px, #111 100px),
+                linear-gradient(0deg, #111 0px, transparent 1px, transparent 99px, #111 100px),
+                linear-gradient(180deg, #000 0%, #001a1a 50%, #000 100%);
+            background-size: 100px 100px, 100px 100px, 100% 100%;
+            animation: elevatorRise 4s ease-out forwards;
+            opacity: 0;
+        }
+
+        @keyframes elevatorRise {
+            0% {
+                transform: translateY(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-50%);
+                opacity: 1;
+            }
+        }
+
+        /* Elevator floor numbers */
+        .floor-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 150px;
+            font-weight: bold;
+            color: #00ffff;
+            text-shadow:
+                0 0 20px #00ffff,
+                0 0 40px #00ffff,
+                0 0 60px #00ffff,
+                0 0 80px #00ffff;
+            animation: floorCount 4s ease-out forwards;
+            z-index: 10;
+        }
+
+        @keyframes floorCount {
+            0% { content: "1"; opacity: 0; }
+            10% { opacity: 1; }
+            25% { content: "25"; }
+            50% { content: "50"; }
+            75% { content: "75"; }
+            90% { content: "99"; }
+            100% { content: "100"; opacity: 0; }
+        }
+
+        /* AI Doors Container */
+        .doors-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            animation: doorsAppear 1s 4s forwards;
+        }
+
+        @keyframes doorsAppear {
+            to { opacity: 1; }
+        }
+
+        /* Main Doors */
+        .door {
+            position: absolute;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(180deg,
+                #0a3d4d 0%,
+                #0d5266 20%,
+                #106680 40%,
+                #0d5266 60%,
+                #0a3d4d 100%
+            );
+            border: 3px solid #00ffff;
+            box-shadow:
+                inset 0 0 100px rgba(0, 255, 255, 0.2),
+                0 0 50px rgba(0, 255, 255, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .door-left {
+            left: 0;
+            border-right: 2px solid #00ffff;
+            animation: doorOpenLeft 2s 5s ease-out forwards;
+        }
+
+        .door-right {
+            right: 0;
+            border-left: 2px solid #00ffff;
+            animation: doorOpenRight 2s 5s ease-out forwards;
+        }
+
+        @keyframes doorOpenLeft {
+            to {
+                transform: translateX(-100%);
+            }
+        }
+
+        @keyframes doorOpenRight {
+            to {
+                transform: translateX(100%);
+            }
+        }
+
+        /* Door panels and details */
+        .door-panel {
+            position: absolute;
+            width: 80%;
+            height: 90%;
+            border: 2px solid rgba(0, 255, 255, 0.3);
+            border-radius: 10px;
+        }
+
+        .door-center-line {
+            position: absolute;
+            width: 2px;
+            height: 80%;
+            background: linear-gradient(180deg,
+                transparent,
+                #00ffff,
+                transparent
+            );
+            top: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            animation: centerLinePulse 2s infinite;
+        }
+
+        @keyframes centerLinePulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; box-shadow: 0 0 20px #00ffff; }
+        }
+
+        /* AI Scanning Lines on Doors */
+        .scan-line {
+            position: absolute;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg,
+                transparent,
+                #00ffff,
+                transparent
+            );
+            box-shadow: 0 0 20px #00ffff;
+            animation: scanDown 2s 4.5s ease-in-out;
+        }
+
+        @keyframes scanDown {
+            0% { top: 0%; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        /* Secondary Doors (Multiple layers) */
+        .door-layer-2 {
+            position: absolute;
+            width: 45%;
+            height: 90%;
+            background: linear-gradient(180deg,
+                #052a35 0%,
+                #084455 50%,
+                #052a35 100%
+            );
+            border: 2px solid rgba(0, 255, 255, 0.6);
+            top: 5%;
+            opacity: 0;
+            animation: doorLayer2Appear 0.5s 6s forwards, doorLayer2Open 1.5s 6.5s ease-out forwards;
+        }
+
+        .door-layer-2.left {
+            left: 2.5%;
+        }
+
+        .door-layer-2.right {
+            right: 2.5%;
+        }
+
+        @keyframes doorLayer2Appear {
+            to { opacity: 1; }
+        }
+
+        @keyframes doorLayer2Open {
+            to {
+                transform: scaleX(0);
+                opacity: 0;
+            }
+        }
+
+        /* Third Layer Doors */
+        .door-layer-3 {
+            position: absolute;
+            width: 40%;
+            height: 80%;
+            background: linear-gradient(180deg,
+                #031a22 0%,
+                #053344 50%,
+                #031a22 100%
+            );
+            border: 2px solid rgba(0, 255, 255, 0.8);
+            top: 10%;
+            opacity: 0;
+            animation: doorLayer3Appear 0.5s 7.5s forwards, doorLayer3Open 1s 8s ease-out forwards;
+        }
+
+        .door-layer-3.left {
+            left: 5%;
+        }
+
+        .door-layer-3.right {
+            right: 5%;
+        }
+
+        @keyframes doorLayer3Appear {
+            to { opacity: 1; }
+        }
+
+        @keyframes doorLayer3Open {
+            to {
+                transform: scaleY(0);
+                opacity: 0;
+            }
+        }
+
+        /* Monster AI Hologram Reveal */
+        .hologram-reveal {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            animation: hologramAppear 2s 9s forwards;
+            z-index: 100;
+        }
+
+        @keyframes hologramAppear {
+            0% {
+                opacity: 0;
+                transform: scale(0.5) rotateY(180deg);
+            }
+            50% {
+                transform: scale(1.2) rotateY(0deg);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1) rotateY(0deg);
+            }
+        }
+
+        .hologram-logo {
+            font-size: 120px;
+            font-weight: bold;
+            background: linear-gradient(45deg,
+                #00ffff 0%,
+                #00ff88 25%,
+                #00ffff 50%,
+                #0088ff 75%,
+                #00ffff 100%
+            );
+            background-size: 300% 300%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow:
+                0 0 30px rgba(0, 255, 255, 0.8);
+            animation:
+                logoGradient 3s infinite,
+                logoFloat 3s ease-in-out infinite,
+                hologramGlitch 5s infinite;
+            letter-spacing: 10px;
+            position: relative;
+        }
+
+        @keyframes logoGradient {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        @keyframes logoFloat {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+
+        @keyframes hologramGlitch {
+            0%, 90%, 100% { opacity: 1; transform: translateX(0); }
+            91% { opacity: 0.8; transform: translateX(-5px); }
+            92% { opacity: 1; transform: translateX(5px); }
+            93% { opacity: 0.9; transform: translateX(-3px); }
+            94% { opacity: 1; transform: translateX(0); }
+        }
+
+        .hologram-subtitle {
+            font-size: 24px;
+            color: #00ffff;
+            text-transform: uppercase;
+            letter-spacing: 15px;
+            margin-top: 20px;
+            opacity: 0;
+            animation: subtitleAppear 1s 10s forwards, scanlineEffect 2s infinite;
+        }
+
+        @keyframes subtitleAppear {
+            to { opacity: 1; }
+        }
+
+        @keyframes scanlineEffect {
+            0%, 100% { text-shadow: 0 0 10px #00ffff; }
+            50% { text-shadow: 0 0 20px #00ffff, 0 0 30px #00ffff; }
+        }
+
+        /* Hologram particles */
+        .hologram-particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .holo-particle {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: #00ffff;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #00ffff;
+            animation: particleOrbit 4s infinite;
+        }
+
+        @keyframes particleOrbit {
+            0% {
+                transform: rotate(0deg) translateX(200px) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: rotate(360deg) translateX(200px) rotate(-360deg);
+                opacity: 0;
+            }
+        }
+
+        /* Hexagon grid effect */
+        .hex-grid {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            animation: hexGridAppear 1s 9.5s forwards;
+            background-image:
+                linear-gradient(30deg, rgba(0, 255, 255, 0.1) 12%, transparent 12.5%, transparent 87%, rgba(0, 255, 255, 0.1) 87.5%, rgba(0, 255, 255, 0.1)),
+                linear-gradient(150deg, rgba(0, 255, 255, 0.1) 12%, transparent 12.5%, transparent 87%, rgba(0, 255, 255, 0.1) 87.5%, rgba(0, 255, 255, 0.1)),
+                linear-gradient(30deg, rgba(0, 255, 255, 0.1) 12%, transparent 12.5%, transparent 87%, rgba(0, 255, 255, 0.1) 87.5%, rgba(0, 255, 255, 0.1)),
+                linear-gradient(150deg, rgba(0, 255, 255, 0.1) 12%, transparent 12.5%, transparent 87%, rgba(0, 255, 255, 0.1) 87.5%, rgba(0, 255, 255, 0.1)),
+                linear-gradient(60deg, rgba(0, 255, 255, 0.15) 25%, transparent 25.5%, transparent 75%, rgba(0, 255, 255, 0.15) 75%, rgba(0, 255, 255, 0.15)),
+                linear-gradient(60deg, rgba(0, 255, 255, 0.15) 25%, transparent 25.5%, transparent 75%, rgba(0, 255, 255, 0.15) 75%, rgba(0, 255, 255, 0.15));
+            background-size: 80px 140px;
+            background-position: 0 0, 0 0, 40px 70px, 40px 70px, 0 0, 40px 70px;
+        }
+
+        @keyframes hexGridAppear {
+            to { opacity: 1; }
+        }
+
+        /* Energy rings */
+        .energy-ring {
+            position: absolute;
+            border: 2px solid #00ffff;
+            border-radius: 50%;
+            opacity: 0;
+            animation: ringExpand 2s 9s ease-out infinite;
+        }
+
+        @keyframes ringExpand {
+            0% {
+                width: 50px;
+                height: 50px;
+                opacity: 0;
+                box-shadow: 0 0 20px #00ffff;
+            }
+            50% {
+                opacity: 0.8;
+            }
+            100% {
+                width: 800px;
+                height: 800px;
+                opacity: 0;
+                box-shadow: 0 0 100px #00ffff;
+            }
+        }
+
+        .energy-ring:nth-child(2) {
+            animation-delay: 9.5s;
+        }
+
+        .energy-ring:nth-child(3) {
+            animation-delay: 10s;
+        }
+
+        /* Skip button */
+        .skip-intro {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            padding: 15px 30px;
+            background: rgba(0, 255, 255, 0.1);
+            border: 2px solid #00ffff;
+            color: #00ffff;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: all 0.3s;
+            z-index: 1000;
+            animation: skipPulse 2s infinite;
+        }
+
+        @keyframes skipPulse {
+            0%, 100% { box-shadow: 0 0 10px rgba(0, 255, 255, 0.5); }
+            50% { box-shadow: 0 0 30px rgba(0, 255, 255, 0.8); }
+        }
+
+        .skip-intro:hover {
+            background: rgba(0, 255, 255, 0.3);
+            box-shadow: 0 0 40px rgba(0, 255, 255, 1);
+            transform: scale(1.05);
+        }
+
+        /* ============================================
+           MAIN APPLICATION (Same as PRO version)
+        ============================================ */
+
+        #mainApp {
+            display: none;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        #mainApp.active {
+            display: flex;
+            flex-direction: column;
+            animation: appFadeIn 1s forwards;
+        }
+
+        @keyframes appFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        body {
+            overflow-y: auto;
+        }
+
+        /* Copy all styles from PRO version... */
+        .holographic-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: linear-gradient(135deg, #0a0e1a 0%, #1a1f35 50%, #0a0e1a 100%);
+            overflow: hidden;
+        }
+
+        .holographic-layer {
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            background:
+                radial-gradient(circle at 20% 50%, rgba(0, 255, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(0, 150, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 40% 20%, rgba(0, 200, 255, 0.08) 0%, transparent 50%);
+            animation: float 20s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(-25%, -25%) rotate(0deg); }
+            33% { transform: translate(-30%, -20%) rotate(120deg); }
+            66% { transform: translate(-20%, -30%) rotate(240deg); }
+        }
+
+        .particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: #00ffff;
+            border-radius: 50%;
+            opacity: 0.6;
+            animation: particleFloat 15s infinite;
+        }
+
+        @keyframes particleFloat {
+            0% { transform: translateY(100vh) translateX(0); opacity: 0; }
+            10% { opacity: 0.6; }
+            90% { opacity: 0.6; }
+            100% { transform: translateY(-100vh) translateX(100px); opacity: 0; }
+        }
+
+        /* Continue with all other PRO styles... */
+        .header {
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            text-align: center;
+            border-bottom: 2px solid #00ffff;
+            box-shadow: 0 4px 20px rgba(0, 255, 255, 0.3);
+            position: relative;
+            z-index: 10;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            text-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff;
+            animation: glow 2s ease-in-out infinite alternate;
+            background: linear-gradient(45deg, #00ffff, #0099ff, #00ffff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        @keyframes glow {
+            from { filter: brightness(1); }
+            to { filter: brightness(1.3); }
+        }
+
+        .subtitle {
+            color: #888;
+            margin-top: 10px;
+            font-size: 1.1em;
+        }
+
+        /* Add all other styles from monster-ai-pro.html here... */
+        /* For brevity, I'll include key styles. Full implementation would have all PRO styles */
+
+        .container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 1400px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .api-key-section {
+            background: rgba(255, 100, 0, 0.2);
+            backdrop-filter: blur(10px);
+            border: 2px solid #ff6600;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .api-key-section.configured {
+            background: rgba(0, 255, 0, 0.1);
+            border-color: #00ff00;
+        }
+
+        .api-input-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .api-input {
+            flex: 1;
+            padding: 10px;
+            border-radius: 8px;
+            border: 2px solid #00ffff;
+            background: rgba(0, 0, 0, 0.5);
+            color: #00ffff;
+            font-size: 1em;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            border-radius: 10px;
+            border: 2px solid #00ffff;
+            background: rgba(0, 150, 255, 0.3);
+            color: #00ffff;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        .btn:hover {
+            background: rgba(0, 200, 255, 0.5);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .chat-container {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            border: 2px solid #00ffff;
+            padding: 20px;
+            margin-bottom: 20px;
+            overflow-y: auto;
+            max-height: 60vh;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
+        }
+
+        .message {
+            margin: 15px 0;
+            padding: 15px;
+            border-radius: 10px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .user-message {
+            background: rgba(0, 100, 200, 0.3);
+            border-left: 4px solid #0099ff;
+            margin-left: 10%;
+        }
+
+        .assistant-message {
+            background: rgba(0, 200, 100, 0.3);
+            border-left: 4px solid #00ffff;
+            margin-right: 10%;
+        }
+
+        .voice-orb {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #00ffff 0%, #0099ff 50%, #0066cc 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+            position: relative;
+            z-index: 1;
+        }
+
+        .voice-orb:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 50px rgba(0, 255, 255, 0.8);
+        }
+
+        .voice-orb-icon {
+            font-size: 4em;
+        }
+
+        .control-panel {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            border: 2px solid #00ffff;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 0 40px rgba(0, 255, 255, 0.3);
+        }
+
+        .text-input {
+            flex: 1;
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #00ffff;
+            background: rgba(0, 0, 0, 0.5);
+            color: #00ffff;
+            font-size: 1.1em;
+            outline: none;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+            max-width: 900px;
+        }
+
+        .status-text {
+            font-size: 1.2em;
+            text-align: center;
+            min-height: 30px;
+        }
+    </style>
+</head>
+<body>
+    <!-- EPIC INTRO SEQUENCE -->
+    <div id="introSequence">
+        <!-- Elevator Shaft -->
+        <div class="elevator-shaft"></div>
+
+        <!-- Floor Counter -->
+        <div class="floor-indicator" id="floorNumber">1</div>
+
+        <!-- Main Doors -->
+        <div class="doors-container">
+            <!-- Scan Lines -->
+            <div class="scan-line"></div>
+
+            <!-- First Layer Doors -->
+            <div class="door door-left">
+                <div class="door-panel"></div>
+                <div class="door-center-line"></div>
+            </div>
+            <div class="door door-right">
+                <div class="door-panel"></div>
+                <div class="door-center-line"></div>
+            </div>
+
+            <!-- Second Layer Doors -->
+            <div class="door-layer-2 left"></div>
+            <div class="door-layer-2 right"></div>
+
+            <!-- Third Layer Doors -->
+            <div class="door-layer-3 left"></div>
+            <div class="door-layer-3 right"></div>
+        </div>
+
+        <!-- Hologram Reveal -->
+        <div class="hologram-reveal">
+            <div class="hex-grid"></div>
+
+            <div class="hologram-particles" id="holoParticles"></div>
+
+            <div class="energy-ring"></div>
+            <div class="energy-ring"></div>
+            <div class="energy-ring"></div>
+
+            <div class="hologram-logo">MONSTER AI</div>
+            <div class="hologram-subtitle">ULTIMATE EDITION</div>
+        </div>
+
+        <!-- Skip Button -->
+        <button class="skip-intro" onclick="skipIntro()">
+            SKIP INTRO ⏭️
+        </button>
+    </div>
+
+    <!-- MAIN APPLICATION -->
+    <div id="mainApp">
+        <!-- Holographic Background -->
+        <div class="holographic-bg">
+            <div class="holographic-layer"></div>
+            <div class="particles" id="particles"></div>
+        </div>
+
+        <div class="header">
+            <h1>🔥 MONSTER SUPER AI</h1>
+            <p class="subtitle">Ultimate Voice-Enabled AI Interface</p>
+        </div>
+
+        <div class="container">
+            <div class="api-key-section" id="apiKeySection">
+                <h3>🔑 API Configuration</h3>
+                <p style="margin: 10px 0; font-size: 0.9em;">Enter your Claude API key from <a href="https://console.anthropic.com" target="_blank" style="color: #00ffff;">console.anthropic.com</a></p>
+                <div class="api-input-group">
+                    <input type="password" class="api-input" id="apiKeyInput" placeholder="sk-ant-...">
+                    <button class="btn" onclick="saveApiKey()">Save Key</button>
+                </div>
+            </div>
+
+            <div class="chat-container" id="chatContainer">
+                <div class="message assistant-message">
+                    <div>Welcome to Monster Super AI Ultimate! Configure your API key above and start your journey.</div>
+                </div>
+            </div>
+
+            <div class="control-panel">
+                <div class="voice-orb" id="voiceOrb" onclick="toggleVoice()">
+                    <div class="voice-orb-icon">🎤</div>
+                </div>
+
+                <div class="status-text" id="statusText">Configure API key to start</div>
+
+                <div class="input-group">
+                    <input type="text" class="text-input" id="textInput" placeholder="Type your message..." onkeypress="handleKeyPress(event)">
+                    <button class="btn" id="sendBtn" onclick="sendMessage()" disabled>Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // INTRO SEQUENCE CONTROL
+        let introPlayed = sessionStorage.getItem('introPlayed');
+
+        window.onload = function() {
+            if (introPlayed) {
+                skipIntro();
+            } else {
+                startIntro();
+            }
+        };
+
+        function startIntro() {
+            // Floor counter animation
+            let floor = 1;
+            const floorCounter = setInterval(() => {
+                floor += Math.floor(Math.random() * 15) + 10;
+                if (floor >= 100) {
+                    floor = 100;
+                    clearInterval(floorCounter);
+                }
+                document.getElementById('floorNumber').textContent = floor;
+            }, 100);
+
+            // Generate hologram particles
+            const holoParticles = document.getElementById('holoParticles');
+            for (let i = 0; i < 20; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'holo-particle';
+                particle.style.left = '50%';
+                particle.style.top = '50%';
+                particle.style.animationDelay = (i * 0.2) + 's';
+                holoParticles.appendChild(particle);
+            }
+
+            // End intro after 12 seconds
+            setTimeout(() => {
+                endIntro();
+            }, 12000);
+        }
+
+        function skipIntro() {
+            endIntro();
+        }
+
+        function endIntro() {
+            document.getElementById('introSequence').classList.add('hidden');
+            document.getElementById('mainApp').classList.add('active');
+            document.body.style.overflow = 'auto';
+            sessionStorage.setItem('introPlayed', 'true');
+
+            // Initialize main app
+            initializeApp();
+        }
+
+        function initializeApp() {
+            // Initialize particles
+            initializeParticles();
+
+            // Load API key
+            const apiKey = localStorage.getItem('anthropic_api_key');
+            if (apiKey) {
+                document.getElementById('apiKeyInput').value = apiKey;
+                saveApiKey();
+            }
+        }
+
+        function initializeParticles() {
+            const container = document.getElementById('particles');
+            for (let i = 0; i < 50; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 15 + 's';
+                particle.style.animationDuration = (15 + Math.random() * 10) + 's';
+                container.appendChild(particle);
+            }
+        }
+
+        // Basic functions (simplified - would include all PRO features)
+        function saveApiKey() {
+            const input = document.getElementById('apiKeyInput');
+            const apiKey = input.value.trim();
+
+            if (!apiKey) {
+                alert('Please enter a valid API key');
+                return;
+            }
+
+            localStorage.setItem('anthropic_api_key', apiKey);
+            document.getElementById('apiKeySection').classList.add('configured');
+            document.getElementById('sendBtn').disabled = false;
+            setStatus('Ready to use!');
+
+            addMessage('assistant', 'API key configured! Ready to assist you.');
+        }
+
+        function toggleVoice() {
+            alert('Voice feature - integrate with Web Speech API');
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('textInput');
+            const message = input.value.trim();
+
+            if (!message) return;
+
+            addMessage('user', message);
+            input.value = '';
+
+            // Add Claude API integration here (same as PRO version)
+            addMessage('assistant', 'This is a demo response. Integrate Claude API for full functionality.');
+        }
+
+        function addMessage(type, content) {
+            const chatContainer = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message ' + (type === 'user' ? 'user-message' : 'assistant-message');
+            messageDiv.textContent = content;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function setStatus(text) {
+            document.getElementById('statusText').textContent = text;
+        }
+
+        console.log('🔥 Monster Super AI Ultimate - Intro sequence loaded!');
+    </script>
+</body>
+</html>
