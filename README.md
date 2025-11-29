@@ -194,6 +194,13 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 - `FIRECRAWL_RETRY_MAX_DELAY`: Maximum delay in milliseconds between retries (default: 10000)
 - `FIRECRAWL_RETRY_BACKOFF_FACTOR`: Exponential backoff multiplier (default: 2)
 
+##### Crawl Timeout Configuration
+
+- `FIRECRAWL_CRAWL_TIMEOUT`: Maximum time in seconds to wait for a crawl job to complete (default: 120)
+  - Set to `0` to disable timeout and wait indefinitely (not recommended)
+  - Useful for self-hosted instances where crawls may take longer
+- `FIRECRAWL_CRAWL_POLL_INTERVAL`: How often in seconds to check crawl job status (default: 2)
+
 ##### Credit Usage Monitoring
 
 - `FIRECRAWL_CREDIT_WARNING_THRESHOLD`: Credit usage warning threshold (default: 1000)
@@ -230,6 +237,10 @@ export FIRECRAWL_API_KEY=your-api-key  # If your instance requires auth
 # Custom retry configuration
 export FIRECRAWL_RETRY_MAX_ATTEMPTS=10
 export FIRECRAWL_RETRY_INITIAL_DELAY=500     # Start with faster retries
+
+# Crawl timeout configuration (recommended for self-hosted)
+export FIRECRAWL_CRAWL_TIMEOUT=300           # 5 minutes for larger crawls
+export FIRECRAWL_CRAWL_POLL_INTERVAL=5       # Check status every 5 seconds
 ```
 
 ### Usage with Claude Desktop

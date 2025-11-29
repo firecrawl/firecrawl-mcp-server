@@ -139,6 +139,25 @@ const ORIGIN = 'mcp-fastmcp';
 // Safe mode is enabled by default for cloud service to comply with ChatGPT safety requirements
 const SAFE_MODE = process.env.CLOUD_SERVICE === 'true';
 
+// Crawl timeout configuration (in seconds)
+// Default: 120 seconds. Set FIRECRAWL_CRAWL_TIMEOUT=0 to disable timeout (wait indefinitely)
+const CRAWL_TIMEOUT = (() => {
+  const envVal = process.env.FIRECRAWL_CRAWL_TIMEOUT;
+  if (envVal === undefined) return 120; // default 2 minutes
+  const parsed = parseInt(envVal, 10);
+  if (isNaN(parsed) || parsed < 0) return 120;
+  return parsed === 0 ? undefined : parsed; // 0 means no timeout
+})();
+
+// Crawl poll interval (in seconds)
+const CRAWL_POLL_INTERVAL = (() => {
+  const envVal = process.env.FIRECRAWL_CRAWL_POLL_INTERVAL;
+  if (envVal === undefined) return 2; // default 2 seconds
+  const parsed = parseInt(envVal, 10);
+  if (isNaN(parsed) || parsed < 1) return 2;
+  return parsed;
+})();
+
 function getClient(session?: SessionData): FirecrawlApp {
   // For cloud service, API key is required
   if (process.env.CLOUD_SERVICE === 'true') {
@@ -471,6 +490,7 @@ server.addTool({
  }
  \`\`\`
  **Returns:** Operation ID for status checking; use firecrawl_check_crawl_status to check progress.
+ **Timeout:** Default 120 seconds. Configure via FIRECRAWL_CRAWL_TIMEOUT env var (0 = no timeout).
  ${
    SAFE_MODE
      ? '**Safe Mode:** Read-only crawling. Webhooks and interactive actions are disabled for security.'
@@ -511,10 +531,12 @@ server.addTool({
     const { url, ...options } = args as Record<string, unknown>;
     const client = getClient(session);
     const cleaned = removeEmptyTopLevel(options as Record<string, unknown>);
-    log.info('Starting crawl', { url: String(url) });
+    log.info('Starting crawl', { url: String(url), timeout: CRAWL_TIMEOUT, pollInterval: CRAWL_POLL_INTERVAL });
     const res = await client.crawl(String(url), {
       ...(cleaned as any),
       origin: ORIGIN,
+      pollInterval: CRAWL_POLL_INTERVAL,
+      timeout: CRAWL_TIMEOUT,
     });
     return asText(res);
   },
