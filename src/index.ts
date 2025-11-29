@@ -532,13 +532,41 @@ server.addTool({
     const client = getClient(session);
     const cleaned = removeEmptyTopLevel(options as Record<string, unknown>);
     log.info('Starting crawl', { url: String(url), timeout: CRAWL_TIMEOUT, pollInterval: CRAWL_POLL_INTERVAL });
-    const res = await client.crawl(String(url), {
+    
+    // Start the crawl job
+    const started = await client.startCrawl(String(url), {
       ...(cleaned as any),
       origin: ORIGIN,
-      pollInterval: CRAWL_POLL_INTERVAL,
-      timeout: CRAWL_TIMEOUT,
     });
-    return asText(res);
+    
+    // Poll for completion with timeout (avoiding SDK's auto-pagination bug with self-hosted instances)
+    const startTime = Date.now();
+    const timeoutMs = CRAWL_TIMEOUT ? CRAWL_TIMEOUT * 1000 : undefined;
+    const pollIntervalMs = Math.max(1000, CRAWL_POLL_INTERVAL * 1000);
+    
+    while (true) {
+      // Check timeout
+      if (timeoutMs && (Date.now() - startTime) > timeoutMs) {
+        throw new Error(`Crawl job ${started.id} did not complete within ${CRAWL_TIMEOUT} seconds`);
+      }
+      
+      // Get status without auto-pagination to avoid infinite loop on self-hosted instances
+      const status = await client.getCrawlStatus(started.id, { autoPaginate: false });
+      
+      if (['completed', 'failed', 'cancelled'].includes(status.status)) {
+        return asText(status);
+      }
+      
+      log.info('Crawl in progress', { 
+        id: started.id, 
+        status: status.status, 
+        completed: status.completed, 
+        total: status.total,
+        elapsed: Math.round((Date.now() - startTime) / 1000) + 's'
+      });
+      
+      await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+    }
   },
 });
 
