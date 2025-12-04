@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔥 Monster Super AI Voice Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0a0e1a 0%, #1a1f35 100%);
+            color: #00ffff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 20px;
+            text-align: center;
+            border-bottom: 2px solid #00ffff;
+            box-shadow: 0 4px 20px rgba(0, 255, 255, 0.3);
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            text-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff; }
+            to { text-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff, 0 0 60px #00ffff; }
+        }
+
+        .subtitle {
+            color: #888;
+            margin-top: 10px;
+            font-size: 1.1em;
+        }
+
+        .container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .chat-container {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            border: 2px solid #00ffff;
+            padding: 20px;
+            margin-bottom: 20px;
+            overflow-y: auto;
+            max-height: 60vh;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
+        }
+
+        .message {
+            margin: 15px 0;
+            padding: 15px;
+            border-radius: 10px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .user-message {
+            background: rgba(0, 100, 200, 0.3);
+            border-left: 4px solid #0099ff;
+            margin-left: 10%;
+        }
+
+        .assistant-message {
+            background: rgba(0, 200, 100, 0.3);
+            border-left: 4px solid #00ffff;
+            margin-right: 10%;
+        }
+
+        .message-label {
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        .control-panel {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            border: 2px solid #00ffff;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .voice-orb {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #00ffff 0%, #0099ff 50%, #0066cc 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+            position: relative;
+        }
+
+        .voice-orb:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 50px rgba(0, 255, 255, 0.8);
+        }
+
+        .voice-orb.listening {
+            animation: pulse 1s ease-in-out infinite;
+            box-shadow: 0 0 60px rgba(0, 255, 255, 1);
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+                box-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+            }
+            50% {
+                transform: scale(1.15);
+                box-shadow: 0 0 80px rgba(0, 255, 255, 1);
+            }
+        }
+
+        .voice-orb-icon {
+            font-size: 4em;
+        }
+
+        .status-text {
+            font-size: 1.2em;
+            text-align: center;
+            min-height: 30px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+            max-width: 800px;
+        }
+
+        .text-input {
+            flex: 1;
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #00ffff;
+            background: rgba(0, 0, 0, 0.5);
+            color: #00ffff;
+            font-size: 1.1em;
+            outline: none;
+        }
+
+        .text-input:focus {
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+        }
+
+        .btn {
+            padding: 15px 30px;
+            border-radius: 10px;
+            border: 2px solid #00ffff;
+            background: rgba(0, 150, 255, 0.3);
+            color: #00ffff;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        .btn:hover {
+            background: rgba(0, 200, 255, 0.5);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-clear {
+            background: rgba(255, 50, 50, 0.3);
+            border-color: #ff3333;
+            color: #ff3333;
+        }
+
+        .btn-clear:hover {
+            background: rgba(255, 50, 50, 0.5);
+            box-shadow: 0 0 20px rgba(255, 50, 50, 0.5);
+        }
+
+        .info-panel {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .info-card {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid #00ffff;
+            border-radius: 10px;
+            padding: 15px 25px;
+            text-align: center;
+        }
+
+        .info-label {
+            font-size: 0.9em;
+            opacity: 0.7;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            font-size: 1.3em;
+            font-weight: bold;
+        }
+
+        .error-message {
+            background: rgba(255, 0, 0, 0.2);
+            border: 2px solid #ff3333;
+            color: #ff6666;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .voice-orb {
+                width: 120px;
+                height: 120px;
+            }
+
+            .input-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔥 MONSTER SUPER AI</h1>
+        <p class="subtitle">Voice-Enabled Claude Code Interface</p>
+    </div>
+
+    <div class="container">
+        <div class="chat-container" id="chatContainer">
+            <div class="message assistant-message">
+                <div class="message-label">🤖 Claude:</div>
+                <div>Welcome to Monster Super AI! I'm ready to assist you. Click the orb to start voice input or type below.</div>
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <div class="voice-orb" id="voiceOrb" title="Click to toggle voice input">
+                <div class="voice-orb-icon">🎤</div>
+            </div>
+
+            <div class="status-text" id="statusText">Ready to listen</div>
+
+            <div class="input-group">
+                <input type="text" class="text-input" id="textInput"
+                       placeholder="Type your message or use voice..."
+                       onkeypress="handleKeyPress(event)">
+                <button class="btn" onclick="sendMessage()">Send</button>
+                <button class="btn btn-clear" onclick="clearHistory()">Clear</button>
+            </div>
+
+            <div class="info-panel">
+                <div class="info-card">
+                    <div class="info-label">Status</div>
+                    <div class="info-value" id="apiStatus">⏳ Checking...</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Messages</div>
+                    <div class="info-value" id="messageCount">0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Session management
+        const sessionId = 'web-' + Date.now();
+        let messageCount = 0;
+        let isListening = false;
+        let recognition = null;
+        let synthesis = window.speechSynthesis;
+
+        // Initialize speech recognition if available
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                document.getElementById('textInput').value = transcript;
+                setStatus('Heard: ' + transcript);
+                setTimeout(() => sendMessage(), 500);
+            };
+
+            recognition.onerror = (event) => {
+                setStatus('Error: ' + event.error);
+                stopListening();
+            };
+
+            recognition.onend = () => {
+                stopListening();
+            };
+        }
+
+        // Voice orb click handler
+        document.getElementById('voiceOrb').addEventListener('click', toggleVoice);
+
+        function toggleVoice() {
+            if (!recognition) {
+                alert('Speech recognition not supported in this browser. Please use Chrome, Edge, or Safari.');
+                return;
+            }
+
+            if (isListening) {
+                stopListening();
+            } else {
+                startListening();
+            }
+        }
+
+        function startListening() {
+            isListening = true;
+            document.getElementById('voiceOrb').classList.add('listening');
+            setStatus('🎤 Listening... Speak now!');
+            recognition.start();
+        }
+
+        function stopListening() {
+            isListening = false;
+            document.getElementById('voiceOrb').classList.remove('listening');
+            setStatus('Ready to listen');
+            if (recognition) {
+                recognition.stop();
+            }
+        }
+
+        function setStatus(text) {
+            document.getElementById('statusText').textContent = text;
+        }
+
+        function speak(text) {
+            // Cancel any ongoing speech
+            synthesis.cancel();
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.1;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+
+            utterance.onstart = () => {
+                setStatus('🔊 Speaking...');
+            };
+
+            utterance.onend = () => {
+                setStatus('Ready to listen');
+            };
+
+            synthesis.speak(utterance);
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('textInput');
+            const message = input.value.trim();
+
+            if (!message) return;
+
+            // Add user message to chat
+            addMessage('user', message);
+            input.value = '';
+            messageCount++;
+            updateMessageCount();
+
+            // Show thinking status
+            setStatus('🧠 Claude is thinking...');
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        session_id: sessionId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    addMessage('error', data.error);
+                    setStatus('Error occurred');
+                } else {
+                    addMessage('assistant', data.response);
+                    speak(data.response);
+                    messageCount++;
+                    updateMessageCount();
+                }
+            } catch (error) {
+                addMessage('error', 'Failed to connect to server: ' + error.message);
+                setStatus('Connection error');
+            }
+        }
+
+        function addMessage(type, content) {
+            const chatContainer = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+
+            if (type === 'error') {
+                messageDiv.className = 'error-message';
+                messageDiv.textContent = '❌ ' + content;
+            } else {
+                messageDiv.className = 'message ' + (type === 'user' ? 'user-message' : 'assistant-message');
+                const label = document.createElement('div');
+                label.className = 'message-label';
+                label.textContent = type === 'user' ? '👤 You:' : '🤖 Claude:';
+
+                const contentDiv = document.createElement('div');
+                contentDiv.textContent = content;
+
+                messageDiv.appendChild(label);
+                messageDiv.appendChild(contentDiv);
+            }
+
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function updateMessageCount() {
+            document.getElementById('messageCount').textContent = messageCount;
+        }
+
+        async function clearHistory() {
+            if (!confirm('Clear conversation history?')) return;
+
+            try {
+                await fetch('/api/clear', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        session_id: sessionId
+                    })
+                });
+
+                document.getElementById('chatContainer').innerHTML = '';
+                addMessage('assistant', 'Conversation history cleared. How can I help you?');
+                messageCount = 0;
+                updateMessageCount();
+                setStatus('History cleared');
+            } catch (error) {
+                alert('Failed to clear history: ' + error.message);
+            }
+        }
+
+        async function checkStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+
+                const statusEl = document.getElementById('apiStatus');
+                if (data.api_configured) {
+                    statusEl.textContent = '✅ Online';
+                    statusEl.style.color = '#00ff00';
+                } else {
+                    statusEl.textContent = '⚠️ No API Key';
+                    statusEl.style.color = '#ffaa00';
+                    addMessage('error', 'API key not configured. Please set ANTHROPIC_API_KEY in .env file');
+                }
+            } catch (error) {
+                document.getElementById('apiStatus').textContent = '❌ Offline';
+                document.getElementById('apiStatus').style.color = '#ff0000';
+            }
+        }
+
+        // Check status on load
+        checkStatus();
+
+        // Check status every 30 seconds
+        setInterval(checkStatus, 30000);
+
+        console.log('🔥 Monster Super AI initialized!');
+        console.log('Session ID:', sessionId);
+    </script>
+</body>
+</html>
