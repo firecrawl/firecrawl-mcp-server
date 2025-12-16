@@ -257,6 +257,7 @@ const scrapeParamsSchema = z.object({
     .optional(),
   storeInCache: z.boolean().optional(),
   maxAge: z.number().optional(),
+  proxy: z.enum(['basic', 'stealth', 'auto']).optional(),
 });
 
 server.addTool({
