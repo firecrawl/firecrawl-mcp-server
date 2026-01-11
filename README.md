@@ -264,6 +264,379 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 }
 ```
 
+### More MCP clients
+
+Below are quick-start snippets for popular MCP hosts/clients. In most cases you can re-use the same `npx`/JSON config:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+#### Claude Code
+
+Claude Code supports adding local MCP servers via the CLI:
+
+```bash
+claude mcp add --transport stdio firecrawl --env FIRECRAWL_API_KEY=YOUR_API_KEY -- npx -y firecrawl-mcp
+```
+
+Docs: https://docs.claude.com/en/docs/claude-code/mcp
+
+#### Cline (VS Code extension)
+
+1. Open Cline → MCP Servers → Configure → “Configure MCP Servers”
+2. Add this to `cline_mcp_settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Docs: https://docs.cline.bot/mcp/configuring-mcp-servers
+
+#### Zed
+
+Add to Zed `settings.json`:
+
+```json
+{
+  "context_servers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Docs: https://zed.dev/docs/ai/mcp
+
+#### JetBrains IDEs (AI Assistant)
+
+Settings → Tools → AI Assistant → Model Context Protocol (MCP) → Add → paste:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Docs: https://www.jetbrains.com/help/ai-assistant/mcp.html
+
+#### Continue (VS Code / JetBrains)
+
+Create `.continue/config.yaml` (or add to your existing config) with:
+
+```yaml
+name: Continue
+version: 1.0.0
+schema: v1
+mcpServers:
+  - name: Firecrawl
+    command: npx
+    args: ["-y", "firecrawl-mcp"]
+    env:
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY}
+```
+
+Docs: https://docs.continue.dev/reference (see `mcpServers`)
+
+#### Warp
+
+Warp → Settings → AI → Manage MCP Servers → Add → paste:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Docs: https://docs.warp.dev/features/warp-ai/mcp
+
+#### Amazon Q CLI
+
+Option A (agent file): create an agent JSON with an `mcpServers` section:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Docs:
+- Agent format (`mcpServers`): https://aws.github.io/amazon-q-developer-cli/agent-format.html
+- CLI MCP config (`qchat mcp ...`): https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/command-line-mcp-config-CLI.html
+
+#### Goose
+
+Run `goose configure` and add a “Command-line Extension”, then use:
+
+```bash
+npx -y firecrawl-mcp
+```
+
+Docs: https://block.github.io/goose/docs/mcp/vs-code-mcp
+
+#### Gemini CLI
+
+Add to `~/.gemini/settings.json` (or `.gemini/settings.json` in a project):
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "${FIRECRAWL_API_KEY}" }
+    }
+  }
+}
+```
+
+Docs: https://google-gemini.github.io/gemini-cli/docs/tools/mcp-server.html
+
+#### Codex (OpenAI)
+
+Add via CLI:
+
+```bash
+codex mcp add firecrawl -- npx -y firecrawl-mcp
+```
+
+Docs: https://github.com/openai/codex/blob/main/docs/config.md#mcp
+
+#### LM Studio
+
+LM Studio → Program tab → Install → “Edit mcp.json” and add:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Docs: https://lmstudio.ai/mcp
+
+#### LibreChat
+
+Add to your `librechat.yaml`:
+
+```yaml
+mcpServers:
+  firecrawl:
+    command: npx
+    args: ["-y", "firecrawl-mcp"]
+    env:
+      FIRECRAWL_API_KEY: "${FIRECRAWL_API_KEY}"
+```
+
+Docs: https://www.librechat.ai/docs/features/mcp
+
+#### Roo Code
+
+Global: Roo Code → MCP settings → “Edit Global MCP” and add:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Project-level: commit `.roo/mcp.json` with the same `mcpServers` object.
+
+Docs: https://docs.roocode.com/features/mcp/recommended-mcp-servers
+
+#### BoltAI (macOS)
+
+BoltAI stores MCP servers in `~/.boltai/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Docs: https://docs.boltai.com/docs/plugins/mcp-servers
+
+#### Cherry Studio
+
+Settings → MCP Server → Add server:
+
+- Type: `STDIO`
+- Command: `npx`
+- Parameters: `-y firecrawl-mcp`
+- Env: `FIRECRAWL_API_KEY=YOUR_API_KEY`
+
+Docs: https://docs.cherry-ai.com/docs/en-us/advanced-basic/mcp/config
+
+#### opencode
+
+Add to `opencode.jsonc`:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "firecrawl": {
+      "type": "local",
+      "command": ["npx", "-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Docs: https://opencode.ai/docs/mcp-servers
+
+#### Augment Code
+
+Option A (UI): Augment panel → Settings → MCP → Add Local MCP → set `command=npx`, `args=-y firecrawl-mcp`, and add `FIRECRAWL_API_KEY` in the environment section.
+
+Option B (CLI):
+
+```bash
+auggie mcp add firecrawl --command npx --args "-y firecrawl-mcp" --env FIRECRAWL_API_KEY=YOUR_API_KEY
+```
+
+Docs:
+- Settings + JSON import: https://docs.augmentcode.com/setup-augment/mcp
+- CLI: https://docs.augmentcode.com/cli/integrations
+
+#### Emacs
+
+With `mcp.el`, configure:
+
+```elisp
+(setq mcp-hub-servers
+      '(("firecrawl" . (:command "npx"
+                        :args ("-y" "firecrawl-mcp")
+                        :env (:FIRECRAWL_API_KEY "YOUR_API_KEY")))))
+```
+
+Docs: https://github.com/lizqwerscott/mcp.el
+
+#### Neovim
+
+With `mcphub.nvim`, add to `~/.config/mcphub/servers.json`:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Docs: https://ravitemer.github.io/mcphub.nvim/mcp/servers_json.html
+
+#### ChatGPT (Developer mode)
+
+ChatGPT Developer mode supports **remote** MCP servers (SSE or Streamable HTTP) over **HTTPS**. A common pattern is:
+
+1. Run Firecrawl MCP as Streamable HTTP locally:
+
+```bash
+export FIRECRAWL_API_KEY=YOUR_API_KEY
+export FASTMCP_TRANSPORT=httpStream
+export FASTMCP_HOST=127.0.0.1
+export FASTMCP_PORT=3000
+export FASTMCP_ENDPOINT=/mcp
+npx -y firecrawl-mcp
+```
+
+2. Expose it over HTTPS (e.g., ngrok / Cloudflare Tunnel).
+3. In ChatGPT: Settings → Apps & Connectors → Advanced settings → Developer mode → Create app/connector → enter your `https://.../mcp` URL.
+
+Docs:
+- https://platform.openai.com/docs/guides/developer-mode
+- https://developers.openai.com/apps-sdk/deploy/connect-chatgpt
+
+#### Docker
+
+You can run the MCP server over stdio in a container and point your MCP client at `docker run ...`:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "FIRECRAWL_API_KEY",
+        "ghcr.io/firecrawl/firecrawl-mcp-server:latest"
+      ],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Or build locally from this repo:
+
+```bash
+docker build -t firecrawl-mcp -f Dockerfile .
+echo '{"formats":["markdown"]}' | docker run -i --rm -e FIRECRAWL_API_KEY=YOUR_API_KEY firecrawl-mcp
+```
+
 ## Configuration
 
 ### Environment Variables
