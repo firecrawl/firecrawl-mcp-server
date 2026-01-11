@@ -9,6 +9,8 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
+      # NOTE: MCP Registry publishing uses GitHub OIDC and is handled in `.github/workflows/registry.yml`
+      # (which requires `id-token: write`). This workflow publishes to npm using `NPM_TOKEN`.
       contents: read
 
     steps:
