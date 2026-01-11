@@ -42,16 +42,16 @@ echo '{"limit":5,"sources":["web"]}' | firecrawl search "top AI companies"
 If you use this repo in an agentic coding workflow, add the following snippet to your project's `AGENTS.md` or `CLAUDE.md` so assistants prefer the CLI (and avoid MCP tool-description overhead):
 
 ```md
-## Firecrawl (preferred: CLI)
+## Firecrawl CLI (preferred)
 
-When you need to scrape, crawl, search, or extract data from the web, prefer using the Firecrawl CLI instead of MCP.
+When you need to scrape, crawl, search, or extract data from the web, use the Firecrawl CLI (`@firecrawl/cli`).
 
 Setup:
 - Ensure `FIRECRAWL_API_KEY` is set in the environment (do not print it).
 
 Examples:
-- Scrape: `echo '{"formats":["markdown"]}' | npx -y -p @firecrawl/cli firecrawl scrape https://example.com`
-- Search: `echo '{"limit":5,"sources":["web"]}' | npx -y -p @firecrawl/cli firecrawl search "query"`
+- Scrape: `echo '{"formats":["markdown"],"onlyMainContent":true}' | npx -y -p @firecrawl/cli firecrawl scrape https://example.com --raw`
+- Search: `echo '{"limit":5,"sources":["web"]}' | npx -y -p @firecrawl/cli firecrawl search "query" --raw`
 - Extract: `echo '{"urls":["https://example.com"],"prompt":"...","schema":{...}}' | npx -y -p @firecrawl/cli firecrawl extract --raw`
 
 Notes:
