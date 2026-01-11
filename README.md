@@ -37,6 +37,28 @@ echo '{"formats":["markdown"]}' | firecrawl scrape https://example.com
 echo '{"limit":5,"sources":["web"]}' | firecrawl search "top AI companies"
 ```
 
+### Recommended project instructions (AGENTS.md / CLAUDE.md)
+
+If you use this repo in an agentic coding workflow, add the following snippet to your project's `AGENTS.md` or `CLAUDE.md` so assistants prefer the CLI (and avoid MCP tool-description overhead):
+
+```md
+## Firecrawl (preferred: CLI)
+
+When you need to scrape, crawl, search, or extract data from the web, prefer using the Firecrawl CLI instead of MCP.
+
+Setup:
+- Ensure `FIRECRAWL_API_KEY` is set in the environment (do not print it).
+
+Examples:
+- Scrape: `echo '{"formats":["markdown"]}' | npx -y -p @firecrawl/cli firecrawl scrape https://example.com`
+- Search: `echo '{"limit":5,"sources":["web"]}' | npx -y -p @firecrawl/cli firecrawl search "query"`
+- Extract: `echo '{"urls":["https://example.com"],"prompt":"...","schema":{...}}' | npx -y -p @firecrawl/cli firecrawl extract --raw`
+
+Notes:
+- The CLI writes machine-readable output to stdout; logs go to stderr.
+- Use `--raw` to emit only JSON (no extra text).
+```
+
 ### `firecrawl tool` (MCP-style wrapper)
 
 Terminal agents often already produce MCP tool-call JSON (`{ "name": "...", "arguments": {...} }`). You can pipe that directly:
