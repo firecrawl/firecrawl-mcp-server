@@ -1,0 +1,23 @@
+{
+  "name": "firecrawl-mcp",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/firecrawl-mcp/src",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/firecrawl-mcp",
+        "command": "tsup"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "options": {
+        "command": "node --experimental-vm-modules node_modules/jest/bin/jest.js apps/firecrawl-mcp --testPathIgnorePatterns \\\\.int\\\\.test\\\\.ts$",
+        "cwd": "{workspaceRoot}"
+      }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "@firecrawl/core-internal",
+  "private": true,
+  "type": "module"
+}
+
