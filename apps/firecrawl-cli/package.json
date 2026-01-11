@@ -1,0 +1,40 @@
+{
+  "name": "@firecrawl/cli",
+  "version": "4.0.0",
+  "description": "Firecrawl CLI for web scraping, crawling, search, extraction, and agent workflows (no MCP tool-description overhead).",
+  "type": "module",
+  "bin": {
+    "firecrawl": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "firecrawl",
+    "cli",
+    "web-scraping",
+    "crawler",
+    "content-extraction"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/firecrawl/firecrawl-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/firecrawl/firecrawl-mcp-server/issues"
+  },
+  "homepage": "https://github.com/firecrawl/firecrawl-mcp-server#readme",
+  "dependencies": {
+    "@mendable/firecrawl-js": "^4.10.0",
+    "dotenv": "^17.2.2",
+    "zod": "^4.1.5"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "license": "MIT"
+}

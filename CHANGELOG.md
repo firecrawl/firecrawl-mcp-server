@@ -1,5 +1,22 @@
 # Changelog
 
+## [4.0.0] - 2026-01-11
+
+### Added
+
+- New `@firecrawl/cli` package for terminal usage (avoids MCP tool-description overhead).
+- Nx monorepo layout with shared internal core (`libs/firecrawl-core`).
+
+### Changed
+
+- Node.js requirement is now `>=22.0.0`.
+- Updated dependencies and aligned MCP/CLI with the latest Firecrawl JS SDK APIs.
+
+### Fixed
+
+- Robust MCP tool schema generation (avoids `z.record(...)` JSON-schema crashes).
+- HTTP streamable transport now correctly supports cloud auth via request context.
+
 ## [1.7.0] - 2025-03-18
 
 ### Fixed

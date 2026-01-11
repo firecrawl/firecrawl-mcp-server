@@ -8,18 +8,126 @@
 
 # Firecrawl MCP Server
 
-A Model Context Protocol (MCP) server implementation that integrates with [Firecrawl](https://github.com/firecrawl/firecrawl) for web scraping capabilities.
+A Model Context Protocol (MCP) server implementation that integrates with [Firecrawl](https://github.com/firecrawl/firecrawl) for web scraping, search, crawling, and extraction.
 
 > Big thanks to [@vrknetha](https://github.com/vrknetha), [@knacklabs](https://www.knacklabs.ai) for the initial implementation!
 
+## Credits
+
+- Initial implementation: [@vrknetha](https://github.com/vrknetha), [@knacklabs](https://www.knacklabs.ai), [@cawstudios](https://caw.tech)
+- Hosting/integrations: MCP.so, Klavis AI, [@gstarwd](https://github.com/gstarwd), [@xiangkaiz](https://github.com/xiangkaiz), [@zihaolin96](https://github.com/zihaolin96)
+
+## Packages in this repo
+
+- `firecrawl-mcp` (MCP server)
+- `@firecrawl/cli` (terminal CLI, no MCP)
+
+## CLI (no MCP)
+
+If you want to avoid MCP tool-description overhead, use the CLI:
+
+```bash
+npm install -g @firecrawl/cli
+export FIRECRAWL_API_KEY=fc-YOUR_API_KEY
+
+# JSON args via stdin + positional URL
+echo '{"formats":["markdown"]}' | firecrawl scrape https://example.com
+
+# Search (query as positional; other options via JSON)
+echo '{"limit":5,"sources":["web"]}' | firecrawl search "top AI companies"
+```
+
+### Recommended project instructions (AGENTS.md / CLAUDE.md)
+
+If you use this repo in an agentic coding workflow, add the following snippet to your project's `AGENTS.md` or `CLAUDE.md` so assistants prefer the CLI (and avoid MCP tool-description overhead):
+
+```md
+## Firecrawl CLI (preferred)
+
+When you need to scrape, crawl, search, or extract data from the web, use the Firecrawl CLI (`@firecrawl/cli`).
+
+Setup:
+- Ensure `FIRECRAWL_API_KEY` is set in the environment (do not print it).
+
+Examples:
+- Scrape: `echo '{"formats":["markdown"],"onlyMainContent":true}' | npx -y -p @firecrawl/cli firecrawl scrape https://example.com --raw`
+- Search: `echo '{"limit":5,"sources":["web"]}' | npx -y -p @firecrawl/cli firecrawl search "query" --raw`
+- Extract: `echo '{"urls":["https://example.com"],"prompt":"...","schema":{...}}' | npx -y -p @firecrawl/cli firecrawl extract --raw`
+
+Notes:
+- The CLI writes machine-readable output to stdout; logs go to stderr.
+- Use `--raw` to emit only JSON (no extra text).
+```
+
+### `firecrawl tool` (MCP-style wrapper)
+
+Terminal agents often already produce MCP tool-call JSON (`{ "name": "...", "arguments": {...} }`). You can pipe that directly:
+
+```bash
+echo '{"name":"firecrawl_scrape","arguments":{"url":"https://example.com","formats":["markdown"]}}' | firecrawl tool
+```
+
+### Inputs
+
+- `--json '<json>'`: Provide the tool arguments inline
+- `--input <file>`: Read JSON tool arguments from a file (`-` reads stdin)
+- If stdin is piped and neither `--json` nor `--input` is provided, the CLI reads JSON from stdin
+
+Examples:
+
+```bash
+firecrawl scrape https://example.com --json '{"formats":["markdown"]}'
+firecrawl scrape https://example.com --input args.json
+cat args.json | firecrawl scrape https://example.com
+```
+
+### Profiles / config
+
+Create `~/.config/firecrawl/config.json` (or set `FIRECRAWL_CONFIG`):
+
+```json
+{
+  "defaults": { "profile": "default" },
+  "profiles": {
+    "default": { "apiKey": "fc-YOUR_API_KEY" },
+    "local": { "apiUrl": "http://localhost:3002" }
+  }
+}
+```
+
+Keep API keys in env vars or a user-local config file (don’t commit them to your repo).
+
+Then run with `--profile local` (or `FIRECRAWL_PROFILE=local`).
+
+### Streaming output (JSONL) + files
+
+For large outputs, use `--jsonl` and/or write to a file:
+
+```bash
+firecrawl crawl https://example.com --jsonl --output out.jsonl
+```
+
+### Logging (stderr)
+
+CLI logs go to stderr so stdout can stay machine-readable:
+
+- `--log-level error|warn|info|debug` (default: `error`)
+- `--log-format text|json` (default: `text`)
+- `--quiet`, `--verbose`, `--debug`
+
+You can also run without installing globally:
+
+```bash
+env FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y -p @firecrawl/cli firecrawl scrape https://example.com --json '{"formats":["markdown"]}'
+```
+
 ## Features
 
-- Web scraping, crawling, and discovery
-- Search and content extraction
-- Deep research and batch scraping
-- Automatic retries and rate limiting
-- Cloud and self-hosted support
-- SSE support
+- Web scraping, crawling, and discovery (`scrape`, `map`, `crawl`)
+- Web search (`search`)
+- Structured extraction (`extract`)
+- Firecrawl agent jobs (`agent`, `agent-status`)
+- Works with cloud API keys or self-hosted via `FIRECRAWL_API_URL`
 
 > Play around with [our MCP Server on MCP.so's playground](https://mcp.so/playground?server=firecrawl-mcp-server) or on [Klavis AI](https://www.klavis.ai/mcp-servers).
 
@@ -35,6 +143,12 @@ env FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
 
 ```bash
 npm install -g firecrawl-mcp
+```
+
+Then run:
+
+```bash
+env FIRECRAWL_API_KEY=fc-YOUR_API_KEY firecrawl-mcp
 ```
 
 ### Running on Cursor
@@ -103,7 +217,7 @@ Add this to your `./codeium/windsurf/model_config.json`:
 To run the server using Streamable HTTP locally instead of the default stdio transport:
 
 ```bash
-env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
+env FASTMCP_TRANSPORT=httpStream FASTMCP_PORT=3000 FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
 ```
 
 Use the url: http://localhost:3000/mcp
@@ -172,6 +286,379 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 }
 ```
 
+### More MCP clients
+
+Below are quick-start snippets for popular MCP hosts/clients. In most cases you can re-use the same `npx`/JSON config:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+#### Claude Code
+
+Claude Code supports adding local MCP servers via the CLI:
+
+```bash
+claude mcp add --transport stdio firecrawl --env FIRECRAWL_API_KEY=YOUR_API_KEY -- npx -y firecrawl-mcp
+```
+
+Docs: https://docs.claude.com/en/docs/claude-code/mcp
+
+#### Cline (VS Code extension)
+
+1. Open Cline → MCP Servers → Configure → “Configure MCP Servers”
+2. Add this to `cline_mcp_settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Docs: https://docs.cline.bot/mcp/configuring-mcp-servers
+
+#### Zed
+
+Add to Zed `settings.json`:
+
+```json
+{
+  "context_servers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Docs: https://zed.dev/docs/ai/mcp
+
+#### JetBrains IDEs (AI Assistant)
+
+Settings → Tools → AI Assistant → Model Context Protocol (MCP) → Add → paste:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Docs: https://www.jetbrains.com/help/ai-assistant/mcp.html
+
+#### Continue (VS Code / JetBrains)
+
+Create `.continue/config.yaml` (or add to your existing config) with:
+
+```yaml
+name: Continue
+version: 1.0.0
+schema: v1
+mcpServers:
+  - name: Firecrawl
+    command: npx
+    args: ["-y", "firecrawl-mcp"]
+    env:
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY}
+```
+
+Docs: https://docs.continue.dev/reference (see `mcpServers`)
+
+#### Warp
+
+Warp → Settings → AI → Manage MCP Servers → Add → paste:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Docs: https://docs.warp.dev/features/warp-ai/mcp
+
+#### Amazon Q CLI
+
+Option A (agent file): create an agent JSON with an `mcpServers` section:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Docs:
+- Agent format (`mcpServers`): https://aws.github.io/amazon-q-developer-cli/agent-format.html
+- CLI MCP config (`qchat mcp ...`): https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/command-line-mcp-config-CLI.html
+
+#### Goose
+
+Run `goose configure` and add a “Command-line Extension”, then use:
+
+```bash
+npx -y firecrawl-mcp
+```
+
+Docs: https://block.github.io/goose/docs/mcp/vs-code-mcp
+
+#### Gemini CLI
+
+Add to `~/.gemini/settings.json` (or `.gemini/settings.json` in a project):
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "${FIRECRAWL_API_KEY}" }
+    }
+  }
+}
+```
+
+Docs: https://google-gemini.github.io/gemini-cli/docs/tools/mcp-server.html
+
+#### Codex (OpenAI)
+
+Add via CLI:
+
+```bash
+codex mcp add firecrawl -- npx -y firecrawl-mcp
+```
+
+Docs: https://github.com/openai/codex/blob/main/docs/config.md#mcp
+
+#### LM Studio
+
+LM Studio → Program tab → Install → “Edit mcp.json” and add:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Docs: https://lmstudio.ai/mcp
+
+#### LibreChat
+
+Add to your `librechat.yaml`:
+
+```yaml
+mcpServers:
+  firecrawl:
+    command: npx
+    args: ["-y", "firecrawl-mcp"]
+    env:
+      FIRECRAWL_API_KEY: "${FIRECRAWL_API_KEY}"
+```
+
+Docs: https://www.librechat.ai/docs/features/mcp
+
+#### Roo Code
+
+Global: Roo Code → MCP settings → “Edit Global MCP” and add:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Project-level: commit `.roo/mcp.json` with the same `mcpServers` object.
+
+Docs: https://docs.roocode.com/features/mcp/recommended-mcp-servers
+
+#### BoltAI (macOS)
+
+BoltAI stores MCP servers in `~/.boltai/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Docs: https://docs.boltai.com/docs/plugins/mcp-servers
+
+#### Cherry Studio
+
+Settings → MCP Server → Add server:
+
+- Type: `STDIO`
+- Command: `npx`
+- Parameters: `-y firecrawl-mcp`
+- Env: `FIRECRAWL_API_KEY=YOUR_API_KEY`
+
+Docs: https://docs.cherry-ai.com/docs/en-us/advanced-basic/mcp/config
+
+#### opencode
+
+Add to `opencode.jsonc`:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "firecrawl": {
+      "type": "local",
+      "command": ["npx", "-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Docs: https://opencode.ai/docs/mcp-servers
+
+#### Augment Code
+
+Option A (UI): Augment panel → Settings → MCP → Add Local MCP → set `command=npx`, `args=-y firecrawl-mcp`, and add `FIRECRAWL_API_KEY` in the environment section.
+
+Option B (CLI):
+
+```bash
+auggie mcp add firecrawl --command npx --args "-y firecrawl-mcp" --env FIRECRAWL_API_KEY=YOUR_API_KEY
+```
+
+Docs:
+- Settings + JSON import: https://docs.augmentcode.com/setup-augment/mcp
+- CLI: https://docs.augmentcode.com/cli/integrations
+
+#### Emacs
+
+With `mcp.el`, configure:
+
+```elisp
+(setq mcp-hub-servers
+      '(("firecrawl" . (:command "npx"
+                        :args ("-y" "firecrawl-mcp")
+                        :env (:FIRECRAWL_API_KEY "YOUR_API_KEY")))))
+```
+
+Docs: https://github.com/lizqwerscott/mcp.el
+
+#### Neovim
+
+With `mcphub.nvim`, add to `~/.config/mcphub/servers.json`:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Docs: https://ravitemer.github.io/mcphub.nvim/mcp/servers_json.html
+
+#### ChatGPT (Developer mode)
+
+ChatGPT Developer mode supports **remote** MCP servers (SSE or Streamable HTTP) over **HTTPS**. A common pattern is:
+
+1. Run Firecrawl MCP as Streamable HTTP locally:
+
+```bash
+export FIRECRAWL_API_KEY=YOUR_API_KEY
+export FASTMCP_TRANSPORT=httpStream
+export FASTMCP_HOST=127.0.0.1
+export FASTMCP_PORT=3000
+export FASTMCP_ENDPOINT=/mcp
+npx -y firecrawl-mcp
+```
+
+2. Expose it over HTTPS (e.g., ngrok / Cloudflare Tunnel).
+3. In ChatGPT: Settings → Apps & Connectors → Advanced settings → Developer mode → Create app/connector → enter your `https://.../mcp` URL.
+
+Docs:
+- https://platform.openai.com/docs/guides/developer-mode
+- https://developers.openai.com/apps-sdk/deploy/connect-chatgpt
+
+#### Docker
+
+You can run the MCP server over stdio in a container and point your MCP client at `docker run ...`:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "FIRECRAWL_API_KEY",
+        "ghcr.io/firecrawl/firecrawl-mcp-server:latest"
+      ],
+      "env": { "FIRECRAWL_API_KEY": "YOUR_API_KEY" }
+    }
+  }
+}
+```
+
+Or build locally from this repo:
+
+```bash
+docker build -t firecrawl-mcp -f Dockerfile .
+echo '{"formats":["markdown"]}' | docker run -i --rm -e FIRECRAWL_API_KEY=YOUR_API_KEY firecrawl-mcp
+```
+
 ## Configuration
 
 ### Environment Variables
@@ -187,35 +674,26 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 
 #### Optional Configuration
 
-##### Retry Configuration
+##### MCP Tool Docs
 
-- `FIRECRAWL_RETRY_MAX_ATTEMPTS`: Maximum number of retry attempts (default: 3)
-- `FIRECRAWL_RETRY_INITIAL_DELAY`: Initial delay in milliseconds before first retry (default: 1000)
-- `FIRECRAWL_RETRY_MAX_DELAY`: Maximum delay in milliseconds between retries (default: 10000)
-- `FIRECRAWL_RETRY_BACKOFF_FACTOR`: Exponential backoff multiplier (default: 2)
+- `FIRECRAWL_MCP_DOCS`: Tool description verbosity for MCP clients (`short` or `full`, default: `short`)
+- MCP also exposes a lightweight `firecrawl_capabilities` tool for discovery (safe mode, docs mode, and config hints)
 
-##### Credit Usage Monitoring
+##### Server runtime (optional)
 
-- `FIRECRAWL_CREDIT_WARNING_THRESHOLD`: Credit usage warning threshold (default: 1000)
-- `FIRECRAWL_CREDIT_CRITICAL_THRESHOLD`: Credit usage critical threshold (default: 100)
+- `FASTMCP_TRANSPORT=httpStream`: Run the MCP server over Streamable HTTP (instead of stdio)
+- `FASTMCP_PORT`: Port for `httpStream` mode (default: `8080`)
+- `FASTMCP_HOST`: Host for `httpStream` mode (default: `localhost`)
+- `FASTMCP_ENDPOINT`: Endpoint path for `httpStream` mode (default: `/mcp`)
+- `CLOUD_SERVICE=true`: Require API key via request headers (for hosted deployments)
 
 ### Configuration Examples
 
-For cloud API usage with custom retry and credit monitoring:
+For cloud API usage:
 
 ```bash
 # Required for cloud API
 export FIRECRAWL_API_KEY=your-api-key
-
-# Optional retry configuration
-export FIRECRAWL_RETRY_MAX_ATTEMPTS=5        # Increase max retry attempts
-export FIRECRAWL_RETRY_INITIAL_DELAY=2000    # Start with 2s delay
-export FIRECRAWL_RETRY_MAX_DELAY=30000       # Maximum 30s delay
-export FIRECRAWL_RETRY_BACKOFF_FACTOR=3      # More aggressive backoff
-
-# Optional credit monitoring
-export FIRECRAWL_CREDIT_WARNING_THRESHOLD=2000    # Warning at 2000 credits
-export FIRECRAWL_CREDIT_CRITICAL_THRESHOLD=500    # Critical at 500 credits
 ```
 
 For self-hosted instance:
@@ -226,10 +704,6 @@ export FIRECRAWL_API_URL=https://firecrawl.your-domain.com
 
 # Optional authentication for self-hosted
 export FIRECRAWL_API_KEY=your-api-key  # If your instance requires auth
-
-# Custom retry configuration
-export FIRECRAWL_RETRY_MAX_ATTEMPTS=10
-export FIRECRAWL_RETRY_INITIAL_DELAY=500     # Start with faster retries
 ```
 
 ### Usage with Claude Desktop
@@ -244,484 +718,54 @@ Add this to your `claude_desktop_config.json`:
       "args": ["-y", "firecrawl-mcp"],
       "env": {
         "FIRECRAWL_API_KEY": "YOUR_API_KEY_HERE",
-
-        "FIRECRAWL_RETRY_MAX_ATTEMPTS": "5",
-        "FIRECRAWL_RETRY_INITIAL_DELAY": "2000",
-        "FIRECRAWL_RETRY_MAX_DELAY": "30000",
-        "FIRECRAWL_RETRY_BACKOFF_FACTOR": "3",
-
-        "FIRECRAWL_CREDIT_WARNING_THRESHOLD": "2000",
-        "FIRECRAWL_CREDIT_CRITICAL_THRESHOLD": "500"
+        "FIRECRAWL_MCP_DOCS": "short"
       }
     }
   }
 }
 ```
 
-### System Configuration
-
-The server includes several configurable parameters that can be set via environment variables. Here are the default values if not configured:
-
-```typescript
-const CONFIG = {
-  retry: {
-    maxAttempts: 3, // Number of retry attempts for rate-limited requests
-    initialDelay: 1000, // Initial delay before first retry (in milliseconds)
-    maxDelay: 10000, // Maximum delay between retries (in milliseconds)
-    backoffFactor: 2, // Multiplier for exponential backoff
-  },
-  credit: {
-    warningThreshold: 1000, // Warn when credit usage reaches this level
-    criticalThreshold: 100, // Critical alert when credit usage reaches this level
-  },
-};
-```
-
-These configurations control:
-
-1. **Retry Behavior**
-
-   - Automatically retries failed requests due to rate limits
-   - Uses exponential backoff to avoid overwhelming the API
-   - Example: With default settings, retries will be attempted at:
-     - 1st retry: 1 second delay
-     - 2nd retry: 2 seconds delay
-     - 3rd retry: 4 seconds delay (capped at maxDelay)
-
-2. **Credit Usage Monitoring**
-   - Tracks API credit consumption for cloud API usage
-   - Provides warnings at specified thresholds
-   - Helps prevent unexpected service interruption
-   - Example: With default settings:
-     - Warning at 1000 credits remaining
-     - Critical alert at 100 credits remaining
-
-### Rate Limiting and Batch Processing
-
-The server utilizes Firecrawl's built-in rate limiting and batch processing capabilities:
-
-- Automatic rate limit handling with exponential backoff
-- Efficient parallel processing for batch operations
-- Smart request queuing and throttling
-- Automatic retries for transient errors
-
-## How to Choose a Tool
-
-Use this guide to select the right tool for your task:
-
-- **If you know the exact URL(s) you want:**
-  - For one: use **scrape**
-  - For many: use **batch_scrape**
-- **If you need to discover URLs on a site:** use **map**
-- **If you want to search the web for info:** use **search**
-- **If you want to extract structured data:** use **extract**
-- **If you want to analyze a whole site or section:** use **crawl** (with limits!)
-
-### Quick Reference Table
-
-| Tool         | Best for                            | Returns         |
-| ------------ | ----------------------------------- | --------------- |
-| scrape       | Single page content                 | markdown/html   |
-| batch_scrape | Multiple known URLs                 | markdown/html[] |
-| map          | Discovering URLs on a site          | URL[]           |
-| crawl        | Multi-page extraction (with limits) | markdown/html[] |
-| search       | Web search for info                 | results[]       |
-| extract      | Structured data from pages          | JSON            |
-
-## Available Tools
-
-### 1. Scrape Tool (`firecrawl_scrape`)
-
-Scrape content from a single URL with advanced options.
-
-**Best for:**
-
-- Single page content extraction, when you know exactly which page contains the information.
-
-**Not recommended for:**
-
-- Extracting content from multiple pages (use batch_scrape for known URLs, or map + batch_scrape to discover URLs first, or crawl for full page content)
-- When you're unsure which page contains the information (use search)
-- When you need structured data (use extract)
-
-**Common mistakes:**
-
-- Using scrape for a list of URLs (use batch_scrape instead).
-
-**Prompt Example:**
-
-> "Get the content of the page at https://example.com."
-
-**Usage Example:**
-
-```json
-{
-  "name": "firecrawl_scrape",
-  "arguments": {
-    "url": "https://example.com",
-    "formats": ["markdown"],
-    "onlyMainContent": true,
-    "waitFor": 1000,
-    "timeout": 30000,
-    "mobile": false,
-    "includeTags": ["article", "main"],
-    "excludeTags": ["nav", "footer"],
-    "skipTlsVerification": false
-  }
-}
-```
-
-**Returns:**
-
-- Markdown, HTML, or other formats as specified.
-
-### 2. Batch Scrape Tool (`firecrawl_batch_scrape`)
-
-Scrape multiple URLs efficiently with built-in rate limiting and parallel processing.
-
-**Best for:**
-
-- Retrieving content from multiple pages, when you know exactly which pages to scrape.
-
-**Not recommended for:**
-
-- Discovering URLs (use map first if you don't know the URLs)
-- Scraping a single page (use scrape)
-
-**Common mistakes:**
-
-- Using batch_scrape with too many URLs at once (may hit rate limits or token overflow)
-
-**Prompt Example:**
-
-> "Get the content of these three blog posts: [url1, url2, url3]."
-
-**Usage Example:**
-
-```json
-{
-  "name": "firecrawl_batch_scrape",
-  "arguments": {
-    "urls": ["https://example1.com", "https://example2.com"],
-    "options": {
-      "formats": ["markdown"],
-      "onlyMainContent": true
-    }
-  }
-}
-```
-
-**Returns:**
-
-- Response includes operation ID for status checking:
-
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "Batch operation queued with ID: batch_1. Use firecrawl_check_batch_status to check progress."
-    }
-  ],
-  "isError": false
-}
-```
-
-### 3. Check Batch Status (`firecrawl_check_batch_status`)
-
-Check the status of a batch operation.
-
-```json
-{
-  "name": "firecrawl_check_batch_status",
-  "arguments": {
-    "id": "batch_1"
-  }
-}
-```
-
-### 4. Map Tool (`firecrawl_map`)
-
-Map a website to discover all indexed URLs on the site.
-
-**Best for:**
-
-- Discovering URLs on a website before deciding what to scrape
-- Finding specific sections of a website
-
-**Not recommended for:**
-
-- When you already know which specific URL you need (use scrape or batch_scrape)
-- When you need the content of the pages (use scrape after mapping)
-
-**Common mistakes:**
-
-- Using crawl to discover URLs instead of map
-
-**Prompt Example:**
-
-> "List all URLs on example.com."
-
-**Usage Example:**
-
-```json
-{
-  "name": "firecrawl_map",
-  "arguments": {
-    "url": "https://example.com"
-  }
-}
-```
-
-**Returns:**
-
-- Array of URLs found on the site
-
-### 5. Search Tool (`firecrawl_search`)
-
-Search the web and optionally extract content from search results.
-
-**Best for:**
-
-- Finding specific information across multiple websites, when you don't know which website has the information.
-- When you need the most relevant content for a query
-
-**Not recommended for:**
-
-- When you already know which website to scrape (use scrape)
-- When you need comprehensive coverage of a single website (use map or crawl)
-
-**Common mistakes:**
-
-- Using crawl or map for open-ended questions (use search instead)
-
-**Usage Example:**
-
-```json
-{
-  "name": "firecrawl_search",
-  "arguments": {
-    "query": "latest AI research papers 2023",
-    "limit": 5,
-    "lang": "en",
-    "country": "us",
-    "scrapeOptions": {
-      "formats": ["markdown"],
-      "onlyMainContent": true
-    }
-  }
-}
-```
-
-**Returns:**
-
-- Array of search results (with optional scraped content)
-
-**Prompt Example:**
-
-> "Find the latest research papers on AI published in 2023."
-
-### 6. Crawl Tool (`firecrawl_crawl`)
-
-Starts an asynchronous crawl job on a website and extract content from all pages.
-
-**Best for:**
-
-- Extracting content from multiple related pages, when you need comprehensive coverage.
-
-**Not recommended for:**
-
-- Extracting content from a single page (use scrape)
-- When token limits are a concern (use map + batch_scrape)
-- When you need fast results (crawling can be slow)
-
-**Warning:** Crawl responses can be very large and may exceed token limits. Limit the crawl depth and number of pages, or use map + batch_scrape for better control.
-
-**Common mistakes:**
-
-- Setting limit or maxDepth too high (causes token overflow)
-- Using crawl for a single page (use scrape instead)
-
-**Prompt Example:**
-
-> "Get all blog posts from the first two levels of example.com/blog."
-
-**Usage Example:**
-
-```json
-{
-  "name": "firecrawl_crawl",
-  "arguments": {
-    "url": "https://example.com/blog/*",
-    "maxDepth": 2,
-    "limit": 100,
-    "allowExternalLinks": false,
-    "deduplicateSimilarURLs": true
-  }
-}
-```
-
-**Returns:**
-
-- Response includes operation ID for status checking:
-
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "Started crawl for: https://example.com/* with job ID: 550e8400-e29b-41d4-a716-446655440000. Use firecrawl_check_crawl_status to check progress."
-    }
-  ],
-  "isError": false
-}
-```
-
-### 7. Check Crawl Status (`firecrawl_check_crawl_status`)
-
-Check the status of a crawl job.
-
-```json
-{
-  "name": "firecrawl_check_crawl_status",
-  "arguments": {
-    "id": "550e8400-e29b-41d4-a716-446655440000"
-  }
-}
-```
-
-**Returns:**
-
-- Response includes the status of the crawl job:
-
-### 8. Extract Tool (`firecrawl_extract`)
-
-Extract structured information from web pages using LLM capabilities. Supports both cloud AI and self-hosted LLM extraction.
-
-**Best for:**
-
-- Extracting specific structured data like prices, names, details.
-
-**Not recommended for:**
-
-- When you need the full content of a page (use scrape)
-- When you're not looking for specific structured data
-
-**Arguments:**
-
-- `urls`: Array of URLs to extract information from
-- `prompt`: Custom prompt for the LLM extraction
-- `systemPrompt`: System prompt to guide the LLM
-- `schema`: JSON schema for structured data extraction
-- `allowExternalLinks`: Allow extraction from external links
-- `enableWebSearch`: Enable web search for additional context
-- `includeSubdomains`: Include subdomains in extraction
-
-When using a self-hosted instance, the extraction will use your configured LLM. For cloud API, it uses Firecrawl's managed LLM service.
-**Prompt Example:**
-
-> "Extract the product name, price, and description from these product pages."
-
-**Usage Example:**
-
-```json
-{
-  "name": "firecrawl_extract",
-  "arguments": {
-    "urls": ["https://example.com/page1", "https://example.com/page2"],
-    "prompt": "Extract product information including name, price, and description",
-    "systemPrompt": "You are a helpful assistant that extracts product information",
-    "schema": {
-      "type": "object",
-      "properties": {
-        "name": { "type": "string" },
-        "price": { "type": "number" },
-        "description": { "type": "string" }
-      },
-      "required": ["name", "price"]
-    },
-    "allowExternalLinks": false,
-    "enableWebSearch": false,
-    "includeSubdomains": false
-  }
-}
-```
-
-**Returns:**
-
-- Extracted structured data as defined by your schema
-
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": {
-        "name": "Example Product",
-        "price": 99.99,
-        "description": "This is an example product description"
-      }
-    }
-  ],
-  "isError": false
-}
-```
-
-## Logging System
-
-The server includes comprehensive logging:
-
-- Operation status and progress
-- Performance metrics
-- Credit usage monitoring
-- Rate limit tracking
-- Error conditions
-
-Example log messages:
-
-```
-[INFO] Firecrawl MCP Server initialized successfully
-[INFO] Starting scrape for URL: https://example.com
-[INFO] Batch operation queued with ID: batch_1
-[WARNING] Credit usage has reached warning threshold
-[ERROR] Rate limit exceeded, retrying in 2s...
-```
-
-## Error Handling
-
-The server provides robust error handling:
-
-- Automatic retries for transient errors
-- Rate limit handling with backoff
-- Detailed error messages
-- Credit usage warnings
-- Network resilience
-
-Example error response:
-
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "Error: Rate limit exceeded. Retrying in 2 seconds..."
-    }
-  ],
-  "isError": true
-}
-```
+## MCP tools
+
+This server exposes these tools (names match the CLI wrapper):
+
+- `firecrawl_capabilities`
+- `firecrawl_scrape`
+- `firecrawl_map`
+- `firecrawl_search`
+- `firecrawl_crawl`
+- `firecrawl_check_crawl_status`
+- `firecrawl_extract`
+- `firecrawl_agent`
+- `firecrawl_agent_status`
+
+Tip: set `FIRECRAWL_MCP_DOCS=full` to get full descriptions from the server itself.
 
 ## Development
+
+Requires Node.js 22+.
 
 ```bash
 # Install dependencies
 npm install
 
-# Build
+# Build (Nx monorepo)
 npm run build
+# Or per-package:
+npm run nx -- build firecrawl-mcp
+npm run nx -- build firecrawl-cli
 
 # Run tests
 npm test
+```
+
+### Integration tests (optional)
+
+Integration tests hit the real Firecrawl API and are intended to be run locally (not in CI). They are skipped unless `FIRECRAWL_API_KEY` is set:
+
+```bash
+export FIRECRAWL_API_KEY=fc-YOUR_API_KEY
+npm run test:integration
 ```
 
 ### Contributing

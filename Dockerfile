@@ -5,11 +5,14 @@ FROM node:22-alpine AS builder
 # Set the working directory inside the container
 WORKDIR /app
 
-# Copy package.json and package-lock.json to install dependencies
+# Copy root + workspace package manifests to install dependencies
 COPY package.json package-lock.json ./
+COPY apps/firecrawl-mcp/package.json apps/firecrawl-mcp/package.json
+COPY apps/firecrawl-cli/package.json apps/firecrawl-cli/package.json
+COPY libs/firecrawl-core/package.json libs/firecrawl-core/package.json
 
 # Install dependencies (ignoring scripts to prevent running the prepare script)
-RUN npm install --ignore-scripts
+RUN npm ci --include=dev --ignore-scripts
 
 # Copy the rest of the application source code
 COPY . .
@@ -23,8 +26,11 @@ FROM node:22-slim AS release
 # Set the working directory inside the container
 WORKDIR /app
 
-# Copy the built application from the builder stage
-COPY --from=builder /app/dist /app/dist
+# Copy the built application from the builder stage (MCP only)
+COPY --from=builder /app/apps/firecrawl-mcp/dist /app/apps/firecrawl-mcp/dist
+COPY --from=builder /app/apps/firecrawl-mcp/package.json /app/apps/firecrawl-mcp/package.json
+COPY --from=builder /app/apps/firecrawl-cli/package.json /app/apps/firecrawl-cli/package.json
+COPY --from=builder /app/libs/firecrawl-core/package.json /app/libs/firecrawl-core/package.json
 COPY --from=builder /app/package.json /app/package.json
 COPY --from=builder /app/package-lock.json /app/package-lock.json
 
@@ -35,4 +41,4 @@ RUN npm ci --omit=dev --ignore-scripts
 
 
 # Specify the command to run the application
-ENTRYPOINT ["node", "dist/index.js"]
+ENTRYPOINT ["node", "apps/firecrawl-mcp/dist/mcp.js"]

@@ -5,8 +5,9 @@ startCommand:
   configSchema:
     # JSON Schema defining the configuration options for the MCP.
     type: object
-    required:
-      - fireCrawlApiKey
+    anyOf:
+      - required: [fireCrawlApiKey]
+      - required: [fireCrawlApiUrl]
     properties:
       fireCrawlApiKey:
         type: string
@@ -19,4 +20,4 @@ startCommand:
   commandFunction:
     # A function that produces the CLI command to start the MCP on stdio.
     |-
-    (config) => ({ command: 'node', args: ['dist/index.js'], env: { FIRECRAWL_API_KEY: config.fireCrawlApiKey, FIRECRAWL_API_URL: config.fireCrawlApiUrl || '' } })
+    (config) => ({ command: 'node', args: ['apps/firecrawl-mcp/dist/mcp.js'], env: { FIRECRAWL_API_KEY: config.fireCrawlApiKey, FIRECRAWL_API_URL: config.fireCrawlApiUrl || '' } })

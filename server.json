@@ -3,7 +3,7 @@
   "name": "io.github.firecrawl/firecrawl-mcp-server",
   "title": "Firecrawl MCP Server",
   "description": "MCP server for Firecrawl web scraping, structured data extraction and web search integration.",
-  "version": "3.7.4",
+  "version": "4.0.0",
   "repository": {
     "url": "https://github.com/firecrawl/firecrawl-mcp-server.git",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "npm",
       "identifier": "firecrawl-mcp",
-      "version": "3.7.4",
+      "version": "4.0.0",
       "transport": {
         "type": "stdio"
       },
@@ -23,9 +23,22 @@
           "format": "string",
           "isSecret": true,
           "name": "FIRECRAWL_API_KEY"
+        },
+        {
+          "description": "Custom API endpoint for self-hosted Firecrawl instances",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "FIRECRAWL_API_URL"
+        },
+        {
+          "description": "MCP tool description verbosity: short (default) or full",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "FIRECRAWL_MCP_DOCS"
         }
       ]
     }
   ]
 }
-
