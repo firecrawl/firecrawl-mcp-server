@@ -738,6 +738,119 @@ Check the status of an agent job.
   },
 });
 
+server.addTool({
+  name: 'firecrawl_read_claude_md',
+  description: `
+Read CLAUDE.md files from a codebase or repository to understand project-specific instructions and guidelines.
+
+**Best for:** Getting context about a codebase before working with it; understanding project structure, guidelines, and instructions that maintainers have documented for AI assistants.
+**Not recommended for:** General web scraping (use scrape); when you need content from multiple pages (use crawl or map).
+**Common locations checked:**
+- /CLAUDE.md (root level)
+- /docs/CLAUDE.md
+- /.claude/CLAUDE.md
+- /claude.md (lowercase variant)
+
+**Why use this tool:**
+- CLAUDE.md files contain project-specific instructions for AI assistants
+- They help you understand coding conventions, architecture, and best practices
+- Reading these files first can help you navigate repositories more easily
+
+**Prompt Example:** "Read the CLAUDE.md file from this GitHub repository to understand the project guidelines."
+**Usage Example:**
+\`\`\`json
+{
+  "name": "firecrawl_read_claude_md",
+  "arguments": {
+    "url": "https://github.com/mendableai/firecrawl"
+  }
+}
+\`\`\`
+**Returns:** Contents of CLAUDE.md file(s) found, or a message if none were found.
+`,
+  parameters: z.object({
+    url: z.string().url(),
+    includeAllVariants: z.boolean().optional(),
+  }),
+  execute: async (
+    args: unknown,
+    { session, log }: { session?: SessionData; log: Logger }
+  ): Promise<string> => {
+    const client = getClient(session);
+    const { url, includeAllVariants } = args as {
+      url: string;
+      includeAllVariants?: boolean;
+    };
+    log.info('Looking for CLAUDE.md files', { url });
+
+    // Common locations for CLAUDE.md files
+    const claudeMdPaths = [
+      'CLAUDE.md',
+      'claude.md',
+      'docs/CLAUDE.md',
+      '.claude/CLAUDE.md',
+      '.github/CLAUDE.md',
+    ];
+
+    // Parse the URL to construct potential CLAUDE.md URLs
+    let baseUrl = url.replace(/\/$/, ''); // Remove trailing slash
+
+    // Handle GitHub URLs specially - convert to raw content URLs
+    const githubMatch = baseUrl.match(
+      /^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)/
+    );
+    if (githubMatch) {
+      const [, owner, repo] = githubMatch;
+      // Try to get the default branch - use main as default
+      baseUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main`;
+    }
+
+    const results: Array<{ path: string; content: string }> = [];
+    const errors: string[] = [];
+
+    // Try each potential path
+    for (const path of claudeMdPaths) {
+      const fullUrl = `${baseUrl}/${path}`;
+      try {
+        const res = await client.scrape(fullUrl, {
+          formats: ['markdown'],
+          origin: ORIGIN,
+        } as any);
+
+        if (res && (res as any).markdown) {
+          results.push({
+            path,
+            content: (res as any).markdown,
+          });
+          // If not including all variants, stop after first success
+          if (!includeAllVariants) {
+            break;
+          }
+        }
+      } catch (error) {
+        // Silently continue if file not found
+        errors.push(`${path}: not found`);
+      }
+    }
+
+    if (results.length === 0) {
+      return asText({
+        success: false,
+        message:
+          'No CLAUDE.md files found at common locations. The repository may not have AI-specific instructions documented.',
+        checkedPaths: claudeMdPaths,
+        baseUrl,
+      });
+    }
+
+    return asText({
+      success: true,
+      message: `Found ${results.length} CLAUDE.md file(s)`,
+      files: results,
+    });
+  },
+});
+
 const PORT = Number(process.env.PORT || 3000);
 const HOST =
   process.env.CLOUD_SERVICE === 'true'
