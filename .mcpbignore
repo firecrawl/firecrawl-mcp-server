@@ -1,0 +1,54 @@
+# Exclude everything except manifest.json and icon.png for npx-based bundle
+
+# Source code (not needed - using npx)
+src/
+dist/
+*.ts
+*.js
+!manifest.json
+
+# Dependencies (not needed - npx downloads from npm)
+node_modules/
+
+# Development files
+*.test.ts
+*.spec.ts
+__tests__/
+test/
+tests/
+coverage/
+jest.config.js
+jest.setup.ts
+
+# Configuration files
+tsconfig.json
+.eslintrc.json
+.prettierrc
+smithery.yaml
+server.json
+
+# Docker files
+Dockerfile
+Dockerfile.service
+docker/
+
+# Documentation
+*.md
+docs/
+
+# Package manager files
+package.json
+package-lock.json
+pnpm-lock.yaml
+
+# Git and GitHub
+.git/
+.github/
+.gitignore
+
+# Images (except icon.png)
+img/
+
+# Environment
+.env*
+*.local

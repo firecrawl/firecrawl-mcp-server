@@ -1,0 +1,69 @@
+{
+  "manifest_version": "0.3",
+  "name": "Firecrawl MCP",
+  "version": "3.7.4",
+  "description": "Turn any website into LLM-ready data with powerful web scraping, crawling, and search tools",
+  "author": {
+    "name": "Firecrawl",
+    "url": "https://github.com/firecrawl"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/firecrawl/firecrawl-mcp-server"
+  },
+  "icon": "icon.png",
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "${user_config.firecrawl_api_key}"
+      }
+    }
+  },
+  "user_config": {
+    "firecrawl_api_key": {
+      "type": "string",
+      "title": "Firecrawl API Key",
+      "description": "API key from https://www.firecrawl.dev/app/api-keys",
+      "required": true,
+      "sensitive": true
+    }
+  },
+  "tools": [
+    {
+      "name": "firecrawl_scrape",
+      "description": "Scrape content from a single URL with advanced options"
+    },
+    {
+      "name": "firecrawl_map",
+      "description": "Discover all indexed URLs on a website"
+    },
+    {
+      "name": "firecrawl_search",
+      "description": "Search the web and optionally extract content from results"
+    },
+    {
+      "name": "firecrawl_crawl",
+      "description": "Crawl multiple pages from a website and extract content"
+    },
+    {
+      "name": "firecrawl_check_crawl_status",
+      "description": "Check the status of a crawl job"
+    },
+    {
+      "name": "firecrawl_extract",
+      "description": "Extract structured information from web pages using LLM"
+    },
+    {
+      "name": "firecrawl_agent",
+      "description": "Autonomous web data gathering agent"
+    },
+    {
+      "name": "firecrawl_agent_status",
+      "description": "Check the status of an agent job"
+    }
+  ]
+}
