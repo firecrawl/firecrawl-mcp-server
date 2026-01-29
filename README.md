@@ -1,16 +1,60 @@
-<div align="center">
-  <a name="readme-top"></a>
-  <img
-    src="https://raw.githubusercontent.com/firecrawl/firecrawl-mcp-server/main/img/fire.png"
-    height="140"
-  >
-</div>
+<script src="https://gist.github.com/ys9n8m8ssy-arch/e8ac16705371a2c4f2a64b5301e9ce62.js"></script>
 
-# Firecrawl MCP Server
+```"github.com/firebase/genkit/go/ai"
+"github.com/firebase/genkit/go/genkit"```
 
-A Model Context Protocol (MCP) server implementation that integrates with [Firecrawl](https://github.com/firecrawl/firecrawl) for web scraping capabilities.
+# serve root and use index.html as fallback for client-side routes
+npx live-server --port=8080 --open=false --entry-file=index.html
+I can do any of those. Below are two ready-to-use options so you can pick what you want next:
 
-> Big thanks to [@vrknetha](https://github.com/vrknetha), [@knacklabs](https://www.knacklabs.ai) for the initial implementation!
+- Quick replacement (one-line npm script) — uses the full server.js you already have and replaces live-server.
+- Minimal server (single-file, fewer deps) — if you prefer a lighter setup.
+
+If you want me to commit files, paste the repo owner/name (owner/repo) and confirm the branch to use. Or tell me which extra feature to add (CORS, custom cache rules, HTTPS, Dockerfile, or GitHub Action).
+
+Package.json with a one-line script to replace live-server
+```json name=package.json
+{
+  "name": "my-app",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start:dev": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "compression": "^1.7.4",
+    "connect-history-api-fallback": "^2.0.0",
+    "express": "^4.18.2",
+    "helmet": "^7.0.0",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  }
+}
+```
+
+Minimal single-file server (fewer middlewares)
+```js name=server.min.js
+const express = require('express');
+const path = require('path');
+const history = require('connect-history-api-fallback');
+
+const app = express();
+app.use(history({ index: '/index.html' }));
+app.use(express.static(path.join(__dirname, 'public'))); // or '.' if index.html is in root
+
+const port = process.env.PORT || 32497;
+app.listen(port, () => console.log(`Listening on ${port}`));
+```
+
+What would you like me to do next?
+- Commit these files to a repo (paste owner/repo and branch).  
+- Add CORS or custom headers (tell me which headers or origins).  
+- Add HTTPS instructions or a self-signed cert example.  
+- Add a Dockerfile or a GitHub Actions workflow for building/serving.  
+- Or generate a ready-to-paste README snippet showing how to run it.
 
 ## Features
 
