@@ -25,6 +25,8 @@ A Model Context Protocol (MCP) server implementation that integrates with [Firec
 
 ## Installation
 
+> 📖 **Looking for detailed setup instructions for your specific editor or IDE?** See the **[Comprehensive Installation Guide](./INSTALLATION.md)** with step-by-step instructions for 25+ MCP-compatible environments including Cursor, Claude Desktop, Claude Code, VS Code, Windsurf, Zed, JetBrains, Gemini CLI, and more.
+
 ### Running with npx
 
 ```bash
