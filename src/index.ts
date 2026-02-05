@@ -270,23 +270,12 @@ This is the most powerful, fastest and most reliable scraper tool, if available 
 **Best for:** Single page content extraction, when you know exactly which page contains the information.
 **Not recommended for:** Multiple pages (use batch_scrape), unknown page (use search).
 **Common mistakes:** Using scrape for a list of URLs (use batch_scrape instead). If batch scrape doesnt work, just use scrape and call it multiple times.
-**Other Features:** Use 'branding' format to extract brand identity (colors, fonts, typography, spacing, UI components) for design analysis or style replication.
-**Prompt Example:** "Get the content of the page at https://example.com."
-**Usage Example:**
-\`\`\`json
-{
-  "name": "firecrawl_scrape",
-  "arguments": {
-    "url": "https://example.com",
-    "formats": ["markdown"],
-    "maxAge": 172800000
-  }
-}
-\`\`\`
-**Performance:** Add maxAge parameter for 500% faster scrapes using cached data.
-**Returns:** Markdown, HTML, or other formats as specified.
-**Token Limit Issues:** If you encounter "tokens exceeds maximum allowed tokens" errors or the scraped content is too large, use the JSON format with a schema to extract only the specific data you need. This dramatically reduces output size by returning structured data instead of the full page content.
-**JSON Format Example:**
+
+**IMPORTANT - Choosing the Right Format:**
+- **Default to JSON format:** Always use the JSON format with a schema to extract only the specific data needed. This prevents token limit issues and keeps responses small. Analyze what information the user actually needs and create a schema for just that data.
+- **Only use markdown format** when the user explicitly asks for the full page content, the complete article text, or the entire page as markdown.
+
+**JSON Format Example (Recommended):**
 \`\`\`json
 {
   "name": "firecrawl_scrape",
@@ -308,6 +297,21 @@ This is the most powerful, fastest and most reliable scraper tool, if available 
   }
 }
 \`\`\`
+
+**Markdown Format Example (Only when full page content is explicitly requested):**
+\`\`\`json
+{
+  "name": "firecrawl_scrape",
+  "arguments": {
+    "url": "https://example.com",
+    "formats": ["markdown"],
+    "maxAge": 172800000
+  }
+}
+\`\`\`
+
+**Performance:** Add maxAge parameter for 500% faster scrapes using cached data.
+**Other Features:** Use 'branding' format to extract brand identity (colors, fonts, typography, spacing, UI components) for design analysis or style replication.
 ${
   SAFE_MODE
     ? '**Safe Mode:** Read-only content extraction. Interactive actions (click, write, executeJavascript) are disabled for security.'
