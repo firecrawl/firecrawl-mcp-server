@@ -288,10 +288,12 @@ When the user asks for SPECIFIC data points, you MUST use JSON format with a sch
 - User explicitly asks for the full page content
 
 **Handling JavaScript-rendered pages (SPAs):**
-If JSON extraction returns empty, minimal, or just navigation content, the page is likely JavaScript-rendered. Try these steps IN ORDER:
+If JSON extraction returns empty, minimal, or just navigation content, the page is likely JavaScript-rendered or the content is on a different URL. Try these steps IN ORDER:
 1. **Add waitFor parameter:** Set \`waitFor: 5000\` to \`waitFor: 10000\` to allow JavaScript to render before extraction
 2. **Try a different URL:** If the URL has a hash fragment (#section), try the base URL or look for a direct page URL
-3. **Use firecrawl_agent:** As a last resort for heavily dynamic pages, use the agent which can better handle SPAs
+3. **Use firecrawl_map to find the correct page:** Large documentation sites or SPAs often spread content across multiple URLs. Use \`firecrawl_map\` with a \`search\` parameter to discover the specific page containing your target content, then scrape that URL directly.
+   Example: If scraping "https://docs.example.com/reference" fails to find webhook parameters, use \`firecrawl_map\` with \`{"url": "https://docs.example.com/reference", "search": "webhook"}\` to find URLs like "/reference/webhook-events", then scrape that specific page.
+4. **Use firecrawl_agent:** As a last resort for heavily dynamic pages where map+scrape still fails, use the agent which can autonomously navigate and research
 
 **Usage Example (JSON format - REQUIRED for specific data extraction):**
 \`\`\`json
