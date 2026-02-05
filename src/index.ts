@@ -288,10 +288,12 @@ When the user asks for SPECIFIC data points, you MUST use JSON format with a sch
 - User explicitly asks for the full page content
 
 **Handling JavaScript-rendered pages (SPAs):**
-If JSON extraction returns empty, minimal, or just navigation content, the page is likely JavaScript-rendered. Try these steps IN ORDER:
+If JSON extraction returns empty, minimal, or just navigation content, the page is likely JavaScript-rendered or the content is on a different URL. Try these steps IN ORDER:
 1. **Add waitFor parameter:** Set \`waitFor: 5000\` to \`waitFor: 10000\` to allow JavaScript to render before extraction
 2. **Try a different URL:** If the URL has a hash fragment (#section), try the base URL or look for a direct page URL
-3. **Use firecrawl_agent:** As a last resort for heavily dynamic pages, use the agent which can better handle SPAs
+3. **Use firecrawl_map to find the correct page:** Large documentation sites or SPAs often spread content across multiple URLs. Use \`firecrawl_map\` with a \`search\` parameter to discover the specific page containing your target content, then scrape that URL directly.
+   Example: If scraping "https://docs.example.com/reference" fails to find webhook parameters, use \`firecrawl_map\` with \`{"url": "https://docs.example.com/reference", "search": "webhook"}\` to find URLs like "/reference/webhook-events", then scrape that specific page.
+4. **Use firecrawl_agent:** As a last resort for heavily dynamic pages where map+scrape still fails, use the agent which can autonomously navigate and research
 
 **Usage Example (JSON format - REQUIRED for specific data extraction):**
 \`\`\`json
@@ -319,8 +321,7 @@ If JSON extraction returns empty, minimal, or just navigation content, the page 
           }
         }
       }
-    }],
-    "waitFor": 5000
+    }]
   }
 }
 \`\`\`
@@ -379,11 +380,14 @@ server.addTool({
   description: `
 Map a website to discover all indexed URLs on the site.
 
-**Best for:** Discovering URLs on a website before deciding what to scrape; finding specific sections of a website.
-**Not recommended for:** When you already know which specific URL you need (use scrape or batch_scrape); when you need the content of the pages (use scrape after mapping).
-**Common mistakes:** Using crawl to discover URLs instead of map.
-**Prompt Example:** "List all URLs on example.com."
-**Usage Example:**
+**Best for:** Discovering URLs on a website before deciding what to scrape; finding specific sections or pages within a large site; locating the correct page when scrape returns empty or incomplete results.
+**Not recommended for:** When you already know which specific URL you need (use scrape); when you need the content of the pages (use scrape after mapping).
+**Common mistakes:** Using crawl to discover URLs instead of map; jumping straight to firecrawl_agent when scrape fails instead of using map first to find the right page.
+
+**IMPORTANT - Use map before agent:** If \`firecrawl_scrape\` returns empty, minimal, or irrelevant content, use \`firecrawl_map\` with the \`search\` parameter to find the specific page URL containing your target content. This is faster and cheaper than using \`firecrawl_agent\`. Only use the agent as a last resort after map+scrape fails.
+
+**Prompt Example:** "Find the webhook documentation page on this API docs site."
+**Usage Example (discover all URLs):**
 \`\`\`json
 {
   "name": "firecrawl_map",
@@ -392,7 +396,17 @@ Map a website to discover all indexed URLs on the site.
   }
 }
 \`\`\`
-**Returns:** Array of URLs found on the site.
+**Usage Example (search for specific content - RECOMMENDED when scrape fails):**
+\`\`\`json
+{
+  "name": "firecrawl_map",
+  "arguments": {
+    "url": "https://docs.example.com/api",
+    "search": "webhook events"
+  }
+}
+\`\`\`
+**Returns:** Array of URLs found on the site, filtered by search query if provided.
 `,
   parameters: z.object({
     url: z.string().url(),
