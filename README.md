@@ -310,23 +310,30 @@ The server utilizes Firecrawl's built-in rate limiting and batch processing capa
 Use this guide to select the right tool for your task:
 
 - **If you know the exact URL(s) you want:**
-  - For one: use **scrape**
+  - For one: use **scrape** (with JSON format for structured data)
   - For many: use **batch_scrape**
 - **If you need to discover URLs on a site:** use **map**
 - **If you want to search the web for info:** use **search**
-- **If you want to extract structured data:** use **extract**
+- **If you need complex research across multiple unknown sources:** use **agent**
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
 
 ### Quick Reference Table
 
-| Tool         | Best for                            | Returns         |
-| ------------ | ----------------------------------- | --------------- |
-| scrape       | Single page content                 | markdown/html   |
-| batch_scrape | Multiple known URLs                 | markdown/html[] |
-| map          | Discovering URLs on a site          | URL[]           |
-| crawl        | Multi-page extraction (with limits) | markdown/html[] |
-| search       | Web search for info                 | results[]       |
-| extract      | Structured data from pages          | JSON            |
+| Tool         | Best for                            | Returns                    |
+| ------------ | ----------------------------------- | -------------------------- |
+| scrape       | Single page content                 | JSON (preferred) or markdown |
+| batch_scrape | Multiple known URLs                 | JSON (preferred) or markdown[] |
+| map          | Discovering URLs on a site          | URL[]                      |
+| crawl        | Multi-page extraction (with limits) | markdown/html[]            |
+| search       | Web search for info                 | results[]                  |
+| agent        | Complex multi-source research       | JSON (structured data)     |
+
+### Format Selection Guide
+
+When using `scrape` or `batch_scrape`, choose the right format:
+
+- **JSON format (recommended for most cases):** Use when you need specific data from a page. Define a schema based on what you need to extract. This keeps responses small and avoids context window overflow.
+- **Markdown format (use sparingly):** Only when you genuinely need the full page content, such as reading an entire article for summarization or analyzing page structure.
 
 ## Available Tools
 
@@ -342,38 +349,75 @@ Scrape content from a single URL with advanced options.
 
 - Extracting content from multiple pages (use batch_scrape for known URLs, or map + batch_scrape to discover URLs first, or crawl for full page content)
 - When you're unsure which page contains the information (use search)
-- When you need structured data (use extract)
 
 **Common mistakes:**
 
 - Using scrape for a list of URLs (use batch_scrape instead).
+- Using markdown format by default (use JSON format to extract only what you need).
+
+**Choosing the right format:**
+
+- **JSON format (preferred):** For most use cases, use JSON format with a schema to extract only the specific data needed. This keeps responses focused and prevents context window overflow.
+- **Markdown format:** Only when the task genuinely requires full page content (e.g., summarizing an entire article, analyzing page structure).
 
 **Prompt Example:**
 
-> "Get the content of the page at https://example.com."
+> "Get the product details from https://example.com/product."
 
-**Usage Example:**
+**Usage Example (JSON format - preferred):**
+
+```json
+{
+  "name": "firecrawl_scrape",
+  "arguments": {
+    "url": "https://example.com/product",
+    "formats": [{
+      "type": "json",
+      "prompt": "Extract the product information",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "price": { "type": "number" },
+          "description": { "type": "string" }
+        },
+        "required": ["name", "price"]
+      }
+    }]
+  }
+}
+```
+
+**Usage Example (markdown format - when full content needed):**
+
+```json
+{
+  "name": "firecrawl_scrape",
+  "arguments": {
+    "url": "https://example.com/article",
+    "formats": ["markdown"],
+    "onlyMainContent": true
+  }
+}
+```
+
+**Usage Example (branding format - extract brand identity):**
 
 ```json
 {
   "name": "firecrawl_scrape",
   "arguments": {
     "url": "https://example.com",
-    "formats": ["markdown"],
-    "onlyMainContent": true,
-    "waitFor": 1000,
-    "timeout": 30000,
-    "mobile": false,
-    "includeTags": ["article", "main"],
-    "excludeTags": ["nav", "footer"],
-    "skipTlsVerification": false
+    "formats": ["branding"]
   }
 }
 ```
 
+**Branding format:** Extracts comprehensive brand identity (colors, fonts, typography, spacing, logo, UI components) for design analysis or style replication.
+
 **Returns:**
 
-- Markdown, HTML, or other formats as specified.
+- JSON structured data, markdown, branding profile, or other formats as specified.
 
 ### 2. Batch Scrape Tool (`firecrawl_batch_scrape`)
 
@@ -666,6 +710,108 @@ When using a self-hosted instance, the extraction will use your configured LLM. 
   "isError": false
 }
 ```
+
+### 9. Agent Tool (`firecrawl_agent`)
+
+Autonomous web research agent. This is a separate AI agent layer that independently browses the internet, searches for information, navigates through pages, and extracts structured data based on your query.
+
+**How it works:**
+
+The agent performs web searches, follows links, reads pages, and gathers data autonomously. This runs **asynchronously** - it returns a job ID immediately, and you poll `firecrawl_agent_status` to check when complete and retrieve results.
+
+**Async workflow:**
+
+1. Call `firecrawl_agent` with your prompt/schema → returns job ID
+2. Do other work while the agent researches (can take minutes for complex queries)
+3. Poll `firecrawl_agent_status` with the job ID to check progress
+4. When status is "completed", the response includes the extracted data
+
+**Best for:**
+
+- Complex research tasks where you don't know the exact URLs
+- Multi-source data gathering
+- Finding information scattered across the web
+- Tasks where you can do other work while waiting for results
+
+**Not recommended for:**
+
+- Simple single-page scraping where you know the URL (use scrape with JSON format - faster and cheaper)
+
+**Arguments:**
+
+- `prompt`: Natural language description of the data you want (required, max 10,000 characters)
+- `urls`: Optional array of URLs to focus the agent on specific pages
+- `schema`: Optional JSON schema for structured output
+
+**Prompt Example:**
+
+> "Find the founders of Firecrawl and their backgrounds"
+
+**Usage Example (start agent, then poll for results):**
+
+```json
+{
+  "name": "firecrawl_agent",
+  "arguments": {
+    "prompt": "Find the top 5 AI startups founded in 2024 and their funding amounts",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "startups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "funding": { "type": "string" },
+              "founded": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Then poll with `firecrawl_agent_status` using the returned job ID.
+
+**Usage Example (with URLs - agent focuses on specific pages):**
+
+```json
+{
+  "name": "firecrawl_agent",
+  "arguments": {
+    "urls": ["https://docs.firecrawl.dev", "https://firecrawl.dev/pricing"],
+    "prompt": "Compare the features and pricing information from these pages"
+  }
+}
+```
+
+**Returns:**
+
+- Job ID for status checking. Use `firecrawl_agent_status` to poll for results.
+
+### 10. Check Agent Status (`firecrawl_agent_status`)
+
+Check the status of an agent job and retrieve results when complete. Use this to poll for results after starting an agent.
+
+**Polling pattern:** Agent research can take minutes for complex queries. Poll this endpoint periodically (e.g., every 10-30 seconds) until status is "completed" or "failed".
+
+```json
+{
+  "name": "firecrawl_agent_status",
+  "arguments": {
+    "id": "550e8400-e29b-41d4-a716-446655440000"
+  }
+}
+```
+
+**Possible statuses:**
+
+- `processing`: Agent is still researching - check back later
+- `completed`: Research finished - response includes the extracted data
+- `failed`: An error occurred
 
 ## Logging System
 

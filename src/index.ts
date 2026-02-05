@@ -271,22 +271,12 @@ This is the most powerful, fastest and most reliable scraper tool, if available 
 **Not recommended for:** Multiple pages (use batch_scrape), unknown page (use search).
 **Common mistakes:** Using scrape for a list of URLs (use batch_scrape instead). If batch scrape doesnt work, just use scrape and call it multiple times.
 **Other Features:** Use 'branding' format to extract brand identity (colors, fonts, typography, spacing, UI components) for design analysis or style replication.
-**Prompt Example:** "Get the content of the page at https://example.com."
-**Usage Example:**
-\`\`\`json
-{
-  "name": "firecrawl_scrape",
-  "arguments": {
-    "url": "https://example.com",
-    "formats": ["markdown"],
-    "maxAge": 172800000
-  }
-}
-\`\`\`
-**Performance:** Add maxAge parameter for 500% faster scrapes using cached data.
-**Returns:** Markdown, HTML, or other formats as specified.
-**Token Limit Issues:** If you encounter "tokens exceeds maximum allowed tokens" errors or the scraped content is too large, use the JSON format with a schema to extract only the specific data you need. This dramatically reduces output size by returning structured data instead of the full page content.
-**JSON Format Example:**
+
+**IMPORTANT - Choosing the right format:**
+- **Use JSON format (default):** For most use cases, use the JSON format with a schema to extract only the specific data needed. This keeps responses small and focused. Analyze the user's query to determine what fields to extract.
+- **Use markdown format (rare):** Only when the task genuinely requires the full page content, such as: reading an entire article for summarization, analyzing the full structure of a page, or when the user needs to see all the content. This is uncommon.
+
+**Usage Example (JSON format - preferred):**
 \`\`\`json
 {
   "name": "firecrawl_scrape",
@@ -308,6 +298,30 @@ This is the most powerful, fastest and most reliable scraper tool, if available 
   }
 }
 \`\`\`
+**Usage Example (markdown format - when full content needed):**
+\`\`\`json
+{
+  "name": "firecrawl_scrape",
+  "arguments": {
+    "url": "https://example.com/article",
+    "formats": ["markdown"],
+    "onlyMainContent": true
+  }
+}
+\`\`\`
+**Usage Example (branding format - extract brand identity):**
+\`\`\`json
+{
+  "name": "firecrawl_scrape",
+  "arguments": {
+    "url": "https://example.com",
+    "formats": ["branding"]
+  }
+}
+\`\`\`
+**Branding format:** Extracts comprehensive brand identity (colors, fonts, typography, spacing, logo, UI components) for design analysis or style replication.
+**Performance:** Add maxAge parameter for 500% faster scrapes using cached data.
+**Returns:** JSON structured data, markdown, branding profile, or other formats as specified.
 ${
   SAFE_MODE
     ? '**Safe Mode:** Read-only content extraction. Interactive actions (click, write, executeJavascript) are disabled for security.'
@@ -646,15 +660,18 @@ Extract structured information from web pages using LLM capabilities. Supports b
 server.addTool({
   name: 'firecrawl_agent',
   description: `
-Autonomous web data gathering agent. Describe what data you want, and the agent searches, navigates, and extracts it from anywhere on the web.
+Autonomous web research agent. This is a separate AI agent layer that independently browses the internet, searches for information, navigates through pages, and extracts structured data based on your query. You describe what you need, and the agent figures out where to find it.
 
-**Best for:** Complex data gathering tasks where you don't know the exact URLs; research tasks requiring multiple sources; finding data in hard-to-reach places.
-**Not recommended for:** Simple single-page scraping (use scrape); when you already know the exact URL (use scrape or extract).
-**Key advantages over extract:**
-- No URLs required - just describe what you need
-- Autonomously searches and navigates the web
-- Faster and more cost-effective for complex tasks
-- Higher reliability for varied queries
+**How it works:** The agent performs web searches, follows links, reads pages, and gathers data autonomously. This runs **asynchronously** - it returns a job ID immediately, and you poll \`firecrawl_agent_status\` to check when complete and retrieve results.
+
+**Async workflow:**
+1. Call \`firecrawl_agent\` with your prompt/schema → returns job ID
+2. Do other work while the agent researches (can take minutes for complex queries)
+3. Poll \`firecrawl_agent_status\` with the job ID to check progress
+4. When status is "completed", the response includes the extracted data
+
+**Best for:** Complex research tasks where you don't know the exact URLs; multi-source data gathering; finding information scattered across the web; tasks where you can do other work while waiting.
+**Not recommended for:** Simple single-page scraping where you know the URL (use scrape with JSON format instead - faster and cheaper).
 
 **Arguments:**
 - prompt: Natural language description of the data you want (required, max 10,000 characters)
@@ -662,7 +679,7 @@ Autonomous web data gathering agent. Describe what data you want, and the agent 
 - schema: Optional JSON schema for structured output
 
 **Prompt Example:** "Find the founders of Firecrawl and their backgrounds"
-**Usage Example (no URLs):**
+**Usage Example (start agent, then poll for results):**
 \`\`\`json
 {
   "name": "firecrawl_agent",
@@ -687,7 +704,9 @@ Autonomous web data gathering agent. Describe what data you want, and the agent 
   }
 }
 \`\`\`
-**Usage Example (with URLs):**
+Then poll with \`firecrawl_agent_status\` using the returned job ID.
+
+**Usage Example (with URLs - agent focuses on specific pages):**
 \`\`\`json
 {
   "name": "firecrawl_agent",
@@ -697,7 +716,7 @@ Autonomous web data gathering agent. Describe what data you want, and the agent 
   }
 }
 \`\`\`
-**Returns:** Extracted data matching your prompt/schema, plus credits used.
+**Returns:** Job ID for status checking. Use \`firecrawl_agent_status\` to poll for results.
 `,
   parameters: z.object({
     prompt: z.string().min(1).max(10000),
@@ -719,7 +738,7 @@ Autonomous web data gathering agent. Describe what data you want, and the agent 
       urls: a.urls as string[] | undefined,
       schema: (a.schema as Record<string, unknown>) || undefined,
     });
-    const res = await (client as any).agent({
+    const res = await (client as any).startAgent({
       ...agentBody,
       origin: ORIGIN,
     });
@@ -730,7 +749,9 @@ Autonomous web data gathering agent. Describe what data you want, and the agent 
 server.addTool({
   name: 'firecrawl_agent_status',
   description: `
-Check the status of an agent job.
+Check the status of an agent job and retrieve results when complete. Use this to poll for results after starting an agent with \`firecrawl_agent\`.
+
+**Polling pattern:** Agent research can take minutes for complex queries. Poll this endpoint periodically (e.g., every 10-30 seconds) until status is "completed" or "failed".
 
 **Usage Example:**
 \`\`\`json
@@ -742,8 +763,8 @@ Check the status of an agent job.
 }
 \`\`\`
 **Possible statuses:**
-- processing: Agent is still working
-- completed: Extraction finished successfully
+- processing: Agent is still researching - check back later
+- completed: Research finished - response includes the extracted data
 - failed: An error occurred
 
 **Returns:** Status, progress, and results (if completed) of the agent job.
