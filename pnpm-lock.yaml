@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@mendable/firecrawl-js':
-        specifier: ^4.9.3
-        version: 4.11.1
+        specifier: 4.13.0-beta.2
+        version: 4.13.0-beta.2
       dotenv:
         specifier: ^17.2.2
         version: 17.2.2
@@ -33,8 +33,8 @@ packages:
   '@borewit/text-codec@0.1.1':
     resolution: {integrity: sha512-5L/uBxmjaCIX5h8Z+uu+kA9BQLkc/Wl06UGR5ajNRxu+/XjonB5i8JpgFMrPj3LXTCPA0pv8yxUvbUi+QthGGA==}
 
-  '@mendable/firecrawl-js@4.11.1':
-    resolution: {integrity: sha512-GBfnP0fFw25185ZCyPNhfgmBdpWxRy2Q3cXhBWSUixmkVLCaFHnhX/vekYcrQBeWjfJbZC2dSukHtIPZGNivoA==}
+  '@mendable/firecrawl-js@4.13.0-beta.2':
+    resolution: {integrity: sha512-OOf4Xo+5Y1nK0hFX6SuGdZtVayXH8C1JRhduG7+HxBIK4E7yYm8wymcN58ESoK0X5RqtXeExVVyiTJFoaLAHQg==}
     engines: {node: '>=22.0.0'}
 
   '@modelcontextprotocol/sdk@1.18.0':
@@ -79,8 +79,8 @@ packages:
   asynckit@0.4.0:
     resolution: {integrity: sha512-Oei9OH4tRh0YqU3GxhX79dM/mwVgvbZJaSNaRk+bshkj0S5cfHcgYakreBjrHwatXKbz+IoIdYLxrKim2MjW0Q==}
 
-  axios@1.12.2:
-    resolution: {integrity: sha512-vMJzPewAlRyOgxV2dU0Cuz2O8zzzx9VYtbJOaBgXFeLc4IV/Eg50n4LowmehOOR61S8ZMpc2K5Sa7g6A4jfkUw==}
+  axios@1.13.5:
+    resolution: {integrity: sha512-cz4ur7Vb0xS4/KUN0tPWe44eqxrIu31me+fbang3ijiNscE129POzipJJA6zniq2C/Z6sJCjMimjS8Lc/GAs8Q==}
 
   body-parser@2.2.0:
     resolution: {integrity: sha512-02qvAaxv8tp7fBa/mw1ga98OGm+eCbqzJOKoRt70sLmfEEi+jyBYVTDGfCL/k06/4EMk/z01gCe7HoCH/f2LTg==}
@@ -248,8 +248,8 @@ packages:
       debug:
         optional: true
 
-  form-data@4.0.4:
-    resolution: {integrity: sha512-KrGhL9Q4zjj0kiUt5OO4Mr/A/jlI2jDYs5eHBpYHPcBEVSiipAvn2Ko2HnPe20rmcuuvMHNdZFp+4IlGTMF0Ow==}
+  form-data@4.0.5:
+    resolution: {integrity: sha512-8RipRLol37bNs2bhoV67fiTEvdTrbMUYcFTiy3+wuuOnUog2QBHCZWXDRijWQfAkhBj2Uf5UnVaiWwA5vdd82w==}
     engines: {node: '>= 6'}
 
   forwarded@0.2.0:
@@ -645,9 +645,9 @@ snapshots:
 
   '@borewit/text-codec@0.1.1': {}
 
-  '@mendable/firecrawl-js@4.11.1':
+  '@mendable/firecrawl-js@4.13.0-beta.2':
     dependencies:
-      axios: 1.12.2
+      axios: 1.13.5
       typescript-event-target: 1.1.1
       zod: 3.25.76
       zod-to-json-schema: 3.24.6(zod@3.25.76)
@@ -709,10 +709,10 @@ snapshots:
 
   asynckit@0.4.0: {}
 
-  axios@1.12.2:
+  axios@1.13.5:
     dependencies:
       follow-redirects: 1.15.11
-      form-data: 4.0.4
+      form-data: 4.0.5
       proxy-from-env: 1.1.0
     transitivePeerDependencies:
       - debug
@@ -927,7 +927,7 @@ snapshots:
 
   follow-redirects@1.15.11: {}
 
-  form-data@4.0.4:
+  form-data@4.0.5:
     dependencies:
       asynckit: 0.4.0
       combined-stream: 1.0.8

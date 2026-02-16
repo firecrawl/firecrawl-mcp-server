@@ -28,7 +28,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@mendable/firecrawl-js": "^4.9.3",
+    "@mendable/firecrawl-js": "4.13.0-beta.2",
     "dotenv": "^17.2.2",
     "firecrawl-fastmcp": "^1.0.4",
     "typescript": "^5.9.2",
