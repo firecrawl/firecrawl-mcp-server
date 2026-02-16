@@ -842,8 +842,8 @@ Create a persistent browser session for code execution via CDP (Chrome DevTools 
 **Not recommended for:** Simple page scraping (use firecrawl_scrape instead).
 
 **Arguments:**
-- ttlTotal: Total session lifetime in seconds (30-3600, optional)
-- ttlWithoutActivity: Idle timeout in seconds (10-3600, optional)
+- ttl: Total session lifetime in seconds (30-3600, optional)
+- activityTtl: Idle timeout in seconds (10-3600, optional)
 - streamWebView: Whether to enable live view streaming (optional)
 
 **Usage Example:**
@@ -856,8 +856,8 @@ Create a persistent browser session for code execution via CDP (Chrome DevTools 
 **Returns:** Session ID, CDP URL, and live view URL.
 `,
   parameters: z.object({
-    ttlTotal: z.number().min(30).max(3600).optional(),
-    ttlWithoutActivity: z.number().min(10).max(3600).optional(),
+    ttl: z.number().min(30).max(3600).optional(),
+    activityTtl: z.number().min(10).max(3600).optional(),
     streamWebView: z.boolean().optional(),
   }),
   execute: async (
@@ -885,7 +885,7 @@ Execute Python or JavaScript code in a browser session. The code has access to a
 **Arguments:**
 - sessionId: The browser session ID (required)
 - code: The code to execute (required)
-- language: "python" or "js" (optional, defaults to "python")
+- language: "python", "node", or "bash" (optional, defaults to "node")
 
 **Usage Example:**
 \`\`\`json
@@ -894,7 +894,7 @@ Execute Python or JavaScript code in a browser session. The code has access to a
   "arguments": {
     "sessionId": "session-id-here",
     "code": "await page.goto('https://example.com'); return await page.title();",
-    "language": "js"
+    "language": "node"
   }
 }
 \`\`\`
@@ -903,7 +903,7 @@ Execute Python or JavaScript code in a browser session. The code has access to a
     parameters: z.object({
       sessionId: z.string(),
       code: z.string(),
-      language: z.enum(['python', 'js']).optional(),
+      language: z.enum(['python', 'node', 'bash']).optional(),
     }),
     execute: async (
       args: unknown,
@@ -913,7 +913,7 @@ Execute Python or JavaScript code in a browser session. The code has access to a
       const { sessionId, code, language } = args as {
         sessionId: string;
         code: string;
-        language?: 'python' | 'js';
+        language?: 'python' | 'node' | 'bash';
       };
       log.info('Executing code in browser session', { sessionId });
       const res = await client.browserExecute(sessionId, { code, language });
