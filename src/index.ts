@@ -832,6 +832,187 @@ Check the status of an agent job and retrieve results when complete. Use this to
   },
 });
 
+// Browser session tools
+server.addTool({
+  name: 'firecrawl_browser_create',
+  description: `
+Create a persistent browser session for code execution via CDP (Chrome DevTools Protocol).
+
+**Best for:** Running code (Python/JS) that interacts with a live browser page, multi-step browser automation, persistent sessions that survive across multiple tool calls.
+**Not recommended for:** Simple page scraping (use firecrawl_scrape instead).
+
+**Arguments:**
+- ttl: Total session lifetime in seconds (30-3600, optional)
+- activityTtl: Idle timeout in seconds (10-3600, optional)
+- streamWebView: Whether to enable live view streaming (optional)
+
+**Usage Example:**
+\`\`\`json
+{
+  "name": "firecrawl_browser_create",
+  "arguments": {}
+}
+\`\`\`
+**Returns:** Session ID, CDP URL, and live view URL.
+`,
+  parameters: z.object({
+    ttl: z.number().min(30).max(3600).optional(),
+    activityTtl: z.number().min(10).max(3600).optional(),
+    streamWebView: z.boolean().optional(),
+  }),
+  execute: async (
+    args: unknown,
+    { session, log }: { session?: SessionData; log: Logger }
+  ): Promise<string> => {
+    const client = getClient(session);
+    const a = args as Record<string, unknown>;
+    const cleaned = removeEmptyTopLevel(a);
+    log.info('Creating browser session');
+    const res = await client.browser(cleaned as any);
+    return asText(res);
+  },
+});
+
+if (!SAFE_MODE) {
+  server.addTool({
+    name: 'firecrawl_browser_execute',
+    description: `
+Execute code in a browser session. Supports agent-browser commands (bash), Python, or JavaScript.
+
+**Best for:** Browser automation, navigating pages, clicking elements, extracting data, multi-step browser workflows.
+**Requires:** An active browser session (create one with firecrawl_browser_create first).
+
+**Arguments:**
+- sessionId: The browser session ID (required)
+- code: The code to execute (required)
+- language: "bash", "python", or "node" (optional, defaults to "bash")
+
+**Recommended: Use bash with agent-browser commands** (pre-installed in every sandbox):
+\`\`\`json
+{
+  "name": "firecrawl_browser_execute",
+  "arguments": {
+    "sessionId": "session-id-here",
+    "code": "agent-browser open https://example.com",
+    "language": "bash"
+  }
+}
+\`\`\`
+
+**Common agent-browser commands:**
+- \`agent-browser open <url>\` — Navigate to URL
+- \`agent-browser snapshot\` — Get accessibility tree with clickable refs (for AI)
+- \`agent-browser snapshot -i -c\` — Interactive elements only, compact
+- \`agent-browser click @e5\` — Click element by ref from snapshot
+- \`agent-browser type @e3 "text"\` — Type into element
+- \`agent-browser fill @e3 "text"\` — Clear and fill element
+- \`agent-browser get text @e1\` — Get text content
+- \`agent-browser get title\` — Get page title
+- \`agent-browser get url\` — Get current URL
+- \`agent-browser screenshot [path]\` — Take screenshot
+- \`agent-browser scroll down\` — Scroll page
+- \`agent-browser wait 2000\` — Wait 2 seconds
+- \`agent-browser --help\` — Full command reference
+
+**For Playwright scripting, use Python** (has proper async/await support):
+\`\`\`json
+{
+  "name": "firecrawl_browser_execute",
+  "arguments": {
+    "sessionId": "session-id-here",
+    "code": "await page.goto('https://example.com')\\ntitle = await page.title()\\nprint(title)",
+    "language": "python"
+  }
+}
+\`\`\`
+
+**Note:** Prefer bash (agent-browser) or Python.
+**Returns:** Execution result including stdout, stderr, and exit code.
+`,
+    parameters: z.object({
+      sessionId: z.string(),
+      code: z.string(),
+      language: z.enum(['bash', 'python', 'node']).optional(),
+    }),
+    execute: async (
+      args: unknown,
+      { session, log }: { session?: SessionData; log: Logger }
+    ): Promise<string> => {
+      const client = getClient(session);
+      const { sessionId, code, language } = args as {
+        sessionId: string;
+        code: string;
+        language?: 'python' | 'node' | 'bash';
+      };
+      log.info('Executing code in browser session', { sessionId });
+      const res = await client.browserExecute(sessionId, { code, language });
+      return asText(res);
+    },
+  });
+}
+
+server.addTool({
+  name: 'firecrawl_browser_delete',
+  description: `
+Destroy a browser session.
+
+**Usage Example:**
+\`\`\`json
+{
+  "name": "firecrawl_browser_delete",
+  "arguments": {
+    "sessionId": "session-id-here"
+  }
+}
+\`\`\`
+**Returns:** Success confirmation.
+`,
+  parameters: z.object({
+    sessionId: z.string(),
+  }),
+  execute: async (
+    args: unknown,
+    { session, log }: { session?: SessionData; log: Logger }
+  ): Promise<string> => {
+    const client = getClient(session);
+    const { sessionId } = args as { sessionId: string };
+    log.info('Deleting browser session', { sessionId });
+    const res = await client.deleteBrowser(sessionId);
+    return asText(res);
+  },
+});
+
+server.addTool({
+  name: 'firecrawl_browser_list',
+  description: `
+List browser sessions, optionally filtered by status.
+
+**Usage Example:**
+\`\`\`json
+{
+  "name": "firecrawl_browser_list",
+  "arguments": {
+    "status": "active"
+  }
+}
+\`\`\`
+**Returns:** Array of browser sessions.
+`,
+  parameters: z.object({
+    status: z.enum(['active', 'destroyed']).optional(),
+  }),
+  execute: async (
+    args: unknown,
+    { session, log }: { session?: SessionData; log: Logger }
+  ): Promise<string> => {
+    const client = getClient(session);
+    const { status } = args as { status?: 'active' | 'destroyed' };
+    log.info('Listing browser sessions', { status });
+    const res = await client.listBrowsers({ status });
+    return asText(res);
+  },
+});
+
 const PORT = Number(process.env.PORT || 3000);
 const HOST =
   process.env.CLOUD_SERVICE === 'true'
