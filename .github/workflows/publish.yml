@@ -1,11 +1,8 @@
 name: Publish Package
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - package.json
+  release:
+    types: [created]
   workflow_dispatch:
 
 jobs:
@@ -31,30 +28,17 @@ jobs:
       - name: Build
         run: pnpm run build
 
-      - name: Determine npm tag
-        id: npm-tag
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          if echo "$VERSION" | grep -q "beta"; then
-            echo "tag=beta" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=latest" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Publish to NPM
-        run: pnpm publish --access public --no-git-checks --tag ${{ steps.npm-tag.outputs.tag }}
+        run: pnpm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Install MCP Publisher
-        if: steps.npm-tag.outputs.tag == 'latest'
         run: |
           curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
 
       - name: Login to MCP Registry
-        if: steps.npm-tag.outputs.tag == 'latest'
         run: ./mcp-publisher login github-oidc
 
       - name: Publish to MCP Registry
-        if: steps.npm-tag.outputs.tag == 'latest'
         run: ./mcp-publisher publish
