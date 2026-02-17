@@ -17,6 +17,7 @@ A Model Context Protocol (MCP) server implementation that integrates with [Firec
 - Web scraping, crawling, and discovery
 - Search and content extraction
 - Deep research and batch scraping
+- Cloud browser sessions with agent-browser automation
 - Automatic retries and rate limiting
 - Cloud and self-hosted support
 - SSE support
@@ -316,6 +317,7 @@ Use this guide to select the right tool for your task:
 - **If you want to search the web for info:** use **search**
 - **If you need complex research across multiple unknown sources:** use **agent**
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
+- **If you need interactive browser automation** (click, type, navigate): use **browser**
 
 ### Quick Reference Table
 
@@ -327,6 +329,7 @@ Use this guide to select the right tool for your task:
 | crawl        | Multi-page extraction (with limits) | markdown/html[]            |
 | search       | Web search for info                 | results[]                  |
 | agent        | Complex multi-source research       | JSON (structured data)     |
+| browser      | Interactive multi-step automation    | Session with live browser  |
 
 ### Format Selection Guide
 
@@ -812,6 +815,105 @@ Check the status of an agent job and retrieve results when complete. Use this to
 - `processing`: Agent is still researching - check back later
 - `completed`: Research finished - response includes the extracted data
 - `failed`: An error occurred
+
+### 11. Browser Create (`firecrawl_browser_create`)
+
+Create a persistent cloud browser session for interactive automation.
+
+**Best for:**
+
+- Multi-step browser automation (navigate, click, fill forms, extract data)
+- Interactive workflows that require maintaining state across actions
+- Testing and debugging web pages in a live browser
+
+**Arguments:**
+
+- `ttl`: Total session lifetime in seconds (30-3600, optional)
+- `activityTtl`: Idle timeout in seconds (10-3600, optional)
+- `streamWebView`: Whether to enable live view streaming (optional)
+
+**Usage Example:**
+
+```json
+{
+  "name": "firecrawl_browser_create",
+  "arguments": {
+    "ttl": 600
+  }
+}
+```
+
+**Returns:**
+
+- Session ID, CDP URL, and live view URL
+
+### 12. Browser Execute (`firecrawl_browser_execute`)
+
+Execute code in a browser session. Supports agent-browser commands (bash), Python, or JavaScript.
+
+**Recommended: Use bash with agent-browser commands** (pre-installed in every sandbox):
+
+```json
+{
+  "name": "firecrawl_browser_execute",
+  "arguments": {
+    "sessionId": "session-id-here",
+    "code": "agent-browser open https://example.com",
+    "language": "bash"
+  }
+}
+```
+
+**Common agent-browser commands:**
+
+| Command | Description |
+|---------|-------------|
+| `agent-browser open <url>` | Navigate to URL |
+| `agent-browser snapshot` | Accessibility tree with clickable refs |
+| `agent-browser click @e5` | Click element by ref from snapshot |
+| `agent-browser type @e3 "text"` | Type into element |
+| `agent-browser get title` | Get page title |
+| `agent-browser screenshot` | Take screenshot |
+| `agent-browser --help` | Full command reference |
+
+**For Playwright scripting, use Python:**
+
+```json
+{
+  "name": "firecrawl_browser_execute",
+  "arguments": {
+    "sessionId": "session-id-here",
+    "code": "await page.goto('https://example.com')\ntitle = await page.title()\nprint(title)",
+    "language": "python"
+  }
+}
+```
+
+### 13. Browser List (`firecrawl_browser_list`)
+
+List browser sessions, optionally filtered by status.
+
+```json
+{
+  "name": "firecrawl_browser_list",
+  "arguments": {
+    "status": "active"
+  }
+}
+```
+
+### 14. Browser Delete (`firecrawl_browser_delete`)
+
+Destroy a browser session.
+
+```json
+{
+  "name": "firecrawl_browser_delete",
+  "arguments": {
+    "sessionId": "session-id-here"
+  }
+}
+```
 
 ## Logging System
 
