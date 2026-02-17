@@ -877,33 +877,62 @@ if (!SAFE_MODE) {
   server.addTool({
     name: 'firecrawl_browser_execute',
     description: `
-Execute Python or JavaScript code in a browser session. The code has access to a Playwright \`page\` object for browser automation.
+Execute code in a browser session. Supports agent-browser commands (bash), Python, or JavaScript.
 
-**Best for:** Running automation scripts in a persistent browser session, interacting with pages programmatically.
+**Best for:** Browser automation, navigating pages, clicking elements, extracting data, multi-step browser workflows.
 **Requires:** An active browser session (create one with firecrawl_browser_create first).
 
 **Arguments:**
 - sessionId: The browser session ID (required)
 - code: The code to execute (required)
-- language: "python", "node", or "bash" (optional, defaults to "node")
+- language: "bash", "python", or "node" (optional, defaults to "bash")
 
-**Usage Example:**
+**Recommended: Use bash with agent-browser commands** (pre-installed in every sandbox):
 \`\`\`json
 {
   "name": "firecrawl_browser_execute",
   "arguments": {
     "sessionId": "session-id-here",
-    "code": "await page.goto('https://example.com'); return await page.title();",
-    "language": "node"
+    "code": "agent-browser open https://example.com",
+    "language": "bash"
   }
 }
 \`\`\`
-**Returns:** Execution result from the code.
+
+**Common agent-browser commands:**
+- \`agent-browser open <url>\` — Navigate to URL
+- \`agent-browser snapshot\` — Get accessibility tree with clickable refs (for AI)
+- \`agent-browser snapshot -i -c\` — Interactive elements only, compact
+- \`agent-browser click @e5\` — Click element by ref from snapshot
+- \`agent-browser type @e3 "text"\` — Type into element
+- \`agent-browser fill @e3 "text"\` — Clear and fill element
+- \`agent-browser get text @e1\` — Get text content
+- \`agent-browser get title\` — Get page title
+- \`agent-browser get url\` — Get current URL
+- \`agent-browser screenshot [path]\` — Take screenshot
+- \`agent-browser scroll down\` — Scroll page
+- \`agent-browser wait 2000\` — Wait 2 seconds
+- \`agent-browser --help\` — Full command reference
+
+**For Playwright scripting, use Python** (has proper async/await support):
+\`\`\`json
+{
+  "name": "firecrawl_browser_execute",
+  "arguments": {
+    "sessionId": "session-id-here",
+    "code": "await page.goto('https://example.com')\\ntitle = await page.title()\\nprint(title)",
+    "language": "python"
+  }
+}
+\`\`\`
+
+**Note:** Prefer bash (agent-browser) or Python.
+**Returns:** Execution result including stdout, stderr, and exit code.
 `,
     parameters: z.object({
       sessionId: z.string(),
       code: z.string(),
-      language: z.enum(['python', 'node', 'bash']).optional(),
+      language: z.enum(['bash', 'python', 'node']).optional(),
     }),
     execute: async (
       args: unknown,
