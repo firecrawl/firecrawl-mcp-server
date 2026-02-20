@@ -182,47 +182,112 @@ const allActionTypes = [...safeActionTypes, ...otherActions] as const;
 // Use appropriate action types based on safe mode
 const allowedActionTypes = SAFE_MODE ? safeActionTypes : allActionTypes;
 
+function buildFormatsArray(
+  args: Record<string, unknown>
+): Record<string, unknown>[] | undefined {
+  const formats = args.formats as string[] | undefined;
+  if (!formats || formats.length === 0) return undefined;
+
+  const result: Record<string, unknown>[] = [];
+  for (const fmt of formats) {
+    if (fmt === 'json') {
+      const jsonOpts = args.jsonOptions as Record<string, unknown> | undefined;
+      result.push({ type: 'json', ...jsonOpts });
+    } else if (fmt === 'screenshot' && args.screenshotOptions) {
+      const ssOpts = args.screenshotOptions as Record<string, unknown>;
+      result.push({ type: 'screenshot', ...ssOpts });
+    } else {
+      result.push(fmt as unknown as Record<string, unknown>);
+    }
+  }
+  return result;
+}
+
+function buildParsersArray(
+  args: Record<string, unknown>
+): Record<string, unknown>[] | undefined {
+  const parsers = args.parsers as string[] | undefined;
+  if (!parsers || parsers.length === 0) return undefined;
+
+  const result: Record<string, unknown>[] = [];
+  for (const p of parsers) {
+    if (p === 'pdf' && args.pdfOptions) {
+      const pdfOpts = args.pdfOptions as Record<string, unknown>;
+      result.push({ type: 'pdf', ...pdfOpts });
+    } else {
+      result.push(p as unknown as Record<string, unknown>);
+    }
+  }
+  return result;
+}
+
+function buildWebhook(
+  args: Record<string, unknown>
+): string | Record<string, unknown> | undefined {
+  const webhook = args.webhook as string | undefined;
+  if (!webhook) return undefined;
+  const headers = args.webhookHeaders as Record<string, string> | undefined;
+  if (headers && Object.keys(headers).length > 0) {
+    return { url: webhook, headers };
+  }
+  return webhook;
+}
+
+function transformScrapeParams(
+  args: Record<string, unknown>
+): Record<string, unknown> {
+  const out = { ...args };
+
+  const formats = buildFormatsArray(out);
+  if (formats) out.formats = formats;
+
+  const parsers = buildParsersArray(out);
+  if (parsers) out.parsers = parsers;
+
+  delete out.jsonOptions;
+  delete out.screenshotOptions;
+  delete out.pdfOptions;
+
+  return out;
+}
+
 const scrapeParamsSchema = z.object({
   url: z.string().url(),
   formats: z
     .array(
-      z.union([
-        z.enum([
-          'markdown',
-          'html',
-          'rawHtml',
-          'screenshot',
-          'links',
-          'summary',
-          'changeTracking',
-          'branding',
-        ]),
-        z.object({
-          type: z.literal('json'),
-          prompt: z.string().optional(),
-          schema: z.record(z.string(), z.any()).optional(),
-        }),
-        z.object({
-          type: z.literal('screenshot'),
-          fullPage: z.boolean().optional(),
-          quality: z.number().optional(),
-          viewport: z
-            .object({ width: z.number(), height: z.number() })
-            .optional(),
-        }),
+      z.enum([
+        'markdown',
+        'html',
+        'rawHtml',
+        'screenshot',
+        'links',
+        'summary',
+        'changeTracking',
+        'branding',
+        'json',
       ])
     )
     .optional(),
-  parsers: z
-    .array(
-      z.union([
-        z.enum(['pdf']),
-        z.object({
-          type: z.enum(['pdf']),
-          maxPages: z.number().int().min(1).max(10000).optional(),
-        }),
-      ])
-    )
+  jsonOptions: z
+    .object({
+      prompt: z.string().optional(),
+      schema: z.record(z.string(), z.any()).optional(),
+    })
+    .optional(),
+  screenshotOptions: z
+    .object({
+      fullPage: z.boolean().optional(),
+      quality: z.number().optional(),
+      viewport: z
+        .object({ width: z.number(), height: z.number() })
+        .optional(),
+    })
+    .optional(),
+  parsers: z.array(z.enum(['pdf'])).optional(),
+  pdfOptions: z
+    .object({
+      maxPages: z.number().int().min(1).max(10000).optional(),
+    })
     .optional(),
   onlyMainContent: z.boolean().optional(),
   includeTags: z.array(z.string()).optional(),
@@ -301,8 +366,8 @@ If JSON extraction returns empty, minimal, or just navigation content, the page 
   "name": "firecrawl_scrape",
   "arguments": {
     "url": "https://example.com/api-docs",
-    "formats": [{
-      "type": "json",
+    "formats": ["json"],
+    "jsonOptions": {
       "prompt": "Extract the header parameters for the authentication endpoint",
       "schema": {
         "type": "object",
@@ -321,7 +386,7 @@ If JSON extraction returns empty, minimal, or just navigation content, the page 
           }
         }
       }
-    }]
+    }
   }
 }
 \`\`\`
@@ -365,7 +430,8 @@ ${
       unknown
     >;
     const client = getClient(session);
-    const cleaned = removeEmptyTopLevel(options as Record<string, unknown>);
+    const transformed = transformScrapeParams(options as Record<string, unknown>);
+    const cleaned = removeEmptyTopLevel(transformed);
     log.info('Scraping URL', { url: String(url) });
     const res = await client.scrape(String(url), {
       ...cleaned,
@@ -516,7 +582,15 @@ The query also supports search operators, that you can use if needed to refine t
   ): Promise<string> => {
     const client = getClient(session);
     const { query, ...opts } = args as Record<string, unknown>;
-    const cleaned = removeEmptyTopLevel(opts as Record<string, unknown>);
+
+    const searchOpts = { ...opts } as Record<string, unknown>;
+    if (searchOpts.scrapeOptions) {
+      searchOpts.scrapeOptions = transformScrapeParams(
+        searchOpts.scrapeOptions as Record<string, unknown>
+      );
+    }
+
+    const cleaned = removeEmptyTopLevel(searchOpts);
     log.info('Searching', { query: String(query) });
     const res = await client.search(query as string, {
       ...(cleaned as any),
@@ -573,15 +647,8 @@ server.addTool({
     ...(SAFE_MODE
       ? {}
       : {
-          webhook: z
-            .union([
-              z.string(),
-              z.object({
-                url: z.string(),
-                headers: z.record(z.string(), z.string()).optional(),
-              }),
-            ])
-            .optional(),
+          webhook: z.string().optional(),
+          webhookHeaders: z.record(z.string(), z.string()).optional(),
         }),
     deduplicateSimilarURLs: z.boolean().optional(),
     ignoreQueryParameters: z.boolean().optional(),
@@ -590,7 +657,19 @@ server.addTool({
   execute: async (args, { session, log }) => {
     const { url, ...options } = args as Record<string, unknown>;
     const client = getClient(session);
-    const cleaned = removeEmptyTopLevel(options as Record<string, unknown>);
+
+    const opts = { ...options } as Record<string, unknown>;
+    if (opts.scrapeOptions) {
+      opts.scrapeOptions = transformScrapeParams(
+        opts.scrapeOptions as Record<string, unknown>
+      );
+    }
+
+    const webhook = buildWebhook(opts);
+    if (webhook) opts.webhook = webhook;
+    delete opts.webhookHeaders;
+
+    const cleaned = removeEmptyTopLevel(opts);
     log.info('Starting crawl', { url: String(url) });
     const res = await client.crawl(String(url), {
       ...(cleaned as any),
