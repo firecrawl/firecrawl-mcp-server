@@ -459,6 +459,7 @@ The query also supports search operators, that you can use if needed to refine t
 **Common mistakes:** Using crawl or map for open-ended questions (use search instead).
 **Prompt Example:** "Find the latest research papers on AI published in 2023."
 **Sources:** web, images, news, default to web unless needed images or news.
+**Sort:** Use \`sort\` to control result ordering: \`"relevance"\` (default) or \`"recency"\` (newest first). Particularly useful with news sources.
 **Scrape Options:** Only use scrapeOptions when you think it is absolutely necessary. When you do so default to a lower limit to avoid timeouts, 5 or lower.
 **Optimal Workflow:** Search first using firecrawl_search without formats, then after fetching the results, use the scrape tool to get the content of the relevantpage(s) that you want to scrape
 
@@ -501,6 +502,7 @@ The query also supports search operators, that you can use if needed to refine t
   parameters: z.object({
     query: z.string().min(1),
     limit: z.number().optional(),
+    sort: z.enum(['relevance', 'recency']).optional(),
     tbs: z.string().optional(),
     filter: z.string().optional(),
     location: z.string().optional(),
@@ -515,7 +517,11 @@ The query also supports search operators, that you can use if needed to refine t
     { session, log }: { session?: SessionData; log: Logger }
   ): Promise<string> => {
     const client = getClient(session);
-    const { query, ...opts } = args as Record<string, unknown>;
+    const { query, sort, ...opts } = args as Record<string, unknown>;
+    if (sort === 'recency') {
+      const existing = typeof opts.tbs === 'string' ? opts.tbs : '';
+      opts.tbs = existing ? `sbd:1,${existing}` : 'sbd:1';
+    }
     const cleaned = removeEmptyTopLevel(opts as Record<string, unknown>);
     log.info('Searching', { query: String(query) });
     const res = await client.search(query as string, {
