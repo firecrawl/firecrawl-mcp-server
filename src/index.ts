@@ -836,21 +836,26 @@ Check the status of an agent job and retrieve results when complete. Use this to
 server.addTool({
   name: 'firecrawl_browser_create',
   description: `
-Create a persistent browser session for code execution via CDP (Chrome DevTools Protocol).
+Create a browser session for code execution via CDP (Chrome DevTools Protocol).
 
-**Best for:** Running code (Python/JS) that interacts with a live browser page, multi-step browser automation, persistent sessions that survive across multiple tool calls.
+**Best for:** Running code (Python/JS) that interacts with a live browser page, multi-step browser automation, sessions with profiles that survive across multiple tool calls.
 **Not recommended for:** Simple page scraping (use firecrawl_scrape instead).
 
 **Arguments:**
 - ttl: Total session lifetime in seconds (30-3600, optional)
 - activityTtl: Idle timeout in seconds (10-3600, optional)
 - streamWebView: Whether to enable live view streaming (optional)
+- profile: Save and reuse browser state (cookies, localStorage) across sessions (optional)
+  - name: Profile name (sessions with the same name share state)
+  - saveChanges: Whether to save changes back to the profile (default: true)
 
 **Usage Example:**
 \`\`\`json
 {
   "name": "firecrawl_browser_create",
-  "arguments": {}
+  "arguments": {
+    "profile": { "name": "my-profile", "saveChanges": true }
+  }
 }
 \`\`\`
 **Returns:** Session ID, CDP URL, and live view URL.
@@ -859,6 +864,10 @@ Create a persistent browser session for code execution via CDP (Chrome DevTools 
     ttl: z.number().min(30).max(3600).optional(),
     activityTtl: z.number().min(10).max(3600).optional(),
     streamWebView: z.boolean().optional(),
+    profile: z.object({
+      name: z.string().min(1).max(128),
+      saveChanges: z.boolean().default(true),
+    }).optional(),
   }),
   execute: async (
     args: unknown,

@@ -818,19 +818,23 @@ Check the status of an agent job and retrieve results when complete. Use this to
 
 ### 11. Browser Create (`firecrawl_browser_create`)
 
-Create a persistent cloud browser session for interactive automation.
+Create a cloud browser session for interactive automation.
 
 **Best for:**
 
 - Multi-step browser automation (navigate, click, fill forms, extract data)
 - Interactive workflows that require maintaining state across actions
 - Testing and debugging web pages in a live browser
+- Saving and reusing browser state with profiles
 
 **Arguments:**
 
 - `ttl`: Total session lifetime in seconds (30-3600, optional)
 - `activityTtl`: Idle timeout in seconds (10-3600, optional)
 - `streamWebView`: Whether to enable live view streaming (optional)
+- `profile`: Save and reuse browser state across sessions (optional)
+  - `name`: Profile name (sessions with the same name share state)
+  - `saveChanges`: Whether to save changes back to the profile (default: true)
 
 **Usage Example:**
 
@@ -838,7 +842,8 @@ Create a persistent cloud browser session for interactive automation.
 {
   "name": "firecrawl_browser_create",
   "arguments": {
-    "ttl": 600
+    "ttl": 600,
+    "profile": { "name": "my-profile", "saveChanges": true }
   }
 }
 ```
