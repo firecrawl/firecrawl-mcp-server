@@ -375,6 +375,140 @@ ${
   },
 });
 
+const batchScrapeParamsSchema = z.object({
+  urls: z.array(z.string().url()).min(1),
+  options: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+  appendToId: z.string().optional(),
+  ignoreInvalidURLs: z.boolean().optional(),
+  maxConcurrency: z.number().optional(),
+  zeroDataRetention: z.boolean().optional(),
+  idempotencyKey: z.string().optional(),
+  integration: z.string().optional(),
+  ...(SAFE_MODE
+    ? {}
+    : {
+        webhook: z
+          .union([
+            z.string(),
+            z.object({
+              url: z.string(),
+              headers: z.record(z.string(), z.string()).optional(),
+            }),
+          ])
+          .optional(),
+      }),
+});
+
+server.addTool({
+  name: 'firecrawl_batch_scrape',
+  description: `
+Scrape multiple URLs efficiently with built-in rate limiting and parallel processing.
+
+**Best for:** Retrieving content from multiple pages when you already know which URLs to scrape.
+**Not recommended for:** Discovering URLs (use firecrawl_map first) or scraping a single page (use firecrawl_scrape).
+**Common mistakes:** Queueing too many URLs at once, which may hit rate limits or overflow token budgets.
+**Prompt Example:** "Get the content of these three blog posts: [url1, url2, url3]."
+**Usage Example:**
+\`\`\`json
+{
+  "name": "firecrawl_batch_scrape",
+  "arguments": {
+    "urls": ["https://example1.com", "https://example2.com"],
+    "options": {
+      "formats": ["markdown"],
+      "onlyMainContent": true
+    }
+  }
+}
+\`\`\`
+**Returns:** Response includes an operation ID for status checking.
+\`\`\`json
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "Batch operation queued with ID: batch_1. Use firecrawl_check_batch_status to check progress."
+    }
+  ],
+  "isError": false
+}
+\`\`\`
+`,
+  parameters: batchScrapeParamsSchema,
+  execute: async (
+    args: unknown,
+    { session, log }: { session?: SessionData; log: Logger }
+  ): Promise<string> => {
+    const { urls, options, ...rest } = args as {
+      urls: string[];
+      options?: Record<string, unknown>;
+    } & Record<string, unknown>;
+    const client = getClient(session);
+    const cleanedOptions = options
+      ? removeEmptyTopLevel(options as Record<string, unknown>)
+      : undefined;
+    const batchOptions = removeEmptyTopLevel({
+      ...(rest as Record<string, unknown>),
+      ...(cleanedOptions ? { options: cleanedOptions } : {}),
+      origin: ORIGIN,
+    });
+    log.info('Starting batch scrape', {
+      count: Array.isArray(urls) ? urls.length : 0,
+    });
+    const res = await client.startBatchScrape(
+      urls.map((url) => String(url)),
+      batchOptions as any
+    );
+    return asText(res);
+  },
+});
+
+const batchStatusParamsSchema = z.object({
+  id: z.string(),
+  pagination: z
+    .object({
+      autoPaginate: z.boolean().optional(),
+      maxPages: z.number().optional(),
+      maxResults: z.number().optional(),
+      maxWaitTime: z.number().optional(),
+    })
+    .optional(),
+});
+
+server.addTool({
+  name: 'firecrawl_check_batch_status',
+  description: `
+Check the status of a batch operation.
+
+\`\`\`json
+{
+  "name": "firecrawl_check_batch_status",
+  "arguments": {
+    "id": "batch_1"
+  }
+}
+\`\`\`
+**Returns:** Current status of the batch job, including progress or completed results when available.
+`,
+  parameters: batchStatusParamsSchema,
+  execute: async (
+    args: unknown,
+    { session, log }: { session?: SessionData; log: Logger }
+  ): Promise<string> => {
+    const { id, pagination } = args as {
+      id: string;
+      pagination?: Record<string, unknown>;
+    };
+    const client = getClient(session);
+    log.info('Checking batch status', { id });
+    const res = await client.getBatchScrapeStatus(
+      id,
+      pagination,
+    );
+    return asText(res);
+  },
+});
+
 server.addTool({
   name: 'firecrawl_map',
   description: `
