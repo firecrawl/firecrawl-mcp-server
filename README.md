@@ -26,69 +26,57 @@ A Model Context Protocol (MCP) server implementation that integrates with [Firec
 
 ## Installation
 
-### Running with npx
+### Prerequisites
+
+- **Node.js** (v18 or higher) installed
+- A **Firecrawl API key** — get one at [firecrawl.dev/app/api-keys](https://www.firecrawl.dev/app/api-keys)
+
+### Quick Start
 
 ```bash
+# Run directly with npx
 env FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
 ```
 
-### Manual Installation
-
 ```bash
+# Or install globally
 npm install -g firecrawl-mcp
 ```
 
-### Running on Cursor
+### Streamable HTTP (Local Remote Server)
 
-Configuring Cursor 🖥️
-Note: Requires Cursor version 0.45.6+
-For the most up-to-date configuration instructions, please refer to the official Cursor documentation on configuring MCP servers:
-[Cursor MCP Server Configuration Guide](https://docs.cursor.com/context/model-context-protocol#configuring-mcp-servers)
+To run the server using Streamable HTTP locally instead of the default stdio transport:
 
-To configure Firecrawl MCP in Cursor **v0.48.6**
+```bash
+env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
+```
 
-1. Open Cursor Settings
-2. Go to Features > MCP Servers
-3. Click "+ Add new global MCP server"
-4. Enter the following code:
-   ```json
-   {
-     "mcpServers": {
-       "firecrawl-mcp": {
-         "command": "npx",
-         "args": ["-y", "firecrawl-mcp"],
-         "env": {
-           "FIRECRAWL_API_KEY": "YOUR-API-KEY"
-         }
-       }
-     }
-   }
-   ```
+Server URL: `http://localhost:3000/mcp`
 
-To configure Firecrawl MCP in Cursor **v0.45.6**
+---
 
-1. Open Cursor Settings
-2. Go to Features > MCP Servers
-3. Click "+ Add New MCP Server"
-4. Enter the following:
-   - Name: "firecrawl-mcp" (or your preferred name)
-   - Type: "command"
-   - Command: `env FIRECRAWL_API_KEY=your-api-key npx -y firecrawl-mcp`
+### MCP Client Installation Guides
 
-> If you are using Windows and are running into issues, try `cmd /c "set FIRECRAWL_API_KEY=your-api-key && npx -y firecrawl-mcp"`
+> **Note:** Replace `YOUR_API_KEY` with your Firecrawl API key in all examples below. Get one at [firecrawl.dev/app/api-keys](https://www.firecrawl.dev/app/api-keys).
 
-Replace `your-api-key` with your Firecrawl API key. If you don't have one yet, you can create an account and get it from https://www.firecrawl.dev/app/api-keys
+<details>
+<summary><b>Claude Desktop</b></summary>
 
-After adding, refresh the MCP server list to see the new tools. The Composer Agent will automatically use Firecrawl MCP when appropriate, but you can explicitly request it by describing your web scraping needs. Access the Composer via Command+L (Mac), select "Agent" next to the submit button, and enter your query.
+#### Prerequisites
+- [Claude Desktop](https://claude.ai/download) installed
+- Node.js 18+
 
-### Running on Windsurf
+#### Configuration
 
-Add this to your `./codeium/windsurf/model_config.json`:
+Open Claude Desktop developer settings and edit your `claude_desktop_config.json` file. See [Claude Desktop MCP docs](https://modelcontextprotocol.io/quickstart/user) for more info.
+
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
-    "mcp-server-firecrawl": {
+    "firecrawl-mcp": {
       "command": "npx",
       "args": ["-y", "firecrawl-mcp"],
       "env": {
@@ -99,31 +87,125 @@ Add this to your `./codeium/windsurf/model_config.json`:
 }
 ```
 
-### Running with Streamable HTTP Local Mode
+#### Verification
+1. Restart Claude Desktop
+2. Look for the MCP tools icon (hammer) in the chat input
+3. Ask Claude: "Use Firecrawl to scrape https://example.com"
 
-To run the server using Streamable HTTP locally instead of the default stdio transport:
+</details>
 
-```bash
-env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
+<details>
+<summary><b>Claude Code</b></summary>
+
+#### Prerequisites
+- [Claude Code](https://code.claude.com) CLI installed
+- Node.js 18+
+
+#### Configuration
+
+Run this command. See [Claude Code MCP docs](https://code.claude.com/docs/en/mcp) for more info.
+
+```sh
+claude mcp add --scope user firecrawl-mcp -- npx -y firecrawl-mcp
 ```
 
-Use the url: http://localhost:3000/mcp
+Then set the environment variable:
 
-### Installing via Smithery (Legacy)
-
-To install Firecrawl for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@mendableai/mcp-server-firecrawl):
-
-```bash
-npx -y @smithery/cli install @mendableai/mcp-server-firecrawl --client claude
+```sh
+export FIRECRAWL_API_KEY=YOUR_API_KEY
 ```
 
-### Running on VS Code
+> Remove `--scope user` to install for the current project only.
 
-For one-click installation, click one of the install buttons below...
+#### Verification
+```sh
+claude mcp list
+```
+Confirm `firecrawl-mcp` appears in the list, then ask Claude Code to scrape a URL.
+
+</details>
+
+<details>
+<summary><b>Cursor</b></summary>
+
+#### Prerequisites
+- [Cursor](https://cursor.com) v0.45.6+
+- Node.js 18+
+
+#### Configuration
+
+Go to: `Settings` → `Cursor Settings` → `MCP` → `Add new global MCP server`
+
+Paste the following into your Cursor `~/.cursor/mcp.json` file. You may also install in a specific project by creating `.cursor/mcp.json` in your project folder. See [Cursor MCP docs](https://docs.cursor.com/context/model-context-protocol) for more info.
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+> **Windows users:** If you run into issues, try `cmd /c "set FIRECRAWL_API_KEY=YOUR_API_KEY && npx -y firecrawl-mcp"`
+
+#### Verification
+1. Refresh the MCP server list in Cursor Settings → MCP
+2. Open Composer (Cmd+L / Ctrl+L), select "Agent" mode
+3. Ask: "Use Firecrawl to scrape https://example.com"
+
+</details>
+
+<details>
+<summary><b>Windsurf</b></summary>
+
+#### Prerequisites
+- [Windsurf](https://windsurf.com) IDE installed
+- Node.js 18+
+
+#### Configuration
+
+Add this to your Windsurf MCP config file (`./codeium/windsurf/model_config.json`). See [Windsurf MCP docs](https://docs.windsurf.com/windsurf/cascade/mcp) for more info.
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+1. Restart Windsurf
+2. Open Cascade and ask: "Use Firecrawl to scrape https://example.com"
+
+</details>
+
+<details>
+<summary><b>VS Code (GitHub Copilot)</b></summary>
+
+#### Prerequisites
+- [VS Code](https://code.visualstudio.com/) with [GitHub Copilot](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot) extension
+- Node.js 18+
+
+#### One-Click Install
 
 [![Install with NPX in VS Code](https://img.shields.io/badge/VS_Code-NPM-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=firecrawl&inputs=%5B%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22apiKey%22%2C%22description%22%3A%22Firecrawl%20API%20Key%22%2C%22password%22%3Atrue%7D%5D&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22firecrawl-mcp%22%5D%2C%22env%22%3A%7B%22FIRECRAWL_API_KEY%22%3A%22%24%7Binput%3AapiKey%7D%22%7D%7D) [![Install with NPX in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-NPM-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=firecrawl&inputs=%5B%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22apiKey%22%2C%22description%22%3A%22Firecrawl%20API%20Key%22%2C%22password%22%3Atrue%7D%5D&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22firecrawl-mcp%22%5D%2C%22env%22%3A%7B%22FIRECRAWL_API_KEY%22%3A%22%24%7Binput%3AapiKey%7D%22%7D%7D&quality=insiders)
 
-For manual installation, add the following JSON block to your User Settings (JSON) file in VS Code. You can do this by pressing `Ctrl + Shift + P` and typing `Preferences: Open User Settings (JSON)`.
+#### Manual Configuration
+
+Press `Ctrl+Shift+P` → `Preferences: Open User Settings (JSON)` and add:
 
 ```json
 {
@@ -149,7 +231,7 @@ For manual installation, add the following JSON block to your User Settings (JSO
 }
 ```
 
-Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others:
+Or add to `.vscode/mcp.json` in your workspace to share with your team:
 
 ```json
 {
@@ -172,6 +254,693 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
   }
 }
 ```
+
+#### Verification
+1. Restart VS Code
+2. Open Copilot Chat and ask: "Use Firecrawl to scrape https://example.com"
+
+</details>
+
+<details>
+<summary><b>Cline</b></summary>
+
+#### Prerequisites
+- [Cline](https://cline.bot) VS Code extension installed
+- Node.js 18+
+
+#### Configuration
+
+1. Open **Cline** in VS Code
+2. Click the hamburger menu icon → **MCP Servers** section
+3. Choose **Installed** tab → **Edit Configuration**
+4. Add `firecrawl-mcp` to `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+1. The server should appear as connected in the MCP Servers panel
+2. Ask Cline: "Use Firecrawl to scrape https://example.com"
+
+</details>
+
+<details>
+<summary><b>Continue</b></summary>
+
+#### Prerequisites
+- [Continue](https://continue.dev) VS Code or JetBrains extension installed
+- Node.js 18+
+
+#### Configuration
+
+Add to your Continue config file (`~/.continue/config.json`). See [Continue MCP docs](https://docs.continue.dev/customize/model-context-protocol) for more info.
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+1. Restart your IDE
+2. Open Continue chat and confirm Firecrawl tools are available
+
+</details>
+
+<details>
+<summary><b>Zed</b></summary>
+
+#### Prerequisites
+- [Zed](https://zed.dev) editor installed
+- Node.js 18+
+
+#### Configuration
+
+Add this to your Zed `settings.json`. See [Zed Context Server docs](https://zed.dev/docs/assistant/context-servers) for more info.
+
+```json
+{
+  "context_servers": {
+    "firecrawl-mcp": {
+      "source": "custom",
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+1. Restart Zed
+2. Open the Assistant panel and confirm the Firecrawl tools are available
+
+</details>
+
+<details>
+<summary><b>Roo Code</b></summary>
+
+#### Prerequisites
+- [Roo Code](https://docs.roocode.com) VS Code extension installed
+- Node.js 18+
+
+#### Configuration
+
+Add to your Roo Code MCP configuration file. See [Roo Code MCP docs](https://docs.roocode.com/features/mcp/using-mcp-in-roo) for more info.
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+1. Restart VS Code
+2. Confirm the server is connected in Roo Code's MCP panel
+
+</details>
+
+<details>
+<summary><b>Amazon Q Developer CLI</b></summary>
+
+#### Prerequisites
+- [Amazon Q Developer CLI](https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/command-line.html) installed
+- Node.js 18+
+
+#### Configuration
+
+Add to your Amazon Q Developer CLI configuration file. See [Amazon Q MCP docs](https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/command-line-mcp-configuration.html) for more info.
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+1. Restart the CLI
+2. Confirm Firecrawl tools are available with `q mcp list`
+
+</details>
+
+<details>
+<summary><b>Firebase Genkit</b></summary>
+
+#### Prerequisites
+- [Firebase Genkit](https://firebase.google.com/docs/genkit) project set up
+- Node.js 18+
+
+#### Configuration
+
+Install the MCP plugin for Genkit:
+
+```bash
+npm install genkitx-mcp
+```
+
+Then in your Genkit configuration:
+
+```typescript
+import { genkit } from "genkit";
+import { mcpClient } from "genkitx-mcp";
+
+const firecrawlClient = mcpClient({
+  name: "firecrawl-mcp",
+  serverProcess: {
+    command: "npx",
+    args: ["-y", "firecrawl-mcp"],
+    env: {
+      FIRECRAWL_API_KEY: "YOUR_API_KEY",
+    },
+  },
+});
+
+const ai = genkit({
+  plugins: [firecrawlClient],
+});
+```
+
+#### Verification
+1. Start your Genkit app
+2. Confirm the Firecrawl tools are registered in the Genkit Developer UI
+
+</details>
+
+<details>
+<summary><b>Highlight.ai</b></summary>
+
+#### Prerequisites
+- [Highlight.ai](https://highlight.ing) desktop app installed
+- Node.js 18+
+
+#### Configuration
+
+Add to your Highlight.ai MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+1. Restart Highlight.ai
+2. Confirm Firecrawl tools are available in the tools list
+
+</details>
+
+<details>
+<summary><b>Goose (Block)</b></summary>
+
+#### Prerequisites
+- [Goose](https://block.github.io/goose/) CLI installed
+- Node.js 18+
+
+#### Configuration
+
+Add to your Goose configuration file (`~/.config/goose/config.yaml`):
+
+```yaml
+mcpServers:
+  firecrawl-mcp:
+    command: npx
+    args:
+      - -y
+      - firecrawl-mcp
+    env:
+      FIRECRAWL_API_KEY: YOUR_API_KEY
+```
+
+#### Verification
+1. Start a new Goose session
+2. Ask: "Use Firecrawl to scrape https://example.com"
+
+</details>
+
+<details>
+<summary><b>Jan</b></summary>
+
+#### Prerequisites
+- [Jan](https://jan.ai) desktop app installed
+- Node.js 18+
+
+#### Configuration
+
+Add to your Jan MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+1. Restart Jan
+2. Confirm Firecrawl tools appear in the tools list
+
+</details>
+
+<details>
+<summary><b>pne (PromptNexusEngine)</b></summary>
+
+#### Prerequisites
+- [pne](https://github.com/Undertone0809/pne) installed (`pip install pne`)
+- Node.js 18+
+
+#### Configuration
+
+```python
+import pne
+
+firecrawl_mcp = pne.MCPClient(
+    server_params={
+        "command": "npx",
+        "args": ["-y", "firecrawl-mcp"],
+        "env": {
+            "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+        }
+    }
+)
+```
+
+#### Verification
+1. Run your pne script
+2. Confirm the Firecrawl tools are accessible via the MCP client
+
+</details>
+
+<details>
+<summary><b>5ire</b></summary>
+
+#### Prerequisites
+- [5ire](https://github.com/5ire-tech/5ire) desktop app installed
+- Node.js 18+
+
+#### Configuration
+
+Open 5ire Settings → Tools → Add MCP Server:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+1. Restart 5ire
+2. Check that Firecrawl tools are listed in the available tools
+
+</details>
+
+<details>
+<summary><b>TheAgentCompany</b></summary>
+
+#### Prerequisites
+- [TheAgentCompany](https://github.com/TheAgentCompany/TheAgentCompany) environment set up
+- Node.js 18+
+
+#### Configuration
+
+Add to your agent's MCP server configuration:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+1. Start the agent environment
+2. Verify Firecrawl tools are registered and available
+
+</details>
+
+<details>
+<summary><b>Superinterface</b></summary>
+
+#### Prerequisites
+- [Superinterface](https://superinterface.ai) account
+- Node.js 18+
+
+#### Configuration
+
+Add Firecrawl MCP in your Superinterface dashboard under the MCP Servers section:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+1. Save the configuration in the dashboard
+2. Create a new assistant and confirm Firecrawl tools are available
+
+</details>
+
+<details>
+<summary><b>Klavis AI MCP Client</b></summary>
+
+#### Prerequisites
+- [Klavis AI](https://www.klavis.ai) account
+
+#### Configuration
+
+Firecrawl MCP is available as a hosted server on Klavis AI:
+
+1. Visit [Klavis AI MCP Servers](https://www.klavis.ai/mcp-servers)
+2. Find and enable **Firecrawl MCP Server**
+3. Enter your Firecrawl API key when prompted
+4. The server will be automatically configured for your workspace
+
+#### Verification
+1. Open a chat in Klavis AI
+2. Confirm Firecrawl tools are available
+
+</details>
+
+<details>
+<summary><b>MCPHub</b></summary>
+
+#### Prerequisites
+- [MCPHub](https://github.com/mcp-hub/mcp-hub) installed
+- Node.js 18+
+
+#### Configuration
+
+Add to your MCPHub configuration:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+1. Restart MCPHub
+2. Confirm the Firecrawl server appears in the server list
+
+</details>
+
+<details>
+<summary><b>mcp-cli</b></summary>
+
+#### Prerequisites
+- [mcp-cli](https://github.com/chrishayuk/mcp-cli) installed
+- Node.js 18+
+
+#### Configuration
+
+Add to your `servers.json` configuration file:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+```bash
+mcp-cli list-tools --server firecrawl-mcp
+```
+
+</details>
+
+<details>
+<summary><b>Smithery</b></summary>
+
+#### Prerequisites
+- Node.js 18+
+
+#### Configuration
+
+Install Firecrawl for any client automatically via [Smithery](https://smithery.ai/server/@mendableai/mcp-server-firecrawl):
+
+```bash
+npx -y @smithery/cli@latest install @mendableai/mcp-server-firecrawl --client <CLIENT_NAME> --key <YOUR_SMITHERY_KEY>
+```
+
+Replace `<CLIENT_NAME>` with your MCP client (e.g., `claude`, `cursor`, `cline`).
+
+#### Verification
+1. Check that the MCP server was added to your client's configuration
+2. Restart the client and confirm Firecrawl tools are available
+
+</details>
+
+<details>
+<summary><b>JetBrains AI Assistant</b></summary>
+
+#### Prerequisites
+- JetBrains IDE (IntelliJ, WebStorm, PyCharm, etc.) with [AI Assistant](https://www.jetbrains.com/help/ai-assistant/) plugin
+- Node.js 18+
+
+#### Configuration
+
+See [JetBrains AI Assistant MCP docs](https://www.jetbrains.com/help/ai-assistant/configure-an-mcp-server.html) for details.
+
+1. Go to `Settings` → `Tools` → `AI Assistant` → `Model Context Protocol (MCP)`
+2. Click `+ Add`
+3. Click on `Command` in the top-left corner and select **As JSON**
+4. Paste:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+5. Click `Apply` to save changes
+
+#### Verification
+1. Restart your IDE
+2. Confirm Firecrawl tools appear in AI Assistant's available tools
+
+</details>
+
+<details>
+<summary><b>Copilot Coding Agent (GitHub)</b></summary>
+
+#### Prerequisites
+- GitHub repository with Copilot access
+
+#### Configuration
+
+Add the following to **Repository → Settings → Copilot → Coding agent → MCP configuration**:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "type": "http",
+      "url": "http://localhost:3000/mcp",
+      "headers": {}
+    }
+  }
+}
+```
+
+> You'll need to run the Firecrawl MCP server in Streamable HTTP mode. See [Streamable HTTP](#streamable-http-local-remote-server) section above.
+
+See the [official GitHub docs](https://docs.github.com/en/copilot/how-tos/agents/copilot-coding-agent/extending-copilot-coding-agent-with-mcp) for more info.
+
+#### Verification
+1. Create a Copilot coding agent task that involves web scraping
+2. Confirm the agent uses Firecrawl tools
+
+</details>
+
+<details>
+<summary><b>LM Studio</b></summary>
+
+#### Prerequisites
+- [LM Studio](https://lmstudio.ai) v0.3.17+ installed
+- Node.js 18+
+
+#### Configuration
+
+1. Navigate to `Program` (right side) → `Install` → `Edit mcp.json`
+2. Paste the configuration:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+3. Click `Save`
+
+#### Verification
+1. Restart LM Studio
+2. Confirm Firecrawl tools appear in the tool list
+
+</details>
+
+<details>
+<summary><b>Windows Configuration</b></summary>
+
+#### Note for Windows Users
+
+On Windows, use `cmd` to run npx. This applies to any MCP client:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Using Docker</b></summary>
+
+#### Prerequisites
+- Docker installed
+
+#### Configuration
+
+1. Run with Docker directly:
+
+```bash
+docker run -i --rm -e FIRECRAWL_API_KEY=YOUR_API_KEY node:18-alpine npx -y firecrawl-mcp
+```
+
+2. Configure your MCP client:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "FIRECRAWL_API_KEY=YOUR_API_KEY", "node:18-alpine", "npx", "-y", "firecrawl-mcp"],
+      "transportType": "stdio"
+    }
+  }
+}
+```
+
+#### Verification
+1. Test the Docker command runs successfully
+2. Confirm your MCP client connects to the server
+
+</details>
 
 ## Configuration
 
@@ -235,12 +1004,12 @@ export FIRECRAWL_RETRY_INITIAL_DELAY=500     # Start with faster retries
 
 ### Usage with Claude Desktop
 
-Add this to your `claude_desktop_config.json`:
+Add this to your `claude_desktop_config.json` (see [Installation — Claude Desktop](#claude-desktop) for file location):
 
 ```json
 {
   "mcpServers": {
-    "mcp-server-firecrawl": {
+    "firecrawl-mcp": {
       "command": "npx",
       "args": ["-y", "firecrawl-mcp"],
       "env": {
