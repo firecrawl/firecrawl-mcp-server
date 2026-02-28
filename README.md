@@ -38,7 +38,10 @@ env FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
 npm install -g firecrawl-mcp
 ```
 
-### Running on Cursor
+### AI Assistants & Code Editors
+
+<details>
+<summary><b>Cursor</b></summary>
 
 Configuring Cursor 🖥️
 Note: Requires Cursor version 0.45.6+
@@ -81,43 +84,10 @@ Replace `your-api-key` with your Firecrawl API key. If you don't have one yet, y
 
 After adding, refresh the MCP server list to see the new tools. The Composer Agent will automatically use Firecrawl MCP when appropriate, but you can explicitly request it by describing your web scraping needs. Access the Composer via Command+L (Mac), select "Agent" next to the submit button, and enter your query.
 
-### Running on Windsurf
+</details>
 
-Add this to your `./codeium/windsurf/model_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "mcp-server-firecrawl": {
-      "command": "npx",
-      "args": ["-y", "firecrawl-mcp"],
-      "env": {
-        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
-      }
-    }
-  }
-}
-```
-
-### Running with Streamable HTTP Local Mode
-
-To run the server using Streamable HTTP locally instead of the default stdio transport:
-
-```bash
-env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
-```
-
-Use the url: http://localhost:3000/mcp
-
-### Installing via Smithery (Legacy)
-
-To install Firecrawl for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@mendableai/mcp-server-firecrawl):
-
-```bash
-npx -y @smithery/cli install @mendableai/mcp-server-firecrawl --client claude
-```
-
-### Running on VS Code
+<details>
+<summary><b>VS Code</b></summary>
 
 For one-click installation, click one of the install buttons below...
 
@@ -173,7 +143,1346 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 }
 ```
 
+</details>
+
+<details>
+<summary><b>Windsurf</b></summary>
+
+Add this to your `./codeium/windsurf/model_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "mcp-server-firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Claude Desktop</b></summary>
+
+Add this to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "mcp-server-firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY_HERE",
+
+        "FIRECRAWL_RETRY_MAX_ATTEMPTS": "5",
+        "FIRECRAWL_RETRY_INITIAL_DELAY": "2000",
+        "FIRECRAWL_RETRY_MAX_DELAY": "30000",
+        "FIRECRAWL_RETRY_BACKOFF_FACTOR": "3",
+
+        "FIRECRAWL_CREDIT_WARNING_THRESHOLD": "2000",
+        "FIRECRAWL_CREDIT_CRITICAL_THRESHOLD": "500"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+
+
+<details>
+<summary><b>Claude Code</b></summary>
+
+Claude Code (Anthropic's CLI tool) supports MCP servers natively via the `claude mcp add` command.
+
+#### Prerequisites
+
+- Claude Code installed
+- Firecrawl API key from [firecrawl.dev](https://www.firecrawl.dev/app/api-keys)
+
+#### Installation
+
+**Local server connection (recommended):**
+
+```bash
+claude mcp add firecrawl-mcp -e FIRECRAWL_API_KEY=YOUR_API_KEY -- npx -y firecrawl-mcp
+```
+
+**Remote server connection (HTTP transport):**
+
+```bash
+claude mcp add firecrawl-mcp --transport http http://localhost:3000/mcp
+```
+
+**Scope options:**
+
+- `-s project` for project-level configuration (saved in `.mcp.json`)
+- `-s user` for user-level configuration (available across all projects)
+
+#### Verification
+
+```bash
+claude mcp list
+```
+
+You should see `firecrawl-mcp` listed with its tools.
+
+</details>
+
+
+
+<details>
+<summary><b>Opencode</b></summary>
+
+Opencode supports MCP servers through configuration files.
+
+#### Installation
+
+Add to your Opencode configuration file:
+
+**Local server connection:**
+
+```json
+{
+  "mcp": {
+    "firecrawl-mcp": {
+      "type": "local",
+      "command": ["npx", "-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      },
+      "enabled": true
+    }
+  }
+}
+```
+
+**Remote server connection:**
+
+```json
+{
+  "mcp": {
+    "firecrawl-mcp": {
+      "type": "remote",
+      "url": "http://localhost:3000/mcp",
+      "enabled": true
+    }
+  }
+}
+```
+
+#### Verification
+
+Restart Opencode and check MCP servers list.
+
+</details>
+
+<details>
+<summary><b>OpenAI Codex</b></summary>
+
+OpenAI Codex uses TOML configuration.
+
+#### Installation
+
+Add to your Codex configuration file:
+
+**Local server connection:**
+
+```toml
+[mcp_servers.firecrawl-mcp]
+command = "npx"
+args = ["-y", "firecrawl-mcp"]
+
+[mcp_servers.firecrawl-mcp.env]
+FIRECRAWL_API_KEY = "YOUR_API_KEY"
+```
+
+**Remote server connection:**
+
+```toml
+[mcp_servers.firecrawl-mcp]
+url = "http://localhost:3000/mcp"
+```
+
+If you see startup timeout errors, increase `startup_timeout_ms`:
+
+```toml
+[mcp_servers.firecrawl-mcp]
+command = "npx"
+args = ["-y", "firecrawl-mcp"]
+startup_timeout_ms = 40000
+
+[mcp_servers.firecrawl-mcp.env]
+FIRECRAWL_API_KEY = "YOUR_API_KEY"
+```
+
+</details>
+
+<details>
+<summary><b>Google Antigravity</b></summary>
+
+Google Antigravity is Google's agentic development platform powered by Gemini.
+
+#### Prerequisites
+
+- Google Antigravity installed
+- Firecrawl API key
+
+#### Installation
+
+**Via MCP Store (recommended):**
+
+1. Open Google Antigravity
+2. Click the **`⋯`** (more) menu in the Agent pane
+3. Select **MCP Servers**
+4. Search for "Firecrawl" in the MCP Store
+5. Click **Install**
+6. Enter your Firecrawl API key when prompted
+
+**Manual configuration:**
+
+Edit `~/.gemini/antigravity/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+**Remote server connection:**
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "serverUrl": "http://localhost:3000/mcp"
+    }
+  }
+}
+```
+
+#### Verification
+
+Restart Antigravity or reload the Agent pane, check MCP Servers list.
+
+</details>
+
+
+
+<details>
+<summary><b>Kiro</b></summary>
+
+Kiro IDE supports MCP servers through its UI or configuration.
+
+#### Installation
+
+1. Navigate to **Kiro > MCP Servers**
+2. Click the **+ Add** button
+3. Paste the configuration:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
+```
+
+4. Click **Save**
+
+#### Verification
+
+Check the MCP Server dropdown in the folder panel for Firecrawl tools.
+
+</details>
+
+<details>
+<summary><b>Kilo Code</b></summary>
+
+Kilo Code supports MCP servers via UI or project-level configuration.
+
+#### Installation
+
+**Via UI:**
+
+1. Open Kilo Code → Settings (top-right icon)
+2. Navigate to **Settings → MCP Servers**
+3. Click **Add Server**
+4. Enter the configuration details
+
+**Manual configuration:**
+
+Create `.kilocode/mcp.json` in your project:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      },
+      "disabled": false
+    }
+  }
+}
+```
+
+#### Verification
+
+Check Settings → MCP Server → Installed section for Firecrawl.
+
+</details>
+
+<details>
+<summary><b>Roo Code</b></summary>
+
+Roo Code is a VS Code extension with MCP support.
+
+#### Installation
+
+Add to your Roo Code MCP configuration file:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+
+Check the MCP server dropdown in Roo Code.
+
+</details>
+
+
+
+
+
+<details>
+<summary><b>ChatGPT (Web)</b></summary>
+
+ChatGPT supports MCP servers through Developer Mode (beta).
+
+#### Prerequisites
+
+- ChatGPT Pro, Plus, Team, Enterprise, or Edu plan
+- Developer Mode enabled
+
+#### Installation
+
+1. Go to: `Settings` → `Apps` → `Advanced settings` → Enable `Developer Mode`
+2. Create an App:
+   - **Name**: `Firecrawl`
+   - **Description**: `Web scraping and content extraction`
+   - **MCP Server URL**: `http://localhost:3000/mcp` (or remote URL)
+3. Accept security notice and complete authorization.
+
+#### Verification
+
+Start a new chat, click the plus icon, hover over `More`, select `Firecrawl` app.
+
+</details>
+
+<details>
+<summary><b>ChatGPT (Desktop)</b></summary>
+
+Same as web configuration; apps configured on web are automatically available in desktop app.
+
+#### Installation
+
+Configure on [chatgpt.com](https://chatgpt.com) as above.
+
+#### Verification
+
+Open desktop app; Firecrawl app should be available.
+
+</details>
+
+<details>
+<summary><b>Trae</b></summary>
+
+Trae is an AI-powered development environment.
+
+#### Installation
+
+Use the **Add manually** feature and paste:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+
+Check Settings → MCPs for Firecrawl tools.
+
+</details>
+
+<details>
+<summary><b>Cline</b></summary>
+
+Cline is a VS Code extension with MCP marketplace.
+
+#### Installation
+
+**Via Marketplace:**
+
+1. Open Cline → hamburger menu → **MCP Servers**
+2. Search for "Firecrawl" in the Marketplace tab
+3. Click **Install**
+
+**Manual configuration:**
+
+Edit configuration:
+
+```json
+{
+  "cline.mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+
+Check MCP Servers dropdown for Firecrawl.
+
+</details>
+
+<details>
+<summary><b>Augment Code</b></summary>
+
+Augment Code (AMP) is a VS Code extension.
+
+#### Installation
+
+**Using UI:**
+
+1. Click hamburger menu → **Settings**
+2. Navigate to **Tools** section
+3. Click **+ Add MCP**
+4. Enter command: `npx -y firecrawl-mcp`
+5. Name: `firecrawl-mcp`
+6. Click **Add**
+
+**Manual configuration:**
+
+Add to `settings.json`:
+
+```json
+{
+  "amp.mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+
+Restart VS Code; check AMP extension tools.
+
+</details>
+
+<details>
+<summary><b>Gemini CLI</b></summary>
+
+Gemini CLI is Google's command-line interface.
+
+#### Installation
+
+Edit `~/.gemini/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+
+Run `gemini` and use `/mcp list` command.
+
+</details>
+
+<details>
+<summary><b>Copilot Coding Agent</b></summary>
+
+GitHub Copilot Coding Agent supports MCP configuration.
+
+#### Installation
+
+Add to repository settings under **Settings > Copilot > Coding agent > MCP configuration**:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+
+Trigger Copilot Coding Agent; it should have Firecrawl tools.
+
+</details>
+
+<details>
+<summary><b>Copilot CLI</b></summary>
+
+GitHub Copilot CLI supports MCP servers.
+
+#### Installation
+
+Edit `~/.copilot/mcp-config.json`:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "type": "local",
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+
+Run Copilot CLI; MCP tools should be available.
+
+</details>
+
+<details>
+<summary><b>Amazon Q Developer CLI</b></summary>
+
+Amazon Q Developer CLI supports MCP servers.
+
+#### Installation
+
+Add to configuration file:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+
+Check CLI documentation for verification steps.
+
+</details>
+
+<details>
+<summary><b>Warp</b></summary>
+
+Warp is a modern terminal with AI.
+
+#### Installation
+
+1. Navigate to **Settings > AI > Manage MCP servers**
+2. Click **+ Add**
+3. Paste:
+
+```json
+{
+  "firecrawl-mcp": {
+    "command": "npx",
+    "args": ["-y", "firecrawl-mcp"],
+    "env": {
+      "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+    },
+    "working_directory": null,
+    "start_on_launch": true
+  }
+}
+```
+
+4. Click **Save**
+
+#### Verification
+
+In Warp's AI features, ask: "Use Firecrawl to scrape https://example.com"
+
+</details>
+
+<details>
+<summary><b>Amp</b></summary>
+
+Amp is a CLI tool for AI agents.
+
+#### Installation
+
+Run command:
+
+```bash
+amp mcp add firecrawl-mcp -- npx -y firecrawl-mcp
+```
+
+Set environment variable `FIRECRAWL_API_KEY` in your shell.
+
+#### Verification
+
+Check Amp MCP list.
+
+</details>
+
+<details>
+<summary><b>Zed</b></summary>
+
+Zed is a high-performance code editor.
+
+#### Installation
+
+Add to Zed `settings.json`:
+
+```json
+{
+  "context_servers": {
+    "firecrawl-mcp": {
+      "source": "custom",
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+
+Open Zed's AI assistant, ask for Firecrawl tools.
+
+</details>
+
+<details>
+<summary><b>JetBrains AI Assistant</b></summary>
+
+JetBrains AI Assistant works across IntelliJ IDEA, PyCharm, WebStorm, etc.
+
+#### Installation
+
+1. In JetBrains IDE, go to **Settings → Tools → AI Assistant → Model Context Protocol (MCP)**
+2. Click **+ Add**
+3. Click **Command** in top-left corner and select **As JSON**
+4. Add:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+5. Click **Apply**
+
+#### Verification
+
+Type `/` in AI chatbox; Firecrawl tools should appear.
+
+</details>
+
+<details>
+<summary><b>Qwen Code</b></summary>
+
+Qwen Code is an AI-powered IDE.
+
+#### Installation
+
+**Via CLI:**
+
+```bash
+qwen mcp add firecrawl-mcp npx -y firecrawl-mcp
+```
+
+**Manual configuration:**
+
+Edit `~/.qwen/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+
+Check MCP section in Qwen Code.
+
+</details>
+
+## Terminal & CLI Tools
+
+<details>
+<summary><b>Gemini CLI</b></summary>
+
+Already covered above.
+
+</details>
+
+<details>
+<summary><b>Kiro CLI</b></summary>
+
+Kiro CLI supports MCP servers.
+
+#### Installation
+
+Edit `~/.kiro/settings/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+
+Run `kiro-cli` and use `/mcp` command.
+
+</details>
+
+<details>
+<summary><b>Crush CLI</b></summary>
+
+Crush CLI supports MCP integration.
+
+#### Installation
+
+Edit `crush.json`:
+
+```json
+{
+  "mcp": {
+    "firecrawl-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+
+Open Crush CLI, navigate to MCP section.
+
+</details>
+
+<details>
+<summary><b>Warp</b></summary>
+
+Covered above.
+
+</details>
+
+<details>
+<summary><b>Amp</b></summary>
+
+Covered above.
+
+</details>
+
+## Automation & Workflow Platforms
+
+<details>
+<summary><b>n8n</b></summary>
+
+n8n requires HTTP transport mode.
+
+#### Installation
+
+Start Firecrawl MCP server in HTTP mode:
+
+```bash
+env HTTP_STREAMABLE_SERVER=true \
+  FIRECRAWL_API_KEY=fc-YOUR_API_KEY \
+  npx -y firecrawl-mcp
+```
+
+Server starts at `http://localhost:3000/mcp`.
+
+#### Usage
+
+In n8n workflow, add HTTP Request node or MCP connector node with endpoint `http://localhost:3000/mcp`.
+
+</details>
+
+## Alternative Runtimes
+
+<details>
+<summary><b>Bun Runtime</b></summary>
+
+Run with Bun instead of Node.js.
+
+#### Installation
+
+Configure MCP client with:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "bunx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+
+Same as standard installation.
+
+</details>
+
+<details>
+<summary><b>Deno Runtime</b></summary>
+
+Run with Deno.
+
+#### Installation
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "deno",
+      "args": [
+        "run",
+        "--allow-all",
+        "npm:firecrawl-mcp"
+      ],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Verification
+
+Same as standard.
+
+</details>
+
+## Advanced Deployments
+
+<details>
+<summary><b>Streamable HTTP (Local Server Mode)</b></summary>
+
+Run server using Streamable HTTP locally instead of stdio transport.
+
+```bash
+env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
+```
+
+Use the URL: `http://localhost:3000/mcp`
+
+</details>
+
+<details>
+<summary><b>Smithery (Package Manager)</b></summary>
+
+Install Firecrawl for Claude Desktop automatically via Smithery.
+
+```bash
+npx -y @smithery/cli install @mendableai/mcp-server-firecrawl --client claude
+```
+
+</details>
+
+<details>
+<summary><b>Docker</b></summary>
+
+Run Firecrawl MCP server in a Docker container.
+
+#### Dockerfile
+
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+RUN npm install -g firecrawl-mcp
+CMD ["firecrawl-mcp"]
+```
+
+#### Build and run
+
+```bash
+docker build -t firecrawl-mcp .
+docker run -e FIRECRAWL_API_KEY=YOUR_API_KEY -it firecrawl-mcp
+```
+
+#### MCP Client Configuration
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "FIRECRAWL_API_KEY=YOUR_API_KEY", "firecrawl-mcp"],
+      "transportType": "stdio"
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Windows</b></summary>
+
+On Windows, use `cmd` or PowerShell.
+
+#### Using cmd
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+#### Using PowerShell
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "powershell",
+      "args": ["-Command", "npx -y firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>LM Studio</b></summary>
+
+LM Studio is a desktop app for local LLMs.
+
+#### Installation
+
+1. Navigate to **Program** > **Install** > **Edit mcp.json**
+2. Add:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+3. Click **Save**
+
+#### Verification
+
+Check **Program** > **Integration** section.
+
+</details>
+
+<details>
+<summary><b>Visual Studio 2022</b></summary>
+
+Visual Studio 2022 supports MCP servers.
+
+#### Installation
+
+Add to configuration:
+
+```json
+{
+  "inputs": [],
+  "servers": {
+    "firecrawl": {
+      "type": "http",
+      "url": "http://localhost:3000/mcp"
+    }
+  }
+}
+```
+
+Or local server:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "firecrawl": {
+        "type": "stdio",
+        "command": "npx",
+        "args": ["-y", "firecrawl-mcp"],
+        "env": {
+          "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+        }
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Crush</b></summary>
+
+Crush is a CLI tool.
+
+#### Installation
+
+Add to `crush.json`:
+
+```json
+{
+  "$schema": "https://charm.land/crush.json",
+  "mcp": {
+    "firecrawl-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>BoltAI</b></summary>
+
+BoltAI is a desktop AI assistant.
+
+#### Installation
+
+Open Settings → Plugins, enter:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Rovo Dev CLI</b></summary>
+
+Rovo Dev CLI supports MCP.
+
+#### Installation
+
+Edit MCP config:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Zencoder</b></summary>
+
+Zencoder is an AI coding assistant.
+
+#### Installation
+
+1. Go to Zencoder menu (...)
+2. Select Agent tools
+3. Click Add custom MCP
+4. Add name and configuration:
+
+```json
+{
+  "command": "npx",
+  "args": ["-y", "firecrawl-mcp"],
+  "env": {
+    "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+  }
+}
+```
+
+5. Click Install
+
+</details>
+
+<details>
+<summary><b>Qodo Gen</b></summary>
+
+Qodo Gen is an AI coding agent.
+
+#### Installation
+
+Add configuration:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Perplexity Desktop</b></summary>
+
+Perplexity Desktop supports MCP servers.
+
+#### Installation
+
+1. Navigate `Perplexity` > `Settings` > `Connectors`
+2. Click `Add Connector` > `Advanced`
+3. Enter Server Name: `Firecrawl`
+4. Paste:
+
+```json
+{
+  "args": ["-y", "firecrawl-mcp"],
+  "command": "npx",
+  "env": {
+    "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+  }
+}
+```
+
+5. Click `Save`
+
+</details>
+
+<details>
+<summary><b>Factory</b></summary>
+
+Factory's droid CLI supports MCP.
+
+#### Installation
+
+**Remote server:**
+
+```bash
+droid mcp add firecrawl-mcp http://localhost:3000/mcp --type http
+```
+
+**Local server:**
+
+```bash
+droid mcp add firecrawl-mcp "npx -y firecrawl-mcp" --env FIRECRAWL_API_KEY=YOUR_API_KEY
+```
+
+</details>
+
+<details>
+<summary><b>Emdash</b></summary>
+
+Emdash is an orchestration layer for coding agents.
+
+**Note:** Emdash provides global toggle for MCP but does not modify agent config. Configure your coding agent separately.
+
+#### Installation
+
+Enable in Settings → MCP → "Enable Firecrawl MCP".
+
+</details>
+
+<details>
+<summary><b>Desktop Extension (MCP bundles)</b></summary>
+
+Install the Firecrawl MCP bundle file (`firecrawl.mcpb`) and add to your client.
+
+Refer to [MCP bundles docs](https://github.com/anthropics/mcpb#mcp-bundles-mcpb).
+
+</details>
+
 ## Configuration
+
+### Environment Variables
+
+- `FIRECRAWL_API_KEY`: Your Firecrawl API key (required for cloud API)
+- `FIRECRAWL_API_URL`: Custom API endpoint for self-hosted instances
+- `HTTP_STREAMABLE_SERVER`: Set to `true` to enable HTTP mode
+- `FIRECRAWL_RETRY_MAX_ATTEMPTS`, `FIRECRAWL_RETRY_INITIAL_DELAY`, etc. (optional)
+
+### Examples
+
+See main README for detailed configuration options.
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Server fails to start:** Ensure Node.js version 18+ is installed.
+2. **API key not recognized:** Verify the key starts with `fc-` and is correct.
+3. **MCP client timeout:** Increase startup timeout in client configuration.
+4. **Tools not appearing:** Restart the client after configuration changes.
+5. **HTTP mode not working:** Ensure `HTTP_STREAMABLE_SERVER=true` and port 3000 is free.
+
+### Getting Help
+
+- Visit [Firecrawl documentation](https://firecrawl.dev/docs)
+- Join the [Firecrawl Discord](https://discord.gg/firecrawl)
+- Open an issue on [GitHub](https://github.com/firecrawl/firecrawl-mcp-server/issues)
+
+---
+
+*This guide covers 40+ MCP-compatible environments. For the most up-to-date information, refer to the [Firecrawl MCP server README](https://github.com/firecrawl/firecrawl-mcp-server).*## Configuration
 
 ### Environment Variables
 
