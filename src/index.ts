@@ -436,7 +436,6 @@ ${
     const res = await client.scrape(String(url), {
       ...cleaned,
       origin: ORIGIN,
-      integration: ORIGIN,
     } as any);
     return asText(res);
   },
@@ -497,7 +496,6 @@ Map a website to discover all indexed URLs on the site.
     const res = await client.map(String(url), {
       ...cleaned,
       origin: ORIGIN,
-      integration: ORIGIN,
     } as any);
     return asText(res);
   },
@@ -597,7 +595,6 @@ The query also supports search operators, that you can use if needed to refine t
     const res = await client.search(query as string, {
       ...(cleaned as any),
       origin: ORIGIN,
-      integration: ORIGIN,
     });
     return asText(res);
   },
@@ -677,7 +674,6 @@ server.addTool({
     const res = await client.crawl(String(url), {
       ...(cleaned as any),
       origin: ORIGIN,
-      integration: ORIGIN,
     });
     return asText(res);
   },
@@ -774,7 +770,6 @@ Extract structured information from web pages using LLM capabilities. Supports b
       enableWebSearch: a.enableWebSearch as boolean | undefined,
       includeSubdomains: a.includeSubdomains as boolean | undefined,
       origin: ORIGIN,
-      integration: ORIGIN,
     });
     const res = await client.extract(extractBody as any);
     return asText(res);
@@ -871,7 +866,6 @@ Then poll with \`firecrawl_agent_status\` every 15-30 seconds for at least 2-3 m
     const res = await (client as any).startAgent({
       ...agentBody,
       origin: ORIGIN,
-      integration: ORIGIN,
     });
     return asText(res);
   },
