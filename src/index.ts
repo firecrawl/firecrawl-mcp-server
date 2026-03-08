@@ -606,8 +606,8 @@ server.addTool({
  Starts a crawl job on a website and extracts content from all pages.
  
  **Best for:** Extracting content from multiple related pages, when you need comprehensive coverage.
- **Not recommended for:** Extracting content from a single page (use scrape); when token limits are a concern (use map + batch_scrape); when you need fast results (crawling can be slow).
- **Warning:** Crawl responses can be very large and may exceed token limits. Limit the crawl depth and number of pages, or use map + batch_scrape for better control.
+ **Not recommended for:** Extracting content from a single page (use scrape); when token limits are a concern (use map + firecrawl_batch_scrape); when you need fast results (crawling can be slow).
+ **Warning:** Crawl responses can be very large and may exceed token limits. Limit the crawl depth and number of pages, or use map + firecrawl_batch_scrape for better control.
  **Common mistakes:** Setting limit or maxDiscoveryDepth too high (causes token overflow) or too low (causes missing pages); using crawl for a single page (use scrape instead). Using a /* wildcard is not recommended.
  **Prompt Example:** "Get all blog posts from the first two levels of example.com/blog."
  **Usage Example:**
@@ -702,6 +702,113 @@ Check the status of a crawl job.
   ): Promise<string> => {
     const client = getClient(session);
     const res = await client.getCrawlStatus((args as any).id as string);
+    return asText(res);
+  },
+});
+
+server.addTool({
+  name: 'firecrawl_batch_scrape',
+  description: `
+Start a batch scrape job for multiple URLs. This is more efficient than calling scrape repeatedly and gives you better control over large-scale scraping than crawl.
+
+**Best for:** Scraping a known list of URLs in parallel; large-scale scraping with controlled concurrency; when you've already used \`firecrawl_map\` to discover URLs and now want to scrape them.
+**Not recommended for:** Single page scraping (use \`firecrawl_scrape\`); discovering URLs on a site (use \`firecrawl_map\`); scraping all pages following links (use \`firecrawl_crawl\`).
+**Common workflow:** Use \`firecrawl_map\` to discover URLs, then \`firecrawl_batch_scrape\` to scrape them all at once.
+
+**Usage Example:**
+\`\`\`json
+{
+  "name": "firecrawl_batch_scrape",
+  "arguments": {
+    "urls": ["https://example.com/page1", "https://example.com/page2", "https://example.com/page3"],
+    "scrapeOptions": {
+      "formats": ["markdown"],
+      "onlyMainContent": true
+    }
+  }
+}
+\`\`\`
+**Returns:** Job ID and status URL for checking progress; use \`firecrawl_check_batch_scrape_status\` to poll for results.
+${
+  SAFE_MODE
+    ? '**Safe Mode:** Webhooks are disabled for security.'
+    : ''
+}
+`,
+  parameters: z.object({
+    urls: z.array(z.string().url()).min(1),
+    scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+    ...(SAFE_MODE
+      ? {}
+      : {
+          webhook: z.string().optional(),
+          webhookHeaders: z.record(z.string(), z.string()).optional(),
+        }),
+    ignoreInvalidURLs: z.boolean().optional(),
+    maxConcurrency: z.number().optional(),
+  }),
+  execute: async (
+    args: unknown,
+    { session, log }: { session?: SessionData; log: Logger }
+  ): Promise<string> => {
+    const client = getClient(session);
+    const a = args as Record<string, unknown>;
+    const urls = a.urls as string[];
+
+    const opts: Record<string, unknown> = {};
+    if (a.scrapeOptions) {
+      opts.options = transformScrapeParams(
+        a.scrapeOptions as Record<string, unknown>
+      );
+    }
+
+    const webhook = buildWebhook(a);
+    if (webhook) opts.webhook = webhook;
+
+    if (a.ignoreInvalidURLs != null) opts.ignoreInvalidURLs = a.ignoreInvalidURLs;
+    if (a.maxConcurrency != null) opts.maxConcurrency = a.maxConcurrency;
+
+    const cleaned = removeEmptyTopLevel(opts);
+    log.info('Starting batch scrape', { urlCount: urls.length });
+    const res = await client.startBatchScrape(urls, {
+      ...(cleaned as any),
+      origin: ORIGIN,
+    });
+    return asText(res);
+  },
+});
+
+server.addTool({
+  name: 'firecrawl_check_batch_scrape_status',
+  description: `
+Check the status of a batch scrape job and retrieve results.
+
+**Usage Example:**
+\`\`\`json
+{
+  "name": "firecrawl_check_batch_scrape_status",
+  "arguments": {
+    "id": "550e8400-e29b-41d4-a716-446655440000"
+  }
+}
+\`\`\`
+**Possible statuses:**
+- scraping: Job is still in progress - keep polling
+- completed: All URLs have been scraped - response includes the data
+- failed: An error occurred
+- cancelled: Job was cancelled
+
+**Returns:** Status, progress (completed/total), and scraped data (if available) of the batch scrape job.
+`,
+  parameters: z.object({ id: z.string() }),
+  execute: async (
+    args: unknown,
+    { session, log }: { session?: SessionData; log: Logger }
+  ): Promise<string> => {
+    const client = getClient(session);
+    const { id } = args as { id: string };
+    log.info('Checking batch scrape status', { id });
+    const res = await client.getBatchScrapeStatus(id);
     return asText(res);
   },
 });
