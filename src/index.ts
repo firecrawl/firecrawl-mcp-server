@@ -193,6 +193,9 @@ function buildFormatsArray(
     if (fmt === 'json') {
       const jsonOpts = args.jsonOptions as Record<string, unknown> | undefined;
       result.push({ type: 'json', ...jsonOpts });
+    } else if (fmt === 'query') {
+      const queryOpts = args.queryOptions as Record<string, unknown> | undefined;
+      result.push({ type: 'query', ...queryOpts });
     } else if (fmt === 'screenshot' && args.screenshotOptions) {
       const ssOpts = args.screenshotOptions as Record<string, unknown>;
       result.push({ type: 'screenshot', ...ssOpts });
@@ -245,6 +248,7 @@ function transformScrapeParams(
   if (parsers) out.parsers = parsers;
 
   delete out.jsonOptions;
+  delete out.queryOptions;
   delete out.screenshotOptions;
   delete out.pdfOptions;
 
@@ -265,6 +269,7 @@ const scrapeParamsSchema = z.object({
         'changeTracking',
         'branding',
         'json',
+        'query',
       ])
     )
     .optional(),
@@ -272,6 +277,11 @@ const scrapeParamsSchema = z.object({
     .object({
       prompt: z.string().optional(),
       schema: z.record(z.string(), z.any()).optional(),
+    })
+    .optional(),
+  queryOptions: z
+    .object({
+      prompt: z.string().max(10000),
     })
     .optional(),
   screenshotOptions: z
@@ -390,7 +400,18 @@ If JSON extraction returns empty, minimal, or just navigation content, the page 
   }
 }
 \`\`\`
-**Usage Example (markdown format - ONLY when full content genuinely needed):**
+
+**Prefer markdown format by default.** You can read and reason over the full page content directly — no need for an intermediate query step. Use markdown for questions about page content, factual lookups, and any task where you need to understand the page.
+
+**Use JSON format when user needs:**
+- Structured data with specific fields (extract all products with name, price, description)
+- Data in a specific schema for downstream processing
+
+**Use query format only when:**
+- The page is extremely long and you need a single targeted answer without processing the full content
+- You want a quick factual answer and don't need to retain the page content
+
+**Usage Example (markdown format - default for most tasks):**
 \`\`\`json
 {
   "name": "firecrawl_scrape",
