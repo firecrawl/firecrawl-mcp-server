@@ -9,7 +9,25 @@ dotenv.config({ debug: false, quiet: true });
 
 interface SessionData {
   firecrawlApiKey?: string;
+  apiKeyId?: string;
   [key: string]: unknown;
+}
+
+/**
+ * Extract API key ID from headers or path.
+ * Supports:
+ * - x-api-key-id header (for UUID-based routing)
+ * - x-firecrawl-key-id header (alternative)
+ */
+function extractApiKeyId(headers: IncomingHttpHeaders): string | undefined {
+  const headerKeyId = (headers['x-api-key-id'] ||
+    headers['x-firecrawl-key-id']) as string | string[] | undefined;
+
+  if (headerKeyId) {
+    return Array.isArray(headerKeyId) ? headerKeyId[0] : headerKeyId;
+  }
+
+  return undefined;
 }
 
 function extractApiKey(headers: IncomingHttpHeaders): string | undefined {
@@ -94,11 +112,24 @@ const server = new FastMCP<SessionData>({
   }): Promise<SessionData> => {
     if (process.env.CLOUD_SERVICE === 'true') {
       const apiKey = extractApiKey(request.headers);
+      const apiKeyId = extractApiKeyId(request.headers);
 
       if (!apiKey) {
         throw new Error('Firecrawl API key is required');
       }
-      return { firecrawlApiKey: apiKey };
+
+      // If API_KEY_ID is configured, validate that it matches
+      // This enables UUID-based routing with Bearer token auth
+      if (process.env.FIRECRAWL_API_KEY_ID) {
+        if (!apiKeyId) {
+          throw new Error('API key ID is required when using UUID-based routing');
+        }
+        if (apiKeyId !== process.env.FIRECRAWL_API_KEY_ID) {
+          throw new Error('Invalid API key ID');
+        }
+      }
+
+      return { firecrawlApiKey: apiKey, apiKeyId };
     } else {
       // For self-hosted instances, API key is optional if FIRECRAWL_API_URL is provided
       if (!process.env.FIRECRAWL_API_KEY && !process.env.FIRECRAWL_API_URL) {
