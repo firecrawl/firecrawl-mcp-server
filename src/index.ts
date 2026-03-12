@@ -358,7 +358,6 @@ If JSON extraction returns empty, minimal, or just navigation content, the page 
 2. **Try a different URL:** If the URL has a hash fragment (#section), try the base URL or look for a direct page URL
 3. **Use firecrawl_map to find the correct page:** Large documentation sites or SPAs often spread content across multiple URLs. Use \`firecrawl_map\` with a \`search\` parameter to discover the specific page containing your target content, then scrape that URL directly.
    Example: If scraping "https://docs.example.com/reference" fails to find webhook parameters, use \`firecrawl_map\` with \`{"url": "https://docs.example.com/reference", "search": "webhook"}\` to find URLs like "/reference/webhook-events", then scrape that specific page.
-4. **Use firecrawl_agent:** As a last resort for heavily dynamic pages where map+scrape still fails, use the agent which can autonomously navigate and research
 
 **Usage Example (JSON format - REQUIRED for specific data extraction):**
 \`\`\`json
@@ -450,7 +449,7 @@ Map a website to discover all indexed URLs on the site.
 **Not recommended for:** When you already know which specific URL you need (use scrape); when you need the content of the pages (use scrape after mapping).
 **Common mistakes:** Using crawl to discover URLs instead of map; jumping straight to firecrawl_agent when scrape fails instead of using map first to find the right page.
 
-**IMPORTANT - Use map before agent:** If \`firecrawl_scrape\` returns empty, minimal, or irrelevant content, use \`firecrawl_map\` with the \`search\` parameter to find the specific page URL containing your target content. This is faster and cheaper than using \`firecrawl_agent\`. Only use the agent as a last resort after map+scrape fails.
+**IMPORTANT - Use map when scrape fails:** If \`firecrawl_scrape\` returns empty, minimal, or irrelevant content, use \`firecrawl_map\` with the \`search\` parameter to find the specific page URL containing your target content, then scrape that URL directly.
 
 **Prompt Example:** "Find the webhook documentation page on this API docs site."
 **Usage Example (discover all URLs):**
@@ -772,141 +771,6 @@ Extract structured information from web pages using LLM capabilities. Supports b
       origin: ORIGIN,
     });
     const res = await client.extract(extractBody as any);
-    return asText(res);
-  },
-});
-
-server.addTool({
-  name: 'firecrawl_agent',
-  description: `
-Autonomous web research agent. This is a separate AI agent layer that independently browses the internet, searches for information, navigates through pages, and extracts structured data based on your query. You describe what you need, and the agent figures out where to find it.
-
-**How it works:** The agent performs web searches, follows links, reads pages, and gathers data autonomously. This runs **asynchronously** - it returns a job ID immediately, and you poll \`firecrawl_agent_status\` to check when complete and retrieve results.
-
-**IMPORTANT - Async workflow with patient polling:**
-1. Call \`firecrawl_agent\` with your prompt/schema → returns job ID immediately
-2. Poll \`firecrawl_agent_status\` with the job ID to check progress
-3. **Keep polling for at least 2-3 minutes** - agent research typically takes 1-5 minutes for complex queries
-4. Poll every 15-30 seconds until status is "completed" or "failed"
-5. Do NOT give up after just a few polling attempts - the agent needs time to research
-
-**Expected wait times:**
-- Simple queries with provided URLs: 30 seconds - 1 minute
-- Complex research across multiple sites: 2-5 minutes
-- Deep research tasks: 5+ minutes
-
-**Best for:** Complex research tasks where you don't know the exact URLs; multi-source data gathering; finding information scattered across the web; extracting data from JavaScript-heavy SPAs that fail with regular scrape.
-**Not recommended for:** Simple single-page scraping where you know the URL (use scrape with JSON format instead - faster and cheaper).
-
-**Arguments:**
-- prompt: Natural language description of the data you want (required, max 10,000 characters)
-- urls: Optional array of URLs to focus the agent on specific pages
-- schema: Optional JSON schema for structured output
-
-**Prompt Example:** "Find the founders of Firecrawl and their backgrounds"
-**Usage Example (start agent, then poll patiently for results):**
-\`\`\`json
-{
-  "name": "firecrawl_agent",
-  "arguments": {
-    "prompt": "Find the top 5 AI startups founded in 2024 and their funding amounts",
-    "schema": {
-      "type": "object",
-      "properties": {
-        "startups": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": { "type": "string" },
-              "funding": { "type": "string" },
-              "founded": { "type": "string" }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-\`\`\`
-Then poll with \`firecrawl_agent_status\` every 15-30 seconds for at least 2-3 minutes.
-
-**Usage Example (with URLs - agent focuses on specific pages):**
-\`\`\`json
-{
-  "name": "firecrawl_agent",
-  "arguments": {
-    "urls": ["https://docs.firecrawl.dev", "https://firecrawl.dev/pricing"],
-    "prompt": "Compare the features and pricing information from these pages"
-  }
-}
-\`\`\`
-**Returns:** Job ID for status checking. Use \`firecrawl_agent_status\` to poll for results.
-`,
-  parameters: z.object({
-    prompt: z.string().min(1).max(10000),
-    urls: z.array(z.string().url()).optional(),
-    schema: z.record(z.string(), z.any()).optional(),
-  }),
-  execute: async (
-    args: unknown,
-    { session, log }: { session?: SessionData; log: Logger }
-  ): Promise<string> => {
-    const client = getClient(session);
-    const a = args as Record<string, unknown>;
-    log.info('Starting agent', {
-      prompt: (a.prompt as string).substring(0, 100),
-      urlCount: Array.isArray(a.urls) ? a.urls.length : 0,
-    });
-    const agentBody = removeEmptyTopLevel({
-      prompt: a.prompt as string,
-      urls: a.urls as string[] | undefined,
-      schema: (a.schema as Record<string, unknown>) || undefined,
-    });
-    const res = await (client as any).startAgent({
-      ...agentBody,
-      origin: ORIGIN,
-    });
-    return asText(res);
-  },
-});
-
-server.addTool({
-  name: 'firecrawl_agent_status',
-  description: `
-Check the status of an agent job and retrieve results when complete. Use this to poll for results after starting an agent with \`firecrawl_agent\`.
-
-**IMPORTANT - Be patient with polling:**
-- Poll every 15-30 seconds
-- **Keep polling for at least 2-3 minutes** before considering the request failed
-- Complex research can take 5+ minutes - do not give up early
-- Only stop polling when status is "completed" or "failed"
-
-**Usage Example:**
-\`\`\`json
-{
-  "name": "firecrawl_agent_status",
-  "arguments": {
-    "id": "550e8400-e29b-41d4-a716-446655440000"
-  }
-}
-\`\`\`
-**Possible statuses:**
-- processing: Agent is still researching - keep polling, do not give up
-- completed: Research finished - response includes the extracted data
-- failed: An error occurred (only stop polling on this status)
-
-**Returns:** Status, progress, and results (if completed) of the agent job.
-`,
-  parameters: z.object({ id: z.string() }),
-  execute: async (
-    args: unknown,
-    { session, log }: { session?: SessionData; log: Logger }
-  ): Promise<string> => {
-    const client = getClient(session);
-    const { id } = args as { id: string };
-    log.info('Checking agent status', { id });
-    const res = await (client as any).getAgentStatus(id);
     return asText(res);
   },
 });
