@@ -400,33 +400,17 @@ If JSON extraction returns empty, minimal, or just navigation content, the page 
 }
 \`\`\`
 
-**Use query format when user asks:**
-- A direct question about page content (e.g., "What is the pricing?", "Does this API support webhooks?")
-- Simple factual lookups (e.g., "What languages are supported?")
-- Quick answers without needing structured data extraction
+**Prefer markdown format by default.** You can read and reason over the full page content directly — no need for an intermediate query step. Use markdown for questions about page content, factual lookups, and any task where you need to understand the page.
 
 **Use JSON format when user needs:**
 - Structured data with specific fields (extract all products with name, price, description)
 - Data in a specific schema for downstream processing
 
-**Use query format INSTEAD of JSON when:**
-- The user asks a yes/no or factual question — no schema needed
-- The answer is a single piece of information, not a structured dataset
+**Use query format only when:**
+- The page is extremely long and you need a single targeted answer without processing the full content
+- You want a quick factual answer and don't need to retain the page content
 
-**Usage Example (query format - for direct questions about page content):**
-\`\`\`json
-{
-  "name": "firecrawl_scrape",
-  "arguments": {
-    "url": "https://example.com/pricing",
-    "formats": ["query"],
-    "queryOptions": {
-      "prompt": "What is the enterprise plan price?"
-    }
-  }
-}
-\`\`\`
-**Usage Example (markdown format - ONLY when full content genuinely needed):**
+**Usage Example (markdown format - default for most tasks):**
 \`\`\`json
 {
   "name": "firecrawl_scrape",
