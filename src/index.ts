@@ -193,6 +193,9 @@ function buildFormatsArray(
     if (fmt === 'json') {
       const jsonOpts = args.jsonOptions as Record<string, unknown> | undefined;
       result.push({ type: 'json', ...jsonOpts });
+    } else if (fmt === 'query') {
+      const queryOpts = args.queryOptions as Record<string, unknown> | undefined;
+      result.push({ type: 'query', ...queryOpts });
     } else if (fmt === 'screenshot' && args.screenshotOptions) {
       const ssOpts = args.screenshotOptions as Record<string, unknown>;
       result.push({ type: 'screenshot', ...ssOpts });
@@ -245,6 +248,7 @@ function transformScrapeParams(
   if (parsers) out.parsers = parsers;
 
   delete out.jsonOptions;
+  delete out.queryOptions;
   delete out.screenshotOptions;
   delete out.pdfOptions;
 
@@ -265,6 +269,7 @@ const scrapeParamsSchema = z.object({
         'changeTracking',
         'branding',
         'json',
+        'query',
       ])
     )
     .optional(),
@@ -272,6 +277,11 @@ const scrapeParamsSchema = z.object({
     .object({
       prompt: z.string().optional(),
       schema: z.record(z.string(), z.any()).optional(),
+    })
+    .optional(),
+  queryOptions: z
+    .object({
+      prompt: z.string().max(10000),
     })
     .optional(),
   screenshotOptions: z
@@ -385,6 +395,33 @@ If JSON extraction returns empty, minimal, or just navigation content, the page 
           }
         }
       }
+    }
+  }
+}
+\`\`\`
+
+**Use query format when user asks:**
+- A direct question about page content (e.g., "What is the pricing?", "Does this API support webhooks?")
+- Simple factual lookups (e.g., "What languages are supported?")
+- Quick answers without needing structured data extraction
+
+**Use JSON format when user needs:**
+- Structured data with specific fields (extract all products with name, price, description)
+- Data in a specific schema for downstream processing
+
+**Use query format INSTEAD of JSON when:**
+- The user asks a yes/no or factual question — no schema needed
+- The answer is a single piece of information, not a structured dataset
+
+**Usage Example (query format - for direct questions about page content):**
+\`\`\`json
+{
+  "name": "firecrawl_scrape",
+  "arguments": {
+    "url": "https://example.com/pricing",
+    "formats": ["query"],
+    "queryOptions": {
+      "prompt": "What is the enterprise plan price?"
     }
   }
 }
