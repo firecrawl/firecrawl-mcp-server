@@ -800,7 +800,7 @@ Extract structured information from web pages using LLM capabilities. Supports b
 server.addTool({
   name: 'firecrawl_agent',
   description: `
-Autonomous web research agent. This is a separate AI agent layer that independently browses the internet, searches for information, navigates through pages, and extracts structured data based on your query. You describe what you need, and the agent figures out where to find it.
+Autonomous research agent for complex, multi-source research where you don't know where the answer lives. This is a separate AI layer that searches the web, follows links across multiple sites, and synthesizes findings — all asynchronously.
 
 **How it works:** The agent performs web searches, follows links, reads pages, and gathers data autonomously. This runs **asynchronously** - it returns a job ID immediately, and you poll \`firecrawl_agent_status\` to check when complete and retrieve results.
 
@@ -816,8 +816,12 @@ Autonomous web research agent. This is a separate AI agent layer that independen
 - Complex research across multiple sites: 2-5 minutes
 - Deep research tasks: 5+ minutes
 
-**Best for:** Complex research tasks where you don't know the exact URLs; multi-source data gathering; finding information scattered across the web; extracting data from JavaScript-heavy SPAs that fail with regular scrape.
-**Not recommended for:** Simple single-page scraping where you know the URL (use scrape with JSON format instead - faster and cheaper).
+**Best for:** Complex research across multiple unknown sources; synthesizing information scattered across the web; tasks where you genuinely don't know where to look.
+**Not recommended for:**
+- Single-page extraction when you have a URL (use firecrawl_scrape, faster and cheaper)
+- Web search (use firecrawl_search first)
+- Interactive page tasks like clicking, filling forms, login, or navigating JS-heavy SPAs (use firecrawl_browser_create + firecrawl_browser_execute)
+- Extracting specific data from a known page (use firecrawl_scrape with JSON format)
 
 **Arguments:**
 - prompt: Natural language description of the data you want (required, max 10,000 characters)
