@@ -165,6 +165,31 @@ function asText(data: unknown): string {
   return JSON.stringify(data, null, 2);
 }
 
+/**
+ * Encode `@` characters in the **path** portion of a URL so that downstream
+ * HTTP clients and API servers do not misinterpret them as the userinfo
+ * separator (RFC 3986 §3.2.1).  `@` is technically a valid sub-delimiter in
+ * path segments, but some URL parsers treat it as the userinfo/host boundary,
+ * which corrupts the hostname and causes requests to hang until they time out.
+ *
+ * Only the pathname is modified; the authority (userinfo@host) is left intact.
+ *
+ * @see https://github.com/mendableai/firecrawl-mcp-server/issues/135
+ */
+function sanitizeUrl(raw: string): string {
+  try {
+    const parsed = new URL(raw);
+    if (parsed.pathname.includes('@')) {
+      parsed.pathname = parsed.pathname.replace(/@/g, '%40');
+    }
+    return parsed.href;
+  } catch {
+    // If the URL cannot be parsed, return it unchanged and let the
+    // downstream validator / API surface the error.
+    return raw;
+  }
+}
+
 // scrape tool (v2 semantics, minimal args)
 // Centralized scrape params (used by scrape, and referenced in search/crawl scrapeOptions)
 
@@ -453,8 +478,9 @@ ${
     const client = getClient(session);
     const transformed = transformScrapeParams(options as Record<string, unknown>);
     const cleaned = removeEmptyTopLevel(transformed);
-    log.info('Scraping URL', { url: String(url) });
-    const res = await client.scrape(String(url), {
+    const safeUrl = sanitizeUrl(String(url));
+    log.info('Scraping URL', { url: safeUrl });
+    const res = await client.scrape(safeUrl, {
       ...cleaned,
       origin: ORIGIN,
     } as any);
@@ -513,8 +539,9 @@ Map a website to discover all indexed URLs on the site.
     >;
     const client = getClient(session);
     const cleaned = removeEmptyTopLevel(options as Record<string, unknown>);
-    log.info('Mapping URL', { url: String(url) });
-    const res = await client.map(String(url), {
+    const safeUrl = sanitizeUrl(String(url));
+    log.info('Mapping URL', { url: safeUrl });
+    const res = await client.map(safeUrl, {
       ...cleaned,
       origin: ORIGIN,
     } as any);
@@ -691,8 +718,9 @@ server.addTool({
     delete opts.webhookHeaders;
 
     const cleaned = removeEmptyTopLevel(opts);
-    log.info('Starting crawl', { url: String(url) });
-    const res = await client.crawl(String(url), {
+    const safeUrl = sanitizeUrl(String(url));
+    log.info('Starting crawl', { url: safeUrl });
+    const res = await client.crawl(safeUrl, {
       ...(cleaned as any),
       origin: ORIGIN,
     });
@@ -783,8 +811,9 @@ Extract structured information from web pages using LLM capabilities. Supports b
     log.info('Extracting from URLs', {
       count: Array.isArray(a.urls) ? a.urls.length : 0,
     });
+    const safeUrls = (a.urls as string[]).map(sanitizeUrl);
     const extractBody = removeEmptyTopLevel({
-      urls: a.urls as string[],
+      urls: safeUrls,
       prompt: a.prompt as string | undefined,
       schema: (a.schema as Record<string, unknown>) || undefined,
       allowExternalLinks: a.allowExternalLinks as boolean | undefined,
@@ -879,9 +908,12 @@ Then poll with \`firecrawl_agent_status\` every 15-30 seconds for at least 2-3 m
       prompt: (a.prompt as string).substring(0, 100),
       urlCount: Array.isArray(a.urls) ? a.urls.length : 0,
     });
+    const safeUrls = Array.isArray(a.urls)
+      ? (a.urls as string[]).map(sanitizeUrl)
+      : undefined;
     const agentBody = removeEmptyTopLevel({
       prompt: a.prompt as string,
-      urls: a.urls as string[] | undefined,
+      urls: safeUrls,
       schema: (a.schema as Record<string, unknown>) || undefined,
     });
     const res = await (client as any).startAgent({
