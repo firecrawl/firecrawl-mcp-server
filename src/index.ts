@@ -590,6 +590,8 @@ The query also supports search operators, that you can use if needed to refine t
     limit: z.number().optional(),
     tbs: z.string().optional(),
     filter: z.string().optional(),
+    lang: z.string().optional(),
+    country: z.string().optional(),
     location: z.string().optional(),
     sources: z
       .array(z.object({ type: z.enum(['web', 'images', 'news']) }))
