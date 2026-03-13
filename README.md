@@ -29,13 +29,13 @@ A Model Context Protocol (MCP) server implementation that integrates with [Firec
 ### Running with npx
 
 ```bash
-env FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
+env FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y mcp-server-firecrawl
 ```
 
 ### Manual Installation
 
 ```bash
-npm install -g firecrawl-mcp
+npm install -g mcp-server-firecrawl
 ```
 
 ### Running on Cursor
@@ -71,11 +71,11 @@ To configure Firecrawl MCP in Cursor **v0.45.6**
 2. Go to Features > MCP Servers
 3. Click "+ Add New MCP Server"
 4. Enter the following:
-   - Name: "firecrawl-mcp" (or your preferred name)
+   - Name: "mcp-server-firecrawl" (or your preferred name)
    - Type: "command"
-   - Command: `env FIRECRAWL_API_KEY=your-api-key npx -y firecrawl-mcp`
+   - Command: `env FIRECRAWL_API_KEY=your-api-key npx -y mcp-server-firecrawl`
 
-> If you are using Windows and are running into issues, try `cmd /c "set FIRECRAWL_API_KEY=your-api-key && npx -y firecrawl-mcp"`
+> If you are using Windows and are running into issues, try `cmd /c "set FIRECRAWL_API_KEY=your-api-key && npx -y mcp-server-firecrawl"`
 
 Replace `your-api-key` with your Firecrawl API key. If you don't have one yet, you can create an account and get it from https://www.firecrawl.dev/app/api-keys
 
@@ -90,7 +90,7 @@ Add this to your `./codeium/windsurf/model_config.json`:
   "mcpServers": {
     "mcp-server-firecrawl": {
       "command": "npx",
-      "args": ["-y", "firecrawl-mcp"],
+      "args": ["-y", "mcp-server-firecrawl"],
       "env": {
         "FIRECRAWL_API_KEY": "YOUR_API_KEY"
       }
@@ -242,7 +242,7 @@ Add this to your `claude_desktop_config.json`:
   "mcpServers": {
     "mcp-server-firecrawl": {
       "command": "npx",
-      "args": ["-y", "firecrawl-mcp"],
+      "args": ["-y", "mcp-server-firecrawl"],
       "env": {
         "FIRECRAWL_API_KEY": "YOUR_API_KEY_HERE",
 
