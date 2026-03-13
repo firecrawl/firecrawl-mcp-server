@@ -737,10 +737,23 @@ Extract structured information from web pages using LLM capabilities. Supports b
 **Arguments:**
 - urls: Array of URLs to extract information from
 - prompt: Custom prompt for the LLM extraction
+- systemPrompt: Custom system prompt to guide extraction behavior
 - schema: JSON schema for structured data extraction
 - allowExternalLinks: Allow extraction from external links
 - enableWebSearch: Enable web search for additional context
 - includeSubdomains: Include subdomains in extraction
+- ignoreSitemap: Skip sitemap when discovering URLs
+- showSources: Include source URLs in the response
+- ignoreInvalidURLs: Skip invalid/blocked URLs instead of failing
+- limit: Maximum number of URLs to process
+- timeout: Custom timeout in milliseconds (minimum 1000)
+- scrapeOptions: Scrape options applied to each extracted page
+- agent: Agent options for extraction (model selection)
+${
+  SAFE_MODE
+    ? ''
+    : '- webhook: Webhook URL for async notifications\n- webhookHeaders: Custom headers for webhook requests'
+}
 **Prompt Example:** "Extract the product name, price, and description from these product pages."
 **Usage Example:**
 \`\`\`json
@@ -749,6 +762,7 @@ Extract structured information from web pages using LLM capabilities. Supports b
   "arguments": {
     "urls": ["https://example.com/page1", "https://example.com/page2"],
     "prompt": "Extract product information including name, price, and description",
+    "systemPrompt": "You are a precise data extraction assistant. Only extract explicitly stated information.",
     "schema": {
       "type": "object",
       "properties": {
@@ -760,19 +774,41 @@ Extract structured information from web pages using LLM capabilities. Supports b
     },
     "allowExternalLinks": false,
     "enableWebSearch": false,
-    "includeSubdomains": false
+    "includeSubdomains": false,
+    "showSources": true
   }
 }
 \`\`\`
 **Returns:** Extracted structured data as defined by your schema.
+${
+  SAFE_MODE
+    ? '**Safe Mode:** Webhooks are disabled for security.'
+    : ''
+}
 `,
   parameters: z.object({
     urls: z.array(z.string()),
     prompt: z.string().optional(),
+    systemPrompt: z.string().optional(),
     schema: z.record(z.string(), z.any()).optional(),
     allowExternalLinks: z.boolean().optional(),
     enableWebSearch: z.boolean().optional(),
     includeSubdomains: z.boolean().optional(),
+    ignoreSitemap: z.boolean().optional(),
+    showSources: z.boolean().optional(),
+    ignoreInvalidURLs: z.boolean().optional(),
+    limit: z.number().optional(),
+    timeout: z.number().min(1000).optional(),
+    scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+    agent: z.object({
+      model: z.enum(['FIRE-1']),
+    }).optional(),
+    ...(SAFE_MODE
+      ? {}
+      : {
+          webhook: z.string().optional(),
+          webhookHeaders: z.record(z.string(), z.string()).optional(),
+        }),
   }),
   execute: async (
     args: unknown,
@@ -783,13 +819,34 @@ Extract structured information from web pages using LLM capabilities. Supports b
     log.info('Extracting from URLs', {
       count: Array.isArray(a.urls) ? a.urls.length : 0,
     });
+
+    const opts = { ...a } as Record<string, unknown>;
+    if (opts.scrapeOptions) {
+      opts.scrapeOptions = transformScrapeParams(
+        opts.scrapeOptions as Record<string, unknown>
+      );
+    }
+
+    const webhook = buildWebhook(opts);
+    if (webhook) opts.webhook = webhook;
+    delete opts.webhookHeaders;
+
     const extractBody = removeEmptyTopLevel({
-      urls: a.urls as string[],
-      prompt: a.prompt as string | undefined,
-      schema: (a.schema as Record<string, unknown>) || undefined,
-      allowExternalLinks: a.allowExternalLinks as boolean | undefined,
-      enableWebSearch: a.enableWebSearch as boolean | undefined,
-      includeSubdomains: a.includeSubdomains as boolean | undefined,
+      urls: opts.urls as string[],
+      prompt: opts.prompt as string | undefined,
+      systemPrompt: opts.systemPrompt as string | undefined,
+      schema: (opts.schema as Record<string, unknown>) || undefined,
+      allowExternalLinks: opts.allowExternalLinks as boolean | undefined,
+      enableWebSearch: opts.enableWebSearch as boolean | undefined,
+      includeSubdomains: opts.includeSubdomains as boolean | undefined,
+      ignoreSitemap: opts.ignoreSitemap as boolean | undefined,
+      showSources: opts.showSources as boolean | undefined,
+      ignoreInvalidURLs: opts.ignoreInvalidURLs as boolean | undefined,
+      limit: opts.limit as number | undefined,
+      timeout: opts.timeout as number | undefined,
+      scrapeOptions: opts.scrapeOptions as Record<string, unknown> | undefined,
+      agent: opts.agent as { model: string } | undefined,
+      webhook: opts.webhook as string | Record<string, unknown> | undefined,
       origin: ORIGIN,
     });
     const res = await client.extract(extractBody as any);
