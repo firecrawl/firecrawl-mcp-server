@@ -259,6 +259,376 @@ Add this to your `claude_desktop_config.json`:
 }
 ```
 
+## MCP-Compatible Environment Setup Guides (Context7 Coverage)
+
+The following guides provide a consistent setup flow for popular MCP-compatible environments. For each environment:
+
+- **Prerequisites**: Node.js 18+ and a valid `FIRECRAWL_API_KEY`
+- **Install command**: `npx -y firecrawl-mcp`
+- **Verification**: Confirm the Firecrawl MCP server appears and tools (e.g. `firecrawl_scrape`) are available
+
+> Reusable MCP server block (use in each environment's MCP config):
+
+```json
+{
+  "command": "npx",
+  "args": ["-y", "firecrawl-mcp"],
+  "env": {
+    "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+  }
+}
+```
+
+### 1) Claude Desktop
+
+**Prerequisites**
+- Claude Desktop installed
+- Access to `claude_desktop_config.json`
+
+**Installation**
+1. Open Claude Desktop config file.
+2. Add/update `mcpServers.firecrawl` with the reusable server block above.
+3. Save and restart Claude Desktop.
+
+**Verification**
+- Open Claude Desktop and confirm Firecrawl tools are available.
+- Run a quick scrape request (for example, scrape `https://example.com`).
+
+### 2) Claude Code
+
+**Prerequisites**
+- Claude Code installed
+- MCP configuration enabled
+
+**Installation**
+1. Open Claude Code MCP settings.
+2. Add a server named `firecrawl` using the reusable server block.
+3. Restart Claude Code session.
+
+**Verification**
+- Confirm `firecrawl` appears in MCP server list.
+- Trigger a tool call such as `firecrawl_search`.
+
+### 3) Cursor
+
+**Prerequisites**
+- Cursor with MCP support enabled
+
+**Installation**
+1. Open Cursor Settings → Features → MCP Servers.
+2. Add a new MCP server named `firecrawl`.
+3. Paste the reusable server block and save.
+
+**Verification**
+- Refresh MCP server list and confirm Firecrawl is connected.
+- Ask Cursor Agent to scrape a page using Firecrawl MCP.
+
+### 4) Windsurf
+
+**Prerequisites**
+- Windsurf installed
+- Access to MCP server configuration
+
+**Installation**
+1. Open Windsurf MCP configuration.
+2. Add a `firecrawl` server with the reusable block.
+3. Save and restart Windsurf.
+
+**Verification**
+- Confirm Firecrawl appears in available MCP servers.
+- Execute a small search/scrape request.
+
+### 5) VS Code
+
+**Prerequisites**
+- VS Code with MCP support
+
+**Installation**
+1. Open User Settings JSON or workspace `.vscode/mcp.json`.
+2. Add `firecrawl` under `mcp.servers` (or `servers`) with the reusable block.
+3. Reload VS Code window.
+
+**Verification**
+- Confirm Firecrawl is listed in MCP server view.
+- Run one Firecrawl MCP tool invocation.
+
+### 6) Cline
+
+**Prerequisites**
+- Cline extension installed
+- MCP settings available
+
+**Installation**
+1. Open Cline MCP server settings.
+2. Add `firecrawl` using command `npx -y firecrawl-mcp` and env `FIRECRAWL_API_KEY`.
+3. Save and restart Cline session.
+
+**Verification**
+- Firecrawl tools are visible in Cline tool list.
+- Run a sample scrape.
+
+### 7) Roo Code
+
+**Prerequisites**
+- Roo Code installed with MCP support
+
+**Installation**
+1. Open Roo Code MCP server config.
+2. Register `firecrawl` with the reusable block.
+3. Restart the tool/extension.
+
+**Verification**
+- Ensure Firecrawl is connected.
+- Run `firecrawl_map` or `firecrawl_scrape`.
+
+### 8) Continue
+
+**Prerequisites**
+- Continue extension with MCP support
+
+**Installation**
+1. Open Continue config (`config.json` / MCP settings).
+2. Add `firecrawl` MCP server with the reusable block.
+3. Reload Continue.
+
+**Verification**
+- Firecrawl appears as an MCP tool provider.
+- Execute one Firecrawl tool call.
+
+### 9) Zed
+
+**Prerequisites**
+- Zed with MCP integration enabled
+
+**Installation**
+1. Open Zed settings for MCP servers.
+2. Add a `firecrawl` server using the reusable block.
+3. Restart Zed.
+
+**Verification**
+- Firecrawl server status is healthy.
+- Invoke a Firecrawl tool.
+
+### 10) OpenAI Codex CLI
+
+**Prerequisites**
+- Codex CLI installed
+- MCP support enabled
+
+**Installation**
+1. Open Codex MCP configuration file.
+2. Add `firecrawl` server with the reusable block.
+3. Restart Codex CLI session.
+
+**Verification**
+- Firecrawl MCP tools are listed.
+- Run a scrape/search tool invocation.
+
+### 11) Gemini CLI
+
+**Prerequisites**
+- Gemini CLI installed with MCP support
+
+**Installation**
+1. Open Gemini CLI MCP config.
+2. Add `firecrawl` server using the reusable block.
+3. Restart Gemini CLI.
+
+**Verification**
+- Firecrawl server loads successfully.
+- Perform a quick scrape call.
+
+### 12) GitHub Copilot Coding Agent
+
+**Prerequisites**
+- Copilot agent environment with MCP support
+
+**Installation**
+1. Open Copilot MCP/tool configuration.
+2. Add `firecrawl` with command `npx -y firecrawl-mcp` and API key env.
+3. Restart the agent session.
+
+**Verification**
+- Firecrawl tools are discoverable by the agent.
+- Run a test scrape request.
+
+### 13) GitHub Copilot CLI
+
+**Prerequisites**
+- Copilot CLI with MCP support
+
+**Installation**
+1. Edit Copilot CLI MCP config.
+2. Add `firecrawl` using the reusable block.
+3. Restart CLI process.
+
+**Verification**
+- Firecrawl tools are available from CLI workflows.
+- Execute one tool call.
+
+### 14) Amazon Q Developer CLI
+
+**Prerequisites**
+- Amazon Q Developer CLI with MCP support
+
+**Installation**
+1. Open Q CLI MCP configuration.
+2. Add `firecrawl` server via the reusable block.
+3. Restart Q CLI.
+
+**Verification**
+- Firecrawl appears in tool list.
+- Run a sample Firecrawl action.
+
+### 15) Warp
+
+**Prerequisites**
+- Warp with MCP/tool integrations enabled
+
+**Installation**
+1. Open Warp MCP/integrations settings.
+2. Add `firecrawl` server with `npx -y firecrawl-mcp` and env key.
+3. Save and restart Warp session.
+
+**Verification**
+- Firecrawl tools are visible.
+- Run a simple scrape from Warp agent context.
+
+### 16) Kiro
+
+**Prerequisites**
+- Kiro with MCP support enabled
+
+**Installation**
+1. Open Kiro MCP settings.
+2. Add `firecrawl` using the reusable block.
+3. Restart Kiro.
+
+**Verification**
+- Firecrawl is shown as connected.
+- Invoke `firecrawl_search`.
+
+### 17) Kilo Code
+
+**Prerequisites**
+- Kilo Code MCP support enabled
+
+**Installation**
+1. Open Kilo Code MCP configuration.
+2. Add server `firecrawl` with command/env as shown above.
+3. Save and restart.
+
+**Verification**
+- Server appears online.
+- Execute one tool call.
+
+### 18) Trae
+
+**Prerequisites**
+- Trae MCP integration enabled
+
+**Installation**
+1. Open Trae MCP configuration.
+2. Add `firecrawl` with the reusable server block.
+3. Restart Trae.
+
+**Verification**
+- Firecrawl server is listed.
+- Run a test scrape request.
+
+### 19) Augment Code
+
+**Prerequisites**
+- Augment Code with MCP support
+
+**Installation**
+1. Open Augment MCP settings.
+2. Register a server named `firecrawl` using `npx -y firecrawl-mcp`.
+3. Save and reload Augment.
+
+**Verification**
+- Firecrawl tools appear in tool picker.
+- Execute a scrape or search action.
+
+### 20) JetBrains AI Assistant
+
+**Prerequisites**
+- JetBrains IDE with AI Assistant and MCP support
+
+**Installation**
+1. Open AI Assistant MCP/tool settings.
+2. Add `firecrawl` server with the reusable block.
+3. Restart IDE.
+
+**Verification**
+- Firecrawl is available to AI Assistant.
+- Run one Firecrawl request.
+
+### 21) OpenCode
+
+**Prerequisites**
+- OpenCode MCP support enabled
+
+**Installation**
+1. Open OpenCode MCP config.
+2. Add `firecrawl` using the reusable block.
+3. Restart OpenCode.
+
+**Verification**
+- Firecrawl server is loaded and tools are callable.
+
+### 22) Docker-based MCP Host
+
+**Prerequisites**
+- Docker installed
+
+**Installation**
+1. Launch an MCP host/container that supports external MCP servers.
+2. Configure `firecrawl` to run with command `npx -y firecrawl-mcp` and `FIRECRAWL_API_KEY` env.
+3. Restart the host container/service.
+
+**Verification**
+- Check host logs for successful Firecrawl MCP startup.
+- Run one tool call through the MCP host.
+
+### 23) Bun Runtime-based Setup
+
+**Prerequisites**
+- Bun installed
+
+**Installation**
+1. Configure your MCP client to execute the same NPX command (or equivalent Bun invocation) for Firecrawl MCP.
+2. Set `FIRECRAWL_API_KEY` in environment variables.
+3. Restart MCP client.
+
+**Verification**
+- Confirm server boots and tools are discoverable.
+
+### 24) Deno Runtime-based Setup
+
+**Prerequisites**
+- Deno installed
+
+**Installation**
+1. Configure your MCP client with the Firecrawl server command and env as above.
+2. Save configuration and restart client.
+
+**Verification**
+- Firecrawl tools appear and execute successfully.
+
+### Troubleshooting (All Environments)
+
+- Ensure Node.js is available on your `PATH` (`node -v`, `npx -v`).
+- Validate API key is set correctly (no extra quotes/spaces).
+- Restart the client after config changes.
+- If startup fails, run directly in terminal:
+
+```bash
+env FIRECRAWL_API_KEY=YOUR_API_KEY npx -y firecrawl-mcp
+```
+
+If this command works but your client does not, the issue is usually client config path/JSON shape.
+
 ### System Configuration
 
 The server includes several configurable parameters that can be set via environment variables. Here are the default values if not configured:
