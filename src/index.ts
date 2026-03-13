@@ -817,7 +817,11 @@ Autonomous web research agent. This is a separate AI agent layer that independen
 - Deep research tasks: 5+ minutes
 
 **Best for:** Complex research tasks where you don't know the exact URLs; multi-source data gathering; finding information scattered across the web; extracting data from JavaScript-heavy SPAs that fail with regular scrape.
-**Not recommended for:** Simple single-page scraping where you know the URL (use scrape with JSON format instead - faster and cheaper).
+**Not recommended for:**
+- Single-page extraction when you have a URL (use firecrawl_scrape, faster and cheaper)
+- Web search (use firecrawl_search first)
+- Interactive page tasks like clicking, filling forms, login, or navigating JS-heavy SPAs (use firecrawl_browser_create + firecrawl_browser_execute)
+- Extracting specific data from a known page (use firecrawl_scrape with JSON format)
 
 **Arguments:**
 - prompt: Natural language description of the data you want (required, max 10,000 characters)
