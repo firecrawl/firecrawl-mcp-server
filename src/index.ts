@@ -334,6 +334,12 @@ const scrapeParamsSchema = z.object({
   zeroDataRetention: z.boolean().optional(),
   maxAge: z.number().optional(),
   proxy: z.enum(['basic', 'stealth', 'enhanced', 'auto']).optional(),
+  profile: z
+    .object({
+      name: z.string(),
+      saveChanges: z.boolean().optional(),
+    })
+    .optional(),
 });
 
 server.addTool({
