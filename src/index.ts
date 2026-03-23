@@ -826,7 +826,7 @@ Autonomous web research agent. This is a separate AI agent layer that independen
 **Not recommended for:**
 - Single-page extraction when you have a URL (use firecrawl_scrape, faster and cheaper)
 - Web search (use firecrawl_search first)
-- Interactive page tasks like clicking, filling forms, login, or navigating JS-heavy SPAs (use firecrawl_browser_create + firecrawl_browser_execute)
+- Interactive page tasks like clicking, filling forms, login, or navigating JS-heavy SPAs (use firecrawl_scrape + firecrawl_interact)
 - Extracting specific data from a known page (use firecrawl_scrape with JSON format)
 
 **Arguments:**
@@ -942,14 +942,13 @@ Check the status of an agent job and retrieve results when complete. Use this to
   },
 });
 
-// Browser session tools
+// Browser session tools (deprecated — prefer firecrawl_scrape + firecrawl_interact)
 server.addTool({
   name: 'firecrawl_browser_create',
   description: `
-Create a browser session for code execution via CDP (Chrome DevTools Protocol).
+**DEPRECATED — prefer firecrawl_scrape + firecrawl_interact instead.** Interact lets you scrape a page and then click, fill forms, and navigate without managing sessions manually.
 
-**Best for:** Running code (Python/JS) that interacts with a live browser page, multi-step browser automation, sessions with profiles that survive across multiple tool calls.
-**Not recommended for:** Simple page scraping (use firecrawl_scrape instead).
+Create a browser session for code execution via CDP (Chrome DevTools Protocol).
 
 **Arguments:**
 - ttl: Total session lifetime in seconds (30-3600, optional)
@@ -996,9 +995,9 @@ if (!SAFE_MODE) {
   server.addTool({
     name: 'firecrawl_browser_execute',
     description: `
-Execute code in a browser session. Supports agent-browser commands (bash), Python, or JavaScript.
+**DEPRECATED — prefer firecrawl_scrape + firecrawl_interact instead.** Interact lets you scrape a page and then click, fill forms, and navigate without managing sessions manually.
 
-**Best for:** Browser automation, navigating pages, clicking elements, extracting data, multi-step browser workflows.
+Execute code in a browser session. Supports agent-browser commands (bash), Python, or JavaScript.
 **Requires:** An active browser session (create one with firecrawl_browser_create first).
 
 **Arguments:**
@@ -1073,6 +1072,8 @@ Execute code in a browser session. Supports agent-browser commands (bash), Pytho
 server.addTool({
   name: 'firecrawl_browser_delete',
   description: `
+**DEPRECATED — prefer firecrawl_scrape + firecrawl_interact instead.**
+
 Destroy a browser session.
 
 **Usage Example:**
@@ -1104,6 +1105,8 @@ Destroy a browser session.
 server.addTool({
   name: 'firecrawl_browser_list',
   description: `
+**DEPRECATED — prefer firecrawl_scrape + firecrawl_interact instead.**
+
 List browser sessions, optionally filtered by status.
 
 **Usage Example:**
