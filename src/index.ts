@@ -334,6 +334,12 @@ const scrapeParamsSchema = z.object({
   zeroDataRetention: z.boolean().optional(),
   maxAge: z.number().optional(),
   proxy: z.enum(['basic', 'stealth', 'enhanced', 'auto']).optional(),
+  profile: z
+    .object({
+      name: z.string(),
+      saveChanges: z.boolean().optional(),
+    })
+    .optional(),
 });
 
 server.addTool({
@@ -820,7 +826,7 @@ Autonomous web research agent. This is a separate AI agent layer that independen
 **Not recommended for:**
 - Single-page extraction when you have a URL (use firecrawl_scrape, faster and cheaper)
 - Web search (use firecrawl_search first)
-- Interactive page tasks like clicking, filling forms, login, or navigating JS-heavy SPAs (use firecrawl_browser_create + firecrawl_browser_execute)
+- Interactive page tasks like clicking, filling forms, login, or navigating JS-heavy SPAs (use firecrawl_scrape + firecrawl_interact)
 - Extracting specific data from a known page (use firecrawl_scrape with JSON format)
 
 **Arguments:**
@@ -936,14 +942,13 @@ Check the status of an agent job and retrieve results when complete. Use this to
   },
 });
 
-// Browser session tools
+// Browser session tools (deprecated — prefer firecrawl_scrape + firecrawl_interact)
 server.addTool({
   name: 'firecrawl_browser_create',
   description: `
-Create a browser session for code execution via CDP (Chrome DevTools Protocol).
+**DEPRECATED — prefer firecrawl_scrape + firecrawl_interact instead.** Interact lets you scrape a page and then click, fill forms, and navigate without managing sessions manually.
 
-**Best for:** Running code (Python/JS) that interacts with a live browser page, multi-step browser automation, sessions with profiles that survive across multiple tool calls.
-**Not recommended for:** Simple page scraping (use firecrawl_scrape instead).
+Create a browser session for code execution via CDP (Chrome DevTools Protocol).
 
 **Arguments:**
 - ttl: Total session lifetime in seconds (30-3600, optional)
@@ -990,9 +995,9 @@ if (!SAFE_MODE) {
   server.addTool({
     name: 'firecrawl_browser_execute',
     description: `
-Execute code in a browser session. Supports agent-browser commands (bash), Python, or JavaScript.
+**DEPRECATED — prefer firecrawl_scrape + firecrawl_interact instead.** Interact lets you scrape a page and then click, fill forms, and navigate without managing sessions manually.
 
-**Best for:** Browser automation, navigating pages, clicking elements, extracting data, multi-step browser workflows.
+Execute code in a browser session. Supports agent-browser commands (bash), Python, or JavaScript.
 **Requires:** An active browser session (create one with firecrawl_browser_create first).
 
 **Arguments:**
@@ -1067,6 +1072,8 @@ Execute code in a browser session. Supports agent-browser commands (bash), Pytho
 server.addTool({
   name: 'firecrawl_browser_delete',
   description: `
+**DEPRECATED — prefer firecrawl_scrape + firecrawl_interact instead.**
+
 Destroy a browser session.
 
 **Usage Example:**
@@ -1098,6 +1105,8 @@ Destroy a browser session.
 server.addTool({
   name: 'firecrawl_browser_list',
   description: `
+**DEPRECATED — prefer firecrawl_scrape + firecrawl_interact instead.**
+
 List browser sessions, optionally filtered by status.
 
 **Usage Example:**
@@ -1122,6 +1131,109 @@ List browser sessions, optionally filtered by status.
     const { status } = args as { status?: 'active' | 'destroyed' };
     log.info('Listing browser sessions', { status });
     const res = await client.listBrowsers({ status });
+    return asText(res);
+  },
+});
+
+// Interact tools (scrape-bound browser sessions)
+server.addTool({
+  name: 'firecrawl_interact',
+  description: `
+Interact with a previously scraped page in a live browser session. Scrape a page first with firecrawl_scrape, then use the returned scrapeId to click buttons, fill forms, extract dynamic content, or navigate deeper.
+
+**Best for:** Multi-step workflows on a single page — searching a site, clicking through results, filling forms, extracting data that requires interaction.
+**Requires:** A scrapeId from a previous firecrawl_scrape call (found in the metadata of the scrape response).
+
+**Arguments:**
+- scrapeId: The scrape job ID from a previous scrape (required)
+- prompt: Natural language instruction describing the action to take (use this OR code)
+- code: Code to execute in the browser session (use this OR prompt)
+- language: "bash", "python", or "node" (optional, defaults to "node", only used with code)
+- timeout: Execution timeout in seconds, 1-300 (optional, defaults to 30)
+
+**Usage Example (prompt):**
+\`\`\`json
+{
+  "name": "firecrawl_interact",
+  "arguments": {
+    "scrapeId": "scrape-id-from-previous-scrape",
+    "prompt": "Click on the first product and tell me its price"
+  }
+}
+\`\`\`
+
+**Usage Example (code):**
+\`\`\`json
+{
+  "name": "firecrawl_interact",
+  "arguments": {
+    "scrapeId": "scrape-id-from-previous-scrape",
+    "code": "agent-browser click @e5",
+    "language": "bash"
+  }
+}
+\`\`\`
+**Returns:** Execution result including output, stdout, stderr, exit code, and live view URLs.
+`,
+  parameters: z.object({
+    scrapeId: z.string(),
+    prompt: z.string().optional(),
+    code: z.string().optional(),
+    language: z.enum(['bash', 'python', 'node']).optional(),
+    timeout: z.number().min(1).max(300).optional(),
+  }).refine(data => data.code || data.prompt, {
+    message: "Either 'code' or 'prompt' must be provided.",
+  }),
+  execute: async (
+    args: unknown,
+    { session, log }: { session?: SessionData; log: Logger }
+  ): Promise<string> => {
+    const client = getClient(session);
+    const { scrapeId, prompt, code, language, timeout } = args as {
+      scrapeId: string;
+      prompt?: string;
+      code?: string;
+      language?: 'bash' | 'python' | 'node';
+      timeout?: number;
+    };
+    log.info('Interacting with scraped page', { scrapeId });
+    const interactArgs: Record<string, unknown> = { origin: ORIGIN };
+    if (prompt) interactArgs.prompt = prompt;
+    if (code) interactArgs.code = code;
+    if (language) interactArgs.language = language;
+    if (timeout != null) interactArgs.timeout = timeout;
+    const res = await client.interact(scrapeId, interactArgs as any);
+    return asText(res);
+  },
+});
+
+server.addTool({
+  name: 'firecrawl_interact_stop',
+  description: `
+Stop an interact session for a scraped page. Call this when you are done interacting to free resources.
+
+**Usage Example:**
+\`\`\`json
+{
+  "name": "firecrawl_interact_stop",
+  "arguments": {
+    "scrapeId": "scrape-id-here"
+  }
+}
+\`\`\`
+**Returns:** Success confirmation.
+`,
+  parameters: z.object({
+    scrapeId: z.string(),
+  }),
+  execute: async (
+    args: unknown,
+    { session, log }: { session?: SessionData; log: Logger }
+  ): Promise<string> => {
+    const client = getClient(session);
+    const { scrapeId } = args as { scrapeId: string };
+    log.info('Stopping interact session', { scrapeId });
+    const res = await client.stopInteraction(scrapeId);
     return asText(res);
   },
 });
