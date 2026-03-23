@@ -1126,6 +1126,109 @@ List browser sessions, optionally filtered by status.
   },
 });
 
+// Interact tools (scrape-bound browser sessions)
+server.addTool({
+  name: 'firecrawl_interact',
+  description: `
+Interact with a previously scraped page in a live browser session. Scrape a page first with firecrawl_scrape, then use the returned scrapeId to click buttons, fill forms, extract dynamic content, or navigate deeper.
+
+**Best for:** Multi-step workflows on a single page — searching a site, clicking through results, filling forms, extracting data that requires interaction.
+**Requires:** A scrapeId from a previous firecrawl_scrape call (found in the metadata of the scrape response).
+
+**Arguments:**
+- scrapeId: The scrape job ID from a previous scrape (required)
+- prompt: Natural language instruction describing the action to take (use this OR code)
+- code: Code to execute in the browser session (use this OR prompt)
+- language: "bash", "python", or "node" (optional, defaults to "node", only used with code)
+- timeout: Execution timeout in seconds, 1-300 (optional, defaults to 30)
+
+**Usage Example (prompt):**
+\`\`\`json
+{
+  "name": "firecrawl_interact",
+  "arguments": {
+    "scrapeId": "scrape-id-from-previous-scrape",
+    "prompt": "Click on the first product and tell me its price"
+  }
+}
+\`\`\`
+
+**Usage Example (code):**
+\`\`\`json
+{
+  "name": "firecrawl_interact",
+  "arguments": {
+    "scrapeId": "scrape-id-from-previous-scrape",
+    "code": "agent-browser click @e5",
+    "language": "bash"
+  }
+}
+\`\`\`
+**Returns:** Execution result including output, stdout, stderr, exit code, and live view URLs.
+`,
+  parameters: z.object({
+    scrapeId: z.string(),
+    prompt: z.string().optional(),
+    code: z.string().optional(),
+    language: z.enum(['bash', 'python', 'node']).optional(),
+    timeout: z.number().min(1).max(300).optional(),
+  }).refine(data => data.code || data.prompt, {
+    message: "Either 'code' or 'prompt' must be provided.",
+  }),
+  execute: async (
+    args: unknown,
+    { session, log }: { session?: SessionData; log: Logger }
+  ): Promise<string> => {
+    const client = getClient(session);
+    const { scrapeId, prompt, code, language, timeout } = args as {
+      scrapeId: string;
+      prompt?: string;
+      code?: string;
+      language?: 'bash' | 'python' | 'node';
+      timeout?: number;
+    };
+    log.info('Interacting with scraped page', { scrapeId });
+    const interactArgs: Record<string, unknown> = { origin: ORIGIN };
+    if (prompt) interactArgs.prompt = prompt;
+    if (code) interactArgs.code = code;
+    if (language) interactArgs.language = language;
+    if (timeout != null) interactArgs.timeout = timeout;
+    const res = await client.interact(scrapeId, interactArgs as any);
+    return asText(res);
+  },
+});
+
+server.addTool({
+  name: 'firecrawl_interact_stop',
+  description: `
+Stop an interact session for a scraped page. Call this when you are done interacting to free resources.
+
+**Usage Example:**
+\`\`\`json
+{
+  "name": "firecrawl_interact_stop",
+  "arguments": {
+    "scrapeId": "scrape-id-here"
+  }
+}
+\`\`\`
+**Returns:** Success confirmation.
+`,
+  parameters: z.object({
+    scrapeId: z.string(),
+  }),
+  execute: async (
+    args: unknown,
+    { session, log }: { session?: SessionData; log: Logger }
+  ): Promise<string> => {
+    const client = getClient(session);
+    const { scrapeId } = args as { scrapeId: string };
+    log.info('Stopping interact session', { scrapeId });
+    const res = await client.stopInteraction(scrapeId);
+    return asText(res);
+  },
+});
+
 const PORT = Number(process.env.PORT || 3000);
 const HOST =
   process.env.CLOUD_SERVICE === 'true'
