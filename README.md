@@ -317,19 +317,21 @@ Use this guide to select the right tool for your task:
 - **If you want to search the web for info:** use **search**
 - **If you need complex research across multiple unknown sources:** use **agent**
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
-- **If you need interactive browser automation** (click, type, navigate): use **browser**
+- **If you need interactive browser automation** (click, type, navigate): use **scrape** + **interact**
+- **If you need a raw CDP browser session** (advanced): use **browser** (deprecated)
 
 ### Quick Reference Table
 
 | Tool         | Best for                            | Returns                    |
 | ------------ | ----------------------------------- | -------------------------- |
 | scrape       | Single page content                 | JSON (preferred) or markdown |
+| interact     | Interact with a scraped page        | Execution result           |
 | batch_scrape | Multiple known URLs                 | JSON (preferred) or markdown[] |
 | map          | Discovering URLs on a site          | URL[]                      |
 | crawl        | Multi-page extraction (with limits) | markdown/html[]            |
 | search       | Web search for info                 | results[]                  |
 | agent        | Complex multi-source research       | JSON (structured data)     |
-| browser      | Interactive multi-step automation    | Session with live browser  |
+| browser      | Interactive multi-step automation (deprecated) | Session with live browser  |
 
 ### Format Selection Guide
 
@@ -816,16 +818,11 @@ Check the status of an agent job and retrieve results when complete. Use this to
 - `completed`: Research finished - response includes the extracted data
 - `failed`: An error occurred
 
-### 11. Browser Create (`firecrawl_browser_create`)
+### 11. Browser Create (`firecrawl_browser_create`) — Deprecated
+
+> **Deprecated:** Prefer `firecrawl_scrape` + `firecrawl_interact` instead. Interact lets you scrape a page and then click, fill forms, and navigate without managing sessions manually.
 
 Create a cloud browser session for interactive automation.
-
-**Best for:**
-
-- Multi-step browser automation (navigate, click, fill forms, extract data)
-- Interactive workflows that require maintaining state across actions
-- Testing and debugging web pages in a live browser
-- Saving and reusing browser state with profiles
 
 **Arguments:**
 
@@ -852,7 +849,9 @@ Create a cloud browser session for interactive automation.
 
 - Session ID, CDP URL, and live view URL
 
-### 12. Browser Execute (`firecrawl_browser_execute`)
+### 12. Browser Execute (`firecrawl_browser_execute`) — Deprecated
+
+> **Deprecated:** Prefer `firecrawl_scrape` + `firecrawl_interact` instead.
 
 Execute code in a browser session. Supports agent-browser commands (bash), Python, or JavaScript.
 
@@ -894,7 +893,9 @@ Execute code in a browser session. Supports agent-browser commands (bash), Pytho
 }
 ```
 
-### 13. Browser List (`firecrawl_browser_list`)
+### 13. Browser List (`firecrawl_browser_list`) — Deprecated
+
+> **Deprecated:** Prefer `firecrawl_scrape` + `firecrawl_interact` instead.
 
 List browser sessions, optionally filtered by status.
 
@@ -907,7 +908,9 @@ List browser sessions, optionally filtered by status.
 }
 ```
 
-### 14. Browser Delete (`firecrawl_browser_delete`)
+### 14. Browser Delete (`firecrawl_browser_delete`) — Deprecated
+
+> **Deprecated:** Prefer `firecrawl_scrape` + `firecrawl_interact` instead.
 
 Destroy a browser session.
 
