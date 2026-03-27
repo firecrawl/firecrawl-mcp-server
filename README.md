@@ -26,6 +26,8 @@ A Model Context Protocol (MCP) server implementation that integrates with [Firec
 
 ## Installation
 
+> **Looking for installation guides for your specific environment?** See [INSTALLATION.md](./INSTALLATION.md) for detailed setup instructions for **23 MCP-compatible clients** including Claude Desktop, Cursor, Windsurf, Cline, VS Code (Copilot), Continue, Zed, Claude Code, Goose, Roo Code, and many more.
+
 ### Running with npx
 
 ```bash
