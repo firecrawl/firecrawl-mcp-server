@@ -186,6 +186,30 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
   - Example: `https://firecrawl.your-domain.com`
   - If not provided, the cloud API will be used (requires API key)
 
+#### Secure Authentication (Recommended for Production)
+
+For enhanced security, you can use Bearer token authentication instead of embedding API keys in URLs:
+
+- `FIRECRAWL_API_KEY_ID` (Optional): API key identifier (UUID) for secure routing
+  - When set, requests must include the API key ID via `x-api-key-id` header
+  - Enables UUID-based routing without exposing API keys in URLs
+  - Use with Bearer token in Authorization header for secure authentication
+
+**Example secure request:**
+
+```bash
+# Instead of: https://mcp.firecrawl.dev/{API_KEY}/v2/mcp
+# Use Bearer token authentication:
+curl -X POST https://mcp.firecrawl.dev/v2/mcp \
+  -H "Authorization: Bearer YOUR_FIRECRAWL_API_KEY" \
+  -H "x-api-key-id: YOUR_UUID"
+```
+
+This approach keeps your API key secure by:
+1. Not exposing it in URL paths (which may be logged by proxies/load balancers)
+2. Using Bearer token authentication via the Authorization header
+3. Optionally using UUID-based routing with `x-api-key-id`
+
 #### Optional Configuration
 
 ##### Retry Configuration
