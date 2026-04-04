@@ -1,0 +1,24 @@
+{
+  "name": "firecrawl-mcp",
+  "version": "0.1.0",
+  "description": "Powerful web scraping and search from Codex via MCP",
+  "author": {
+    "name": "firecrawl",
+    "url": "https://github.com/firecrawl/firecrawl-mcp-server"
+  },
+  "homepage": "https://github.com/firecrawl/firecrawl-mcp-server",
+  "repository": "https://github.com/firecrawl/firecrawl-mcp-server",
+  "keywords": [
+    "mcp",
+    "codex"
+  ],
+  "mcpServers": "./.mcp.json",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Firecrawl MCP",
+    "shortDescription": "Powerful web scraping and search from Codex via MCP",
+    "longDescription": "Official Firecrawl MCP Server. Adds powerful web scraping and search to Codex and any LLM client.",
+    "category": "Web Scraping",
+    "websiteURL": "https://github.com/firecrawl/firecrawl-mcp-server"
+  }
+}
