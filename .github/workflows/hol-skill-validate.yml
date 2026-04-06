@@ -1,33 +1,16 @@
-name: Validate
-
+name: HOL Skill Validate
 on:
   push:
-    branches: [main, hol-skill-validate]
+    branches: [main, master]
   pull_request:
-    branches: [main]
-
 jobs:
-  validate:
+  validate-skill:
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Validate skill package
+        uses: hashgraph-online/skill-publish@c182a4aa4dba68fb7f3c01be4ca560dfb759ae9e # v1
         with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run linter
-        run: npm run lint || true
-
-      - name: Run type check
-        run: npm run typecheck || true
-
-      - name: Run tests
-        run: npm test
+          skill-dir: .
