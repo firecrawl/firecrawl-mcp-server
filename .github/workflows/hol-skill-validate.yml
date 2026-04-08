@@ -3,15 +3,16 @@ on:
   push:
     branches: [main, master]
   pull_request:
+permissions:
+  contents: read
+  id-token: none
 jobs:
   validate-skill:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Validate skill package
-        uses: hashgraph-online/skill-publish@8f3c91d7d4cde7b104549e5f0cccdbb4cd7ee58d # v1 # v1
+        uses: hashgraph-online/skill-publish@8f3c91d7d4cde7b104549e5f0cccdbb4cd7ee58d # v1
         with:
           skill-dir: .
           mode: validate
