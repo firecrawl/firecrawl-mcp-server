@@ -1256,7 +1256,11 @@ if (
     httpStream: {
       port: PORT,
       host: HOST,
-      stateless: true,
+      // Stateless mode is the safe default for serverless / horizontally
+      // scaled deployments. Clients built on the official
+      // `modelcontextprotocol/go-sdk` (stateful by design) require
+      // session-tracking mode; set `FASTMCP_STATELESS=false` to opt in.
+      stateless: process.env.FASTMCP_STATELESS !== 'false',
     },
   };
 } else {
