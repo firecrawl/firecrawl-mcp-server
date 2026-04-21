@@ -659,7 +659,7 @@ server.addTool({
  }
  `,
   parameters: z.object({
-    url: z.string(),
+    url: z.string().url(),
     prompt: z.string().optional(),
     excludePaths: z.array(z.string()).optional(),
     includePaths: z.array(z.string()).optional(),
