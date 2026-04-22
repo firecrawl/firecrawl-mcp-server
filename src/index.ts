@@ -773,7 +773,7 @@ Extract structured information from web pages using LLM capabilities. Supports b
 **Returns:** Extracted structured data as defined by your schema.
 `,
   parameters: z.object({
-    urls: z.array(z.string()),
+    urls: z.array(z.string().url()),
     prompt: z.string().optional(),
     schema: z.record(z.string(), z.any()).optional(),
     allowExternalLinks: z.boolean().optional(),
