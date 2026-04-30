@@ -499,6 +499,7 @@ Search the web and optionally extract content from search results. This is the m
 **Common mistakes:** Using crawl or map for open-ended questions (use search instead).
 **Prompt Example:** "Find the latest research papers on AI published in 2023."
 **Sources:** web, images, news, default to web unless needed images or news.
+**Domain filters:** Use includeDomains to restrict results to specific domains, or excludeDomains to remove domains. Do not use both in the same request. Domains must be hostnames only, without protocol or path.
 **Usage Example:**
 \`\`\`json
 {
@@ -508,6 +509,7 @@ Search the web and optionally extract content from search results. This is the m
     "limit": 5,
     "lang": "en",
     "country": "us",
+    "excludeDomains": ["example.com"],
     "sources": [
       "web",
       "images",
@@ -544,6 +546,22 @@ Search the web and optionally extract content from search results. This is the m
       location: {
         type: 'string',
         description: 'Location parameter for search results',
+      },
+      includeDomains: {
+        type: 'array',
+        description:
+          'Domains to include in search results. Cannot be used with excludeDomains. Domains must be hostnames only, without protocol or path.',
+        items: {
+          type: 'string',
+        },
+      },
+      excludeDomains: {
+        type: 'array',
+        description:
+          'Domains to exclude from search results. Cannot be used with includeDomains. Domains must be hostnames only, without protocol or path.',
+        items: {
+          type: 'string',
+        },
       },
       sources: {
         type: 'array',

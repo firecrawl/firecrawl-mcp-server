@@ -53,6 +53,35 @@ function removeEmptyTopLevel<T extends Record<string, any>>(
   return out;
 }
 
+const searchDomainSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(
+    /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/,
+    'Domain must be a valid hostname without protocol or path'
+  );
+
+function buildSearchQueryWithDomains(
+  query: string,
+  includeDomains?: string[],
+  excludeDomains?: string[]
+): string {
+  if (includeDomains?.length) {
+    return `${query} (${includeDomains
+      .map((domain) => `site:${domain}`)
+      .join(' OR ')})`;
+  }
+
+  if (excludeDomains?.length) {
+    return `${query} ${excludeDomains
+      .map((domain) => `-site:${domain}`)
+      .join(' ')}`;
+  }
+
+  return query;
+}
+
 class ConsoleLogger implements Logger {
   private shouldLog =
     process.env.CLOUD_SERVICE === 'true' ||
@@ -575,6 +604,7 @@ The query also supports search operators, that you can use if needed to refine t
 **Common mistakes:** Using crawl or map for open-ended questions (use search instead).
 **Prompt Example:** "Find the latest research papers on AI published in 2023."
 **Sources:** web, images, news, default to web unless needed images or news.
+**Domain filters:** Use includeDomains to restrict results to specific domains, or excludeDomains to remove domains. Do not use both in the same request. Domains must be hostnames only, without protocol or path.
 **Scrape Options:** Only use scrapeOptions when you think it is absolutely necessary. When you do so default to a lower limit to avoid timeouts, 5 or lower.
 **Optimal Workflow:** Search first using firecrawl_search without formats, then after fetching the results, use the scrape tool to get the content of the relevantpage(s) that you want to scrape
 
@@ -585,6 +615,7 @@ The query also supports search operators, that you can use if needed to refine t
   "arguments": {
     "query": "top AI companies",
     "limit": 5,
+    "includeDomains": ["example.com"],
     "sources": [
       { "type": "web" }
     ]
@@ -614,18 +645,28 @@ The query also supports search operators, that you can use if needed to refine t
 \`\`\`
 **Returns:** Array of search results (with optional scraped content).
 `,
-  parameters: z.object({
-    query: z.string().min(1),
-    limit: z.number().optional(),
-    tbs: z.string().optional(),
-    filter: z.string().optional(),
-    location: z.string().optional(),
-    sources: z
-      .array(z.object({ type: z.enum(['web', 'images', 'news']) }))
-      .optional(),
-    scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
-    enterprise: z.array(z.enum(['default', 'anon', 'zdr'])).optional(),
-  }),
+  parameters: z
+    .object({
+      query: z.string().min(1),
+      limit: z.number().optional(),
+      tbs: z.string().optional(),
+      filter: z.string().optional(),
+      location: z.string().optional(),
+      includeDomains: z.array(searchDomainSchema).optional(),
+      excludeDomains: z.array(searchDomainSchema).optional(),
+      sources: z
+        .array(z.object({ type: z.enum(['web', 'images', 'news']) }))
+        .optional(),
+      scrapeOptions: scrapeParamsSchema
+        .omit({ url: true })
+        .partial()
+        .optional(),
+      enterprise: z.array(z.enum(['default', 'anon', 'zdr'])).optional(),
+    })
+    .refine(
+      (args) => !(args.includeDomains?.length && args.excludeDomains?.length),
+      'includeDomains and excludeDomains cannot both be specified'
+    ),
   execute: async (
     args: unknown,
     { session, log }: { session?: SessionData; log: Logger }
@@ -634,6 +675,11 @@ The query also supports search operators, that you can use if needed to refine t
     const { query, ...opts } = args as Record<string, unknown>;
 
     const searchOpts = { ...opts } as Record<string, unknown>;
+    const includeDomains = searchOpts.includeDomains as string[] | undefined;
+    const excludeDomains = searchOpts.excludeDomains as string[] | undefined;
+    delete searchOpts.includeDomains;
+    delete searchOpts.excludeDomains;
+
     if (searchOpts.scrapeOptions) {
       searchOpts.scrapeOptions = transformScrapeParams(
         searchOpts.scrapeOptions as Record<string, unknown>
@@ -641,8 +687,13 @@ The query also supports search operators, that you can use if needed to refine t
     }
 
     const cleaned = removeEmptyTopLevel(searchOpts);
-    log.info('Searching', { query: String(query) });
-    const res = await client.search(query as string, {
+    const searchQuery = buildSearchQueryWithDomains(
+      query as string,
+      includeDomains,
+      excludeDomains
+    );
+    log.info('Searching', { query: searchQuery });
+    const res = await client.search(searchQuery, {
       ...(cleaned as any),
       origin: ORIGIN,
     });
