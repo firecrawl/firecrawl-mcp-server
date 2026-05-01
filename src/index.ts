@@ -301,6 +301,7 @@ const scrapeParamsSchema = z.object({
         'branding',
         'json',
         'query',
+        'audio',
       ])
     )
     .optional(),
