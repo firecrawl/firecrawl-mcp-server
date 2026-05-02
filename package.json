@@ -34,6 +34,15 @@
     "typescript": "^5.9.2",
     "zod": "^4.1.5"
   },
+  "pnpm": {
+    "overrides": {
+      "@modelcontextprotocol/sdk": "1.26.0",
+      "file-type": "21.3.2",
+      "follow-redirects": "1.16.0",
+      "path-to-regexp": "8.4.0",
+      "qs": "6.14.2"
+    }
+  },
   "engines": {
     "node": ">=18.0.0"
   },
