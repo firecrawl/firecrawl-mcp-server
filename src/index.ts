@@ -57,8 +57,10 @@ const searchDomainSchema = z
   .string()
   .trim()
   .toLowerCase()
+  .min(1)
+  .max(253)
   .regex(
-    /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/,
+    /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/,
     'Domain must be a valid hostname without protocol or path'
   );
 
