@@ -53,6 +53,10 @@ function removeEmptyTopLevel<T extends Record<string, any>>(
   return out;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 const searchDomainSchema = z
   .string()
   .trim()
@@ -61,6 +65,16 @@ const searchDomainSchema = z
     /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/,
     'Domain must be a valid hostname without protocol or path'
   );
+
+const searchSourceSchema = z.union([
+  z.enum(['web', 'images', 'news']),
+  z.object({ type: z.enum(['web', 'images', 'news']) }),
+]);
+
+const searchCategorySchema = z.union([
+  z.enum(['github', 'research', 'pdf']),
+  z.object({ type: z.enum(['github', 'research', 'pdf']) }),
+]);
 
 function buildSearchQueryWithDomains(
   query: string,
@@ -150,18 +164,23 @@ const server = new FastMCP<SessionData>({
   },
 });
 
-function createClient(apiKey?: string): FirecrawlApp {
-  const config: any = {
-    ...(process.env.FIRECRAWL_API_URL && {
-      apiUrl: process.env.FIRECRAWL_API_URL,
-    }),
-  };
+function createClientConfig(apiKey?: string): Record<string, string> {
+  const config: Record<string, string> = {};
+
+  if (process.env.FIRECRAWL_API_URL) {
+    config.apiUrl = process.env.FIRECRAWL_API_URL;
+  }
 
   // Only add apiKey if it's provided (required for cloud, optional for self-hosted)
   if (apiKey) {
     config.apiKey = apiKey;
   }
 
+  return config;
+}
+
+function createClient(apiKey?: string): FirecrawlApp {
+  const config = createClientConfig(apiKey);
   return new FirecrawlApp(config);
 }
 
@@ -170,13 +189,13 @@ const ORIGIN = 'mcp-fastmcp';
 // Safe mode is enabled by default for cloud service to comply with ChatGPT safety requirements
 const SAFE_MODE = process.env.CLOUD_SERVICE === 'true';
 
-function getClient(session?: SessionData): FirecrawlApp {
+function getAuthorizedApiKey(session?: SessionData): string | undefined {
   // For cloud service, API key is required
   if (process.env.CLOUD_SERVICE === 'true') {
     if (!session || !session.firecrawlApiKey) {
       throw new Error('Unauthorized');
     }
-    return createClient(session.firecrawlApiKey);
+    return session.firecrawlApiKey;
   }
 
   // For self-hosted instances, API key is optional if FIRECRAWL_API_URL is provided
@@ -189,7 +208,63 @@ function getClient(session?: SessionData): FirecrawlApp {
     );
   }
 
-  return createClient(session?.firecrawlApiKey);
+  return session?.firecrawlApiKey;
+}
+
+function getClient(session?: SessionData): FirecrawlApp {
+  return createClient(getAuthorizedApiKey(session));
+}
+
+async function searchFirecrawl(
+  session: SessionData | undefined,
+  query: string,
+  searchOpts: Record<string, unknown>
+): Promise<unknown> {
+  const config = createClientConfig(getAuthorizedApiKey(session));
+  const apiUrl = (config.apiUrl ?? 'https://api.firecrawl.dev').replace(
+    /\/$/,
+    ''
+  );
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (config.apiKey) {
+    headers.Authorization = `Bearer ${config.apiKey}`;
+  }
+
+  const response = await fetch(`${apiUrl}/v2/search`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(
+      removeEmptyTopLevel({
+        query,
+        ...searchOpts,
+        origin: ORIGIN,
+      })
+    ),
+  });
+  const responseText = await response.text();
+  let payload: unknown = {};
+
+  try {
+    payload = responseText ? JSON.parse(responseText) : {};
+  } catch {
+    payload = { error: responseText };
+  }
+
+  if (
+    !response.ok ||
+    (isRecord(payload) && payload.success === false)
+  ) {
+    const message =
+      isRecord(payload) && typeof payload.error === 'string'
+        ? payload.error
+        : responseText || response.statusText;
+    throw new Error(`Firecrawl search failed (${response.status}): ${message}`);
+  }
+
+  return isRecord(payload) && 'data' in payload ? payload.data : payload;
 }
 
 function asText(data: unknown): string {
@@ -657,9 +732,11 @@ The query also supports search operators, that you can use if needed to refine t
       location: z.string().optional(),
       includeDomains: z.array(searchDomainSchema).optional(),
       excludeDomains: z.array(searchDomainSchema).optional(),
-      sources: z
-        .array(z.object({ type: z.enum(['web', 'images', 'news']) }))
-        .optional(),
+      sources: z.array(searchSourceSchema).optional(),
+      categories: z.array(searchCategorySchema).optional(),
+      country: z.string().optional(),
+      timeout: z.number().positive().optional(),
+      ignoreInvalidURLs: z.boolean().optional(),
       scrapeOptions: scrapeParamsSchema
         .omit({ url: true })
         .partial()
@@ -674,7 +751,6 @@ The query also supports search operators, that you can use if needed to refine t
     args: unknown,
     { session, log }: { session?: SessionData; log: Logger }
   ): Promise<string> => {
-    const client = getClient(session);
     const { query, ...opts } = args as Record<string, unknown>;
 
     const searchOpts = { ...opts } as Record<string, unknown>;
@@ -696,10 +772,7 @@ The query also supports search operators, that you can use if needed to refine t
       excludeDomains
     );
     log.info('Searching', { query: searchQuery });
-    const res = await client.search(searchQuery, {
-      ...(cleaned as any),
-      origin: ORIGIN,
-    });
+    const res = await searchFirecrawl(session, searchQuery, cleaned);
     return asText(res);
   },
 });
