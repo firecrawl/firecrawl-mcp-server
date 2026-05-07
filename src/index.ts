@@ -3,7 +3,13 @@ import dotenv from 'dotenv';
 import { FastMCP, type Logger } from 'firecrawl-fastmcp';
 import { z } from 'zod';
 import FirecrawlApp from '@mendable/firecrawl-js';
-import type { IncomingHttpHeaders } from 'http';
+import { randomUUID } from 'node:crypto';
+import http from 'node:http';
+import type {
+  IncomingHttpHeaders,
+  IncomingMessage,
+  ServerResponse,
+} from 'node:http';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -11,7 +17,49 @@ dotenv.config({ debug: false, quiet: true });
 
 interface SessionData {
   firecrawlApiKey?: string;
+  mcpSessionId?: string;
   [key: string]: unknown;
+}
+
+const MCP_SESSION_HEADER = 'mcp-session-id';
+const MCP_SESSION_RESPONSE_HEADER = 'Mcp-Session-Id';
+const FIRECRAWL_MCP_SESSION_HEADER = 'x-firecrawl-mcp-session-id';
+
+function normalizeHeaderValue(
+  value: string | string[] | number | undefined
+): string | undefined {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  if (candidate == null) return undefined;
+  const normalized = String(candidate).trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function getHeaderValue(
+  headers: IncomingHttpHeaders,
+  headerName: string
+): string | undefined {
+  const normalizedHeaderName = headerName.toLowerCase();
+  const directValue = headers[normalizedHeaderName];
+  if (directValue != null) {
+    return normalizeHeaderValue(directValue);
+  }
+
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === normalizedHeaderName) {
+      return normalizeHeaderValue(value);
+    }
+  }
+
+  return undefined;
+}
+
+function extractMcpSessionId(
+  headers: IncomingHttpHeaders
+): string | undefined {
+  return (
+    getHeaderValue(headers, FIRECRAWL_MCP_SESSION_HEADER) ||
+    getHeaderValue(headers, MCP_SESSION_HEADER)
+  );
 }
 
 function extractApiKey(headers: IncomingHttpHeaders): string | undefined {
@@ -31,6 +79,135 @@ function extractApiKey(headers: IncomingHttpHeaders): string | undefined {
   }
 
   return undefined;
+}
+
+function appendExposeHeader(
+  res: ServerResponse,
+  exposedHeaderName: string
+): void {
+  const existing = res.getHeader('Access-Control-Expose-Headers');
+  const existingValues =
+    typeof existing === 'string'
+      ? existing.split(',')
+      : Array.isArray(existing)
+        ? existing.flatMap((value) => String(value).split(','))
+        : [];
+  const trimmedValues = existingValues
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const alreadyExposed = trimmedValues.some(
+    (value) => value.toLowerCase() === exposedHeaderName.toLowerCase()
+  );
+
+  if (!alreadyExposed) {
+    res.setHeader('Access-Control-Expose-Headers', [
+      ...trimmedValues,
+      exposedHeaderName,
+    ].join(', '));
+  }
+}
+
+function isMcpPostRequest(
+  req: IncomingMessage,
+  streamEndpoint: string
+): boolean {
+  if (req.method !== 'POST') return false;
+
+  try {
+    const url = new URL(
+      req.url || '',
+      `http://${req.headers.host || 'localhost'}`
+    );
+    return url.pathname === streamEndpoint;
+  } catch {
+    return false;
+  }
+}
+
+function bridgeStatelessMcpSessionRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  streamEndpoint: string
+): void {
+  const inboundSessionId = extractMcpSessionId(req.headers);
+
+  if (inboundSessionId) {
+    req.headers[FIRECRAWL_MCP_SESSION_HEADER] = inboundSessionId;
+    // mcp-proxy rejects standard session headers in stateless mode.
+    delete req.headers[MCP_SESSION_HEADER];
+  }
+
+  if (inboundSessionId || !isMcpPostRequest(req, streamEndpoint)) {
+    return;
+  }
+
+  const assignedSessionId = randomUUID();
+  const setStatelessSessionHeader = (statusCode = res.statusCode): void => {
+    if (res.headersSent || statusCode < 200 || statusCode >= 300) {
+      return;
+    }
+
+    if (!res.hasHeader(MCP_SESSION_RESPONSE_HEADER)) {
+      res.setHeader(MCP_SESSION_RESPONSE_HEADER, assignedSessionId);
+    }
+    appendExposeHeader(res, MCP_SESSION_RESPONSE_HEADER);
+  };
+
+  const originalWriteHead = res.writeHead;
+  res.writeHead = (function patchedWriteHead(
+    this: ServerResponse,
+    statusCode: number,
+    ...args: unknown[]
+  ) {
+    setStatelessSessionHeader(statusCode);
+    return (
+      originalWriteHead as (...writeHeadArgs: unknown[]) => ServerResponse
+    ).call(this, statusCode, ...args);
+  }) as ServerResponse['writeHead'];
+
+  const originalEnd = res.end;
+  res.end = (function patchedEnd(this: ServerResponse, ...args: unknown[]) {
+    setStatelessSessionHeader();
+    return (originalEnd as (...endArgs: unknown[]) => ServerResponse).apply(
+      this,
+      args
+    );
+  }) as ServerResponse['end'];
+}
+
+function installStatelessMcpSessionBridge(streamEndpoint: string): () => void {
+  // FastMCP delegates HTTP creation to mcp-proxy, so this scoped patch wraps
+  // only the server created during start() and is restored immediately after.
+  type MutableHttp = typeof http & {
+    createServer: (...args: unknown[]) => http.Server;
+  };
+
+  const mutableHttp = http as MutableHttp;
+  const originalCreateServer = mutableHttp.createServer;
+
+  mutableHttp.createServer = (...args: unknown[]): http.Server => {
+    const listenerIndex = args.findIndex((arg) => typeof arg === 'function');
+    if (listenerIndex === -1) {
+      return originalCreateServer.apply(http, args);
+    }
+
+    const originalListener = args[listenerIndex] as (
+      req: IncomingMessage,
+      res: ServerResponse
+    ) => void;
+    const wrappedListener = (req: IncomingMessage, res: ServerResponse): void => {
+      bridgeStatelessMcpSessionRequest(req, res, streamEndpoint);
+      originalListener(req, res);
+    };
+    const wrappedArgs = [...args];
+    wrappedArgs[listenerIndex] = wrappedListener;
+
+    return originalCreateServer.apply(http, wrappedArgs);
+  };
+
+  return () => {
+    mutableHttp.createServer = originalCreateServer;
+  };
 }
 
 function removeEmptyTopLevel<T extends Record<string, any>>(
@@ -123,13 +300,15 @@ const server = new FastMCP<SessionData>({
   authenticate: async (request: {
     headers: IncomingHttpHeaders;
   }): Promise<SessionData> => {
+    const mcpSessionId = extractMcpSessionId(request.headers);
+
     if (process.env.CLOUD_SERVICE === 'true') {
       const apiKey = extractApiKey(request.headers);
 
       if (!apiKey) {
         throw new Error('Firecrawl API key is required');
       }
-      return { firecrawlApiKey: apiKey };
+      return { firecrawlApiKey: apiKey, mcpSessionId };
     } else {
       // For self-hosted instances, API key is optional if FIRECRAWL_API_URL is provided
       if (!process.env.FIRECRAWL_API_KEY && !process.env.FIRECRAWL_API_URL) {
@@ -138,7 +317,10 @@ const server = new FastMCP<SessionData>({
         );
         process.exit(1);
       }
-      return { firecrawlApiKey: process.env.FIRECRAWL_API_KEY };
+      return {
+        firecrawlApiKey: process.env.FIRECRAWL_API_KEY,
+        mcpSessionId,
+      };
     }
   },
   // Lightweight health endpoint for LB checks
@@ -150,7 +332,62 @@ const server = new FastMCP<SessionData>({
   },
 });
 
-function createClient(apiKey?: string): FirecrawlApp {
+function setHeaderValue(
+  headers: Record<string, unknown> & {
+    set?: (key: string, value: string) => void;
+  },
+  key: string,
+  value: string
+): void {
+  if (typeof headers.set === 'function') {
+    headers.set(key, value);
+  } else {
+    headers[key] = value;
+  }
+}
+
+function attachMcpSessionHeader(
+  client: FirecrawlApp,
+  mcpSessionId?: string
+): void {
+  if (!mcpSessionId) return;
+
+  const httpClient = (client as unknown as {
+    http?: {
+      instance?: {
+        defaults?: {
+          headers?: Record<string, unknown> & {
+            common?: Record<string, unknown> & {
+              set?: (key: string, value: string) => void;
+            };
+            set?: (key: string, value: string) => void;
+          };
+        };
+      };
+    };
+  }).http;
+  const defaultHeaders = httpClient?.instance?.defaults?.headers;
+
+  if (!defaultHeaders) return;
+
+  if (!defaultHeaders.common) {
+    defaultHeaders.common = {};
+  }
+
+  setHeaderValue(
+    defaultHeaders.common,
+    FIRECRAWL_MCP_SESSION_HEADER,
+    mcpSessionId
+  );
+}
+
+function reportingHeaders(session?: SessionData): Record<string, string> {
+  return session?.mcpSessionId
+    ? { [FIRECRAWL_MCP_SESSION_HEADER]: session.mcpSessionId }
+    : {};
+}
+
+function createClient(apiKey?: string, mcpSessionId?: string): FirecrawlApp {
   const config: any = {
     ...(process.env.FIRECRAWL_API_URL && {
       apiUrl: process.env.FIRECRAWL_API_URL,
@@ -162,7 +399,9 @@ function createClient(apiKey?: string): FirecrawlApp {
     config.apiKey = apiKey;
   }
 
-  return new FirecrawlApp(config);
+  const client = new FirecrawlApp(config);
+  attachMcpSessionHeader(client, mcpSessionId);
+  return client;
 }
 
 const ORIGIN = 'mcp-fastmcp';
@@ -176,7 +415,7 @@ function getClient(session?: SessionData): FirecrawlApp {
     if (!session || !session.firecrawlApiKey) {
       throw new Error('Unauthorized');
     }
-    return createClient(session.firecrawlApiKey);
+    return createClient(session.firecrawlApiKey, session.mcpSessionId);
   }
 
   // For self-hosted instances, API key is optional if FIRECRAWL_API_URL is provided
@@ -189,7 +428,7 @@ function getClient(session?: SessionData): FirecrawlApp {
     );
   }
 
-  return createClient(session?.firecrawlApiKey);
+  return createClient(session?.firecrawlApiKey, session?.mcpSessionId);
 }
 
 function asText(data: unknown): string {
@@ -1576,7 +1815,7 @@ Add \`"parsers": ["pdf"]\` (optionally with \`pdfOptions.maxPages\`) when parsin
       form.append('file', blob, filename);
       form.append('options', JSON.stringify(optionsPayload));
 
-      const headers: Record<string, string> = {};
+      const headers: Record<string, string> = reportingHeaders(session);
       const apiKey = session?.firecrawlApiKey;
       if (apiKey) {
         headers['Authorization'] = `Bearer ${apiKey}`;
@@ -1639,4 +1878,13 @@ if (
   };
 }
 
-await server.start(args);
+const restoreStatelessMcpSessionBridge =
+  args?.transportType === 'httpStream' && args.httpStream.stateless
+    ? installStatelessMcpSessionBridge('/mcp')
+    : undefined;
+
+try {
+  await server.start(args);
+} finally {
+  restoreStatelessMcpSessionBridge?.();
+}
