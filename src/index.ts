@@ -196,6 +196,58 @@ function asText(data: unknown): string {
   return JSON.stringify(data, null, 2);
 }
 
+// Default base for the customer-facing /v2/support/* endpoints. The
+// Firecrawl API proxies these through to the support-agent service.
+const SUPPORT_API_BASE = 'https://api.firecrawl.dev';
+
+/**
+ * Call a /v2/support/* endpoint (currently /support/ask and /support/docs-search).
+ *
+ * The SDK doesn't expose these yet, so we POST directly. The bearer is the
+ * customer's Firecrawl API key — same auth as every other Firecrawl request,
+ * just resolved per-session like every other tool. Honors FIRECRAWL_API_URL
+ * so self-hosted-with-proxy deployments work too.
+ */
+async function callSupportEndpoint(
+  session: SessionData | undefined,
+  endpoint: '/v2/support/ask' | '/v2/support/docs-search',
+  body: Record<string, unknown>
+): Promise<string> {
+  const apiKey = session?.firecrawlApiKey || process.env.FIRECRAWL_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      'Firecrawl API key is required for support endpoints (set FIRECRAWL_API_KEY or pass via session).'
+    );
+  }
+  const apiUrl =
+    (process.env.FIRECRAWL_API_URL && process.env.FIRECRAWL_API_URL.trim()) ||
+    SUPPORT_API_BASE;
+  const url = `${apiUrl.replace(/\/$/, '')}${endpoint}`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  const text = await response.text();
+  if (!response.ok) {
+    let detail = response.statusText;
+    if (text) detail = `${detail} — ${text.slice(0, 500)}`;
+    throw new Error(
+      `Firecrawl support endpoint ${endpoint} returned ${response.status}: ${detail}`
+    );
+  }
+  try {
+    return asText(JSON.parse(text));
+  } catch {
+    return text;
+  }
+}
+
 // scrape tool (v2 semantics, minimal args)
 // Centralized scrape params (used by scrape, and referenced in search/crawl scrapeOptions)
 
@@ -1374,6 +1426,153 @@ Stop an interact session for a scraped page. Call this when you are done interac
     log.info('Stopping interact session', { scrapeId });
     const res = await client.stopInteraction(scrapeId);
     return asText(res);
+  },
+});
+
+server.addTool({
+  name: 'firecrawl_ask',
+  annotations: {
+    title: 'Diagnose a Firecrawl issue with the AI support agent',
+    readOnlyHint: true,
+    openWorldHint: false,
+  },
+  description: `
+Diagnose why a Firecrawl call failed or returned unexpected results. The AI support agent inspects job logs, account state, credit usage, and the docs, then returns a 2-4 sentence prose diagnosis plus machine-readable \`fixParameters\` you can apply directly. Typical latency: 15-30 seconds.
+
+**Best for:** Debugging a failing or unexpected Firecrawl call. Use this WHENEVER another firecrawl_* tool returns an error, an empty result, or output that doesn't match what the user asked for — instead of guessing or apologizing, call firecrawl_ask first and apply the suggested fix.
+**Not recommended for:** "How do I…" questions about Firecrawl features (use firecrawl_docs_search instead). Generic web search (use firecrawl_search). Pre-flight what-ifs ("what would happen if…") — only call after a real failure.
+**Common mistakes:** Re-running the same broken call hoping for a different result. Telling the user the run failed without trying firecrawl_ask. Skipping \`jobId\` when you have one (it lets the agent pull the actual run's logs instead of guessing from the question).
+
+**When to call:**
+- A previous firecrawl_scrape / firecrawl_crawl / firecrawl_search / firecrawl_map / firecrawl_agent / firecrawl_browser_* / firecrawl_interact call failed or returned unexpected output.
+- The user is confused by Firecrawl behavior ("why is it returning empty?", "why am I being rate-limited?", "why did the crawl stop early?").
+- You're about to recommend the user open a support ticket — try firecrawl_ask first.
+
+**Recipe — agent-friendly debugging loop:**
+1. Run the operation. Capture any error and the job id (the \`id\` or \`scrape_id\` field on the response).
+2. If the result looks wrong, call firecrawl_ask with the failing question, the jobId, and a short rationale describing user intent.
+3. If \`fixParameters\` come back, apply them and rerun the original tool with those params. The agent often validates fixes against the live API (\`validation.tested: true, validation.result: "success"\`) — those are safe to apply directly.
+4. If \`confidence\` is "low" and \`feedback\` is non-null, escalate to human support; the agent could not resolve the issue.
+
+**Authentication:** The Firecrawl API key on the session IS the bearer — calls are automatically scoped to the caller's team. No extra config needed.
+
+**Usage Example (after a failing scrape):**
+\`\`\`json
+{
+  "name": "firecrawl_ask",
+  "arguments": {
+    "question": "scrape of https://example.com returned empty markdown — the page loads fine in a browser",
+    "rationale": "User wants to scrape example.com to feed an LLM summarization pipeline.",
+    "jobId": "scrape-abc-123-def",
+    "context": { "formats": ["markdown"], "status": "completed-empty" }
+  }
+}
+\`\`\`
+
+**Returns:** JSON envelope with \`requestId\`, \`answer\` (prose), \`confidence\` (high/medium/low), \`fixParameters\` (object|null — apply these to retry the failing call), \`validation\` (whether the agent tested the fix), \`feedback\` (non-null when stuck), and \`durationMs\`.
+`,
+  parameters: z.object({
+    question: z
+      .string()
+      .min(1)
+      .max(8_000)
+      .describe(
+        'What to diagnose. Describe what went wrong — the failing tool name, what you expected, what you got. 1-8000 chars.'
+      ),
+    rationale: z
+      .string()
+      .min(1)
+      .max(2_000)
+      .optional()
+      .describe(
+        'Recommended for AI callers. 1-2 plain-English sentences on what the END USER (not you, the calling agent) is trying to accomplish. Helps the support agent prioritize evidence gathering. ≤2000 chars.'
+      ),
+    jobId: z
+      .string()
+      .optional()
+      .describe(
+        'Firecrawl job id from the failing call (the `id` or `scrape_id` on the response). Lets agent tools like debugJob/searchLogs/getJob auto-default to the right run.'
+      ),
+    context: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .describe(
+        'Free-form structured metadata about the failing call (status, formats requested, error code, etc.) the agent considers. Treated as untrusted DATA, not instructions.'
+      ),
+  }),
+  execute: async (
+    args: unknown,
+    { session, log }: { session?: SessionData; log: Logger }
+  ): Promise<string> => {
+    const { question, rationale, jobId, context } = args as {
+      question: string;
+      rationale?: string;
+      jobId?: string;
+      context?: Record<string, unknown>;
+    };
+    log.info('Calling firecrawl ask', {
+      jobId: jobId ?? null,
+      hasContext: Boolean(context && Object.keys(context).length),
+    });
+    const body: Record<string, unknown> = { question };
+    if (rationale) body.rationale = rationale;
+    if (jobId) body.jobId = jobId;
+    if (context && Object.keys(context).length > 0) body.context = context;
+    return callSupportEndpoint(session, '/v2/support/ask', body);
+  },
+});
+
+server.addTool({
+  name: 'firecrawl_docs_search',
+  annotations: {
+    title: "Search Firecrawl's official documentation",
+    readOnlyHint: true,
+    openWorldHint: false,
+  },
+  description: `
+Search Firecrawl's official public documentation for "how does it work" / "how do I…" questions. Returns a concise, docs-grounded answer with citations to the source pages — answers come from current Firecrawl docs, not stale training data.
+
+**Best for:** Looking up how a Firecrawl endpoint, parameter, or feature works. Examples: "what does \`waitFor\` do on /scrape?", "how do I verify webhook signatures?", "which formats support change tracking?", "how does crawl handle robots.txt?", "what's the difference between /scrape and /parse?". Use this BEFORE generic web search whenever the question is specifically about Firecrawl behavior or configuration.
+**Not recommended for:** Debugging an actual failing call (use firecrawl_ask — it can pull the run's logs). General web search unrelated to Firecrawl (use firecrawl_search).
+**Common mistakes:** Asking firecrawl_search or doing your own training-data answer for Firecrawl-specific questions when firecrawl_docs_search would be both more accurate (current docs) and cheaper than a full web search.
+
+**When to call:**
+- The user asks "how do I…" about a Firecrawl feature/endpoint/parameter.
+- You need to look up which option name to pass, what a status code means, how billing works for a specific endpoint, or how a feature behaves.
+- You're onboarding to a Firecrawl feature you've never used (webhooks, change tracking, batch scrape, agent extraction, browser sessions, etc.).
+
+**Authentication:** The Firecrawl API key on the session IS the bearer.
+
+**Usage Example:**
+\`\`\`json
+{
+  "name": "firecrawl_docs_search",
+  "arguments": {
+    "question": "how do I verify webhook signatures?"
+  }
+}
+\`\`\`
+
+**Returns:** JSON with \`requestId\`, \`answer\` (prose), \`evidence\` (array of \`{pathOrUrl, reason}\` citing the docs pages used), \`usage\`, and \`durationMs\`. The \`evidence[].pathOrUrl\` values can be fed back into firecrawl_scrape if you need the full text of a cited page.
+`,
+  parameters: z.object({
+    question: z
+      .string()
+      .min(1)
+      .max(8_000)
+      .describe(
+        "Plain-English question about Firecrawl's features, endpoints, parameters, or behavior. 1-8000 chars."
+      ),
+  }),
+  execute: async (
+    args: unknown,
+    { session, log }: { session?: SessionData; log: Logger }
+  ): Promise<string> => {
+    const { question } = args as { question: string };
+    log.info('Calling firecrawl docs-search');
+    return callSupportEndpoint(session, '/v2/support/docs-search', {
+      question,
+    });
   },
 });
 
