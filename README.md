@@ -332,6 +332,8 @@ Use this guide to select the right tool for your task:
 | crawl        | Multi-page extraction (with limits) | markdown/html[]            |
 | search       | Web search for info                 | results[]                  |
 | agent        | Complex multi-source research       | JSON (structured data)     |
+| ask          | **Diagnose** a failing/unexpected Firecrawl call | Diagnosis + fix params |
+| docs_search  | **Look up** how a Firecrawl feature/parameter works | Docs-grounded answer + citations |
 | browser      | Interactive multi-step automation (deprecated) | Session with live browser  |
 
 ### Format Selection Guide
@@ -819,7 +821,51 @@ Check the status of an agent job and retrieve results when complete. Use this to
 - `completed`: Research finished - response includes the extracted data
 - `failed`: An error occurred
 
-### 11. Browser Create (`firecrawl_browser_create`) — Deprecated
+### 11. Ask the AI Support Agent (`firecrawl_ask`)
+
+Diagnose a failing or unexpected Firecrawl call. The AI support agent inspects job logs, account state, credit usage, and the docs, then returns a 2-4 sentence prose diagnosis plus machine-readable `fixParameters` you can apply directly. Typical latency: 15-30 seconds.
+
+**Use this WHENEVER another firecrawl_* tool returns an error, an empty result, or output that doesn't match what the user asked for** — instead of guessing or apologizing, call `firecrawl_ask` first and apply the suggested fix.
+
+```json
+{
+  "name": "firecrawl_ask",
+  "arguments": {
+    "question": "scrape of https://example.com returned empty markdown",
+    "rationale": "User wants to scrape example.com to feed an LLM summarization pipeline.",
+    "jobId": "scrape-abc-123-def",
+    "context": { "formats": ["markdown"], "status": "completed-empty" }
+  }
+}
+```
+
+**Recommended loop:**
+
+1. Run the operation; capture any error and the job id from the response.
+2. If the result looks wrong, call `firecrawl_ask` with the failing question, the `jobId`, and a short `rationale` describing user intent.
+3. If `fixParameters` come back, apply them and rerun the original tool. The agent often validates fixes against the live API (`validation.tested: true, validation.result: "success"`) — those are safe to apply directly.
+4. If `confidence` is `low` and `feedback` is non-null, escalate to human support.
+
+**Returns:** Envelope with `requestId`, `answer`, `confidence`, `fixParameters`, `validation`, `feedback`, `usage`, `durationMs`.
+
+### 12. Search Firecrawl Docs (`firecrawl_docs_search`)
+
+Search Firecrawl's official public documentation for "how do I…" questions. Returns a concise, docs-grounded answer with citations to the source pages — answers come from current Firecrawl docs, not stale training data.
+
+**Prefer this over a generic web search** for any Firecrawl-specific question (parameters, endpoints, features, status codes, billing). Use `firecrawl_ask` instead when you're debugging an actual failing call.
+
+```json
+{
+  "name": "firecrawl_docs_search",
+  "arguments": {
+    "question": "how do I verify webhook signatures?"
+  }
+}
+```
+
+**Returns:** `requestId`, `answer`, `evidence` (array of `{pathOrUrl, reason}` citing the docs pages), `usage`, `durationMs`. The `evidence[].pathOrUrl` values can be fed back into `firecrawl_scrape` if you need the full text of a cited page.
+
+### 13. Browser Create (`firecrawl_browser_create`) — Deprecated
 
 > **Deprecated:** Prefer `firecrawl_scrape` + `firecrawl_interact` instead. Interact lets you scrape a page and then click, fill forms, and navigate without managing sessions manually.
 
@@ -850,7 +896,7 @@ Create a cloud browser session for interactive automation.
 
 - Session ID, CDP URL, and live view URL
 
-### 12. Browser Execute (`firecrawl_browser_execute`) — Deprecated
+### 14. Browser Execute (`firecrawl_browser_execute`) — Deprecated
 
 > **Deprecated:** Prefer `firecrawl_scrape` + `firecrawl_interact` instead.
 
@@ -894,7 +940,7 @@ Execute code in a browser session. Supports agent-browser commands (bash), Pytho
 }
 ```
 
-### 13. Browser List (`firecrawl_browser_list`) — Deprecated
+### 15. Browser List (`firecrawl_browser_list`) — Deprecated
 
 > **Deprecated:** Prefer `firecrawl_scrape` + `firecrawl_interact` instead.
 
@@ -909,7 +955,7 @@ List browser sessions, optionally filtered by status.
 }
 ```
 
-### 14. Browser Delete (`firecrawl_browser_delete`) — Deprecated
+### 16. Browser Delete (`firecrawl_browser_delete`) — Deprecated
 
 > **Deprecated:** Prefer `firecrawl_scrape` + `firecrawl_interact` instead.
 
