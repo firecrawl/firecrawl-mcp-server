@@ -846,7 +846,7 @@ Diagnose a failing or unexpected Firecrawl call. The AI support agent inspects j
 3. If `fixParameters` come back, apply them and rerun the original tool. The agent often validates fixes against the live API (`validation.tested: true, validation.result: "success"`) — those are safe to apply directly.
 4. If `confidence` is `low` and `feedback` is non-null, escalate to human support.
 
-**Returns:** Envelope with `requestId`, `answer`, `confidence`, `fixParameters`, `validation`, `feedback`, `usage`, `durationMs`.
+**Returns:** Envelope with `requestId`, `answer`, `confidence`, `fixParameters`, `validation`, `feedback`, `durationMs`.
 
 ### 12. Search Firecrawl Docs (`firecrawl_docs_search`)
 

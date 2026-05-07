@@ -1469,7 +1469,7 @@ Diagnose why a Firecrawl call failed or returned unexpected results. The AI supp
 }
 \`\`\`
 
-**Returns:** JSON envelope with \`requestId\`, \`answer\` (prose), \`confidence\` (high/medium/low), \`fixParameters\` (object|null — apply these to retry the failing call), \`validation\` (whether the agent tested the fix), \`feedback\` (non-null when stuck), \`usage\`, and \`durationMs\`.
+**Returns:** JSON envelope with \`requestId\`, \`answer\` (prose), \`confidence\` (high/medium/low), \`fixParameters\` (object|null — apply these to retry the failing call), \`validation\` (whether the agent tested the fix), \`feedback\` (non-null when stuck), and \`durationMs\`.
 `,
   parameters: z.object({
     question: z
