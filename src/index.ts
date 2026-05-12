@@ -6,6 +6,7 @@ import FirecrawlApp from '@mendable/firecrawl-js';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { registerMonitorTools } from './monitor.js';
 
 dotenv.config({ debug: false, quiet: true });
 
@@ -1638,5 +1639,7 @@ if (
     transportType: 'stdio',
   };
 }
+
+registerMonitorTools(server);
 
 await server.start(args);
