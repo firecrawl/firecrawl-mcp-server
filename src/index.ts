@@ -608,6 +608,7 @@ The query also supports search operators, that you can use if needed to refine t
 **Domain filters:** Use includeDomains to restrict results to specific domains, or excludeDomains to remove domains. Do not use both in the same request. Domains must be hostnames only, without protocol or path.
 **Scrape Options:** Only use scrapeOptions when you think it is absolutely necessary. When you do so default to a lower limit to avoid timeouts, 5 or lower.
 **Optimal Workflow:** Search first using firecrawl_search without formats, then after fetching the results, use the scrape tool to get the content of the relevantpage(s) that you want to scrape
+**After the search:** Once you have processed the results (or decided they were not useful), call \`firecrawl_search_feedback\` with the \`id\` from this response. The first feedback per search refunds 1 credit and helps Firecrawl improve search quality.
 
 **Usage Example without formats (Preferred):**
 \`\`\`json
@@ -701,6 +702,213 @@ The query also supports search operators, that you can use if needed to refine t
     return asText(res);
   },
 });
+
+const DEFAULT_CLOUD_API_URL = 'https://api.firecrawl.dev';
+
+function resolveApiBaseUrl(): string {
+  return (process.env.FIRECRAWL_API_URL || DEFAULT_CLOUD_API_URL).replace(
+    /\/$/,
+    ''
+  );
+}
+
+const SEARCH_FEEDBACK_DISABLED = ['1', 'true', 'yes', 'on'].includes(
+  (
+    process.env.FIRECRAWL_NO_SEARCH_FEEDBACK ||
+    process.env.FIRECRAWL_DISABLE_SEARCH_FEEDBACK ||
+    ''
+  )
+    .trim()
+    .toLowerCase()
+);
+
+if (SEARCH_FEEDBACK_DISABLED) {
+  console.error(
+    '[firecrawl-mcp] Search feedback tool disabled by FIRECRAWL_NO_SEARCH_FEEDBACK; firecrawl_search_feedback will not be registered.'
+  );
+}
+
+if (!SEARCH_FEEDBACK_DISABLED) {
+server.addTool({
+  name: 'firecrawl_search_feedback',
+  annotations: {
+    title: 'Send feedback on a search result',
+    readOnlyHint: false,
+    openWorldHint: true,
+  },
+  description: `
+Send structured feedback on a previous \`firecrawl_search\` result. **Call this immediately after a search where you used the results** so we can improve search quality and refund 1 credit (search costs 2).
+
+Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the response) and tell us:
+
+- **rating** — overall result quality: \`good\`, \`partial\`, or \`bad\`.
+- **valuableSources** — which result URLs were actually useful, and a short reason why.
+- **missingContent** — **the most important field.** An ARRAY of specific pieces of content you expected to find but didn't. One entry per missing piece, each with a short \`topic\` and an optional longer \`description\`. Examples: \`{"topic":"enterprise pricing","description":"no pricing tier table for the Enterprise plan was returned"}\`, \`{"topic":"API rate limits"}\`, \`{"topic":"comparison vs competitors"}\`. **Be specific** — these aggregate across teams and tell us what to index next. Do not pack multiple topics into one entry.
+- **querySuggestions** — how the query or response shape could be improved (e.g. "would have liked official docs first", "should boost github.com").
+
+**Substantive-feedback requirement** (zero-effort feedback is rejected with HTTP 400):
+- \`good\` — must include at least one \`valuableSources\` entry
+- \`partial\` — must include \`valuableSources\` or at least one \`missingContent\` entry
+- \`bad\` — must include at least one \`missingContent\` entry or \`querySuggestions\`
+
+**Time window:** Feedback must be submitted within ~2 minutes of the search. Beyond that, the call returns HTTP 409 with \`feedbackErrorCode: "FEEDBACK_WINDOW_EXPIRED"\` — do not retry, just move on. Same goes for any 4xx response: do not retry-loop.
+
+**Behaviors:**
+- Idempotent per \`searchId\`. Re-submitting for the same id returns \`alreadySubmitted: true\` with \`creditsRefunded: 0\`.
+- Refund only applies to billable searches; preview teams are blocked.
+- Failed searches cannot receive feedback (the search itself already returned an error you can act on).
+- **Daily refund cap (per team, per UTC day, default 100 credits).** Once a team's \`creditsRefundedToday\` reaches \`dailyRefundCap\`, the response returns \`dailyCapReached: true\` with \`creditsRefunded: 0\`. The feedback is still recorded for search-quality improvement — only the credit refund is gated. **Stop calling this tool for the rest of the UTC day** when you see \`dailyCapReached: true\`.
+
+**When to call:** Right after processing a search result. If the result didn't help, send rating \`bad\` with a clear \`missingContent\` — that is just as valuable as a \`good\` rating.
+
+**Usage Example (good rating with valuable sources + missing content):**
+\`\`\`json
+{
+  "name": "firecrawl_search_feedback",
+  "arguments": {
+    "searchId": "0193f6c5-1234-7890-abcd-1234567890ab",
+    "rating": "good",
+    "valuableSources": [
+      { "url": "https://docs.firecrawl.dev/features/search", "reason": "Most up-to-date description of /search." }
+    ],
+    "missingContent": [
+      { "topic": "Pricing for the search endpoint", "description": "No pricing tier table for /search specifically." },
+      { "topic": "Rate limits", "description": "Per-team RPS for /search not documented." }
+    ],
+    "querySuggestions": "Boost docs.firecrawl.dev for queries that mention 'firecrawl'"
+  }
+}
+\`\`\`
+
+**Usage Example (bad rating, what was missing):**
+\`\`\`json
+{
+  "name": "firecrawl_search_feedback",
+  "arguments": {
+    "searchId": "0193f6c5-1234-7890-abcd-1234567890ab",
+    "rating": "bad",
+    "missingContent": [
+      { "topic": "Recent benchmarks", "description": "All results were >12 months old." },
+      { "topic": "Comparison vs Algolia" }
+    ]
+  }
+}
+\`\`\`
+
+**Returns:** \`{ success, feedbackId, creditsRefunded, creditsRefundedToday, dailyRefundCap, dailyCapReached?, alreadySubmitted?, warning? }\` JSON.
+`,
+  parameters: z.object({
+    searchId: z
+      .string()
+      .uuid('searchId must be the UUID returned by firecrawl_search'),
+    rating: z.enum(['good', 'bad', 'partial']),
+    valuableSources: z
+      .array(
+        z.object({
+          url: z.string().url(),
+          reason: z.string().max(1000).optional(),
+        })
+      )
+      .max(50)
+      .optional(),
+    missingContent: z
+      .array(
+        z.object({
+          topic: z
+            .string()
+            .min(1, 'topic must not be empty')
+            .max(200, 'topic must be 200 characters or fewer'),
+          description: z.string().max(2000).optional(),
+        })
+      )
+      .max(20)
+      .optional()
+      .describe(
+        'Array of specific pieces of content the agent expected to find but did not. ' +
+          'One entry per distinct topic. Each entry has a short `topic` and optional ' +
+          'longer `description`.'
+      ),
+    querySuggestions: z.string().max(2000).optional(),
+  }),
+  execute: async (
+    args: unknown,
+    { session, log }: { session?: SessionData; log: Logger }
+  ): Promise<string> => {
+    const {
+      searchId,
+      rating,
+      valuableSources,
+      missingContent,
+      querySuggestions,
+    } = args as {
+      searchId: string;
+      rating: 'good' | 'bad' | 'partial';
+      valuableSources?: { url: string; reason?: string }[];
+      missingContent?: { topic: string; description?: string }[];
+      querySuggestions?: string;
+    };
+
+    const apiBase = resolveApiBaseUrl();
+    const endpoint = `${apiBase}/v2/search/${encodeURIComponent(searchId)}/feedback`;
+
+    const body: Record<string, unknown> = {
+      rating,
+      origin: ORIGIN,
+    };
+    if (valuableSources && valuableSources.length > 0) {
+      body.valuableSources = valuableSources;
+    }
+    if (missingContent && missingContent.length > 0) {
+      body.missingContent = missingContent;
+    }
+    if (querySuggestions) body.querySuggestions = querySuggestions;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    const apiKey = session?.firecrawlApiKey;
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    } else if (process.env.CLOUD_SERVICE === 'true') {
+      throw new Error('Unauthorized: missing API key for search feedback.');
+    }
+
+    log.info('Submitting search feedback', { searchId, rating });
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    const responseText = await response.text();
+    let parsed: any;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch {
+      parsed = { raw: responseText };
+    }
+
+    // 4xx is terminal; surface a structured payload (with retryable=false)
+    // so agents do not retry-loop on substantive-feedback rejections,
+    // expired windows, etc.
+    if (!response.ok) {
+      log.warn('Search feedback rejected', {
+        status: response.status,
+        feedbackErrorCode: parsed?.feedbackErrorCode,
+      });
+      return asText({
+        success: false,
+        status: response.status,
+        feedbackErrorCode: parsed?.feedbackErrorCode,
+        error: parsed?.error ?? `HTTP ${response.status}`,
+        retryable: response.status >= 500,
+      });
+    }
+
+    return asText(parsed);
+  },
+});
+}
 
 server.addTool({
   name: 'firecrawl_crawl',
