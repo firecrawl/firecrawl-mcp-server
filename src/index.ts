@@ -314,6 +314,7 @@ const scrapeParamsSchema = z.object({
   queryOptions: z
     .object({
       prompt: z.string().max(10000),
+      mode: z.enum(['directQuote', 'freeform']).default('freeform'),
     })
     .optional(),
   screenshotOptions: z
@@ -454,6 +455,7 @@ If JSON extraction returns empty, minimal, or just navigation content, the page 
 **Use query format only when:**
 - The page is extremely long and you need a single targeted answer without processing the full content
 - You want a quick factual answer and don't need to retain the page content
+- Set \`queryOptions.mode\` to \`"directQuote"\` when you need verbatim page text; otherwise it defaults to \`"freeform"\`
 
 **Usage Example (markdown format - default for most tasks):**
 \`\`\`json
@@ -1622,6 +1624,7 @@ if (process.env.CLOUD_SERVICE !== 'true') {
     queryOptions: z
       .object({
         prompt: z.string().max(10000),
+        mode: z.enum(['directQuote', 'freeform']).default('freeform'),
       })
       .optional(),
     parsers: z.array(z.enum(['pdf'])).optional(),
