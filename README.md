@@ -187,6 +187,23 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
   - Example: `https://firecrawl.your-domain.com`
   - If not provided, the cloud API will be used (requires API key)
 
+#### OAuth access tokens (hosted / `CLOUD_SERVICE`)
+
+When the MCP server runs in cloud mode, credentials are read from headers (see below). Firecrawl **API keys** always start with `fc-` and may be sent in `Authorization: Bearer`. **Opaque OAuth access tokens** (from the Firecrawl web OAuth flow) do not use that prefix; the server can resolve them via **token introspection** (RFC 7662) without any database credentials in this repo.
+
+- `FIRECRAWL_OAUTH_INTROSPECT_URL` (optional): Introspection endpoint URL, e.g. `https://www.firecrawl.dev/api/oauth/introspect`
+- `FIRECRAWL_OAUTH_INTROSPECT_SECRET` (optional): Shared secret sent on every introspection request as header `x-firecrawl-mcp-introspect-secret`. Must match `OAUTH_MCP_INTROSPECT_SECRET` configured on **firecrawl-web**.
+
+**Behavior**
+
+- `x-firecrawl-api-key` / `x-api-key`: always interpreted as a raw Firecrawl API key.
+- `Authorization: Bearer`:
+  - If the value starts with `fc-`, it is treated as a Firecrawl API key.
+  - Otherwise, if `FIRECRAWL_OAUTH_INTROSPECT_URL` is set, the value is sent to introspection; on success the session uses the resolved `firecrawl_api_key`.
+  - Otherwise the Bearer value is treated as a raw API key (legacy / self-hosted style).
+
+If you enable introspection in production, use header keys for any non-OAuth bearer material that must not hit the introspection endpoint.
+
 #### Optional Configuration
 
 ##### Retry Configuration

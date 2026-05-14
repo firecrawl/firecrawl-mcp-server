@@ -6,6 +6,7 @@ import FirecrawlApp from '@mendable/firecrawl-js';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { introspectAccessToken } from './oauth-introspect.js';
 
 dotenv.config({ debug: false, quiet: true });
 
@@ -14,23 +15,44 @@ interface SessionData {
   [key: string]: unknown;
 }
 
-function extractApiKey(headers: IncomingHttpHeaders): string | undefined {
-  const headerAuth = headers['authorization'];
+async function resolveCloudSessionFromHeaders(
+  headers: IncomingHttpHeaders
+): Promise<SessionData> {
   const headerApiKey = (headers['x-firecrawl-api-key'] ||
     headers['x-api-key']) as string | string[] | undefined;
 
   if (headerApiKey) {
-    return Array.isArray(headerApiKey) ? headerApiKey[0] : headerApiKey;
+    const v = Array.isArray(headerApiKey) ? headerApiKey[0] : headerApiKey;
+    if (!v?.trim()) {
+      throw new Error('Firecrawl API key is required');
+    }
+    return { firecrawlApiKey: v.trim() };
   }
 
+  const headerAuth = headers['authorization'];
   if (
     typeof headerAuth === 'string' &&
     headerAuth.toLowerCase().startsWith('bearer ')
   ) {
-    return headerAuth.slice(7).trim();
+    const bearer = headerAuth.slice(7).trim();
+    if (!bearer) {
+      throw new Error('Firecrawl API key is required');
+    }
+    if (bearer.startsWith('fc-')) {
+      return { firecrawlApiKey: bearer };
+    }
+    const introUrl = process.env.FIRECRAWL_OAUTH_INTROSPECT_URL?.trim();
+    if (introUrl) {
+      const intro = await introspectAccessToken(bearer);
+      if (intro?.active === true) {
+        return { firecrawlApiKey: intro.firecrawl_api_key };
+      }
+      throw new Error('Unauthorized');
+    }
+    return { firecrawlApiKey: bearer };
   }
 
-  return undefined;
+  throw new Error('Firecrawl API key is required');
 }
 
 function removeEmptyTopLevel<T extends Record<string, any>>(
@@ -124,12 +146,7 @@ const server = new FastMCP<SessionData>({
     headers: IncomingHttpHeaders;
   }): Promise<SessionData> => {
     if (process.env.CLOUD_SERVICE === 'true') {
-      const apiKey = extractApiKey(request.headers);
-
-      if (!apiKey) {
-        throw new Error('Firecrawl API key is required');
-      }
-      return { firecrawlApiKey: apiKey };
+      return resolveCloudSessionFromHeaders(request.headers);
     } else {
       // For self-hosted instances, API key is optional if FIRECRAWL_API_URL is provided
       if (!process.env.FIRECRAWL_API_KEY && !process.env.FIRECRAWL_API_URL) {
@@ -225,7 +242,9 @@ function buildFormatsArray(
       const jsonOpts = args.jsonOptions as Record<string, unknown> | undefined;
       result.push({ type: 'json', ...jsonOpts });
     } else if (fmt === 'query') {
-      const queryOpts = args.queryOptions as Record<string, unknown> | undefined;
+      const queryOpts = args.queryOptions as
+        | Record<string, unknown>
+        | undefined;
       result.push({ type: 'query', ...queryOpts });
     } else if (fmt === 'screenshot' && args.screenshotOptions) {
       const ssOpts = args.screenshotOptions as Record<string, unknown>;
@@ -321,9 +340,7 @@ const scrapeParamsSchema = z.object({
     .object({
       fullPage: z.boolean().optional(),
       quality: z.number().optional(),
-      viewport: z
-        .object({ width: z.number(), height: z.number() })
-        .optional(),
+      viewport: z.object({ width: z.number(), height: z.number() }).optional(),
     })
     .optional(),
   parsers: z.array(z.enum(['pdf'])).optional(),
@@ -498,7 +515,9 @@ ${
       unknown
     >;
     const client = getClient(session);
-    const transformed = transformScrapeParams(options as Record<string, unknown>);
+    const transformed = transformScrapeParams(
+      options as Record<string, unknown>
+    );
     const cleaned = removeEmptyTopLevel(transformed);
     if (cleaned.lockdown) {
       log.info('Scraping URL (lockdown)');
@@ -1297,10 +1316,12 @@ Create a browser session for code execution via CDP (Chrome DevTools Protocol).
     ttl: z.number().min(30).max(3600).optional(),
     activityTtl: z.number().min(10).max(3600).optional(),
     streamWebView: z.boolean().optional(),
-    profile: z.object({
-      name: z.string().min(1).max(128),
-      saveChanges: z.boolean().default(true),
-    }).optional(),
+    profile: z
+      .object({
+        name: z.string().min(1).max(128),
+        saveChanges: z.boolean().default(true),
+      })
+      .optional(),
   }),
   execute: async (
     args: unknown,
@@ -1522,15 +1543,17 @@ Interact with a previously scraped page in a live browser session. Scrape a page
 \`\`\`
 **Returns:** Execution result including output, stdout, stderr, exit code, and live view URLs.
 `,
-  parameters: z.object({
-    scrapeId: z.string(),
-    prompt: z.string().optional(),
-    code: z.string().optional(),
-    language: z.enum(['bash', 'python', 'node']).optional(),
-    timeout: z.number().min(1).max(300).optional(),
-  }).refine(data => data.code || data.prompt, {
-    message: "Either 'code' or 'prompt' must be provided.",
-  }),
+  parameters: z
+    .object({
+      scrapeId: z.string(),
+      prompt: z.string().optional(),
+      code: z.string().optional(),
+      language: z.enum(['bash', 'python', 'node']).optional(),
+      timeout: z.number().min(1).max(300).optional(),
+    })
+    .refine((data) => data.code || data.prompt, {
+      message: "Either 'code' or 'prompt' must be provided.",
+    }),
   execute: async (
     args: unknown,
     { session, log }: { session?: SessionData; log: Logger }
@@ -1786,7 +1809,9 @@ Add \`"parsers": ["pdf"]\` (optionally with \`pdfOptions.maxPages\`) when parsin
       const optionsPayload = { origin: ORIGIN, ...cleaned };
 
       const form = new FormData();
-      const blob = new Blob([new Uint8Array(buffer)], { type: fileContentType });
+      const blob = new Blob([new Uint8Array(buffer)], {
+        type: fileContentType,
+      });
       form.append('file', blob, filename);
       form.append('options', JSON.stringify(optionsPayload));
 
