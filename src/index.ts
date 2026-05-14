@@ -647,7 +647,7 @@ The query also supports search operators, that you can use if needed to refine t
   }
 }
 \`\`\`
-**Returns:** Array of search results (with optional scraped content).
+**Returns:** A JSON envelope of the form \`{ success, data: { web?, images?, news? }, id, creditsUsed }\`. Each result array contains the search results (with optional scraped content). Pass the top-level \`id\` to \`firecrawl_search_feedback\` after you've used the results.
 `,
   parameters: z
     .object({
@@ -697,11 +697,17 @@ The query also supports search operators, that you can use if needed to refine t
       excludeDomains
     );
     log.info('Searching', { query: searchQuery });
-    const res = await client.search(searchQuery, {
+    // Call /v2/search through the SDK's HTTP layer (auth + retries) instead
+    // of `client.search()` so we preserve the full response envelope. The
+    // high-level `search()` helper strips `id` and `creditsUsed`, which
+    // breaks the `firecrawl_search_feedback` workflow that this server
+    // explicitly tells the LLM to use after every search.
+    const httpRes = await (client as any).http.post('/v2/search', {
+      query: searchQuery,
       ...(cleaned as any),
       origin: ORIGIN,
     });
-    return asText(res);
+    return asText(httpRes?.data ?? {});
   },
 });
 
