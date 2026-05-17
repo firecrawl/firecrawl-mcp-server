@@ -92,7 +92,8 @@ Create a Firecrawl monitor — a recurring scrape or crawl that diffs each resul
 
 Pass the full request body. Required fields: \`name\`, \`schedule\` (with \`cron\` or \`text\`), and \`targets\` (one or more \`{ type: 'scrape', urls: [...] }\` or \`{ type: 'crawl', url: '...' }\`). Optional: \`webhook\`, \`notification\`, \`retentionDays\`.
 
-**Usage Example:**
+**Markdown-mode (default):** Each check produces a unified text diff of the page's markdown. No extra configuration needed.
+
 \`\`\`json
 {
   "name": "firecrawl_monitor_create",
@@ -106,6 +107,49 @@ Pass the full request body. Required fields: \`name\`, \`schedule\` (with \`cron
   }
 }
 \`\`\`
+
+**JSON-mode change tracking:** To detect changes in **specific structured fields** (price, headline, in-stock flag, list items) instead of the whole page, add a \`changeTracking\` format with \`modes: ["json"]\` and a JSON schema to the target's \`scrapeOptions.formats\`. The check response will then carry a per-field diff (keyed by JSON path, e.g. \`plans[0].price\`) and a \`snapshot.json\` with the full current extraction. See \`firecrawl_monitor_check\` for the response shape.
+
+\`\`\`json
+{
+  "name": "firecrawl_monitor_create",
+  "arguments": {
+    "body": {
+      "name": "Pricing watch",
+      "schedule": { "text": "hourly", "timezone": "UTC" },
+      "targets": [{
+        "type": "scrape",
+        "urls": ["https://example.com/pricing"],
+        "scrapeOptions": {
+          "formats": [{
+            "type": "changeTracking",
+            "modes": ["json"],
+            "prompt": "Extract pricing tiers and headline features for each plan.",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "plans": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name":     { "type": "string" },
+                      "price":    { "type": "string" },
+                      "features": { "type": "array", "items": { "type": "string" } }
+                    }
+                  }
+                }
+              }
+            }
+          }]
+        }
+      }]
+    }
+  }
+}
+\`\`\`
+
+**Mixed mode (JSON + git-diff):** Use \`modes: ["json", "git-diff"]\` to get both per-field diffs and a markdown sidecar. The page is marked \`changed\` whenever either surface changed.
 `,
     parameters: z.object({
       body: z.record(z.string(), z.any()),
@@ -335,6 +379,32 @@ List historical checks for a monitor.
     },
     description: `
 Get a single check with page-level diff results. Filter \`pageStatus\` to surface only the pages that changed (or were new, removed, etc.).
+
+Each entry in \`data.pages[]\` has \`url\`, \`status\` (\`same\` | \`new\` | \`changed\` | \`removed\` | \`error\`), and — when changed — a \`diff\` and possibly a \`snapshot\`. The shape of \`diff\` depends on the monitor's \`formats\` configuration:
+
+- **Markdown mode (default).** \`diff.text\` is the unified markdown diff; \`diff.json\` is a parse-diff AST (\`{ files: [...] }\`). No \`snapshot\`.
+- **JSON mode** (\`changeTracking\` with \`modes: ["json"]\`). \`diff.json\` is a per-field map keyed by JSON path into the extraction, e.g. \`plans[0].price\`, with each value being \`{ previous, current }\`. \`snapshot.json\` is the full current extraction. No \`diff.text\`.
+- **Mixed mode** (\`modes: ["json", "git-diff"]\`). Both \`diff.text\` (markdown sidecar) AND \`diff.json\` (per-field map) are present, plus \`snapshot.json\`.
+
+**Example JSON-mode response \`pages[]\` entry:**
+
+\`\`\`json
+{
+  "url": "https://example.com/pricing",
+  "status": "changed",
+  "diff": {
+    "json": {
+      "plans[0].price":       { "previous": "$19/mo",        "current": "$24/mo" },
+      "plans[1].features[2]": { "previous": "10 GB storage", "current": "25 GB storage" }
+    }
+  },
+  "snapshot": { "json": { "plans": [/* current full extraction matching the monitor's schema */] } }
+}
+\`\`\`
+
+When summarizing a check for the user, prefer \`diff.json\` paths (e.g. "plans[0].price changed from $19/mo to $24/mo") over re-printing the markdown diff — it's more concise and grounded in the schema fields they asked for.
+
+The endpoint paginates via a top-level \`next\` URL; this tool returns one page at a time. Increase \`limit\` (max 100) to fetch fewer pages.
 
 **Usage Example:**
 \`\`\`json
