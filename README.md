@@ -8,7 +8,7 @@
 
 # Firecrawl MCP Server
 
-A Model Context Protocol (MCP) server implementation that integrates with [Firecrawl](https://github.com/firecrawl/firecrawl) for searching, scraping, and interacting with the web.
+A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com/firecrawl/firecrawl) to MCP-compatible AI agents — search, scrape, and interact with the live web for clean, agent-ready context.
 
 > Big thanks to [@vrknetha](https://github.com/vrknetha), [@knacklabs](https://www.knacklabs.ai) for the initial implementation!
 
@@ -565,11 +565,50 @@ Search the web and optionally extract content from search results.
 
 **Returns:**
 
-- Array of search results (with optional scraped content)
+- Array of search results (with optional scraped content), plus an `id` field. Pass that `id` to `firecrawl_search_feedback` after you've used the results to refund 1 credit (search costs 2) and improve search quality.
 
 **Prompt Example:**
 
 > "Find the latest research papers on AI published in 2023."
+
+### 5b. Search Feedback Tool (`firecrawl_search_feedback`)
+
+Sends structured feedback on a previous `firecrawl_search` result. The first feedback per search id refunds 1 credit and improves Firecrawl's search quality. Idempotent per search id.
+
+**Call this after every search you actually use** (or that didn't help). Bad/partial feedback with `missingContent` is just as valuable as good feedback.
+
+**Opt out:** set `FIRECRAWL_NO_SEARCH_FEEDBACK=1` (or `FIRECRAWL_DISABLE_SEARCH_FEEDBACK=1`) in the environment when starting the MCP server. The `firecrawl_search_feedback` tool will not be registered, so agents can't call it. Team admins can also disable feedback server-side; in that case the tool is registered but always returns `feedbackErrorCode: "TEAM_OPTED_OUT"`.
+
+**Most important field:** `missingContent`. It's an array of specific pieces of content the agent expected to find but did not. One entry per missing topic — these aggregate across teams and tell us what to index next.
+
+**Daily refund cap (per team, per UTC day, default 100 credits).** Once a team's `creditsRefundedToday` reaches `dailyRefundCap`, further submissions still record feedback but no longer refund credits. The response sets `dailyCapReached: true`. Agents should stop calling this tool for the rest of the UTC day when they see that flag.
+
+**Usage Example:**
+
+```json
+{
+  "name": "firecrawl_search_feedback",
+  "arguments": {
+    "searchId": "0193f6c5-1234-7890-abcd-1234567890ab",
+    "rating": "good",
+    "valuableSources": [
+      {
+        "url": "https://docs.firecrawl.dev/features/search",
+        "reason": "Most up-to-date description of /search."
+      }
+    ],
+    "missingContent": [
+      { "topic": "Pricing for the search endpoint", "description": "No pricing tier table for /search specifically." },
+      { "topic": "Per-team rate limits" }
+    ],
+    "querySuggestions": "Boost docs.firecrawl.dev for queries that mention 'firecrawl'"
+  }
+}
+```
+
+**Returns:**
+
+- `{ success, feedbackId, creditsRefunded, alreadySubmitted? }` JSON.
 
 ### 6. Crawl Tool (`firecrawl_crawl`)
 
