@@ -255,11 +255,55 @@ function buildParsersArray(
   return result;
 }
 
+function isPrivateOrLoopbackHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (host === 'localhost' || host.endsWith('.localhost')) return true;
+  if (host === '::' || host === '::1') return true;
+  if (host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd')) {
+    return true;
+  }
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4) {
+    const [a, b] = ipv4.slice(1).map(Number);
+    if (a === 10) return true;
+    if (a === 127) return true;
+    if (a === 0) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    return false;
+  }
+  return false;
+}
+
+function validateWebhookUrl(raw: string): URL {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(
+      `Invalid webhook URL: ${raw}. Must be an absolute https:// URL.`
+    );
+  }
+  if (url.protocol !== 'https:') {
+    throw new Error(
+      `Invalid webhook URL: ${raw}. Webhooks must use https:// (got ${url.protocol}).`
+    );
+  }
+  if (isPrivateOrLoopbackHost(url.hostname)) {
+    throw new Error(
+      `Invalid webhook URL: ${raw}. Private, loopback, and link-local hosts are not allowed.`
+    );
+  }
+  return url;
+}
+
 function buildWebhook(
   args: Record<string, unknown>
 ): string | Record<string, unknown> | undefined {
   const webhook = args.webhook as string | undefined;
   if (!webhook) return undefined;
+  validateWebhookUrl(webhook);
   const headers = args.webhookHeaders as Record<string, string> | undefined;
   if (headers && Object.keys(headers).length > 0) {
     return { url: webhook, headers };
@@ -384,107 +428,31 @@ server.addTool({
     openWorldHint: true,
   },
   description: `
-Scrape content from a single URL with advanced options.
-This is the most powerful, fastest and most reliable scraper tool, if available you should always default to using this tool for any web scraping needs.
+Scrape a single URL into clean content. Default tool for any web page extraction.
 
-**Best for:** Single page content extraction, when you know exactly which page contains the information.
-**Not recommended for:** Multiple pages (call scrape multiple times or use crawl), unknown page location (use search).
-**Common mistakes:** Using markdown format when extracting specific data points (use JSON instead).
-**Other Features:** Use 'branding' format to extract brand identity (colors, fonts, typography, spacing, UI components) for design analysis or style replication.
+**Best for:** Single page extraction when you know the URL.
+**Not for:** Multiple pages (use crawl), unknown location (use search), multi-step interactions (use interact).
 
-**CRITICAL - Format Selection (you MUST follow this):**
-When the user asks for SPECIFIC data points, you MUST use JSON format with a schema. Only use markdown when the user needs the ENTIRE page content.
+**Formats:**
+- \`markdown\` (default): full page content for reading/summarizing.
+- \`json\` with \`jsonOptions.schema\`: specific data points (prices, fields, lists, API params).
+- \`query\` with \`queryOptions.prompt\`: single targeted answer from a long page (\`mode: "directQuote"\` for verbatim).
+- \`branding\`: colors, fonts, typography, logo for design analysis.
+- \`html\`, \`rawHtml\`, \`links\`, \`screenshot\`, \`summary\`, \`changeTracking\` also supported.
 
-**Use JSON format when user asks for:**
-- Parameters, fields, or specifications (e.g., "get the header parameters", "what are the required fields")
-- Prices, numbers, or structured data (e.g., "extract the pricing", "get the product details")
-- API details, endpoints, or technical specs (e.g., "find the authentication endpoint")
-- Lists of items or properties (e.g., "list the features", "get all the options")
-- Any specific piece of information from a page
+**If extraction returns empty/minimal:** add \`waitFor: 5000-10000\` for JS-rendered pages, or use \`firecrawl_map\` with \`search\` to locate the right URL before retrying.
 
-**Use markdown format ONLY when:**
-- User wants to read/summarize an entire article or blog post
-- User needs to see all content on a page without specific extraction
-- User explicitly asks for the full page content
+**Performance:** \`maxAge\` enables cached scrapes (~500% faster). \`lockdown: true\` serves only from cache, errors on miss (5 credits, for compliance/air-gapped use).
 
-**Handling JavaScript-rendered pages (SPAs):**
-If JSON extraction returns empty, minimal, or just navigation content, the page is likely JavaScript-rendered or the content is on a different URL. Try these steps IN ORDER:
-1. **Add waitFor parameter:** Set \`waitFor: 5000\` to \`waitFor: 10000\` to allow JavaScript to render before extraction
-2. **Try a different URL:** If the URL has a hash fragment (#section), try the base URL or look for a direct page URL
-3. **Use firecrawl_map to find the correct page:** Large documentation sites or SPAs often spread content across multiple URLs. Use \`firecrawl_map\` with a \`search\` parameter to discover the specific page containing your target content, then scrape that URL directly.
-   Example: If scraping "https://docs.example.com/reference" fails to find webhook parameters, use \`firecrawl_map\` with \`{"url": "https://docs.example.com/reference", "search": "webhook"}\` to find URLs like "/reference/webhook-events", then scrape that specific page.
-4. **Use firecrawl_agent:** As a last resort for heavily dynamic pages where map+scrape still fails, use the agent which can autonomously navigate and research
+**Returns:** \`{ success, data: { markdown?, json?, html?, links?, screenshot?, metadata, scrapeId } }\`. The \`scrapeId\` can be passed to \`firecrawl_interact\` for follow-up clicks/forms.
 
-**Usage Example (JSON format - REQUIRED for specific data extraction):**
+**Example:**
 \`\`\`json
-{
-  "name": "firecrawl_scrape",
-  "arguments": {
-    "url": "https://example.com/api-docs",
-    "formats": ["json"],
-    "jsonOptions": {
-      "prompt": "Extract the header parameters for the authentication endpoint",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "parameters": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "name": { "type": "string" },
-                "type": { "type": "string" },
-                "required": { "type": "boolean" },
-                "description": { "type": "string" }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
+{ "url": "https://example.com/api-docs", "formats": ["json"], "jsonOptions": { "prompt": "Extract auth header parameters", "schema": { "type": "object", "properties": { "parameters": { "type": "array" } } } } }
 \`\`\`
-
-**Prefer markdown format by default.** You can read and reason over the full page content directly — no need for an intermediate query step. Use markdown for questions about page content, factual lookups, and any task where you need to understand the page.
-
-**Use JSON format when user needs:**
-- Structured data with specific fields (extract all products with name, price, description)
-- Data in a specific schema for downstream processing
-
-**Use query format only when:**
-- The page is extremely long and you need a single targeted answer without processing the full content
-- You want a quick factual answer and don't need to retain the page content
-- Set \`queryOptions.mode\` to \`"directQuote"\` when you need verbatim page text; otherwise it defaults to \`"freeform"\`
-
-**Usage Example (markdown format - default for most tasks):**
-\`\`\`json
-{
-  "name": "firecrawl_scrape",
-  "arguments": {
-    "url": "https://example.com/article",
-    "formats": ["markdown"],
-    "onlyMainContent": true
-  }
-}
-\`\`\`
-**Usage Example (branding format - extract brand identity):**
-\`\`\`json
-{
-  "name": "firecrawl_scrape",
-  "arguments": {
-    "url": "https://example.com",
-    "formats": ["branding"]
-  }
-}
-\`\`\`
-**Branding format:** Extracts comprehensive brand identity (colors, fonts, typography, spacing, logo, UI components) for design analysis or style replication.
-**Performance:** Add maxAge parameter for 500% faster scrapes using cached data.
-**Lockdown mode:** Set \`lockdown: true\` to serve the request only from the existing index/cache without any outbound network request. For air-gapped or compliance-constrained use where the request URL itself is considered sensitive. Errors on cache miss. Billed at 5 credits.
-**Returns:** JSON structured data, markdown, branding profile, or other formats as specified.
 ${
   SAFE_MODE
-    ? '**Safe Mode:** Read-only content extraction. Interactive actions (click, write, executeJavascript) are disabled for security.'
+    ? '**Safe Mode:** Read-only. Interactive actions disabled.'
     : ''
 }
 `,
@@ -521,35 +489,16 @@ server.addTool({
     openWorldHint: true,
   },
   description: `
-Map a website to discover all indexed URLs on the site.
+Discover indexed URLs on a site. Use \`search\` to find a specific page when \`firecrawl_scrape\` returns empty/wrong content — cheaper and faster than \`firecrawl_agent\`.
 
-**Best for:** Discovering URLs on a website before deciding what to scrape; finding specific sections or pages within a large site; locating the correct page when scrape returns empty or incomplete results.
-**Not recommended for:** When you already know which specific URL you need (use scrape); when you need the content of the pages (use scrape after mapping).
-**Common mistakes:** Using crawl to discover URLs instead of map; jumping straight to firecrawl_agent when scrape fails instead of using map first to find the right page.
+**Best for:** URL discovery before scraping; locating the right page within docs/SPAs.
+**Not for:** When you already know the URL (use scrape); fetching page content (use scrape after mapping).
 
-**IMPORTANT - Use map before agent:** If \`firecrawl_scrape\` returns empty, minimal, or irrelevant content, use \`firecrawl_map\` with the \`search\` parameter to find the specific page URL containing your target content. This is faster and cheaper than using \`firecrawl_agent\`. Only use the agent as a last resort after map+scrape fails.
+**Edge cases:** Sites with no sitemap and few internal links may return very few URLs — set \`sitemap: "skip"\` and \`includeSubdomains: true\` to broaden discovery, or fall back to \`firecrawl_crawl\`. \`limit\` defaults to ~5000; results above the limit are truncated, not paginated.
 
-**Prompt Example:** "Find the webhook documentation page on this API docs site."
-**Usage Example (discover all URLs):**
-\`\`\`json
-{
-  "name": "firecrawl_map",
-  "arguments": {
-    "url": "https://example.com"
-  }
-}
-\`\`\`
-**Usage Example (search for specific content - RECOMMENDED when scrape fails):**
-\`\`\`json
-{
-  "name": "firecrawl_map",
-  "arguments": {
-    "url": "https://docs.example.com/api",
-    "search": "webhook events"
-  }
-}
-\`\`\`
-**Returns:** Array of URLs found on the site, filtered by search query if provided.
+**Returns:** \`{ success, links: string[] }\` filtered by \`search\` if provided. Empty array means nothing matched — not an error.
+
+**Example:** \`{ "url": "https://docs.example.com/api", "search": "webhook events" }\`
 `,
   parameters: z.object({
     url: z.string().url(),
@@ -586,68 +535,22 @@ server.addTool({
     openWorldHint: true,
   },
   description: `
-Search the web and optionally extract content from search results. This is the most powerful web search tool available, and if available you should always default to using this tool for any web search needs.
+Web search across web, images, and news. Default tool for any web search.
 
-The query also supports search operators, that you can use if needed to refine the search:
-| Operator | Functionality | Examples |
----|-|-|
-| \`"\"\` | Non-fuzzy matches a string of text | \`"Firecrawl"\`
-| \`-\` | Excludes certain keywords or negates other operators | \`-bad\`, \`-site:firecrawl.dev\`
-| \`site:\` | Only returns results from a specified website | \`site:firecrawl.dev\`
-| \`inurl:\` | Only returns results that include a word in the URL | \`inurl:firecrawl\`
-| \`allinurl:\` | Only returns results that include multiple words in the URL | \`allinurl:git firecrawl\`
-| \`intitle:\` | Only returns results that include a word in the title of the page | \`intitle:Firecrawl\`
-| \`allintitle:\` | Only returns results that include multiple words in the title of the page | \`allintitle:firecrawl playground\`
-| \`related:\` | Only returns results that are related to a specific domain | \`related:firecrawl.dev\`
-| \`imagesize:\` | Only returns images with exact dimensions | \`imagesize:1920x1080\`
-| \`larger:\` | Only returns images larger than specified dimensions | \`larger:1920x1080\`
+**Best for:** Finding information when you don't know which site has it.
+**Not for:** When you already know the URL (use scrape); single-site coverage (use map/crawl); filesystem search.
 
-**Best for:** Finding specific information across multiple websites, when you don't know which website has the information; when you need the most relevant content for a query.
-**Not recommended for:** When you need to search the filesystem. When you already know which website to scrape (use scrape); when you need comprehensive coverage of a single website (use map or crawl.
-**Common mistakes:** Using crawl or map for open-ended questions (use search instead).
-**Prompt Example:** "Find the latest research papers on AI published in 2023."
-**Sources:** web, images, news, default to web unless needed images or news.
-**Domain filters:** Use includeDomains to restrict results to specific domains, or excludeDomains to remove domains. Do not use both in the same request. Domains must be hostnames only, without protocol or path.
-**Scrape Options:** Only use scrapeOptions when you think it is absolutely necessary. When you do so default to a lower limit to avoid timeouts, 5 or lower.
-**Optimal Workflow:** Search first using firecrawl_search without formats, then after fetching the results, use the scrape tool to get the content of the relevantpage(s) that you want to scrape
-**After the search:** Once you have processed the results (or decided they were not useful), call \`firecrawl_search_feedback\` with the \`id\` from this response. The first feedback per search refunds 1 credit and helps Firecrawl improve search quality.
+**Workflow:** Search first without \`scrapeOptions\`, then scrape the relevant URLs separately. Only set \`scrapeOptions\` when you need content inline — keep \`limit\` ≤ 5 to avoid timeouts.
 
-**Usage Example without formats (Preferred):**
-\`\`\`json
-{
-  "name": "firecrawl_search",
-  "arguments": {
-    "query": "top AI companies",
-    "limit": 5,
-    "includeDomains": ["example.com"],
-    "sources": [
-      { "type": "web" }
-    ]
-  }
-}
-\`\`\`
-**Usage Example with formats:**
-\`\`\`json
-{
-  "name": "firecrawl_search",
-  "arguments": {
-    "query": "latest AI research papers 2023",
-    "limit": 5,
-    "lang": "en",
-    "country": "us",
-    "sources": [
-      { "type": "web" },
-      { "type": "images" },
-      { "type": "news" }
-    ],
-    "scrapeOptions": {
-      "formats": ["markdown"],
-      "onlyMainContent": true
-    }
-  }
-}
-\`\`\`
-**Returns:** A JSON envelope of the form \`{ success, data: { web?, images?, news? }, id, creditsUsed }\`. Each result array contains the search results (with optional scraped content). Pass the top-level \`id\` to \`firecrawl_search_feedback\` after you've used the results.
+**Operators in \`query\`:** \`"exact"\`, \`-exclude\`, \`site:\`, \`inurl:\`, \`intitle:\`, \`related:\`, \`imagesize:WxH\`, \`larger:WxH\`.
+**Domain filters:** \`includeDomains\` OR \`excludeDomains\` (not both), hostnames only.
+**Sources:** \`web\` (default), \`images\`, \`news\`.
+
+**After processing results, call \`firecrawl_search_feedback\` with the returned \`id\`** — refunds 1 credit on first feedback and improves search quality.
+
+**Returns:** \`{ success, data: { web?, images?, news? }, id, creditsUsed }\`.
+
+**Example:** \`{ "query": "top AI startups 2024", "limit": 5, "sources": [{ "type": "web" }] }\`
 `,
   parameters: z
     .object({
@@ -745,65 +648,24 @@ server.addTool({
     openWorldHint: true,
   },
   description: `
-Send structured feedback on a previous \`firecrawl_search\` result. **Call this immediately after a search where you used the results** so we can improve search quality and refund 1 credit (search costs 2).
+Submit feedback on a \`firecrawl_search\` result. Call immediately after using a search (refunds 1 credit on first feedback, improves quality).
 
-Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the response) and tell us:
+**Required fields by rating** (zero-effort feedback returns HTTP 400):
+- \`good\`: must include \`valuableSources\` (≥1).
+- \`partial\`: must include \`valuableSources\` OR \`missingContent\` (≥1).
+- \`bad\`: must include \`missingContent\` (≥1) OR \`querySuggestions\`.
 
-- **rating** — overall result quality: \`good\`, \`partial\`, or \`bad\`.
-- **valuableSources** — which result URLs were actually useful, and a short reason why.
-- **missingContent** — **the most important field.** An ARRAY of specific pieces of content you expected to find but didn't. One entry per missing piece, each with a short \`topic\` and an optional longer \`description\`. Examples: \`{"topic":"enterprise pricing","description":"no pricing tier table for the Enterprise plan was returned"}\`, \`{"topic":"API rate limits"}\`, \`{"topic":"comparison vs competitors"}\`. **Be specific** — these aggregate across teams and tell us what to index next. Do not pack multiple topics into one entry.
-- **querySuggestions** — how the query or response shape could be improved (e.g. "would have liked official docs first", "should boost github.com").
+**\`missingContent\`** is an array of specific gaps — one entry per topic with \`topic\` (short) and optional \`description\`. Don't pack multiple topics into one entry.
 
-**Substantive-feedback requirement** (zero-effort feedback is rejected with HTTP 400):
-- \`good\` — must include at least one \`valuableSources\` entry
-- \`partial\` — must include \`valuableSources\` or at least one \`missingContent\` entry
-- \`bad\` — must include at least one \`missingContent\` entry or \`querySuggestions\`
+**Constraints:**
+- Window: ~2 minutes after the search. Expired returns HTTP 409 \`FEEDBACK_WINDOW_EXPIRED\` — do not retry.
+- Idempotent per \`searchId\`. Resubmits return \`alreadySubmitted: true\`.
+- Daily refund cap (default 100 credits/team/UTC day). When \`dailyCapReached: true\`, stop calling for the rest of the day.
+- Any 4xx is terminal — do not retry-loop.
 
-**Time window:** Feedback must be submitted within ~2 minutes of the search. Beyond that, the call returns HTTP 409 with \`feedbackErrorCode: "FEEDBACK_WINDOW_EXPIRED"\` — do not retry, just move on. Same goes for any 4xx response: do not retry-loop.
+**Returns:** \`{ success, feedbackId, creditsRefunded, creditsRefundedToday, dailyRefundCap, dailyCapReached?, alreadySubmitted? }\`.
 
-**Behaviors:**
-- Idempotent per \`searchId\`. Re-submitting for the same id returns \`alreadySubmitted: true\` with \`creditsRefunded: 0\`.
-- Refund only applies to billable searches; preview teams are blocked.
-- Failed searches cannot receive feedback (the search itself already returned an error you can act on).
-- **Daily refund cap (per team, per UTC day, default 100 credits).** Once a team's \`creditsRefundedToday\` reaches \`dailyRefundCap\`, the response returns \`dailyCapReached: true\` with \`creditsRefunded: 0\`. The feedback is still recorded for search-quality improvement — only the credit refund is gated. **Stop calling this tool for the rest of the UTC day** when you see \`dailyCapReached: true\`.
-
-**When to call:** Right after processing a search result. If the result didn't help, send rating \`bad\` with a clear \`missingContent\` — that is just as valuable as a \`good\` rating.
-
-**Usage Example (good rating with valuable sources + missing content):**
-\`\`\`json
-{
-  "name": "firecrawl_search_feedback",
-  "arguments": {
-    "searchId": "0193f6c5-1234-7890-abcd-1234567890ab",
-    "rating": "good",
-    "valuableSources": [
-      { "url": "https://docs.firecrawl.dev/features/search", "reason": "Most up-to-date description of /search." }
-    ],
-    "missingContent": [
-      { "topic": "Pricing for the search endpoint", "description": "No pricing tier table for /search specifically." },
-      { "topic": "Rate limits", "description": "Per-team RPS for /search not documented." }
-    ],
-    "querySuggestions": "Boost docs.firecrawl.dev for queries that mention 'firecrawl'"
-  }
-}
-\`\`\`
-
-**Usage Example (bad rating, what was missing):**
-\`\`\`json
-{
-  "name": "firecrawl_search_feedback",
-  "arguments": {
-    "searchId": "0193f6c5-1234-7890-abcd-1234567890ab",
-    "rating": "bad",
-    "missingContent": [
-      { "topic": "Recent benchmarks", "description": "All results were >12 months old." },
-      { "topic": "Comparison vs Algolia" }
-    ]
-  }
-}
-\`\`\`
-
-**Returns:** \`{ success, feedbackId, creditsRefunded, creditsRefundedToday, dailyRefundCap, dailyCapReached?, alreadySubmitted?, warning? }\` JSON.
+**Example:** \`{ "searchId": "uuid-from-search", "rating": "bad", "missingContent": [{ "topic": "Recent benchmarks", "description": "All results >12 months old" }] }\`
 `,
   parameters: z.object({
     searchId: z
@@ -927,34 +789,24 @@ server.addTool({
     destructiveHint: false,
   },
   description: `
- Starts a crawl job on a website and extracts content from all pages.
- 
- **Best for:** Extracting content from multiple related pages, when you need comprehensive coverage.
- **Not recommended for:** Extracting content from a single page (use scrape); when token limits are a concern (use map + batch_scrape); when you need fast results (crawling can be slow).
- **Warning:** Crawl responses can be very large and may exceed token limits. Limit the crawl depth and number of pages, or use map + batch_scrape for better control.
- **Common mistakes:** Setting limit or maxDiscoveryDepth too high (causes token overflow) or too low (causes missing pages); using crawl for a single page (use scrape instead). Using a /* wildcard is not recommended.
- **Prompt Example:** "Get all blog posts from the first two levels of example.com/blog."
- **Usage Example:**
- \`\`\`json
- {
-   "name": "firecrawl_crawl",
-   "arguments": {
-     "url": "https://example.com/blog/*",
-     "maxDiscoveryDepth": 5,
-     "limit": 20,
-     "allowExternalLinks": false,
-     "deduplicateSimilarURLs": true,
-     "sitemap": "include"
-   }
- }
- \`\`\`
- **Returns:** Operation ID for status checking; use firecrawl_check_crawl_status to check progress.
- ${
-   SAFE_MODE
-     ? '**Safe Mode:** Read-only crawling. Webhooks and interactive actions are disabled for security.'
-     : ''
- }
- `,
+Start an async crawl job over multiple pages on a site.
+
+**Best for:** Comprehensive coverage of a site or section.
+**Not for:** Single pages (use scrape); when results must be fast (crawls can be slow); when token budget is tight (use map + scrape per URL).
+
+**Critical:** Always set \`limit\` (typical 10–50) and \`maxDiscoveryDepth\` (typical 2–5). Unbounded crawls overflow tokens. Avoid \`/*\` wildcards.
+
+**Webhook security** (when supported): \`webhook\` must be HTTPS and resolve to a public IP — private/loopback/link-local addresses are rejected.
+
+**Returns:** \`{ success, id }\`. Poll progress with \`firecrawl_check_crawl_status\`.
+
+**Example:** \`{ "url": "https://example.com/blog", "maxDiscoveryDepth": 3, "limit": 20, "sitemap": "include" }\`
+${
+  SAFE_MODE
+    ? '**Safe Mode:** Webhooks and interactive actions disabled.'
+    : ''
+}
+`,
   parameters: z.object({
     url: z.string(),
     prompt: z.string().optional(),
@@ -1011,18 +863,13 @@ server.addTool({
     openWorldHint: false,
   },
   description: `
-Check the status of a crawl job.
+Check the status and results of a crawl job started by \`firecrawl_crawl\`.
 
-**Usage Example:**
-\`\`\`json
-{
-  "name": "firecrawl_check_crawl_status",
-  "arguments": {
-    "id": "550e8400-e29b-41d4-a716-446655440000"
-  }
-}
-\`\`\`
-**Returns:** Status and progress of the crawl job, including results if available.
+**Polling:** Every 5–15s while \`status === "scraping"\`. \`data\` is only populated when \`status === "completed"\`. Crawls of 10–50 pages typically finish in 30–180s; large crawls (\`limit\` > 100) can take 5+ minutes.
+
+**Returns:** \`{ success, status, completed, total, creditsUsed, data?: [{ markdown?, json?, html?, metadata }] }\`. Status is one of \`scraping\`, \`completed\`, \`failed\`, \`cancelled\`. On \`failed\`/\`cancelled\`, \`data\` may be a partial result of pages crawled so far.
+
+**Example:** \`{ "id": "550e8400-e29b-41d4-a716-446655440000" }\`
 `,
   parameters: z.object({ id: z.string() }),
   execute: async (
@@ -1043,41 +890,19 @@ server.addTool({
     openWorldHint: true,
   },
   description: `
-Extract structured information from web pages using LLM capabilities. Supports both cloud AI and self-hosted LLM extraction.
+Extract structured data from one or more URLs using an LLM and your JSON schema.
 
-**Best for:** Extracting specific structured data like prices, names, details from web pages.
-**Not recommended for:** When you need the full content of a page (use scrape); when you're not looking for specific structured data.
-**Arguments:**
-- urls: Array of URLs to extract information from
-- prompt: Custom prompt for the LLM extraction
-- schema: JSON schema for structured data extraction
-- allowExternalLinks: Allow extraction from external links
-- enableWebSearch: Enable web search for additional context
-- includeSubdomains: Include subdomains in extraction
-**Prompt Example:** "Extract the product name, price, and description from these product pages."
-**Usage Example:**
+**Best for:** Pulling specific fields (prices, names, specs) across multiple pages with one schema.
+**Not for:** Full page content (use scrape with markdown); a single page with a known schema (use scrape with \`json\` format — cheaper).
+
+**Edge cases:** Fields the LLM can't find return \`null\` (or are omitted if not in \`required\`). \`enableWebSearch: true\` lets the model browse beyond the supplied URLs when context is missing. \`urls\` supports glob suffixes (e.g. \`https://example.com/blog/*\`) to fan out to all matching pages.
+
+**Returns:** \`{ success, data: <matches schema> }\`. On per-URL failure, that URL's contribution is omitted; \`data\` reflects only successfully extracted pages.
+
+**Example:**
 \`\`\`json
-{
-  "name": "firecrawl_extract",
-  "arguments": {
-    "urls": ["https://example.com/page1", "https://example.com/page2"],
-    "prompt": "Extract product information including name, price, and description",
-    "schema": {
-      "type": "object",
-      "properties": {
-        "name": { "type": "string" },
-        "price": { "type": "number" },
-        "description": { "type": "string" }
-      },
-      "required": ["name", "price"]
-    },
-    "allowExternalLinks": false,
-    "enableWebSearch": false,
-    "includeSubdomains": false
-  }
-}
+{ "urls": ["https://example.com/p1", "https://example.com/p2"], "prompt": "Extract product info", "schema": { "type": "object", "properties": { "name": {"type": "string"}, "price": {"type": "number"} }, "required": ["name", "price"] } }
 \`\`\`
-**Returns:** Extracted structured data as defined by your schema.
 `,
   parameters: z.object({
     urls: z.array(z.string()),
@@ -1119,73 +944,16 @@ server.addTool({
     destructiveHint: false,
   },
   description: `
-Autonomous web research agent. This is a separate AI agent layer that independently browses the internet, searches for information, navigates through pages, and extracts structured data based on your query. You describe what you need, and the agent figures out where to find it.
+Async autonomous research agent: searches the web, follows links, and gathers data without supervision. Returns a job ID — poll \`firecrawl_agent_status\` for results.
 
-**How it works:** The agent performs web searches, follows links, reads pages, and gathers data autonomously. This runs **asynchronously** - it returns a job ID immediately, and you poll \`firecrawl_agent_status\` to check when complete and retrieve results.
+**Best for:** Multi-source research where you don't know the URLs; JS-heavy SPAs where regular scrape fails.
+**Not for:** Single known URLs (use scrape — faster, cheaper); plain web search (use search); clicking/filling forms (use scrape + interact).
 
-**IMPORTANT - Async workflow with patient polling:**
-1. Call \`firecrawl_agent\` with your prompt/schema → returns job ID immediately
-2. Poll \`firecrawl_agent_status\` with the job ID to check progress
-3. **Keep polling for at least 2-3 minutes** - agent research typically takes 1-5 minutes for complex queries
-4. Poll every 15-30 seconds until status is "completed" or "failed"
-5. Do NOT give up after just a few polling attempts - the agent needs time to research
+**Polling:** Every 15–30s. Typical runtime 1–5 min; complex research can take 5+ min. Don't give up early.
 
-**Expected wait times:**
-- Simple queries with provided URLs: 30 seconds - 1 minute
-- Complex research across multiple sites: 2-5 minutes
-- Deep research tasks: 5+ minutes
+**Returns:** \`{ success, id }\`. Use \`firecrawl_agent_status\` to retrieve results.
 
-**Best for:** Complex research tasks where you don't know the exact URLs; multi-source data gathering; finding information scattered across the web; extracting data from JavaScript-heavy SPAs that fail with regular scrape.
-**Not recommended for:**
-- Single-page extraction when you have a URL (use firecrawl_scrape, faster and cheaper)
-- Web search (use firecrawl_search first)
-- Interactive page tasks like clicking, filling forms, login, or navigating JS-heavy SPAs (use firecrawl_scrape + firecrawl_interact)
-- Extracting specific data from a known page (use firecrawl_scrape with JSON format)
-
-**Arguments:**
-- prompt: Natural language description of the data you want (required, max 10,000 characters)
-- urls: Optional array of URLs to focus the agent on specific pages
-- schema: Optional JSON schema for structured output
-
-**Prompt Example:** "Find the founders of Firecrawl and their backgrounds"
-**Usage Example (start agent, then poll patiently for results):**
-\`\`\`json
-{
-  "name": "firecrawl_agent",
-  "arguments": {
-    "prompt": "Find the top 5 AI startups founded in 2024 and their funding amounts",
-    "schema": {
-      "type": "object",
-      "properties": {
-        "startups": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": { "type": "string" },
-              "funding": { "type": "string" },
-              "founded": { "type": "string" }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-\`\`\`
-Then poll with \`firecrawl_agent_status\` every 15-30 seconds for at least 2-3 minutes.
-
-**Usage Example (with URLs - agent focuses on specific pages):**
-\`\`\`json
-{
-  "name": "firecrawl_agent",
-  "arguments": {
-    "urls": ["https://docs.firecrawl.dev", "https://firecrawl.dev/pricing"],
-    "prompt": "Compare the features and pricing information from these pages"
-  }
-}
-\`\`\`
-**Returns:** Job ID for status checking. Use \`firecrawl_agent_status\` to poll for results.
+**Example:** \`{ "prompt": "Find the top 5 AI startups founded in 2024 and their funding", "schema": { "type": "object", "properties": { "startups": { "type": "array" } } } }\`
 `,
   parameters: z.object({
     prompt: z.string().min(1).max(10000),
@@ -1223,29 +991,13 @@ server.addTool({
     openWorldHint: false,
   },
   description: `
-Check the status of an agent job and retrieve results when complete. Use this to poll for results after starting an agent with \`firecrawl_agent\`.
+Poll the status and retrieve results for a \`firecrawl_agent\` job.
 
-**IMPORTANT - Be patient with polling:**
-- Poll every 15-30 seconds
-- **Keep polling for at least 2-3 minutes** before considering the request failed
-- Complex research can take 5+ minutes - do not give up early
-- Only stop polling when status is "completed" or "failed"
+**Polling:** Every 15–30s. Statuses: \`processing\` (keep polling), \`completed\` (data ready), \`failed\` (stop). Don't give up before 2–3 minutes; complex research can run 5+ minutes.
 
-**Usage Example:**
-\`\`\`json
-{
-  "name": "firecrawl_agent_status",
-  "arguments": {
-    "id": "550e8400-e29b-41d4-a716-446655440000"
-  }
-}
-\`\`\`
-**Possible statuses:**
-- processing: Agent is still researching - keep polling, do not give up
-- completed: Research finished - response includes the extracted data
-- failed: An error occurred (only stop polling on this status)
+**Returns:** \`{ success, status, data?, error? }\`. \`data\` matches the schema passed to \`firecrawl_agent\`.
 
-**Returns:** Status, progress, and results (if completed) of the agent job.
+**Example:** \`{ "id": "550e8400-e29b-41d4-a716-446655440000" }\`
 `,
   parameters: z.object({ id: z.string() }),
   execute: async (
@@ -1260,223 +1012,7 @@ Check the status of an agent job and retrieve results when complete. Use this to
   },
 });
 
-// Browser session tools (deprecated — prefer firecrawl_scrape + firecrawl_interact)
-server.addTool({
-  name: 'firecrawl_browser_create',
-  annotations: {
-    title: 'Create browser session',
-    readOnlyHint: false,
-    openWorldHint: false,
-    destructiveHint: false,
-  },
-  description: `
-**DEPRECATED — prefer firecrawl_scrape + firecrawl_interact instead.** Interact lets you scrape a page and then click, fill forms, and navigate without managing sessions manually.
-
-Create a browser session for code execution via CDP (Chrome DevTools Protocol).
-
-**Arguments:**
-- ttl: Total session lifetime in seconds (30-3600, optional)
-- activityTtl: Idle timeout in seconds (10-3600, optional)
-- streamWebView: Whether to enable live view streaming (optional)
-- profile: Save and reuse browser state (cookies, localStorage) across sessions (optional)
-  - name: Profile name (sessions with the same name share state)
-  - saveChanges: Whether to save changes back to the profile (default: true)
-
-**Usage Example:**
-\`\`\`json
-{
-  "name": "firecrawl_browser_create",
-  "arguments": {
-    "profile": { "name": "my-profile", "saveChanges": true }
-  }
-}
-\`\`\`
-**Returns:** Session ID, CDP URL, and live view URL.
-`,
-  parameters: z.object({
-    ttl: z.number().min(30).max(3600).optional(),
-    activityTtl: z.number().min(10).max(3600).optional(),
-    streamWebView: z.boolean().optional(),
-    profile: z.object({
-      name: z.string().min(1).max(128),
-      saveChanges: z.boolean().default(true),
-    }).optional(),
-  }),
-  execute: async (
-    args: unknown,
-    { session, log }: { session?: SessionData; log: Logger }
-  ): Promise<string> => {
-    const client = getClient(session);
-    const a = args as Record<string, unknown>;
-    const cleaned = removeEmptyTopLevel(a);
-    log.info('Creating browser session');
-    const res = await client.browser(cleaned as any);
-    return asText(res);
-  },
-});
-
-if (!SAFE_MODE) {
-  server.addTool({
-    name: 'firecrawl_browser_execute',
-    annotations: {
-      title: 'Run code in browser session',
-      readOnlyHint: false,
-      openWorldHint: false,
-      destructiveHint: true,
-    },
-    description: `
-**DEPRECATED — prefer firecrawl_scrape + firecrawl_interact instead.** Interact lets you scrape a page and then click, fill forms, and navigate without managing sessions manually.
-
-Execute code in a browser session. Supports agent-browser commands (bash), Python, or JavaScript.
-**Requires:** An active browser session (create one with firecrawl_browser_create first).
-
-**Arguments:**
-- sessionId: The browser session ID (required)
-- code: The code to execute (required)
-- language: "bash", "python", or "node" (optional, defaults to "bash")
-
-**Recommended: Use bash with agent-browser commands** (pre-installed in every sandbox):
-\`\`\`json
-{
-  "name": "firecrawl_browser_execute",
-  "arguments": {
-    "sessionId": "session-id-here",
-    "code": "agent-browser open https://example.com",
-    "language": "bash"
-  }
-}
-\`\`\`
-
-**Common agent-browser commands:**
-- \`agent-browser open <url>\` — Navigate to URL
-- \`agent-browser snapshot\` — Get accessibility tree with clickable refs (for AI)
-- \`agent-browser snapshot -i -c\` — Interactive elements only, compact
-- \`agent-browser click @e5\` — Click element by ref from snapshot
-- \`agent-browser type @e3 "text"\` — Type into element
-- \`agent-browser fill @e3 "text"\` — Clear and fill element
-- \`agent-browser get text @e1\` — Get text content
-- \`agent-browser get title\` — Get page title
-- \`agent-browser get url\` — Get current URL
-- \`agent-browser screenshot [path]\` — Take screenshot
-- \`agent-browser scroll down\` — Scroll page
-- \`agent-browser wait 2000\` — Wait 2 seconds
-- \`agent-browser --help\` — Full command reference
-
-**For Playwright scripting, use Python** (has proper async/await support):
-\`\`\`json
-{
-  "name": "firecrawl_browser_execute",
-  "arguments": {
-    "sessionId": "session-id-here",
-    "code": "await page.goto('https://example.com')\\ntitle = await page.title()\\nprint(title)",
-    "language": "python"
-  }
-}
-\`\`\`
-
-**Note:** Prefer bash (agent-browser) or Python.
-**Returns:** Execution result including stdout, stderr, and exit code.
-`,
-    parameters: z.object({
-      sessionId: z.string(),
-      code: z.string(),
-      language: z.enum(['bash', 'python', 'node']).optional(),
-    }),
-    execute: async (
-      args: unknown,
-      { session, log }: { session?: SessionData; log: Logger }
-    ): Promise<string> => {
-      const client = getClient(session);
-      const { sessionId, code, language } = args as {
-        sessionId: string;
-        code: string;
-        language?: 'python' | 'node' | 'bash';
-      };
-      log.info('Executing code in browser session', { sessionId });
-      const res = await client.browserExecute(sessionId, { code, language });
-      return asText(res);
-    },
-  });
-}
-
-server.addTool({
-  name: 'firecrawl_browser_delete',
-  annotations: {
-    title: 'Delete browser session',
-    readOnlyHint: false,
-    openWorldHint: false,
-    destructiveHint: true,
-  },
-  description: `
-**DEPRECATED — prefer firecrawl_scrape + firecrawl_interact instead.**
-
-Destroy a browser session.
-
-**Usage Example:**
-\`\`\`json
-{
-  "name": "firecrawl_browser_delete",
-  "arguments": {
-    "sessionId": "session-id-here"
-  }
-}
-\`\`\`
-**Returns:** Success confirmation.
-`,
-  parameters: z.object({
-    sessionId: z.string(),
-  }),
-  execute: async (
-    args: unknown,
-    { session, log }: { session?: SessionData; log: Logger }
-  ): Promise<string> => {
-    const client = getClient(session);
-    const { sessionId } = args as { sessionId: string };
-    log.info('Deleting browser session', { sessionId });
-    const res = await client.deleteBrowser(sessionId);
-    return asText(res);
-  },
-});
-
-server.addTool({
-  name: 'firecrawl_browser_list',
-  annotations: {
-    title: 'List browser sessions',
-    readOnlyHint: true,
-    openWorldHint: false,
-  },
-  description: `
-**DEPRECATED — prefer firecrawl_scrape + firecrawl_interact instead.**
-
-List browser sessions, optionally filtered by status.
-
-**Usage Example:**
-\`\`\`json
-{
-  "name": "firecrawl_browser_list",
-  "arguments": {
-    "status": "active"
-  }
-}
-\`\`\`
-**Returns:** Array of browser sessions.
-`,
-  parameters: z.object({
-    status: z.enum(['active', 'destroyed']).optional(),
-  }),
-  execute: async (
-    args: unknown,
-    { session, log }: { session?: SessionData; log: Logger }
-  ): Promise<string> => {
-    const client = getClient(session);
-    const { status } = args as { status?: 'active' | 'destroyed' };
-    log.info('Listing browser sessions', { status });
-    const res = await client.listBrowsers({ status });
-    return asText(res);
-  },
-});
-
-// Interact tools (scrape-bound browser sessions)
+// Interact tools (scrape-bound browser sessions; replace deprecated firecrawl_browser_* tools)
 server.addTool({
   name: 'firecrawl_interact',
   annotations: {
@@ -1486,41 +1022,17 @@ server.addTool({
     destructiveHint: false,
   },
   description: `
-Interact with a previously scraped page in a live browser session. Scrape a page first with firecrawl_scrape, then use the returned scrapeId to click buttons, fill forms, extract dynamic content, or navigate deeper.
+Drive a live browser session on a previously scraped page — click, fill forms, navigate, extract dynamic content. Replaces deprecated \`firecrawl_browser_*\` tools.
 
-**Best for:** Multi-step workflows on a single page — searching a site, clicking through results, filling forms, extracting data that requires interaction.
-**Requires:** A scrapeId from a previous firecrawl_scrape call (found in the metadata of the scrape response).
+**Requires:** \`scrapeId\` from a prior \`firecrawl_scrape\` response (in \`data.metadata.scrapeId\`). Sessions are scoped to that scrape — passing an unknown or expired \`scrapeId\` returns an error.
+**Best for:** Multi-step flows on one page (search, click-through, form fills, login-gated content).
+**Not for:** First-page fetch (use scrape); multi-URL extraction (use crawl + extract).
 
-**Arguments:**
-- scrapeId: The scrape job ID from a previous scrape (required)
-- prompt: Natural language instruction describing the action to take (use this OR code)
-- code: Code to execute in the browser session (use this OR prompt)
-- language: "bash", "python", or "node" (optional, defaults to "node", only used with code)
-- timeout: Execution timeout in seconds, 1-300 (optional, defaults to 30)
+**Inputs:** Exactly one of \`prompt\` (natural language action) or \`code\` is required. With \`code\`, set \`language: bash|python|node\` (default \`node\`). \`timeout\` in seconds (1–300, default 30); exceeding it returns a non-zero \`exitCode\` with whatever \`stdout\`/\`stderr\` was captured. The session is reused across calls with the same \`scrapeId\` until you call \`firecrawl_interact_stop\` or the server reaps it for idleness.
 
-**Usage Example (prompt):**
-\`\`\`json
-{
-  "name": "firecrawl_interact",
-  "arguments": {
-    "scrapeId": "scrape-id-from-previous-scrape",
-    "prompt": "Click on the first product and tell me its price"
-  }
-}
-\`\`\`
+**Returns:** \`{ success, output, stdout, stderr, exitCode, liveViewUrl? }\`. \`exitCode === 0\` means the action ran cleanly; non-zero means it errored mid-flight — inspect \`stderr\`.
 
-**Usage Example (code):**
-\`\`\`json
-{
-  "name": "firecrawl_interact",
-  "arguments": {
-    "scrapeId": "scrape-id-from-previous-scrape",
-    "code": "agent-browser click @e5",
-    "language": "bash"
-  }
-}
-\`\`\`
-**Returns:** Execution result including output, stdout, stderr, exit code, and live view URLs.
+**Example:** \`{ "scrapeId": "<id from scrape>", "prompt": "Click the first product and read its price" }\`
 `,
   parameters: z.object({
     scrapeId: z.string(),
@@ -1563,18 +1075,13 @@ server.addTool({
     destructiveHint: true,
   },
   description: `
-Stop an interact session for a scraped page. Call this when you are done interacting to free resources.
+End an \`firecrawl_interact\` session for a scraped page to free browser resources. Always call when interaction is done — sessions otherwise persist until the server's idle reaper sweeps them.
 
-**Usage Example:**
-\`\`\`json
-{
-  "name": "firecrawl_interact_stop",
-  "arguments": {
-    "scrapeId": "scrape-id-here"
-  }
-}
-\`\`\`
-**Returns:** Success confirmation.
+**Idempotent:** Calling on an already-stopped or unknown \`scrapeId\` succeeds (no-op). After stopping, the \`scrapeId\` cannot be reused with \`firecrawl_interact\` — start a new scrape first.
+
+**Returns:** \`{ success }\`.
+
+**Example:** \`{ "scrapeId": "<id>" }\`
 `,
   parameters: z.object({
     scrapeId: z.string(),
@@ -1677,75 +1184,19 @@ if (process.env.CLOUD_SERVICE !== 'true') {
       openWorldHint: false,
     },
     description: `
-Parse a file from the local filesystem using a self-hosted Firecrawl API's /v2/parse endpoint.
-This is the fastest and most reliable way to extract content from a document on disk — if the file lives locally and the MCP is pointed at a self-hosted Firecrawl instance, you should always prefer this tool over uploading the file elsewhere and then scraping it.
+Parse a local document via a self-hosted Firecrawl \`/v2/parse\`. Requires \`FIRECRAWL_API_URL\` pointing at a self-hosted instance.
 
-**Best for:** Extracting content from a local document (PDF, Word, Excel, HTML, etc.) when you don't want to host it on the public web first; pulling structured data out of a file with JSON format; converting binary documents into markdown for downstream reasoning.
-**Not recommended for:** Remote URLs (use firecrawl_scrape); multiple files at once (call parse multiple times); documents that require interactive actions, screenshots, or change tracking — those aren't supported by the parse endpoint.
-**Common mistakes:** Passing a URL instead of a local file path; requesting an unsupported format (screenshot, branding, changeTracking); setting waitFor, location, mobile, or a non-basic/auto proxy — parse uploads reject all of those.
+**Best for:** Local PDFs, Word, Excel, HTML you don't want to host publicly.
+**Not for:** Remote URLs (use scrape); batches (call once per file); pages needing actions/screenshots/changeTracking.
 
-**Supported file types:** .html, .htm, .xhtml, .pdf, .docx, .doc, .odt, .rtf, .xlsx, .xls
-**Unsupported options:** actions, screenshot/branding/changeTracking formats, waitFor > 0, location, mobile, proxy values other than "auto" or "basic".
+**Supported types:** .html, .htm, .xhtml, .pdf, .docx, .doc, .odt, .rtf, .xlsx, .xls.
+**Unsupported options:** \`actions\`, \`screenshot\`/\`branding\`/\`changeTracking\` formats, \`waitFor > 0\`, \`location\`, \`mobile\`, proxies other than \`auto\`|\`basic\`.
 
-**CRITICAL - Format Selection (same rules as firecrawl_scrape):**
-When the user asks for SPECIFIC data points from a document, you MUST use JSON format with a schema. Only use markdown when the user needs the ENTIRE document content.
+**Formats:** \`markdown\` (default) for reading; \`json\` with \`jsonOptions.schema\` for structured fields; \`query\`, \`html\`, \`links\`, \`summary\` also supported. For PDFs, set \`parsers: ["pdf"]\` and cap \`pdfOptions.maxPages\` on long docs.
 
-**Use JSON format when the user asks for:**
-- Specific fields, parameters, or values from a form / PDF / spreadsheet
-- Prices, numbers, or other structured data
-- Lists of items or properties
+**Returns:** \`{ success, data: { markdown?, json?, html?, links?, summary?, metadata } }\`.
 
-**Use markdown format when:**
-- User wants to read, summarize, or analyze the full document
-- User explicitly asks for the complete content
-
-**Handling PDFs:**
-Add \`"parsers": ["pdf"]\` (optionally with \`pdfOptions.maxPages\`) when parsing a PDF so the PDF engine is invoked explicitly. For very long documents, cap \`maxPages\` to keep the response within token limits.
-
-**Usage Example (markdown from a local PDF):**
-\`\`\`json
-{
-  "name": "firecrawl_parse",
-  "arguments": {
-    "filePath": "/absolute/path/to/document.pdf",
-    "formats": ["markdown"],
-    "parsers": ["pdf"],
-    "onlyMainContent": true
-  }
-}
-\`\`\`
-
-**Usage Example (structured JSON extraction from a local HTML file):**
-\`\`\`json
-{
-  "name": "firecrawl_parse",
-  "arguments": {
-    "filePath": "./invoice.html",
-    "formats": ["json"],
-    "jsonOptions": {
-      "prompt": "Extract the invoice number, total, and line items",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "invoiceNumber": { "type": "string" },
-          "total": { "type": "number" },
-          "lineItems": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "description": { "type": "string" },
-                "amount": { "type": "number" }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-\`\`\`
-**Returns:** A parsed document with markdown, html, links, summary, json, or query results depending on the requested formats.
+**Example:** \`{ "filePath": "/abs/path/invoice.pdf", "formats": ["json"], "parsers": ["pdf"], "jsonOptions": { "prompt": "Extract invoice total and line items", "schema": { "type": "object" } } }\`
 `,
     parameters: parseParamsSchema,
     execute: async (
