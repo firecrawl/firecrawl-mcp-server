@@ -428,32 +428,19 @@ server.addTool({
     openWorldHint: true,
   },
   description: `
-Scrape a single URL into clean content. Default tool for any web page extraction.
+Scrape a single URL into clean content. Default for any web page extraction.
 
-**Best for:** Single page extraction when you know the URL.
-**Not for:** Multiple pages (use crawl), unknown location (use search), multi-step interactions (use interact).
+**Best for:** Single page when you know the URL.
+**Not for:** Multiple pages (crawl); unknown URL (search); multi-step interactions (interact).
 
-**Formats:**
-- \`markdown\` (default): full page content for reading/summarizing.
-- \`json\` with \`jsonOptions.schema\`: specific data points (prices, fields, lists, API params).
-- \`query\` with \`queryOptions.prompt\`: single targeted answer from a long page (\`mode: "directQuote"\` for verbatim).
-- \`branding\`: colors, fonts, typography, logo for design analysis.
-- \`html\`, \`rawHtml\`, \`links\`, \`screenshot\`, \`summary\`, \`changeTracking\` also supported.
+**Formats:** \`markdown\` (default), \`json\` (+ \`jsonOptions.schema\`), \`query\` (+ \`queryOptions.prompt\`), \`html\`, \`rawHtml\`, \`links\`, \`screenshot\`, \`summary\`, \`changeTracking\`, \`branding\`.
 
-**If extraction returns empty/minimal:** add \`waitFor: 5000-10000\` for JS-rendered pages, or use \`firecrawl_map\` with \`search\` to locate the right URL before retrying.
+**Empty output?** Add \`waitFor: 5000\` for JS pages, or \`firecrawl_map\` to find the right URL. **Speed:** \`maxAge\` enables ~5× cached scrapes; \`lockdown: true\` serves cache only (5 credits).
 
-**Performance:** \`maxAge\` enables cached scrapes (~500% faster). \`lockdown: true\` serves only from cache, errors on miss (5 credits, for compliance/air-gapped use).
+**Returns:** \`{ success, data: { markdown?, json?, html?, links?, screenshot?, metadata, scrapeId } }\`. Pass \`scrapeId\` to \`firecrawl_interact\`.
 
-**Returns:** \`{ success, data: { markdown?, json?, html?, links?, screenshot?, metadata, scrapeId } }\`. The \`scrapeId\` can be passed to \`firecrawl_interact\` for follow-up clicks/forms.
-
-**Example:**
-\`\`\`json
-{ "url": "https://example.com/api-docs", "formats": ["json"], "jsonOptions": { "prompt": "Extract auth header parameters", "schema": { "type": "object", "properties": { "parameters": { "type": "array" } } } } }
-\`\`\`
-${
-  SAFE_MODE
-    ? '**Safe Mode:** Read-only. Interactive actions disabled.'
-    : ''
+**Example:** \`{ "url": "https://example.com", "formats": ["json"], "jsonOptions": { "prompt": "Extract auth headers" } }\`${
+  SAFE_MODE ? '\n**Safe Mode:** Read-only.' : ''
 }
 `,
   parameters: scrapeParamsSchema,
@@ -489,16 +476,16 @@ server.addTool({
     openWorldHint: true,
   },
   description: `
-Discover indexed URLs on a site. Use \`search\` to find a specific page when \`firecrawl_scrape\` returns empty/wrong content — cheaper and faster than \`firecrawl_agent\`.
+Discover indexed URLs on a site. Cheaper/faster than \`firecrawl_agent\` for finding the right page.
 
-**Best for:** URL discovery before scraping; locating the right page within docs/SPAs.
-**Not for:** When you already know the URL (use scrape); fetching page content (use scrape after mapping).
+**Best for:** URL discovery before scraping.
+**Not for:** Known URLs (use scrape); page content (scrape after).
 
-**Edge cases:** Sites with no sitemap and few internal links may return very few URLs — set \`sitemap: "skip"\` and \`includeSubdomains: true\` to broaden discovery, or fall back to \`firecrawl_crawl\`. \`limit\` defaults to ~5000; results above the limit are truncated, not paginated.
+**Edge cases:** No sitemap → try \`sitemap: "skip"\` + \`includeSubdomains: true\`, or fall back to crawl. \`limit\` defaults ~5000, no pagination.
 
-**Returns:** \`{ success, links: string[] }\` filtered by \`search\` if provided. Empty array means nothing matched — not an error.
+**Returns:** \`{ success, links: string[] }\`. Empty = no match (not an error).
 
-**Example:** \`{ "url": "https://docs.example.com/api", "search": "webhook events" }\`
+**Example:** \`{ "url": "https://docs.example.com", "search": "webhooks" }\`
 `,
   parameters: z.object({
     url: z.string().url(),
@@ -535,22 +522,20 @@ server.addTool({
     openWorldHint: true,
   },
   description: `
-Web search across web, images, and news. Default tool for any web search.
+Web/image/news search. Default for any web search.
 
-**Best for:** Finding information when you don't know which site has it.
-**Not for:** When you already know the URL (use scrape); single-site coverage (use map/crawl); filesystem search.
+**Best for:** Finding info when you don't know the URL.
+**Not for:** Known URLs (use scrape); single-site (use map); filesystem search.
 
-**Workflow:** Search first without \`scrapeOptions\`, then scrape the relevant URLs separately. Only set \`scrapeOptions\` when you need content inline — keep \`limit\` ≤ 5 to avoid timeouts.
+**Workflow:** Search without \`scrapeOptions\`, then scrape top URLs. Inline scrape only when needed — keep \`limit\` ≤ 5.
 
-**Operators in \`query\`:** \`"exact"\`, \`-exclude\`, \`site:\`, \`inurl:\`, \`intitle:\`, \`related:\`, \`imagesize:WxH\`, \`larger:WxH\`.
-**Domain filters:** \`includeDomains\` OR \`excludeDomains\` (not both), hostnames only.
-**Sources:** \`web\` (default), \`images\`, \`news\`.
+**Operators:** \`"exact"\`, \`-exclude\`, \`site:\`, \`inurl:\`, \`intitle:\`. **Filters:** \`includeDomains\` OR \`excludeDomains\` (not both). **Sources:** \`web\` (default), \`images\`, \`news\`.
 
-**After processing results, call \`firecrawl_search_feedback\` with the returned \`id\`** — refunds 1 credit on first feedback and improves search quality.
+**After results, call \`firecrawl_search_feedback\` with the returned \`id\`** to refund 1 credit.
 
 **Returns:** \`{ success, data: { web?, images?, news? }, id, creditsUsed }\`.
 
-**Example:** \`{ "query": "top AI startups 2024", "limit": 5, "sources": [{ "type": "web" }] }\`
+**Example:** \`{ "query": "top AI startups 2024", "limit": 5 }\`
 `,
   parameters: z
     .object({
@@ -648,24 +633,17 @@ server.addTool({
     openWorldHint: true,
   },
   description: `
-Submit feedback on a \`firecrawl_search\` result. Call immediately after using a search (refunds 1 credit on first feedback, improves quality).
+Submit feedback on a \`firecrawl_search\` result. Within ~2 min refunds 1 credit (first feedback only).
 
-**Required fields by rating** (zero-effort feedback returns HTTP 400):
-- \`good\`: must include \`valuableSources\` (≥1).
-- \`partial\`: must include \`valuableSources\` OR \`missingContent\` (≥1).
-- \`bad\`: must include \`missingContent\` (≥1) OR \`querySuggestions\`.
+**Required by rating:** \`good\` → \`valuableSources\` (≥1). \`partial\` → \`valuableSources\` OR \`missingContent\`. \`bad\` → \`missingContent\` OR \`querySuggestions\`. Empty = 400.
 
-**\`missingContent\`** is an array of specific gaps — one entry per topic with \`topic\` (short) and optional \`description\`. Don't pack multiple topics into one entry.
+**\`missingContent\`:** one entry per distinct gap (short \`topic\`, optional \`description\`).
 
-**Constraints:**
-- Window: ~2 minutes after the search. Expired returns HTTP 409 \`FEEDBACK_WINDOW_EXPIRED\` — do not retry.
-- Idempotent per \`searchId\`. Resubmits return \`alreadySubmitted: true\`.
-- Daily refund cap (default 100 credits/team/UTC day). When \`dailyCapReached: true\`, stop calling for the rest of the day.
-- Any 4xx is terminal — do not retry-loop.
+**Terminal (don't retry):** 409 \`FEEDBACK_WINDOW_EXPIRED\`, \`dailyCapReached: true\`, any 4xx.
 
-**Returns:** \`{ success, feedbackId, creditsRefunded, creditsRefundedToday, dailyRefundCap, dailyCapReached?, alreadySubmitted? }\`.
+**Returns:** \`{ success, feedbackId, creditsRefunded, creditsRefundedToday, dailyRefundCap, dailyCapReached?, alreadySubmitted? }\`. Idempotent per \`searchId\`.
 
-**Example:** \`{ "searchId": "uuid-from-search", "rating": "bad", "missingContent": [{ "topic": "Recent benchmarks", "description": "All results >12 months old" }] }\`
+**Example:** \`{ "searchId": "uuid", "rating": "bad", "missingContent": [{ "topic": "Recent benchmarks" }] }\`
 `,
   parameters: z.object({
     searchId: z
@@ -789,16 +767,16 @@ server.addTool({
     destructiveHint: false,
   },
   description: `
-Start an async crawl job over multiple pages on a site.
+Async crawl over multiple pages on a site. Returns a job id to poll.
 
-**Best for:** Comprehensive coverage of a site or section.
-**Not for:** Single pages (use scrape); when results must be fast (crawls can be slow); when token budget is tight (use map + scrape per URL).
+**Best for:** Comprehensive site/section coverage.
+**Not for:** Single pages (use scrape); when fast (crawls are slow); tight token budgets (use map + scrape).
 
-**Critical:** Always set \`limit\` (typical 10–50) and \`maxDiscoveryDepth\` (typical 2–5). Unbounded crawls overflow tokens. Avoid \`/*\` wildcards.
+**Critical:** Always set \`limit\` (10–50) and \`maxDiscoveryDepth\` (2–5). Unbounded crawls overflow tokens. Avoid \`/*\` wildcards.
 
-**Webhook security** (when supported): \`webhook\` must be HTTPS and resolve to a public IP — private/loopback/link-local addresses are rejected.
+**Webhook security:** \`webhook\` must be HTTPS and resolve to a public IP. Private/loopback/link-local rejected.
 
-**Returns:** \`{ success, id }\`. Poll progress with \`firecrawl_check_crawl_status\`.
+**Returns:** \`{ success, id }\`. Poll with \`firecrawl_check_crawl_status\`.
 
 **Example:** \`{ "url": "https://example.com/blog", "maxDiscoveryDepth": 3, "limit": 20, "sitemap": "include" }\`
 ${
@@ -863,11 +841,11 @@ server.addTool({
     openWorldHint: false,
   },
   description: `
-Check the status and results of a crawl job started by \`firecrawl_crawl\`.
+Check status and results of a crawl job from \`firecrawl_crawl\`.
 
-**Polling:** Every 5–15s while \`status === "scraping"\`. \`data\` is only populated when \`status === "completed"\`. Crawls of 10–50 pages typically finish in 30–180s; large crawls (\`limit\` > 100) can take 5+ minutes.
+**Polling:** Every 5–15s while \`status === "scraping"\`. \`data\` populated only when \`completed\`. 10–50 pages: 30–180s; \`limit\` >100: 5+ min.
 
-**Returns:** \`{ success, status, completed, total, creditsUsed, data?: [{ markdown?, json?, html?, metadata }] }\`. Status is one of \`scraping\`, \`completed\`, \`failed\`, \`cancelled\`. On \`failed\`/\`cancelled\`, \`data\` may be a partial result of pages crawled so far.
+**Returns:** \`{ success, status, completed, total, creditsUsed, data?: [{ markdown?, json?, html?, metadata }] }\`. Status: \`scraping|completed|failed|cancelled\`. On \`failed\`/\`cancelled\`, \`data\` may be partial.
 
 **Example:** \`{ "id": "550e8400-e29b-41d4-a716-446655440000" }\`
 `,
@@ -890,19 +868,16 @@ server.addTool({
     openWorldHint: true,
   },
   description: `
-Extract structured data from one or more URLs using an LLM and your JSON schema.
+Extract structured data from one or more URLs via LLM + JSON schema.
 
-**Best for:** Pulling specific fields (prices, names, specs) across multiple pages with one schema.
-**Not for:** Full page content (use scrape with markdown); a single page with a known schema (use scrape with \`json\` format — cheaper).
+**Best for:** Specific fields across multiple pages with one schema.
+**Not for:** Full page content (use scrape markdown); single page (scrape \`json\` — cheaper).
 
-**Edge cases:** Fields the LLM can't find return \`null\` (or are omitted if not in \`required\`). \`enableWebSearch: true\` lets the model browse beyond the supplied URLs when context is missing. \`urls\` supports glob suffixes (e.g. \`https://example.com/blog/*\`) to fan out to all matching pages.
+**Edge cases:** Missing fields → \`null\` (or omit). \`enableWebSearch: true\` browses beyond supplied URLs. \`urls\` supports glob suffixes (\`https://example.com/blog/*\`).
 
-**Returns:** \`{ success, data: <matches schema> }\`. On per-URL failure, that URL's contribution is omitted; \`data\` reflects only successfully extracted pages.
+**Returns:** \`{ success, data: <matches schema> }\`. Per-URL failures omitted.
 
-**Example:**
-\`\`\`json
-{ "urls": ["https://example.com/p1", "https://example.com/p2"], "prompt": "Extract product info", "schema": { "type": "object", "properties": { "name": {"type": "string"}, "price": {"type": "number"} }, "required": ["name", "price"] } }
-\`\`\`
+**Example:** \`{ "urls": ["https://example.com/p1"], "prompt": "Extract product info", "schema": { "type": "object", "properties": { "name": {"type": "string"}, "price": {"type": "number"} } } }\`
 `,
   parameters: z.object({
     urls: z.array(z.string()),
@@ -944,16 +919,16 @@ server.addTool({
     destructiveHint: false,
   },
   description: `
-Async autonomous research agent: searches the web, follows links, and gathers data without supervision. Returns a job ID — poll \`firecrawl_agent_status\` for results.
+Async research agent: searches the web, follows links, gathers data. Returns a job id — poll \`firecrawl_agent_status\`.
 
-**Best for:** Multi-source research where you don't know the URLs; JS-heavy SPAs where regular scrape fails.
-**Not for:** Single known URLs (use scrape — faster, cheaper); plain web search (use search); clicking/filling forms (use scrape + interact).
+**Best for:** Multi-source research without known URLs; JS-heavy SPAs where scrape fails.
+**Not for:** Known URLs (use scrape — faster/cheaper); plain web search (use search); form interactions (use scrape + interact).
 
-**Polling:** Every 15–30s. Typical runtime 1–5 min; complex research can take 5+ min. Don't give up early.
+**Polling:** Every 15–30s. Typical 1–5 min; complex 5+ min.
 
-**Returns:** \`{ success, id }\`. Use \`firecrawl_agent_status\` to retrieve results.
+**Returns:** \`{ success, id }\`.
 
-**Example:** \`{ "prompt": "Find the top 5 AI startups founded in 2024 and their funding", "schema": { "type": "object", "properties": { "startups": { "type": "array" } } } }\`
+**Example:** \`{ "prompt": "Top 5 AI startups founded in 2024 and their funding", "schema": { "type": "object", "properties": { "startups": { "type": "array" } } } }\`
 `,
   parameters: z.object({
     prompt: z.string().min(1).max(10000),
@@ -991,9 +966,9 @@ server.addTool({
     openWorldHint: false,
   },
   description: `
-Poll the status and retrieve results for a \`firecrawl_agent\` job.
+Poll a \`firecrawl_agent\` job for results.
 
-**Polling:** Every 15–30s. Statuses: \`processing\` (keep polling), \`completed\` (data ready), \`failed\` (stop). Don't give up before 2–3 minutes; complex research can run 5+ minutes.
+**Polling:** Every 15–30s. Statuses: \`processing\` (keep polling), \`completed\` (data ready), \`failed\` (stop). Allow 2–5+ min for complex research.
 
 **Returns:** \`{ success, status, data?, error? }\`. \`data\` matches the schema passed to \`firecrawl_agent\`.
 
@@ -1022,17 +997,17 @@ server.addTool({
     destructiveHint: false,
   },
   description: `
-Drive a live browser session on a previously scraped page — click, fill forms, navigate, extract dynamic content. Replaces deprecated \`firecrawl_browser_*\` tools.
+Drive a live browser on a previously scraped page — click, fill forms, navigate, extract dynamic content.
 
-**Requires:** \`scrapeId\` from a prior \`firecrawl_scrape\` response (in \`data.metadata.scrapeId\`). Sessions are scoped to that scrape — passing an unknown or expired \`scrapeId\` returns an error.
-**Best for:** Multi-step flows on one page (search, click-through, form fills, login-gated content).
-**Not for:** First-page fetch (use scrape); multi-URL extraction (use crawl + extract).
+**Requires:** \`scrapeId\` from a prior \`firecrawl_scrape\` (in \`data.metadata.scrapeId\`). Unknown/expired returns an error.
+**Best for:** Multi-step flows on one page.
+**Not for:** First fetch (use scrape); multi-URL extraction (crawl + extract).
 
-**Inputs:** Exactly one of \`prompt\` (natural language action) or \`code\` is required. With \`code\`, set \`language: bash|python|node\` (default \`node\`). \`timeout\` in seconds (1–300, default 30); exceeding it returns a non-zero \`exitCode\` with whatever \`stdout\`/\`stderr\` was captured. The session is reused across calls with the same \`scrapeId\` until you call \`firecrawl_interact_stop\` or the server reaps it for idleness.
+**Inputs:** Exactly one of \`prompt\` or \`code\`. With \`code\` set \`language: bash|python|node\` (default \`node\`). \`timeout\` 1–300s (default 30). Session reuses until \`firecrawl_interact_stop\` or idle reap.
 
-**Returns:** \`{ success, output, stdout, stderr, exitCode, liveViewUrl? }\`. \`exitCode === 0\` means the action ran cleanly; non-zero means it errored mid-flight — inspect \`stderr\`.
+**Returns:** \`{ success, output, stdout, stderr, exitCode, liveViewUrl? }\`. \`exitCode !== 0\` = errored.
 
-**Example:** \`{ "scrapeId": "<id from scrape>", "prompt": "Click the first product and read its price" }\`
+**Example:** \`{ "scrapeId": "<id>", "prompt": "Click the first product and read its price" }\`
 `,
   parameters: z.object({
     scrapeId: z.string(),
@@ -1075,13 +1050,11 @@ server.addTool({
     destructiveHint: true,
   },
   description: `
-End an \`firecrawl_interact\` session for a scraped page to free browser resources. Always call when interaction is done — sessions otherwise persist until the server's idle reaper sweeps them.
+End an \`firecrawl_interact\` session to free browser resources. Call when done — otherwise the server idle-reaps it.
 
-**Idempotent:** Calling on an already-stopped or unknown \`scrapeId\` succeeds (no-op). After stopping, the \`scrapeId\` cannot be reused with \`firecrawl_interact\` — start a new scrape first.
+**Idempotent:** Already-stopped or unknown \`scrapeId\` is a no-op. After stopping, the \`scrapeId\` is dead — start a new scrape.
 
-**Returns:** \`{ success }\`.
-
-**Example:** \`{ "scrapeId": "<id>" }\`
+**Returns:** \`{ success }\`. **Example:** \`{ "scrapeId": "<id>" }\`
 `,
   parameters: z.object({
     scrapeId: z.string(),
@@ -1184,19 +1157,16 @@ if (process.env.CLOUD_SERVICE !== 'true') {
       openWorldHint: false,
     },
     description: `
-Parse a local document via a self-hosted Firecrawl \`/v2/parse\`. Requires \`FIRECRAWL_API_URL\` pointing at a self-hosted instance.
+Parse a local document via self-hosted Firecrawl \`/v2/parse\`. Requires \`FIRECRAWL_API_URL\` set to a self-hosted instance.
 
 **Best for:** Local PDFs, Word, Excel, HTML you don't want to host publicly.
-**Not for:** Remote URLs (use scrape); batches (call once per file); pages needing actions/screenshots/changeTracking.
+**Not for:** Remote URLs (use scrape); batches (one file/call); actions/screenshots/changeTracking.
 
-**Supported types:** .html, .htm, .xhtml, .pdf, .docx, .doc, .odt, .rtf, .xlsx, .xls.
-**Unsupported options:** \`actions\`, \`screenshot\`/\`branding\`/\`changeTracking\` formats, \`waitFor > 0\`, \`location\`, \`mobile\`, proxies other than \`auto\`|\`basic\`.
-
-**Formats:** \`markdown\` (default) for reading; \`json\` with \`jsonOptions.schema\` for structured fields; \`query\`, \`html\`, \`links\`, \`summary\` also supported. For PDFs, set \`parsers: ["pdf"]\` and cap \`pdfOptions.maxPages\` on long docs.
+**Supported:** .html, .htm, .pdf, .docx, .doc, .odt, .rtf, .xlsx, .xls. **Formats:** \`markdown\` (default), \`json\`, \`query\`, \`html\`, \`links\`, \`summary\`. For long PDFs use \`parsers: ["pdf"]\` + \`pdfOptions.maxPages\`.
 
 **Returns:** \`{ success, data: { markdown?, json?, html?, links?, summary?, metadata } }\`.
 
-**Example:** \`{ "filePath": "/abs/path/invoice.pdf", "formats": ["json"], "parsers": ["pdf"], "jsonOptions": { "prompt": "Extract invoice total and line items", "schema": { "type": "object" } } }\`
+**Example:** \`{ "filePath": "/abs/path/invoice.pdf", "formats": ["json"], "jsonOptions": { "prompt": "Extract total" } }\`
 `,
     parameters: parseParamsSchema,
     execute: async (
