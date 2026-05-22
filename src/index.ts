@@ -23,7 +23,7 @@ interface SessionData {
 
 const MCP_SESSION_HEADER = 'mcp-session-id';
 const MCP_SESSION_RESPONSE_HEADER = 'Mcp-Session-Id';
-const FIRECRAWL_MCP_SESSION_HEADER = 'x-firecrawl-mcp-session-id';
+const FIRECRAWL_SESSION_HEADER = 'x-firecrawl-session-id';
 
 function normalizeHeaderValue(
   value: string | string[] | number | undefined
@@ -57,7 +57,7 @@ function extractMcpSessionId(
   headers: IncomingHttpHeaders
 ): string | undefined {
   return (
-    getHeaderValue(headers, FIRECRAWL_MCP_SESSION_HEADER) ||
+    getHeaderValue(headers, FIRECRAWL_SESSION_HEADER) ||
     getHeaderValue(headers, MCP_SESSION_HEADER)
   );
 }
@@ -132,7 +132,7 @@ function bridgeStatelessMcpSessionRequest(
   const inboundSessionId = extractMcpSessionId(req.headers);
 
   if (inboundSessionId) {
-    req.headers[FIRECRAWL_MCP_SESSION_HEADER] = inboundSessionId;
+    req.headers[FIRECRAWL_SESSION_HEADER] = inboundSessionId;
     // mcp-proxy rejects standard session headers in stateless mode.
     delete req.headers[MCP_SESSION_HEADER];
   }
@@ -376,14 +376,14 @@ function attachMcpSessionHeader(
 
   setHeaderValue(
     defaultHeaders.common,
-    FIRECRAWL_MCP_SESSION_HEADER,
+    FIRECRAWL_SESSION_HEADER,
     mcpSessionId
   );
 }
 
 function reportingHeaders(session?: SessionData): Record<string, string> {
   return session?.mcpSessionId
-    ? { [FIRECRAWL_MCP_SESSION_HEADER]: session.mcpSessionId }
+    ? { [FIRECRAWL_SESSION_HEADER]: session.mcpSessionId }
     : {};
 }
 
