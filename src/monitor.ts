@@ -90,7 +90,9 @@ export function registerMonitorTools(server: FastMCP<SessionData>): void {
     description: `
 Create a Firecrawl monitor — a recurring scrape or crawl that diffs each result against the last retained snapshot.
 
-Pass the full request body. Required fields: \`name\`, \`schedule\` (with \`cron\` or \`text\`), and \`targets\` (one or more \`{ type: 'scrape', urls: [...] }\` or \`{ type: 'crawl', url: '...' }\`). Optional: \`webhook\`, \`notification\`, \`retentionDays\`.
+Pass the full request body. Required fields: \`name\`, \`schedule\` (with \`cron\` or \`text\`), and \`targets\` (one or more \`{ type: 'scrape', urls: [...] }\` or \`{ type: 'crawl', url: '...' }\`). Optional: \`webhook\`, \`notification\`, \`retentionDays\`, \`goal\`, \`judgeEnabled\`.
+
+**Meaningful-change judge:** Set \`goal\` to a plain-language description of what you actually care about (e.g. \`"tell me when pricing changes"\`) and the API will run an AI judge on each diff, exposing \`isMeaningful\` on the \`monitor.page\` webhook. \`judgeEnabled\` defaults to true when \`goal\` is set, so just providing \`goal\` is enough.
 
 **Markdown-mode (default):** Each check produces a unified text diff of the page's markdown. No extra configuration needed.
 
