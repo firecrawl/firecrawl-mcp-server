@@ -6,6 +6,7 @@ import FirecrawlApp from '@mendable/firecrawl-js';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { registerMonitorTools } from './monitor.js';
 
 dotenv.config({ debug: false, quiet: true });
 
@@ -102,8 +103,10 @@ const searchDomainSchema = z
   .string()
   .trim()
   .toLowerCase()
+  .min(1)
+  .max(253)
   .regex(
-    /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/,
+    /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/,
     'Domain must be a valid hostname without protocol or path'
   );
 
@@ -1924,5 +1927,7 @@ if (
     transportType: 'stdio',
   };
 }
+
+registerMonitorTools(server);
 
 await server.start(args);
