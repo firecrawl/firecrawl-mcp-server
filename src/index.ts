@@ -40,31 +40,6 @@ function isFirecrawlOAuthAccessToken(token: string): boolean {
   return token.startsWith('fco_');
 }
 
-/**
- * Credential for the Firecrawl API: OAuth access token or API key.
- * Prefers `Authorization: Bearer fco_…` (MCP OAuth) over `x-api-key` headers so
- * per-request OAuth wins over any stale gateway header.
- */
-function extractFirecrawlCredential(
-  headers: IncomingHttpHeaders
-): string | undefined {
-  const bearer = extractBearerToken(headers);
-  const headerApiKey = normalizeHeader(
-    headers['x-firecrawl-api-key'] ?? headers['x-api-key']
-  );
-
-  if (bearer && isFirecrawlOAuthAccessToken(bearer)) {
-    return bearer;
-  }
-  if (headerApiKey) {
-    return headerApiKey;
-  }
-  if (bearer) {
-    return bearer;
-  }
-  return undefined;
-}
-
 function resolveCredentialFromEnv(): string | undefined {
   return (
     normalizeHeader(process.env.FIRECRAWL_OAUTH_TOKEN) ??
@@ -77,6 +52,111 @@ function isHttpStreamingTransport(): boolean {
     process.env.HTTP_STREAMABLE_SERVER === 'true' ||
     process.env.SSE_LOCAL === 'true'
   );
+}
+
+const DEFAULT_OAUTH_ISSUER = 'https://www.firecrawl.dev';
+const DEFAULT_MCP_RESOURCE_URL = 'https://mcp.firecrawl.dev/v2/mcp';
+
+function withoutTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, '');
+}
+
+function getOAuthIssuer(): string {
+  return withoutTrailingSlash(
+    normalizeHeader(process.env.FIRECRAWL_OAUTH_ISSUER) ??
+      DEFAULT_OAUTH_ISSUER
+  );
+}
+
+function getOAuthProtectedResourceMetadataUrl(): string {
+  return (
+    normalizeHeader(
+      process.env.FIRECRAWL_OAUTH_PROTECTED_RESOURCE_METADATA_URL
+    ) ?? `${getOAuthIssuer()}/.well-known/oauth-protected-resource`
+  );
+}
+
+function getOAuthIntrospectionEndpoint(): string {
+  return (
+    normalizeHeader(process.env.FIRECRAWL_OAUTH_INTROSPECTION_ENDPOINT) ??
+    `${getOAuthIssuer()}/api/oauth/introspect`
+  );
+}
+
+function getOAuthIntrospectionSecret(): string | undefined {
+  return (
+    normalizeHeader(process.env.OAUTH_MCP_INTROSPECT_SECRET) ??
+    normalizeHeader(process.env.FIRECRAWL_OAUTH_INTROSPECT_SECRET)
+  );
+}
+
+function getMcpResourceUrl(): string {
+  return (
+    normalizeHeader(process.env.FIRECRAWL_MCP_RESOURCE_URL) ??
+    DEFAULT_MCP_RESOURCE_URL
+  );
+}
+
+function isMcpOAuthEnabled(): boolean {
+  return (
+    process.env.CLOUD_SERVICE === 'true' ||
+    process.env.FIRECRAWL_MCP_OAUTH_ENABLED === 'true'
+  );
+}
+
+type OAuthIntrospectionResponse = {
+  active?: boolean;
+  firecrawl_api_key?: string;
+};
+
+async function introspectOAuthAccessToken(token: string): Promise<string> {
+  const introspectionSecret = getOAuthIntrospectionSecret();
+  if (!introspectionSecret) {
+    throw new Error('OAuth token introspection is not configured');
+  }
+
+  const response = await fetch(getOAuthIntrospectionEndpoint(), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'x-firecrawl-mcp-introspect-secret': introspectionSecret,
+    },
+    body: new URLSearchParams({
+      token,
+      token_type_hint: 'access_token',
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`OAuth token introspection failed: ${response.status}`);
+  }
+
+  const data = (await response.json()) as OAuthIntrospectionResponse;
+  if (!data.active || !data.firecrawl_api_key) {
+    throw new Error('Invalid OAuth access token');
+  }
+
+  return data.firecrawl_api_key;
+}
+
+async function resolveCredentialFromHeaders(
+  headers: IncomingHttpHeaders
+): Promise<string | undefined> {
+  const bearer = extractBearerToken(headers);
+  const headerApiKey = normalizeHeader(
+    headers['x-firecrawl-api-key'] ?? headers['x-api-key']
+  );
+
+  if (bearer && isFirecrawlOAuthAccessToken(bearer)) {
+    return introspectOAuthAccessToken(bearer);
+  }
+  if (headerApiKey) {
+    return headerApiKey;
+  }
+  if (bearer) {
+    return bearer;
+  }
+  return undefined;
 }
 
 function removeEmptyTopLevel<T extends Record<string, any>>(
@@ -168,21 +248,33 @@ const server = new FastMCP<SessionData>({
   version: '3.0.0',
   logger: new ConsoleLogger(),
   roots: { enabled: false },
+  oauth: {
+    enabled: isMcpOAuthEnabled(),
+    protectedResource: {
+      authorizationServers: [getOAuthIssuer()],
+      bearerMethodsSupported: ['header'],
+      resource: getMcpResourceUrl(),
+      resourceName: 'Firecrawl MCP',
+      scopesSupported: ['mcp'],
+    },
+    protectedResourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(),
+  },
   authenticate: async (request: {
     headers: IncomingHttpHeaders;
   }): Promise<SessionData> => {
-    const headerCred = extractFirecrawlCredential(request.headers);
+    const headerCred = await resolveCredentialFromHeaders(request.headers);
     const envCred = resolveCredentialFromEnv();
-    const credential = headerCred ?? envCred;
 
     if (process.env.CLOUD_SERVICE === 'true') {
-      if (!credential) {
+      if (!headerCred) {
         throw new Error(
-          'Firecrawl credentials required: OAuth access token (Authorization: Bearer fco_…) or API key (x-firecrawl-api-key / FIRECRAWL_API_KEY)'
+          'Firecrawl credentials required: OAuth access token (Authorization: Bearer fco_…) or API key (x-firecrawl-api-key)'
         );
       }
-      return { firecrawlApiKey: credential };
+      return { firecrawlApiKey: headerCred };
     }
+
+    const credential = headerCred ?? envCred;
 
     // Self-hosted / stdio / HTTP streamable — headers supply MCP OAuth token when present
     const httpStreaming = isHttpStreamingTransport();

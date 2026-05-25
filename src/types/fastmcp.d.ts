@@ -35,6 +35,18 @@ declare module 'firecrawl-fastmcp' {
       authenticate?: (request: {
         headers: IncomingHttpHeaders;
       }) => Promise<Session> | Session;
+      oauth?: {
+        enabled: boolean;
+        protectedResource?: {
+          authorizationServers: string[];
+          bearerMethodsSupported?: string[];
+          resource: string;
+          resourceName?: string;
+          scopesSupported?: string[];
+          [key: string]: unknown;
+        };
+        protectedResourceMetadataUrl?: string;
+      };
       health?: {
         enabled?: boolean;
         message?: string;
