@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.19.0] - 2026-05-25
+
+### Added
+
+- Added a simplified `firecrawl_monitor_create` path using `page` or `pages` plus `goal`.
+- Added monitor check status filtering to `firecrawl_monitor_checks`.
+
+### Changed
+
+- Updated monitor tool guidance to prefer goal-based meaningful-change monitoring and document `judgment` results.
+
 ## [1.7.0] - 2025-03-18
 
 ### Fixed
