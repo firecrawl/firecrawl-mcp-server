@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import { FastMCP, type Logger } from 'firecrawl-fastmcp';
 import { z } from 'zod';
 import FirecrawlApp from '@mendable/firecrawl-js';
+import pkg from '../package.json' with { type: 'json' };
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -169,7 +170,7 @@ function createClient(apiKey?: string): FirecrawlApp {
   return new FirecrawlApp(config);
 }
 
-const ORIGIN = 'mcp-fastmcp';
+const ORIGIN = `mcp-fastmcp@${pkg.version}`;
 
 // Safe mode is enabled by default for cloud service to comply with ChatGPT safety requirements
 const SAFE_MODE = process.env.CLOUD_SERVICE === 'true';
