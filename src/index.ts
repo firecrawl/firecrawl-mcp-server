@@ -106,7 +106,7 @@ function isMcpOAuthEnabled(): boolean {
 
 type OAuthIntrospectionResponse = {
   active?: boolean;
-  firecrawl_api_key?: string;
+  api_key?: string;
 };
 
 async function introspectOAuthAccessToken(token: string): Promise<string> {
@@ -119,7 +119,7 @@ async function introspectOAuthAccessToken(token: string): Promise<string> {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'x-firecrawl-mcp-introspect-secret': introspectionSecret,
+      Authorization: `Bearer ${introspectionSecret}`,
     },
     body: new URLSearchParams({
       token,
@@ -132,11 +132,11 @@ async function introspectOAuthAccessToken(token: string): Promise<string> {
   }
 
   const data = (await response.json()) as OAuthIntrospectionResponse;
-  if (!data.active || !data.firecrawl_api_key) {
+  if (!data.active || !data.api_key) {
     throw new Error('Invalid OAuth access token');
   }
 
-  return data.firecrawl_api_key;
+  return data.api_key;
 }
 
 async function resolveCredentialFromHeaders(
