@@ -7,6 +7,7 @@ import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { registerMonitorTools } from './monitor.js';
+import { assertSafeExternalUrl, assertSafeExternalUrls } from './urlGuard.js';
 
 dotenv.config({ debug: false, quiet: true });
 
@@ -501,6 +502,7 @@ ${
       string,
       unknown
     >;
+    assertSafeExternalUrl(url);
     const client = getClient(session);
     const transformed = transformScrapeParams(options as Record<string, unknown>);
     const cleaned = removeEmptyTopLevel(transformed);
@@ -571,6 +573,7 @@ Map a website to discover all indexed URLs on the site.
       string,
       unknown
     >;
+    assertSafeExternalUrl(url);
     const client = getClient(session);
     const cleaned = removeEmptyTopLevel(options as Record<string, unknown>);
     log.info('Mapping URL', { url: String(url) });
@@ -984,6 +987,7 @@ server.addTool({
   }),
   execute: async (args, { session, log }) => {
     const { url, ...options } = args as Record<string, unknown>;
+    assertSafeExternalUrl(String(url));
     const client = getClient(session);
 
     const opts = { ...options } as Record<string, unknown>;
@@ -1097,6 +1101,7 @@ Extract structured information from web pages using LLM capabilities. Supports b
   ): Promise<string> => {
     const client = getClient(session);
     const a = args as Record<string, unknown>;
+    assertSafeExternalUrls((a.urls as string[]) || []);
     log.info('Extracting from URLs', {
       count: Array.isArray(a.urls) ? a.urls.length : 0,
     });
