@@ -8,12 +8,12 @@ importers:
 
   .:
     dependencies:
-      '@mendable/firecrawl-js':
-        specifier: 4.24.0
-        version: 4.24.0
       dotenv:
         specifier: ^17.2.2
         version: 17.2.2
+      firecrawl:
+        specifier: 4.24.0
+        version: 4.24.0
       firecrawl-fastmcp:
         specifier: ^1.0.5
         version: 1.0.5
@@ -32,10 +32,6 @@ packages:
 
   '@borewit/text-codec@0.1.1':
     resolution: {integrity: sha512-5L/uBxmjaCIX5h8Z+uu+kA9BQLkc/Wl06UGR5ajNRxu+/XjonB5i8JpgFMrPj3LXTCPA0pv8yxUvbUi+QthGGA==}
-
-  '@mendable/firecrawl-js@4.24.0':
-    resolution: {integrity: sha512-VergmApaVrr4zdAVchmJJajQn+o6+m6UjqNnf3E6RlNfISXLDIHrrvfYQSoe1cFGb+gWfHzPTJSXa13jWC7THg==}
-    engines: {node: '>=22.0.0'}
 
   '@modelcontextprotocol/sdk@1.18.0':
     resolution: {integrity: sha512-JvKyB6YwS3quM+88JPR0axeRgvdDu3Pv6mdZUy+w4qVkCzGgumb9bXG/TmtDRQv+671yaofVfXSQmFLlWU5qPQ==}
@@ -268,8 +264,8 @@ packages:
     resolution: {integrity: sha512-rmJ3/THqr3LaE+7m7EW8bNLII32G0Fbp1fwCt2cPhX7KFDg9M/vDj0pbAQABbUSRnjE827eAsV/vTd6/qhS3rA==}
     hasBin: true
 
-  firecrawl@4.16.0:
-    resolution: {integrity: sha512-7SJ/FWhZBtW2gTCE/BsvU+gbfIpfTq+D9IH82l9MacauLVptaY6EdYAhrK3YSMC9yr5NxvxRcpZKcXG/nqjiiQ==}
+  firecrawl@4.24.0:
+    resolution: {integrity: sha512-kP9E3Up7eF/0Qe8x2tPU/Mcvx0v6Vks397Gkln1+gZKyLAGtIQNEW0+KZcDPS/meRPodGlVi4Z77doQ2Twq74w==}
     engines: {node: '>=22.0.0'}
 
   follow-redirects@1.15.11:
@@ -737,16 +733,6 @@ snapshots:
 
   '@borewit/text-codec@0.1.1': {}
 
-  '@mendable/firecrawl-js@4.24.0':
-    dependencies:
-      axios: 1.15.2(debug@4.4.3)
-      firecrawl: 4.16.0
-      typescript-event-target: 1.1.1
-      zod: 3.25.76
-      zod-to-json-schema: 3.24.6(zod@3.25.76)
-    transitivePeerDependencies:
-      - debug
-
   '@modelcontextprotocol/sdk@1.18.0':
     dependencies:
       ajv: 6.12.6
@@ -1031,7 +1017,7 @@ snapshots:
       mcp-proxy: 6.5.1
       strict-event-emitter-types: 2.0.0
       uri-templates: 0.2.0
-      xsschema: 0.3.5(zod-to-json-schema@3.24.6(zod@4.1.11))(zod@3.25.76)
+      xsschema: 0.3.5(zod-to-json-schema@3.24.6(zod@3.25.76))(zod@3.25.76)
       yargs: 18.0.0
       zod: 3.25.76
       zod-to-json-schema: 3.24.6(zod@3.25.76)
@@ -1042,7 +1028,7 @@ snapshots:
       - supports-color
       - sury
 
-  firecrawl@4.16.0:
+  firecrawl@4.24.0:
     dependencies:
       axios: 1.15.2(debug@4.4.3)
       typescript-event-target: 1.1.1
@@ -1459,7 +1445,7 @@ snapshots:
 
   wrappy@1.0.2: {}
 
-  xsschema@0.3.5(zod-to-json-schema@3.24.6(zod@4.1.11))(zod@3.25.76):
+  xsschema@0.3.5(zod-to-json-schema@3.24.6(zod@3.25.76))(zod@3.25.76):
     optionalDependencies:
       zod: 3.25.76
       zod-to-json-schema: 3.24.6(zod@3.25.76)

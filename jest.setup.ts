@@ -1,11 +1,11 @@
 import { jest } from '@jest/globals';
-import FirecrawlApp from '@mendable/firecrawl-js';
+import { Firecrawl } from 'firecrawl';
 import type {
   SearchResponse,
   BatchScrapeResponse,
   BatchScrapeStatusResponse,
   FirecrawlDocument,
-} from '@mendable/firecrawl-js';
+} from 'firecrawl';
 
 // Set test timeout
 jest.setTimeout(30000);
@@ -66,7 +66,7 @@ const mockInstance = {
 };
 
 // Mock the module
-jest.mock('@mendable/firecrawl-js', () => ({
+jest.mock('firecrawl', () => ({
   __esModule: true,
   default: jest.fn().mockImplementation(() => mockInstance),
 }));

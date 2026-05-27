@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import FirecrawlApp from '@mendable/firecrawl-js';
+import { Firecrawl } from 'firecrawl';
 import dotenv from 'dotenv';
 import { FastMCP, type Logger } from 'firecrawl-fastmcp';
 import type { IncomingHttpHeaders } from 'http';
@@ -299,7 +299,7 @@ const server = new FastMCP<SessionData>({
   },
 });
 
-function createClient(apiKey?: string): FirecrawlApp {
+function createClient(apiKey?: string): Firecrawl {
   const config: any = {
     ...(process.env.FIRECRAWL_API_URL && {
       apiUrl: process.env.FIRECRAWL_API_URL,
@@ -311,7 +311,7 @@ function createClient(apiKey?: string): FirecrawlApp {
     config.apiKey = apiKey;
   }
 
-  return new FirecrawlApp(config);
+  return new Firecrawl(config);
 }
 
 const ORIGIN = 'mcp-fastmcp';
@@ -319,7 +319,7 @@ const ORIGIN = 'mcp-fastmcp';
 // Safe mode is enabled by default for cloud service to comply with ChatGPT safety requirements
 const SAFE_MODE = process.env.CLOUD_SERVICE === 'true';
 
-function getClient(session?: SessionData): FirecrawlApp {
+function getClient(session?: SessionData): Firecrawl {
   // For cloud service, API key is required
   if (process.env.CLOUD_SERVICE === 'true') {
     if (!session || !session.firecrawlApiKey) {

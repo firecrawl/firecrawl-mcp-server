@@ -8,11 +8,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import FirecrawlApp, {
-  type ScrapeOptions,
-  type MapOptions,
-  type Document,
-} from '@mendable/firecrawl-js';
+import { Firecrawl, type ScrapeOptions, type MapOptions, type Document, } from 'firecrawl';
 
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
@@ -1016,7 +1012,7 @@ server.setRequestHandler(
         throw new Error('No API key provided');
       }
 
-      const client = new FirecrawlApp({
+      const client = new Firecrawl({
         apiKey,
         ...(FIRECRAWL_API_URL ? { apiUrl: FIRECRAWL_API_URL } : {}),
       });
