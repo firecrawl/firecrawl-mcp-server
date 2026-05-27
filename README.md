@@ -187,6 +187,15 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
   - Example: `https://firecrawl.your-domain.com`
   - If not provided, the cloud API will be used (requires API key)
 
+#### MCP OAuth (Bearer access tokens)
+
+Hosted Firecrawl can issue OAuth **access tokens** (`fco_…`) via the authorization server on [firecrawl.dev](https://firecrawl.dev). This MCP server forwards whichever credential it resolves to the Firecrawl API as `Authorization: Bearer …`.
+
+- **HTTP stream transports** (`CLOUD_SERVICE=true`, `HTTP_STREAMABLE_SERVER=true`, or `SSE_LOCAL=true`): Clients should send `Authorization: Bearer <fco_access_token>` on MCP requests. An OAuth bearer token takes precedence over `x-firecrawl-api-key` / `x-api-key` when both are present.
+- **stdio:** Use `FIRECRAWL_OAUTH_TOKEN` for a static access token, or keep using `FIRECRAWL_API_KEY` for an API key.
+
+Use **access** tokens (`fco_…`) only. Refresh tokens (`fcr_…`) must be exchanged at the token endpoint, not passed to the scrape/search API.
+
 #### Optional Configuration
 
 ##### Retry Configuration
@@ -323,16 +332,16 @@ Use this guide to select the right tool for your task:
 
 ### Quick Reference Table
 
-| Tool         | Best for                            | Returns                    |
-| ------------ | ----------------------------------- | -------------------------- |
-| scrape       | Single page content                 | JSON (preferred) or markdown |
-| interact     | Interact with a scraped page        | Execution result           |
-| batch_scrape | Multiple known URLs                 | JSON (preferred) or markdown[] |
-| map          | Discovering URLs on a site          | URL[]                      |
-| crawl        | Multi-page extraction (with limits) | markdown/html[]            |
-| search       | Web search for info                 | results[]                  |
-| agent        | Complex multi-source research       | JSON (structured data)     |
-| browser      | Interactive multi-step automation (deprecated) | Session with live browser  |
+| Tool         | Best for                                       | Returns                        |
+| ------------ | ---------------------------------------------- | ------------------------------ |
+| scrape       | Single page content                            | JSON (preferred) or markdown   |
+| interact     | Interact with a scraped page                   | Execution result               |
+| batch_scrape | Multiple known URLs                            | JSON (preferred) or markdown[] |
+| map          | Discovering URLs on a site                     | URL[]                          |
+| crawl        | Multi-page extraction (with limits)            | markdown/html[]                |
+| search       | Web search for info                            | results[]                      |
+| agent        | Complex multi-source research                  | JSON (structured data)         |
+| browser      | Interactive multi-step automation (deprecated) | Session with live browser      |
 
 ### Format Selection Guide
 
@@ -377,19 +386,21 @@ Scrape content from a single URL with advanced options.
   "name": "firecrawl_scrape",
   "arguments": {
     "url": "https://example.com/product",
-    "formats": [{
-      "type": "json",
-      "prompt": "Extract the product information",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "name": { "type": "string" },
-          "price": { "type": "number" },
-          "description": { "type": "string" }
-        },
-        "required": ["name", "price"]
+    "formats": [
+      {
+        "type": "json",
+        "prompt": "Extract the product information",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "price": { "type": "number" },
+            "description": { "type": "string" }
+          },
+          "required": ["name", "price"]
+        }
       }
-    }]
+    ]
   }
 }
 ```
@@ -598,7 +609,10 @@ Sends structured feedback on a previous `firecrawl_search` result. The first fee
       }
     ],
     "missingContent": [
-      { "topic": "Pricing for the search endpoint", "description": "No pricing tier table for /search specifically." },
+      {
+        "topic": "Pricing for the search endpoint",
+        "description": "No pricing tier table for /search specifically."
+      },
       { "topic": "Per-team rate limits" }
     ],
     "querySuggestions": "Boost docs.firecrawl.dev for queries that mention 'firecrawl'"
@@ -910,15 +924,15 @@ Execute code in a browser session. Supports agent-browser commands (bash), Pytho
 
 **Common agent-browser commands:**
 
-| Command | Description |
-|---------|-------------|
-| `agent-browser open <url>` | Navigate to URL |
-| `agent-browser snapshot` | Accessibility tree with clickable refs |
-| `agent-browser click @e5` | Click element by ref from snapshot |
-| `agent-browser type @e3 "text"` | Type into element |
-| `agent-browser get title` | Get page title |
-| `agent-browser screenshot` | Take screenshot |
-| `agent-browser --help` | Full command reference |
+| Command                         | Description                            |
+| ------------------------------- | -------------------------------------- |
+| `agent-browser open <url>`      | Navigate to URL                        |
+| `agent-browser snapshot`        | Accessibility tree with clickable refs |
+| `agent-browser click @e5`       | Click element by ref from snapshot     |
+| `agent-browser type @e3 "text"` | Type into element                      |
+| `agent-browser get title`       | Get page title                         |
+| `agent-browser screenshot`      | Take screenshot                        |
+| `agent-browser --help`          | Full command reference                 |
 
 **For Playwright scripting, use Python:**
 
