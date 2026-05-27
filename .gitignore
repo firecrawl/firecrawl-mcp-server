@@ -26,4 +26,5 @@ v1.2.md
 
 # OS
 .DS_Store
-Thumbs.db 
+Thumbs.db
+.pnpm-store/
