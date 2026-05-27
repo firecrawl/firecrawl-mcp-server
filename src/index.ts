@@ -77,8 +77,16 @@ function getMcpResourceUrl(): string {
 // PRM lives at the MCP origin per RFC 9728 (one PRM per resource). firecrawl-fastmcp
 // auto-serves it at the standard /.well-known/oauth-protected-resource path from the
 // protectedResource config, so the URL is fully derived from the MCP resource.
+//
+// `FIRECRAWL_OAUTH_PROTECTED_RESOURCE_METADATA_URL` is an optional escape hatch: if
+// fastmcp's auto-serve route is unavailable for any reason (build/version skew,
+// ingress drift), the deploy can point clients at an externally-hosted PRM (e.g. the
+// MCP-specific endpoint on www.firecrawl.dev) without a rebuild.
 function getOAuthProtectedResourceMetadataUrl(): string {
-  return `${new URL(getMcpResourceUrl()).origin}/.well-known/oauth-protected-resource`;
+  return (
+    normalizeHeader(process.env.FIRECRAWL_OAUTH_PROTECTED_RESOURCE_METADATA_URL) ??
+    `${new URL(getMcpResourceUrl()).origin}/.well-known/oauth-protected-resource`
+  );
 }
 
 function getOAuthIntrospectionEndpoint(): string {
@@ -91,6 +99,43 @@ function getOAuthIntrospectionSecret(): string | undefined {
 
 function isMcpOAuthEnabled(): boolean {
   return process.env.CLOUD_SERVICE === 'true';
+}
+
+function escapeWWWAuthenticateValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+/**
+ * Build an RFC 9728 §5.1 OAuth challenge as a `Response` object. Throwing a
+ * `Response` (rather than an `Error`) from the fastmcp `authenticate` callback
+ * short-circuits both fastmcp's `#createOAuthChallengeResponse` wrap and
+ * mcp-proxy's auth-substring heuristic — `mcp-proxy/src/startHTTPServer.ts`
+ * `handleResponseError` detects Response-shaped throws via duck-typing and
+ * writes the status + headers verbatim. The result is a deterministic 401 +
+ * `WWW-Authenticate: Bearer resource_metadata="…"` regardless of which
+ * fastmcp / mcp-proxy build is in the deployed image.
+ */
+function buildOAuthChallengeResponse(errorDescription: string): Response {
+  const resourceMetadataUrl = getOAuthProtectedResourceMetadataUrl();
+  const wwwAuthenticate = [
+    `resource_metadata="${escapeWWWAuthenticateValue(resourceMetadataUrl)}"`,
+    'error="invalid_token"',
+    `error_description="${escapeWWWAuthenticateValue(errorDescription)}"`,
+  ].join(', ');
+
+  return new Response(
+    JSON.stringify({
+      error: 'invalid_token',
+      error_description: errorDescription,
+    }),
+    {
+      status: 401,
+      headers: {
+        'Content-Type': 'application/json',
+        'WWW-Authenticate': `Bearer ${wwwAuthenticate}`,
+      },
+    }
+  );
 }
 
 type OAuthIntrospectionResponse = {
@@ -259,8 +304,16 @@ const server = new FastMCP<SessionData>({
 
     if (process.env.CLOUD_SERVICE === 'true') {
       if (!headerCred) {
-        throw new Error(
-          'Firecrawl credentials required: OAuth access token (Authorization: Bearer fco_…) or API key (x-firecrawl-api-key)'
+        // RFC 9728 §5.1 challenge. Build the 401 + WWW-Authenticate response
+        // ourselves and throw it, instead of throwing a plain Error and relying
+        // on the surrounding fastmcp/mcp-proxy versions to wrap it. mcp-proxy's
+        // startHTTPServer detects thrown Response objects via duck-typing
+        // (handleResponseError) and writes the status + headers verbatim, so
+        // this path is deterministic across fastmcp/mcp-proxy versions and is
+        // the route an MCP client (e.g. Claude's connector, per the 2025-06-18
+        // MCP Authorization spec) needs to discover that OAuth is required.
+        throw buildOAuthChallengeResponse(
+          'Unauthorized: Firecrawl credentials required (OAuth access token via Authorization: Bearer fco_… or API key via x-firecrawl-api-key)'
         );
       }
       return { firecrawlApiKey: headerCred };
