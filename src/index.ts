@@ -67,40 +67,6 @@ function getOAuthIssuer(): string {
   );
 }
 
-function getOAuthProtectedResourceMetadataUrl(): string {
-  const explicit = normalizeHeader(
-    process.env.FIRECRAWL_OAUTH_PROTECTED_RESOURCE_METADATA_URL
-  );
-  if (explicit) return explicit;
-
-  // Default to the MCP server's own PRM endpoint. firecrawl-fastmcp serves
-  // the PRM at <origin>/.well-known/oauth-protected-resource automatically
-  // from the protectedResource config (FastMCP.ts:2422-2435). Per RFC 9728
-  // there's one PRM per resource, so the PRM advertised in the 401 challenge
-  // must describe the MCP resource (mcp.firecrawl.dev/v2/mcp), not the REST
-  // API resource (api.firecrawl.dev) served by firecrawl-web.
-  try {
-    const resourceOrigin = new URL(getMcpResourceUrl()).origin;
-    return `${resourceOrigin}/.well-known/oauth-protected-resource`;
-  } catch {
-    return `${getOAuthIssuer()}/.well-known/oauth-protected-resource`;
-  }
-}
-
-function getOAuthIntrospectionEndpoint(): string {
-  return (
-    normalizeHeader(process.env.FIRECRAWL_OAUTH_INTROSPECTION_ENDPOINT) ??
-    `${getOAuthIssuer()}/api/oauth/introspect`
-  );
-}
-
-function getOAuthIntrospectionSecret(): string | undefined {
-  return (
-    normalizeHeader(process.env.OAUTH_MCP_INTROSPECT_SECRET) ??
-    normalizeHeader(process.env.FIRECRAWL_OAUTH_INTROSPECT_SECRET)
-  );
-}
-
 function getMcpResourceUrl(): string {
   return (
     normalizeHeader(process.env.FIRECRAWL_MCP_RESOURCE_URL) ??
@@ -108,11 +74,23 @@ function getMcpResourceUrl(): string {
   );
 }
 
+// PRM lives at the MCP origin per RFC 9728 (one PRM per resource). firecrawl-fastmcp
+// auto-serves it at the standard /.well-known/oauth-protected-resource path from the
+// protectedResource config, so the URL is fully derived from the MCP resource.
+function getOAuthProtectedResourceMetadataUrl(): string {
+  return `${new URL(getMcpResourceUrl()).origin}/.well-known/oauth-protected-resource`;
+}
+
+function getOAuthIntrospectionEndpoint(): string {
+  return `${getOAuthIssuer()}/api/oauth/introspect`;
+}
+
+function getOAuthIntrospectionSecret(): string | undefined {
+  return normalizeHeader(process.env.FIRECRAWL_OAUTH_INTROSPECT_SECRET);
+}
+
 function isMcpOAuthEnabled(): boolean {
-  return (
-    process.env.CLOUD_SERVICE === 'true' ||
-    process.env.FIRECRAWL_MCP_OAUTH_ENABLED === 'true'
-  );
+  return process.env.CLOUD_SERVICE === 'true';
 }
 
 type OAuthIntrospectionResponse = {
