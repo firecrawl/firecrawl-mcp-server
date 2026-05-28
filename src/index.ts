@@ -251,10 +251,18 @@ const server = new FastMCP<SessionData>({
     },
     protectedResourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(),
   },
-  authenticate: async (request: {
+  authenticate: async (request?: {
     headers: IncomingHttpHeaders;
   }): Promise<SessionData> => {
-    const headerCred = await resolveCredentialFromHeaders(request.headers);
+    // FastMCP invokes `authenticate(undefined)` for the stdio transport
+    // because there is no HTTP request context. Without this null guard,
+    // accessing `request.headers` throws a TypeError, FastMCP silently
+    // swallows it, and every subsequent tool call fails with
+    // "Unauthorized: API key is required when not using a self-hosted
+    // instance" even though `FIRECRAWL_API_KEY` is set in env.
+    const headerCred = request?.headers
+      ? await resolveCredentialFromHeaders(request.headers)
+      : undefined;
     const envCred = resolveCredentialFromEnv();
 
     if (process.env.CLOUD_SERVICE === 'true') {
