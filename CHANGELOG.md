@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.19.1] - 2026-05-27
+
+### Changed
+
+- Refined monitor goal guidance for meaningful-change monitoring.
+- Documented `isMeaningful`, `judgment`, and `meaningfulChanges` monitor results.
+
 ## [3.19.0] - 2026-05-25
 
 ### Added
