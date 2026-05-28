@@ -32,7 +32,7 @@ declare module 'firecrawl-fastmcp' {
       version?: string;
       logger?: Logger;
       roots?: { enabled?: boolean };
-      authenticate?: (request: {
+      authenticate?: (request?: {
         headers: IncomingHttpHeaders;
       }) => Promise<Session> | Session;
       oauth?: {
