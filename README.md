@@ -328,7 +328,6 @@ Use this guide to select the right tool for your task:
 - **If you need complex research across multiple unknown sources:** use **agent**
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
 - **If you need interactive browser automation** (click, type, navigate): use **scrape** + **interact**
-- **If you need a raw CDP browser session** (advanced): use **browser** (deprecated)
 
 ### Quick Reference Table
 
@@ -341,7 +340,6 @@ Use this guide to select the right tool for your task:
 | crawl        | Multi-page extraction (with limits)            | markdown/html[]                |
 | search       | Web search for info                            | results[]                      |
 | agent        | Complex multi-source research                  | JSON (structured data)         |
-| browser      | Interactive multi-step automation (deprecated) | Session with live browser      |
 
 ### Format Selection Guide
 
@@ -939,111 +937,6 @@ Pass `body` when you need crawl targets, JSON change tracking, custom retention,
 - `firecrawl_monitor_run`: trigger a check now.
 - `firecrawl_monitor_checks`: list checks, optionally filtered by status.
 - `firecrawl_monitor_check`: get page-level results, including `diff`, `snapshot`, `judgment.meaningful`, and `judgment.meaningfulChanges`.
-
-### 12. Browser Create (`firecrawl_browser_create`) — Deprecated
-
-> **Deprecated:** Prefer `firecrawl_scrape` + `firecrawl_interact` instead. Interact lets you scrape a page and then click, fill forms, and navigate without managing sessions manually.
-
-Create a cloud browser session for interactive automation.
-
-**Arguments:**
-
-- `ttl`: Total session lifetime in seconds (30-3600, optional)
-- `activityTtl`: Idle timeout in seconds (10-3600, optional)
-- `streamWebView`: Whether to enable live view streaming (optional)
-- `profile`: Save and reuse browser state across sessions (optional)
-  - `name`: Profile name (sessions with the same name share state)
-  - `saveChanges`: Whether to save changes back to the profile (default: true)
-
-**Usage Example:**
-
-```json
-{
-  "name": "firecrawl_browser_create",
-  "arguments": {
-    "ttl": 600,
-    "profile": { "name": "my-profile", "saveChanges": true }
-  }
-}
-```
-
-**Returns:**
-
-- Session ID, CDP URL, and live view URL
-
-### 13. Browser Execute (`firecrawl_browser_execute`) — Deprecated
-
-> **Deprecated:** Prefer `firecrawl_scrape` + `firecrawl_interact` instead.
-
-Execute code in a browser session. Supports agent-browser commands (bash), Python, or JavaScript.
-
-**Recommended: Use bash with agent-browser commands** (pre-installed in every sandbox):
-
-```json
-{
-  "name": "firecrawl_browser_execute",
-  "arguments": {
-    "sessionId": "session-id-here",
-    "code": "agent-browser open https://example.com",
-    "language": "bash"
-  }
-}
-```
-
-**Common agent-browser commands:**
-
-| Command                         | Description                            |
-| ------------------------------- | -------------------------------------- |
-| `agent-browser open <url>`      | Navigate to URL                        |
-| `agent-browser snapshot`        | Accessibility tree with clickable refs |
-| `agent-browser click @e5`       | Click element by ref from snapshot     |
-| `agent-browser type @e3 "text"` | Type into element                      |
-| `agent-browser get title`       | Get page title                         |
-| `agent-browser screenshot`      | Take screenshot                        |
-| `agent-browser --help`          | Full command reference                 |
-
-**For Playwright scripting, use Python:**
-
-```json
-{
-  "name": "firecrawl_browser_execute",
-  "arguments": {
-    "sessionId": "session-id-here",
-    "code": "await page.goto('https://example.com')\ntitle = await page.title()\nprint(title)",
-    "language": "python"
-  }
-}
-```
-
-### 14. Browser List (`firecrawl_browser_list`) — Deprecated
-
-> **Deprecated:** Prefer `firecrawl_scrape` + `firecrawl_interact` instead.
-
-List browser sessions, optionally filtered by status.
-
-```json
-{
-  "name": "firecrawl_browser_list",
-  "arguments": {
-    "status": "active"
-  }
-}
-```
-
-### 15. Browser Delete (`firecrawl_browser_delete`) — Deprecated
-
-> **Deprecated:** Prefer `firecrawl_scrape` + `firecrawl_interact` instead.
-
-Destroy a browser session.
-
-```json
-{
-  "name": "firecrawl_browser_delete",
-  "arguments": {
-    "sessionId": "session-id-here"
-  }
-}
-```
 
 ## Logging System
 
