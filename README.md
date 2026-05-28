@@ -922,7 +922,7 @@ Pass `body` when you need crawl targets, JSON change tracking, custom retention,
 - `firecrawl_monitor_update`: update fields including `goal`, `judgeEnabled`, `webhook`, and `notification`.
 - `firecrawl_monitor_run`: trigger a check now.
 - `firecrawl_monitor_checks`: list checks, optionally filtered by status.
-- `firecrawl_monitor_check`: get page-level results, including `diff`, `snapshot`, and `judgment`.
+- `firecrawl_monitor_check`: get page-level results, including `diff`, `snapshot`, `judgment.meaningful`, and `judgment.meaningfulChanges`.
 
 ### 12. Browser Create (`firecrawl_browser_create`) — Deprecated
 

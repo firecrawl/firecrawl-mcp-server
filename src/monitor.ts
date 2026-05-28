@@ -512,13 +512,26 @@ Each entry in \`data.pages[]\` has \`url\`, \`status\` (\`same\` | \`new\` | \`c
       "plans[1].features[2]": { "previous": "10 GB storage", "current": "25 GB storage" }
     }
   },
-  "snapshot": { "json": { "plans": [/* current full extraction matching the monitor's schema */] } }
+  "snapshot": { "json": { "plans": [/* current full extraction matching the monitor's schema */] } },
+  "judgment": {
+    "meaningful": true,
+    "confidence": "high",
+    "reason": "The pricing changed, which matches the monitor goal.",
+    "meaningfulChanges": [
+      {
+        "type": "changed",
+        "before": "$19/mo",
+        "after": "$24/mo",
+        "reason": "The tracked plan price changed."
+      }
+    ]
+  }
 }
 \`\`\`
 
 When summarizing a check for the user, prefer \`diff.json\` paths (e.g. "plans[0].price changed from $19/mo to $24/mo") over re-printing the markdown diff — it's more concise and grounded in the schema fields they asked for.
 
-When \`judgment\` is present, use it to decide what to surface. \`judgment.meaningful: false\` means the change was classified as noise for the monitor's goal.
+When \`judgment\` is present, use it to decide what to surface. \`judgment.meaningful: false\` means the change was classified as noise for the monitor's goal. When \`judgment.meaningfulChanges\` is present, prefer those goal-relevant changes over raw diff hunks; each item includes \`type\`, \`before\`, \`after\`, and \`reason\`.
 
 The endpoint paginates via a top-level \`next\` URL; this tool returns one page at a time. Increase \`limit\` (max 100) to fetch fewer pages.
 
