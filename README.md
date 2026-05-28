@@ -872,6 +872,8 @@ Create and manage recurring page monitors. Monitors run scheduled scrapes or cra
 
 Use `page` or `pages` plus `goal`. The MCP server builds the monitor request with a 30-minute schedule and the API enables meaningful-change judging automatically.
 
+Meaningful-change judging runs automatically when `goal` is set. Page webhooks expose `isMeaningful` and `judgment` on `monitor.page` events.
+
 Write goals as concise 2-3 sentence monitor instructions. Say what should trigger an alert, preserve any scope the user gave, and include intent-specific exclusions only when obvious from the request. Generic noise such as whitespace, formatting-only changes, request IDs, tracking params, generic metadata, and unrelated page chrome is already handled by the judge, so do not repeat it in every goal. If the user is vague, keep the goal broad; if they ask for broad monitoring or "any change", preserve that. If the user says they do not care about something, include that explicitly.
 
 ```json

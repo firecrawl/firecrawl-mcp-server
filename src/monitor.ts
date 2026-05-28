@@ -168,6 +168,8 @@ Create a Firecrawl monitor — a recurring scrape or crawl that diffs each resul
 
 Prefer the simple path: pass \`page\` or \`pages\` plus \`goal\`. The tool will create a scrape monitor with a 30-minute schedule and meaningful-change judging enabled by the API. Use \`body\` only for advanced requests such as crawl targets, JSON change tracking, custom retention, or manual \`judgeEnabled\` control.
 
+Meaningful-change judge: set \`goal\` to a plain-language description of what the user actually cares about. \`judgeEnabled\` defaults to true when \`goal\` is set, so providing \`goal\` is enough. Page webhooks expose \`isMeaningful\` and \`judgment\` on \`monitor.page\` events.
+
 Simple fields:
 - \`page\`: one page URL to monitor.
 - \`pages\`: multiple page URLs to monitor.
