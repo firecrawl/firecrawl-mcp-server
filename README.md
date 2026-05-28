@@ -18,7 +18,6 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Scrape any URL into clean, structured data
 - Interact with pages — click, navigate, and operate
 - Deep research with autonomous agent
-- Cloud browser sessions with agent-browser automation
 - Automatic retries and rate limiting
 - Cloud and self-hosted support
 - SSE support
