@@ -176,6 +176,12 @@ Simple fields:
 - \`email\`: optional email recipient for summaries.
 - \`webhookUrl\`: optional webhook URL. Configures \`monitor.page\` and \`monitor.check.completed\`.
 
+Goal guidance:
+- Write a concise 2-3 sentence monitor goal.
+- State what should trigger an alert and restate any scope the user gave, such as top N, price, role type, company, region, topic, status, or entity.
+- Include intent-specific exclusions only when obvious from the user's request. Do not invent page-specific sections, thresholds, entities, or business rules.
+- If the user asks for broad monitoring or "any change", preserve that and do not add exclusions that hide changes.
+
 Full \`body\` requests require: \`name\`, \`schedule\` (with \`cron\` or \`text\`), and \`targets\` (one or more \`{ type: 'scrape', urls: [...] }\` or \`{ type: 'crawl', url: '...' }\`). Optional: \`goal\`, \`judgeEnabled\`, \`webhook\`, \`notification\`, \`retentionDays\`.
 
 **Markdown-mode (default):** Each check produces a unified text diff of the page's markdown. No extra configuration needed.

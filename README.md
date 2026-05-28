@@ -872,6 +872,8 @@ Create and manage recurring page monitors. Monitors run scheduled scrapes or cra
 
 Use `page` or `pages` plus `goal`. The MCP server builds the monitor request with a 30-minute schedule and the API enables meaningful-change judging automatically.
 
+Write goals as concise monitor instructions: say what should trigger an alert, preserve any scope the user gave, and include exclusions only when they are part of the request. If the user asks for broad monitoring or "any change", keep it broad.
+
 ```json
 {
   "name": "firecrawl_monitor_create",
