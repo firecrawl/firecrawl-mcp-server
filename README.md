@@ -872,14 +872,14 @@ Create and manage recurring page monitors. Monitors run scheduled scrapes or cra
 
 Use `page` or `pages` plus `goal`. The MCP server builds the monitor request with a 30-minute schedule and the API enables meaningful-change judging automatically.
 
-Write goals as concise monitor instructions: say what should trigger an alert, preserve any scope the user gave, and include exclusions only when they are part of the request. If the user asks for broad monitoring or "any change", keep it broad.
+Write goals as concise 2-3 sentence monitor instructions. Say what should trigger an alert, preserve any scope the user gave, and include intent-specific exclusions only when obvious from the request. Generic noise such as whitespace, formatting-only changes, request IDs, tracking params, generic metadata, and unrelated page chrome is already handled by the judge, so do not repeat it in every goal. If the user is vague, keep the goal broad; if they ask for broad monitoring or "any change", preserve that. If the user says they do not care about something, include that explicitly.
 
 ```json
 {
   "name": "firecrawl_monitor_create",
   "arguments": {
     "page": "https://example.com/pricing",
-    "goal": "Notify me when pricing, packaging, or launch messaging changes"
+    "goal": "Alert when pricing, packaging, or launch messaging changes."
   }
 }
 ```
@@ -891,7 +891,7 @@ Write goals as concise monitor instructions: say what should trigger an alert, p
   "name": "firecrawl_monitor_create",
   "arguments": {
     "pages": ["https://example.com/pricing", "https://example.com/changelog"],
-    "goal": "Notify me when pricing, packaging, or launch messaging changes",
+    "goal": "Alert when pricing, packaging, or launch messaging changes.",
     "webhookUrl": "https://example.com/webhooks/firecrawl"
   }
 }
@@ -908,7 +908,7 @@ Pass `body` when you need crawl targets, JSON change tracking, custom retention,
     "body": {
       "name": "Docs monitor",
       "schedule": { "text": "hourly", "timezone": "UTC" },
-      "goal": "Notify me when docs pages add, remove, or materially change API behavior",
+      "goal": "Alert when docs pages add, remove, or materially change API behavior.",
       "targets": [{ "type": "crawl", "url": "https://example.com/docs" }]
     }
   }

@@ -177,10 +177,12 @@ Simple fields:
 - \`webhookUrl\`: optional webhook URL. Configures \`monitor.page\` and \`monitor.check.completed\`.
 
 Goal guidance:
-- Write a concise 2-3 sentence monitor goal.
-- State what should trigger an alert and restate any scope the user gave, such as top N, price, role type, company, region, topic, status, or entity.
-- Include intent-specific exclusions only when obvious from the user's request. Do not invent page-specific sections, thresholds, entities, or business rules.
-- If the user asks for broad monitoring or "any change", preserve that and do not add exclusions that hide changes.
+- Expand the user's one-line monitoring intent into a concise 2-3 sentence monitor goal.
+- State what should trigger an alert, restate any scope the user gave, and include intent-specific exclusions only when obvious from the user's request.
+- Generic noise such as whitespace, formatting-only changes, request IDs, tracking params, generic metadata, and unrelated page chrome is already handled by the judge; do not repeat it in every goal.
+- If the user is vague, keep the goal broad rather than guessing exclusions. If the user asks for broad monitoring or "any change", preserve that and do not add exclusions that hide changes.
+- If the user says they do not care about something, include that explicitly. It is okay to ask whether they want to ignore specific noise when it is likely to matter.
+- Do not invent page-specific sections, thresholds, entities, or business rules unless the user mentioned them.
 
 Full \`body\` requests require: \`name\`, \`schedule\` (with \`cron\` or \`text\`), and \`targets\` (one or more \`{ type: 'scrape', urls: [...] }\` or \`{ type: 'crawl', url: '...' }\`). Optional: \`goal\`, \`judgeEnabled\`, \`webhook\`, \`notification\`, \`retentionDays\`.
 
@@ -191,7 +193,7 @@ Full \`body\` requests require: \`name\`, \`schedule\` (with \`cron\` or \`text\
   "name": "firecrawl_monitor_create",
   "arguments": {
     "page": "https://example.com/blog",
-    "goal": "Notify me when a new blog post is published or the headline changes",
+    "goal": "Alert when a new blog post is published or an existing headline changes.",
     "email": "alerts@example.com"
   }
 }
@@ -204,7 +206,7 @@ Full \`body\` requests require: \`name\`, \`schedule\` (with \`cron\` or \`text\
   "name": "firecrawl_monitor_create",
   "arguments": {
     "pages": ["https://example.com/pricing", "https://example.com/changelog"],
-    "goal": "Notify me when pricing, packaging, or launch messaging changes",
+    "goal": "Alert when pricing, packaging, or launch messaging changes.",
     "webhookUrl": "https://example.com/webhooks/firecrawl"
   }
 }
@@ -219,7 +221,7 @@ Full \`body\` requests require: \`name\`, \`schedule\` (with \`cron\` or \`text\
     "body": {
       "name": "Pricing watch",
       "schedule": { "text": "hourly", "timezone": "UTC" },
-      "goal": "Notify me when a pricing tier, price, or headline feature changes",
+      "goal": "Alert when a pricing tier, price, billing period, limit, or headline feature changes. Ignore unrelated marketing copy unless it changes the pricing offer.",
       "targets": [{
         "type": "scrape",
         "urls": ["https://example.com/pricing"],
