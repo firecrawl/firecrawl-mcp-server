@@ -872,7 +872,73 @@ Check the status of an agent job and retrieve results when complete. Use this to
 - `completed`: Research finished - response includes the extracted data
 - `failed`: An error occurred
 
-### 11. Browser Create (`firecrawl_browser_create`) — Deprecated
+### 11. Monitor Tools (`firecrawl_monitor_*`)
+
+Create and manage recurring page monitors. Monitors run scheduled scrapes or crawls, diff each result against the last retained snapshot, and can notify by webhook or email.
+
+**Best for:**
+
+- Watching one page or a few pages over time
+- Alerting on meaningful changes using a plain-English goal
+- Tracking check history and page-level diffs
+
+**Recommended create pattern:**
+
+Use `page` or `pages` plus `goal`. The MCP server builds the monitor request with a 30-minute schedule and the API enables meaningful-change judging automatically.
+
+Write goals as concise 2-3 sentence monitor instructions. Say what should trigger an alert, preserve any scope the user gave, and include intent-specific exclusions only when obvious from the request. Generic noise such as whitespace, formatting-only changes, request IDs, tracking params, generic metadata, and unrelated page chrome is already handled by the judge, so do not repeat it in every goal. If the user is vague, keep the goal broad; if they ask for broad monitoring or "any change", preserve that. If the user says they do not care about something, include that explicitly.
+
+```json
+{
+  "name": "firecrawl_monitor_create",
+  "arguments": {
+    "page": "https://example.com/pricing",
+    "goal": "Alert when pricing, packaging, or launch messaging changes."
+  }
+}
+```
+
+**Multiple pages with webhooks:**
+
+```json
+{
+  "name": "firecrawl_monitor_create",
+  "arguments": {
+    "pages": ["https://example.com/pricing", "https://example.com/changelog"],
+    "goal": "Alert when pricing, packaging, or launch messaging changes.",
+    "webhookUrl": "https://example.com/webhooks/firecrawl"
+  }
+}
+```
+
+**Advanced create requests:**
+
+Pass `body` when you need crawl targets, JSON change tracking, custom retention, or explicit `judgeEnabled` control.
+
+```json
+{
+  "name": "firecrawl_monitor_create",
+  "arguments": {
+    "body": {
+      "name": "Docs monitor",
+      "schedule": { "text": "hourly", "timezone": "UTC" },
+      "goal": "Alert when docs pages add, remove, or materially change API behavior.",
+      "targets": [{ "type": "crawl", "url": "https://example.com/docs" }]
+    }
+  }
+}
+```
+
+**Other monitor tools:**
+
+- `firecrawl_monitor_list`: list monitors.
+- `firecrawl_monitor_get`: get one monitor.
+- `firecrawl_monitor_update`: update fields including `goal`, `judgeEnabled`, `webhook`, and `notification`.
+- `firecrawl_monitor_run`: trigger a check now.
+- `firecrawl_monitor_checks`: list checks, optionally filtered by status.
+- `firecrawl_monitor_check`: get page-level results, including `diff`, `snapshot`, `judgment.meaningful`, and `judgment.meaningfulChanges`.
+
+### 12. Browser Create (`firecrawl_browser_create`) — Deprecated
 
 > **Deprecated:** Prefer `firecrawl_scrape` + `firecrawl_interact` instead. Interact lets you scrape a page and then click, fill forms, and navigate without managing sessions manually.
 
@@ -903,7 +969,7 @@ Create a cloud browser session for interactive automation.
 
 - Session ID, CDP URL, and live view URL
 
-### 12. Browser Execute (`firecrawl_browser_execute`) — Deprecated
+### 13. Browser Execute (`firecrawl_browser_execute`) — Deprecated
 
 > **Deprecated:** Prefer `firecrawl_scrape` + `firecrawl_interact` instead.
 
@@ -947,7 +1013,7 @@ Execute code in a browser session. Supports agent-browser commands (bash), Pytho
 }
 ```
 
-### 13. Browser List (`firecrawl_browser_list`) — Deprecated
+### 14. Browser List (`firecrawl_browser_list`) — Deprecated
 
 > **Deprecated:** Prefer `firecrawl_scrape` + `firecrawl_interact` instead.
 
@@ -962,7 +1028,7 @@ List browser sessions, optionally filtered by status.
 }
 ```
 
-### 14. Browser Delete (`firecrawl_browser_delete`) — Deprecated
+### 15. Browser Delete (`firecrawl_browser_delete`) — Deprecated
 
 > **Deprecated:** Prefer `firecrawl_scrape` + `firecrawl_interact` instead.
 
