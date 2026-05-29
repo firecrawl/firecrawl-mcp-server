@@ -12,8 +12,8 @@ dotenv.config({ debug: false, quiet: true });
 
 interface SessionData {
   /**
-   * FC API key (`fc-…`) or OAuth access token (`fco_…`) sent as
-   * `Authorization: Bearer …` to the Firecrawl API.
+   * FC API key (`fc-...`) or OAuth access token (`fco_...`) sent as
+   * `Authorization: Bearer ...` to the Firecrawl API.
    */
   firecrawlApiKey?: string;
   [key: string]: unknown;
@@ -268,7 +268,7 @@ const server = new FastMCP<SessionData>({
     if (process.env.CLOUD_SERVICE === 'true') {
       if (!headerCred) {
         throw new Error(
-          'Firecrawl credentials required: OAuth access token (Authorization: Bearer fco_…) or API key (x-firecrawl-api-key)'
+          'Firecrawl credentials required: OAuth access token (Authorization: Bearer fco_...) or API key (x-firecrawl-api-key)'
         );
       }
       return { firecrawlApiKey: headerCred };
@@ -291,7 +291,7 @@ const server = new FastMCP<SessionData>({
 
     if (httpStreaming && !credential && !process.env.FIRECRAWL_API_URL) {
       console.error(
-        'HTTP MCP transport requires FIRECRAWL_API_URL and/or credentials (OAuth: Authorization Bearer fco_…, or FIRECRAWL_API_KEY / FIRECRAWL_OAUTH_TOKEN)'
+        'HTTP MCP transport requires FIRECRAWL_API_URL and/or credentials (OAuth: Authorization Bearer fco_..., or FIRECRAWL_API_KEY / FIRECRAWL_OAUTH_TOKEN)'
       );
       process.exit(1);
     }
