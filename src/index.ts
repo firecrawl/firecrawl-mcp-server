@@ -386,6 +386,11 @@ function buildFormatsArray(
         | Record<string, unknown>
         | undefined;
       result.push({ type: 'query', ...queryOpts });
+    } else if (fmt === 'knowledgeGraph') {
+      const kgOpts = args.knowledgeGraphOptions as
+        | Record<string, unknown>
+        | undefined;
+      result.push({ type: 'knowledgeGraph', ...kgOpts });
     } else if (fmt === 'screenshot' && args.screenshotOptions) {
       const ssOpts = args.screenshotOptions as Record<string, unknown>;
       result.push({ type: 'screenshot', ...ssOpts });
@@ -439,6 +444,7 @@ function transformScrapeParams(
 
   delete out.jsonOptions;
   delete out.queryOptions;
+  delete out.knowledgeGraphOptions;
   delete out.screenshotOptions;
   delete out.pdfOptions;
 
@@ -460,6 +466,7 @@ const scrapeParamsSchema = z.object({
         'branding',
         'json',
         'query',
+        'knowledgeGraph',
         'audio',
       ])
     )
@@ -468,6 +475,11 @@ const scrapeParamsSchema = z.object({
     .object({
       prompt: z.string().optional(),
       schema: z.record(z.string(), z.any()).optional(),
+    })
+    .optional(),
+  knowledgeGraphOptions: z
+    .object({
+      entityTypes: z.array(z.string()).max(50).optional(),
     })
     .optional(),
   queryOptions: z
@@ -637,6 +649,18 @@ If JSON extraction returns empty, minimal, or just navigation content, the page 
 }
 \`\`\`
 **Branding format:** Extracts comprehensive brand identity (colors, fonts, typography, spacing, logo, UI components) for design analysis or style replication.
+**Knowledge graph format:** Use \`knowledgeGraph\` to extract a graph of the entities on a page (nodes) and the relationships between them (edges). Each node has \`id\`, \`label\`, \`type\`; each edge has \`source\`, \`target\`, \`relation\`. Optionally pass \`knowledgeGraphOptions.entityTypes\` (max 50) to restrict which entity types are extracted. Best for mapping people/organizations/concepts and how they connect, rather than reading prose.
+**Knowledge graph example:**
+\`\`\`json
+{
+  "name": "firecrawl_scrape",
+  "arguments": {
+    "url": "https://en.wikipedia.org/wiki/Marie_Curie",
+    "formats": ["knowledgeGraph"],
+    "knowledgeGraphOptions": { "entityTypes": ["Person", "Organization"] }
+  }
+}
+\`\`\`
 **Performance:** Add maxAge parameter for 500% faster scrapes using cached data.
 **Lockdown mode:** Set \`lockdown: true\` to serve the request only from the existing index/cache without any outbound network request. For air-gapped or compliance-constrained use where the request URL itself is considered sensitive. Errors on cache miss. Billed at 5 credits.
 **Privacy:** Set \`redactPII: true\` to return content with personally identifiable information redacted.
