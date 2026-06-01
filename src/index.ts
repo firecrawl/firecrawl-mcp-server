@@ -490,6 +490,7 @@ const scrapeParamsSchema = z.object({
     })
     .optional(),
   onlyMainContent: z.boolean().optional(),
+  redactPII: z.boolean().optional(),
   includeTags: z.array(z.string()).optional(),
   excludeTags: z.array(z.string()).optional(),
   waitFor: z.number().optional(),
@@ -638,6 +639,7 @@ If JSON extraction returns empty, minimal, or just navigation content, the page 
 **Branding format:** Extracts comprehensive brand identity (colors, fonts, typography, spacing, logo, UI components) for design analysis or style replication.
 **Performance:** Add maxAge parameter for 500% faster scrapes using cached data.
 **Lockdown mode:** Set \`lockdown: true\` to serve the request only from the existing index/cache without any outbound network request. For air-gapped or compliance-constrained use where the request URL itself is considered sensitive. Errors on cache miss. Billed at 5 credits.
+**Privacy:** Set \`redactPII: true\` to return content with personally identifiable information redacted.
 **Returns:** JSON structured data, markdown, branding profile, or other formats as specified.
 ${
   SAFE_MODE
@@ -1587,6 +1589,7 @@ if (process.env.CLOUD_SERVICE !== 'true') {
       })
       .optional(),
     onlyMainContent: z.boolean().optional(),
+    redactPII: z.boolean().optional(),
     includeTags: z.array(z.string()).optional(),
     excludeTags: z.array(z.string()).optional(),
     removeBase64Images: z.boolean().optional(),
@@ -1633,6 +1636,7 @@ This is the fastest and most reliable way to extract content from a document on 
 
 **Supported file types:** .html, .htm, .xhtml, .pdf, .docx, .doc, .odt, .rtf, .xlsx, .xls
 **Unsupported options:** actions, screenshot/branding/changeTracking formats, waitFor > 0, location, mobile, proxy values other than "auto" or "basic".
+**Privacy:** Set \`redactPII: true\` to return content with personally identifiable information redacted.
 
 **CRITICAL - Format Selection (same rules as firecrawl_scrape):**
 When the user asks for SPECIFIC data points from a document, you MUST use JSON format with a schema. Only use markdown when the user needs the ENTIRE document content.
