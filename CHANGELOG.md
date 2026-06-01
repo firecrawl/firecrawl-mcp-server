@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.20.2] - 2026-06-01
+
+### Added
+
+- Added `redactPII` to scrape, parse, and nested scrape option schemas so MCP callers can request PII redaction without adding a `pii` format.
+
 ## [3.20.1] - 2026-05-28
 
 ### Fixed

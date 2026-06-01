@@ -428,6 +428,7 @@ Scrape content from a single URL with advanced options.
 ```
 
 **Branding format:** Extracts comprehensive brand identity (colors, fonts, typography, spacing, logo, UI components) for design analysis or style replication.
+**Privacy:** Set `redactPII: true` to return content with personally identifiable information redacted. You do not need to request the `pii` format for redaction.
 
 **Returns:**
 
@@ -565,7 +566,8 @@ Search the web and optionally extract content from search results.
     "country": "us",
     "scrapeOptions": {
       "formats": ["markdown"],
-      "onlyMainContent": true
+      "onlyMainContent": true,
+      "redactPII": true
     }
   }
 }
