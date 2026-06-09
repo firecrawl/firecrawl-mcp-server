@@ -38,10 +38,6 @@ type GetClient = (session?: SessionData) => unknown;
 
 const BASE = '/v2/research';
 
-function asText(data: unknown): string {
-  return JSON.stringify(data, null, 2);
-}
-
 /** Append a value (or repeated array values) to a URLSearchParams instance. */
 function appendParam(
   params: URLSearchParams,
@@ -61,6 +57,140 @@ function appendParam(
 function withQuery(path: string, params: URLSearchParams): string {
   const qs = params.toString();
   return qs ? `${path}?${qs}` : path;
+}
+
+// --- result formatting (ported from research-index-front/src/agent_eval.ts) ---
+
+// Max authors to print per paper (with affiliations); the rest collapse to a
+// "+N more" tail so a large collaboration doesn't flood the context.
+const MAX_AUTHORS = 15;
+// Cap each abstract so a page of hits stays within the MCP output-token limit.
+const MAX_ABSTRACT_CHARS = 600;
+// Per-affiliation char cap — keeps one long org string (e.g. a full multi-dept
+// university address) from bloating the authors line.
+const MAX_AFFIL_CHARS = 60;
+// Hard ceiling on the whole authors line, as a final guard.
+const MAX_AUTHORS_LINE_CHARS = 400;
+
+interface PaperHit {
+  paper_id?: string;
+  ids?: Record<string, string[]>;
+  title?: string;
+  abstract?: string;
+  // Search/metadata responses give a comma-joined string; some shapes give the
+  // structured form — handle both.
+  authors?: string | { name: string; affiliation?: string }[];
+}
+
+/** Best display id for a paper: its arXiv id, falling back to the canonical id. */
+function displayId(p: PaperHit): string {
+  return p.ids?.arxiv?.[0] ?? p.paper_id ?? '?';
+}
+
+/** Format the authors line, accepting either the string or structured form. */
+function fmtAuthors(
+  authors?: string | { name: string; affiliation?: string }[]
+): string | null {
+  if (!authors) return null;
+  let shown: string[];
+  let total: number;
+  if (typeof authors === 'string') {
+    const names = authors
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (names.length === 0) return null;
+    total = names.length;
+    shown = names.slice(0, MAX_AUTHORS);
+  } else {
+    if (authors.length === 0) return null;
+    total = authors.length;
+    shown = authors.slice(0, MAX_AUTHORS).map((a) => {
+      const aff = a.affiliation?.trim();
+      return aff ? `${a.name} (${aff.slice(0, MAX_AFFIL_CHARS)})` : a.name;
+    });
+  }
+  const extra = total > MAX_AUTHORS ? `; +${total - MAX_AUTHORS} more` : '';
+  return ('Authors: ' + shown.join('; ') + extra).slice(
+    0,
+    MAX_AUTHORS_LINE_CHARS
+  );
+}
+
+/** Render ranked papers as `[id] title` / authors / abstract blocks. */
+function fmtHits(results?: PaperHit[]): string {
+  if (!results || results.length === 0) return '(no results)';
+  return results
+    .map((r) => {
+      const lines = [`[${displayId(r)}] ${r.title ?? '(untitled)'}`];
+      const authors = fmtAuthors(r.authors);
+      if (authors) lines.push(authors);
+      lines.push(
+        (r.abstract || '(no abstract)')
+          .replace(/\s+/g, ' ')
+          .slice(0, MAX_ABSTRACT_CHARS)
+      );
+      return lines.join('\n');
+    })
+    .join('\n\n');
+}
+
+// Cap GitHub matched content so a page of results stays within the MCP
+// output-token limit. Higher than abstracts since issue/PR threads carry the
+// signal (repro steps, stack traces) the agent actually needs to verify.
+const MAX_GITHUB_CONTENT_CHARS = 1200;
+
+interface GitHubItem {
+  resultType?: string;
+  /** `owner/name`. */
+  repo?: string;
+  url?: string;
+  /** History page type (e.g. `issue`, `pull`). Omitted for readmes. */
+  pageType?: string;
+  /** Issue/PR number. Omitted for readmes. */
+  number?: number;
+  /** Number of matched segments/chunks. */
+  segmentCount?: number;
+  /** Readme URL (readme results). */
+  readmeUrl?: string;
+  /** Short matched excerpt. */
+  snippet?: string;
+  /** Full matched content in markdown. */
+  contentMd?: string;
+}
+
+/**
+ * Render GitHub history/readme hits as `[repo#number] (kind)` / url / body
+ * blocks — the same shape as `fmtHits`, but tuned for issues/PRs and readmes.
+ * Markdown content keeps its newlines (so tables/code survive); only readmes and
+ * snippets fall back when full content is absent.
+ */
+function fmtGithub(results?: GitHubItem[]): string {
+  if (!results || results.length === 0) return '(no results)';
+  return results
+    .map((r) => {
+      const lines: string[] = [];
+      if (r.resultType === 'repo_readme') {
+        lines.push(`[${r.repo ?? '?'}] README`);
+      } else {
+        const ref = r.number != null ? `#${r.number}` : '';
+        const meta = [
+          r.pageType,
+          r.segmentCount ? `${r.segmentCount} segments` : '',
+        ]
+          .filter(Boolean)
+          .join(', ');
+        lines.push(`[${r.repo ?? '?'}${ref}]${meta ? ` (${meta})` : ''}`);
+      }
+      const url = r.readmeUrl ?? r.url;
+      if (url) lines.push(url);
+      const body = (r.contentMd || r.snippet || '').trim();
+      lines.push(
+        body ? body.slice(0, MAX_GITHUB_CONTENT_CHARS) : '(no content)'
+      );
+      return lines.join('\n');
+    })
+    .join('\n\n');
 }
 
 /** Only present these tools when the session has research enabled. */
@@ -132,8 +262,10 @@ export function registerResearchTools(
       appendParam(params, 'from', from);
       appendParam(params, 'to', to);
       const client = getClient(session) as ClientLike;
-      const res = await client.http.get(withQuery(`${BASE}/papers`, params));
-      return asText(res.data);
+      const res = await client.http.get<{ results?: PaperHit[] }>(
+        withQuery(`${BASE}/papers`, params)
+      );
+      return fmtHits(res.data?.results);
     },
   });
 
@@ -186,13 +318,18 @@ export function registerResearchTools(
       if (rerank != null) appendParam(params, 'rerank', rerank);
       appendParam(params, 'anchor', anchors);
       const client = getClient(session) as ClientLike;
-      const res = await client.http.get(
+      const res = await client.http.get<{
+        results?: PaperHit[];
+        pool_size?: number;
+        note?: string | null;
+      }>(
         withQuery(
           `${BASE}/papers/${encodeURIComponent(primary)}/similar`,
           params
         )
       );
-      return asText(res.data);
+      const note = res.data?.note ? `\nnote: ${res.data.note}` : '';
+      return `${fmtHits(res.data?.results)}\n(pool_size=${res.data?.pool_size ?? 0})${note}`;
     },
   });
 
@@ -234,15 +371,17 @@ export function registerResearchTools(
       appendParam(params, 'query', question);
       appendParam(params, 'k', k);
       const client = getClient(session) as ClientLike;
-      const res = await client.http.get(
+      const res = await client.http.get<{ passages?: { text: string }[] }>(
         withQuery(`${BASE}/papers/${encodeURIComponent(arxiv_id)}`, params)
       );
-      return asText(res.data);
+      const passages = res.data?.passages ?? [];
+      return passages.length
+        ? passages.map((p) => p.text).join('\n---\n')
+        : '(no full-text passages available for this paper)';
     },
   });
 
   // --- search_github ---
-  // TODO: description pending — the user is writing this one.
   server.addTool({
     name: 'firecrawl_research_search_github',
     canAccess,
@@ -267,8 +406,10 @@ export function registerResearchTools(
       appendParam(params, 'query', query);
       appendParam(params, 'k', k);
       const client = getClient(session) as ClientLike;
-      const res = await client.http.get(withQuery(`${BASE}/github`, params));
-      return asText(res.data);
+      const res = await client.http.get<{ results?: GitHubItem[] }>(
+        withQuery(`${BASE}/github`, params)
+      );
+      return fmtGithub(res.data?.results);
     },
   });
 }
