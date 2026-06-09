@@ -7,6 +7,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import { registerMonitorTools } from './monitor.js';
+import { registerResearchTools } from './research.js';
 
 dotenv.config({ debug: false, quiet: true });
 
@@ -16,7 +17,35 @@ interface SessionData {
    * `Authorization: Bearer ...` to the Firecrawl API.
    */
   firecrawlApiKey?: string;
+  /**
+   * Whether the (experimental) research tools are exposed for this session.
+   * Enabled locally via `FIRECRAWL_RESEARCH=true`, or per-request via the
+   * `?research=true` query param on the MCP endpoint.
+   */
+  research?: boolean;
   [key: string]: unknown;
+}
+
+/**
+ * Decide whether the research tools should be visible for a session.
+ * Local/stdio/self-hosted: gated by `FIRECRAWL_RESEARCH=true`.
+ * Remote (HTTP): additionally enabled by a `?research=true` query param on the
+ * incoming MCP request URL.
+ */
+function isResearchEnabled(request?: { url?: string }): boolean {
+  if (process.env.FIRECRAWL_RESEARCH === 'true') return true;
+  const url = request?.url;
+  if (url) {
+    try {
+      const research = new URL(url, 'http://localhost').searchParams.get(
+        'research'
+      );
+      if (research === 'true') return true;
+    } catch {
+      // malformed URL — fall through to disabled
+    }
+  }
+  return false;
 }
 
 function normalizeHeader(
@@ -253,7 +282,9 @@ const server = new FastMCP<SessionData>({
   },
   authenticate: async (request?: {
     headers: IncomingHttpHeaders;
+    url?: string;
   }): Promise<SessionData> => {
+    const research = isResearchEnabled(request);
     // FastMCP invokes `authenticate(undefined)` for the stdio transport
     // because there is no HTTP request context. Without this null guard,
     // accessing `request.headers` throws a TypeError, FastMCP silently
@@ -271,7 +302,7 @@ const server = new FastMCP<SessionData>({
           'Firecrawl credentials required: OAuth access token (Authorization: Bearer fco_...) or API key (x-firecrawl-api-key)'
         );
       }
-      return { firecrawlApiKey: headerCred };
+      return { firecrawlApiKey: headerCred, research };
     }
 
     const credential = headerCred ?? envCred;
@@ -296,7 +327,7 @@ const server = new FastMCP<SessionData>({
       process.exit(1);
     }
 
-    return { firecrawlApiKey: credential };
+    return { firecrawlApiKey: credential, research };
   },
   // Lightweight health endpoint for LB checks
   health: {
@@ -1807,5 +1838,21 @@ if (
 }
 
 registerMonitorTools(server);
+
+// Research tools gating. FastMCP's `canAccess` is only honored on the HTTP
+// transport (the stdio path exposes every registered tool regardless), so we
+// split the two cases:
+//   - HTTP (cloud / SSE_LOCAL / HTTP_STREAMABLE_SERVER): always register; each
+//     tool's `canAccess` hides it unless the session has research enabled
+//     (`FIRECRAWL_RESEARCH=true` env or `?research=true` on the request).
+//   - stdio (local): register only when `FIRECRAWL_RESEARCH=true`, since
+//     `canAccess` cannot hide them there.
+const isHttpTransport =
+  process.env.CLOUD_SERVICE === 'true' ||
+  process.env.SSE_LOCAL === 'true' ||
+  process.env.HTTP_STREAMABLE_SERVER === 'true';
+if (isHttpTransport || process.env.FIRECRAWL_RESEARCH === 'true') {
+  registerResearchTools(server, getClient);
+}
 
 await server.start(args);
