@@ -18,13 +18,25 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Scrape any URL into clean, structured data
 - Interact with pages — click, navigate, and operate
 - Deep research with autonomous agent
+- Monitor pages for changes with webhook/email alerts
+- arXiv + GitHub research tools (when research access is enabled)
 - Automatic retries and rate limiting
 - Cloud and self-hosted support
-- SSE support
+- Streamable HTTP support
 
 > Play around with [our MCP Server on MCP.so's playground](https://mcp.so/playground?server=firecrawl-mcp-server) or on [Klavis AI](https://www.klavis.ai/mcp-servers).
 
 ## Installation
+
+You can either use our remote hosted URL or run the server locally. Get your API key from https://firecrawl.dev/app/api-keys.
+
+### Remote hosted URL (recommended)
+
+No install required — point your MCP client at:
+
+```
+https://mcp.firecrawl.dev/{FIRECRAWL_API_KEY}/v2/mcp
+```
 
 ### Running with npx
 
@@ -99,6 +111,42 @@ Add this to your `./codeium/windsurf/model_config.json`:
 }
 ```
 
+### Running on Claude Code
+
+Add the server with the Claude Code CLI — remote hosted URL (recommended) or local npx:
+
+```bash
+# Remote hosted URL (recommended)
+claude mcp add --transport http firecrawl https://mcp.firecrawl.dev/your-api-key/v2/mcp
+
+# Or run locally via npx
+claude mcp add firecrawl -e FIRECRAWL_API_KEY=your-api-key -- npx -y firecrawl-mcp
+```
+
+### Running on Google Antigravity
+
+In the Agent sidebar, open the "…" menu → **MCP Servers** → **View raw config**, then add:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_FIRECRAWL_API_KEY"
+      }
+    }
+  }
+}
+```
+
+Save and click **Refresh** in the Antigravity MCP interface.
+
+### Running on n8n
+
+Add an **AI Agent** node → add a **Tool** → **MCP Client Tool**, set the endpoint to `https://mcp.firecrawl.dev/{YOUR_FIRECRAWL_API_KEY}/v2/mcp`, **Server Transport** to **HTTP Streamable**, and **Authentication** to **None**.
+
 ### Running with Streamable HTTP Local Mode
 
 To run the server using Streamable HTTP locally instead of the default stdio transport:
@@ -107,7 +155,7 @@ To run the server using Streamable HTTP locally instead of the default stdio tra
 env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
 ```
 
-Use the url: http://localhost:3000/mcp
+Use the url: http://localhost:3000/v2/mcp (or the remote `https://mcp.firecrawl.dev/{FIRECRAWL_API_KEY}/v2/mcp`)
 
 ### Installing via Smithery (Legacy)
 
@@ -321,12 +369,15 @@ Use this guide to select the right tool for your task:
 
 - **If you know the exact URL(s) you want:**
   - For one: use **scrape** (with JSON format for structured data)
-  - For many: use **batch_scrape**
+  - For many: call **scrape** per URL, or use **crawl** for a whole section
 - **If you need to discover URLs on a site:** use **map**
 - **If you want to search the web for info:** use **search**
 - **If you need complex research across multiple unknown sources:** use **agent**
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
 - **If you need interactive browser automation** (click, type, navigate): use **scrape** + **interact**
+- **If you need to convert a file (PDF, DOCX, …) to markdown:** use **parse**
+- **If you want to watch a page for changes over time:** use **monitor**
+- **If you're researching academic papers or GitHub history:** use the **research** tools (when enabled)
 
 ### Quick Reference Table
 
@@ -334,11 +385,14 @@ Use this guide to select the right tool for your task:
 | ------------ | ---------------------------------------------- | ------------------------------ |
 | scrape       | Single page content                            | JSON (preferred) or markdown   |
 | interact     | Interact with a scraped page                   | Execution result               |
-| batch_scrape | Multiple known URLs                            | JSON (preferred) or markdown[] |
 | map          | Discovering URLs on a site                     | URL[]                          |
 | crawl        | Multi-page extraction (with limits)            | markdown/html[]                |
 | search       | Web search for info                            | results[]                      |
+| extract      | Structured data from known URLs                | JSON (structured data)         |
 | agent        | Complex multi-source research                  | JSON (structured data)         |
+| parse        | Local/remote file (PDF, DOCX, …) → markdown    | markdown                       |
+| monitor      | Watch pages for changes over time              | monitor/check objects          |
+| research_*   | arXiv papers + GitHub history (when enabled)   | ranked results                 |
 
 ### Format Selection Guide
 
@@ -434,72 +488,7 @@ Scrape content from a single URL with advanced options.
 
 - JSON structured data, markdown, branding profile, or other formats as specified.
 
-### 2. Batch Scrape Tool (`firecrawl_batch_scrape`)
-
-Scrape multiple URLs efficiently with built-in rate limiting and parallel processing.
-
-**Best for:**
-
-- Retrieving content from multiple pages, when you know exactly which pages to scrape.
-
-**Not recommended for:**
-
-- Discovering URLs (use map first if you don't know the URLs)
-- Scraping a single page (use scrape)
-
-**Common mistakes:**
-
-- Using batch_scrape with too many URLs at once (may hit rate limits or token overflow)
-
-**Prompt Example:**
-
-> "Get the content of these three blog posts: [url1, url2, url3]."
-
-**Usage Example:**
-
-```json
-{
-  "name": "firecrawl_batch_scrape",
-  "arguments": {
-    "urls": ["https://example1.com", "https://example2.com"],
-    "options": {
-      "formats": ["markdown"],
-      "onlyMainContent": true
-    }
-  }
-}
-```
-
-**Returns:**
-
-- Response includes operation ID for status checking:
-
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "Batch operation queued with ID: batch_1. Use firecrawl_check_batch_status to check progress."
-    }
-  ],
-  "isError": false
-}
-```
-
-### 3. Check Batch Status (`firecrawl_check_batch_status`)
-
-Check the status of a batch operation.
-
-```json
-{
-  "name": "firecrawl_check_batch_status",
-  "arguments": {
-    "id": "batch_1"
-  }
-}
-```
-
-### 4. Map Tool (`firecrawl_map`)
+### 2. Map Tool (`firecrawl_map`)
 
 Map a website to discover all indexed URLs on the site.
 
@@ -536,7 +525,7 @@ Map a website to discover all indexed URLs on the site.
 
 - Array of URLs found on the site
 
-### 5. Search Tool (`firecrawl_search`)
+### 3. Search Tool (`firecrawl_search`)
 
 Search the web and optionally extract content from search results.
 
@@ -562,8 +551,8 @@ Search the web and optionally extract content from search results.
   "arguments": {
     "query": "latest AI research papers 2023",
     "limit": 5,
-    "lang": "en",
-    "country": "us",
+    "location": "United States",
+    "sources": ["web"],
     "scrapeOptions": {
       "formats": ["markdown"],
       "onlyMainContent": true,
@@ -581,7 +570,7 @@ Search the web and optionally extract content from search results.
 
 > "Find the latest research papers on AI published in 2023."
 
-### 5b. Search Feedback Tool (`firecrawl_search_feedback`)
+### 3b. Search Feedback Tool (`firecrawl_search_feedback`)
 
 Sends structured feedback on a previous `firecrawl_search` result. The first feedback per search id refunds 1 credit and improves Firecrawl's search quality. Idempotent per search id.
 
@@ -623,7 +612,7 @@ Sends structured feedback on a previous `firecrawl_search` result. The first fee
 
 - `{ success, feedbackId, creditsRefunded, alreadySubmitted? }` JSON.
 
-### 6. Crawl Tool (`firecrawl_crawl`)
+### 4. Crawl Tool (`firecrawl_crawl`)
 
 Starts an asynchronous crawl job on a website and extract content from all pages.
 
@@ -641,7 +630,7 @@ Starts an asynchronous crawl job on a website and extract content from all pages
 
 **Common mistakes:**
 
-- Setting limit or maxDepth too high (causes token overflow)
+- Setting limit or maxDiscoveryDepth too high (causes token overflow)
 - Using crawl for a single page (use scrape instead)
 
 **Prompt Example:**
@@ -655,7 +644,7 @@ Starts an asynchronous crawl job on a website and extract content from all pages
   "name": "firecrawl_crawl",
   "arguments": {
     "url": "https://example.com/blog/*",
-    "maxDepth": 2,
+    "maxDiscoveryDepth": 2,
     "limit": 100,
     "allowExternalLinks": false,
     "deduplicateSimilarURLs": true
@@ -679,7 +668,7 @@ Starts an asynchronous crawl job on a website and extract content from all pages
 }
 ```
 
-### 7. Check Crawl Status (`firecrawl_check_crawl_status`)
+### 5. Check Crawl Status (`firecrawl_check_crawl_status`)
 
 Check the status of a crawl job.
 
@@ -696,7 +685,7 @@ Check the status of a crawl job.
 
 - Response includes the status of the crawl job:
 
-### 8. Extract Tool (`firecrawl_extract`)
+### 6. Extract Tool (`firecrawl_extract`)
 
 Extract structured information from web pages using LLM capabilities. Supports both cloud AI and self-hosted LLM extraction.
 
@@ -769,7 +758,67 @@ When using a self-hosted instance, the extraction will use your configured LLM. 
 }
 ```
 
-### 9. Agent Tool (`firecrawl_agent`)
+### 7. Parse Tool (`firecrawl_parse`)
+
+Parse a file from the **local filesystem** into clean markdown or structured JSON, via a self-hosted Firecrawl API's `/v2/parse` endpoint.
+
+**Requires:** `FIRECRAWL_API_URL` set to a self-hosted Firecrawl instance (parse is not available on the default cloud API).
+
+**Best for:** Extracting content from a local document without hosting it on the public web first.
+**Not recommended for:** Remote URLs (use `firecrawl_scrape`).
+**Supported file types:** `.html`, `.htm`, `.xhtml`, `.pdf`, `.docx`, `.doc`, `.odt`, `.rtf`, `.xlsx`, `.xls`.
+
+```json
+{
+  "name": "firecrawl_parse",
+  "arguments": {
+    "filePath": "/absolute/path/to/document.pdf",
+    "formats": ["markdown"],
+    "parsers": ["pdf"]
+  }
+}
+```
+
+For specific data points, use JSON format with a schema (same rules as `firecrawl_scrape`). Set `redactPII: true` to redact personal data.
+
+### 8. Interact Tool (`firecrawl_interact`)
+
+Interact with a previously scraped page in a live browser session — click buttons, fill forms, extract dynamic content, or navigate deeper. Scrape a page first with `firecrawl_scrape`, then pass the returned `scrapeId`.
+
+**Arguments:**
+
+- `scrapeId`: scrape job ID from a previous `firecrawl_scrape` call (required)
+- `prompt`: natural-language instruction (use this OR `code`)
+- `code`: code to execute in the session (use this OR `prompt`)
+- `language`: `bash`, `python`, or `node` (default `node`, only used with `code`)
+- `timeout`: seconds, 1–300 (default 30)
+
+```json
+{
+  "name": "firecrawl_interact",
+  "arguments": {
+    "scrapeId": "scrape-id-from-previous-scrape",
+    "prompt": "Click on the first product and tell me its price"
+  }
+}
+```
+
+The response includes `liveViewUrl` and `interactiveLiveViewUrl` to watch or control the session in real time.
+
+### 9. Stop Interact Session (`firecrawl_interact_stop`)
+
+Stop an interact session for a scraped page to free resources when you're done.
+
+```json
+{
+  "name": "firecrawl_interact_stop",
+  "arguments": {
+    "scrapeId": "scrape-id-from-previous-scrape"
+  }
+}
+```
+
+### 10. Agent Tool (`firecrawl_agent`)
 
 Autonomous web research agent. This is a separate AI agent layer that independently browses the internet, searches for information, navigates through pages, and extracts structured data based on your query.
 
@@ -850,7 +899,7 @@ Then poll with `firecrawl_agent_status` using the returned job ID.
 
 - Job ID for status checking. Use `firecrawl_agent_status` to poll for results.
 
-### 10. Check Agent Status (`firecrawl_agent_status`)
+### 11. Check Agent Status (`firecrawl_agent_status`)
 
 Check the status of an agent job and retrieve results when complete. Use this to poll for results after starting an agent.
 
@@ -871,7 +920,7 @@ Check the status of an agent job and retrieve results when complete. Use this to
 - `completed`: Research finished - response includes the extracted data
 - `failed`: An error occurred
 
-### 11. Monitor Tools (`firecrawl_monitor_*`)
+### 12. Monitor Tools (`firecrawl_monitor_*`)
 
 Create and manage recurring page monitors. Monitors run scheduled scrapes or crawls, diff each result against the last retained snapshot, and can notify by webhook or email.
 
@@ -938,6 +987,25 @@ Pass `body` when you need crawl targets, JSON change tracking, custom retention,
 - `firecrawl_monitor_run`: trigger a check now.
 - `firecrawl_monitor_checks`: list checks, optionally filtered by status.
 - `firecrawl_monitor_check`: get page-level results, including `diff`, `snapshot`, `judgment.meaningful`, and `judgment.meaningfulChanges`.
+
+### 13. Research Tools (`firecrawl_research_*`)
+
+A suite of academic and code research tools, available **only when research access is enabled** for your session. They search and read arXiv papers and GitHub history.
+
+- **`firecrawl_research_search_papers`** — semantic (HyDE) search over arXiv abstracts; returns ranked papers (id, title, abstract). Args: `query`, `k`, `authors`, `categories`, `from`, `to`. Run several distinct framings of a question for better recall.
+- **`firecrawl_research_related_papers`** — expand from seed arXiv ids via the citation graph, ranked to a natural-language `intent`. Args: `seed_ids`, `intent`, `mode` (`similar` | `citers` | `references`), `k`, `rerank`.
+- **`firecrawl_research_read_paper`** — read the most relevant full-text passages of one paper to verify a claim. Args: `arxiv_id`, `question`, `k`.
+- **`firecrawl_research_search_github`** — search GitHub issue/PR history and repository READMEs. Args: `query`, `k`.
+
+```json
+{
+  "name": "firecrawl_research_search_papers",
+  "arguments": {
+    "query": "retrieval-augmented generation for code",
+    "k": 40
+  }
+}
+```
 
 ## Logging System
 
