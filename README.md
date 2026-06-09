@@ -388,15 +388,14 @@ Use this guide to select the right tool for your task:
 | map          | Discovering URLs on a site                     | URL[]                          |
 | crawl        | Multi-page extraction (with limits)            | markdown/html[]                |
 | search       | Web search for info                            | results[]                      |
-| extract      | Structured data from known URLs                | JSON (structured data)         |
 | agent        | Complex multi-source research                  | JSON (structured data)         |
-| parse        | Local/remote file (PDF, DOCX, …) → markdown    | markdown                       |
+| parse        | Local file (PDF, DOCX, …) → markdown — self-hosted only | markdown              |
 | monitor      | Watch pages for changes over time              | monitor/check objects          |
-| research_*   | arXiv papers + GitHub history (when enabled)   | ranked results                 |
+| research_*   | arXiv papers + GitHub history — experimental, opt-in    | ranked results        |
 
 ### Format Selection Guide
 
-When using `scrape` or `batch_scrape`, choose the right format:
+When using `scrape`, choose the right format:
 
 - **JSON format (recommended for most cases):** Use when you need specific data from a page. Define a schema based on what you need to extract. This keeps responses small and avoids context window overflow.
 - **Markdown format (use sparingly):** Only when you genuinely need the full page content, such as reading an entire article for summarization or analyzing page structure.
@@ -413,12 +412,12 @@ Scrape content from a single URL with advanced options.
 
 **Not recommended for:**
 
-- Extracting content from multiple pages (use batch_scrape for known URLs, or map + batch_scrape to discover URLs first, or crawl for full page content)
+- Extracting content from multiple pages (call scrape per URL, or use crawl for full page content)
 - When you're unsure which page contains the information (use search)
 
 **Common mistakes:**
 
-- Using scrape for a list of URLs (use batch_scrape instead).
+- Using markdown format by default when you only need specific fields (use JSON format with a schema).
 - Using markdown format by default (use JSON format to extract only what you need).
 
 **Choosing the right format:**
@@ -499,7 +498,7 @@ Map a website to discover all indexed URLs on the site.
 
 **Not recommended for:**
 
-- When you already know which specific URL you need (use scrape or batch_scrape)
+- When you already know which specific URL you need (use scrape)
 - When you need the content of the pages (use scrape after mapping)
 
 **Common mistakes:**
@@ -623,10 +622,10 @@ Starts an asynchronous crawl job on a website and extract content from all pages
 **Not recommended for:**
 
 - Extracting content from a single page (use scrape)
-- When token limits are a concern (use map + batch_scrape)
+- When token limits are a concern (use map, then scrape specific URLs)
 - When you need fast results (crawling can be slow)
 
-**Warning:** Crawl responses can be very large and may exceed token limits. Limit the crawl depth and number of pages, or use map + batch_scrape for better control.
+**Warning:** Crawl responses can be very large and may exceed token limits. Limit the crawl depth and number of pages, or use map then scrape specific URLs for better control.
 
 **Common mistakes:**
 
@@ -685,80 +684,7 @@ Check the status of a crawl job.
 
 - Response includes the status of the crawl job:
 
-### 6. Extract Tool (`firecrawl_extract`)
-
-Extract structured information from web pages using LLM capabilities. Supports both cloud AI and self-hosted LLM extraction.
-
-**Best for:**
-
-- Extracting specific structured data like prices, names, details.
-
-**Not recommended for:**
-
-- When you need the full content of a page (use scrape)
-- When you're not looking for specific structured data
-
-**Arguments:**
-
-- `urls`: Array of URLs to extract information from
-- `prompt`: Custom prompt for the LLM extraction
-- `systemPrompt`: System prompt to guide the LLM
-- `schema`: JSON schema for structured data extraction
-- `allowExternalLinks`: Allow extraction from external links
-- `enableWebSearch`: Enable web search for additional context
-- `includeSubdomains`: Include subdomains in extraction
-
-When using a self-hosted instance, the extraction will use your configured LLM. For cloud API, it uses Firecrawl's managed LLM service.
-**Prompt Example:**
-
-> "Extract the product name, price, and description from these product pages."
-
-**Usage Example:**
-
-```json
-{
-  "name": "firecrawl_extract",
-  "arguments": {
-    "urls": ["https://example.com/page1", "https://example.com/page2"],
-    "prompt": "Extract product information including name, price, and description",
-    "systemPrompt": "You are a helpful assistant that extracts product information",
-    "schema": {
-      "type": "object",
-      "properties": {
-        "name": { "type": "string" },
-        "price": { "type": "number" },
-        "description": { "type": "string" }
-      },
-      "required": ["name", "price"]
-    },
-    "allowExternalLinks": false,
-    "enableWebSearch": false,
-    "includeSubdomains": false
-  }
-}
-```
-
-**Returns:**
-
-- Extracted structured data as defined by your schema
-
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": {
-        "name": "Example Product",
-        "price": 99.99,
-        "description": "This is an example product description"
-      }
-    }
-  ],
-  "isError": false
-}
-```
-
-### 7. Parse Tool (`firecrawl_parse`)
+### 6. Parse Tool (`firecrawl_parse`)
 
 Parse a file from the **local filesystem** into clean markdown or structured JSON, via a self-hosted Firecrawl API's `/v2/parse` endpoint.
 
@@ -781,7 +707,7 @@ Parse a file from the **local filesystem** into clean markdown or structured JSO
 
 For specific data points, use JSON format with a schema (same rules as `firecrawl_scrape`). Set `redactPII: true` to redact personal data.
 
-### 8. Interact Tool (`firecrawl_interact`)
+### 7. Interact Tool (`firecrawl_interact`)
 
 Interact with a previously scraped page in a live browser session — click buttons, fill forms, extract dynamic content, or navigate deeper. Scrape a page first with `firecrawl_scrape`, then pass the returned `scrapeId`.
 
@@ -805,7 +731,7 @@ Interact with a previously scraped page in a live browser session — click butt
 
 The response includes `liveViewUrl` and `interactiveLiveViewUrl` to watch or control the session in real time.
 
-### 9. Stop Interact Session (`firecrawl_interact_stop`)
+### 8. Stop Interact Session (`firecrawl_interact_stop`)
 
 Stop an interact session for a scraped page to free resources when you're done.
 
@@ -818,7 +744,7 @@ Stop an interact session for a scraped page to free resources when you're done.
 }
 ```
 
-### 10. Agent Tool (`firecrawl_agent`)
+### 9. Agent Tool (`firecrawl_agent`)
 
 Autonomous web research agent. This is a separate AI agent layer that independently browses the internet, searches for information, navigates through pages, and extracts structured data based on your query.
 
@@ -899,7 +825,7 @@ Then poll with `firecrawl_agent_status` using the returned job ID.
 
 - Job ID for status checking. Use `firecrawl_agent_status` to poll for results.
 
-### 11. Check Agent Status (`firecrawl_agent_status`)
+### 10. Check Agent Status (`firecrawl_agent_status`)
 
 Check the status of an agent job and retrieve results when complete. Use this to poll for results after starting an agent.
 
@@ -920,7 +846,7 @@ Check the status of an agent job and retrieve results when complete. Use this to
 - `completed`: Research finished - response includes the extracted data
 - `failed`: An error occurred
 
-### 12. Monitor Tools (`firecrawl_monitor_*`)
+### 11. Monitor Tools (`firecrawl_monitor_*`)
 
 Create and manage recurring page monitors. Monitors run scheduled scrapes or crawls, diff each result against the last retained snapshot, and can notify by webhook or email.
 
@@ -988,9 +914,9 @@ Pass `body` when you need crawl targets, JSON change tracking, custom retention,
 - `firecrawl_monitor_checks`: list checks, optionally filtered by status.
 - `firecrawl_monitor_check`: get page-level results, including `diff`, `snapshot`, `judgment.meaningful`, and `judgment.meaningfulChanges`.
 
-### 13. Research Tools (`firecrawl_research_*`)
+### 12. Research Tools (`firecrawl_research_*`)
 
-A suite of academic and code research tools, available **only when research access is enabled** for your session. They search and read arXiv papers and GitHub history.
+An **experimental, opt-in** suite of academic and code research tools that search and read arXiv papers and GitHub history. They are **not exposed on the standard hosted MCP** — enable them with `FIRECRAWL_RESEARCH=true` (local/self-hosted) or a `?research=true` query param on the HTTP endpoint.
 
 - **`firecrawl_research_search_papers`** — semantic (HyDE) search over arXiv abstracts; returns ranked papers (id, title, abstract). Args: `query`, `k`, `authors`, `categories`, `from`, `to`. Run several distinct framings of a question for better recall.
 - **`firecrawl_research_related_papers`** — expand from seed arXiv ids via the citation graph, ranked to a natural-language `intent`. Args: `seed_ids`, `intent`, `mode` (`similar` | `citers` | `references`), `k`, `rerank`.
