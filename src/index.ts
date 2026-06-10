@@ -525,6 +525,12 @@ const scrapeParamsSchema = z.object({
   includeTags: z.array(z.string()).optional(),
   excludeTags: z.array(z.string()).optional(),
   waitFor: z.number().optional(),
+  headers: z
+    .record(z.string(), z.string())
+    .optional()
+    .describe(
+      'Custom HTTP headers to send with the request, e.g. Cookie or Authorization for pages behind authentication or consent walls'
+    ),
   ...(SAFE_MODE
     ? {}
     : {
