@@ -623,6 +623,43 @@ Sends structured feedback on a previous `firecrawl_search` result. The first fee
 
 - `{ success, feedbackId, creditsRefunded, alreadySubmitted? }` JSON.
 
+### 5c. Generic Feedback Tool (`firecrawl_feedback`)
+
+Sends structured feedback for a completed v2 endpoint job through `/v2/feedback`.
+Use this for endpoint-level feedback on `scrape`, `parse`, `map`, or `search`
+jobs. For search-result quality specifically, prefer
+`firecrawl_search_feedback` because it includes search-specific guidance.
+
+Keep feedback concise: use issue codes, tags, short notes, URLs, page numbers,
+and small metadata objects. Do not include raw scrape/parse outputs.
+
+**Opt out:** set `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` (or `FIRECRAWL_DISABLE_ENDPOINT_FEEDBACK=1`) in the environment when starting the MCP server. The `firecrawl_feedback` tool will not be registered, so agents cannot call it.
+
+**Usage Example:**
+
+```json
+{
+  "name": "firecrawl_feedback",
+  "arguments": {
+    "endpoint": "scrape",
+    "jobId": "0193f6c5-1234-7890-abcd-1234567890ab",
+    "rating": "partial",
+    "issues": ["missing_markdown"],
+    "tags": ["docs"],
+    "note": "The pricing table was missing from the markdown output.",
+    "url": "https://example.com/pricing",
+    "pageNumbers": [1],
+    "metadata": {
+      "format": "markdown"
+    }
+  }
+}
+```
+
+**Returns:**
+
+- `{ success, feedbackId, creditsRefunded, creditsRefundedToday?, dailyRefundCap?, dailyCapReached?, alreadySubmitted?, warning? }` JSON.
+
 ### 6. Crawl Tool (`firecrawl_crawl`)
 
 Starts an asynchronous crawl job on a website and extract content from all pages.
