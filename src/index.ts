@@ -18,6 +18,12 @@ interface SessionData {
    */
   firecrawlApiKey?: string;
   /**
+   * For keyless requests over the hosted (CLOUD_SERVICE) MCP, the end-user's
+   * real client IP, forwarded to the API so it can rate-limit per real IP
+   * instead of the shared server IP.
+   */
+  keylessClientIp?: string;
+  /**
    * Whether the (experimental) research tools are exposed for this session.
    * Enabled locally via `FIRECRAWL_RESEARCH=true`, or per-request via the
    * `?research=true` query param on the MCP endpoint.
@@ -298,6 +304,21 @@ const server = new FastMCP<SessionData>({
 
     if (process.env.CLOUD_SERVICE === 'true') {
       if (!headerCred) {
+        // Keyless free tier over the hosted MCP: serve it only when a forwarding
+        // secret is configured, we know the end-user's client IP (so the API can
+        // rate-limit per real IP, not the shared server IP), AND that IP still
+        // has free quota. If the IP is out of quota (or keyless is off), fall
+        // through to throw so FastMCP emits the OAuth 401 + WWW-Authenticate
+        // challenge — i.e. prompt the user to connect an account exactly when
+        // their free quota runs out.
+        const clientIp = extractClientIp(request);
+        if (
+          process.env.KEYLESS_PROXY_SECRET &&
+          clientIp &&
+          (await keylessEligible(clientIp))
+        ) {
+          return { firecrawlApiKey: undefined, research, keylessClientIp: clientIp };
+        }
         throw new Error(
           'Firecrawl credentials required: OAuth access token (Authorization: Bearer fco_...) or API key (x-firecrawl-api-key)'
         );
@@ -314,10 +335,14 @@ const server = new FastMCP<SessionData>({
       !process.env.FIRECRAWL_API_KEY &&
       !process.env.FIRECRAWL_API_URL
     ) {
+      // No credential and no self-hosted URL: run in keyless mode. scrape and
+      // search work for free (rate-limited per IP) against the Firecrawl cloud;
+      // every other tool needs an API key and will return Unauthorized.
       console.error(
-        'Either FIRECRAWL_API_KEY or FIRECRAWL_API_URL must be provided'
+        'No FIRECRAWL_API_KEY or FIRECRAWL_API_URL set — running in keyless mode. ' +
+          'firecrawl_scrape and firecrawl_search are free (rate-limited per IP) against the Firecrawl cloud; ' +
+          'other tools require an API key (get one free at https://firecrawl.dev).'
       );
-      process.exit(1);
     }
 
     if (httpStreaming && !credential && !process.env.FIRECRAWL_API_URL) {
@@ -687,7 +712,6 @@ ${
       string,
       unknown
     >;
-    const client = getClient(session);
     const transformed = transformScrapeParams(
       options as Record<string, unknown>
     );
@@ -697,6 +721,19 @@ ${
     } else {
       log.info('Scraping URL', { url: String(url) });
     }
+    if (isKeylessMode(session)) {
+      const json = await keylessPost(
+        '/v2/scrape',
+        {
+          url: String(url),
+          ...cleaned,
+          origin: ORIGIN,
+        },
+        session
+      );
+      return asText(json?.data ?? json);
+    }
+    const client = getClient(session);
     const res = await client.scrape(String(url), {
       ...cleaned,
       origin: ORIGIN,
@@ -867,7 +904,6 @@ The query also supports search operators, that you can use if needed to refine t
     args: unknown,
     { session, log }: { session?: SessionData; log: Logger }
   ): Promise<string> => {
-    const client = getClient(session);
     const { query, ...opts } = args as Record<string, unknown>;
 
     const searchOpts = { ...opts } as Record<string, unknown>;
@@ -889,16 +925,22 @@ The query also supports search operators, that you can use if needed to refine t
       excludeDomains
     );
     log.info('Searching', { query: searchQuery });
+    const searchBody = {
+      query: searchQuery,
+      ...(cleaned as any),
+      origin: ORIGIN,
+    };
+    if (isKeylessMode(session)) {
+      const json = await keylessPost('/v2/search', searchBody, session);
+      return asText(json ?? {});
+    }
     // Call /v2/search through the SDK's HTTP layer (auth + retries) instead
     // of `client.search()` so we preserve the full response envelope. The
     // high-level `search()` helper strips `id` and `creditsUsed`, which
     // breaks the `firecrawl_search_feedback` workflow that this server
     // explicitly tells the LLM to use after every search.
-    const httpRes = await (client as any).http.post('/v2/search', {
-      query: searchQuery,
-      ...(cleaned as any),
-      origin: ORIGIN,
-    });
+    const client = getClient(session);
+    const httpRes = await (client as any).http.post('/v2/search', searchBody);
     return asText(httpRes?.data ?? {});
   },
 });
@@ -910,6 +952,85 @@ function resolveApiBaseUrl(): string {
     /\/$/,
     ''
   );
+}
+
+// Keyless free tier: when no credential is configured and we're targeting the
+// Firecrawl cloud (not self-hosted via FIRECRAWL_API_URL, not the multi-tenant
+// CLOUD_SERVICE deployment), scrape and search are free, rate-limited per IP.
+// The cloud only grants this when NO Authorization header is sent, so we bypass
+// the SDK — which always attaches a Bearer header — and post directly.
+/** Best-effort end-user client IP from the incoming MCP request headers. */
+function extractClientIp(request?: {
+  headers: IncomingHttpHeaders;
+}): string | undefined {
+  const xff = request?.headers?.['x-forwarded-for'];
+  const raw = Array.isArray(xff) ? xff[0] : xff;
+  const first = typeof raw === 'string' ? raw.split(',')[0].trim() : undefined;
+  return first || undefined;
+}
+
+/**
+ * Read-only check (no quota consumed) of whether a client IP can still use the
+ * keyless free tier, via the API's secret-gated eligibility endpoint. Fails
+ * closed: anything other than a clear "eligible: true" means fall through to the
+ * OAuth challenge rather than silently granting keyless.
+ */
+async function keylessEligible(clientIp: string): Promise<boolean> {
+  const secret = process.env.KEYLESS_PROXY_SECRET;
+  if (!secret) return false;
+  try {
+    const response = await fetch(
+      `${resolveApiBaseUrl()}/v2/keyless/eligibility`,
+      {
+        headers: {
+          'x-firecrawl-keyless-ip': clientIp,
+          'x-firecrawl-keyless-secret': secret,
+        },
+      }
+    );
+    if (!response.ok) return false;
+    const json: any = await response.json().catch(() => ({}));
+    return json?.eligible === true;
+  } catch {
+    return false;
+  }
+}
+
+function isKeylessMode(session?: SessionData): boolean {
+  if (session?.firecrawlApiKey) return false;
+  if (process.env.CLOUD_SERVICE === 'true') {
+    // Hosted: keyless only for secret-gated sessions carrying the forwarded
+    // client IP (so the per-IP cap is meaningful, not the shared server IP).
+    return !!session?.keylessClientIp;
+  }
+  // Local/stdio against the cloud (not a self-hosted FIRECRAWL_API_URL).
+  return !process.env.FIRECRAWL_API_URL;
+}
+
+async function keylessPost(
+  path: string,
+  body: Record<string, unknown>,
+  session?: SessionData
+): Promise<any> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  // Forward the real client IP (secret-authenticated) when proxying keyless
+  // requests through the hosted MCP, so the API rate-limits per real IP.
+  if (session?.keylessClientIp && process.env.KEYLESS_PROXY_SECRET) {
+    headers['x-firecrawl-keyless-ip'] = session.keylessClientIp;
+    headers['x-firecrawl-keyless-secret'] = process.env.KEYLESS_PROXY_SECRET;
+  }
+  const response = await fetch(`${resolveApiBaseUrl()}${path}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+  const json: any = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      json?.error || `Firecrawl request failed (HTTP ${response.status})`
+    );
+  }
+  return json;
 }
 
 const feedbackIssueSchema = z
@@ -935,14 +1056,22 @@ const missingContentSchema = z.object({
   description: z.string().max(2000).optional(),
 });
 
-const SEARCH_FEEDBACK_DISABLED = ['1', 'true', 'yes', 'on'].includes(
-  (
-    process.env.FIRECRAWL_NO_SEARCH_FEEDBACK ||
-    process.env.FIRECRAWL_DISABLE_SEARCH_FEEDBACK ||
-    ''
-  )
-    .trim()
-    .toLowerCase()
+const FEEDBACK_DISABLED_VALUES = new Set(['1', 'true', 'yes', 'on']);
+
+function feedbackEnvEnabled(...keys: string[]): boolean {
+  return keys.some((key) =>
+    FEEDBACK_DISABLED_VALUES.has((process.env[key] || '').trim().toLowerCase())
+  );
+}
+
+const SEARCH_FEEDBACK_DISABLED = feedbackEnvEnabled(
+  'FIRECRAWL_NO_SEARCH_FEEDBACK',
+  'FIRECRAWL_DISABLE_SEARCH_FEEDBACK'
+);
+
+const ENDPOINT_FEEDBACK_DISABLED = feedbackEnvEnabled(
+  'FIRECRAWL_NO_ENDPOINT_FEEDBACK',
+  'FIRECRAWL_DISABLE_ENDPOINT_FEEDBACK'
 );
 
 if (SEARCH_FEEDBACK_DISABLED) {
@@ -1135,14 +1264,21 @@ Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the 
   });
 }
 
-server.addTool({
-  name: 'firecrawl_feedback',
-  annotations: {
-    title: 'Send feedback on a Firecrawl job',
-    readOnlyHint: false,
-    openWorldHint: true,
-  },
-  description: `
+if (ENDPOINT_FEEDBACK_DISABLED) {
+  console.error(
+    '[firecrawl-mcp] Endpoint feedback tool disabled by FIRECRAWL_NO_ENDPOINT_FEEDBACK; firecrawl_feedback will not be registered.'
+  );
+}
+
+if (!ENDPOINT_FEEDBACK_DISABLED) {
+  server.addTool({
+    name: 'firecrawl_feedback',
+    annotations: {
+      title: 'Send feedback on a Firecrawl job',
+      readOnlyHint: false,
+      openWorldHint: true,
+    },
+    description: `
 Send structured feedback for a completed Firecrawl v2 job. Use this for endpoint-level feedback on \`scrape\`, \`parse\`, \`map\`, or \`search\` jobs when the job result was useful, partially useful, or failed to meet expectations.
 
 For search-result quality specifically, prefer \`firecrawl_search_feedback\` when available because it has search-focused guidance. This generic tool posts to \`/v2/feedback\` and accepts endpoint-wide signals:
@@ -1159,111 +1295,112 @@ Do not store multi-MB outputs in feedback. Use concise notes, issue codes, URLs,
 
 **Returns:** \`{ success, feedbackId, creditsRefunded, creditsRefundedToday?, dailyRefundCap?, dailyCapReached?, alreadySubmitted?, warning? }\` JSON.
 `,
-  parameters: z.object({
-    endpoint: z.enum(['search', 'scrape', 'parse', 'map']),
-    jobId: z.string().uuid('jobId must be the UUID returned by Firecrawl'),
-    rating: z.enum(['good', 'bad', 'partial']),
-    issues: z.array(feedbackIssueSchema).max(20).optional(),
-    tags: z.array(feedbackIssueSchema).max(20).optional(),
-    note: z.string().max(4000).optional(),
-    valuableSources: z.array(valuableSourceSchema).max(50).optional(),
-    missingContent: z.array(missingContentSchema).max(50).optional(),
-    querySuggestions: z.string().max(2000).optional(),
-    url: z.string().url().optional(),
-    pageNumbers: z.array(z.number().int().positive()).max(100).optional(),
-    metadata: z.record(z.string(), z.unknown()).optional(),
-  }),
-  execute: async (
-    args: unknown,
-    { session, log }: { session?: SessionData; log: Logger }
-  ): Promise<string> => {
-    const {
-      endpoint,
-      jobId,
-      rating,
-      issues,
-      tags,
-      note,
-      valuableSources,
-      missingContent,
-      querySuggestions,
-      url,
-      pageNumbers,
-      metadata,
-    } = args as {
-      endpoint: 'search' | 'scrape' | 'parse' | 'map';
-      jobId: string;
-      rating: 'good' | 'bad' | 'partial';
-      issues?: string[];
-      tags?: string[];
-      note?: string;
-      valuableSources?: { url: string; reason?: string }[];
-      missingContent?: { topic: string; description?: string }[];
-      querySuggestions?: string;
-      url?: string;
-      pageNumbers?: number[];
-      metadata?: Record<string, unknown>;
-    };
+    parameters: z.object({
+      endpoint: z.enum(['search', 'scrape', 'parse', 'map']),
+      jobId: z.string().uuid('jobId must be the UUID returned by Firecrawl'),
+      rating: z.enum(['good', 'bad', 'partial']),
+      issues: z.array(feedbackIssueSchema).max(20).optional(),
+      tags: z.array(feedbackIssueSchema).max(20).optional(),
+      note: z.string().max(4000).optional(),
+      valuableSources: z.array(valuableSourceSchema).max(50).optional(),
+      missingContent: z.array(missingContentSchema).max(50).optional(),
+      querySuggestions: z.string().max(2000).optional(),
+      url: z.string().url().optional(),
+      pageNumbers: z.array(z.number().int().positive()).max(100).optional(),
+      metadata: z.record(z.string(), z.unknown()).optional(),
+    }),
+    execute: async (
+      args: unknown,
+      { session, log }: { session?: SessionData; log: Logger }
+    ): Promise<string> => {
+      const {
+        endpoint,
+        jobId,
+        rating,
+        issues,
+        tags,
+        note,
+        valuableSources,
+        missingContent,
+        querySuggestions,
+        url,
+        pageNumbers,
+        metadata,
+      } = args as {
+        endpoint: 'search' | 'scrape' | 'parse' | 'map';
+        jobId: string;
+        rating: 'good' | 'bad' | 'partial';
+        issues?: string[];
+        tags?: string[];
+        note?: string;
+        valuableSources?: { url: string; reason?: string }[];
+        missingContent?: { topic: string; description?: string }[];
+        querySuggestions?: string;
+        url?: string;
+        pageNumbers?: number[];
+        metadata?: Record<string, unknown>;
+      };
 
-    const apiBase = resolveApiBaseUrl();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    const apiKey = session?.firecrawlApiKey;
-    if (apiKey) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-    } else if (process.env.CLOUD_SERVICE === 'true') {
-      throw new Error('Unauthorized: missing API key for feedback.');
-    }
+      const apiBase = resolveApiBaseUrl();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      const apiKey = session?.firecrawlApiKey;
+      if (apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+      } else if (process.env.CLOUD_SERVICE === 'true') {
+        throw new Error('Unauthorized: missing API key for feedback.');
+      }
 
-    const body = removeEmptyTopLevel({
-      endpoint,
-      jobId,
-      rating,
-      issues,
-      tags,
-      note,
-      valuableSources,
-      missingContent,
-      querySuggestions,
-      url,
-      pageNumbers,
-      metadata,
-      origin: ORIGIN,
-    });
-
-    log.info('Submitting endpoint feedback', { endpoint, jobId, rating });
-    const response = await fetch(`${apiBase}/v2/feedback`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    });
-
-    const responseText = await response.text();
-    let parsed: any;
-    try {
-      parsed = JSON.parse(responseText);
-    } catch {
-      parsed = { raw: responseText };
-    }
-
-    if (!response.ok) {
-      log.warn('Endpoint feedback rejected', {
-        status: response.status,
-        feedbackErrorCode: parsed?.feedbackErrorCode,
+      const body = removeEmptyTopLevel({
+        endpoint,
+        jobId,
+        rating,
+        issues,
+        tags,
+        note,
+        valuableSources,
+        missingContent,
+        querySuggestions,
+        url,
+        pageNumbers,
+        metadata,
+        origin: ORIGIN,
       });
-      return asText({
-        success: false,
-        status: response.status,
-        feedbackErrorCode: parsed?.feedbackErrorCode,
-        error: parsed?.error ?? `HTTP ${response.status}`,
-        retryable: response.status >= 500,
-      });
-    }
 
-    return asText(parsed);
-  },
-});
+      log.info('Submitting endpoint feedback', { endpoint, jobId, rating });
+      const response = await fetch(`${apiBase}/v2/feedback`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+
+      const responseText = await response.text();
+      let parsed: any;
+      try {
+        parsed = JSON.parse(responseText);
+      } catch {
+        parsed = { raw: responseText };
+      }
+
+      if (!response.ok) {
+        log.warn('Endpoint feedback rejected', {
+          status: response.status,
+          feedbackErrorCode: parsed?.feedbackErrorCode,
+        });
+        return asText({
+          success: false,
+          status: response.status,
+          feedbackErrorCode: parsed?.feedbackErrorCode,
+          error: parsed?.error ?? `HTTP ${response.status}`,
+          retryable: response.status >= 500,
+        });
+      }
+
+      return asText(parsed);
+    },
+  });
+}
 
 server.addTool({
   name: 'firecrawl_crawl',

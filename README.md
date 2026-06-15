@@ -633,6 +633,8 @@ jobs. For search-result quality specifically, prefer
 Keep feedback concise: use issue codes, tags, short notes, URLs, page numbers,
 and small metadata objects. Do not include raw scrape/parse outputs.
 
+**Opt out:** set `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` (or `FIRECRAWL_DISABLE_ENDPOINT_FEEDBACK=1`) in the environment when starting the MCP server. The `firecrawl_feedback` tool will not be registered, so agents cannot call it.
+
 **Usage Example:**
 
 ```json
