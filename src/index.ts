@@ -912,6 +912,29 @@ function resolveApiBaseUrl(): string {
   );
 }
 
+const feedbackIssueSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .regex(
+    /^[a-z0-9][a-z0-9_-]*$/,
+    'Issue codes must use lowercase letters, numbers, underscores, or hyphens'
+  );
+
+const valuableSourceSchema = z.object({
+  url: z.string().url(),
+  reason: z.string().max(1000).optional(),
+});
+
+const missingContentSchema = z.object({
+  topic: z
+    .string()
+    .min(1, 'topic must not be empty')
+    .max(200, 'topic must be 200 characters or fewer'),
+  description: z.string().max(2000).optional(),
+});
+
 const SEARCH_FEEDBACK_DISABLED = ['1', 'true', 'yes', 'on'].includes(
   (
     process.env.FIRECRAWL_NO_SEARCH_FEEDBACK ||
@@ -1111,6 +1134,136 @@ Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the 
     },
   });
 }
+
+server.addTool({
+  name: 'firecrawl_feedback',
+  annotations: {
+    title: 'Send feedback on a Firecrawl job',
+    readOnlyHint: false,
+    openWorldHint: true,
+  },
+  description: `
+Send structured feedback for a completed Firecrawl v2 job. Use this for endpoint-level feedback on \`scrape\`, \`parse\`, \`map\`, or \`search\` jobs when the job result was useful, partially useful, or failed to meet expectations.
+
+For search-result quality specifically, prefer \`firecrawl_search_feedback\` when available because it has search-focused guidance. This generic tool posts to \`/v2/feedback\` and accepts endpoint-wide signals:
+
+- **endpoint** — one of \`search\`, \`scrape\`, \`parse\`, or \`map\`.
+- **jobId** — the id returned by that endpoint.
+- **rating** — overall result quality: \`good\`, \`partial\`, or \`bad\`.
+- **issues** — stable lowercase issue codes such as \`missing_markdown\`, \`bad_pdf_parse\`, or \`wrong_links\`.
+- **tags** — optional lowercase tags for grouping feedback.
+- **note** — short human-readable context. Do not include huge page contents or raw scrape results.
+- **url**, **pageNumbers**, and **metadata** — small contextual fields that identify what the feedback refers to.
+
+Do not store multi-MB outputs in feedback. Use concise notes, issue codes, URLs, and page numbers.
+
+**Returns:** \`{ success, feedbackId, creditsRefunded, creditsRefundedToday?, dailyRefundCap?, dailyCapReached?, alreadySubmitted?, warning? }\` JSON.
+`,
+  parameters: z.object({
+    endpoint: z.enum(['search', 'scrape', 'parse', 'map']),
+    jobId: z.string().uuid('jobId must be the UUID returned by Firecrawl'),
+    rating: z.enum(['good', 'bad', 'partial']),
+    issues: z.array(feedbackIssueSchema).max(20).optional(),
+    tags: z.array(feedbackIssueSchema).max(20).optional(),
+    note: z.string().max(4000).optional(),
+    valuableSources: z.array(valuableSourceSchema).max(50).optional(),
+    missingContent: z.array(missingContentSchema).max(50).optional(),
+    querySuggestions: z.string().max(2000).optional(),
+    url: z.string().url().optional(),
+    pageNumbers: z.array(z.number().int().positive()).max(100).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+  }),
+  execute: async (
+    args: unknown,
+    { session, log }: { session?: SessionData; log: Logger }
+  ): Promise<string> => {
+    const {
+      endpoint,
+      jobId,
+      rating,
+      issues,
+      tags,
+      note,
+      valuableSources,
+      missingContent,
+      querySuggestions,
+      url,
+      pageNumbers,
+      metadata,
+    } = args as {
+      endpoint: 'search' | 'scrape' | 'parse' | 'map';
+      jobId: string;
+      rating: 'good' | 'bad' | 'partial';
+      issues?: string[];
+      tags?: string[];
+      note?: string;
+      valuableSources?: { url: string; reason?: string }[];
+      missingContent?: { topic: string; description?: string }[];
+      querySuggestions?: string;
+      url?: string;
+      pageNumbers?: number[];
+      metadata?: Record<string, unknown>;
+    };
+
+    const apiBase = resolveApiBaseUrl();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    const apiKey = session?.firecrawlApiKey;
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    } else if (process.env.CLOUD_SERVICE === 'true') {
+      throw new Error('Unauthorized: missing API key for feedback.');
+    }
+
+    const body = removeEmptyTopLevel({
+      endpoint,
+      jobId,
+      rating,
+      issues,
+      tags,
+      note,
+      valuableSources,
+      missingContent,
+      querySuggestions,
+      url,
+      pageNumbers,
+      metadata,
+      origin: ORIGIN,
+    });
+
+    log.info('Submitting endpoint feedback', { endpoint, jobId, rating });
+    const response = await fetch(`${apiBase}/v2/feedback`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    const responseText = await response.text();
+    let parsed: any;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch {
+      parsed = { raw: responseText };
+    }
+
+    if (!response.ok) {
+      log.warn('Endpoint feedback rejected', {
+        status: response.status,
+        feedbackErrorCode: parsed?.feedbackErrorCode,
+      });
+      return asText({
+        success: false,
+        status: response.status,
+        feedbackErrorCode: parsed?.feedbackErrorCode,
+        error: parsed?.error ?? `HTTP ${response.status}`,
+        retryable: response.status >= 500,
+      });
+    }
+
+    return asText(parsed);
+  },
+});
 
 server.addTool({
   name: 'firecrawl_crawl',
