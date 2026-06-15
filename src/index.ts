@@ -304,11 +304,19 @@ const server = new FastMCP<SessionData>({
 
     if (process.env.CLOUD_SERVICE === 'true') {
       if (!headerCred) {
-        // Keyless free tier over the hosted MCP: allowed only when a forwarding
-        // secret is configured AND we can determine the end-user's client IP, so
-        // the API rate-limits per real client IP rather than the shared server IP.
+        // Keyless free tier over the hosted MCP: serve it only when a forwarding
+        // secret is configured, we know the end-user's client IP (so the API can
+        // rate-limit per real IP, not the shared server IP), AND that IP still
+        // has free quota. If the IP is out of quota (or keyless is off), fall
+        // through to throw so FastMCP emits the OAuth 401 + WWW-Authenticate
+        // challenge — i.e. prompt the user to connect an account exactly when
+        // their free quota runs out.
         const clientIp = extractClientIp(request);
-        if (process.env.KEYLESS_PROXY_SECRET && clientIp) {
+        if (
+          process.env.KEYLESS_PROXY_SECRET &&
+          clientIp &&
+          (await keylessEligible(clientIp))
+        ) {
           return { firecrawlApiKey: undefined, research, keylessClientIp: clientIp };
         }
         throw new Error(
@@ -959,6 +967,33 @@ function extractClientIp(request?: {
   const raw = Array.isArray(xff) ? xff[0] : xff;
   const first = typeof raw === 'string' ? raw.split(',')[0].trim() : undefined;
   return first || undefined;
+}
+
+/**
+ * Read-only check (no quota consumed) of whether a client IP can still use the
+ * keyless free tier, via the API's secret-gated eligibility endpoint. Fails
+ * closed: anything other than a clear "eligible: true" means fall through to the
+ * OAuth challenge rather than silently granting keyless.
+ */
+async function keylessEligible(clientIp: string): Promise<boolean> {
+  const secret = process.env.KEYLESS_PROXY_SECRET;
+  if (!secret) return false;
+  try {
+    const response = await fetch(
+      `${resolveApiBaseUrl()}/v2/keyless/eligibility`,
+      {
+        headers: {
+          'x-firecrawl-keyless-ip': clientIp,
+          'x-firecrawl-keyless-secret': secret,
+        },
+      }
+    );
+    if (!response.ok) return false;
+    const json: any = await response.json().catch(() => ({}));
+    return json?.eligible === true;
+  } catch {
+    return false;
+  }
 }
 
 function isKeylessMode(session?: SessionData): boolean {
