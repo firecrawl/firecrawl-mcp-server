@@ -209,6 +209,7 @@ export function registerResearchTools(
       title: 'Search arXiv papers',
       readOnlyHint: true,
       openWorldHint: true,
+      destructiveHint: false,
     },
     description:
       'Primary entry point for finding arXiv papers by topic. Semantic (HyDE) search over arXiv ' +
@@ -277,6 +278,7 @@ export function registerResearchTools(
       title: 'Find related arXiv papers',
       readOnlyHint: true,
       openWorldHint: true,
+      destructiveHint: false,
     },
     description:
       'Expand from anchor papers you have already found, via the citation graph, ranked and filtered ' +
@@ -341,6 +343,7 @@ export function registerResearchTools(
       title: 'Read an arXiv paper',
       readOnlyHint: true,
       openWorldHint: true,
+      destructiveHint: false,
     },
     description:
       'Read the most relevant in-body (full-text) passages of ONE specific paper for a question. Use ' +
@@ -389,6 +392,7 @@ export function registerResearchTools(
       title: 'Search GitHub history',
       readOnlyHint: true,
       openWorldHint: true,
+      destructiveHint: false,
     },
     description:
       'Search GitHub issue/PR history and repository readmes. Returns ranked matches with repo, ' +

@@ -162,6 +162,7 @@ export function registerMonitorTools(server: FastMCP<SessionData>): void {
       title: 'Create monitor',
       readOnlyHint: false,
       openWorldHint: true,
+      destructiveHint: false,
     },
     description: `
 Create a Firecrawl monitor — a recurring scrape or crawl that diffs each result against the last retained snapshot.
@@ -290,6 +291,7 @@ Full \`body\` requests require: \`name\`, \`schedule\` (with \`cron\` or \`text\
       title: 'List monitors',
       readOnlyHint: true,
       openWorldHint: false,
+      destructiveHint: false,
     },
     description: `
 List all Firecrawl monitors for the authenticated account.
@@ -321,6 +323,7 @@ List all Firecrawl monitors for the authenticated account.
       title: 'Get monitor',
       readOnlyHint: true,
       openWorldHint: false,
+      destructiveHint: false,
     },
     description: `
 Get a single monitor by ID.
@@ -350,6 +353,7 @@ Get a single monitor by ID.
       title: 'Update monitor',
       readOnlyHint: false,
       openWorldHint: true,
+      destructiveHint: true,
     },
     description: `
 Update a monitor. Pass any subset of fields to patch: \`name\`, \`status\` ("active" | "paused"), \`schedule\`, \`targets\`, \`goal\`, \`judgeEnabled\`, \`webhook\`, \`notification\`, \`retentionDays\`.
@@ -424,6 +428,7 @@ Permanently delete a monitor and stop its schedule. This cannot be undone.
       title: 'Run monitor now',
       readOnlyHint: false,
       openWorldHint: true,
+      destructiveHint: false,
     },
     description: `
 Trigger a monitor check immediately, outside its normal schedule. Returns the queued check.
@@ -454,6 +459,7 @@ Trigger a monitor check immediately, outside its normal schedule. Returns the qu
       title: 'List monitor checks',
       readOnlyHint: true,
       openWorldHint: false,
+      destructiveHint: false,
     },
     description: `
 List historical checks for a monitor.
@@ -494,6 +500,7 @@ List historical checks for a monitor.
       title: 'Get monitor check',
       readOnlyHint: true,
       openWorldHint: false,
+      destructiveHint: false,
     },
     description: `
 Get a single check with page-level diff results. Filter \`pageStatus\` to surface only the pages that changed (or were new, removed, etc.).
