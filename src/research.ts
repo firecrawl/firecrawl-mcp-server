@@ -1,11 +1,8 @@
 /**
  * Firecrawl Research tools (experimental).
  *
- * Thin MCP wrappers over the `/v2/research/*` endpoints (arXiv papers + GitHub
- * history/readmes). These tools are hidden unless research is enabled for the
- * session — locally via `FIRECRAWL_RESEARCH=true`, or remotely via the
- * `?research=true` query param on the MCP endpoint (see `isResearchEnabled` in
- * index.ts, which sets `session.research`).
+ * Thin MCP wrappers over the `/v2/search/research/*` endpoints (arXiv papers + GitHub
+ * history/readmes).
  *
  * The installed `@mendable/firecrawl-js` predates the SDK's `research` client,
  * so we call the endpoints directly through the SDK's HTTP layer (auth +
@@ -18,7 +15,6 @@ import { z } from 'zod';
 
 interface SessionData {
   firecrawlApiKey?: string;
-  research?: boolean;
   [key: string]: unknown;
 }
 
@@ -36,7 +32,7 @@ type ClientLike = {
 // the callback loosely and narrow to `ClientLike` at each call site.
 type GetClient = (session?: SessionData) => unknown;
 
-const BASE = '/v2/research';
+const BASE = '/v2/search/research';
 
 /** Append a value (or repeated array values) to a URLSearchParams instance. */
 function appendParam(
@@ -73,18 +69,22 @@ const MAX_AFFIL_CHARS = 60;
 const MAX_AUTHORS_LINE_CHARS = 400;
 
 interface PaperHit {
-  paper_id?: string;
+  paperId?: string;
+  primaryId?: string;
   ids?: Record<string, string[]>;
   title?: string;
   abstract?: string;
   // Search/metadata responses give a comma-joined string; some shapes give the
   // structured form — handle both.
   authors?: string | { name: string; affiliation?: string }[];
+  categories?: string[];
+  createdDate?: string;
+  updateDate?: string;
 }
 
-/** Best display id for a paper: its arXiv id, falling back to the canonical id. */
+/** Display id supplied by the API, already ordered for citation/fetch use. */
 function displayId(p: PaperHit): string {
-  return p.ids?.arxiv?.[0] ?? p.paper_id ?? '?';
+  return p.primaryId ?? 'missing-primary-id';
 }
 
 /** Format the authors line, accepting either the string or structured form. */
@@ -122,7 +122,7 @@ function fmtHits(results?: PaperHit[]): string {
   if (!results || results.length === 0) return '(no results)';
   return results
     .map((r) => {
-      const lines = [`[${displayId(r)}] ${r.title ?? '(untitled)'}`];
+      const lines = [`## [${displayId(r)}] ${r.title ?? '(untitled)'}`];
       const authors = fmtAuthors(r.authors);
       if (authors) lines.push(authors);
       lines.push(
@@ -133,6 +133,40 @@ function fmtHits(results?: PaperHit[]): string {
       return lines.join('\n');
     })
     .join('\n\n');
+}
+
+function fmtPaperMetadata(paper?: PaperHit): string {
+  if (!paper) return '(paper not found)';
+  const lines = [`# ${paper.title ?? '(untitled)'}`];
+  lines.push('');
+  lines.push(`Paper ID: ${paper.paperId ?? '?'}`);
+
+  const ids = Object.entries(paper.ids ?? {})
+    .flatMap(([namespace, values]) =>
+      values.map((value) => `${namespace}:${value}`)
+    )
+    .join(', ');
+  if (ids) lines.push(`IDs: ${ids}`);
+
+  const authors = fmtAuthors(paper.authors);
+  if (authors) lines.push(authors);
+
+  if (paper.categories?.length) {
+    lines.push(`Categories: ${paper.categories.join(', ')}`);
+  }
+
+  const dates = [
+    paper.createdDate ? `created ${paper.createdDate}` : '',
+    paper.updateDate ? `updated ${paper.updateDate}` : '',
+  ]
+    .filter(Boolean)
+    .join('; ');
+  if (dates) lines.push(`Dates: ${dates}`);
+
+  lines.push('');
+  lines.push('## Abstract');
+  lines.push((paper.abstract || '(no abstract)').replace(/\s+/g, ' '));
+  return lines.join('\n');
 }
 
 // Cap GitHub matched content so a page of results stays within the MCP
@@ -193,10 +227,6 @@ function fmtGithub(results?: GitHubItem[]): string {
     .join('\n\n');
 }
 
-/** Only present these tools when the session has research enabled. */
-const canAccess = (session?: SessionData): boolean =>
-  session?.research === true;
-
 export function registerResearchTools(
   server: FastMCP<SessionData>,
   getClient: GetClient
@@ -204,7 +234,6 @@ export function registerResearchTools(
   // --- search_papers ---
   server.addTool({
     name: 'firecrawl_research_search_papers',
-    canAccess,
     annotations: {
       title: 'Search arXiv papers',
       readOnlyHint: true,
@@ -270,10 +299,42 @@ export function registerResearchTools(
     },
   });
 
+  // --- inspect_paper ---
+  server.addTool({
+    name: 'firecrawl_research_inspect_paper',
+    annotations: {
+      title: 'Inspect a paper',
+      readOnlyHint: true,
+      openWorldHint: true,
+    },
+    description:
+      'Fetch canonical metadata for one paper by primaryId or canonical paperId. ' +
+      'Use this after search/related results when you need the full title, abstract, authors, ' +
+      'categories, source ids, and dates rendered as markdown.',
+    parameters: z.object({
+      paperId: z
+        .string()
+        .min(1)
+        .describe(
+          'Canonical paperId or primaryId such as `arxiv:1706.03762`, `pmcid:PMC12530322`, `pmid:40953549`, or `doi:10.1016/j.neunet.2025.108095`.'
+        ),
+    }),
+    execute: async (
+      args: unknown,
+      { session }: { session?: SessionData; log: Logger }
+    ): Promise<string> => {
+      const { paperId } = args as { paperId: string };
+      const client = getClient(session) as ClientLike;
+      const res = await client.http.get<{ paper?: PaperHit }>(
+        `${BASE}/papers/${encodeURIComponent(paperId)}`
+      );
+      return fmtPaperMetadata(res.data?.paper);
+    },
+  });
+
   // --- related_papers ---
   server.addTool({
     name: 'firecrawl_research_related_papers',
-    canAccess,
     annotations: {
       title: 'Find related arXiv papers',
       readOnlyHint: true,
@@ -322,7 +383,7 @@ export function registerResearchTools(
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{
         results?: PaperHit[];
-        pool_size?: number;
+        poolSize?: number;
         note?: string | null;
       }>(
         withQuery(
@@ -331,16 +392,15 @@ export function registerResearchTools(
         )
       );
       const note = res.data?.note ? `\nnote: ${res.data.note}` : '';
-      return `${fmtHits(res.data?.results)}\n(pool_size=${res.data?.pool_size ?? 0})${note}`;
+      return `${fmtHits(res.data?.results)}\n(poolSize=${res.data?.poolSize ?? 0})${note}`;
     },
   });
 
   // --- read_paper ---
   server.addTool({
     name: 'firecrawl_research_read_paper',
-    canAccess,
     annotations: {
-      title: 'Read an arXiv paper',
+      title: 'Read a paper',
       readOnlyHint: true,
       openWorldHint: true,
       destructiveHint: false,
@@ -351,7 +411,12 @@ export function registerResearchTools(
       "reject it (e.g. 'does this paper actually use technique X / report a score on benchmark Y'). " +
       "Returns the best-matching passages, or a notice if the paper's full text is unavailable.",
     parameters: z.object({
-      arxiv_id: z.string().min(1),
+      paperId: z
+        .string()
+        .min(1)
+        .describe(
+          'Canonical paperId or primaryId such as `arxiv:1706.03762`, `pmcid:PMC12530322`, `pmid:40953549`, or `doi:10.1016/j.neunet.2025.108095`.'
+        ),
       question: z.string().min(1),
       k: z
         .number()
@@ -365,8 +430,8 @@ export function registerResearchTools(
       args: unknown,
       { session }: { session?: SessionData; log: Logger }
     ): Promise<string> => {
-      const { arxiv_id, question, k } = args as {
-        arxiv_id: string;
+      const { paperId, question, k } = args as {
+        paperId: string;
         question: string;
         k?: number;
       };
@@ -375,7 +440,7 @@ export function registerResearchTools(
       appendParam(params, 'k', k);
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ passages?: { text: string }[] }>(
-        withQuery(`${BASE}/papers/${encodeURIComponent(arxiv_id)}`, params)
+        withQuery(`${BASE}/papers/${encodeURIComponent(paperId)}`, params)
       );
       const passages = res.data?.passages ?? [];
       return passages.length
@@ -387,7 +452,6 @@ export function registerResearchTools(
   // --- search_github ---
   server.addTool({
     name: 'firecrawl_research_search_github',
-    canAccess,
     annotations: {
       title: 'Search GitHub history',
       readOnlyHint: true,
