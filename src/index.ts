@@ -6,10 +6,13 @@ import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
+import { handleCliInfoFlags } from './cli-info.js';
 import { registerMonitorTools } from './monitor.js';
 import { registerResearchTools } from './research.js';
 
 dotenv.config({ debug: false, quiet: true });
+
+await handleCliInfoFlags();
 
 interface SessionData {
   /**
