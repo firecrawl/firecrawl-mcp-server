@@ -26,6 +26,8 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 
 ## Installation
 
+> 📖 **Looking for setup instructions for a specific IDE or tool?** See the **[Complete Installation Guide](./INSTALLATION.md)** for step-by-step instructions across 30+ MCP-compatible environments including Cursor, VS Code, Claude Desktop, Windsurf, JetBrains, Zed, Cline, and many more.
+
 ### Running with npx
 
 ```bash
