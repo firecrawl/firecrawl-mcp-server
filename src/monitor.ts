@@ -160,9 +160,9 @@ export function registerMonitorTools(server: FastMCP<SessionData>): void {
     name: 'firecrawl_monitor_create',
     annotations: {
       title: 'Create monitor',
-      readOnlyHint: false,
-      openWorldHint: true,
-      destructiveHint: false,
+      readOnlyHint: false, // Creates a new recurring monitor configuration on the Firecrawl API.
+      openWorldHint: true, // Monitors user-specified URLs on the public web on a recurring schedule.
+      destructiveHint: false, // Additive; creates a new monitor without deleting existing monitors or external content.
     },
     description: `
 Create a Firecrawl monitor — a recurring scrape or crawl that diffs each result against the last retained snapshot.
@@ -289,9 +289,9 @@ Full \`body\` requests require: \`name\`, \`schedule\` (with \`cron\` or \`text\
     name: 'firecrawl_monitor_list',
     annotations: {
       title: 'List monitors',
-      readOnlyHint: true,
-      openWorldHint: false,
-      destructiveHint: false,
+      readOnlyHint: true, // Lists monitors for the authenticated account; no mutations.
+      openWorldHint: false, // Returns only the user's Firecrawl monitor records, not arbitrary web content.
+      destructiveHint: false, // Read-only listing.
     },
     description: `
 List all Firecrawl monitors for the authenticated account.
@@ -321,9 +321,9 @@ List all Firecrawl monitors for the authenticated account.
     name: 'firecrawl_monitor_get',
     annotations: {
       title: 'Get monitor',
-      readOnlyHint: true,
-      openWorldHint: false,
-      destructiveHint: false,
+      readOnlyHint: true, // Fetches a single monitor by ID; no mutations.
+      openWorldHint: false, // Reads a specific monitor resource in the user's Firecrawl account.
+      destructiveHint: false, // Read-only retrieval.
     },
     description: `
 Get a single monitor by ID.
@@ -351,9 +351,9 @@ Get a single monitor by ID.
     name: 'firecrawl_monitor_update',
     annotations: {
       title: 'Update monitor',
-      readOnlyHint: false,
-      openWorldHint: true,
-      destructiveHint: true,
+      readOnlyHint: false, // PATCHes an existing monitor (status, schedule, targets, webhooks, etc.).
+      openWorldHint: true, // Can change which external URLs are monitored and how recurring scrapes run.
+      destructiveHint: true, // Can pause, replace, or remove monitor configuration; changes overwrite prior settings.
     },
     description: `
 Update a monitor. Pass any subset of fields to patch: \`name\`, \`status\` ("active" | "paused"), \`schedule\`, \`targets\`, \`goal\`, \`judgeEnabled\`, \`webhook\`, \`notification\`, \`retentionDays\`.
@@ -394,9 +394,9 @@ Update a monitor. Pass any subset of fields to patch: \`name\`, \`status\` ("act
     name: 'firecrawl_monitor_delete',
     annotations: {
       title: 'Delete monitor',
-      readOnlyHint: false,
-      destructiveHint: true,
-      openWorldHint: true,
+      readOnlyHint: false, // Permanently deletes a monitor via DELETE on the API.
+      openWorldHint: true, // Deletes a monitor that tracked open-web URLs.
+      destructiveHint: true, // Irreversibly removes the monitor and stops its schedule.
     },
     description: `
 Permanently delete a monitor and stop its schedule. This cannot be undone.
@@ -426,9 +426,9 @@ Permanently delete a monitor and stop its schedule. This cannot be undone.
     name: 'firecrawl_monitor_run',
     annotations: {
       title: 'Run monitor now',
-      readOnlyHint: false,
-      openWorldHint: true,
-      destructiveHint: false,
+      readOnlyHint: false, // Triggers an immediate monitor check, queueing a new scrape/diff run.
+      openWorldHint: true, // The triggered check scrapes external URLs configured on the monitor.
+      destructiveHint: false, // Starts a read-only check job; does not delete the monitor or external sites.
     },
     description: `
 Trigger a monitor check immediately, outside its normal schedule. Returns the queued check.
@@ -457,9 +457,9 @@ Trigger a monitor check immediately, outside its normal schedule. Returns the qu
     name: 'firecrawl_monitor_checks',
     annotations: {
       title: 'List monitor checks',
-      readOnlyHint: true,
-      openWorldHint: false,
-      destructiveHint: false,
+      readOnlyHint: true, // Lists historical check runs for a monitor; no mutations.
+      openWorldHint: false, // Returns check history for a known monitor ID within the user's account.
+      destructiveHint: false, // Read-only listing.
     },
     description: `
 List historical checks for a monitor.
@@ -498,9 +498,9 @@ List historical checks for a monitor.
     name: 'firecrawl_monitor_check',
     annotations: {
       title: 'Get monitor check',
-      readOnlyHint: true,
-      openWorldHint: false,
-      destructiveHint: false,
+      readOnlyHint: true, // Retrieves a single check run with page-level diff results; no mutations.
+      openWorldHint: false, // Reads stored check results for a known monitor/check ID in the user's account.
+      destructiveHint: false, // Read-only retrieval of diff snapshots and judgments.
     },
     description: `
 Get a single check with page-level diff results. Filter \`pageStatus\` to surface only the pages that changed (or were new, removed, etc.).

@@ -236,9 +236,9 @@ export function registerResearchTools(
     name: 'firecrawl_research_search_papers',
     annotations: {
       title: 'Search arXiv papers',
-      readOnlyHint: true,
-      openWorldHint: true,
-      destructiveHint: false,
+      readOnlyHint: true, // Semantic search over indexed arXiv metadata; returns ranked results only.
+      openWorldHint: true, // Searches the public arXiv research corpus.
+      destructiveHint: false, // Query-only; no writes to arXiv or the research index.
     },
     description:
       'Primary entry point for finding arXiv papers by topic. Semantic (HyDE) search over arXiv ' +
@@ -304,8 +304,9 @@ export function registerResearchTools(
     name: 'firecrawl_research_inspect_paper',
     annotations: {
       title: 'Inspect a paper',
-      readOnlyHint: true,
-      openWorldHint: true,
+      readOnlyHint: true, // Fetches canonical metadata (title, abstract, authors) for one paper by ID.
+      openWorldHint: true, // Retrieves metadata for papers in public indexes (arXiv, PMC, DOI, etc.).
+      destructiveHint: false, // Read-only metadata lookup.
     },
     description:
       'Fetch canonical metadata for one paper by primaryId or canonical paperId. ' +
@@ -337,9 +338,9 @@ export function registerResearchTools(
     name: 'firecrawl_research_related_papers',
     annotations: {
       title: 'Find related arXiv papers',
-      readOnlyHint: true,
-      openWorldHint: true,
-      destructiveHint: false,
+      readOnlyHint: true, // Finds related papers via citation graph expansion; returns candidates only.
+      openWorldHint: true, // Traverses relationships across the public research paper corpus.
+      destructiveHint: false, // Read-only graph query; no modifications.
     },
     description:
       'Expand from anchor papers you have already found, via the citation graph, ranked and filtered ' +
@@ -401,9 +402,9 @@ export function registerResearchTools(
     name: 'firecrawl_research_read_paper',
     annotations: {
       title: 'Read a paper',
-      readOnlyHint: true,
-      openWorldHint: true,
-      destructiveHint: false,
+      readOnlyHint: true, // Retrieves relevant full-text passages from a paper; does not modify the paper.
+      openWorldHint: true, // Reads from publicly indexed paper full text when available.
+      destructiveHint: false, // Read-only passage retrieval.
     },
     description:
       'Read the most relevant in-body (full-text) passages of ONE specific paper for a question. Use ' +
@@ -454,9 +455,9 @@ export function registerResearchTools(
     name: 'firecrawl_research_search_github',
     annotations: {
       title: 'Search GitHub history',
-      readOnlyHint: true,
-      openWorldHint: true,
-      destructiveHint: false,
+      readOnlyHint: true, // Searches indexed GitHub issue/PR history and READMEs; returns matches only.
+      openWorldHint: true, // Searches public GitHub content.
+      destructiveHint: false, // Query-only; does not create issues, PRs, or modify repositories.
     },
     description:
       'Search GitHub issue/PR history and repository readmes. Returns ranked matches with repo, ' +
