@@ -10,8 +10,8 @@
  * `/v2/search`.
  */
 
-import type { FastMCP, Logger } from 'firecrawl-fastmcp';
 import { z } from 'zod';
+import type { FastMCP } from './fastmcp/FastMCP';
 
 interface SessionData {
   firecrawlApiKey?: string;
@@ -272,10 +272,7 @@ export function registerResearchTools(
           'Inclusive upper bound on created/updated date (`YYYY-MM-DD`).'
         ),
     }),
-    execute: async (
-      args: unknown,
-      { session }: { session?: SessionData; log: Logger }
-    ): Promise<string> => {
+    execute: async (args: unknown, { session }): Promise<string> => {
       const { query, k, authors, categories, from, to } = args as {
         query: string;
         k?: number;
@@ -320,10 +317,7 @@ export function registerResearchTools(
           'Canonical paperId or primaryId such as `arxiv:1706.03762`, `pmcid:PMC12530322`, `pmid:40953549`, or `doi:10.1016/j.neunet.2025.108095`.'
         ),
     }),
-    execute: async (
-      args: unknown,
-      { session }: { session?: SessionData; log: Logger }
-    ): Promise<string> => {
+    execute: async (args: unknown, { session }): Promise<string> => {
       const { paperId } = args as { paperId: string };
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ paper?: PaperHit }>(
@@ -361,10 +355,7 @@ export function registerResearchTools(
         .optional()
         .describe('Apply an additional rerank over the fused candidates.'),
     }),
-    execute: async (
-      args: unknown,
-      { session }: { session?: SessionData; log: Logger }
-    ): Promise<string> => {
+    execute: async (args: unknown, { session }): Promise<string> => {
       const { seed_ids, intent, mode, k, rerank } = args as {
         seed_ids: string[];
         intent: string;
@@ -427,10 +418,7 @@ export function registerResearchTools(
         .optional()
         .describe('Number of passages to return (default 4).'),
     }),
-    execute: async (
-      args: unknown,
-      { session }: { session?: SessionData; log: Logger }
-    ): Promise<string> => {
+    execute: async (args: unknown, { session }): Promise<string> => {
       const { paperId, question, k } = args as {
         paperId: string;
         question: string;
@@ -466,10 +454,7 @@ export function registerResearchTools(
       query: z.string().min(1),
       k: z.number().int().min(1).max(100).optional(),
     }),
-    execute: async (
-      args: unknown,
-      { session }: { session?: SessionData; log: Logger }
-    ): Promise<string> => {
+    execute: async (args: unknown, { session }): Promise<string> => {
       const { query, k } = args as { query: string; k?: number };
       const params = new URLSearchParams();
       appendParam(params, 'query', query);

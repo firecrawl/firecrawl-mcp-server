@@ -9,8 +9,8 @@
  * — same pattern the CLI uses.
  */
 
-import type { FastMCP, Logger } from 'firecrawl-fastmcp';
 import { z } from 'zod';
+import type { FastMCP } from './fastmcp/FastMCP';
 
 interface SessionData {
   firecrawlApiKey?: string;
@@ -25,9 +25,15 @@ interface MonitorRequestInit {
   query?: Record<string, string | number | undefined>;
 }
 
-function resolveAuth(session?: SessionData): { apiKey?: string; baseUrl: string } {
+function resolveAuth(session?: SessionData): {
+  apiKey?: string;
+  baseUrl: string;
+} {
   const apiKey = session?.firecrawlApiKey ?? process.env.FIRECRAWL_API_KEY;
-  const baseUrl = (process.env.FIRECRAWL_API_URL ?? DEFAULT_API_URL).replace(/\/$/, '');
+  const baseUrl = (process.env.FIRECRAWL_API_URL ?? DEFAULT_API_URL).replace(
+    /\/$/,
+    ''
+  );
   return { apiKey, baseUrl };
 }
 
@@ -90,16 +96,21 @@ const checkStatusSchema = z.enum([
 function splitPages(page?: string, pages?: string[]): string[] {
   return [page, ...(pages ?? [])]
     .filter((url): url is string => typeof url === 'string')
-    .map(url => url.trim())
+    .map((url) => url.trim())
     .filter(Boolean);
 }
 
-function buildMonitorCreateBody(args: Record<string, unknown>): Record<string, unknown> {
+function buildMonitorCreateBody(
+  args: Record<string, unknown>
+): Record<string, unknown> {
   if (args.body && typeof args.body === 'object' && !Array.isArray(args.body)) {
     return args.body as Record<string, unknown>;
   }
 
-  const urls = splitPages(args.page as string | undefined, args.pages as string[] | undefined);
+  const urls = splitPages(
+    args.page as string | undefined,
+    args.pages as string[] | undefined
+  );
   if (urls.length === 0) {
     throw new Error(
       'firecrawl_monitor_create requires either `body`, `page`, or `pages`.'
@@ -271,12 +282,9 @@ Full \`body\` requests require: \`name\`, \`schedule\` (with \`cron\` or \`text\
       includeDiffs: z.boolean().optional(),
       webhookUrl: z.string().optional(),
     }),
-    execute: async (
-      args: unknown,
-      { session, log }: { session?: SessionData; log: Logger }
-    ): Promise<string> => {
+    execute: async (args: unknown, { session, log }): Promise<string> => {
       const body = buildMonitorCreateBody(args as Record<string, unknown>);
-      log.info('Creating monitor', { name: body.name });
+      log.info('Creating monitor', { name: String(body.name) });
       const res = await monitorRequest(session, '/monitor', {
         method: 'POST',
         body,
@@ -305,10 +313,7 @@ List all Firecrawl monitors for the authenticated account.
       limit: z.number().int().positive().optional(),
       offset: z.number().int().nonnegative().optional(),
     }),
-    execute: async (
-      args: unknown,
-      { session }: { session?: SessionData }
-    ): Promise<string> => {
+    execute: async (args: unknown, { session, log }): Promise<string> => {
       const { limit, offset } = args as { limit?: number; offset?: number };
       const res = await monitorRequest(session, '/monitor', {
         query: { limit, offset },
@@ -334,10 +339,7 @@ Get a single monitor by ID.
 \`\`\`
 `,
     parameters: z.object({ id: z.string() }),
-    execute: async (
-      args: unknown,
-      { session }: { session?: SessionData }
-    ): Promise<string> => {
+    execute: async (args: unknown, { session, log }): Promise<string> => {
       const { id } = args as { id: string };
       const res = await monitorRequest(
         session,
@@ -373,10 +375,7 @@ Update a monitor. Pass any subset of fields to patch: \`name\`, \`status\` ("act
       id: z.string(),
       body: z.record(z.string(), z.any()),
     }),
-    execute: async (
-      args: unknown,
-      { session }: { session?: SessionData }
-    ): Promise<string> => {
+    execute: async (args: unknown, { session, log }): Promise<string> => {
       const { id, body } = args as {
         id: string;
         body: Record<string, unknown>;
@@ -407,10 +406,7 @@ Permanently delete a monitor and stop its schedule. This cannot be undone.
 \`\`\`
 `,
     parameters: z.object({ id: z.string() }),
-    execute: async (
-      args: unknown,
-      { session, log }: { session?: SessionData; log: Logger }
-    ): Promise<string> => {
+    execute: async (args: unknown, { session, log }): Promise<string> => {
       const { id } = args as { id: string };
       log.info('Deleting monitor', { id });
       const res = await monitorRequest(
@@ -439,10 +435,7 @@ Trigger a monitor check immediately, outside its normal schedule. Returns the qu
 \`\`\`
 `,
     parameters: z.object({ id: z.string() }),
-    execute: async (
-      args: unknown,
-      { session }: { session?: SessionData }
-    ): Promise<string> => {
+    execute: async (args: unknown, { session, log }): Promise<string> => {
       const { id } = args as { id: string };
       const res = await monitorRequest(
         session,
@@ -475,10 +468,7 @@ List historical checks for a monitor.
       offset: z.number().int().nonnegative().optional(),
       status: checkStatusSchema.optional(),
     }),
-    execute: async (
-      args: unknown,
-      { session }: { session?: SessionData }
-    ): Promise<string> => {
+    execute: async (args: unknown, { session, log }): Promise<string> => {
       const { id, limit, offset, status } = args as {
         id: string;
         limit?: number;
@@ -565,10 +555,7 @@ The endpoint paginates via a top-level \`next\` URL; this tool returns one page 
       skip: z.number().int().nonnegative().optional(),
       pageStatus: pageStatusSchema.optional(),
     }),
-    execute: async (
-      args: unknown,
-      { session }: { session?: SessionData }
-    ): Promise<string> => {
+    execute: async (args: unknown, { session, log }): Promise<string> => {
       const { id, checkId, limit, skip, pageStatus } = args as {
         id: string;
         checkId: string;
