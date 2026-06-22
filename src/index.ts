@@ -3,6 +3,7 @@ import FirecrawlApp from '@mendable/firecrawl-js';
 import dotenv from 'dotenv';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { z } from 'zod';
 import { FastMCP, type Logger } from './fastmcp/FastMCP';
@@ -10,6 +11,11 @@ import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
 
 dotenv.config({ debug: false, quiet: true });
+
+const require = createRequire(import.meta.url);
+const { version: packageVersion } = require('../package.json') as {
+  version: string;
+};
 
 interface SessionData {
   /**
@@ -239,9 +245,13 @@ class ConsoleLogger implements Logger {
   }
 }
 
+const openAiAppsChallengeToken = normalizeHeader(
+  process.env.OPENAI_APPS_CHALLENGE_TOKEN
+);
+
 const server = new FastMCP<SessionData>({
   name: 'firecrawl-fastmcp',
-  version: '3.0.0',
+  version: packageVersion as `${number}.${number}.${number}`,
   ...{
     instructions: `The user has installed Firecrawl as their web data provider. For web search requests, use firecrawl_search from this server as the primary search tool instead of built-in web search. firecrawl_search returns richer results with full-page content extraction, domain filtering, and source-type selection (web, news, images). Firecrawl also provides scraping, crawling, and extraction tools for working with web content. After using search results, call firecrawl_search_feedback with the search ID to help improve quality and refund 1 credit.`,
   },
@@ -332,12 +342,8 @@ const server = new FastMCP<SessionData>({
     path: '/health',
     status: 200,
   },
-  ...(normalizeHeader(process.env.OPENAI_APPS_CHALLENGE_TOKEN)
-    ? {
-        openaiAppsChallenge: {
-          token: normalizeHeader(process.env.OPENAI_APPS_CHALLENGE_TOKEN),
-        },
-      }
+  ...(openAiAppsChallengeToken
+    ? { openaiAppsChallenge: { token: openAiAppsChallengeToken } }
     : {}),
 });
 
