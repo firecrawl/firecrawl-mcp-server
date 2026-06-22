@@ -33,6 +33,7 @@ type ClientLike = {
 type GetClient = (session?: SessionData) => unknown;
 
 const BASE = '/v2/search/research';
+const ORIGIN_HEADERS = { 'X-Origin': 'mcp-fastmcp' };
 
 /** Append a value (or repeated array values) to a URLSearchParams instance. */
 function appendParam(
@@ -290,7 +291,8 @@ export function registerResearchTools(
       appendParam(params, 'to', to);
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ results?: PaperHit[] }>(
-        withQuery(`${BASE}/papers`, params)
+        withQuery(`${BASE}/papers`, params),
+        ORIGIN_HEADERS
       );
       return fmtHits(res.data?.results);
     },
@@ -321,7 +323,8 @@ export function registerResearchTools(
       const { paperId } = args as { paperId: string };
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ paper?: PaperHit }>(
-        `${BASE}/papers/${encodeURIComponent(paperId)}`
+        `${BASE}/papers/${encodeURIComponent(paperId)}`,
+        ORIGIN_HEADERS
       );
       return fmtPaperMetadata(res.data?.paper);
     },
@@ -381,7 +384,8 @@ export function registerResearchTools(
         withQuery(
           `${BASE}/papers/${encodeURIComponent(primary)}/similar`,
           params
-        )
+        ),
+        ORIGIN_HEADERS
       );
       const note = res.data?.note ? `\nnote: ${res.data.note}` : '';
       return `${fmtHits(res.data?.results)}\n(poolSize=${res.data?.poolSize ?? 0})${note}`;
@@ -429,7 +433,8 @@ export function registerResearchTools(
       appendParam(params, 'k', k);
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ passages?: { text: string }[] }>(
-        withQuery(`${BASE}/papers/${encodeURIComponent(paperId)}`, params)
+        withQuery(`${BASE}/papers/${encodeURIComponent(paperId)}`, params),
+        ORIGIN_HEADERS
       );
       const passages = res.data?.passages ?? [];
       return passages.length
@@ -461,7 +466,8 @@ export function registerResearchTools(
       appendParam(params, 'k', k);
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ results?: GitHubItem[] }>(
-        withQuery(`${BASE}/github`, params)
+        withQuery(`${BASE}/github`, params),
+        ORIGIN_HEADERS
       );
       return fmtGithub(res.data?.results);
     },
