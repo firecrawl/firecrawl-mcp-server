@@ -10,6 +10,44 @@ import { FastMCP, type Logger } from './fastmcp/FastMCP';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
 
+const require = createRequire(import.meta.url);
+
+function getPackageVersion(): string {
+  try {
+    const packageJson = require('../package.json') as { version?: string };
+    return packageJson.version ?? 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+function handleCliMetadataFlags(args = process.argv.slice(2)): void {
+  if (args.includes('--version') || args.includes('-v')) {
+    console.log(getPackageVersion());
+    process.exit(0);
+  }
+
+  if (args.includes('--help') || args.includes('-h')) {
+    console.log(`firecrawl-mcp ${getPackageVersion()}
+
+Usage:
+  firecrawl-mcp [options]
+
+Options:
+  -h, --help      Show this help message
+  -v, --version   Show package version
+
+Environment:
+  FIRECRAWL_API_KEY        Firecrawl API key for cloud usage
+  FIRECRAWL_API_URL        Firecrawl API URL for self-hosted usage
+  FIRECRAWL_OAUTH_TOKEN    Firecrawl OAuth token
+`);
+    process.exit(0);
+  }
+}
+
+handleCliMetadataFlags();
+
 dotenv.config({ debug: false, quiet: true });
 
 const require = createRequire(import.meta.url);
@@ -309,7 +347,7 @@ const server = new FastMCP<SessionData>({
 
     const credential = headerCred ?? envCred;
 
-    // Self-hosted / stdio / HTTP streamable — headers supply MCP OAuth token when present
+    // Self-hosted / stdio / HTTP streamable 鈥?headers supply MCP OAuth token when present
     const httpStreaming = isHttpStreamingTransport();
     if (
       !httpStreaming &&
@@ -645,7 +683,7 @@ If JSON extraction returns empty, minimal, or just navigation content, the page 
 }
 \`\`\`
 
-**Prefer markdown format by default.** You can read and reason over the full page content directly — no need for an intermediate query step. Use markdown for questions about page content, factual lookups, and any task where you need to understand the page.
+**Prefer markdown format by default.** You can read and reason over the full page content directly 鈥?no need for an intermediate query step. Use markdown for questions about page content, factual lookups, and any task where you need to understand the page.
 
 **Use JSON format when user needs:**
 - Structured data with specific fields (extract all products with name, price, description)
@@ -1074,25 +1112,25 @@ Send structured feedback on a previous \`firecrawl_search\` result. **Call this 
 
 Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the response) and tell us:
 
-- **rating** — overall result quality: \`good\`, \`partial\`, or \`bad\`.
-- **valuableSources** — which result URLs were actually useful, and a short reason why.
-- **missingContent** — **the most important field.** An ARRAY of specific pieces of content you expected to find but didn't. One entry per missing piece, each with a short \`topic\` and an optional longer \`description\`. Examples: \`{"topic":"enterprise pricing","description":"no pricing tier table for the Enterprise plan was returned"}\`, \`{"topic":"API rate limits"}\`, \`{"topic":"comparison vs competitors"}\`. **Be specific** — these aggregate across teams and tell us what to index next. Do not pack multiple topics into one entry.
-- **querySuggestions** — how the query or response shape could be improved (e.g. "would have liked official docs first", "should boost github.com").
+- **rating** 鈥?overall result quality: \`good\`, \`partial\`, or \`bad\`.
+- **valuableSources** 鈥?which result URLs were actually useful, and a short reason why.
+- **missingContent** 鈥?**the most important field.** An ARRAY of specific pieces of content you expected to find but didn't. One entry per missing piece, each with a short \`topic\` and an optional longer \`description\`. Examples: \`{"topic":"enterprise pricing","description":"no pricing tier table for the Enterprise plan was returned"}\`, \`{"topic":"API rate limits"}\`, \`{"topic":"comparison vs competitors"}\`. **Be specific** 鈥?these aggregate across teams and tell us what to index next. Do not pack multiple topics into one entry.
+- **querySuggestions** 鈥?how the query or response shape could be improved (e.g. "would have liked official docs first", "should boost github.com").
 
 **Substantive-feedback requirement** (zero-effort feedback is rejected with HTTP 400):
-- \`good\` — must include at least one \`valuableSources\` entry
-- \`partial\` — must include \`valuableSources\` or at least one \`missingContent\` entry
-- \`bad\` — must include at least one \`missingContent\` entry or \`querySuggestions\`
+- \`good\` 鈥?must include at least one \`valuableSources\` entry
+- \`partial\` 鈥?must include \`valuableSources\` or at least one \`missingContent\` entry
+- \`bad\` 鈥?must include at least one \`missingContent\` entry or \`querySuggestions\`
 
-**Time window:** Feedback must be submitted within ~2 minutes of the search. Beyond that, the call returns HTTP 409 with \`feedbackErrorCode: "FEEDBACK_WINDOW_EXPIRED"\` — do not retry, just move on. Same goes for any 4xx response: do not retry-loop.
+**Time window:** Feedback must be submitted within ~2 minutes of the search. Beyond that, the call returns HTTP 409 with \`feedbackErrorCode: "FEEDBACK_WINDOW_EXPIRED"\` 鈥?do not retry, just move on. Same goes for any 4xx response: do not retry-loop.
 
 **Behaviors:**
 - Idempotent per \`searchId\`. Re-submitting for the same id returns \`alreadySubmitted: true\` with \`creditsRefunded: 0\`.
 - Refund only applies to billable searches; preview teams are blocked.
 - Failed searches cannot receive feedback (the search itself already returned an error you can act on).
-- **Daily refund cap (per team, per UTC day, default 100 credits).** Once a team's \`creditsRefundedToday\` reaches \`dailyRefundCap\`, the response returns \`dailyCapReached: true\` with \`creditsRefunded: 0\`. The feedback is still recorded for search-quality improvement — only the credit refund is gated. **Stop calling this tool for the rest of the UTC day** when you see \`dailyCapReached: true\`.
+- **Daily refund cap (per team, per UTC day, default 100 credits).** Once a team's \`creditsRefundedToday\` reaches \`dailyRefundCap\`, the response returns \`dailyCapReached: true\` with \`creditsRefunded: 0\`. The feedback is still recorded for search-quality improvement 鈥?only the credit refund is gated. **Stop calling this tool for the rest of the UTC day** when you see \`dailyCapReached: true\`.
 
-**When to call:** Right after processing a search result. If the result didn't help, send rating \`bad\` with a clear \`missingContent\` — that is just as valuable as a \`good\` rating.
+**When to call:** Right after processing a search result. If the result didn't help, send rating \`bad\` with a clear \`missingContent\` 鈥?that is just as valuable as a \`good\` rating.
 
 **Usage Example (good rating with valuable sources + missing content):**
 \`\`\`json
@@ -1583,7 +1621,7 @@ Autonomous web research agent. This is a separate AI agent layer that independen
 **How it works:** The agent performs web searches, follows links, reads pages, and gathers data autonomously. This runs **asynchronously** - it returns a job ID immediately, and you poll \`firecrawl_agent_status\` to check when complete and retrieve results.
 
 **IMPORTANT - Async workflow with patient polling:**
-1. Call \`firecrawl_agent\` with your prompt/schema → returns job ID immediately
+1. Call \`firecrawl_agent\` with your prompt/schema 鈫?returns job ID immediately
 2. Poll \`firecrawl_agent_status\` with the job ID to check progress
 3. **Keep polling for at least 2-3 minutes** - agent research typically takes 1-5 minutes for complex queries
 4. Poll every 15-30 seconds until status is "completed" or "failed"
@@ -1726,7 +1764,7 @@ server.addTool({
   description: `
 Interact with a previously scraped page in a live browser session. Scrape a page first with firecrawl_scrape, then use the returned scrapeId to click buttons, fill forms, extract dynamic content, or navigate deeper.
 
-**Best for:** Multi-step workflows on a single page — searching a site, clicking through results, filling forms, extracting data that requires interaction.
+**Best for:** Multi-step workflows on a single page 鈥?searching a site, clicking through results, filling forms, extracting data that requires interaction.
 **Requires:** A scrapeId from a previous firecrawl_scrape call (found in the metadata of the scrape response).
 
 **Arguments:**
@@ -1914,11 +1952,11 @@ if (process.env.CLOUD_SERVICE !== 'true') {
     },
     description: `
 Parse a file from the local filesystem using a self-hosted Firecrawl API's /v2/parse endpoint.
-This is the fastest and most reliable way to extract content from a document on disk — if the file lives locally and the MCP is pointed at a self-hosted Firecrawl instance, you should always prefer this tool over uploading the file elsewhere and then scraping it.
+This is the fastest and most reliable way to extract content from a document on disk 鈥?if the file lives locally and the MCP is pointed at a self-hosted Firecrawl instance, you should always prefer this tool over uploading the file elsewhere and then scraping it.
 
 **Best for:** Extracting content from a local document (PDF, Word, Excel, HTML, etc.) when you don't want to host it on the public web first; pulling structured data out of a file with JSON format; converting binary documents into markdown for downstream reasoning.
-**Not recommended for:** Remote URLs (use firecrawl_scrape); multiple files at once (call parse multiple times); documents that require interactive actions, screenshots, or change tracking — those aren't supported by the parse endpoint.
-**Common mistakes:** Passing a URL instead of a local file path; requesting an unsupported format (screenshot, branding, changeTracking); setting waitFor, location, mobile, or a non-basic/auto proxy — parse uploads reject all of those.
+**Not recommended for:** Remote URLs (use firecrawl_scrape); multiple files at once (call parse multiple times); documents that require interactive actions, screenshots, or change tracking 鈥?those aren't supported by the parse endpoint.
+**Common mistakes:** Passing a URL instead of a local file path; requesting an unsupported format (screenshot, branding, changeTracking); setting waitFor, location, mobile, or a non-basic/auto proxy 鈥?parse uploads reject all of those.
 
 **Supported file types:** .html, .htm, .xhtml, .pdf, .docx, .doc, .odt, .rtf, .xlsx, .xls
 **Unsupported options:** actions, screenshot/branding/changeTracking formats, waitFor > 0, location, mobile, proxy values other than "auto" or "basic".
