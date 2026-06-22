@@ -1045,7 +1045,7 @@ server.setRequestHandler(
             );
             const response = await client.scrape(url, {
               ...cleaned,
-              origin: 'mcp-server',
+              origin: 'mcp-fastmcp',
             } as any);
             // Log performance metrics
             safeLog(
@@ -1138,7 +1138,7 @@ server.setRequestHandler(
           const response = await client.map(url, {
             ...options,
             // @ts-expect-error Extended API options including origin
-            origin: 'mcp-server',
+            origin: 'mcp-fastmcp',
           });
 
           if (!response.links) {
@@ -1165,7 +1165,7 @@ server.setRequestHandler(
               client.crawl(url as string, {
                 ...options,
                 // @ts-expect-error Extended API options including origin
-                origin: 'mcp-server',
+                origin: 'mcp-fastmcp',
               }),
             'crawl operation'
           );
@@ -1213,7 +1213,7 @@ ${
                 client.search(args.query, {
                   ...args,
                   // @ts-expect-error Extended API options including origin
-                  origin: 'mcp-server',
+                  origin: 'mcp-fastmcp',
                 }),
               'search operation'
             );
@@ -1266,7 +1266,7 @@ ${
                   allowExternalLinks: args.allowExternalLinks,
                   enableWebSearch: args.enableWebSearch,
                   includeSubdomains: args.includeSubdomains,
-                  origin: 'mcp-server',
+                  origin: 'mcp-fastmcp',
                 } as ExtractParams),
               'extract operation'
             );

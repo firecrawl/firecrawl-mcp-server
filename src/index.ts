@@ -363,6 +363,7 @@ function createClient(apiKey?: string): FirecrawlApp {
 }
 
 const ORIGIN = 'mcp-fastmcp';
+const ORIGIN_HEADERS = { 'X-Origin': ORIGIN };
 
 // Safe mode is enabled by default for cloud service to comply with ChatGPT safety requirements
 const SAFE_MODE = process.env.CLOUD_SERVICE === 'true';
@@ -961,6 +962,7 @@ async function keylessEligible(clientIp: string): Promise<boolean> {
       `${resolveApiBaseUrl()}/v2/keyless/eligibility`,
       {
         headers: {
+          ...ORIGIN_HEADERS,
           'x-firecrawl-keyless-ip': clientIp,
           'x-firecrawl-keyless-secret': secret,
         },
@@ -991,6 +993,7 @@ async function keylessPost(
   session?: SessionData
 ): Promise<any> {
   const headers: Record<string, string> = {
+    ...ORIGIN_HEADERS,
     'Content-Type': 'application/json',
   };
   // Forward the real client IP (secret-authenticated) when proxying keyless
@@ -1196,6 +1199,7 @@ Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the 
       if (querySuggestions) body.querySuggestions = querySuggestions;
 
       const headers: Record<string, string> = {
+        ...ORIGIN_HEADERS,
         'Content-Type': 'application/json',
       };
       const apiKey = session?.firecrawlApiKey;
@@ -1319,6 +1323,7 @@ Do not store multi-MB outputs in feedback. Use concise notes, issue codes, URLs,
 
       const apiBase = resolveApiBaseUrl();
       const headers: Record<string, string> = {
+        ...ORIGIN_HEADERS,
         'Content-Type': 'application/json',
       };
       const apiKey = session?.firecrawlApiKey;
@@ -1491,8 +1496,12 @@ Check the status of a crawl job.
     { session }: { session?: SessionData }
   ): Promise<string> => {
     const client = getClient(session);
-    const res = await client.getCrawlStatus((args as any).id as string);
-    return asText(res);
+    const id = (args as any).id as string;
+    const res = await (client as any).http.get(
+      `/v2/crawl/${encodeURIComponent(id)}`,
+      ORIGIN_HEADERS
+    );
+    return asText(res?.data ?? {});
   },
 });
 
@@ -1709,8 +1718,11 @@ Check the status of an agent job and retrieve results when complete. Use this to
     const client = getClient(session);
     const { id } = args as { id: string };
     log.info('Checking agent status', { id });
-    const res = await (client as any).getAgentStatus(id);
-    return asText(res);
+    const res = await (client as any).http.get(
+      `/v2/agent/${encodeURIComponent(id)}`,
+      ORIGIN_HEADERS
+    );
+    return asText(res?.data ?? {});
   },
 });
 
@@ -1820,8 +1832,11 @@ Stop an interact session for a scraped page. Call this when you are done interac
     const client = getClient(session);
     const { scrapeId } = args as { scrapeId: string };
     log.info('Stopping interact session', { scrapeId });
-    const res = await client.stopInteraction(scrapeId);
-    return asText(res);
+    const res = await (client as any).http.delete(
+      `/v2/scrape/${encodeURIComponent(scrapeId)}/interact`,
+      ORIGIN_HEADERS
+    );
+    return asText(res?.data ?? {});
   },
 });
 
@@ -2026,7 +2041,7 @@ Add \`"parsers": ["pdf"]\` (optionally with \`pdfOptions.maxPages\`) when parsin
       form.append('file', blob, filename);
       form.append('options', JSON.stringify(optionsPayload));
 
-      const headers: Record<string, string> = {};
+      const headers: Record<string, string> = { ...ORIGIN_HEADERS };
       const apiKey = session?.firecrawlApiKey;
       if (apiKey) {
         headers['Authorization'] = `Bearer ${apiKey}`;

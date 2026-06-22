@@ -57,7 +57,7 @@ async function monitorRequest(
     if (s) url += `?${s}`;
   }
 
-  const headers: Record<string, string> = { 'X-Origin': 'mcp' };
+  const headers: Record<string, string> = { 'X-Origin': 'mcp-fastmcp' };
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   if (init.body !== undefined) headers['Content-Type'] = 'application/json';
 
