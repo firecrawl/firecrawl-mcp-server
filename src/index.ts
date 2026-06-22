@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 import FirecrawlApp from '@mendable/firecrawl-js';
 import dotenv from 'dotenv';
-import { FastMCP, type Logger } from 'firecrawl-fastmcp';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
-import { registerMonitorTools } from './monitor.js';
-import { registerResearchTools } from './research.js';
+import { FastMCP, type Logger } from './fastmcp/FastMCP';
+import { registerMonitorTools } from './monitor';
+import { registerResearchTools } from './research';
 
 dotenv.config({ debug: false, quiet: true });
 
@@ -332,6 +332,13 @@ const server = new FastMCP<SessionData>({
     path: '/health',
     status: 200,
   },
+  ...(normalizeHeader(process.env.OPENAI_APPS_CHALLENGE_TOKEN)
+    ? {
+        openaiAppsChallenge: {
+          token: normalizeHeader(process.env.OPENAI_APPS_CHALLENGE_TOKEN),
+        },
+      }
+    : {}),
 });
 
 function createClient(apiKey?: string): FirecrawlApp {
@@ -676,10 +683,7 @@ ${
 }
 `,
   parameters: scrapeParamsSchema,
-  execute: async (
-    args: unknown,
-    { session, log }: { session?: SessionData; log: Logger }
-  ): Promise<string> => {
+  execute: async (args: unknown, { session, log }): Promise<string> => {
     const { url, ...options } = args as { url: string } & Record<
       string,
       unknown
@@ -761,10 +765,7 @@ Map a website to discover all indexed URLs on the site.
     limit: z.number().optional(),
     ignoreQueryParameters: z.boolean().optional(),
   }),
-  execute: async (
-    args: unknown,
-    { session, log }: { session?: SessionData; log: Logger }
-  ): Promise<string> => {
+  execute: async (args: unknown, { session, log }): Promise<string> => {
     const { url, ...options } = args as { url: string } & Record<
       string,
       unknown
@@ -874,10 +875,7 @@ The query also supports search operators, that you can use if needed to refine t
       (args) => !(args.includeDomains?.length && args.excludeDomains?.length),
       'includeDomains and excludeDomains cannot both be specified'
     ),
-  execute: async (
-    args: unknown,
-    { session, log }: { session?: SessionData; log: Logger }
-  ): Promise<string> => {
+  execute: async (args: unknown, { session, log }): Promise<string> => {
     const { query, ...opts } = args as Record<string, unknown>;
 
     const searchOpts = { ...opts } as Record<string, unknown>;
@@ -1159,10 +1157,7 @@ Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the 
         ),
       querySuggestions: z.string().max(2000).optional(),
     }),
-    execute: async (
-      args: unknown,
-      { session, log }: { session?: SessionData; log: Logger }
-    ): Promise<string> => {
+    execute: async (args: unknown, { session, log }): Promise<string> => {
       const {
         searchId,
         rating,
@@ -1287,10 +1282,7 @@ Do not store multi-MB outputs in feedback. Use concise notes, issue codes, URLs,
       pageNumbers: z.array(z.number().int().positive()).max(100).optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
     }),
-    execute: async (
-      args: unknown,
-      { session, log }: { session?: SessionData; log: Logger }
-    ): Promise<string> => {
+    execute: async (args: unknown, { session, log }): Promise<string> => {
       const {
         endpoint,
         jobId,
@@ -1551,10 +1543,7 @@ Extract structured information from web pages using LLM capabilities. Supports b
     enableWebSearch: z.boolean().optional(),
     includeSubdomains: z.boolean().optional(),
   }),
-  execute: async (
-    args: unknown,
-    { session, log }: { session?: SessionData; log: Logger }
-  ): Promise<string> => {
+  execute: async (args: unknown, { session, log }): Promise<string> => {
     const client = getClient(session);
     const a = args as Record<string, unknown>;
     log.info('Extracting from URLs', {
@@ -1656,10 +1645,7 @@ Then poll with \`firecrawl_agent_status\` every 15-30 seconds for at least 2-3 m
     urls: z.array(z.string().url()).optional(),
     schema: z.record(z.string(), z.any()).optional(),
   }),
-  execute: async (
-    args: unknown,
-    { session, log }: { session?: SessionData; log: Logger }
-  ): Promise<string> => {
+  execute: async (args: unknown, { session, log }): Promise<string> => {
     const client = getClient(session);
     const a = args as Record<string, unknown>;
     log.info('Starting agent', {
@@ -1713,10 +1699,7 @@ Check the status of an agent job and retrieve results when complete. Use this to
 **Returns:** Status, progress, and results (if completed) of the agent job.
 `,
   parameters: z.object({ id: z.string() }),
-  execute: async (
-    args: unknown,
-    { session, log }: { session?: SessionData; log: Logger }
-  ): Promise<string> => {
+  execute: async (args: unknown, { session, log }): Promise<string> => {
     const client = getClient(session);
     const { id } = args as { id: string };
     log.info('Checking agent status', { id });
@@ -1782,10 +1765,7 @@ Interact with a previously scraped page in a live browser session. Scrape a page
     .refine((data) => data.code || data.prompt, {
       message: "Either 'code' or 'prompt' must be provided.",
     }),
-  execute: async (
-    args: unknown,
-    { session, log }: { session?: SessionData; log: Logger }
-  ): Promise<string> => {
+  execute: async (args: unknown, { session, log }): Promise<string> => {
     const client = getClient(session);
     const { scrapeId, prompt, code, language, timeout } = args as {
       scrapeId: string;
@@ -1830,10 +1810,7 @@ Stop an interact session for a scraped page. Call this when you are done interac
   parameters: z.object({
     scrapeId: z.string(),
   }),
-  execute: async (
-    args: unknown,
-    { session, log }: { session?: SessionData; log: Logger }
-  ): Promise<string> => {
+  execute: async (args: unknown, { session, log }): Promise<string> => {
     const client = getClient(session);
     const { scrapeId } = args as { scrapeId: string };
     log.info('Stopping interact session', { scrapeId });
@@ -2002,10 +1979,7 @@ Add \`"parsers": ["pdf"]\` (optionally with \`pdfOptions.maxPages\`) when parsin
 **Returns:** A parsed document with markdown, html, links, summary, json, or query results depending on the requested formats.
 `,
     parameters: parseParamsSchema,
-    execute: async (
-      args: unknown,
-      { session, log }: { session?: SessionData; log: Logger }
-    ): Promise<string> => {
+    execute: async (args: unknown, { session, log }): Promise<string> => {
       const apiUrl = process.env.FIRECRAWL_API_URL;
       if (!apiUrl) {
         throw new Error(
