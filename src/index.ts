@@ -1016,6 +1016,82 @@ async function keylessPost(
   return json;
 }
 
+async function getCrawlStatusWithOrigin(
+  client: FirecrawlApp,
+  jobId: string
+): Promise<Record<string, unknown>> {
+  const res = await (client as any).http.get(
+    `/v2/crawl/${encodeURIComponent(jobId)}`,
+    ORIGIN_HEADERS
+  );
+  const body = (res?.data ?? {}) as any;
+  const initialDocs = Array.isArray(body.data) ? body.data : [];
+
+  if (!body.next) {
+    return {
+      id: jobId,
+      status: body.status,
+      completed: body.completed ?? 0,
+      total: body.total ?? 0,
+      creditsUsed: body.creditsUsed,
+      expiresAt: body.expiresAt,
+      next: body.next ?? null,
+      data: initialDocs,
+    };
+  }
+
+  const docs = initialDocs.slice();
+  let current = body.next as string | null;
+  while (current) {
+    const pageRes = await (client as any).http.get(current, ORIGIN_HEADERS);
+    const payload = (pageRes?.data ?? {}) as any;
+    if (!payload.success) break;
+
+    const pageData = Array.isArray(payload.data)
+      ? payload.data
+      : payload.data?.pages || [];
+    docs.push(...pageData);
+    current =
+      payload.next ??
+      (Array.isArray(payload.data) ? null : payload.data?.next) ??
+      null;
+  }
+
+  return {
+    id: jobId,
+    status: body.status,
+    completed: body.completed ?? 0,
+    total: body.total ?? 0,
+    creditsUsed: body.creditsUsed,
+    expiresAt: body.expiresAt,
+    next: null,
+    data: docs,
+  };
+}
+
+async function waitForCrawlCompletionWithOrigin(
+  client: FirecrawlApp,
+  jobId: string,
+  pollInterval = 2,
+  timeout?: number
+): Promise<Record<string, unknown>> {
+  const startedAt = Date.now();
+  while (true) {
+    const status = await getCrawlStatusWithOrigin(client, jobId);
+    if (
+      ['completed', 'failed', 'cancelled'].includes(String(status.status ?? ''))
+    ) {
+      return status;
+    }
+    if (timeout != null && Date.now() - startedAt > timeout * 1000) {
+      throw new Error(`Crawl job ${jobId} did not complete within ${timeout}s`);
+    }
+    await new Promise((resolve) =>
+      setTimeout(resolve, Math.max(1000, pollInterval * 1000))
+    );
+  }
+}
+
 const feedbackIssueSchema = z
   .string()
   .trim()
@@ -1459,11 +1535,33 @@ server.addTool({
     delete opts.webhookHeaders;
 
     const cleaned = removeEmptyTopLevel(opts);
+    const pollInterval =
+      typeof cleaned.pollInterval === 'number'
+        ? (cleaned.pollInterval as number)
+        : 2;
+    const timeout =
+      typeof cleaned.timeout === 'number'
+        ? (cleaned.timeout as number)
+        : undefined;
+    delete (cleaned as Record<string, unknown>).pollInterval;
+    delete (cleaned as Record<string, unknown>).timeout;
+
     log.info('Starting crawl', { url: String(url) });
-    const res = await client.crawl(String(url), {
-      ...(cleaned as any),
+    const started = await (client as any).http.post('/v2/crawl', {
+      url: String(url),
+      ...(cleaned as Record<string, unknown>),
       origin: ORIGIN,
     });
+    const crawlId = started?.data?.id;
+    if (!crawlId) {
+      return asText(started?.data ?? {});
+    }
+    const res = await waitForCrawlCompletionWithOrigin(
+      client,
+      crawlId,
+      pollInterval,
+      timeout
+    );
     return asText(res);
   },
 });
@@ -1497,11 +1595,8 @@ Check the status of a crawl job.
   ): Promise<string> => {
     const client = getClient(session);
     const id = (args as any).id as string;
-    const res = await (client as any).http.get(
-      `/v2/crawl/${encodeURIComponent(id)}`,
-      ORIGIN_HEADERS
-    );
-    return asText(res?.data ?? {});
+    const res = await getCrawlStatusWithOrigin(client, id);
+    return asText(res);
   },
 });
 
