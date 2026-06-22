@@ -784,6 +784,24 @@ async function apiPostJson(
   return parsed;
 }
 
+async function apiPostJsonForSession(
+  pathName: string,
+  body: Record<string, unknown>,
+  session: SessionData | undefined
+): Promise<any> {
+  if (session?.firecrawlApiKey) {
+    return apiPostJson(pathName, body, session.firecrawlApiKey);
+  }
+
+  if (isKeylessMode(session)) {
+    return keylessPost(pathName, body, session);
+  }
+
+  throw new Error(
+    'Firecrawl credentials or keyless eligibility required for hosted parse.'
+  );
+}
+
 function buildCurlUploadCommand(
   filePath: string,
   upload: ParseUploadUrlData
@@ -835,12 +853,12 @@ async function executeHostedParse(
     );
   }
 
-  if (!session?.firecrawlApiKey) {
+  if (!session?.firecrawlApiKey && !isKeylessMode(session)) {
     return asText({
       success: false,
       mode: 'hosted-upload-ref-auth-required',
       message:
-        'Hosted firecrawl_parse requires an authenticated Firecrawl session before a local file upload URL can be minted. Connect a Firecrawl account or provide an API key, then call firecrawl_parse again.',
+        'Hosted firecrawl_parse requires an authenticated Firecrawl session or keyless eligibility before a local file upload URL can be minted. Connect a Firecrawl account, provide an API key, or use keyless hosted MCP while eligible, then call firecrawl_parse again.',
     });
   }
 
@@ -859,10 +877,10 @@ async function executeHostedParse(
     }) as Record<string, unknown>;
 
     log.info('Creating hosted parse upload URL', { filename, contentType });
-    const uploadJson = await apiPostJson(
+    const uploadJson = await apiPostJsonForSession(
       '/v2/parse/upload-url',
       uploadRequest,
-      session.firecrawlApiKey
+      session
     );
     const upload = parseApiData(uploadJson) as ParseUploadUrlData;
     if (!upload?.uploadUrl || !upload?.uploadRef) {
@@ -910,10 +928,10 @@ async function executeHostedParse(
     ...buildParseOptionsPayload(options),
   };
   log.info('Parsing hosted upload reference');
-  const parseJson = await apiPostJson(
+  const parseJson = await apiPostJsonForSession(
     '/v2/parse',
     parsePayload,
-    session.firecrawlApiKey
+    session
   );
   return asText(parseJson);
 }
