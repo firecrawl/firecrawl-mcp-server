@@ -26,6 +26,24 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 
 ## Installation
 
+### Hosted MCP (keyless free tier)
+
+Connect to the remote hosted server with no setup:
+
+```
+https://mcp.firecrawl.dev/v2/mcp
+```
+
+On the keyless free tier, `scrape`, `search`, and `interact` work without an API key (rate-limited). Other tools such as `crawl`, `map`, `agent`, and `extract` still need a key.
+
+Prefer an API key or OAuth whenever the human can sign up. It unlocks the full tool set and higher limits. With a key, use:
+
+```
+https://mcp.firecrawl.dev/{FIRECRAWL_API_KEY}/v2/mcp
+```
+
+See the [MCP server docs](https://docs.firecrawl.dev/mcp-server) and the [agent onboarding guide](https://www.firecrawl.dev/agent-onboarding/SKILL.md) for setup details.
+
 ### Running with npx
 
 ```bash
