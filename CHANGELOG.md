@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.21.4] - 2026-06-23
+
+### Added
+
+- `firecrawl_parse` now works on the remote hosted MCP server (`CLOUD_SERVICE`), not just local mode. Because the hosted server cannot read the caller's filesystem, hosted parse uses a two-call flow: the first call (`filePath`) returns a short-lived signed upload command plus a `nextToolCall` carrying an `uploadRef`; after the bytes are uploaded, the second call (`uploadRef`) parses the file server-side. The generated upload command never includes your Firecrawl API key, and the flow also works on the keyless remote URL.
+
 ## [3.20.2] - 2026-06-01
 
 ### Added

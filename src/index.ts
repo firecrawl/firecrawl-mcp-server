@@ -575,6 +575,367 @@ const scrapeParamsSchema = z.object({
     .optional(),
 });
 
+const parseOptionParamsSchema = z.object({
+  formats: z
+    .array(
+      z.enum([
+        'markdown',
+        'html',
+        'rawHtml',
+        'links',
+        'summary',
+        'json',
+        'query',
+      ])
+    )
+    .optional(),
+  jsonOptions: z
+    .object({
+      prompt: z.string().optional(),
+      schema: z.record(z.string(), z.any()).optional(),
+    })
+    .optional(),
+  queryOptions: z
+    .object({
+      prompt: z.string().max(10000),
+      mode: z.enum(['directQuote', 'freeform']).default('freeform'),
+    })
+    .optional(),
+  parsers: z.array(z.enum(['pdf'])).optional(),
+  pdfOptions: z
+    .object({
+      maxPages: z.number().int().min(1).max(10000).optional(),
+    })
+    .optional(),
+  onlyMainContent: z.boolean().optional(),
+  redactPII: z.boolean().optional(),
+  includeTags: z.array(z.string()).optional(),
+  excludeTags: z.array(z.string()).optional(),
+  removeBase64Images: z.boolean().optional(),
+  skipTlsVerification: z.boolean().optional(),
+  storeInCache: z.boolean().optional(),
+  zeroDataRetention: z.boolean().optional(),
+  maxAge: z.number().optional(),
+  proxy: z.enum(['basic', 'auto']).optional(),
+});
+
+const localParseParamsSchema = parseOptionParamsSchema.extend({
+  filePath: z
+    .string()
+    .min(1)
+    .describe(
+      'Absolute or relative path to a local file to parse. Supported: .html, .htm, .pdf, .docx, .doc, .odt, .rtf, .xlsx, .xls'
+    ),
+  contentType: z
+    .string()
+    .optional()
+    .describe(
+      'Optional MIME type override. If omitted, the server infers the file kind from the extension.'
+    ),
+});
+
+const hostedParseParamsSchema = parseOptionParamsSchema
+  .extend({
+    filePath: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'Phase 1 only: path to the local file on the caller/harness machine. Hosted MCP will not read or stat this path; it is used only to produce upload instructions.'
+      ),
+    uploadRef: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'Phase 2 only: short-lived upload reference returned by phase 1 after the local PUT upload completes.'
+      ),
+    contentType: z
+      .string()
+      .optional()
+      .describe(
+        'Phase 1 MIME type override. If omitted, the server infers it from the file extension without reading the file.'
+      ),
+    declaredSizeBytes: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe(
+        'Optional phase 1 size declaration. Hosted MCP does not stat the file; provide this only if the caller already knows it.'
+      ),
+  })
+  .superRefine((value, ctx) => {
+    const hasFilePath =
+      typeof value.filePath === 'string' && value.filePath.length > 0;
+    const hasUploadRef =
+      typeof value.uploadRef === 'string' && value.uploadRef.length > 0;
+    if (hasFilePath === hasUploadRef) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'Hosted firecrawl_parse requires exactly one of filePath (phase 1) or uploadRef (phase 2).',
+        path: hasFilePath && hasUploadRef ? ['uploadRef'] : ['filePath'],
+      });
+    }
+  });
+
+const parseParamsSchema =
+  process.env.CLOUD_SERVICE === 'true'
+    ? hostedParseParamsSchema
+    : localParseParamsSchema;
+
+const EXTENSION_CONTENT_TYPES: Record<string, string> = {
+  '.html': 'text/html',
+  '.htm': 'text/html',
+  '.xhtml': 'application/xhtml+xml',
+  '.pdf': 'application/pdf',
+  '.docx':
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.doc': 'application/msword',
+  '.odt': 'application/vnd.oasis.opendocument.text',
+  '.rtf': 'application/rtf',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.xls': 'application/vnd.ms-excel',
+};
+
+function inferContentType(filename: string): string {
+  const ext = path.extname(filename).toLowerCase();
+  return EXTENSION_CONTENT_TYPES[ext] ?? 'application/octet-stream';
+}
+
+type ParseToolArgs = {
+  filePath?: string;
+  uploadRef?: string;
+  contentType?: string;
+  declaredSizeBytes?: number;
+} & Record<string, unknown>;
+
+function extractParseOptions(args: ParseToolArgs): Record<string, unknown> {
+  const { filePath, uploadRef, contentType, declaredSizeBytes, ...options } =
+    args;
+  return options;
+}
+
+function buildParseOptionsPayload(
+  options: Record<string, unknown>
+): Record<string, unknown> {
+  const transformed = transformScrapeParams(options);
+  const cleaned = removeEmptyTopLevel(transformed) as Record<string, unknown>;
+  return { origin: ORIGIN, ...cleaned };
+}
+
+function buildContinuationArguments(
+  uploadRef: string,
+  options: Record<string, unknown>
+): Record<string, unknown> {
+  return {
+    uploadRef,
+    ...(removeEmptyTopLevel(options) as Record<string, unknown>),
+  };
+}
+
+function shellQuote(value: string): string {
+  if (value.length === 0) return "''";
+  return "'" + value.replace(/'/g, "'\\''") + "'";
+}
+
+type ParseUploadUrlData = {
+  uploadUrl: string;
+  uploadRef: string;
+  method?: string;
+  headers?: Record<string, string>;
+  fields?: Record<string, string>;
+  expiresAt?: string;
+  maxSizeBytes?: number;
+};
+
+function parseApiData(json: any): any {
+  return json && typeof json === 'object' && 'data' in json ? json.data : json;
+}
+
+async function apiPostJson(
+  pathName: string,
+  body: Record<string, unknown>,
+  apiKey: string
+): Promise<any> {
+  const response = await fetch(`${resolveApiBaseUrl()}${pathName}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const responseText = await response.text();
+  let parsed: any;
+  try {
+    parsed = responseText ? JSON.parse(responseText) : {};
+  } catch {
+    parsed = { raw: responseText };
+  }
+  if (!response.ok) {
+    throw new Error(
+      parsed?.error ||
+        parsed?.message ||
+        `Firecrawl request failed (HTTP ${response.status})`
+    );
+  }
+  return parsed;
+}
+
+async function apiPostJsonForSession(
+  pathName: string,
+  body: Record<string, unknown>,
+  session: SessionData | undefined
+): Promise<any> {
+  if (session?.firecrawlApiKey) {
+    return apiPostJson(pathName, body, session.firecrawlApiKey);
+  }
+
+  if (isKeylessMode(session)) {
+    return keylessPost(pathName, body, session);
+  }
+
+  throw new Error(
+    'Firecrawl credentials or keyless eligibility required for hosted parse.'
+  );
+}
+
+function buildCurlUploadCommand(
+  filePath: string,
+  upload: ParseUploadUrlData
+): string {
+  const method = upload.method ?? 'PUT';
+  const headerArgs = Object.entries(upload.headers ?? {})
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `-H ${shellQuote(`${key}: ${value}`)}`);
+
+  if (method.toUpperCase() === 'POST' && upload.fields) {
+    const fieldArgs = Object.entries(upload.fields)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .flatMap(([key, value]) => ['-F', shellQuote(`${key}=${value}`)]);
+    return [
+      'curl',
+      '-X',
+      shellQuote('POST'),
+      ...headerArgs,
+      ...fieldArgs,
+      '-F',
+      shellQuote(`file=@${filePath}`),
+      shellQuote(upload.uploadUrl),
+    ].join(' ');
+  }
+
+  return [
+    'curl',
+    '-X',
+    shellQuote(method),
+    ...headerArgs,
+    '--upload-file',
+    shellQuote(filePath),
+    shellQuote(upload.uploadUrl),
+  ].join(' ');
+}
+
+async function executeHostedParse(
+  args: ParseToolArgs,
+  session: SessionData | undefined,
+  log: Logger
+): Promise<string> {
+  const hasFilePath =
+    typeof args.filePath === 'string' && args.filePath.length > 0;
+  const hasUploadRef =
+    typeof args.uploadRef === 'string' && args.uploadRef.length > 0;
+  if (hasFilePath === hasUploadRef) {
+    throw new Error(
+      'Hosted firecrawl_parse requires exactly one of filePath or uploadRef.'
+    );
+  }
+
+  if (!session?.firecrawlApiKey && !isKeylessMode(session)) {
+    return asText({
+      success: false,
+      mode: 'hosted-upload-ref-auth-required',
+      message:
+        'Hosted firecrawl_parse requires an authenticated Firecrawl session or keyless eligibility before a local file upload URL can be minted. Connect a Firecrawl account, provide an API key, or use keyless hosted MCP while eligible, then call firecrawl_parse again.',
+    });
+  }
+
+  const options = extractParseOptions(args);
+
+  if (hasFilePath && args.filePath) {
+    const filename = path.basename(args.filePath);
+    const contentType =
+      typeof args.contentType === 'string' && args.contentType.length > 0
+        ? args.contentType
+        : inferContentType(filename);
+    const uploadRequest = removeEmptyTopLevel({
+      filename,
+      contentType,
+      declaredSizeBytes: args.declaredSizeBytes,
+    }) as Record<string, unknown>;
+
+    log.info('Creating hosted parse upload URL', { filename, contentType });
+    const uploadJson = await apiPostJsonForSession(
+      '/v2/parse/upload-url',
+      uploadRequest,
+      session
+    );
+    const upload = parseApiData(uploadJson) as ParseUploadUrlData;
+    if (!upload?.uploadUrl || !upload?.uploadRef) {
+      throw new Error(
+        'Firecrawl upload-url response did not include uploadUrl and uploadRef'
+      );
+    }
+    const uploadHeaders =
+      upload.headers && Object.keys(upload.headers).length > 0
+        ? upload.headers
+        : (upload.method ?? 'PUT').toUpperCase() === 'POST'
+          ? {}
+          : { 'Content-Type': contentType };
+    const uploadForCommand = { ...upload, headers: uploadHeaders };
+
+    return asText({
+      success: true,
+      mode: 'hosted-upload-ref-awaiting-upload',
+      message:
+        'Hosted MCP cannot read local files. Run the local upload command, then call firecrawl_parse again with uploadRef. No Firecrawl API key is included in this command.',
+      upload: {
+        command: buildCurlUploadCommand(args.filePath, uploadForCommand),
+        method: upload.method ?? 'PUT',
+        headers: uploadHeaders,
+        fields: upload.fields,
+        uploadUrl: upload.uploadUrl,
+        uploadRef: upload.uploadRef,
+        expiresAt: upload.expiresAt,
+        maxSizeBytes: upload.maxSizeBytes,
+      },
+      nextToolCall: {
+        name: 'firecrawl_parse',
+        arguments: buildContinuationArguments(upload.uploadRef, options),
+      },
+      notes: [
+        'Run the curl command on the machine that can read filePath.',
+        'After the PUT succeeds, use nextToolCall as the second MCP tool call.',
+        'Clients without a local upload mechanism cannot complete hosted parse for local files.',
+      ],
+    });
+  }
+
+  const parsePayload = {
+    uploadRef: args.uploadRef as string,
+    ...buildParseOptionsPayload(options),
+  };
+  log.info('Parsing hosted upload reference');
+  const parseJson = await apiPostJsonForSession(
+    '/v2/parse',
+    parsePayload,
+    session
+  );
+  return asText(parseJson);
+}
+
 server.addTool({
   name: 'firecrawl_scrape',
   annotations: {
@@ -1935,100 +2296,28 @@ Stop an interact session for a scraped page. Call this when you are done interac
   },
 });
 
-// Local-only: parse a local file via the self-hosted Firecrawl /v2/parse endpoint.
-// The parse endpoint is only exposed on self-hosted/local Firecrawl API deployments,
-// so this tool is registered only when the MCP is NOT running in cloud mode.
-if (process.env.CLOUD_SERVICE !== 'true') {
-  const parseParamsSchema = z.object({
-    filePath: z
-      .string()
-      .min(1)
-      .describe(
-        'Absolute or relative path to a local file to parse. Supported: .html, .htm, .pdf, .docx, .doc, .odt, .rtf, .xlsx, .xls'
-      ),
-    contentType: z
-      .string()
-      .optional()
-      .describe(
-        'Optional MIME type override. If omitted, the server infers the file kind from the extension.'
-      ),
-    formats: z
-      .array(
-        z.enum([
-          'markdown',
-          'html',
-          'rawHtml',
-          'links',
-          'summary',
-          'json',
-          'query',
-        ])
-      )
-      .optional(),
-    jsonOptions: z
-      .object({
-        prompt: z.string().optional(),
-        schema: z.record(z.string(), z.any()).optional(),
-      })
-      .optional(),
-    queryOptions: z
-      .object({
-        prompt: z.string().max(10000),
-        mode: z.enum(['directQuote', 'freeform']).default('freeform'),
-      })
-      .optional(),
-    parsers: z.array(z.enum(['pdf'])).optional(),
-    pdfOptions: z
-      .object({
-        maxPages: z.number().int().min(1).max(10000).optional(),
-      })
-      .optional(),
-    onlyMainContent: z.boolean().optional(),
-    redactPII: z.boolean().optional(),
-    includeTags: z.array(z.string()).optional(),
-    excludeTags: z.array(z.string()).optional(),
-    removeBase64Images: z.boolean().optional(),
-    skipTlsVerification: z.boolean().optional(),
-    storeInCache: z.boolean().optional(),
-    zeroDataRetention: z.boolean().optional(),
-    maxAge: z.number().optional(),
-    proxy: z.enum(['basic', 'auto']).optional(),
-  });
+// Parse a local file directly in non-cloud mode, or orchestrate a hosted two-call
+// uploadRef flow in CLOUD_SERVICE mode without reading the caller's filesystem.
+server.addTool({
+  name: 'firecrawl_parse',
+  annotations: {
+    title: 'Parse a local file',
+    readOnlyHint: true, // Local mode reads a file; hosted mode only returns upload instructions or parses an uploadRef.
+    openWorldHint: false, // Operates on a local filesystem path/upload reference, not an arbitrary web URL.
+    destructiveHint: false, // Read-only parsing; no deletion or writes to the source file.
+  },
+  description: `
+Parse a file using Firecrawl's /v2/parse endpoint.
 
-  const EXTENSION_CONTENT_TYPES: Record<string, string> = {
-    '.html': 'text/html',
-    '.htm': 'text/html',
-    '.pdf': 'application/pdf',
-    '.docx':
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    '.doc': 'application/msword',
-    '.odt': 'application/vnd.oasis.opendocument.text',
-    '.rtf': 'application/rtf',
-    '.xlsx':
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    '.xls': 'application/vnd.ms-excel',
-  };
+In local/non-cloud MCP mode, this tool reads filePath from the MCP server filesystem and posts multipart data to the configured self-hosted FIRECRAWL_API_URL, preserving the existing direct-read behavior.
 
-  function inferContentType(filename: string): string {
-    const ext = path.extname(filename).toLowerCase();
-    return EXTENSION_CONTENT_TYPES[ext] ?? 'application/octet-stream';
-  }
+In hosted CLOUD_SERVICE mode, this tool is a two-call flow because hosted MCP cannot read your local filesystem:
+1. Call with filePath, contentType, parse options, and optional declaredSizeBytes. The hosted server mints a short-lived upload URL and returns a safe local curl PUT command plus nextToolCall.
+2. Run the returned curl command locally, then call firecrawl_parse again with uploadRef and the desired parse options. The hosted server calls /v2/parse server-side with your session credential.
 
-  server.addTool({
-    name: 'firecrawl_parse',
-    annotations: {
-      title: 'Parse a local file',
-      readOnlyHint: true, // Reads and parses a local file; does not modify the file on disk.
-      openWorldHint: false, // Operates on a local filesystem path, not the open web.
-      destructiveHint: false, // Read-only parsing; no deletion or writes to the source file.
-    },
-    description: `
-Parse a file from the local filesystem using a self-hosted Firecrawl API's /v2/parse endpoint.
-This is the fastest and most reliable way to extract content from a document on disk — if the file lives locally and the MCP is pointed at a self-hosted Firecrawl instance, you should always prefer this tool over uploading the file elsewhere and then scraping it.
-
-**Best for:** Extracting content from a local document (PDF, Word, Excel, HTML, etc.) when you don't want to host it on the public web first; pulling structured data out of a file with JSON format; converting binary documents into markdown for downstream reasoning.
+**Best for:** Extracting content from a local document (PDF, Word, Excel, HTML, etc.); pulling structured data out of a file with JSON format; converting binary documents into markdown for downstream reasoning.
 **Not recommended for:** Remote URLs (use firecrawl_scrape); multiple files at once (call parse multiple times); documents that require interactive actions, screenshots, or change tracking — those aren't supported by the parse endpoint.
-**Common mistakes:** Passing a URL instead of a local file path; requesting an unsupported format (screenshot, branding, changeTracking); setting waitFor, location, mobile, or a non-basic/auto proxy — parse uploads reject all of those.
+**Common mistakes:** In hosted mode, do not pass both filePath and uploadRef. Phase 1 uses filePath only to generate upload instructions; phase 2 uses uploadRef only to parse server-side.
 
 **Supported file types:** .html, .htm, .xhtml, .pdf, .docx, .doc, .odt, .rtf, .xlsx, .xls
 **Unsupported options:** actions, screenshot/branding/changeTracking formats, waitFor > 0, location, mobile, proxy values other than "auto" or "basic".
@@ -2037,139 +2326,115 @@ This is the fastest and most reliable way to extract content from a document on 
 **CRITICAL - Format Selection (same rules as firecrawl_scrape):**
 When the user asks for SPECIFIC data points from a document, you MUST use JSON format with a schema. Only use markdown when the user needs the ENTIRE document content.
 
-**Use JSON format when the user asks for:**
-- Specific fields, parameters, or values from a form / PDF / spreadsheet
-- Prices, numbers, or other structured data
-- Lists of items or properties
-
-**Use markdown format when:**
-- User wants to read, summarize, or analyze the full document
-- User explicitly asks for the complete content
-
 **Handling PDFs:**
 Add \`"parsers": ["pdf"]\` (optionally with \`pdfOptions.maxPages\`) when parsing a PDF so the PDF engine is invoked explicitly. For very long documents, cap \`maxPages\` to keep the response within token limits.
 
-**Usage Example (markdown from a local PDF):**
+**Hosted phase 1 example:**
 \`\`\`json
 {
   "name": "firecrawl_parse",
   "arguments": {
     "filePath": "/absolute/path/to/document.pdf",
+    "contentType": "application/pdf",
     "formats": ["markdown"],
     "parsers": ["pdf"],
-    "onlyMainContent": true
+    "zeroDataRetention": true
   }
 }
 \`\`\`
 
-**Usage Example (structured JSON extraction from a local HTML file):**
+**Hosted phase 2 example:**
 \`\`\`json
 {
   "name": "firecrawl_parse",
   "arguments": {
-    "filePath": "./invoice.html",
-    "formats": ["json"],
-    "jsonOptions": {
-      "prompt": "Extract the invoice number, total, and line items",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "invoiceNumber": { "type": "string" },
-          "total": { "type": "number" },
-          "lineItems": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "description": { "type": "string" },
-                "amount": { "type": "number" }
-              }
-            }
-          }
-        }
-      }
-    }
+    "uploadRef": "upload-ref-from-phase-1",
+    "formats": ["markdown"],
+    "parsers": ["pdf"],
+    "zeroDataRetention": true
   }
 }
 \`\`\`
-**Returns:** A parsed document with markdown, html, links, summary, json, or query results depending on the requested formats.
+
+**Returns:** Phase 1 hosted upload instructions or a parsed document with markdown, html, links, summary, json, or query results depending on the requested formats.
 `,
-    parameters: parseParamsSchema,
-    execute: async (args: unknown, { session, log }): Promise<string> => {
-      const apiUrl = process.env.FIRECRAWL_API_URL;
-      if (!apiUrl) {
-        throw new Error(
-          'firecrawl_parse requires FIRECRAWL_API_URL to be set to a self-hosted Firecrawl API instance.'
-        );
-      }
+  parameters: parseParamsSchema,
+  execute: async (
+    args: unknown,
+    { session, log }: { session?: SessionData; log: Logger }
+  ): Promise<string> => {
+    if (process.env.CLOUD_SERVICE === 'true') {
+      return executeHostedParse(args as ParseToolArgs, session, log);
+    }
 
-      const {
-        filePath,
-        contentType: overrideContentType,
-        ...options
-      } = args as {
-        filePath: string;
-        contentType?: string;
-      } & Record<string, unknown>;
-
-      const absPath = path.resolve(filePath);
-      const buffer = await readFile(absPath);
-      const filename = path.basename(absPath);
-      const fileContentType =
-        overrideContentType && overrideContentType.length > 0
-          ? overrideContentType
-          : inferContentType(filename);
-
-      const transformed = transformScrapeParams(
-        options as Record<string, unknown>
+    const apiUrl = process.env.FIRECRAWL_API_URL;
+    if (!apiUrl) {
+      throw new Error(
+        'firecrawl_parse requires FIRECRAWL_API_URL to be set to a self-hosted Firecrawl API instance.'
       );
-      const cleaned = removeEmptyTopLevel(transformed) as Record<
-        string,
-        unknown
-      >;
-      const optionsPayload = { origin: ORIGIN, ...cleaned };
+    }
 
-      const form = new FormData();
-      const blob = new Blob([new Uint8Array(buffer)], {
-        type: fileContentType,
-      });
-      form.append('file', blob, filename);
-      form.append('options', JSON.stringify(optionsPayload));
+    const {
+      filePath,
+      contentType: overrideContentType,
+      ...options
+    } = args as {
+      filePath: string;
+      contentType?: string;
+    } & Record<string, unknown>;
 
-      const headers: Record<string, string> = { ...ORIGIN_HEADERS };
-      const apiKey = session?.firecrawlApiKey;
-      if (apiKey) {
-        headers['Authorization'] = `Bearer ${apiKey}`;
-      }
+    const absPath = path.resolve(filePath);
+    const buffer = await readFile(absPath);
+    const filename = path.basename(absPath);
+    const fileContentType =
+      overrideContentType && overrideContentType.length > 0
+        ? overrideContentType
+        : inferContentType(filename);
 
-      const endpoint = `${apiUrl.replace(/\/$/, '')}/v2/parse`;
-      log.info('Parsing local file', {
-        endpoint,
-        filename,
-        size: buffer.length,
-      });
+    const optionsPayload = buildParseOptionsPayload(
+      options as Record<string, unknown>
+    );
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: form,
-      });
+    const form = new FormData();
+    const blob = new Blob([new Uint8Array(buffer)], {
+      type: fileContentType,
+    });
+    form.append('file', blob, filename);
+    form.append('options', JSON.stringify(optionsPayload));
 
-      const responseText = await response.text();
-      if (!response.ok) {
-        throw new Error(
-          `Parse request failed with status ${response.status}: ${responseText}`
-        );
-      }
+    const headers: Record<string, string> = { ...ORIGIN_HEADERS };
+    const apiKey = session?.firecrawlApiKey;
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
 
-      try {
-        return asText(JSON.parse(responseText));
-      } catch {
-        return responseText;
-      }
-    },
-  });
-}
+    const endpoint = `${apiUrl.replace(/\/$/, '')}/v2/parse`;
+    log.info('Parsing local file', {
+      endpoint,
+      filename,
+      size: buffer.length,
+    });
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: form,
+    });
+
+    const responseText = await response.text();
+    if (!response.ok) {
+      throw new Error(
+        `Parse request failed with status ${response.status}: ${responseText}`
+      );
+    }
+
+    try {
+      return asText(JSON.parse(responseText));
+    } catch {
+      return responseText;
+    }
+  },
+});
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST =
