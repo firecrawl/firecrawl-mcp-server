@@ -344,14 +344,14 @@ Use this guide to select the right tool for your task:
 - **If you want to search the web for info:** use **search**
 - **If you need complex research across multiple unknown sources:** use **agent**
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
-- **If you need interactive browser automation** (click, type, navigate): use **scrape** + **interact**
+- **If you need interactive browser automation** (click, type, navigate): use **interact** with a URL for a fresh page, or **scrape** + **interact** when you already scraped the page or need tighter scrape control
 
 ### Quick Reference Table
 
 | Tool         | Best for                                       | Returns                        |
 | ------------ | ---------------------------------------------- | ------------------------------ |
 | scrape       | Single page content                            | JSON (preferred) or markdown   |
-| interact     | Interact with a scraped page                   | Execution result               |
+| interact     | Interact with a URL or scraped page            | Execution result + scrapeId for URL mode |
 | batch_scrape | Multiple known URLs                            | JSON (preferred) or markdown[] |
 | map          | Discovering URLs on a site                     | URL[]                          |
 | crawl        | Multi-page extraction (with limits)            | markdown/html[]                |
