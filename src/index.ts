@@ -390,8 +390,13 @@ function getClient(session?: SessionData): FirecrawlApp {
   return createClient(session?.firecrawlApiKey);
 }
 
-function asText(data: unknown): string {
-  return JSON.stringify(data, null, 2);
+const MAX_RESPONSE_CHARS = Number(process.env.MAX_RESPONSE_CHARS || 50000); 
+
+function asText(data:unknown): string {
+  const serialized = JSON.stringify(data, null, 2);
+  if (serialized.length <= MAX_RESPONSE_CHARS) return serialized; 
+const truncated = serialized.slice(0, MAX_RESPONSE_CHARS);
+ return `${truncated}\n\n[TRUNCATED: Response exceeded ${MAX_RESPONSE_CHARS} characters. Set MAX_RESPONSE_CHARS env var to adjust, or use more specific scrape parameters to reduce response size.]`;
 }
 
 // scrape tool (v2 semantics, minimal args)
