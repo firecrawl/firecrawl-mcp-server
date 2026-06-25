@@ -127,6 +127,12 @@ env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecra
 
 Use the url: http://localhost:3000/mcp
 
+By default the server runs in **stateless** mode (one transient session per request). Clients that rely on persistent MCP sessions — including those built on the official `modelcontextprotocol/go-sdk` — should opt into **stateful** mode by setting `FASTMCP_STATELESS=false`:
+
+```bash
+env HTTP_STREAMABLE_SERVER=true FASTMCP_STATELESS=false FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
+```
+
 ### Installing via Smithery (Legacy)
 
 To install Firecrawl for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@mendableai/mcp-server-firecrawl):
