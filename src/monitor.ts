@@ -228,7 +228,7 @@ Simple fields:
 - \`searchWindow\`: optional recency window for search targets — one of \`5m\`, \`15m\`, \`1h\`, \`6h\`, \`24h\`, \`7d\` (default \`24h\`).
 - \`maxResults\`: optional max results per search, 1-50 (default 10).
 - \`includeDomains\` / \`excludeDomains\`: optional domain allow/deny lists for search targets.
-- \`goal\`: plain-English instruction for what changes matter. Required for the simple path (and always required when \`queries\` are set — search monitors must have a goal).
+- \`goal\`: plain-English instruction for what changes matter. Required for the simple path (and always required when \`queries\` are set — web monitors must have a goal).
 - \`scheduleText\`: optional natural-language schedule, default \`every 30 minutes\`.
 - \`email\`: optional email recipient for summaries.
 - \`webhookUrl\`: optional webhook URL. Configures \`monitor.page\` and \`monitor.check.completed\`.
