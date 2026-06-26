@@ -1832,8 +1832,8 @@ server.addTool({
  Starts a crawl job on a website and extracts content from all pages.
  
  **Best for:** Extracting content from multiple related pages, when you need comprehensive coverage.
- **Not recommended for:** Extracting content from a single page (use scrape); when token limits are a concern (use map + batch_scrape); when you need fast results (crawling can be slow).
- **Warning:** Crawl responses can be very large and may exceed token limits. Limit the crawl depth and number of pages, or use map + batch_scrape for better control.
+ **Not recommended for:** Extracting content from a single page (use scrape); when token limits are a concern (use map + scrape for tighter control); when you need fast results (crawling can be slow).
+ **Warning:** Crawl responses can be very large and may exceed token limits. Limit the crawl depth and number of pages, or use map + scrape for tighter control.
  **Common mistakes:** Setting limit or maxDiscoveryDepth too high (causes token overflow) or too low (causes missing pages); using crawl for a single page (use scrape instead). Using a /* wildcard is not recommended.
  **Prompt Example:** "Get all blog posts from the first two levels of example.com/blog."
  **Usage Example:**
