@@ -213,37 +213,12 @@ Hosted Firecrawl can issue OAuth **access tokens** (`fco_…`) via the authoriza
 
 Use **access** tokens (`fco_…`) only. Refresh tokens (`fcr_…`) must be exchanged at the token endpoint, not passed to the scrape/search API.
 
-#### Optional Configuration
-
-##### Retry Configuration
-
-- `FIRECRAWL_RETRY_MAX_ATTEMPTS`: Maximum number of retry attempts (default: 3)
-- `FIRECRAWL_RETRY_INITIAL_DELAY`: Initial delay in milliseconds before first retry (default: 1000)
-- `FIRECRAWL_RETRY_MAX_DELAY`: Maximum delay in milliseconds between retries (default: 10000)
-- `FIRECRAWL_RETRY_BACKOFF_FACTOR`: Exponential backoff multiplier (default: 2)
-
-##### Credit Usage Monitoring
-
-- `FIRECRAWL_CREDIT_WARNING_THRESHOLD`: Credit usage warning threshold (default: 1000)
-- `FIRECRAWL_CREDIT_CRITICAL_THRESHOLD`: Credit usage critical threshold (default: 100)
-
 ### Configuration Examples
 
-For cloud API usage with custom retry and credit monitoring:
+For cloud API usage:
 
 ```bash
-# Required for cloud API
 export FIRECRAWL_API_KEY=your-api-key
-
-# Optional retry configuration
-export FIRECRAWL_RETRY_MAX_ATTEMPTS=5        # Increase max retry attempts
-export FIRECRAWL_RETRY_INITIAL_DELAY=2000    # Start with 2s delay
-export FIRECRAWL_RETRY_MAX_DELAY=30000       # Maximum 30s delay
-export FIRECRAWL_RETRY_BACKOFF_FACTOR=3      # More aggressive backoff
-
-# Optional credit monitoring
-export FIRECRAWL_CREDIT_WARNING_THRESHOLD=2000    # Warning at 2000 credits
-export FIRECRAWL_CREDIT_CRITICAL_THRESHOLD=500    # Critical at 500 credits
 ```
 
 For self-hosted instance:
@@ -254,10 +229,6 @@ export FIRECRAWL_API_URL=https://firecrawl.your-domain.com
 
 # Optional authentication for self-hosted
 export FIRECRAWL_API_KEY=your-api-key  # If your instance requires auth
-
-# Custom retry configuration
-export FIRECRAWL_RETRY_MAX_ATTEMPTS=10
-export FIRECRAWL_RETRY_INITIAL_DELAY=500     # Start with faster retries
 ```
 
 ### Usage with Claude Desktop
@@ -271,66 +242,12 @@ Add this to your `claude_desktop_config.json`:
       "command": "npx",
       "args": ["-y", "firecrawl-mcp"],
       "env": {
-        "FIRECRAWL_API_KEY": "YOUR_API_KEY_HERE",
-
-        "FIRECRAWL_RETRY_MAX_ATTEMPTS": "5",
-        "FIRECRAWL_RETRY_INITIAL_DELAY": "2000",
-        "FIRECRAWL_RETRY_MAX_DELAY": "30000",
-        "FIRECRAWL_RETRY_BACKOFF_FACTOR": "3",
-
-        "FIRECRAWL_CREDIT_WARNING_THRESHOLD": "2000",
-        "FIRECRAWL_CREDIT_CRITICAL_THRESHOLD": "500"
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY_HERE"
       }
     }
   }
 }
 ```
-
-### System Configuration
-
-The server includes several configurable parameters that can be set via environment variables. Here are the default values if not configured:
-
-```typescript
-const CONFIG = {
-  retry: {
-    maxAttempts: 3, // Number of retry attempts for rate-limited requests
-    initialDelay: 1000, // Initial delay before first retry (in milliseconds)
-    maxDelay: 10000, // Maximum delay between retries (in milliseconds)
-    backoffFactor: 2, // Multiplier for exponential backoff
-  },
-  credit: {
-    warningThreshold: 1000, // Warn when credit usage reaches this level
-    criticalThreshold: 100, // Critical alert when credit usage reaches this level
-  },
-};
-```
-
-These configurations control:
-
-1. **Retry Behavior**
-
-   - Automatically retries failed requests due to rate limits
-   - Uses exponential backoff to avoid overwhelming the API
-   - Example: With default settings, retries will be attempted at:
-     - 1st retry: 1 second delay
-     - 2nd retry: 2 seconds delay
-     - 3rd retry: 4 seconds delay (capped at maxDelay)
-
-2. **Credit Usage Monitoring**
-   - Tracks API credit consumption for cloud API usage
-   - Provides warnings at specified thresholds
-   - Helps prevent unexpected service interruption
-   - Example: With default settings:
-     - Warning at 1000 credits remaining
-     - Critical alert at 100 credits remaining
-
-### Rate Limiting
-
-The server uses Firecrawl's built-in rate limiting:
-
-- Automatic rate limit handling with exponential backoff
-- Smart request queuing and throttling
-- Automatic retries for transient errors
 
 ## How to Choose a Tool
 
@@ -1005,7 +922,6 @@ The server includes comprehensive logging:
 
 - Operation status and progress
 - Performance metrics
-- Credit usage monitoring
 - Rate limit tracking
 - Error conditions
 
@@ -1014,18 +930,15 @@ Example log messages:
 ```
 [INFO] Firecrawl MCP Server initialized successfully
 [INFO] Starting scrape for URL: https://example.com
-[WARNING] Credit usage has reached warning threshold
-[ERROR] Rate limit exceeded, retrying in 2s...
+[ERROR] Rate limit exceeded
 ```
 
 ## Error Handling
 
 The server provides robust error handling:
 
-- Automatic retries for transient errors
-- Rate limit handling with backoff
+- API rate-limit errors surfaced to the MCP client
 - Detailed error messages
-- Credit usage warnings
 - Network resilience
 
 Example error response:
@@ -1035,7 +948,7 @@ Example error response:
   "content": [
     {
       "type": "text",
-      "text": "Error: Rate limit exceeded. Retrying in 2 seconds..."
+      "text": "Error: Rate limit exceeded"
     }
   ],
   "isError": true
