@@ -213,37 +213,12 @@ Hosted Firecrawl can issue OAuth **access tokens** (`fco_…`) via the authoriza
 
 Use **access** tokens (`fco_…`) only. Refresh tokens (`fcr_…`) must be exchanged at the token endpoint, not passed to the scrape/search API.
 
-#### Optional Configuration
-
-##### Retry Configuration
-
-- `FIRECRAWL_RETRY_MAX_ATTEMPTS`: Maximum number of retry attempts (default: 3)
-- `FIRECRAWL_RETRY_INITIAL_DELAY`: Initial delay in milliseconds before first retry (default: 1000)
-- `FIRECRAWL_RETRY_MAX_DELAY`: Maximum delay in milliseconds between retries (default: 10000)
-- `FIRECRAWL_RETRY_BACKOFF_FACTOR`: Exponential backoff multiplier (default: 2)
-
-##### Credit Usage Monitoring
-
-- `FIRECRAWL_CREDIT_WARNING_THRESHOLD`: Credit usage warning threshold (default: 1000)
-- `FIRECRAWL_CREDIT_CRITICAL_THRESHOLD`: Credit usage critical threshold (default: 100)
-
 ### Configuration Examples
 
-For cloud API usage with custom retry and credit monitoring:
+For cloud API usage:
 
 ```bash
-# Required for cloud API
 export FIRECRAWL_API_KEY=your-api-key
-
-# Optional retry configuration
-export FIRECRAWL_RETRY_MAX_ATTEMPTS=5        # Increase max retry attempts
-export FIRECRAWL_RETRY_INITIAL_DELAY=2000    # Start with 2s delay
-export FIRECRAWL_RETRY_MAX_DELAY=30000       # Maximum 30s delay
-export FIRECRAWL_RETRY_BACKOFF_FACTOR=3      # More aggressive backoff
-
-# Optional credit monitoring
-export FIRECRAWL_CREDIT_WARNING_THRESHOLD=2000    # Warning at 2000 credits
-export FIRECRAWL_CREDIT_CRITICAL_THRESHOLD=500    # Critical at 500 credits
 ```
 
 For self-hosted instance:
@@ -254,10 +229,6 @@ export FIRECRAWL_API_URL=https://firecrawl.your-domain.com
 
 # Optional authentication for self-hosted
 export FIRECRAWL_API_KEY=your-api-key  # If your instance requires auth
-
-# Custom retry configuration
-export FIRECRAWL_RETRY_MAX_ATTEMPTS=10
-export FIRECRAWL_RETRY_INITIAL_DELAY=500     # Start with faster retries
 ```
 
 ### Usage with Claude Desktop
@@ -271,96 +242,43 @@ Add this to your `claude_desktop_config.json`:
       "command": "npx",
       "args": ["-y", "firecrawl-mcp"],
       "env": {
-        "FIRECRAWL_API_KEY": "YOUR_API_KEY_HERE",
-
-        "FIRECRAWL_RETRY_MAX_ATTEMPTS": "5",
-        "FIRECRAWL_RETRY_INITIAL_DELAY": "2000",
-        "FIRECRAWL_RETRY_MAX_DELAY": "30000",
-        "FIRECRAWL_RETRY_BACKOFF_FACTOR": "3",
-
-        "FIRECRAWL_CREDIT_WARNING_THRESHOLD": "2000",
-        "FIRECRAWL_CREDIT_CRITICAL_THRESHOLD": "500"
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY_HERE"
       }
     }
   }
 }
 ```
 
-### System Configuration
-
-The server includes several configurable parameters that can be set via environment variables. Here are the default values if not configured:
-
-```typescript
-const CONFIG = {
-  retry: {
-    maxAttempts: 3, // Number of retry attempts for rate-limited requests
-    initialDelay: 1000, // Initial delay before first retry (in milliseconds)
-    maxDelay: 10000, // Maximum delay between retries (in milliseconds)
-    backoffFactor: 2, // Multiplier for exponential backoff
-  },
-  credit: {
-    warningThreshold: 1000, // Warn when credit usage reaches this level
-    criticalThreshold: 100, // Critical alert when credit usage reaches this level
-  },
-};
-```
-
-These configurations control:
-
-1. **Retry Behavior**
-
-   - Automatically retries failed requests due to rate limits
-   - Uses exponential backoff to avoid overwhelming the API
-   - Example: With default settings, retries will be attempted at:
-     - 1st retry: 1 second delay
-     - 2nd retry: 2 seconds delay
-     - 3rd retry: 4 seconds delay (capped at maxDelay)
-
-2. **Credit Usage Monitoring**
-   - Tracks API credit consumption for cloud API usage
-   - Provides warnings at specified thresholds
-   - Helps prevent unexpected service interruption
-   - Example: With default settings:
-     - Warning at 1000 credits remaining
-     - Critical alert at 100 credits remaining
-
-### Rate Limiting and Batch Processing
-
-The server utilizes Firecrawl's built-in rate limiting and batch processing capabilities:
-
-- Automatic rate limit handling with exponential backoff
-- Efficient parallel processing for batch operations
-- Smart request queuing and throttling
-- Automatic retries for transient errors
-
 ## How to Choose a Tool
 
 Use this guide to select the right tool for your task:
 
-- **If you know the exact URL(s) you want:**
-  - For one: use **scrape** (with JSON format for structured data)
-  - For many: use **batch_scrape**
+- **If you know the exact URL you want:** use **scrape** (with JSON format for structured data)
+- **If you have multiple known URLs:** call **scrape** for each URL. If you specifically need one bulk API operation, use the Firecrawl API batch endpoint outside MCP.
 - **If you need to discover URLs on a site:** use **map**
 - **If you want to search the web for info:** use **search**
 - **If you need complex research across multiple unknown sources:** use **agent**
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
-- **If you need interactive browser automation** (click, type, navigate): use **scrape** + **interact**
+- **If you need interactive browser automation** (click, type, navigate): use **interact** with a URL for a fresh page, or **scrape** + **interact** when you already scraped the page or need tighter scrape control
 
 ### Quick Reference Table
 
 | Tool         | Best for                                       | Returns                        |
 | ------------ | ---------------------------------------------- | ------------------------------ |
 | scrape       | Single page content                            | JSON (preferred) or markdown   |
-| interact     | Interact with a scraped page                   | Execution result               |
-| batch_scrape | Multiple known URLs                            | JSON (preferred) or markdown[] |
+| interact     | Interact with a URL or scraped page            | Execution result + scrapeId for URL mode |
 | map          | Discovering URLs on a site                     | URL[]                          |
-| crawl        | Multi-page extraction (with limits)            | markdown/html[]                |
+| crawl        | Multi-page extraction (with limits)            | final crawl status/data after internal polling |
+| parse        | Files and hosted upload refs                   | markdown, JSON, or document output |
+| extract      | Structured extraction from URLs                | JSON structured data           |
 | search       | Web search for info                            | results[]                      |
 | agent        | Complex multi-source research                  | JSON (structured data)         |
+| monitor      | Recurring page checks                          | monitor/check metadata and diffs |
+| research     | Paper and GitHub repository research           | research results and repo matches |
 
 ### Format Selection Guide
 
-When using `scrape` or `batch_scrape`, choose the right format:
+When using `scrape`, choose the right format:
 
 - **JSON format (recommended for most cases):** Use when you need specific data from a page. Define a schema based on what you need to extract. This keeps responses small and avoids context window overflow.
 - **Markdown format (use sparingly):** Only when you genuinely need the full page content, such as reading an entire article for summarization or analyzing page structure.
@@ -377,12 +295,12 @@ Scrape content from a single URL with advanced options.
 
 **Not recommended for:**
 
-- Extracting content from multiple pages (use batch_scrape for known URLs, or map + batch_scrape to discover URLs first, or crawl for full page content)
+- Extracting content from multiple pages (use repeated scrape calls for known URLs, or map + scrape to discover URLs first, or crawl for full page content)
 - When you're unsure which page contains the information (use search)
 
 **Common mistakes:**
 
-- Using scrape for a list of URLs (use batch_scrape instead).
+- Passing a list of URLs to one scrape call. Call scrape once per URL in MCP. If you specifically need one bulk API operation, use the Firecrawl API batch endpoint outside MCP.
 - Using markdown format by default (use JSON format to extract only what you need).
 
 **Choosing the right format:**
@@ -452,72 +370,7 @@ Scrape content from a single URL with advanced options.
 
 - JSON structured data, markdown, branding profile, or other formats as specified.
 
-### 2. Batch Scrape Tool (`firecrawl_batch_scrape`)
-
-Scrape multiple URLs efficiently with built-in rate limiting and parallel processing.
-
-**Best for:**
-
-- Retrieving content from multiple pages, when you know exactly which pages to scrape.
-
-**Not recommended for:**
-
-- Discovering URLs (use map first if you don't know the URLs)
-- Scraping a single page (use scrape)
-
-**Common mistakes:**
-
-- Using batch_scrape with too many URLs at once (may hit rate limits or token overflow)
-
-**Prompt Example:**
-
-> "Get the content of these three blog posts: [url1, url2, url3]."
-
-**Usage Example:**
-
-```json
-{
-  "name": "firecrawl_batch_scrape",
-  "arguments": {
-    "urls": ["https://example1.com", "https://example2.com"],
-    "options": {
-      "formats": ["markdown"],
-      "onlyMainContent": true
-    }
-  }
-}
-```
-
-**Returns:**
-
-- Response includes operation ID for status checking:
-
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "Batch operation queued with ID: batch_1. Use firecrawl_check_batch_status to check progress."
-    }
-  ],
-  "isError": false
-}
-```
-
-### 3. Check Batch Status (`firecrawl_check_batch_status`)
-
-Check the status of a batch operation.
-
-```json
-{
-  "name": "firecrawl_check_batch_status",
-  "arguments": {
-    "id": "batch_1"
-  }
-}
-```
-
-### 4. Map Tool (`firecrawl_map`)
+### 2. Map Tool (`firecrawl_map`)
 
 Map a website to discover all indexed URLs on the site.
 
@@ -528,7 +381,7 @@ Map a website to discover all indexed URLs on the site.
 
 **Not recommended for:**
 
-- When you already know which specific URL you need (use scrape or batch_scrape)
+- When you already know which specific URL you need (use scrape)
 - When you need the content of the pages (use scrape after mapping)
 
 **Common mistakes:**
@@ -554,7 +407,7 @@ Map a website to discover all indexed URLs on the site.
 
 - Array of URLs found on the site
 
-### 5. Search Tool (`firecrawl_search`)
+### 3. Search Tool (`firecrawl_search`)
 
 Search the web and optionally extract content from search results.
 
@@ -599,7 +452,7 @@ Search the web and optionally extract content from search results.
 
 > "Find the latest research papers on AI published in 2023."
 
-### 5b. Search Feedback Tool (`firecrawl_search_feedback`)
+### 3b. Search Feedback Tool (`firecrawl_search_feedback`)
 
 Sends structured feedback on a previous `firecrawl_search` result. The first feedback per search id refunds 1 credit and improves Firecrawl's search quality. Idempotent per search id.
 
@@ -641,7 +494,7 @@ Sends structured feedback on a previous `firecrawl_search` result. The first fee
 
 - `{ success, feedbackId, creditsRefunded, alreadySubmitted? }` JSON.
 
-### 5c. Generic Feedback Tool (`firecrawl_feedback`)
+### 3c. Generic Feedback Tool (`firecrawl_feedback`)
 
 Sends structured feedback for a completed v2 endpoint job through `/v2/feedback`.
 Use this for endpoint-level feedback on `scrape`, `parse`, `map`, or `search`
@@ -678,9 +531,9 @@ and small metadata objects. Do not include raw scrape/parse outputs.
 
 - `{ success, feedbackId, creditsRefunded, creditsRefundedToday?, dailyRefundCap?, dailyCapReached?, alreadySubmitted?, warning? }` JSON.
 
-### 6. Crawl Tool (`firecrawl_crawl`)
+### 4. Crawl Tool (`firecrawl_crawl`)
 
-Starts an asynchronous crawl job on a website and extract content from all pages.
+Starts a crawl job, polls until it reaches a terminal state, and returns the final crawl status/data.
 
 **Best for:**
 
@@ -689,14 +542,14 @@ Starts an asynchronous crawl job on a website and extract content from all pages
 **Not recommended for:**
 
 - Extracting content from a single page (use scrape)
-- When token limits are a concern (use map + batch_scrape)
+- When token limits are a concern (use map + scrape for tighter control)
 - When you need fast results (crawling can be slow)
 
-**Warning:** Crawl responses can be very large and may exceed token limits. Limit the crawl depth and number of pages, or use map + batch_scrape for better control.
+**Warning:** Crawl responses can be very large and may exceed token limits. Limit the crawl depth and number of pages, or use map + scrape for tighter control.
 
 **Common mistakes:**
 
-- Setting limit or maxDepth too high (causes token overflow)
+- Setting limit or maxDiscoveryDepth too high (causes token overflow)
 - Using crawl for a single page (use scrape instead)
 
 **Prompt Example:**
@@ -710,7 +563,7 @@ Starts an asynchronous crawl job on a website and extract content from all pages
   "name": "firecrawl_crawl",
   "arguments": {
     "url": "https://example.com/blog/*",
-    "maxDepth": 2,
+    "maxDiscoveryDepth": 2,
     "limit": 100,
     "allowExternalLinks": false,
     "deduplicateSimilarURLs": true
@@ -718,25 +571,14 @@ Starts an asynchronous crawl job on a website and extract content from all pages
 }
 ```
 
+
 **Returns:**
 
-- Response includes operation ID for status checking:
+- Final crawl status and data after internal polling, including `id`, `status`, `completed`, `total`, `creditsUsed`, `expiresAt`, `next`, and `data`. Use the returned `id` with `firecrawl_check_crawl_status` if you need to re-check the job later.
 
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "Started crawl for: https://example.com/* with job ID: 550e8400-e29b-41d4-a716-446655440000. Use firecrawl_check_crawl_status to check progress."
-    }
-  ],
-  "isError": false
-}
-```
+### 5. Check Crawl Status (`firecrawl_check_crawl_status`)
 
-### 7. Check Crawl Status (`firecrawl_check_crawl_status`)
-
-Check the status of a crawl job.
+Check the status and results of an existing crawl job by ID.
 
 ```json
 {
@@ -751,7 +593,33 @@ Check the status of a crawl job.
 
 - Response includes the status of the crawl job:
 
-### 8. Extract Tool (`firecrawl_extract`)
+### 6. Parse Tool (`firecrawl_parse`)
+
+Parse local files or hosted upload references with Firecrawl's `/v2/parse` endpoint.
+
+**Best for:** PDFs, Word documents, spreadsheets, HTML files, and other documents that need markdown or structured JSON output. Hosted MCP supports a two-step upload-ref flow; local direct file reads require a self-hosted `FIRECRAWL_API_URL`.
+
+**Not recommended for:** Remote URLs (use scrape), multiple files in one call (call parse once per file), or browser-only actions such as screenshots and clicks.
+
+**Hosted MCP flow:** Hosted MCP cannot read the caller's filesystem directly. Call `firecrawl_parse` with `filePath` to receive a short-lived upload command and `nextToolCall`, upload the file locally, then call `firecrawl_parse` again with the returned `uploadRef`. Minting the hosted upload URL requires Firecrawl auth or keyless eligibility. In local `npx firecrawl-mcp` mode, direct file parsing currently requires `FIRECRAWL_API_URL` pointing to a self-hosted Firecrawl API; a plain cloud API-key-only local server cannot read and upload files through this tool.
+
+**Usage Example:**
+
+```json
+{
+  "name": "firecrawl_parse",
+  "arguments": {
+    "filePath": "/absolute/path/to/document.pdf",
+    "formats": ["markdown"],
+    "parsers": ["pdf"],
+    "zeroDataRetention": true
+  }
+}
+```
+
+**Returns:** Parsed document content or hosted upload instructions with a `nextToolCall`.
+
+### 7. Extract Tool (`firecrawl_extract`)
 
 Extract structured information from web pages using LLM capabilities. Supports both cloud AI and self-hosted LLM extraction.
 
@@ -824,7 +692,7 @@ When using a self-hosted instance, the extraction will use your configured LLM. 
 }
 ```
 
-### 9. Agent Tool (`firecrawl_agent`)
+### 8. Agent Tool (`firecrawl_agent`)
 
 Autonomous web research agent. This is a separate AI agent layer that independently browses the internet, searches for information, navigates through pages, and extracts structured data based on your query.
 
@@ -905,7 +773,7 @@ Then poll with `firecrawl_agent_status` using the returned job ID.
 
 - Job ID for status checking. Use `firecrawl_agent_status` to poll for results.
 
-### 10. Check Agent Status (`firecrawl_agent_status`)
+### 9. Check Agent Status (`firecrawl_agent_status`)
 
 Check the status of an agent job and retrieve results when complete. Use this to poll for results after starting an agent.
 
@@ -926,7 +794,60 @@ Check the status of an agent job and retrieve results when complete. Use this to
 - `completed`: Research finished - response includes the extracted data
 - `failed`: An error occurred
 
-### 11. Monitor Tools (`firecrawl_monitor_*`)
+### 10. Interact Tool (`firecrawl_interact`)
+
+Interact with a fresh URL or with a page that was already opened by `firecrawl_scrape`.
+
+**Best for:** Clicking, typing, navigating, and extracting state from dynamic pages without restoring the deprecated browser tools.
+
+**Usage options:**
+
+- Pass `url` to scrape and open a page for interaction in one MCP call.
+- Pass `scrapeId` to continue interacting with an existing scraped page.
+- Pass exactly one of `url` or `scrapeId`, plus either `prompt` or `code`.
+
+**Usage Example:**
+
+```json
+{
+  "name": "firecrawl_interact",
+  "arguments": {
+    "url": "https://example.com",
+    "prompt": "Click the pricing link and summarize the visible plans"
+  }
+}
+```
+
+**Returns:** Interaction result and, for URL mode, the derived `scrapeId` for follow-up or cleanup.
+
+### 11. Stop Interact Tool (`firecrawl_interact_stop`)
+
+Stop an interact session for a scraped page when you are done interacting.
+
+```json
+{
+  "name": "firecrawl_interact_stop",
+  "arguments": {
+    "scrapeId": "scrape-id-here"
+  }
+}
+```
+
+### 12. Research Tools (`firecrawl_research_*`)
+
+Search and inspect papers and GitHub repositories through the research MCP tools.
+
+**Available research tools:**
+
+- `firecrawl_research_search_papers`: search research papers.
+- `firecrawl_research_inspect_paper`: inspect one paper.
+- `firecrawl_research_related_papers`: find related papers.
+- `firecrawl_research_read_paper`: read paper content.
+- `firecrawl_research_search_github`: search GitHub repositories.
+
+**Best for:** Literature review, paper lookup, and repository discovery workflows where the agent needs a focused research surface instead of general web scraping.
+
+### 13. Monitor Tools (`firecrawl_monitor_*`)
 
 Create and manage recurring page monitors. Monitors run scheduled scrapes or crawls, diff each result against the last retained snapshot, and can notify by webhook or email.
 
@@ -991,6 +912,7 @@ Pass `body` when you need crawl targets, JSON change tracking, custom retention,
 - `firecrawl_monitor_get`: get one monitor.
 - `firecrawl_monitor_update`: update fields including `goal`, `judgeEnabled`, `webhook`, and `notification`.
 - `firecrawl_monitor_run`: trigger a check now.
+- `firecrawl_monitor_delete`: delete a monitor (destructive; only call when the user intends to remove it).
 - `firecrawl_monitor_checks`: list checks, optionally filtered by status.
 - `firecrawl_monitor_check`: get page-level results, including `diff`, `snapshot`, `judgment.meaningful`, and `judgment.meaningfulChanges`.
 
@@ -1000,7 +922,6 @@ The server includes comprehensive logging:
 
 - Operation status and progress
 - Performance metrics
-- Credit usage monitoring
 - Rate limit tracking
 - Error conditions
 
@@ -1009,19 +930,15 @@ Example log messages:
 ```
 [INFO] Firecrawl MCP Server initialized successfully
 [INFO] Starting scrape for URL: https://example.com
-[INFO] Batch operation queued with ID: batch_1
-[WARNING] Credit usage has reached warning threshold
-[ERROR] Rate limit exceeded, retrying in 2s...
+[ERROR] Rate limit exceeded
 ```
 
 ## Error Handling
 
 The server provides robust error handling:
 
-- Automatic retries for transient errors
-- Rate limit handling with backoff
+- API rate-limit errors surfaced to the MCP client
 - Detailed error messages
-- Credit usage warnings
 - Network resilience
 
 Example error response:
@@ -1031,7 +948,7 @@ Example error response:
   "content": [
     {
       "type": "text",
-      "text": "Error: Rate limit exceeded. Retrying in 2 seconds..."
+      "text": "Error: Rate limit exceeded"
     }
   ],
   "isError": true

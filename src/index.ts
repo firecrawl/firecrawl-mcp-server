@@ -1823,17 +1823,17 @@ Do not store multi-MB outputs in feedback. Use concise notes, issue codes, URLs,
 server.addTool({
   name: 'firecrawl_crawl',
   annotations: {
-    title: 'Start a site crawl',
-    readOnlyHint: false, // Starts an asynchronous crawl job, creating a persistent server-side job.
+    title: 'Run a site crawl',
+    readOnlyHint: false, // Starts a server-side crawl job and polls until the job reaches a terminal state.
     openWorldHint: true, // Crawls user-specified URLs across the public web.
     destructiveHint: false, // Reads pages from target sites; does not delete or alter external websites.
   },
   description: `
- Starts a crawl job on a website and extracts content from all pages.
+ Starts a crawl job on a website, polls until it reaches a terminal state, and returns the final crawl status/data.
  
  **Best for:** Extracting content from multiple related pages, when you need comprehensive coverage.
- **Not recommended for:** Extracting content from a single page (use scrape); when token limits are a concern (use map + batch_scrape); when you need fast results (crawling can be slow).
- **Warning:** Crawl responses can be very large and may exceed token limits. Limit the crawl depth and number of pages, or use map + batch_scrape for better control.
+ **Not recommended for:** Extracting content from a single page (use scrape); when token limits are a concern (use map + scrape for tighter control); when you need fast results (crawling can be slow).
+ **Warning:** Crawl responses can be very large and may exceed token limits. Limit the crawl depth and number of pages, or use map + scrape for tighter control.
  **Common mistakes:** Setting limit or maxDiscoveryDepth too high (causes token overflow) or too low (causes missing pages); using crawl for a single page (use scrape instead). Using a /* wildcard is not recommended.
  **Prompt Example:** "Get all blog posts from the first two levels of example.com/blog."
  **Usage Example:**
@@ -1850,7 +1850,7 @@ server.addTool({
    }
  }
  \`\`\`
- **Returns:** Operation ID for status checking; use firecrawl_check_crawl_status to check progress.
+ **Returns:** Final crawl status and data after internal polling, including the crawl id. Use firecrawl_check_crawl_status only when you need to re-check an existing crawl ID later.
  ${
    SAFE_MODE
      ? '**Safe Mode:** Read-only crawling. Webhooks and interactive actions are disabled for security.'
@@ -2192,24 +2192,28 @@ server.addTool({
     destructiveHint: false, // Transient page interactions only; does not delete monitors, jobs, or external sites.
   },
   description: `
-Interact with a previously scraped page in a live browser session. Scrape a page first with firecrawl_scrape, then use the returned scrapeId to click buttons, fill forms, extract dynamic content, or navigate deeper.
+Interact with a page in a live browser session: click buttons, fill forms, extract dynamic content, or navigate deeper.
 
 **Best for:** Multi-step workflows on a single page — searching a site, clicking through results, filling forms, extracting data that requires interaction.
-**Requires:** A scrapeId from a previous firecrawl_scrape call (found in the metadata of the scrape response).
+**Two ways to target a page:**
+- Pass a \`url\` to interact directly. The session is opened for you in one call (use this for a fresh page).
+- Pass a \`scrapeId\` from a previous firecrawl_scrape to reuse that already-loaded page (cheaper when you just scraped it).
 
 **Arguments:**
-- scrapeId: The scrape job ID from a previous scrape (required)
+- url: Page to interact with; opens a session for you (use this OR scrapeId)
+- scrapeId: Scrape job ID from a previous scrape, found in its metadata (use this OR url)
 - prompt: Natural language instruction describing the action to take (use this OR code)
 - code: Code to execute in the browser session (use this OR prompt)
 - language: "bash", "python", or "node" (optional, defaults to "node", only used with code)
-- timeout: Execution timeout in seconds, 1-300 (optional, defaults to 30)
+- timeout: Interact execution timeout in seconds, 1-300 (optional, defaults to 30)
+- scrapeOptions: Optional scrape controls used only with url mode, such as waitFor, maxAge, proxy, or zeroDataRetention
 
-**Usage Example (prompt):**
+**Usage Example (prompt, direct via url):**
 \`\`\`json
 {
   "name": "firecrawl_interact",
   "arguments": {
-    "scrapeId": "scrape-id-from-previous-scrape",
+    "url": "https://example.com/products",
     "prompt": "Click on the first product and tell me its price"
   }
 }
@@ -2230,31 +2234,86 @@ Interact with a previously scraped page in a live browser session. Scrape a page
 `,
   parameters: z
     .object({
-      scrapeId: z.string(),
-      prompt: z.string().optional(),
-      code: z.string().optional(),
+      scrapeId: z.string().trim().min(1).optional(),
+      url: z.string().trim().url().optional(),
+      prompt: z.string().trim().min(1).optional(),
+      code: z.string().trim().min(1).optional(),
       language: z.enum(['bash', 'python', 'node']).optional(),
       timeout: z.number().min(1).max(300).optional(),
+      scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+    })
+    .refine((data) => Boolean(data.scrapeId) !== Boolean(data.url), {
+      message:
+        "Provide either 'url' (interact directly) or 'scrapeId' (reuse a previous scrape), not both.",
+    })
+    .refine((data) => !data.scrapeOptions || Boolean(data.url), {
+      message: "scrapeOptions can only be used with 'url' mode.",
     })
     .refine((data) => data.code || data.prompt, {
       message: "Either 'code' or 'prompt' must be provided.",
     }),
   execute: async (args: unknown, { session, log }): Promise<string> => {
     const client = getClient(session);
-    const { scrapeId, prompt, code, language, timeout } = args as {
-      scrapeId: string;
+    const {
+      scrapeId: providedScrapeId,
+      url,
+      prompt,
+      code,
+      language,
+      timeout,
+      scrapeOptions,
+    } = args as {
+      scrapeId?: string;
+      url?: string;
       prompt?: string;
       code?: string;
       language?: 'bash' | 'python' | 'node';
       timeout?: number;
+      scrapeOptions?: Record<string, unknown>;
     };
-    log.info('Interacting with scraped page', { scrapeId });
+    // No scrapeId means the caller passed a url: scrape it first to open the
+    // session, then interact. One tool call instead of scrape + interact.
+    let scrapeId = providedScrapeId;
+    const openedFromUrl = !scrapeId;
+    if (openedFromUrl) {
+      log.info('Opening interact session from url', { url });
+      const cleanedScrapeOptions = removeEmptyTopLevel(scrapeOptions ?? {});
+      const scraped = await client.scrape(String(url), {
+        ...cleanedScrapeOptions,
+        origin: ORIGIN,
+      } as any);
+      scrapeId = (scraped as any)?.metadata?.scrapeId;
+      if (!scrapeId) {
+        return asText({
+          error:
+            'Could not open an interact session: the scrape did not return a scrapeId. Try firecrawl_scrape first, then pass its scrapeId.',
+          url,
+        });
+      }
+    }
+    if (!scrapeId) {
+      return asText({
+        error: 'Could not open an interact session: missing scrapeId.',
+        url,
+      });
+    }
+    const activeScrapeId = scrapeId;
+    log.info('Interacting with page', { scrapeId: activeScrapeId });
     const interactArgs: Record<string, unknown> = { origin: ORIGIN };
     if (prompt) interactArgs.prompt = prompt;
     if (code) interactArgs.code = code;
     if (language) interactArgs.language = language;
     if (timeout != null) interactArgs.timeout = timeout;
-    const res = await client.interact(scrapeId, interactArgs as any);
+    const res = await client.interact(activeScrapeId, interactArgs as any);
+    if (openedFromUrl && res && typeof res === 'object' && !Array.isArray(res)) {
+      return asText({
+        ...(res as unknown as Record<string, unknown>),
+        scrapeId: activeScrapeId,
+      });
+    }
+    if (openedFromUrl) {
+      return asText({ scrapeId: activeScrapeId, result: res });
+    }
     return asText(res);
   },
 });
