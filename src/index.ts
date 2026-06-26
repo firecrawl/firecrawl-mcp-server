@@ -1823,13 +1823,13 @@ Do not store multi-MB outputs in feedback. Use concise notes, issue codes, URLs,
 server.addTool({
   name: 'firecrawl_crawl',
   annotations: {
-    title: 'Start a site crawl',
-    readOnlyHint: false, // Starts an asynchronous crawl job, creating a persistent server-side job.
+    title: 'Run a site crawl',
+    readOnlyHint: false, // Starts a server-side crawl job and polls until the job reaches a terminal state.
     openWorldHint: true, // Crawls user-specified URLs across the public web.
     destructiveHint: false, // Reads pages from target sites; does not delete or alter external websites.
   },
   description: `
- Starts a crawl job on a website and extracts content from all pages.
+ Starts a crawl job on a website, polls until it reaches a terminal state, and returns the final crawl status/data.
  
  **Best for:** Extracting content from multiple related pages, when you need comprehensive coverage.
  **Not recommended for:** Extracting content from a single page (use scrape); when token limits are a concern (use map + scrape for tighter control); when you need fast results (crawling can be slow).
@@ -1850,7 +1850,7 @@ server.addTool({
    }
  }
  \`\`\`
- **Returns:** Operation ID for status checking; use firecrawl_check_crawl_status to check progress.
+ **Returns:** Final crawl status and data after internal polling, including the crawl id. Use firecrawl_check_crawl_status only when you need to re-check an existing crawl ID later.
  ${
    SAFE_MODE
      ? '**Safe Mode:** Read-only crawling. Webhooks and interactive actions are disabled for security.'

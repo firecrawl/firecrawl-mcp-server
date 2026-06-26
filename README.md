@@ -351,7 +351,7 @@ Use this guide to select the right tool for your task:
 | scrape       | Single page content                            | JSON (preferred) or markdown   |
 | interact     | Interact with a URL or scraped page            | Execution result + scrapeId for URL mode |
 | map          | Discovering URLs on a site                     | URL[]                          |
-| crawl        | Multi-page extraction (with limits)            | markdown/html[]                |
+| crawl        | Multi-page extraction (with limits)            | final crawl status/data after internal polling |
 | search       | Web search for info                            | results[]                      |
 | agent        | Complex multi-source research                  | JSON (structured data)         |
 
@@ -612,7 +612,7 @@ and small metadata objects. Do not include raw scrape/parse outputs.
 
 ### 4. Crawl Tool (`firecrawl_crawl`)
 
-Starts an asynchronous crawl job on a website and extract content from all pages.
+Starts a crawl job, polls until it reaches a terminal state, and returns the final crawl status/data.
 
 **Best for:**
 
@@ -628,7 +628,7 @@ Starts an asynchronous crawl job on a website and extract content from all pages
 
 **Common mistakes:**
 
-- Setting limit or maxDepth too high (causes token overflow)
+- Setting limit or maxDiscoveryDepth too high (causes token overflow)
 - Using crawl for a single page (use scrape instead)
 
 **Prompt Example:**
@@ -642,7 +642,7 @@ Starts an asynchronous crawl job on a website and extract content from all pages
   "name": "firecrawl_crawl",
   "arguments": {
     "url": "https://example.com/blog/*",
-    "maxDepth": 2,
+    "maxDiscoveryDepth": 2,
     "limit": 100,
     "allowExternalLinks": false,
     "deduplicateSimilarURLs": true
@@ -650,25 +650,14 @@ Starts an asynchronous crawl job on a website and extract content from all pages
 }
 ```
 
+
 **Returns:**
 
-- Response includes operation ID for status checking:
-
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "Started crawl for: https://example.com/* with job ID: 550e8400-e29b-41d4-a716-446655440000. Use firecrawl_check_crawl_status to check progress."
-    }
-  ],
-  "isError": false
-}
-```
+- Final crawl status and data after internal polling, including `id`, `status`, `completed`, `total`, `creditsUsed`, `expiresAt`, `next`, and `data`. Use the returned `id` with `firecrawl_check_crawl_status` if you need to re-check the job later.
 
 ### 5. Check Crawl Status (`firecrawl_check_crawl_status`)
 
-Check the status of a crawl job.
+Check the status and results of an existing crawl job by ID.
 
 ```json
 {
