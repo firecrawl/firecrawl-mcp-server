@@ -352,8 +352,12 @@ Use this guide to select the right tool for your task:
 | interact     | Interact with a URL or scraped page            | Execution result + scrapeId for URL mode |
 | map          | Discovering URLs on a site                     | URL[]                          |
 | crawl        | Multi-page extraction (with limits)            | final crawl status/data after internal polling |
+| parse        | Files and hosted upload refs                   | markdown, JSON, or document output |
+| extract      | Structured extraction from URLs                | JSON structured data           |
 | search       | Web search for info                            | results[]                      |
 | agent        | Complex multi-source research                  | JSON (structured data)         |
+| monitor      | Recurring page checks                          | monitor/check metadata and diffs |
+| research     | Paper and GitHub repository research           | research results and repo matches |
 
 ### Format Selection Guide
 
@@ -672,7 +676,33 @@ Check the status and results of an existing crawl job by ID.
 
 - Response includes the status of the crawl job:
 
-### 6. Extract Tool (`firecrawl_extract`)
+### 6. Parse Tool (`firecrawl_parse`)
+
+Parse local files or hosted upload references with Firecrawl's `/v2/parse` endpoint.
+
+**Best for:** PDFs, Word documents, spreadsheets, HTML files, and other documents that need markdown or structured JSON output. Hosted MCP supports a two-step upload-ref flow; local direct file reads require a self-hosted `FIRECRAWL_API_URL`.
+
+**Not recommended for:** Remote URLs (use scrape), multiple files in one call (call parse once per file), or browser-only actions such as screenshots and clicks.
+
+**Hosted MCP flow:** Hosted MCP cannot read the caller's filesystem directly. Call `firecrawl_parse` with `filePath` to receive a short-lived upload command and `nextToolCall`, upload the file locally, then call `firecrawl_parse` again with the returned `uploadRef`. Minting the hosted upload URL requires Firecrawl auth or keyless eligibility. In local `npx firecrawl-mcp` mode, direct file parsing currently requires `FIRECRAWL_API_URL` pointing to a self-hosted Firecrawl API; a plain cloud API-key-only local server cannot read and upload files through this tool.
+
+**Usage Example:**
+
+```json
+{
+  "name": "firecrawl_parse",
+  "arguments": {
+    "filePath": "/absolute/path/to/document.pdf",
+    "formats": ["markdown"],
+    "parsers": ["pdf"],
+    "zeroDataRetention": true
+  }
+}
+```
+
+**Returns:** Parsed document content or hosted upload instructions with a `nextToolCall`.
+
+### 7. Extract Tool (`firecrawl_extract`)
 
 Extract structured information from web pages using LLM capabilities. Supports both cloud AI and self-hosted LLM extraction.
 
@@ -745,7 +775,7 @@ When using a self-hosted instance, the extraction will use your configured LLM. 
 }
 ```
 
-### 7. Agent Tool (`firecrawl_agent`)
+### 8. Agent Tool (`firecrawl_agent`)
 
 Autonomous web research agent. This is a separate AI agent layer that independently browses the internet, searches for information, navigates through pages, and extracts structured data based on your query.
 
@@ -826,7 +856,7 @@ Then poll with `firecrawl_agent_status` using the returned job ID.
 
 - Job ID for status checking. Use `firecrawl_agent_status` to poll for results.
 
-### 8. Check Agent Status (`firecrawl_agent_status`)
+### 9. Check Agent Status (`firecrawl_agent_status`)
 
 Check the status of an agent job and retrieve results when complete. Use this to poll for results after starting an agent.
 
@@ -847,7 +877,60 @@ Check the status of an agent job and retrieve results when complete. Use this to
 - `completed`: Research finished - response includes the extracted data
 - `failed`: An error occurred
 
-### 9. Monitor Tools (`firecrawl_monitor_*`)
+### 10. Interact Tool (`firecrawl_interact`)
+
+Interact with a fresh URL or with a page that was already opened by `firecrawl_scrape`.
+
+**Best for:** Clicking, typing, navigating, and extracting state from dynamic pages without restoring the deprecated browser tools.
+
+**Usage options:**
+
+- Pass `url` to scrape and open a page for interaction in one MCP call.
+- Pass `scrapeId` to continue interacting with an existing scraped page.
+- Pass exactly one of `url` or `scrapeId`, plus either `prompt` or `code`.
+
+**Usage Example:**
+
+```json
+{
+  "name": "firecrawl_interact",
+  "arguments": {
+    "url": "https://example.com",
+    "prompt": "Click the pricing link and summarize the visible plans"
+  }
+}
+```
+
+**Returns:** Interaction result and, for URL mode, the derived `scrapeId` for follow-up or cleanup.
+
+### 11. Stop Interact Tool (`firecrawl_interact_stop`)
+
+Stop an interact session for a scraped page when you are done interacting.
+
+```json
+{
+  "name": "firecrawl_interact_stop",
+  "arguments": {
+    "scrapeId": "scrape-id-here"
+  }
+}
+```
+
+### 12. Research Tools (`firecrawl_research_*`)
+
+Search and inspect papers and GitHub repositories through the research MCP tools.
+
+**Available research tools:**
+
+- `firecrawl_research_search_papers`: search research papers.
+- `firecrawl_research_inspect_paper`: inspect one paper.
+- `firecrawl_research_related_papers`: find related papers.
+- `firecrawl_research_read_paper`: read paper content.
+- `firecrawl_research_search_github`: search GitHub repositories.
+
+**Best for:** Literature review, paper lookup, and repository discovery workflows where the agent needs a focused research surface instead of general web scraping.
+
+### 13. Monitor Tools (`firecrawl_monitor_*`)
 
 Create and manage recurring page monitors. Monitors run scheduled scrapes or crawls, diff each result against the last retained snapshot, and can notify by webhook or email.
 
@@ -912,6 +995,7 @@ Pass `body` when you need crawl targets, JSON change tracking, custom retention,
 - `firecrawl_monitor_get`: get one monitor.
 - `firecrawl_monitor_update`: update fields including `goal`, `judgeEnabled`, `webhook`, and `notification`.
 - `firecrawl_monitor_run`: trigger a check now.
+- `firecrawl_monitor_delete`: delete a monitor (destructive; only call when the user intends to remove it).
 - `firecrawl_monitor_checks`: list checks, optionally filtered by status.
 - `firecrawl_monitor_check`: get page-level results, including `diff`, `snapshot`, `judgment.meaningful`, and `judgment.meaningfulChanges`.
 
