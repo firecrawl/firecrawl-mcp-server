@@ -255,6 +255,13 @@ Goal guidance:
 - If the user says they do not care about something, include that explicitly. It is okay to ask whether they want to ignore specific noise when it is likely to matter.
 - Do not invent page-specific sections, thresholds, entities, or business rules unless the user mentioned them.
 
+Query guidance (web monitors): \`queries\` control recall (what search retrieves) and \`goal\` controls precision (which results alert) — tune both.
+- Write keywords, not sentences: \`OpenAI new model release\`, not \`tell me when OpenAI releases a new model\`.
+- Quote multi-word entities (\`"Llama 4"\`); group synonyms with \`OR\` (\`launch OR release OR announcement\`).
+- Keep each query tight (~2-6 terms). One broad query usually beats several narrow ones — extra queries split the \`maxResults\` budget. Use one query per distinct entity; do not emit one per facet of a single subject.
+- Keep \`site:\` operators out of queries — use \`includeDomains\` / \`excludeDomains\`.
+- A healthy web monitor mostly returns \`new: 0\` and alerts only on genuinely new, on-goal results. Many \`ignored\` results ⇒ queries too broad (tighten them); nothing for long stretches ⇒ queries too narrow or window too tight (broaden); dismissed alerts ⇒ goal too broad (add an intent-specific Ignore). Aim for high precision with enough recall.
+
 Full \`body\` requests require: \`name\`, \`schedule\` (with \`cron\` or \`text\`), and \`targets\` (one or more \`{ type: 'scrape', urls: [...] }\`, \`{ type: 'crawl', url: '...' }\`, or \`{ type: 'search', queries: [...], searchWindow?, maxResults?, includeDomains?, excludeDomains? }\`). Optional: \`goal\` (required when any search target is present), \`judgeEnabled\`, \`webhook\`, \`notification\`, \`retentionDays\`.
 
 **Markdown-mode (default):** Each check produces a unified text diff of the page's markdown. No extra configuration needed.
