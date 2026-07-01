@@ -9,7 +9,6 @@
 </div>
 
 # Firecrawl MCP Server
-[![mcp-customs](https://img.shields.io/badge/mcp--customs-CLEARED_97%2F100-brightgreen)](https://github.com/mcpcustoms/mcp-customs)
 
 A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com/firecrawl/firecrawl) to MCP-compatible AI agents — search, scrape, and interact with the live web for clean, agent-ready context.
 
