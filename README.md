@@ -1,3 +1,5 @@
+[![mcp-customs](https://img.shields.io/badge/mcp--customs-CLEARED_97%2F100-brightgreen)](https://mcpcustoms.github.io/?server=firecrawl-mcp-server)
+
 <div align="center">
   <a name="readme-top"></a>
   <img
@@ -5,8 +7,6 @@
     height="140"
   >
 </div>
-
-[![mcp-customs](https://img.shields.io/badge/mcp--customs-CLEARED_97%2F100-brightgreen)](https://mcpcustoms.github.io/?server=firecrawl-mcp-server)
 
 # Firecrawl MCP Server
 [![mcp-customs](https://img.shields.io/badge/mcp--customs-CLEARED_97%2F100-brightgreen)](https://github.com/mcpcustoms/mcp-customs)
