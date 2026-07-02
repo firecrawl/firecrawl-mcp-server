@@ -1179,6 +1179,7 @@ The query also supports search operators, that you can use if needed to refine t
 **Common mistakes:** Using crawl or map for open-ended questions (use search instead).
 **Prompt Example:** "Find the latest research papers on AI published in 2023."
 **Sources:** web, images, news, default to web unless needed images or news.
+**Categories:** Optional filter to limit result types: \`github\` (GitHub repositories, code, issues, and docs), \`research\` (academic and research sources), \`pdf\` (PDF results). Example: \`categories: ["github", "research"]\`.
 **Domain filters:** Use includeDomains to restrict results to specific domains, or excludeDomains to remove domains. Do not use both in the same request. Domains must be hostnames only, without protocol or path.
 **Scrape Options:** Only use scrapeOptions when you think it is absolutely necessary. When you do so default to a lower limit to avoid timeouts, 5 or lower.
 **Optimal Workflow:** Search first using firecrawl_search without formats, then after fetching the results, use the scrape tool to get the content of the relevantpage(s) that you want to scrape
@@ -1205,6 +1206,7 @@ The query also supports search operators, that you can use if needed to refine t
   "arguments": {
     "query": "latest AI research papers 2023",
     "limit": 5,
+    "categories": ["github", "research"],
     "lang": "en",
     "country": "us",
     "sources": [
@@ -1233,6 +1235,12 @@ The query also supports search operators, that you can use if needed to refine t
       sources: z
         .array(z.object({ type: z.enum(['web', 'images', 'news']) }))
         .optional(),
+      categories: z
+        .array(z.enum(['github', 'research', 'pdf']))
+        .optional()
+        .describe(
+          'Limit results to specific source types. `github` searches GitHub repositories, code, issues, and docs; `research` searches academic and research sources; `pdf` searches PDF results.'
+        ),
       scrapeOptions: scrapeParamsSchema
         .omit({ url: true })
         .partial()
