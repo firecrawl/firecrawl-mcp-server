@@ -1,8 +1,8 @@
 /**
  * Firecrawl Research tools (experimental).
  *
- * Thin MCP wrappers over the `/v2/search/research/*` endpoints (arXiv papers + GitHub
- * history/readmes).
+ * Thin MCP wrappers over the `/v2/search/research/*` endpoints (research papers +
+ * GitHub history/readmes).
  *
  * The installed `@mendable/firecrawl-js` predates the SDK's `research` client,
  * so we call the endpoints directly through the SDK's HTTP layer (auth +
@@ -236,20 +236,34 @@ export function registerResearchTools(
   server.addTool({
     name: 'firecrawl_research_search_papers',
     annotations: {
-      title: 'Search arXiv papers',
-      readOnlyHint: true, // Semantic search over indexed arXiv metadata; returns ranked results only.
-      openWorldHint: true, // Searches the public arXiv research corpus.
-      destructiveHint: false, // Query-only; no writes to arXiv or the research index.
+      title: 'Search research papers',
+      readOnlyHint: true, // Semantic search over indexed paper metadata; returns ranked results only.
+      openWorldHint: true, // Searches the Firecrawl research paper index.
+      destructiveHint: false, // Query-only; no writes to external sources or the research index.
     },
     description:
-      'Primary entry point for finding arXiv papers by topic. Semantic (HyDE) search over arXiv ' +
-      'abstracts; returns ranked papers with arXiv id, title, and abstract. The query should be a ' +
-      'natural-language description of what you want. Run SEVERAL distinct framings of the question ' +
-      '(sibling domains, rival methods, dataset/benchmark names) rather than one query — recall ' +
-      'improves markedly with diverse framings. Returns up to `k` results (default 40).',
+      'Primary entry point for finding research papers by topic across AI/ML, computer science, ' +
+      'math, physics, biomedical, life sciences, and clinical literature. Semantic (HyDE) search ' +
+      'over indexed paper metadata and abstracts; returns ranked papers with paper id, title, ' +
+      'authors, and abstract. The query should be a natural-language research topic or question. ' +
+      'Run SEVERAL distinct framings of the question (sibling domains, rival methods, dataset or ' +
+      'benchmark names, conditions, populations, interventions, or outcomes) rather than one query ' +
+      '— recall improves markedly with diverse framings.',
     parameters: z.object({
-      query: z.string().min(1),
-      k: z.number().int().min(1).max(500).optional(),
+      query: z
+        .string()
+        .min(1)
+        .describe(
+          'Natural-language research topic or question, including methods, systems, conditions, ' +
+            'populations, interventions, or outcomes when relevant.'
+        ),
+      k: z
+        .number()
+        .int()
+        .min(1)
+        .max(500)
+        .optional()
+        .describe('Number of ranked papers to return (default 40).'),
       authors: z
         .array(z.string())
         .optional()
@@ -259,7 +273,9 @@ export function registerResearchTools(
       categories: z
         .array(z.string())
         .optional()
-        .describe('arXiv category filter(s) (e.g. `cs.LG`); ALL must match.'),
+        .describe(
+          'Paper category filter(s) (e.g. `cs.LG`); ALL provided values must match.'
+        ),
       from: z
         .string()
         .optional()
