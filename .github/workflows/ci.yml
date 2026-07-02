@@ -29,3 +29,6 @@ jobs:
 
       - name: Build
         run: pnpm run build
+
+      - name: Verify server.json version metadata
+        run: pnpm run check:server-json

@@ -21,6 +21,8 @@
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "format": "prettier --write .",
+    "sync:server-json": "node scripts/sync-server-json.mjs",
+    "check:server-json": "node scripts/check-server-json-version.mjs",
     "prepare": "npm run build",
     "publish-prod": "npm run build && npm publish",
     "publish-beta": "npm run build && npm publish --tag beta"
