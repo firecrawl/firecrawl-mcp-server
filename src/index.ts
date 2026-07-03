@@ -979,24 +979,31 @@ If JSON extraction returns empty, minimal, or just navigation content, the page 
 **Usage Example (JSON format - REQUIRED for specific data extraction):**
 \`\`\`json
 {
-  "name": "firecrawl_scrape",
-  "arguments": {
-    "url": "https://example.com/api-docs",
-    "formats": ["json"],
-    "jsonOptions": {
-      "prompt": "Extract the header parameters for the authentication endpoint",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "parameters": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "name": { "type": "string" },
-                "type": { "type": "string" },
-                "required": { "type": "boolean" },
-                "description": { "type": "string" }
+  "url": "https://example.com/api-docs",
+  "formats": [
+    "json"
+  ],
+  "jsonOptions": {
+    "prompt": "Extract the header parameters for the authentication endpoint",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "parameters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "description": {
+                "type": "string"
               }
             }
           }
@@ -1021,22 +1028,20 @@ If JSON extraction returns empty, minimal, or just navigation content, the page 
 **Usage Example (markdown format - default for most tasks):**
 \`\`\`json
 {
-  "name": "firecrawl_scrape",
-  "arguments": {
-    "url": "https://example.com/article",
-    "formats": ["markdown"],
-    "onlyMainContent": true
-  }
+  "url": "https://example.com/article",
+  "formats": [
+    "markdown"
+  ],
+  "onlyMainContent": true
 }
 \`\`\`
 **Usage Example (branding format - extract brand identity):**
 \`\`\`json
 {
-  "name": "firecrawl_scrape",
-  "arguments": {
-    "url": "https://example.com",
-    "formats": ["branding"]
-  }
+  "url": "https://example.com",
+  "formats": [
+    "branding"
+  ]
 }
 \`\`\`
 **Branding format:** Extracts comprehensive brand identity (colors, fonts, typography, spacing, logo, UI components) for design analysis or style replication.
@@ -1107,20 +1112,14 @@ Map a website to discover all indexed URLs on the site.
 **Usage Example (discover all URLs):**
 \`\`\`json
 {
-  "name": "firecrawl_map",
-  "arguments": {
-    "url": "https://example.com"
-  }
+  "url": "https://example.com"
 }
 \`\`\`
 **Usage Example (search for specific content - RECOMMENDED when scrape fails):**
 \`\`\`json
 {
-  "name": "firecrawl_map",
-  "arguments": {
-    "url": "https://docs.example.com/api",
-    "search": "webhook events"
-  }
+  "url": "https://docs.example.com/api",
+  "search": "webhook events"
 }
 \`\`\`
 **Returns:** Array of URLs found on the site, filtered by search query if provided.
@@ -1188,36 +1187,45 @@ The query also supports search operators, that you can use if needed to refine t
 **Usage Example without formats (Preferred):**
 \`\`\`json
 {
-  "name": "firecrawl_search",
-  "arguments": {
-    "query": "top AI companies",
-    "limit": 5,
-    "includeDomains": ["example.com"],
-    "sources": [
-      { "type": "web" }
-    ]
-  }
+  "query": "top AI companies",
+  "limit": 5,
+  "includeDomains": [
+    "example.com"
+  ],
+  "sources": [
+    {
+      "type": "web"
+    }
+  ]
 }
 \`\`\`
 **Usage Example with formats:**
 \`\`\`json
 {
-  "name": "firecrawl_search",
-  "arguments": {
-    "query": "latest AI research papers 2023",
-    "limit": 5,
-    "categories": ["github", "research"],
-    "lang": "en",
-    "country": "us",
-    "sources": [
-      { "type": "web" },
-      { "type": "images" },
-      { "type": "news" }
-    ],
-    "scrapeOptions": {
-      "formats": ["markdown"],
-      "onlyMainContent": true
+  "query": "latest AI research papers 2023",
+  "limit": 5,
+  "categories": [
+    "github",
+    "research"
+  ],
+  "lang": "en",
+  "country": "us",
+  "sources": [
+    {
+      "type": "web"
+    },
+    {
+      "type": "images"
+    },
+    {
+      "type": "news"
     }
+  ],
+  "scrapeOptions": {
+    "formats": [
+      "markdown"
+    ],
+    "onlyMainContent": true
   }
 }
 \`\`\`
@@ -1545,34 +1553,42 @@ Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the 
 **Usage Example (good rating with valuable sources + missing content):**
 \`\`\`json
 {
-  "name": "firecrawl_search_feedback",
-  "arguments": {
-    "searchId": "0193f6c5-1234-7890-abcd-1234567890ab",
-    "rating": "good",
-    "valuableSources": [
-      { "url": "https://docs.firecrawl.dev/features/search", "reason": "Most up-to-date description of /search." }
-    ],
-    "missingContent": [
-      { "topic": "Pricing for the search endpoint", "description": "No pricing tier table for /search specifically." },
-      { "topic": "Rate limits", "description": "Per-team RPS for /search not documented." }
-    ],
-    "querySuggestions": "Boost docs.firecrawl.dev for queries that mention 'firecrawl'"
-  }
+  "searchId": "0193f6c5-1234-7890-abcd-1234567890ab",
+  "rating": "good",
+  "valuableSources": [
+    {
+      "url": "https://docs.firecrawl.dev/features/search",
+      "reason": "Most up-to-date description of /search."
+    }
+  ],
+  "missingContent": [
+    {
+      "topic": "Pricing for the search endpoint",
+      "description": "No pricing tier table for /search specifically."
+    },
+    {
+      "topic": "Rate limits",
+      "description": "Per-team RPS for /search not documented."
+    }
+  ],
+  "querySuggestions": "Boost docs.firecrawl.dev for queries that mention 'firecrawl'"
 }
 \`\`\`
 
 **Usage Example (bad rating, what was missing):**
 \`\`\`json
 {
-  "name": "firecrawl_search_feedback",
-  "arguments": {
-    "searchId": "0193f6c5-1234-7890-abcd-1234567890ab",
-    "rating": "bad",
-    "missingContent": [
-      { "topic": "Recent benchmarks", "description": "All results were >12 months old." },
-      { "topic": "Comparison vs Algolia" }
-    ]
-  }
+  "searchId": "0193f6c5-1234-7890-abcd-1234567890ab",
+  "rating": "bad",
+  "missingContent": [
+    {
+      "topic": "Recent benchmarks",
+      "description": "All results were >12 months old."
+    },
+    {
+      "topic": "Comparison vs Algolia"
+    }
+  ]
 }
 \`\`\`
 
@@ -1847,15 +1863,12 @@ server.addTool({
  **Usage Example:**
  \`\`\`json
  {
-   "name": "firecrawl_crawl",
-   "arguments": {
-     "url": "https://example.com/blog/*",
-     "maxDiscoveryDepth": 5,
-     "limit": 20,
-     "allowExternalLinks": false,
-     "deduplicateSimilarURLs": true,
-     "sitemap": "include"
-   }
+   "url": "https://example.com/blog/*",
+   "maxDiscoveryDepth": 5,
+   "limit": 20,
+   "allowExternalLinks": false,
+   "deduplicateSimilarURLs": true,
+   "sitemap": "include"
  }
  \`\`\`
  **Returns:** Final crawl status and data after internal polling, including the crawl id. Use firecrawl_check_crawl_status only when you need to re-check an existing crawl ID later.
@@ -1949,10 +1962,7 @@ Check the status of a crawl job.
 **Usage Example:**
 \`\`\`json
 {
-  "name": "firecrawl_check_crawl_status",
-  "arguments": {
-    "id": "550e8400-e29b-41d4-a716-446655440000"
-  }
+  "id": "550e8400-e29b-41d4-a716-446655440000"
 }
 \`\`\`
 **Returns:** Status and progress of the crawl job, including results if available.
@@ -1993,23 +2003,32 @@ Extract structured information from web pages using LLM capabilities. Supports b
 **Usage Example:**
 \`\`\`json
 {
-  "name": "firecrawl_extract",
-  "arguments": {
-    "urls": ["https://example.com/page1", "https://example.com/page2"],
-    "prompt": "Extract product information including name, price, and description",
-    "schema": {
-      "type": "object",
-      "properties": {
-        "name": { "type": "string" },
-        "price": { "type": "number" },
-        "description": { "type": "string" }
+  "urls": [
+    "https://example.com/page1",
+    "https://example.com/page2"
+  ],
+  "prompt": "Extract product information including name, price, and description",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
       },
-      "required": ["name", "price"]
+      "price": {
+        "type": "number"
+      },
+      "description": {
+        "type": "string"
+      }
     },
-    "allowExternalLinks": false,
-    "enableWebSearch": false,
-    "includeSubdomains": false
-  }
+    "required": [
+      "name",
+      "price"
+    ]
+  },
+  "allowExternalLinks": false,
+  "enableWebSearch": false,
+  "includeSubdomains": false
 }
 \`\`\`
 **Returns:** Extracted structured data as defined by your schema.
@@ -2083,20 +2102,23 @@ Autonomous web research agent. This is a separate AI agent layer that independen
 **Usage Example (start agent, then poll patiently for results):**
 \`\`\`json
 {
-  "name": "firecrawl_agent",
-  "arguments": {
-    "prompt": "Find the top 5 AI startups founded in 2024 and their funding amounts",
-    "schema": {
-      "type": "object",
-      "properties": {
-        "startups": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": { "type": "string" },
-              "funding": { "type": "string" },
-              "founded": { "type": "string" }
+  "prompt": "Find the top 5 AI startups founded in 2024 and their funding amounts",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "startups": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "funding": {
+              "type": "string"
+            },
+            "founded": {
+              "type": "string"
             }
           }
         }
@@ -2110,11 +2132,11 @@ Then poll with \`firecrawl_agent_status\` every 15-30 seconds for at least 2-3 m
 **Usage Example (with URLs - agent focuses on specific pages):**
 \`\`\`json
 {
-  "name": "firecrawl_agent",
-  "arguments": {
-    "urls": ["https://docs.firecrawl.dev", "https://firecrawl.dev/pricing"],
-    "prompt": "Compare the features and pricing information from these pages"
-  }
+  "urls": [
+    "https://docs.firecrawl.dev",
+    "https://firecrawl.dev/pricing"
+  ],
+  "prompt": "Compare the features and pricing information from these pages"
 }
 \`\`\`
 **Returns:** Job ID for status checking. Use \`firecrawl_agent_status\` to poll for results.
@@ -2164,10 +2186,7 @@ Check the status of an agent job and retrieve results when complete. Use this to
 **Usage Example:**
 \`\`\`json
 {
-  "name": "firecrawl_agent_status",
-  "arguments": {
-    "id": "550e8400-e29b-41d4-a716-446655440000"
-  }
+  "id": "550e8400-e29b-41d4-a716-446655440000"
 }
 \`\`\`
 **Possible statuses:**
@@ -2219,23 +2238,17 @@ Interact with a page in a live browser session: click buttons, fill forms, extra
 **Usage Example (prompt, direct via url):**
 \`\`\`json
 {
-  "name": "firecrawl_interact",
-  "arguments": {
-    "url": "https://example.com/products",
-    "prompt": "Click on the first product and tell me its price"
-  }
+  "url": "https://example.com/products",
+  "prompt": "Click on the first product and tell me its price"
 }
 \`\`\`
 
 **Usage Example (code):**
 \`\`\`json
 {
-  "name": "firecrawl_interact",
-  "arguments": {
-    "scrapeId": "scrape-id-from-previous-scrape",
-    "code": "agent-browser click @e5",
-    "language": "bash"
-  }
+  "scrapeId": "scrape-id-from-previous-scrape",
+  "code": "agent-browser click @e5",
+  "language": "bash"
 }
 \`\`\`
 **Returns:** Execution result including output, stdout, stderr, exit code, and live view URLs.
@@ -2340,10 +2353,7 @@ Stop an interact session for a scraped page. Call this when you are done interac
 **Usage Example:**
 \`\`\`json
 {
-  "name": "firecrawl_interact_stop",
-  "arguments": {
-    "scrapeId": "scrape-id-here"
-  }
+  "scrapeId": "scrape-id-here"
 }
 \`\`\`
 **Returns:** Success confirmation.
@@ -2399,27 +2409,29 @@ Add \`"parsers": ["pdf"]\` (optionally with \`pdfOptions.maxPages\`) when parsin
 **Hosted phase 1 example:**
 \`\`\`json
 {
-  "name": "firecrawl_parse",
-  "arguments": {
-    "filePath": "/absolute/path/to/document.pdf",
-    "contentType": "application/pdf",
-    "formats": ["markdown"],
-    "parsers": ["pdf"],
-    "zeroDataRetention": true
-  }
+  "filePath": "/absolute/path/to/document.pdf",
+  "contentType": "application/pdf",
+  "formats": [
+    "markdown"
+  ],
+  "parsers": [
+    "pdf"
+  ],
+  "zeroDataRetention": true
 }
 \`\`\`
 
 **Hosted phase 2 example:**
 \`\`\`json
 {
-  "name": "firecrawl_parse",
-  "arguments": {
-    "uploadRef": "upload-ref-from-phase-1",
-    "formats": ["markdown"],
-    "parsers": ["pdf"],
-    "zeroDataRetention": true
-  }
+  "uploadRef": "upload-ref-from-phase-1",
+  "formats": [
+    "markdown"
+  ],
+  "parsers": [
+    "pdf"
+  ],
+  "zeroDataRetention": true
 }
 \`\`\`
 
