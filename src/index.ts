@@ -33,12 +33,26 @@ interface SessionData {
   authType?: 'api-key' | 'oauth' | 'env' | 'keyless' | 'none';
   userAgent?: string;
   requestId?: string;
+  teamId?: string;
+  userId?: string;
+  apiKeyId?: number;
+  oauthClientId?: string;
+  resource?: string;
   [key: string]: unknown;
 }
+
+type CredentialMetadata = {
+  teamId?: string;
+  userId?: string;
+  apiKeyId?: number;
+  oauthClientId?: string;
+  resource?: string;
+};
 
 type ResolvedCredential = {
   credential?: string;
   source?: 'api-key-header' | 'bearer-api-key' | 'oauth' | 'env';
+  metadata?: CredentialMetadata;
 };
 
 type ToolLogger = Pick<Logger, 'debug' | 'error' | 'info' | 'warn'>;
@@ -166,9 +180,33 @@ function isMcpOAuthEnabled(): boolean {
 type OAuthIntrospectionResponse = {
   active?: boolean;
   api_key?: string;
+  team_id?: string;
+  sub?: string;
+  api_key_id?: number;
+  client_id?: string;
+  aud?: string;
 };
 
-async function introspectOAuthAccessToken(token: string): Promise<string> {
+function metadataFromIntrospection(
+  data: OAuthIntrospectionResponse
+): CredentialMetadata {
+  return {
+    teamId: typeof data.team_id === 'string' ? data.team_id : undefined,
+    userId: typeof data.sub === 'string' ? data.sub : undefined,
+    apiKeyId: typeof data.api_key_id === 'number' ? data.api_key_id : undefined,
+    oauthClientId:
+      typeof data.client_id === 'string' ? data.client_id : undefined,
+    resource: typeof data.aud === 'string' ? data.aud : undefined,
+  };
+}
+
+async function introspectToken(
+  token: string
+): Promise<{
+  credential?: string;
+  metadata?: CredentialMetadata;
+  active: boolean;
+}> {
   const introspectionSecret = getOAuthIntrospectionSecret();
   if (!introspectionSecret) {
     throw new Error('OAuth token introspection is not configured');
@@ -191,11 +229,47 @@ async function introspectOAuthAccessToken(token: string): Promise<string> {
   }
 
   const data = (await response.json()) as OAuthIntrospectionResponse;
-  if (!data.active || !data.api_key) {
+  return {
+    active: data.active === true,
+    credential: data.api_key,
+    metadata: metadataFromIntrospection(data),
+  };
+}
+
+async function introspectOAuthAccessToken(
+  token: string
+): Promise<ResolvedCredential> {
+  const result = await introspectToken(token);
+  if (!result.active || !result.credential) {
     throw new Error('Invalid OAuth access token');
   }
+  return {
+    credential: result.credential,
+    metadata: result.metadata,
+    source: 'oauth',
+  };
+}
 
-  return data.api_key;
+async function maybeIntrospectApiKeyMetadata(
+  token: string
+): Promise<CredentialMetadata | undefined> {
+  if (
+    !ACTION_TRACES_ENABLED ||
+    !getMcpActionLogSecret() ||
+    !getOAuthIntrospectionSecret()
+  ) {
+    return undefined;
+  }
+  try {
+    const result = await introspectToken(token);
+    return result.active ? result.metadata : undefined;
+  } catch (error) {
+    console.error(
+      '[MCP_ACTION_LOG] Failed to introspect API-key metadata',
+      error instanceof Error ? error.message : String(error)
+    );
+    return undefined;
+  }
 }
 
 async function resolveCredentialFromHeaders(
@@ -207,21 +281,28 @@ async function resolveCredentialFromHeaders(
   );
 
   if (bearer && isFirecrawlOAuthAccessToken(bearer)) {
-    return { credential: await introspectOAuthAccessToken(bearer), source: 'oauth' };
+    return introspectOAuthAccessToken(bearer);
   }
   if (headerApiKey) {
-    return { credential: headerApiKey, source: 'api-key-header' };
+    return {
+      credential: headerApiKey,
+      metadata: await maybeIntrospectApiKeyMetadata(headerApiKey),
+      source: 'api-key-header',
+    };
   }
   if (bearer) {
-    return { credential: bearer, source: 'bearer-api-key' };
+    return {
+      credential: bearer,
+      metadata: await maybeIntrospectApiKeyMetadata(bearer),
+      source: 'bearer-api-key',
+    };
   }
   return {};
 }
 
-function requestTraceData(request?: MCPAuthRequest): Pick<
-  SessionData,
-  'requestId' | 'userAgent'
-> {
+function requestTraceData(
+  request?: MCPAuthRequest
+): Pick<SessionData, 'requestId' | 'userAgent'> {
   return {
     // Audit traces use a server-generated ID. Do not trust client-supplied
     // x-request-id/x-correlation-id/traceparent or MCP _meta.requestId here.
@@ -284,6 +365,11 @@ async function authenticateRequest(
       ...traceData,
       authType: authTypeFromResolvedCredential(headerCred),
       firecrawlApiKey: headerCred.credential,
+      teamId: headerCred.metadata?.teamId,
+      userId: headerCred.metadata?.userId,
+      apiKeyId: headerCred.metadata?.apiKeyId,
+      oauthClientId: headerCred.metadata?.oauthClientId,
+      resource: headerCred.metadata?.resource,
     };
   }
 
@@ -318,6 +404,11 @@ async function authenticateRequest(
     ...traceData,
     authType: authTypeFromResolvedCredential(resolved),
     firecrawlApiKey: credential,
+    teamId: resolved.metadata?.teamId,
+    userId: resolved.metadata?.userId,
+    apiKeyId: resolved.metadata?.apiKeyId,
+    oauthClientId: resolved.metadata?.oauthClientId,
+    resource: resolved.metadata?.resource,
   };
 }
 
@@ -483,17 +574,82 @@ function canAccessTool(toolName: string, session?: SessionData): boolean {
 }
 
 type ActionTrace = {
+  apiKeyId?: number;
   authType: SessionData['authType'];
   clientName?: string;
+  clientVersion?: string;
+  errorClass?: string;
+  oauthClientId?: string;
   requestId?: string;
+  resource?: string;
   status: 'started' | 'success' | 'error';
+  teamId?: string;
   timestamp: string;
   toolName: string;
   userAgent?: string;
+  userId?: string;
 };
+
+function getMcpActionLogSecret(): string | undefined {
+  return normalizeHeader(process.env.FIRECRAWL_MCP_ACTION_LOG_SECRET);
+}
+
+function getMcpActionLogEndpoint(): string | undefined {
+  const configured = normalizeHeader(process.env.FIRECRAWL_MCP_ACTION_LOG_URL);
+  if (configured) return configured;
+  const apiUrl = normalizeHeader(process.env.FIRECRAWL_API_URL);
+  return apiUrl
+    ? `${withoutTrailingSlash(apiUrl)}/v2/mcp/action-logs`
+    : undefined;
+}
 
 function emitActionTrace(trace: ActionTrace): void {
   console.error('[MCP_ACTION]', JSON.stringify(trace));
+}
+
+function emitRemoteActionLog(trace: ActionTrace): void {
+  const endpoint = getMcpActionLogEndpoint();
+  const secret = getMcpActionLogSecret();
+  if (!endpoint || !secret || !trace.teamId) return;
+
+  const payload = {
+    team_id: trace.teamId,
+    user_id: trace.userId,
+    api_key_id: trace.apiKeyId,
+    oauth_client_id: trace.oauthClientId,
+    auth_type: trace.authType ?? 'unknown',
+    tool_name: trace.toolName,
+    status: trace.status,
+    request_id: trace.requestId,
+    user_agent: trace.userAgent,
+    client_name: trace.clientName,
+    client_version: trace.clientVersion,
+    error_class: trace.errorClass,
+    resource: trace.resource,
+  };
+
+  void fetch(endpoint, {
+    body: JSON.stringify(payload),
+    headers: {
+      Authorization: `Bearer ${secret}`,
+      'Content-Type': 'application/json',
+    },
+    method: 'POST',
+  }).catch((error) => {
+    console.error(
+      '[MCP_ACTION_LOG] Failed to emit remote action log',
+      error instanceof Error ? error.message : String(error)
+    );
+  });
+}
+
+function emitActionEvents(trace: ActionTrace): void {
+  emitActionTrace(trace);
+  emitRemoteActionLog(trace);
+}
+
+function errorClassFromUnknown(error: unknown): string {
+  return error instanceof Error ? error.name || 'Error' : typeof error;
 }
 
 const addTool = server.addTool.bind(server);
@@ -509,28 +665,35 @@ server.addTool = ((tool: Parameters<typeof server.addTool>[0]) => {
       if (!ACTION_TRACES_ENABLED) return execute(args, context);
 
       const baseTrace = {
+        apiKeyId: context.session?.apiKeyId,
         authType: context.session?.authType ?? 'none',
         clientName: context.client.version?.name,
+        clientVersion: context.client.version?.version,
+        oauthClientId: context.session?.oauthClientId,
         requestId: context.session?.requestId,
+        resource: context.session?.resource,
+        teamId: context.session?.teamId,
         toolName: tool.name,
         userAgent: context.session?.userAgent,
+        userId: context.session?.userId,
       };
-      emitActionTrace({
+      emitActionEvents({
         ...baseTrace,
         status: 'started',
         timestamp: new Date().toISOString(),
       });
       try {
         const result = await execute(args, context);
-        emitActionTrace({
+        emitActionEvents({
           ...baseTrace,
           status: 'success',
           timestamp: new Date().toISOString(),
         });
         return result;
       } catch (error) {
-        emitActionTrace({
+        emitActionEvents({
           ...baseTrace,
+          errorClass: errorClassFromUnknown(error),
           status: 'error',
           timestamp: new Date().toISOString(),
         });
@@ -2444,7 +2607,10 @@ Interact with a page in a live browser session: click buttons, fill forms, extra
       code: z.string().trim().min(1).optional(),
       language: z.enum(['bash', 'python', 'node']).optional(),
       timeout: z.number().min(1).max(300).optional(),
-      scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+      scrapeOptions: scrapeParamsSchema
+        .omit({ url: true })
+        .partial()
+        .optional(),
     })
     .refine((data) => Boolean(data.scrapeId) !== Boolean(data.url), {
       message:
@@ -2509,7 +2675,12 @@ Interact with a page in a live browser session: click buttons, fill forms, extra
     if (language) interactArgs.language = language;
     if (timeout != null) interactArgs.timeout = timeout;
     const res = await client.interact(activeScrapeId, interactArgs as any);
-    if (openedFromUrl && res && typeof res === 'object' && !Array.isArray(res)) {
+    if (
+      openedFromUrl &&
+      res &&
+      typeof res === 'object' &&
+      !Array.isArray(res)
+    ) {
       return asText({
         ...(res as unknown as Record<string, unknown>),
         scrapeId: activeScrapeId,
