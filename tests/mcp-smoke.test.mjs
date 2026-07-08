@@ -155,7 +155,10 @@ async function startFakeFirecrawlBackend(options = {}) {
     // OAuth token introspection (issuer origin).
     if (req.method === 'POST' && req.url === '/api/oauth/introspect') {
       const token = parsedBody?.token ?? '';
-      const active = token.startsWith('fco_') && !token.includes('invalid');
+      const active =
+        token.startsWith('fco_') &&
+        !token.includes('invalid') &&
+        !token.includes('revoked');
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify(
@@ -634,6 +637,63 @@ test('HTTP cloud transport rejects an inactive fco_ token with an OAuth challeng
   assert.equal(body.error, 'invalid_token');
   // The failed introspection must NOT leak downstream as an API call.
   assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
+  assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+
+
+test('HTTP cloud transport treats revoked OAuth grants as 401 and allows reconnect', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    apiKeyFromIntrospection: 'fc-reconnected-key',
+  });
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  t.after(() => stopChild(child));
+
+  await waitForHealth(port, child);
+
+  const revokedCall = await httpToolCall(port, {
+    id: 20,
+    headers: { authorization: 'Bearer fco_revoked_token' },
+    params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
+  });
+  assert.equal(revokedCall.status, 401);
+  assert.match(revokedCall.headers.get('www-authenticate') ?? '', /error="invalid_token"/);
+  assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
+
+  const reconnectedCall = await httpToolCall(port, {
+    id: 21,
+    headers: { authorization: 'Bearer fco_reconnected_token' },
+    params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
+  });
+  assert.equal(reconnectedCall.status, 200);
+  const message = parseSseJson(await reconnectedCall.text());
+  assert.notEqual(message.result.isError, true);
+
+  const introspectCalls = backend.requests.filter(
+    (request) => request.url === '/api/oauth/introspect'
+  );
+  assert.deepEqual(
+    introspectCalls.map((request) => request.body.token),
+    ['fco_revoked_token', 'fco_reconnected_token']
+  );
+  const searchCalls = backend.requests.filter((r) => r.url === '/v2/search');
+  assert.equal(searchCalls.length, 1);
+  assert.equal(searchCalls[0].headers.authorization, 'Bearer fc-reconnected-key');
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
