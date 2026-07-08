@@ -2449,6 +2449,7 @@ server.addTool({
   },
   description: `
 Parse a file using Firecrawl's /v2/parse endpoint.
+Works without an API key on the keyless free tier (rate-limited). Sign up for a key for higher limits / production.
 
 In local/non-cloud MCP mode, this tool reads filePath from the MCP server filesystem and posts multipart data to the configured self-hosted FIRECRAWL_API_URL, preserving the existing direct-read behavior.
 
