@@ -29,8 +29,16 @@ interface SessionData {
    * instead of the shared server IP.
    */
   keylessClientIp?: string;
+  authType?: 'api-key' | 'oauth' | 'env' | 'keyless' | 'none';
+  userAgent?: string;
+  requestId?: string;
   [key: string]: unknown;
 }
+
+type ResolvedCredential = {
+  credential?: string;
+  source?: 'api-key-header' | 'bearer-api-key' | 'oauth' | 'env';
+};
 
 type ToolLogger = Pick<Logger, 'debug' | 'error' | 'info' | 'warn'>;
 
@@ -63,11 +71,11 @@ function isFirecrawlOAuthAccessToken(token: string): boolean {
   return token.startsWith('fco_');
 }
 
-function resolveCredentialFromEnv(): string | undefined {
-  return (
-    normalizeHeader(process.env.FIRECRAWL_OAUTH_TOKEN) ??
-    normalizeHeader(process.env.FIRECRAWL_API_KEY)
-  );
+function resolveCredentialFromEnv(): ResolvedCredential {
+  const oauthToken = normalizeHeader(process.env.FIRECRAWL_OAUTH_TOKEN);
+  if (oauthToken) return { credential: oauthToken, source: 'env' };
+  const apiKey = normalizeHeader(process.env.FIRECRAWL_API_KEY);
+  return apiKey ? { credential: apiKey, source: 'env' } : {};
 }
 
 function isHttpStreamingTransport(): boolean {
@@ -185,22 +193,45 @@ async function introspectOAuthAccessToken(token: string): Promise<string> {
 
 async function resolveCredentialFromHeaders(
   headers: IncomingHttpHeaders
-): Promise<string | undefined> {
+): Promise<ResolvedCredential> {
   const bearer = extractBearerToken(headers);
   const headerApiKey = normalizeHeader(
     headers['x-firecrawl-api-key'] ?? headers['x-api-key']
   );
 
   if (bearer && isFirecrawlOAuthAccessToken(bearer)) {
-    return introspectOAuthAccessToken(bearer);
+    return { credential: await introspectOAuthAccessToken(bearer), source: 'oauth' };
   }
   if (headerApiKey) {
-    return headerApiKey;
+    return { credential: headerApiKey, source: 'api-key-header' };
   }
   if (bearer) {
-    return bearer;
+    return { credential: bearer, source: 'bearer-api-key' };
   }
-  return undefined;
+  return {};
+}
+
+function requestTraceData(request?: MCPAuthRequest): Pick<
+  SessionData,
+  'requestId' | 'userAgent'
+> {
+  return {
+    requestId: normalizeHeader(
+      request?.headers['x-request-id'] ??
+        request?.headers['x-correlation-id'] ??
+        request?.headers['traceparent']
+    ),
+    userAgent: normalizeHeader(request?.headers['user-agent']),
+  };
+}
+
+function authTypeFromResolvedCredential(
+  credential: ResolvedCredential
+): SessionData['authType'] {
+  if (!credential.credential) return 'none';
+  if (credential.source === 'oauth') return 'oauth';
+  if (credential.source === 'env') return 'env';
+  return 'api-key';
 }
 
 async function authenticateRequest(
@@ -212,13 +243,14 @@ async function authenticateRequest(
   // swallows it, and every subsequent tool call fails with
   // "Unauthorized: API key is required when not using a self-hosted
   // instance" even though `FIRECRAWL_API_KEY` is set in env.
+  const traceData = requestTraceData(request);
   const headerCred = request?.headers
     ? await resolveCredentialFromHeaders(request.headers)
-    : undefined;
+    : {};
   const envCred = resolveCredentialFromEnv();
 
   if (process.env.CLOUD_SERVICE === 'true') {
-    if (!headerCred) {
+    if (!headerCred.credential) {
       // Keyless free tier over the hosted MCP: serve it only when a forwarding
       // secret is configured, we know the end-user's client IP (so the API can
       // rate-limit per real IP, not the shared server IP), AND that IP still
@@ -232,16 +264,26 @@ async function authenticateRequest(
         clientIp &&
         (await keylessEligible(clientIp))
       ) {
-        return { firecrawlApiKey: undefined, keylessClientIp: clientIp };
+        return {
+          ...traceData,
+          authType: 'keyless',
+          firecrawlApiKey: undefined,
+          keylessClientIp: clientIp,
+        };
       }
       throw new Error(
         'Firecrawl credentials required: OAuth access token (Authorization: Bearer fco_...) or API key (x-firecrawl-api-key)'
       );
     }
-    return { firecrawlApiKey: headerCred };
+    return {
+      ...traceData,
+      authType: headerCred.source === 'oauth' ? 'oauth' : 'api-key',
+      firecrawlApiKey: headerCred.credential,
+    };
   }
 
-  const credential = headerCred ?? envCred;
+  const resolved = headerCred.credential ? headerCred : envCred;
+  const credential = resolved.credential;
 
   // Self-hosted / stdio / HTTP streamable — headers supply MCP OAuth token when present
   const httpStreaming = isHttpStreamingTransport();
@@ -267,7 +309,11 @@ async function authenticateRequest(
     process.exit(1);
   }
 
-  return { firecrawlApiKey: credential };
+  return {
+    ...traceData,
+    authType: authTypeFromResolvedCredential(resolved),
+    firecrawlApiKey: credential,
+  };
 }
 
 async function authenticateWithOAuthChallenge(
@@ -425,14 +471,66 @@ function canAccessTool(toolName: string): (session?: SessionData) => boolean {
   };
 }
 
+type ActionTrace = {
+  authType: SessionData['authType'];
+  keylessClientIp?: string;
+  requestId?: string;
+  status: 'started' | 'success' | 'error';
+  timestamp: string;
+  toolName: string;
+  userAgent?: string;
+};
+
+function emitActionTrace(trace: ActionTrace): void {
+  if (
+    process.env.CLOUD_SERVICE !== 'true' &&
+    process.env.HTTP_STREAMABLE_SERVER !== 'true' &&
+    process.env.SSE_LOCAL !== 'true'
+  ) {
+    return;
+  }
+  console.error('[MCP_ACTION]', JSON.stringify(trace));
+}
+
 const addTool = server.addTool.bind(server);
 server.addTool = ((tool: Parameters<typeof server.addTool>[0]) => {
   const existingCanAccess = tool.canAccess;
+  const execute = tool.execute;
   addTool({
     ...tool,
     canAccess: (session: SessionData) =>
       canAccessTool(tool.name)(session) &&
       (existingCanAccess ? existingCanAccess(session) : true),
+    execute: async (args, context) => {
+      const baseTrace = {
+        authType: context.session?.authType ?? 'none',
+        keylessClientIp: context.session?.keylessClientIp,
+        requestId: context.requestId ?? context.session?.requestId,
+        toolName: tool.name,
+        userAgent: context.session?.userAgent ?? context.client.version?.name,
+      };
+      emitActionTrace({
+        ...baseTrace,
+        status: 'started',
+        timestamp: new Date().toISOString(),
+      });
+      try {
+        const result = await execute(args, context);
+        emitActionTrace({
+          ...baseTrace,
+          status: 'success',
+          timestamp: new Date().toISOString(),
+        });
+        return result;
+      } catch (error) {
+        emitActionTrace({
+          ...baseTrace,
+          status: 'error',
+          timestamp: new Date().toISOString(),
+        });
+        throw error;
+      }
+    },
   });
 }) as typeof server.addTool;
 

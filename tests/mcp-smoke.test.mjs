@@ -837,6 +837,61 @@ test('HTTP cloud transport serves an eligible keyless client and forwards its IP
 
 
 
+
+
+test('HTTP cloud tool calls emit safe MCP action traces', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  t.after(() => stopChild(child));
+
+  await waitForHealth(port, child);
+
+  const toolCall = await httpToolCall(port, {
+    id: 19,
+    headers: {
+      authorization: 'Bearer fc-trace-key',
+      'user-agent': 'TraceClient/1.0',
+      'x-request-id': 'req-trace-123',
+    },
+    params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
+  });
+  assert.equal(toolCall.status, 200);
+  const message = parseSseJson(await toolCall.text());
+  assert.notEqual(message.result.isError, true);
+
+  const traces = stderr
+    .split(/\r?\n/)
+    .filter((line) => line.includes('[MCP_ACTION]'))
+    .map((line) => JSON.parse(line.slice(line.indexOf('{'))));
+  assert.equal(traces.length, 2);
+  assert.deepEqual(
+    traces.map((trace) => trace.status),
+    ['started', 'success']
+  );
+  for (const trace of traces) {
+    assert.equal(trace.toolName, 'firecrawl_search');
+    assert.equal(trace.authType, 'api-key');
+    assert.equal(trace.userAgent, 'TraceClient/1.0');
+    assert.equal(trace.requestId, 'req-trace-123');
+    assert.match(trace.timestamp, /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(JSON.stringify(trace).includes('fc-trace-key'), false);
+  }
+  assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
 test('HTTP cloud keyless sessions expose only scrape and search tools', async (t) => {
   const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
   t.after(() => backend.close());
