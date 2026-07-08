@@ -25,7 +25,9 @@ async function waitForHealth(port, child) {
   let lastError;
   for (let i = 0; i < 60; i += 1) {
     if (child.exitCode !== null) {
-      throw new Error(`server exited early with code ${child.exitCode}`);
+      throw new Error(
+        `server exited early with code ${child.exitCode}; stdout=${child.__stdout ?? ''}; stderr=${child.__stderr ?? ''}`
+      );
     }
     try {
       const response = await fetch(url);
@@ -55,6 +57,14 @@ function spawnServer(env) {
   });
   child.stderr.setEncoding('utf8');
   child.stdout.setEncoding('utf8');
+  child.__stderr = '';
+  child.__stdout = '';
+  child.stderr.on('data', (chunk) => {
+    child.__stderr += chunk;
+  });
+  child.stdout.on('data', (chunk) => {
+    child.__stdout += chunk;
+  });
   return child;
 }
 
@@ -641,7 +651,6 @@ test('HTTP cloud transport rejects an inactive fco_ token with an OAuth challeng
 });
 
 
-
 test('HTTP cloud transport treats revoked OAuth grants as 401 and allows reconnect', async (t) => {
   const backend = await startFakeFirecrawlBackend({
     apiKeyFromIntrospection: 'fc-reconnected-key',
@@ -731,7 +740,6 @@ test('HTTP cloud transport accepts the x-firecrawl-api-key header', async (t) =>
   assert.equal(searchCalls[0].headers.authorization, 'Bearer fc-header-key');
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
-
 
 
 test('HTTP cloud transport accepts bearer API-key fallback for headless clients', async (t) => {
@@ -894,9 +902,6 @@ test('HTTP cloud transport serves an eligible keyless client and forwards its IP
   );
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
-
-
-
 
 
 test('HTTP cloud tool calls emit safe MCP action traces', async (t) => {
