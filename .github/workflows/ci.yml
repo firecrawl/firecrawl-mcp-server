@@ -66,10 +66,13 @@ jobs:
           done
 
           test -n "${port:-}"
-          http_status=$(curl -sS -o /tmp/mcp-unauth.json -w '%{http_code}' \
-            -H 'accept: application/json, text/event-stream' \
-            -H 'content-type: application/json' \
-            -d '{"id":1,"jsonrpc":"2.0","method":"tools/list","params":{}}' \
-            "http://127.0.0.1:$port/v2/mcp")
-          cat /tmp/mcp-unauth.json
-          test "$http_status" = "401"
+          for endpoint in /v2/mcp /v2/mcp/ /mcp /mcp/; do
+            http_status=$(curl -sS -o /tmp/mcp-unauth.json -w '%{http_code}' \
+              -H 'accept: application/json, text/event-stream' \
+              -H 'content-type: application/json' \
+              -d '{"id":1,"jsonrpc":"2.0","method":"tools/list","params":{}}' \
+              "http://127.0.0.1:$port$endpoint")
+            cat /tmp/mcp-unauth.json
+            test "$http_status" = "401"
+            grep -q 'invalid_token' /tmp/mcp-unauth.json
+          done

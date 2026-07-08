@@ -41,7 +41,6 @@ async function waitForHealth(port, child) {
   throw lastError ?? new Error('server did not become healthy');
 }
 
-
 function parseSseJson(body) {
   const dataLine = body
     .split(/\r?\n/)
@@ -139,8 +138,11 @@ async function startFakeFirecrawlApi() {
 // (token introspection + keyless eligibility) AND the Firecrawl API. Every
 // request is recorded so tests can assert what the MCP server forwarded.
 async function startFakeFirecrawlBackend(options = {}) {
-  const { apiKeyFromIntrospection = 'fc-from-introspection', keylessEligible = false } =
-    options;
+  const {
+    apiKeyFromIntrospection = 'fc-from-introspection',
+    keylessEligible = false,
+    searchStatus = 200,
+  } = options;
   const requests = [];
   const server = createServer(async (req, res) => {
     let raw = '';
@@ -186,6 +188,11 @@ async function startFakeFirecrawlBackend(options = {}) {
     }
 
     if (req.method === 'POST' && req.url === '/v2/search') {
+      if (searchStatus !== 200) {
+        res.writeHead(searchStatus, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: 'search failed', success: false }));
+        return;
+      }
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify({
@@ -506,6 +513,36 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.ok(toolNames.includes('firecrawl_scrape'));
   assert.ok(toolNames.includes('firecrawl_search'));
   assert.ok(toolNames.includes('firecrawl_parse'));
+  assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('stdio local keyless still lists the full tool catalog', async (t) => {
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: '',
+    FIRECRAWL_API_URL: '',
+    FIRECRAWL_OAUTH_TOKEN: '',
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-local-keyless', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const tools = await client.request('tools/list');
+  const toolNames = tools.tools.map((tool) => tool.name);
+  assert.ok(toolNames.includes('firecrawl_scrape'));
+  assert.ok(toolNames.includes('firecrawl_search'));
+  assert.ok(toolNames.includes('firecrawl_map'));
+  assert.ok(toolNames.includes('firecrawl_parse'));
+  assert.match(stderr, /running in keyless mode/);
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
@@ -942,7 +979,11 @@ test('HTTP cloud tool calls emit safe MCP action traces', async (t) => {
       'user-agent': 'TraceClient/1.0',
       'x-request-id': 'req-trace-123',
     },
-    params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
+    params: {
+      _meta: { requestId: 'spoofed-jsonrpc-request-id' },
+      arguments: { limit: 1, query: 'example domain' },
+      name: 'firecrawl_search',
+    },
   });
   assert.equal(toolCall.status, 200);
   const message = parseSseJson(await toolCall.text());
@@ -1101,5 +1142,135 @@ test('HTTP cloud transport challenges a keyless client with no forwarded IP', as
   });
   assert.equal(toolCall.status, 401);
   assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
+  assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('HTTP cloud tool calls emit an error action trace when the tool throws', async (t) => {
+  // Keyless search routes through keylessPost, which throws on a non-2xx
+  // upstream — the deterministic way to drive the execute wrapper's catch path.
+  const backend = await startFakeFirecrawlBackend({
+    keylessEligible: true,
+    searchStatus: 500,
+  });
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true',
+    KEYLESS_PROXY_SECRET: 'keyless-secret',
+    PORT: String(port),
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  t.after(() => stopChild(child));
+
+  await waitForHealth(port, child);
+
+  const toolCall = await httpToolCall(port, {
+    id: 40,
+    headers: { 'x-forwarded-for': '203.0.113.40', 'x-request-id': 'req-err-trace' },
+    params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
+  });
+  // The upstream failure surfaces as an MCP tool error, not a transport failure.
+  assert.equal(toolCall.status, 200);
+  const message = parseSseJson(await toolCall.text());
+  assert.equal(message.result.isError, true);
+
+  const traces = stderr
+    .split(/\r?\n/)
+    .filter((line) => line.includes('[MCP_ACTION]'))
+    .map((line) => JSON.parse(line.slice(line.indexOf('{'))));
+  assert.deepEqual(
+    traces.map((trace) => trace.status),
+    ['started', 'error']
+  );
+  assert.equal(traces[1].toolName, 'firecrawl_search');
+  assert.equal(traces[1].requestId, 'req-err-trace');
+  // Even on the error path the trace must not leak the client IP or the secret.
+  assert.equal(stderr.includes('203.0.113.40'), false);
+  assert.equal(stderr.includes('keyless-secret'), false);
+  assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('stdio transport does not emit MCP action traces', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'stdio-trace-guard', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+  const result = await client.request('tools/call', {
+    arguments: { limit: 1, query: 'example domain' },
+    name: 'firecrawl_search',
+  });
+  assert.notEqual(result.isError, true);
+
+  // Action traces are a hosted/HTTP concern; stdio must stay silent so local
+  // runs don't spray audit JSON (or request metadata) into the user's console.
+  assert.equal(stderr.includes('[MCP_ACTION]'), false, stderr);
+  assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('HTTP cloud keyless sessions cannot call a non-keyless tool', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true',
+    KEYLESS_PROXY_SECRET: 'keyless-secret',
+    PORT: String(port),
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  t.after(() => stopChild(child));
+
+  await waitForHealth(port, child);
+
+  // A keyless client that ignores tools/list and directly calls a gated tool
+  // must be rejected by canAccess at call time, not merely hidden from listing.
+  const toolCall = await httpToolCall(port, {
+    id: 41,
+    headers: { 'x-forwarded-for': '203.0.113.41' },
+    params: { arguments: { url: 'https://example.com' }, name: 'firecrawl_map' },
+  });
+  const bodyText = await toolCall.text();
+  let mapSucceeded = false;
+  try {
+    const message = parseSseJson(bodyText);
+    mapSucceeded =
+      Boolean(message.result) &&
+      message.result.isError !== true &&
+      /"links"/.test(JSON.stringify(message.result));
+  } catch {
+    mapSucceeded = false;
+  }
+  assert.equal(mapSucceeded, false, `keyless map call must be rejected: ${bodyText.slice(0, 200)}`);
+  // The gated tool must never reach the upstream API for a keyless session.
+  assert.equal(backend.requests.some((r) => r.url === '/v2/map'), false);
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });

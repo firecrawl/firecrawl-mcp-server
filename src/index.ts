@@ -85,6 +85,12 @@ function isHttpStreamingTransport(): boolean {
   );
 }
 
+function isHostedOrHttpTransport(): boolean {
+  return process.env.CLOUD_SERVICE === 'true' || isHttpStreamingTransport();
+}
+
+const ACTION_TRACES_ENABLED = isHostedOrHttpTransport();
+
 const DEFAULT_OAUTH_ISSUER = 'https://www.firecrawl.dev';
 const DEFAULT_MCP_RESOURCE_URL = 'https://mcp.firecrawl.dev/v2/mcp';
 
@@ -277,7 +283,7 @@ async function authenticateRequest(
     }
     return {
       ...traceData,
-      authType: headerCred.source === 'oauth' ? 'oauth' : 'api-key',
+      authType: authTypeFromResolvedCredential(headerCred),
       firecrawlApiKey: headerCred.credential,
     };
   }
@@ -464,15 +470,22 @@ if (openAiAppsChallengeToken) {
 
 const KEYLESS_TOOL_NAMES = new Set(['firecrawl_scrape', 'firecrawl_search']);
 
-function canAccessTool(toolName: string): (session?: SessionData) => boolean {
-  return (session?: SessionData): boolean => {
-    if (isKeylessMode(session)) return KEYLESS_TOOL_NAMES.has(toolName);
-    return true;
-  };
+function isHostedKeylessSession(session?: SessionData): boolean {
+  return (
+    process.env.CLOUD_SERVICE === 'true' &&
+    !session?.firecrawlApiKey &&
+    !!session?.keylessClientIp
+  );
+}
+
+function canAccessTool(toolName: string, session?: SessionData): boolean {
+  if (isHostedKeylessSession(session)) return KEYLESS_TOOL_NAMES.has(toolName);
+  return true;
 }
 
 type ActionTrace = {
   authType: SessionData['authType'];
+  clientName?: string;
   requestId?: string;
   status: 'started' | 'success' | 'error';
   timestamp: string;
@@ -481,13 +494,6 @@ type ActionTrace = {
 };
 
 function emitActionTrace(trace: ActionTrace): void {
-  if (
-    process.env.CLOUD_SERVICE !== 'true' &&
-    process.env.HTTP_STREAMABLE_SERVER !== 'true' &&
-    process.env.SSE_LOCAL !== 'true'
-  ) {
-    return;
-  }
   console.error('[MCP_ACTION]', JSON.stringify(trace));
 }
 
@@ -498,14 +504,17 @@ server.addTool = ((tool: Parameters<typeof server.addTool>[0]) => {
   addTool({
     ...tool,
     canAccess: (session: SessionData) =>
-      canAccessTool(tool.name)(session) &&
+      canAccessTool(tool.name, session) &&
       (existingCanAccess ? existingCanAccess(session) : true),
     execute: async (args, context) => {
+      if (!ACTION_TRACES_ENABLED) return execute(args, context);
+
       const baseTrace = {
         authType: context.session?.authType ?? 'none',
-        requestId: context.requestId ?? context.session?.requestId,
+        clientName: context.client.version?.name,
+        requestId: context.session?.requestId ?? context.requestId,
         toolName: tool.name,
-        userAgent: context.session?.userAgent ?? context.client.version?.name,
+        userAgent: context.session?.userAgent,
       };
       emitActionTrace({
         ...baseTrace,
