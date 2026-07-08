@@ -473,7 +473,6 @@ function canAccessTool(toolName: string): (session?: SessionData) => boolean {
 
 type ActionTrace = {
   authType: SessionData['authType'];
-  keylessClientIp?: string;
   requestId?: string;
   status: 'started' | 'success' | 'error';
   timestamp: string;
@@ -504,7 +503,6 @@ server.addTool = ((tool: Parameters<typeof server.addTool>[0]) => {
     execute: async (args, context) => {
       const baseTrace = {
         authType: context.session?.authType ?? 'none',
-        keylessClientIp: context.session?.keylessClientIp,
         requestId: context.requestId ?? context.session?.requestId,
         toolName: tool.name,
         userAgent: context.session?.userAgent ?? context.client.version?.name,

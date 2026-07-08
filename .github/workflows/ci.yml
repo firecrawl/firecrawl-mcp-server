@@ -38,3 +38,38 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+
+  docker-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build service image
+        run: docker build -f Dockerfile.service -t firecrawl-mcp-service:ci .
+
+      - name: Smoke service image
+        shell: bash
+        run: |
+          set -euo pipefail
+          cid=$(docker run -d -P -e FIRECRAWL_OAUTH_INTROSPECT_SECRET=test-secret firecrawl-mcp-service:ci)
+          cleanup() { docker logs "$cid" || true; docker rm -f "$cid" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+
+          for _ in $(seq 1 60); do
+            port=$(docker port "$cid" 8080/tcp 2>/dev/null | head -n1 | sed 's/.*://')
+            if [ -n "${port:-}" ] && curl -fsS "http://127.0.0.1:$port/health"; then
+              break
+            fi
+            sleep 1
+          done
+
+          test -n "${port:-}"
+          http_status=$(curl -sS -o /tmp/mcp-unauth.json -w '%{http_code}' \
+            -H 'accept: application/json, text/event-stream' \
+            -H 'content-type: application/json' \
+            -d '{"id":1,"jsonrpc":"2.0","method":"tools/list","params":{}}' \
+            "http://127.0.0.1:$port/v2/mcp")
+          cat /tmp/mcp-unauth.json
+          test "$http_status" = "401"

@@ -198,6 +198,17 @@ async function startFakeFirecrawlBackend(options = {}) {
       return;
     }
 
+    if (req.method === 'POST' && req.url === '/v2/scrape') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: { markdown: '# Example Domain', metadata: { sourceURL: parsedBody?.url } },
+          success: true,
+        })
+      );
+      return;
+    }
+
     res.writeHead(404, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ error: `Unhandled ${req.method} ${req.url}` }));
   });
@@ -952,8 +963,74 @@ test('HTTP cloud tool calls emit safe MCP action traces', async (t) => {
     assert.equal(trace.userAgent, 'TraceClient/1.0');
     assert.equal(trace.requestId, 'req-trace-123');
     assert.match(trace.timestamp, /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(Object.hasOwn(trace, 'keylessClientIp'), false);
     assert.equal(JSON.stringify(trace).includes('fc-trace-key'), false);
   }
+  assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+
+
+test('HTTP cloud keyless sessions can call scrape without leaking raw IP in traces', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true',
+    KEYLESS_PROXY_SECRET: 'keyless-secret',
+    PORT: String(port),
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  t.after(() => stopChild(child));
+
+  await waitForHealth(port, child);
+
+  const toolCall = await httpToolCall(port, {
+    id: 22,
+    headers: {
+      'user-agent': 'KeylessTraceClient/1.0',
+      'x-forwarded-for': '203.0.113.22, 10.0.0.1',
+      'x-request-id': 'req-keyless-scrape',
+    },
+    params: {
+      arguments: { formats: ['markdown'], url: 'https://example.com/' },
+      name: 'firecrawl_scrape',
+    },
+  });
+  assert.equal(toolCall.status, 200);
+  const message = parseSseJson(await toolCall.text());
+  assert.notEqual(message.result.isError, true);
+  assert.deepEqual(JSON.parse(message.result.content[0].text), {
+    markdown: '# Example Domain',
+    metadata: { sourceURL: 'https://example.com/' },
+  });
+
+  const scrapeCalls = backend.requests.filter((request) => request.url === '/v2/scrape');
+  assert.equal(scrapeCalls.length, 1);
+  assert.equal(scrapeCalls[0].headers['x-firecrawl-keyless-ip'], '203.0.113.22');
+  assert.equal(scrapeCalls[0].headers['x-firecrawl-keyless-secret'], 'keyless-secret');
+
+  const traces = stderr
+    .split(/\r?\n/)
+    .filter((line) => line.includes('[MCP_ACTION]'))
+    .map((line) => JSON.parse(line.slice(line.indexOf('{'))));
+  assert.equal(traces.length, 2);
+  for (const trace of traces) {
+    assert.equal(trace.toolName, 'firecrawl_scrape');
+    assert.equal(trace.authType, 'keyless');
+    assert.equal(trace.userAgent, 'KeylessTraceClient/1.0');
+    assert.equal(trace.requestId, 'req-keyless-scrape');
+    assert.equal(Object.hasOwn(trace, 'keylessClientIp'), false);
+  }
+  assert.equal(stderr.includes('203.0.113.22'), false);
+  assert.equal(stderr.includes('keyless-secret'), false);
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
