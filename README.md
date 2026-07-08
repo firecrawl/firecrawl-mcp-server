@@ -26,29 +26,151 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 
 ## Installation
 
-### Hosted MCP (keyless free tier)
+### Remote Hosted MCP
 
-Connect to the remote hosted server with no setup:
+Connect to Firecrawl's hosted MCP server with no local process:
 
-```
+```text
 https://mcp.firecrawl.dev/v2/mcp
 ```
 
-On the keyless free tier, `scrape`, `search`, and `interact` work without an API key (rate-limited). Other tools such as `crawl`, `map`, `agent`, and `extract` still need a key.
+Use the remote server for hosted/web clients and agents that support Streamable HTTP. OAuth-capable clients open a browser sign-in on Firecrawl, let the user choose an account, approve access, and return to a connected MCP session.
 
-Prefer an API key or OAuth whenever the human can sign up. It unlocks the full tool set and higher limits. With a key, use:
+Authenticated hosted sessions expose the full Firecrawl tool surface through one integration: scrape, search, map, crawl, extract, parse, agent, monitor, research, interact, and feedback. The keyless free tier is intentionally limited to `firecrawl_scrape` and `firecrawl_search` while eligible and rate-limited by client IP.
 
+#### OAuth setup by client
+
+Claude Code:
+
+```bash
+claude mcp add --transport http firecrawl https://mcp.firecrawl.dev/v2/mcp
 ```
-https://mcp.firecrawl.dev/{FIRECRAWL_API_KEY}/v2/mcp
+
+Then run `/mcp` in Claude Code and select `firecrawl` to complete browser OAuth.
+
+Claude web/desktop:
+
+```text
+Settings → Connectors → Add custom connector → https://mcp.firecrawl.dev/v2/mcp
 ```
+
+Cursor:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "url": "https://mcp.firecrawl.dev/v2/mcp"
+    }
+  }
+}
+```
+
+Codex:
+
+```bash
+codex mcp add firecrawl --url https://mcp.firecrawl.dev/v2/mcp
+```
+
+GitHub Copilot in VS Code:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "firecrawl": {
+        "type": "http",
+        "url": "https://mcp.firecrawl.dev/v2/mcp"
+      }
+    }
+  }
+}
+```
+
+Windsurf:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "serverUrl": "https://mcp.firecrawl.dev/v2/mcp"
+    }
+  }
+}
+```
+
+Warp:
+
+```json
+{
+  "firecrawl": {
+    "serverUrl": "https://mcp.firecrawl.dev/v2/mcp"
+  }
+}
+```
+
+OpenCode:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "firecrawl": {
+      "type": "remote",
+      "url": "https://mcp.firecrawl.dev/v2/mcp",
+      "enabled": true
+    }
+  }
+}
+```
+
+#### Headless/API-key fallback
+
+If your client runs where browser login is unavailable, pass a Firecrawl API key as a standard Bearer token:
+
+```bash
+claude mcp add --transport http firecrawl https://mcp.firecrawl.dev/v2/mcp \
+  --header "Authorization: Bearer fc-YOUR_API_KEY"
+```
+
+JSON-configured clients can use:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "url": "https://mcp.firecrawl.dev/v2/mcp",
+      "headers": {
+        "Authorization": "Bearer fc-YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+`x-firecrawl-api-key` and `x-api-key` are also accepted for compatibility. Prefer OAuth for interactive clients and `Authorization: Bearer <fc-key>` for CI, servers, scripts, and headless agents.
+
+Legacy API-key-in-URL examples are deprecated because credentials can appear in logs and browser history. Use OAuth or headers instead.
+
+MCP actions emitted by this server include safe trace metadata such as tool name, auth type, timestamp, request id, and user agent. Account-visible log storage and OAuth grant revocation are completed by the Firecrawl backend/dashboard surfaces.
 
 See the [MCP server docs](https://docs.firecrawl.dev/mcp-server) and the [agent onboarding guide](https://www.firecrawl.dev/agent-onboarding/SKILL.md) for setup details.
 
-### Running with npx
+### Local MCP Server with npx
+
+Use local stdio when you prefer self-hosting, air-gapped usage, or clients that do not support remote MCP:
 
 ```bash
 env FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
 ```
+
+### Local Streamable HTTP
+
+```bash
+env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
+```
+
+Use the URL: `http://localhost:3000/mcp`.
 
 ### Manual Installation
 
@@ -204,14 +326,15 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
   - Example: `https://firecrawl.your-domain.com`
   - If not provided, the cloud API will be used (requires API key)
 
-#### MCP OAuth (Bearer access tokens)
+#### MCP OAuth and hosted auth
 
-Hosted Firecrawl can issue OAuth **access tokens** (`fco_…`) via the authorization server on [firecrawl.dev](https://firecrawl.dev). This MCP server forwards whichever credential it resolves to the Firecrawl API as `Authorization: Bearer …`.
+Hosted Firecrawl issues OAuth **access tokens** (`fco_…`) via the authorization server on [firecrawl.dev](https://firecrawl.dev). The hosted MCP server introspects those tokens and forwards the resulting Firecrawl API credential to the Firecrawl API.
 
-- **HTTP stream transports** (`CLOUD_SERVICE=true`, `HTTP_STREAMABLE_SERVER=true`, or `SSE_LOCAL=true`): Clients should send `Authorization: Bearer <fco_access_token>` on MCP requests. An OAuth bearer token takes precedence over `x-firecrawl-api-key` / `x-api-key` when both are present.
-- **stdio:** Use `FIRECRAWL_OAUTH_TOKEN` for a static access token, or keep using `FIRECRAWL_API_KEY` for an API key.
+- **Hosted HTTP** (`CLOUD_SERVICE=true`): interactive clients should send `Authorization: Bearer <fco_access_token>` after browser OAuth.
+- **Headless hosted HTTP:** use `Authorization: Bearer <fc_api_key>`, `x-firecrawl-api-key`, or `x-api-key`.
+- **stdio/local HTTP:** use `FIRECRAWL_OAUTH_TOKEN` for a static access token, `FIRECRAWL_API_KEY` for an API key, or request headers in local HTTP mode.
 
-Use **access** tokens (`fco_…`) only. Refresh tokens (`fcr_…`) must be exchanged at the token endpoint, not passed to the scrape/search API.
+Use **access** tokens (`fco_…`) only. Refresh tokens (`fcr_…`) must be exchanged at the token endpoint, not passed to MCP tools or Firecrawl APIs.
 
 ### Configuration Examples
 

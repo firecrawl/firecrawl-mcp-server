@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Prepared the hosted MCP server for a Resend-style remote launch: documented OAuth-first remote setup, standard Bearer API-key fallback for headless clients, full authenticated tool coverage, keyless scrape/search boundaries, per-client setup examples, and launch-readiness checks.
+- Added safe MCP action trace metadata at the tool layer for backend/dashboard log visibility integrations.
+
+### Changed
+
+- Deprecated API-key-in-URL examples in favor of OAuth or header-based authentication.
+
 ## [3.21.4] - 2026-06-23
 
 ### Added
