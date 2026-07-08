@@ -672,6 +672,126 @@ test('HTTP cloud transport accepts the x-firecrawl-api-key header', async (t) =>
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
+
+
+test('HTTP cloud transport accepts bearer API-key fallback for headless clients', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  t.after(() => stopChild(child));
+
+  await waitForHealth(port, child);
+
+  const toolCall = await httpToolCall(port, {
+    id: 15,
+    headers: { authorization: 'Bearer fc-bearer-key' },
+    params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
+  });
+  assert.equal(toolCall.status, 200);
+  const message = parseSseJson(await toolCall.text());
+  assert.notEqual(message.result.isError, true);
+
+  const searchCalls = backend.requests.filter((r) => r.url === '/v2/search');
+  assert.equal(searchCalls.length, 1);
+  assert.equal(searchCalls[0].headers.authorization, 'Bearer fc-bearer-key');
+  assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('HTTP cloud transport accepts the x-api-key header alias', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  t.after(() => stopChild(child));
+
+  await waitForHealth(port, child);
+
+  const toolCall = await httpToolCall(port, {
+    id: 16,
+    headers: { 'x-api-key': 'fc-x-alias-key' },
+    params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
+  });
+  assert.equal(toolCall.status, 200);
+  const message = parseSseJson(await toolCall.text());
+  assert.notEqual(message.result.isError, true);
+
+  const searchCalls = backend.requests.filter((r) => r.url === '/v2/search');
+  assert.equal(searchCalls.length, 1);
+  assert.equal(searchCalls[0].headers.authorization, 'Bearer fc-x-alias-key');
+  assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('HTTP cloud authenticated sessions expose the full Firecrawl tool surface', async (t) => {
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  t.after(() => stopChild(child));
+
+  await waitForHealth(port, child);
+
+  const toolsList = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
+    body: JSON.stringify({ id: 17, jsonrpc: '2.0', method: 'tools/list', params: {} }),
+    headers: {
+      accept: 'application/json, text/event-stream',
+      'content-type': 'application/json',
+      authorization: 'Bearer fc-tool-surface-key',
+    },
+    method: 'POST',
+  });
+  assert.equal(toolsList.status, 200);
+  const toolsMessage = parseSseJson(await toolsList.text());
+  const toolNames = new Set(toolsMessage.result.tools.map((tool) => tool.name));
+
+  for (const expected of [
+    'firecrawl_scrape',
+    'firecrawl_search',
+    'firecrawl_map',
+    'firecrawl_crawl',
+    'firecrawl_extract',
+    'firecrawl_parse',
+    'firecrawl_agent',
+    'firecrawl_monitor_create',
+    'firecrawl_research_search_papers',
+    'firecrawl_interact',
+    'firecrawl_search_feedback',
+    'firecrawl_feedback',
+  ]) {
+    assert.equal(toolNames.has(expected), true, `${expected} should be visible`);
+  }
+  assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
 test('HTTP cloud transport serves an eligible keyless client and forwards its IP', async (t) => {
   const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
   t.after(() => backend.close());

@@ -3,7 +3,7 @@
   "name": "io.github.firecrawl/firecrawl-mcp-server",
   "title": "Firecrawl MCP Server",
   "description": "MCP server for Firecrawl — search, scrape, and interact with the web.",
-  "version": "3.7.5",
+  "version": "3.22.3",
   "repository": {
     "url": "https://github.com/firecrawl/firecrawl-mcp-server.git",
     "source": "github"
