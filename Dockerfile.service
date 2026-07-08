@@ -35,6 +35,9 @@ COPY docker/nginx.conf /etc/nginx/nginx.conf
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+ENV CLOUD_SERVICE=true
+ENV HTTP_STREAMABLE_SERVER=true
+ENV FASTMCP_ENDPOINT=/v2/mcp
 ENV PORT=3000
 EXPOSE 8080
 
