@@ -416,6 +416,26 @@ if (openAiAppsChallengeToken) {
     );
 }
 
+const KEYLESS_TOOL_NAMES = new Set(['firecrawl_scrape', 'firecrawl_search']);
+
+function canAccessTool(toolName: string): (session?: SessionData) => boolean {
+  return (session?: SessionData): boolean => {
+    if (isKeylessMode(session)) return KEYLESS_TOOL_NAMES.has(toolName);
+    return true;
+  };
+}
+
+const addTool = server.addTool.bind(server);
+server.addTool = ((tool: Parameters<typeof server.addTool>[0]) => {
+  const existingCanAccess = tool.canAccess;
+  addTool({
+    ...tool,
+    canAccess: (session: SessionData) =>
+      canAccessTool(tool.name)(session) &&
+      (existingCanAccess ? existingCanAccess(session) : true),
+  });
+}) as typeof server.addTool;
+
 function createClient(apiKey?: string): FirecrawlApp {
   const config: any = {
     ...(process.env.FIRECRAWL_API_URL && {

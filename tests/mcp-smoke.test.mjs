@@ -835,6 +835,45 @@ test('HTTP cloud transport serves an eligible keyless client and forwards its IP
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
+
+
+test('HTTP cloud keyless sessions expose only scrape and search tools', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true',
+    KEYLESS_PROXY_SECRET: 'keyless-secret',
+    PORT: String(port),
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  t.after(() => stopChild(child));
+
+  await waitForHealth(port, child);
+
+  const toolsList = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
+    body: JSON.stringify({ id: 18, jsonrpc: '2.0', method: 'tools/list', params: {} }),
+    headers: {
+      accept: 'application/json, text/event-stream',
+      'content-type': 'application/json',
+      'x-forwarded-for': '203.0.113.18',
+    },
+    method: 'POST',
+  });
+  assert.equal(toolsList.status, 200);
+  const toolsMessage = parseSseJson(await toolsList.text());
+  const toolNames = toolsMessage.result.tools.map((tool) => tool.name).sort();
+  assert.deepEqual(toolNames, ['firecrawl_scrape', 'firecrawl_search']);
+  assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
 test('HTTP cloud transport challenges a keyless client with no forwarded IP', async (t) => {
   const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
   t.after(() => backend.close());
