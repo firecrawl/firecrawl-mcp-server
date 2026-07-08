@@ -5,6 +5,7 @@ import { FastMCP, type Logger } from 'fastmcp';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { z } from 'zod';
 import { registerMonitorTools } from './monitor';
@@ -222,11 +223,9 @@ function requestTraceData(request?: MCPAuthRequest): Pick<
   'requestId' | 'userAgent'
 > {
   return {
-    requestId: normalizeHeader(
-      request?.headers['x-request-id'] ??
-        request?.headers['x-correlation-id'] ??
-        request?.headers['traceparent']
-    ),
+    // Audit traces use a server-generated ID. Do not trust client-supplied
+    // x-request-id/x-correlation-id/traceparent or MCP _meta.requestId here.
+    requestId: request ? randomUUID() : undefined,
     userAgent: normalizeHeader(request?.headers['user-agent']),
   };
 }
@@ -512,7 +511,7 @@ server.addTool = ((tool: Parameters<typeof server.addTool>[0]) => {
       const baseTrace = {
         authType: context.session?.authType ?? 'none',
         clientName: context.client.version?.name,
-        requestId: context.session?.requestId ?? context.requestId,
+        requestId: context.session?.requestId,
         toolName: tool.name,
         userAgent: context.session?.userAgent,
       };

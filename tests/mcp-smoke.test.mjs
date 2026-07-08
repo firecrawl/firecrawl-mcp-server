@@ -1002,7 +1002,9 @@ test('HTTP cloud tool calls emit safe MCP action traces', async (t) => {
     assert.equal(trace.toolName, 'firecrawl_search');
     assert.equal(trace.authType, 'api-key');
     assert.equal(trace.userAgent, 'TraceClient/1.0');
-    assert.equal(trace.requestId, 'req-trace-123');
+    assert.match(trace.requestId, /^[0-9a-f-]{36}$/);
+    assert.notEqual(trace.requestId, 'req-trace-123');
+    assert.notEqual(trace.requestId, 'spoofed-jsonrpc-request-id');
     assert.match(trace.timestamp, /^\d{4}-\d{2}-\d{2}T/);
     assert.equal(Object.hasOwn(trace, 'keylessClientIp'), false);
     assert.equal(JSON.stringify(trace).includes('fc-trace-key'), false);
@@ -1067,7 +1069,8 @@ test('HTTP cloud keyless sessions can call scrape without leaking raw IP in trac
     assert.equal(trace.toolName, 'firecrawl_scrape');
     assert.equal(trace.authType, 'keyless');
     assert.equal(trace.userAgent, 'KeylessTraceClient/1.0');
-    assert.equal(trace.requestId, 'req-keyless-scrape');
+    assert.match(trace.requestId, /^[0-9a-f-]{36}$/);
+    assert.notEqual(trace.requestId, 'req-keyless-scrape');
     assert.equal(Object.hasOwn(trace, 'keylessClientIp'), false);
   }
   assert.equal(stderr.includes('203.0.113.22'), false);
@@ -1190,7 +1193,8 @@ test('HTTP cloud tool calls emit an error action trace when the tool throws', as
     ['started', 'error']
   );
   assert.equal(traces[1].toolName, 'firecrawl_search');
-  assert.equal(traces[1].requestId, 'req-err-trace');
+  assert.match(traces[1].requestId, /^[0-9a-f-]{36}$/);
+  assert.notEqual(traces[1].requestId, 'req-err-trace');
   // Even on the error path the trace must not leak the client IP or the secret.
   assert.equal(stderr.includes('203.0.113.40'), false);
   assert.equal(stderr.includes('keyless-secret'), false);
