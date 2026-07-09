@@ -876,6 +876,37 @@ test('HTTP cloud transport accepts the x-firecrawl-api-key header', async (t) =>
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
+test('HTTP cloud transport rejects non-API-key bearer credentials before downstream calls', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+
+  await waitForHealth(port, child);
+
+  const toolCall = await httpToolCall(port, {
+    id: 14,
+    headers: { authorization: 'Bearer fcr_refresh_should_not_forward' },
+    params: {
+      arguments: { limit: 1, query: 'example domain' },
+      name: 'firecrawl_search',
+    },
+  });
+  assert.equal(toolCall.status, 401);
+  assert.match(toolCall.headers.get('www-authenticate') ?? '', /invalid_token/);
+
+  const searchCalls = backend.requests.filter((r) => r.url === '/v2/search');
+  assert.equal(searchCalls.length, 0);
+});
+
 test('HTTP cloud transport accepts bearer API-key fallback for headless clients', async (t) => {
   const backend = await startFakeFirecrawlBackend();
   t.after(() => backend.close());

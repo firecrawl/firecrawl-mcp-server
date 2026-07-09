@@ -86,6 +86,11 @@ function isFirecrawlOAuthAccessToken(token: string): boolean {
   return token.startsWith('fco_');
 }
 
+/** Firecrawl API keys accepted as hosted Bearer/header fallback. */
+function isFirecrawlApiKey(token: string): boolean {
+  return token.startsWith('fc-');
+}
+
 function resolveCredentialFromEnv(): ResolvedCredential {
   const oauthToken = normalizeHeader(process.env.FIRECRAWL_OAUTH_TOKEN);
   if (oauthToken) return { credential: oauthToken, source: 'env' };
@@ -284,6 +289,9 @@ async function resolveCredentialFromHeaders(
     return introspectOAuthAccessToken(bearer);
   }
   if (headerApiKey) {
+    if (process.env.CLOUD_SERVICE === 'true' && !isFirecrawlApiKey(headerApiKey)) {
+      throw new Error('Invalid Firecrawl API key header');
+    }
     return {
       credential: headerApiKey,
       metadata: await maybeIntrospectApiKeyMetadata(headerApiKey),
@@ -291,6 +299,9 @@ async function resolveCredentialFromHeaders(
     };
   }
   if (bearer) {
+    if (process.env.CLOUD_SERVICE === 'true' && !isFirecrawlApiKey(bearer)) {
+      throw new Error('Invalid Firecrawl Bearer credential');
+    }
     return {
       credential: bearer,
       metadata: await maybeIntrospectApiKeyMetadata(bearer),
