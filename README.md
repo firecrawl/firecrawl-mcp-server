@@ -336,6 +336,25 @@ Hosted Firecrawl issues OAuth **access tokens** (`fco_…`) via the authorizatio
 
 Use **access** tokens (`fco_…`) only. Refresh tokens (`fcr_…`) must be exchanged at the token endpoint, not passed to MCP tools or Firecrawl APIs.
 
+#### Hosted deployment environment
+
+The managed hosted service image sets the HTTP transport defaults in `Dockerfile.service`:
+
+- `CLOUD_SERVICE=true`
+- `HTTP_STREAMABLE_SERVER=true`
+- `FASTMCP_ENDPOINT=/v2/mcp`
+
+Production and staging deployments must also provide these runtime values:
+
+- `FIRECRAWL_API_URL`: Firecrawl API base URL used for tool calls and, by default, MCP action-log ingestion.
+- `FIRECRAWL_OAUTH_ISSUER` (optional): OAuth issuer. Defaults to `https://www.firecrawl.dev`.
+- `FIRECRAWL_MCP_RESOURCE_URL` (optional): canonical MCP resource URL. Defaults to `https://mcp.firecrawl.dev/v2/mcp`.
+- `FIRECRAWL_OAUTH_INTROSPECT_SECRET`: shared secret used when introspecting hosted OAuth `fco_…` access tokens. If missing in `CLOUD_SERVICE`, OAuth is not launch-ready.
+- `FIRECRAWL_MCP_ACTION_LOG_SECRET`: shared secret used to emit metadata-only MCP action logs to the Firecrawl API. Must match the API-side `MCP_ACTION_LOG_SECRET`.
+- `FIRECRAWL_MCP_ACTION_LOG_URL` (optional): explicit action-log ingest endpoint. Defaults to `${FIRECRAWL_API_URL}/v2/mcp/action-logs`.
+
+Do not configure hosted examples with API keys in the URL. Browser/OAuth clients should use the bare MCP URL; headless clients should pass their Firecrawl API key through `Authorization: Bearer`, `x-firecrawl-api-key`, or `x-api-key`.
+
 ### Configuration Examples
 
 For cloud API usage:
