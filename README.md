@@ -34,7 +34,7 @@ Connect to the remote hosted server with no setup:
 https://mcp.firecrawl.dev/v2/mcp
 ```
 
-On the keyless free tier, `scrape`, `search`, and `interact` work without an API key (rate-limited). Other tools such as `crawl`, `map`, `agent`, and `extract` still need a key.
+On the keyless free tier, `scrape`, `search`, and `parse` work without an API key (rate-limited). Other tools such as `interact`, `crawl`, `map`, `agent`, and `extract` still need a key.
 
 Prefer an API key or OAuth whenever the human can sign up. It unlocks the full tool set and higher limits. With a key, use:
 
