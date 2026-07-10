@@ -2,13 +2,20 @@
 
 ## [Unreleased]
 
+## [3.23.0] - 2026-07-10
+
 ### Added
 
 - Prepared the hosted MCP server for a Resend-style remote launch: documented OAuth-first remote setup, standard Bearer API-key fallback for headless clients, full authenticated tool coverage, keyless scrape/search boundaries, per-client setup examples, and launch-readiness checks.
-- Added safe MCP action trace metadata at the tool layer for backend/dashboard log visibility integrations.
+- Hosted keyless tool boundary: the keyless remote URL now exposes only `firecrawl_scrape` and `firecrawl_search`; all other tools require an authenticated (OAuth or API-key) session.
+- Added safe metadata-only MCP action traces at the tool layer for backend/dashboard log visibility, with no request payloads or secrets captured.
+- Added a smoke test suite (`tests/mcp-smoke.test.mjs`) covering the hosted MCP launch baseline.
 
 ### Changed
 
+- OAuth / API-key hardening: reject bearer tokens that are not Firecrawl API keys (non-`fc-` bearers) instead of treating them as valid credentials.
+- Handle OAuth grant revocation so revoked grants no longer authorize tool calls.
+- Removed the vendored FastMCP fork in favor of the upstream `fastmcp` dependency.
 - Deprecated API-key-in-URL examples in favor of OAuth or header-based authentication.
 
 ## [3.21.4] - 2026-06-23
