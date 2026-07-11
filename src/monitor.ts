@@ -11,6 +11,7 @@
 
 import { z } from 'zod';
 import type { FastMCP } from 'fastmcp';
+import { assertPublicHttpUrl } from './safety';
 
 interface SessionData {
   firecrawlApiKey?: string;
@@ -29,7 +30,9 @@ function resolveAuth(session?: SessionData): {
   apiKey?: string;
   baseUrl: string;
 } {
-  const apiKey = session?.firecrawlApiKey ?? process.env.FIRECRAWL_API_KEY;
+  const apiKey = process.env.CLOUD_SERVICE === 'true'
+    ? session?.firecrawlApiKey
+    : session?.firecrawlApiKey ?? process.env.FIRECRAWL_API_KEY;
   const baseUrl = (process.env.FIRECRAWL_API_URL ?? DEFAULT_API_URL).replace(
     /\/$/,
     ''
@@ -81,6 +84,29 @@ async function monitorRequest(
 
 function asText(data: unknown): string {
   return JSON.stringify(data, null, 2);
+}
+
+async function assertMonitorBodySafe(value: unknown, path = 'monitor body'): Promise<void> {
+  if (!value || typeof value !== 'object') return;
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i += 1) {
+      await assertMonitorBodySafe(value[i], `${path}[${i}]`);
+    }
+    return;
+  }
+  const obj = value as Record<string, unknown>;
+  for (const [key, child] of Object.entries(obj)) {
+    const childPath = `${path}.${key}`;
+    if ((key === 'url' || key === 'webhookUrl') && typeof child === 'string') {
+      await assertPublicHttpUrl(child, childPath);
+    } else if (key === 'urls' && Array.isArray(child)) {
+      for (const url of child) {
+        if (typeof url === 'string') await assertPublicHttpUrl(url, childPath);
+      }
+    } else {
+      await assertMonitorBodySafe(child, childPath);
+    }
+  }
 }
 
 const pageStatusSchema = z.enum(['same', 'new', 'changed', 'removed', 'error']);
@@ -353,6 +379,7 @@ Full \`body\` requests require: \`name\`, \`schedule\` (with \`cron\` or \`text\
     }),
     execute: async (args: unknown, { session, log }): Promise<string> => {
       const body = buildMonitorCreateBody(args as Record<string, unknown>);
+      await assertMonitorBodySafe(body);
       log.info('Creating monitor', { name: String(body.name) });
       const res = await monitorRequest(session, '/monitor', {
         method: 'POST',
@@ -449,6 +476,7 @@ Update a monitor. Pass any subset of fields to patch: \`name\`, \`status\` ("act
         id: string;
         body: Record<string, unknown>;
       };
+      await assertMonitorBodySafe(body);
       const res = await monitorRequest(
         session,
         `/monitor/${encodeURIComponent(id)}`,

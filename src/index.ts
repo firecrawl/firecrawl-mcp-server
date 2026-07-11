@@ -1,14 +1,20 @@
 #!/usr/bin/env node
 import FirecrawlApp from '@mendable/firecrawl-js';
 import dotenv from 'dotenv';
-import { FastMCP, type Logger } from 'fastmcp';
+import { FastMCP, UserError, type Logger } from 'fastmcp';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { z } from 'zod';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
+import {
+  assertLocalPathWithinRoot,
+  assertPublicHttpUrl,
+  extractSinglePublicClientIp,
+} from './safety';
 
 dotenv.config({ debug: false, quiet: true });
 
@@ -16,7 +22,6 @@ const require = createRequire(import.meta.url);
 const { version: packageVersion } = require('../package.json') as {
   version: string;
 };
-
 interface SessionData {
   /**
    * FC API key (`fc-...`) or OAuth access token (`fco_...`) sent as
@@ -29,8 +34,34 @@ interface SessionData {
    * instead of the shared server IP.
    */
   keylessClientIp?: string;
+  credentialError?: 'CREDENTIAL_INVALID';
+  authType?: 'api-key' | 'oauth' | 'env' | 'keyless' | 'none';
+  clientName?: string;
+  clientVersion?: string;
+  userAgent?: string;
+  requestId?: string;
+  teamId?: string;
+  userId?: string;
+  apiKeyId?: number;
+  oauthClientId?: string;
+  resource?: string;
   [key: string]: unknown;
 }
+
+type CredentialMetadata = {
+  teamId?: string;
+  userId?: string;
+  apiKeyId?: number;
+  oauthClientId?: string;
+  resource?: string;
+};
+
+type ResolvedCredential = {
+  credential?: string;
+  source?: 'api-key-header' | 'bearer-api-key' | 'oauth' | 'env' | 'invalid';
+  credentialError?: 'CREDENTIAL_INVALID';
+  metadata?: CredentialMetadata;
+};
 
 type ToolLogger = Pick<Logger, 'debug' | 'error' | 'info' | 'warn'>;
 
@@ -51,6 +82,133 @@ function normalizeHeader(
   return trimmed || undefined;
 }
 
+type SafeClientIdentity = Pick<
+  SessionData,
+  'clientName' | 'clientVersion' | 'userAgent'
+>;
+
+const CLIENT_VERSION_PATTERN = String.raw`(\d{1,5}(?:\.\d{1,5}){0,2})(?![\d.:])`;
+function knownClientPattern(source: string): RegExp {
+  return new RegExp(
+    String.raw`${source}(?:[/\s_-]+v?${CLIENT_VERSION_PATTERN})?`,
+    'i'
+  );
+}
+
+const KNOWN_CLIENT_PATTERNS: ReadonlyArray<{
+  family: string;
+  pattern: RegExp;
+}> = [
+  {
+    family: 'mcp-remote',
+    pattern: knownClientPattern(String.raw`\bmcp[-_\s]?remote\b`),
+  },
+  {
+    family: 'chatgpt',
+    pattern: knownClientPattern(
+      String.raw`\b(?:chatgpt|openai[-_\s]?chatgpt)\b`
+    ),
+  },
+  {
+    family: 'copilot',
+    pattern: knownClientPattern(
+      String.raw`\b(?:github[-_\s]?copilot|githubcopilot|copilot)\b`
+    ),
+  },
+  {
+    family: 'opencode',
+    pattern: knownClientPattern(
+      String.raw`\b(?:opencode|open[-_\s]?code)\b`
+    ),
+  },
+  {
+    family: 'claude',
+    pattern: knownClientPattern(
+      String.raw`\bclaude(?:[-_\s]?(?:desktop|code))?\b`
+    ),
+  },
+  {
+    family: 'cursor',
+    pattern: knownClientPattern(String.raw`\bcursor\b`),
+  },
+  {
+    family: 'codex',
+    pattern: knownClientPattern(
+      String.raw`\b(?:codex|openai[-_\s]?codex)\b`
+    ),
+  },
+  {
+    family: 'windsurf',
+    pattern: knownClientPattern(String.raw`\bwindsurf\b`),
+  },
+  {
+    family: 'warp',
+    pattern: knownClientPattern(String.raw`\bwarp\b`),
+  },
+  {
+    family: 'gemini',
+    pattern: knownClientPattern(
+      String.raw`\b(?:gemini|google[-_\s]?gemini)\b`
+    ),
+  },
+];
+
+function canonicalClientIdentityFromInput(
+  value: string | undefined
+): SafeClientIdentity | undefined {
+  if (!value) return undefined;
+  for (const known of KNOWN_CLIENT_PATTERNS) {
+    const match = known.pattern.exec(value);
+    if (!match) continue;
+    const version = match[1];
+    return {
+      clientName: known.family,
+      clientVersion: version,
+      userAgent: version ? `${known.family}/${version}` : known.family,
+    };
+  }
+  return undefined;
+}
+
+function safeNumericClientVersion(
+  value: string | undefined
+): string | undefined {
+  if (!value) return undefined;
+  const match = new RegExp(`^v?${CLIENT_VERSION_PATTERN}$`, 'i').exec(value);
+  return match?.[1];
+}
+
+function safeClientIdentity(input: {
+  clientName?: string;
+  clientVersion?: string;
+  userAgent?: string;
+}): SafeClientIdentity {
+  const userAgentIdentity = canonicalClientIdentityFromInput(input.userAgent);
+  const clientNameIdentity = canonicalClientIdentityFromInput(input.clientName);
+  const family =
+    clientNameIdentity?.clientName ?? userAgentIdentity?.clientName;
+  let version = userAgentIdentity?.clientVersion;
+  if (clientNameIdentity) {
+    version =
+      safeNumericClientVersion(input.clientVersion) ??
+      clientNameIdentity.clientVersion ??
+      version;
+  }
+
+  if (!family) {
+    if (input.userAgent || input.clientName || input.clientVersion) {
+      return { clientName: 'unknown', userAgent: 'unknown' };
+    }
+    return {};
+  }
+
+  return {
+    clientName: family,
+    clientVersion: version,
+    userAgent: version ? `${family}/${version}` : family,
+  };
+}
+
 function extractBearerToken(headers: IncomingHttpHeaders): string | undefined {
   const headerAuth = normalizeHeader(headers['authorization']);
   if (!headerAuth?.toLowerCase().startsWith('bearer ')) return undefined;
@@ -63,11 +221,16 @@ function isFirecrawlOAuthAccessToken(token: string): boolean {
   return token.startsWith('fco_');
 }
 
-function resolveCredentialFromEnv(): string | undefined {
-  return (
-    normalizeHeader(process.env.FIRECRAWL_OAUTH_TOKEN) ??
-    normalizeHeader(process.env.FIRECRAWL_API_KEY)
-  );
+/** Firecrawl API keys accepted as hosted Bearer/header fallback. */
+function isFirecrawlApiKey(token: string): boolean {
+  return token.startsWith('fc-');
+}
+
+function resolveCredentialFromEnv(): ResolvedCredential {
+  const oauthToken = normalizeHeader(process.env.FIRECRAWL_OAUTH_TOKEN);
+  if (oauthToken) return { credential: oauthToken, source: 'env' };
+  const apiKey = normalizeHeader(process.env.FIRECRAWL_API_KEY);
+  return apiKey ? { credential: apiKey, source: 'env' } : {};
 }
 
 function isHttpStreamingTransport(): boolean {
@@ -77,8 +240,15 @@ function isHttpStreamingTransport(): boolean {
   );
 }
 
+function isHostedOrHttpTransport(): boolean {
+  return process.env.CLOUD_SERVICE === 'true' || isHttpStreamingTransport();
+}
+
+const ACTION_TRACES_ENABLED = isHostedOrHttpTransport();
+
 const DEFAULT_OAUTH_ISSUER = 'https://www.firecrawl.dev';
 const DEFAULT_MCP_RESOURCE_URL = 'https://mcp.firecrawl.dev/v2/mcp';
+const MCP_GLOBAL_SCOPE = 'firecrawl:global';
 
 function withoutTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
@@ -101,7 +271,11 @@ function getMcpResourceUrl(): string {
 // auto-serves it at the standard /.well-known/oauth-protected-resource path from the
 // protectedResource config, so the URL is fully derived from the MCP resource.
 function getOAuthProtectedResourceMetadataUrl(): string {
-  return `${new URL(getMcpResourceUrl()).origin}/.well-known/oauth-protected-resource`;
+  const resource = new URL(getMcpResourceUrl());
+  const root = `${resource.origin}/.well-known/oauth-protected-resource`;
+  const pathname = withoutTrailingSlash(resource.pathname);
+  if (!pathname || pathname === '/v2/mcp') return root;
+  return `${root}${pathname}`;
 }
 
 function escapeWWWAuthenticateValue(value: string): string {
@@ -115,21 +289,30 @@ function createOAuthChallengeResponse(error: unknown): Response | undefined {
 
   const errorMessage =
     error instanceof Error ? error.message : String(error || 'Unauthorized');
-  const wwwAuthenticate = [
+  const isAnonymousAccountDoorChallenge =
+    errorMessage === 'Firecrawl account connection required for /v2/mcp-oauth';
+  const wwwAuthenticateParts = [
     `resource_metadata="${escapeWWWAuthenticateValue(getOAuthProtectedResourceMetadataUrl())}"`,
-    'error="invalid_token"',
-    `error_description="${escapeWWWAuthenticateValue(errorMessage)}"`,
-  ].join(', ');
+  ];
+  if (!isAnonymousAccountDoorChallenge) {
+    wwwAuthenticateParts.push(
+      'error="invalid_token"',
+      `error_description="${escapeWWWAuthenticateValue(errorMessage)}"`
+    );
+  }
+  const errorCode = isAnonymousAccountDoorChallenge
+    ? 'authorization_required'
+    : 'invalid_token';
 
   return new Response(
     JSON.stringify({
-      error: 'invalid_token',
+      error: errorCode,
       error_description: errorMessage,
     }),
     {
       headers: {
         'Content-Type': 'application/json',
-        'WWW-Authenticate': `Bearer ${wwwAuthenticate}`,
+        'WWW-Authenticate': `Bearer ${wwwAuthenticateParts.join(', ')}`,
       },
       status: 401,
     }
@@ -151,9 +334,105 @@ function isMcpOAuthEnabled(): boolean {
 type OAuthIntrospectionResponse = {
   active?: boolean;
   api_key?: string;
+  team_id?: string;
+  sub?: string;
+  api_key_id?: number;
+  client_id?: string;
+  aud?: string | string[];
+  scope?: string | string[];
 };
 
-async function introspectOAuthAccessToken(token: string): Promise<string> {
+function canonicalResource(value: string): string {
+  try {
+    const url = new URL(value);
+    url.hash = '';
+    url.search = '';
+    return withoutTrailingSlash(url.toString());
+  } catch {
+    return withoutTrailingSlash(value.trim());
+  }
+}
+
+function audValues(value: OAuthIntrospectionResponse['aud']): string[] {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
+    return value;
+  }
+  return [];
+}
+
+function scopeValues(value: OAuthIntrospectionResponse['scope']): string[] {
+  if (typeof value === 'string') return value.split(/\s+/).filter(Boolean);
+  if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
+    return value.flatMap((item) => item.split(/\s+/).filter(Boolean));
+  }
+  return [];
+}
+
+function assertMcpAudienceAndScope(data: OAuthIntrospectionResponse): string {
+  const canonicalMcpResource = canonicalResource(getMcpResourceUrl());
+  const canonicalLegacyMcpResource = canonicalResource(DEFAULT_MCP_RESOURCE_URL);
+  const acceptsLegacyMcpAudience =
+    process.env.MCP_OAUTH_ACCEPT_LEGACY_V2_MCP_AUD !== 'false' &&
+    canonicalMcpResource !== canonicalLegacyMcpResource &&
+    canonicalMcpResource.endsWith('/v2/mcp-oauth');
+  const audiences = audValues(data.aud);
+  if (audiences.length === 0) {
+    throw new Error(
+      'OAuth access token audience is missing or malformed for Firecrawl MCP'
+    );
+  }
+
+  const matchedAudience = audiences.find((audience) => {
+    const canonicalAudience = canonicalResource(audience);
+    return (
+      canonicalAudience === canonicalMcpResource ||
+      (acceptsLegacyMcpAudience &&
+        canonicalAudience === canonicalLegacyMcpResource)
+    );
+  });
+  if (!matchedAudience) {
+    throw new Error('OAuth access token audience is not valid for Firecrawl MCP');
+  }
+
+  const scopes = scopeValues(data.scope);
+  if (!scopes.includes(MCP_GLOBAL_SCOPE)) {
+    throw new Error('OAuth access token scope is not valid for Firecrawl MCP');
+  }
+  return canonicalResource(matchedAudience);
+}
+
+function resourceFromIntrospection(
+  data: OAuthIntrospectionResponse,
+  enforceMcpBinding: boolean
+): string | undefined {
+  if (data.active !== true) return undefined;
+  if (enforceMcpBinding) return assertMcpAudienceAndScope(data);
+  return typeof data.aud === 'string' ? canonicalResource(data.aud) : undefined;
+}
+
+function metadataFromIntrospection(
+  data: OAuthIntrospectionResponse,
+  resource?: string
+): CredentialMetadata {
+  return {
+    teamId: typeof data.team_id === 'string' ? data.team_id : undefined,
+    userId: typeof data.sub === 'string' ? data.sub : undefined,
+    apiKeyId: typeof data.api_key_id === 'number' ? data.api_key_id : undefined,
+    oauthClientId:
+      typeof data.client_id === 'string' ? data.client_id : undefined,
+    resource,
+  };
+}
+
+async function introspectToken(
+  token: string,
+  options: { enforceMcpBinding?: boolean } = {}
+): Promise<{
+  credential?: string;
+  metadata?: CredentialMetadata;
+  active: boolean;
+}> {
   const introspectionSecret = getOAuthIntrospectionSecret();
   if (!introspectionSecret) {
     throw new Error('OAuth token introspection is not configured');
@@ -176,16 +455,64 @@ async function introspectOAuthAccessToken(token: string): Promise<string> {
   }
 
   const data = (await response.json()) as OAuthIntrospectionResponse;
-  if (!data.active || !data.api_key) {
+  return {
+    active: data.active === true,
+    credential: data.api_key,
+    metadata: metadataFromIntrospection(
+      data,
+      resourceFromIntrospection(data, options.enforceMcpBinding === true)
+    ),
+  };
+}
+
+async function introspectOAuthAccessToken(
+  token: string
+): Promise<ResolvedCredential> {
+  const result = await introspectToken(token, { enforceMcpBinding: true });
+  if (!result.active || !result.credential) {
     throw new Error('Invalid OAuth access token');
   }
+  if (
+    !result.metadata?.teamId ||
+    !result.metadata.userId ||
+    !result.metadata.oauthClientId
+  ) {
+    throw new Error(
+      'OAuth access token identity is incomplete for Firecrawl MCP'
+    );
+  }
+  return {
+    credential: result.credential,
+    metadata: result.metadata,
+    source: 'oauth',
+  };
+}
 
-  return data.api_key;
+async function maybeIntrospectApiKeyMetadata(
+  token: string
+): Promise<CredentialMetadata | undefined> {
+  if (
+    !ACTION_TRACES_ENABLED ||
+    !getMcpActionLogSecret() ||
+    !getOAuthIntrospectionSecret()
+  ) {
+    return undefined;
+  }
+  try {
+    const result = await introspectToken(token);
+    return result.active ? result.metadata : undefined;
+  } catch (error) {
+    console.error(
+      '[MCP_ACTION_LOG] Failed to introspect API-key metadata',
+      JSON.stringify({ errorClass: errorClassFromUnknown(error) })
+    );
+    return undefined;
+  }
 }
 
 async function resolveCredentialFromHeaders(
   headers: IncomingHttpHeaders
-): Promise<string | undefined> {
+): Promise<ResolvedCredential> {
   const bearer = extractBearerToken(headers);
   const headerApiKey = normalizeHeader(
     headers['x-firecrawl-api-key'] ?? headers['x-api-key']
@@ -195,12 +522,69 @@ async function resolveCredentialFromHeaders(
     return introspectOAuthAccessToken(bearer);
   }
   if (headerApiKey) {
-    return headerApiKey;
+    if (isMcpOAuthEnabled() && !isFirecrawlApiKey(headerApiKey)) {
+      return { credentialError: 'CREDENTIAL_INVALID', source: 'invalid' };
+    }
+    return {
+      credential: headerApiKey,
+      metadata: await maybeIntrospectApiKeyMetadata(headerApiKey),
+      source: 'api-key-header',
+    };
   }
   if (bearer) {
-    return bearer;
+    if (isMcpOAuthEnabled() && !isFirecrawlApiKey(bearer)) {
+      return { credentialError: 'CREDENTIAL_INVALID', source: 'invalid' };
+    }
+    return {
+      credential: bearer,
+      metadata: await maybeIntrospectApiKeyMetadata(bearer),
+      source: 'bearer-api-key',
+    };
   }
-  return undefined;
+  return {};
+}
+
+function requestTraceData(
+  request?: MCPAuthRequest
+): Pick<SessionData, 'clientName' | 'clientVersion' | 'requestId' | 'userAgent'> {
+  const identity = safeClientIdentity({
+    userAgent: normalizeHeader(request?.headers['user-agent']),
+  });
+  return {
+    // Audit traces use a server-generated ID. Do not trust client-supplied
+    // x-request-id/x-correlation-id/traceparent or MCP _meta.requestId here.
+    requestId: request ? randomUUID() : undefined,
+    ...identity,
+  };
+}
+
+function authTypeFromResolvedCredential(
+  credential: ResolvedCredential
+): SessionData['authType'] {
+  if (!credential.credential) return 'none';
+  if (credential.source === 'oauth') return 'oauth';
+  if (credential.source === 'env') return 'env';
+  return 'api-key';
+}
+
+function sessionDataFromCredential(
+  credential: ResolvedCredential,
+  traceData: Pick<
+    SessionData,
+    'clientName' | 'clientVersion' | 'requestId' | 'userAgent'
+  >
+): SessionData {
+  return {
+    ...traceData,
+    authType: authTypeFromResolvedCredential(credential),
+    firecrawlApiKey: credential.credential,
+    teamId: credential.metadata?.teamId,
+    userId: credential.metadata?.userId,
+    apiKeyId: credential.metadata?.apiKeyId,
+    oauthClientId: credential.metadata?.oauthClientId,
+    resource: credential.metadata?.resource,
+    credentialError: credential.credentialError,
+  };
 }
 
 async function authenticateRequest(
@@ -212,36 +596,38 @@ async function authenticateRequest(
   // swallows it, and every subsequent tool call fails with
   // "Unauthorized: API key is required when not using a self-hosted
   // instance" even though `FIRECRAWL_API_KEY` is set in env.
+  const traceData = requestTraceData(request);
   const headerCred = request?.headers
     ? await resolveCredentialFromHeaders(request.headers)
-    : undefined;
+    : {};
   const envCred = resolveCredentialFromEnv();
 
   if (process.env.CLOUD_SERVICE === 'true') {
-    if (!headerCred) {
-      // Keyless free tier over the hosted MCP: serve it only when a forwarding
-      // secret is configured, we know the end-user's client IP (so the API can
-      // rate-limit per real IP, not the shared server IP), AND that IP still
-      // has free quota. If the IP is out of quota (or keyless is off), fall
-      // through to throw so FastMCP emits the OAuth 401 + WWW-Authenticate
-      // challenge — i.e. prompt the user to connect an account exactly when
-      // their free quota runs out.
-      const clientIp = extractClientIp(request);
-      if (
-        process.env.KEYLESS_PROXY_SECRET &&
-        clientIp &&
-        (await keylessEligible(clientIp))
-      ) {
-        return { firecrawlApiKey: undefined, keylessClientIp: clientIp };
-      }
-      throw new Error(
-        'Firecrawl credentials required: OAuth access token (Authorization: Bearer fco_...) or API key (x-firecrawl-api-key)'
-      );
+    if (headerCred.credentialError) {
+      throw new Error('Invalid Firecrawl credential');
     }
-    return { firecrawlApiKey: headerCred };
+    if (!headerCred.credential) {
+      if (canonicalResource(getMcpResourceUrl()).endsWith('/v2/mcp-oauth')) {
+        throw new Error('Firecrawl account connection required for /v2/mcp-oauth');
+      }
+
+      // Hosted /v2/mcp is headless-safe: anonymous initialize/tools/list never
+      // becomes an OAuth transport challenge. Preserve the sanitized client IP,
+      // but defer remote eligibility I/O until an allowed keyless tool executes
+      // so connection and discovery cannot hang on the Firecrawl API.
+      const clientIp = extractClientIp(request);
+      return {
+        ...traceData,
+        authType: 'keyless',
+        firecrawlApiKey: undefined,
+        keylessClientIp: clientIp,
+      };
+    }
+    return sessionDataFromCredential(headerCred, traceData);
   }
 
-  const credential = headerCred ?? envCred;
+  const resolved = headerCred.credential ? headerCred : envCred;
+  const credential = resolved.credential;
 
   // Self-hosted / stdio / HTTP streamable — headers supply MCP OAuth token when present
   const httpStreaming = isHttpStreamingTransport();
@@ -250,9 +636,9 @@ async function authenticateRequest(
     !process.env.FIRECRAWL_API_KEY &&
     !process.env.FIRECRAWL_API_URL
   ) {
-    // No credential and no self-hosted URL: run in keyless mode. scrape and
-    // search work for free (rate-limited per IP) against the Firecrawl cloud;
-    // every other tool needs an API key and will return Unauthorized.
+    // No credential and no self-hosted URL: run in local keyless mode. scrape
+    // and search work for free (rate-limited per IP) against the Firecrawl
+    // cloud; hosted CLOUD_SERVICE keyless exposes parse via upload refs too.
     console.error(
       'No FIRECRAWL_API_KEY or FIRECRAWL_API_URL set — running in keyless mode. ' +
         'firecrawl_scrape and firecrawl_search are free (rate-limited per IP) against the Firecrawl cloud; ' +
@@ -267,7 +653,7 @@ async function authenticateRequest(
     process.exit(1);
   }
 
-  return { firecrawlApiKey: credential };
+  return sessionDataFromCredential(resolved, traceData);
 }
 
 async function authenticateWithOAuthChallenge(
@@ -343,6 +729,82 @@ function buildSearchQueryWithDomains(
   return query;
 }
 
+const HOSTED_LOG_REDACTION_ENABLED = isHostedOrHttpTransport();
+
+const SENSITIVE_LOG_KEY_RE =
+  /^(authorization|cookie|set-cookie|token|access[_-]?token|api[_-]?key|apikey|key|secret|password|credential|credentials)$/i;
+const TOOL_ARGUMENT_LOG_KEY_RE = /^(args|arguments)$/i;
+const URL_LOG_KEY_RE = /url|uri|endpoint/i;
+const IP_LOG_KEY_RE = /(^|[_-])ip($|[_-])/i;
+const URL_IN_TEXT_RE = /https?:\/\/[^\s,;\]})"']+/gi;
+const BEARER_IN_TEXT_RE = /Bearer\s+[A-Za-z0-9._~+/=-]+/gi;
+const FIRECRAWL_TOKEN_IN_TEXT_RE = /\b(?:fc-[A-Za-z0-9._~+/=-]+|fco_[A-Za-z0-9._~+/=-]+)\b/g;
+const IPV4_IN_TEXT_RE =
+  /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g;
+const IPV6_IN_TEXT_RE =
+  /\b(?:[0-9a-f]{1,4}:){2,7}[0-9a-f]{0,4}(?:%[0-9a-z._~-]+)?\b/gi;
+
+function redactHostedLogString(value: string): string {
+  return value
+    .replace(URL_IN_TEXT_RE, '[REDACTED_URL]')
+    .replace(BEARER_IN_TEXT_RE, 'Bearer [REDACTED]')
+    .replace(FIRECRAWL_TOKEN_IN_TEXT_RE, '[REDACTED_CREDENTIAL]')
+    .replace(IPV4_IN_TEXT_RE, '[REDACTED_IP]')
+    .replace(IPV6_IN_TEXT_RE, '[REDACTED_IP]');
+}
+
+function redactHostedLogValue(value: unknown, depth = 0): unknown {
+  if (!HOSTED_LOG_REDACTION_ENABLED) return value;
+  if (value == null) return value;
+  if (typeof value === 'string') return redactHostedLogString(value);
+  if (typeof value === 'number' || typeof value === 'boolean') return value;
+  if (typeof value === 'bigint') return value.toString();
+  if (value instanceof Error) {
+    return { errorClass: errorClassFromUnknown(value) };
+  }
+  if (Array.isArray(value)) {
+    if (depth >= 4) return '[REDACTED_DEPTH]';
+    return value.map((item) => redactHostedLogValue(item, depth + 1));
+  }
+  if (typeof value === 'object') {
+    if (depth >= 4) return '[REDACTED_DEPTH]';
+    const out: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      if (SENSITIVE_LOG_KEY_RE.test(key)) {
+        out[key] = '[REDACTED]';
+      } else if (TOOL_ARGUMENT_LOG_KEY_RE.test(key)) {
+        out[key] = '[REDACTED_ARGS]';
+      } else if (URL_LOG_KEY_RE.test(key)) {
+        out[key] = '[REDACTED_URL]';
+      } else if (IP_LOG_KEY_RE.test(key)) {
+        out[key] = '[REDACTED_IP]';
+      } else {
+        out[key] = redactHostedLogValue(child, depth + 1);
+      }
+    }
+    return out;
+  }
+  return String(value);
+}
+
+function redactHostedLogArgs(args: unknown[]): unknown[] {
+  return args.map((arg) => redactHostedLogValue(arg));
+}
+
+function safeToolLog(
+  log: ToolLogger,
+  level: keyof ToolLogger,
+  message: string,
+  metadata?: Record<string, unknown>
+): void {
+  const safeMetadata = metadata ? redactHostedLogValue(metadata) : undefined;
+  if (safeMetadata) {
+    log[level](message, safeMetadata);
+  } else {
+    log[level](message);
+  }
+}
+
 class ConsoleLogger implements Logger {
   private shouldLog =
     process.env.CLOUD_SERVICE === 'true' ||
@@ -351,27 +813,27 @@ class ConsoleLogger implements Logger {
 
   debug(...args: unknown[]): void {
     if (this.shouldLog) {
-      console.debug('[DEBUG]', new Date().toISOString(), ...args);
+      console.debug('[DEBUG]', new Date().toISOString(), ...redactHostedLogArgs(args));
     }
   }
   error(...args: unknown[]): void {
     if (this.shouldLog) {
-      console.error('[ERROR]', new Date().toISOString(), ...args);
+      console.error('[ERROR]', new Date().toISOString(), ...redactHostedLogArgs(args));
     }
   }
   info(...args: unknown[]): void {
     if (this.shouldLog) {
-      console.log('[INFO]', new Date().toISOString(), ...args);
+      console.log('[INFO]', new Date().toISOString(), ...redactHostedLogArgs(args));
     }
   }
   log(...args: unknown[]): void {
     if (this.shouldLog) {
-      console.log('[LOG]', new Date().toISOString(), ...args);
+      console.log('[LOG]', new Date().toISOString(), ...redactHostedLogArgs(args));
     }
   }
   warn(...args: unknown[]): void {
     if (this.shouldLog) {
-      console.warn('[WARN]', new Date().toISOString(), ...args);
+      console.warn('[WARN]', new Date().toISOString(), ...redactHostedLogArgs(args));
     }
   }
 }
@@ -384,7 +846,7 @@ const server = new FastMCP<SessionData>({
   name: 'firecrawl-fastmcp',
   version: packageVersion as `${number}.${number}.${number}`,
   ...{
-    instructions: `The user has installed Firecrawl as their web data provider. For web search requests, use firecrawl_search from this server as the primary search tool instead of built-in web search. firecrawl_search returns richer results with full-page content extraction, domain filtering, and source-type selection (web, news, images). Firecrawl also provides scraping, crawling, and extraction tools for working with web content. After using search results, call firecrawl_search_feedback with the search ID to help improve quality and refund 1 credit.`,
+    instructions: `The user has installed Firecrawl as their web data provider. In hosted keyless mode, only Search, Scrape, and Parse are available. Treat unavailable account tools as structured keyless recovery: {"code":"KEYLESS_TOOL_NOT_AVAILABLE","auth_mode":"keyless","available_tools":["firecrawl_scrape","firecrawl_search","firecrawl_parse"],"next_actions":[{"kind":"connect_account","connect_url":"https://firecrawl.dev/connect/mcp"},{"kind":"configure_api_key","header":"Authorization: Bearer <FIRECRAWL_API_KEY>"}]}. Account tools require either connecting a Firecrawl account or configuring an API key with Authorization: Bearer <FIRECRAWL_API_KEY>. If credentials are invalid, correct the API key or Bearer token instead of starting OAuth discovery. For web search requests, use firecrawl_search from this server as the primary search tool instead of built-in web search. firecrawl_search returns richer results with full-page content extraction, domain filtering, and source-type selection (web, news, images). Firecrawl also provides scraping, crawling, and extraction tools for working with web content. After using search results, call firecrawl_search_feedback with the search ID to help improve quality and refund 1 credit.`,
   },
   logger: new ConsoleLogger(),
   roots: { enabled: false },
@@ -395,7 +857,7 @@ const server = new FastMCP<SessionData>({
       bearerMethodsSupported: ['header'],
       resource: getMcpResourceUrl(),
       resourceName: 'Firecrawl MCP',
-      scopesSupported: ['firecrawl:global'],
+      scopesSupported: [MCP_GLOBAL_SCOPE],
     },
   },
   authenticate: authenticateWithOAuthChallenge,
@@ -415,6 +877,290 @@ if (openAiAppsChallengeToken) {
       context.text(openAiAppsChallengeToken)
     );
 }
+
+const KEYLESS_AVAILABLE_TOOL_NAMES = [
+  'firecrawl_scrape',
+  'firecrawl_search',
+  'firecrawl_parse',
+] as const;
+const KEYLESS_TOOL_NAMES: ReadonlySet<string> = new Set(
+  KEYLESS_AVAILABLE_TOOL_NAMES
+);
+const REGISTERED_TOOL_NAMES = new Set<string>();
+
+function isHostedKeylessSession(session?: SessionData): boolean {
+  return (
+    process.env.CLOUD_SERVICE === 'true' &&
+    session?.authType === 'keyless' &&
+    !session.firecrawlApiKey
+  );
+}
+
+function canAccessTool(toolName: string, session?: SessionData): boolean {
+  if (session?.credentialError) return false;
+  if (isHostedKeylessSession(session)) return KEYLESS_TOOL_NAMES.has(toolName);
+  return true;
+}
+
+const MCP_DOCS_URL = 'https://docs.firecrawl.dev/mcp-server';
+const MCP_HEADLESS_DOCS_URL = 'https://docs.firecrawl.dev/mcp/headless';
+
+function hostedAccountToolNames(): string[] {
+  return Array.from(REGISTERED_TOOL_NAMES)
+    .filter((toolName) => !KEYLESS_TOOL_NAMES.has(toolName))
+    .sort();
+}
+
+function keylessRecoveryPayload(
+  code: string,
+  overrides: Record<string, unknown> = {}
+): Record<string, unknown> {
+  return {
+    code,
+    message:
+      code === 'KEYLESS_TOOL_NOT_AVAILABLE'
+        ? 'This Firecrawl tool requires an account or API key.'
+        : code === 'KEYLESS_QUOTA_EXHAUSTED'
+          ? 'Anonymous Firecrawl quota is exhausted.'
+          : 'Anonymous Firecrawl keyless access is not currently available.',
+    auth_mode: 'keyless',
+    request_id: overrides.request_id,
+    docs_url: MCP_DOCS_URL,
+    account: {
+      auth_mode: 'keyless',
+      connected: false,
+      api_key_configured: false,
+      safe_to_display: true,
+    },
+    retryable: code === 'KEYLESS_QUOTA_EXHAUSTED',
+    available_tools: KEYLESS_AVAILABLE_TOOL_NAMES,
+    unavailable_without_account: hostedAccountToolNames(),
+    next_actions: [
+      {
+        kind: 'connect_account',
+        requires_interactive_browser: true,
+        connect_url: 'https://firecrawl.dev/connect/mcp',
+        docs_url: MCP_DOCS_URL,
+      },
+      {
+        kind: 'configure_api_key',
+        requires_interactive_browser: false,
+        header: 'Authorization: Bearer <FIRECRAWL_API_KEY>',
+        docs_url: MCP_HEADLESS_DOCS_URL,
+      },
+    ],
+    ...overrides,
+  };
+}
+
+function keylessUserError(
+  code: string,
+  overrides: Record<string, unknown> = {}
+) {
+  const payload = keylessRecoveryPayload(code, overrides);
+  return new UserError(String(payload.message), payload);
+}
+
+type ActionTrace = {
+  apiKeyId?: number;
+  authType: SessionData['authType'];
+  clientName?: string;
+  clientVersion?: string;
+  errorClass?: string;
+  oauthClientId?: string;
+  requestId?: string;
+  resource?: string;
+  status: 'started' | 'success' | 'error';
+  teamId?: string;
+  timestamp: string;
+  toolName: string;
+  userAgent?: string;
+  userId?: string;
+};
+
+function getMcpActionLogSecret(): string | undefined {
+  return normalizeHeader(process.env.FIRECRAWL_MCP_ACTION_LOG_SECRET);
+}
+
+function getMcpActionLogEndpoint(): string | undefined {
+  const configured = normalizeHeader(process.env.FIRECRAWL_MCP_ACTION_LOG_URL);
+  if (configured) return configured;
+  const apiUrl = normalizeHeader(process.env.FIRECRAWL_API_URL);
+  return apiUrl
+    ? `${withoutTrailingSlash(apiUrl)}/v2/mcp/action-logs`
+    : undefined;
+}
+
+function emitActionTrace(trace: ActionTrace): void {
+  console.error('[MCP_ACTION]', JSON.stringify(trace));
+}
+
+function emitActionLogMetric(
+  status: 'success' | 'non_2xx' | 'timeout' | 'dropped',
+  statusCode?: number
+): void {
+  console.error(
+    '[MCP_ACTION_LOG_METRIC]',
+    JSON.stringify({ status, ...(statusCode ? { statusCode } : {}) })
+  );
+}
+
+function emitRemoteActionLog(trace: ActionTrace): void {
+  const endpoint = getMcpActionLogEndpoint();
+  const secret = getMcpActionLogSecret();
+  const hasRequiredIdentity =
+    (trace.authType === 'api-key' && trace.apiKeyId !== undefined) ||
+    (trace.authType === 'oauth' &&
+      Boolean(trace.userId) &&
+      Boolean(trace.oauthClientId));
+  if (!endpoint || !secret || !trace.teamId || !hasRequiredIdentity) {
+    emitActionLogMetric('dropped');
+    return;
+  }
+
+  const authIdentity =
+    trace.authType === 'oauth'
+      ? {
+          user_id: trace.userId,
+          oauth_client_id: trace.oauthClientId,
+          ...(trace.apiKeyId !== undefined
+            ? { api_key_id: trace.apiKeyId }
+            : {}),
+        }
+      : trace.authType === 'api-key' && trace.apiKeyId !== undefined
+        ? { api_key_id: trace.apiKeyId }
+        : {};
+  const payload = {
+    team_id: trace.teamId,
+    ...authIdentity,
+    auth_type: trace.authType ?? 'unknown',
+    tool_name: trace.toolName,
+    status: trace.status,
+    request_id: trace.requestId,
+    user_agent: trace.userAgent,
+    client_name: trace.clientName,
+    client_version: trace.clientVersion,
+    error_class: trace.errorClass,
+    resource: trace.resource,
+  };
+
+  const timeoutMs = Number(
+    process.env.FIRECRAWL_MCP_ACTION_LOG_TIMEOUT_MS ?? 1500
+  );
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    Math.max(100, timeoutMs)
+  );
+  void fetch(endpoint, {
+    body: JSON.stringify(payload),
+    headers: {
+      Authorization: `Bearer ${secret}`,
+      'Content-Type': 'application/json',
+    },
+    method: 'POST',
+    signal: controller.signal,
+  })
+    .then((response) => {
+      emitActionLogMetric(response.ok ? 'success' : 'non_2xx', response.status);
+    })
+    .catch((error) => {
+      emitActionLogMetric(
+        error instanceof Error && error.name === 'AbortError'
+          ? 'timeout'
+          : 'dropped'
+      );
+    })
+    .finally(() => clearTimeout(timeout));
+}
+
+function emitTerminalActionEvents(trace: ActionTrace): void {
+  emitActionTrace(trace);
+  emitRemoteActionLog(trace);
+}
+
+function errorClassFromUnknown(error: unknown): string {
+  return error instanceof Error ? error.name || 'Error' : typeof error;
+}
+
+const addTool = server.addTool.bind(server);
+server.addTool = ((tool: Parameters<typeof server.addTool>[0]) => {
+  const existingCanAccess = tool.canAccess;
+  const execute = tool.execute;
+  REGISTERED_TOOL_NAMES.add(tool.name);
+  const isHostedAccountTool = !KEYLESS_TOOL_NAMES.has(tool.name);
+  addTool({
+    ...tool,
+    ...(isHostedAccountTool
+      ? { _meta: { ...tool._meta, requires_auth: true } }
+      : {}),
+    canAccess: (session: SessionData) =>
+      canAccessTool(tool.name, session) &&
+      (existingCanAccess ? existingCanAccess(session) : true),
+    execute: async (args, context) => {
+      const requestId = randomUUID();
+      const invocationContext = {
+        ...context,
+        session: { ...(context.session ?? {}), requestId },
+      };
+      if (
+        isHostedKeylessSession(invocationContext.session) &&
+        !KEYLESS_TOOL_NAMES.has(tool.name)
+      ) {
+        throw keylessUserError('KEYLESS_TOOL_NOT_AVAILABLE', {
+          request_id: requestId,
+        });
+      }
+
+      if (!ACTION_TRACES_ENABLED) return execute(args, invocationContext);
+
+      const clientIdentity = safeClientIdentity({
+        clientName:
+          context.client.version?.name ??
+          invocationContext.session?.clientName,
+        clientVersion:
+          context.client.version?.version ??
+          invocationContext.session?.clientVersion,
+        userAgent: invocationContext.session?.userAgent,
+      });
+      const baseTrace = {
+        apiKeyId: invocationContext.session?.apiKeyId,
+        authType: invocationContext.session?.authType ?? 'none',
+        clientName: clientIdentity.clientName,
+        clientVersion: clientIdentity.clientVersion,
+        oauthClientId: invocationContext.session?.oauthClientId,
+        requestId,
+        resource: canonicalResource(getMcpResourceUrl()),
+        teamId: invocationContext.session?.teamId,
+        toolName: tool.name,
+        userAgent: clientIdentity.userAgent,
+        userId: invocationContext.session?.userId,
+      };
+      emitActionTrace({
+        ...baseTrace,
+        status: 'started',
+        timestamp: new Date().toISOString(),
+      });
+      try {
+        const result = await execute(args, invocationContext);
+        emitTerminalActionEvents({
+          ...baseTrace,
+          status: 'success',
+          timestamp: new Date().toISOString(),
+        });
+        return result;
+      } catch (error) {
+        emitTerminalActionEvents({
+          ...baseTrace,
+          errorClass: errorClassFromUnknown(error),
+          status: 'error',
+          timestamp: new Date().toISOString(),
+        });
+        throw error;
+      }
+    },
+  });
+}) as typeof server.addTool;
 
 function createClient(apiKey?: string): FirecrawlApp {
   const config: any = {
@@ -948,7 +1694,10 @@ async function executeHostedParse(
       declaredSizeBytes: args.declaredSizeBytes,
     }) as Record<string, unknown>;
 
-    log.info('Creating hosted parse upload URL', { filename, contentType });
+    safeToolLog(log, 'info', 'Creating hosted parse upload URL', {
+      contentType,
+      filename,
+    });
     const uploadJson = await apiPostJsonForSession(
       '/v2/parse/upload-url',
       uploadRequest,
@@ -999,7 +1748,7 @@ async function executeHostedParse(
     uploadRef: args.uploadRef as string,
     ...buildParseOptionsPayload(options),
   };
-  log.info('Parsing hosted upload reference');
+  safeToolLog(log, 'info', 'Parsing hosted upload reference');
   const parseJson = await apiPostJsonForSession(
     '/v2/parse',
     parsePayload,
@@ -1132,16 +1881,15 @@ ${
       options as Record<string, unknown>
     );
     const cleaned = removeEmptyTopLevel(transformed);
-    if (cleaned.lockdown) {
-      log.info('Scraping URL (lockdown)');
-    } else {
-      log.info('Scraping URL', { url: String(url) });
-    }
+    safeToolLog(log, 'info', 'Scraping URL', {
+      lockdown: Boolean(cleaned.lockdown),
+    });
     if (isKeylessMode(session)) {
+      const safeUrl = await assertPublicHttpUrl(String(url), 'scrape URL');
       const json = await keylessPost(
         '/v2/scrape',
         {
-          url: String(url),
+          url: safeUrl,
           ...cleaned,
           origin: ORIGIN,
         },
@@ -1149,8 +1897,9 @@ ${
       );
       return asText(json?.data ?? json);
     }
+    const safeUrl = await assertPublicHttpUrl(String(url), 'scrape URL');
     const client = getClient(session);
-    const res = await client.scrape(String(url), {
+    const res = await client.scrape(safeUrl, {
       ...cleaned,
       origin: ORIGIN,
     } as any);
@@ -1210,10 +1959,11 @@ Map a website to discover all indexed URLs on the site.
       string,
       unknown
     >;
+    const safeUrl = await assertPublicHttpUrl(String(url), 'map URL');
     const client = getClient(session);
     const cleaned = removeEmptyTopLevel(options as Record<string, unknown>);
-    log.info('Mapping URL', { url: String(url) });
-    const res = await client.map(String(url), {
+    safeToolLog(log, 'info', 'Mapping URL');
+    const res = await client.map(safeUrl, {
       ...cleaned,
       origin: ORIGIN,
     } as any);
@@ -1344,7 +2094,7 @@ The query also supports search operators, that you can use if needed to refine t
       includeDomains,
       excludeDomains
     );
-    log.info('Searching', { query: searchQuery });
+    safeToolLog(log, 'info', 'Searching', { query: searchQuery });
     const searchBody = {
       query: searchQuery,
       ...(cleaned as any),
@@ -1374,34 +2124,40 @@ function resolveApiBaseUrl(): string {
   );
 }
 
-// Keyless free tier: when no credential is configured and we're targeting the
-// Firecrawl cloud (not self-hosted via FIRECRAWL_API_URL, not the multi-tenant
-// CLOUD_SERVICE deployment), scrape and search are free, rate-limited per IP.
-// The cloud only grants this when NO Authorization header is sent, so we bypass
-// the SDK — which always attaches a Bearer header — and post directly.
+// Keyless free tier: when no credential is configured, keyless-capable requests
+// must not send Authorization. Bypass the SDK — which always attaches a Bearer
+// header — and post directly. Hosted CLOUD_SERVICE sessions also attach the
+// secret-gated forwarded client IP so scrape/search/parse are rate-limited per
+// real client IP, not the shared server IP.
 /** Best-effort end-user client IP from the incoming MCP request headers. */
 function extractClientIp(request?: {
   headers: IncomingHttpHeaders;
 }): string | undefined {
-  const xff = request?.headers?.['x-forwarded-for'];
-  const raw = Array.isArray(xff) ? xff[0] : xff;
-  const first = typeof raw === 'string' ? raw.split(',')[0].trim() : undefined;
-  return first || undefined;
+  return extractSinglePublicClientIp(request?.headers?.['x-forwarded-for']);
 }
 
 /**
  * Read-only check (no quota consumed) of whether a client IP can still use the
  * keyless free tier, via the API's secret-gated eligibility endpoint. Fails
- * closed: anything other than a clear "eligible: true" means fall through to the
- * OAuth challenge rather than silently granting keyless.
+ * closed: anything other than a clear "eligible: true" leaves the session
+ * keyless but ineligible, so tool calls return structured MCP recovery instead
+ * of silently granting upstream keyless access.
  */
 async function keylessEligible(clientIp: string): Promise<boolean> {
   const secret = process.env.KEYLESS_PROXY_SECRET;
   if (!secret) return false;
+  const configuredTimeout = Number(process.env.KEYLESS_ELIGIBILITY_TIMEOUT_MS);
+  const timeoutMs = Number.isFinite(configuredTimeout)
+    ? Math.min(Math.max(configuredTimeout, 50), 10_000)
+    : 1_500;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  timeout.unref();
   try {
     const response = await fetch(
       `${resolveApiBaseUrl()}/v2/keyless/eligibility`,
       {
+        signal: controller.signal,
         headers: {
           ...ORIGIN_HEADERS,
           'x-firecrawl-keyless-ip': clientIp,
@@ -1414,15 +2170,15 @@ async function keylessEligible(clientIp: string): Promise<boolean> {
     return json?.eligible === true;
   } catch {
     return false;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
 function isKeylessMode(session?: SessionData): boolean {
-  if (session?.firecrawlApiKey) return false;
+  if (session?.firecrawlApiKey || session?.credentialError) return false;
   if (process.env.CLOUD_SERVICE === 'true') {
-    // Hosted: keyless only for secret-gated sessions carrying the forwarded
-    // client IP (so the per-IP cap is meaningful, not the shared server IP).
-    return !!session?.keylessClientIp;
+    return session?.authType === 'keyless';
   }
   // Local/stdio against the cloud (not a self-hosted FIRECRAWL_API_URL).
   return !process.env.FIRECRAWL_API_URL;
@@ -1433,6 +2189,17 @@ async function keylessPost(
   body: Record<string, unknown>,
   session?: SessionData
 ): Promise<any> {
+  if (
+    process.env.CLOUD_SERVICE === 'true' &&
+    session?.authType === 'keyless' &&
+    (!session.keylessClientIp ||
+      !(await keylessEligible(session.keylessClientIp)))
+  ) {
+    throw keylessUserError('KEYLESS_ACCESS_NOT_AVAILABLE', {
+      request_id: session?.requestId,
+    });
+  }
+
   const headers: Record<string, string> = {
     ...ORIGIN_HEADERS,
     'Content-Type': 'application/json',
@@ -1450,6 +2217,21 @@ async function keylessPost(
   });
   const json: any = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (response.status === 429) {
+      const retryAfter = Number(response.headers.get('retry-after'));
+      throw keylessUserError('KEYLESS_QUOTA_EXHAUSTED', {
+        request_id: session?.requestId,
+        rate_limit_layer: 'application',
+        ...(Number.isFinite(retryAfter) && retryAfter > 0
+          ? { retry_after_seconds: retryAfter }
+          : {}),
+      });
+    }
+    if (response.status === 401 || response.status === 403) {
+      throw keylessUserError('KEYLESS_ACCESS_NOT_AVAILABLE', {
+        request_id: session?.requestId,
+      });
+    }
     throw new Error(
       json?.error || `Firecrawl request failed (HTTP ${response.status})`
     );
@@ -1726,7 +2508,7 @@ Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the 
         throw new Error('Unauthorized: missing API key for search feedback.');
       }
 
-      log.info('Submitting search feedback', { searchId, rating });
+      safeToolLog(log, 'info', 'Submitting search feedback', { searchId, rating });
       const response = await fetch(endpoint, {
         method: 'POST',
         headers,
@@ -1745,9 +2527,9 @@ Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the 
       // so agents do not retry-loop on substantive-feedback rejections,
       // expired windows, etc.
       if (!response.ok) {
-        log.warn('Search feedback rejected', {
-          status: response.status,
+        safeToolLog(log, 'warn', 'Search feedback rejected', {
           feedbackErrorCode: parsed?.feedbackErrorCode,
+          status: response.status,
         });
         return asText({
           success: false,
@@ -1866,7 +2648,11 @@ Do not store multi-MB outputs in feedback. Use concise notes, issue codes, URLs,
         origin: ORIGIN,
       });
 
-      log.info('Submitting endpoint feedback', { endpoint, jobId, rating });
+      safeToolLog(log, 'info', 'Submitting endpoint feedback', {
+        endpoint,
+        jobId,
+        rating,
+      });
       const response = await fetch(`${apiBase}/v2/feedback`, {
         method: 'POST',
         headers,
@@ -1882,7 +2668,7 @@ Do not store multi-MB outputs in feedback. Use concise notes, issue codes, URLs,
       }
 
       if (!response.ok) {
-        log.warn('Endpoint feedback rejected', {
+        safeToolLog(log, 'warn', 'Endpoint feedback rejected', {
           status: response.status,
           feedbackErrorCode: parsed?.feedbackErrorCode,
         });
@@ -1962,6 +2748,7 @@ server.addTool({
   }),
   execute: async (args, { session, log }) => {
     const { url, ...options } = args as Record<string, unknown>;
+    const safeUrl = await assertPublicHttpUrl(String(url), 'crawl URL');
     const client = getClient(session);
 
     const opts = { ...options } as Record<string, unknown>;
@@ -1971,6 +2758,9 @@ server.addTool({
       );
     }
 
+    if (typeof opts.webhook === 'string') {
+      opts.webhook = await assertPublicHttpUrl(opts.webhook, 'crawl webhook URL');
+    }
     const webhook = buildWebhook(opts);
     if (webhook) opts.webhook = webhook;
     delete opts.webhookHeaders;
@@ -1987,9 +2777,9 @@ server.addTool({
     delete (cleaned as Record<string, unknown>).pollInterval;
     delete (cleaned as Record<string, unknown>).timeout;
 
-    log.info('Starting crawl', { url: String(url) });
+    safeToolLog(log, 'info', 'Starting crawl');
     const started = await (client as any).http.post('/v2/crawl', {
-      url: String(url),
+      url: safeUrl,
       ...(cleaned as Record<string, unknown>),
       origin: ORIGIN,
     });
@@ -2097,11 +2887,17 @@ Extract structured information from web pages using LLM capabilities. Supports b
   execute: async (args: unknown, { session, log }): Promise<string> => {
     const client = getClient(session);
     const a = args as Record<string, unknown>;
-    log.info('Extracting from URLs', {
+    safeToolLog(log, 'info', 'Extracting from URLs', {
       count: Array.isArray(a.urls) ? a.urls.length : 0,
     });
     const extractBody = removeEmptyTopLevel({
-      urls: a.urls as string[],
+      urls: Array.isArray(a.urls)
+        ? await Promise.all(
+            (a.urls as string[]).map((url) =>
+              assertPublicHttpUrl(url, 'extract URL')
+            )
+          )
+        : [],
       prompt: a.prompt as string | undefined,
       schema: (a.schema as Record<string, unknown>) || undefined,
       allowExternalLinks: a.allowExternalLinks as boolean | undefined,
@@ -2199,13 +2995,19 @@ Then poll with \`firecrawl_agent_status\` every 15-30 seconds for at least 2-3 m
   execute: async (args: unknown, { session, log }): Promise<string> => {
     const client = getClient(session);
     const a = args as Record<string, unknown>;
-    log.info('Starting agent', {
-      prompt: (a.prompt as string).substring(0, 100),
+    safeToolLog(log, 'info', 'Starting agent', {
+      promptLength: typeof a.prompt === 'string' ? a.prompt.length : 0,
       urlCount: Array.isArray(a.urls) ? a.urls.length : 0,
     });
     const agentBody = removeEmptyTopLevel({
       prompt: a.prompt as string,
-      urls: a.urls as string[] | undefined,
+      urls: Array.isArray(a.urls)
+        ? await Promise.all(
+            (a.urls as string[]).map((url) =>
+              assertPublicHttpUrl(url, 'agent URL')
+            )
+          )
+        : undefined,
       schema: (a.schema as Record<string, unknown>) || undefined,
     });
     const res = await (client as any).startAgent({
@@ -2253,7 +3055,7 @@ Check the status of an agent job and retrieve results when complete. Use this to
   execute: async (args: unknown, { session, log }): Promise<string> => {
     const client = getClient(session);
     const { id } = args as { id: string };
-    log.info('Checking agent status', { id });
+    safeToolLog(log, 'info', 'Checking agent status', { id });
     const res = await (client as any).http.get(
       `/v2/agent/${encodeURIComponent(id)}`,
       ORIGIN_HEADERS
@@ -2320,7 +3122,10 @@ Interact with a page in a live browser session: click buttons, fill forms, extra
       code: z.string().trim().min(1).optional(),
       language: z.enum(['bash', 'python', 'node']).optional(),
       timeout: z.number().min(1).max(300).optional(),
-      scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+      scrapeOptions: scrapeParamsSchema
+        .omit({ url: true })
+        .partial()
+        .optional(),
     })
     .refine((data) => Boolean(data.scrapeId) !== Boolean(data.url), {
       message:
@@ -2356,9 +3161,10 @@ Interact with a page in a live browser session: click buttons, fill forms, extra
     let scrapeId = providedScrapeId;
     const openedFromUrl = !scrapeId;
     if (openedFromUrl) {
-      log.info('Opening interact session from url', { url });
+      safeToolLog(log, 'info', 'Opening interact session from URL');
       const cleanedScrapeOptions = removeEmptyTopLevel(scrapeOptions ?? {});
-      const scraped = await client.scrape(String(url), {
+      const safeUrl = await assertPublicHttpUrl(String(url), 'interact URL');
+      const scraped = await client.scrape(safeUrl, {
         ...cleanedScrapeOptions,
         origin: ORIGIN,
       } as any);
@@ -2367,7 +3173,7 @@ Interact with a page in a live browser session: click buttons, fill forms, extra
         return asText({
           error:
             'Could not open an interact session: the scrape did not return a scrapeId. Try firecrawl_scrape first, then pass its scrapeId.',
-          url,
+          url: safeUrl,
         });
       }
     }
@@ -2378,14 +3184,21 @@ Interact with a page in a live browser session: click buttons, fill forms, extra
       });
     }
     const activeScrapeId = scrapeId;
-    log.info('Interacting with page', { scrapeId: activeScrapeId });
+    safeToolLog(log, 'info', 'Interacting with page', {
+      scrapeId: activeScrapeId,
+    });
     const interactArgs: Record<string, unknown> = { origin: ORIGIN };
     if (prompt) interactArgs.prompt = prompt;
     if (code) interactArgs.code = code;
     if (language) interactArgs.language = language;
     if (timeout != null) interactArgs.timeout = timeout;
     const res = await client.interact(activeScrapeId, interactArgs as any);
-    if (openedFromUrl && res && typeof res === 'object' && !Array.isArray(res)) {
+    if (
+      openedFromUrl &&
+      res &&
+      typeof res === 'object' &&
+      !Array.isArray(res)
+    ) {
       return asText({
         ...(res as unknown as Record<string, unknown>),
         scrapeId: activeScrapeId,
@@ -2426,7 +3239,7 @@ Stop an interact session for a scraped page. Call this when you are done interac
   execute: async (args: unknown, { session, log }): Promise<string> => {
     const client = getClient(session);
     const { scrapeId } = args as { scrapeId: string };
-    log.info('Stopping interact session', { scrapeId });
+    safeToolLog(log, 'info', 'Stopping interact session', { scrapeId });
     const res = await (client as any).http.delete(
       `/v2/scrape/${encodeURIComponent(scrapeId)}/interact`,
       ORIGIN_HEADERS
@@ -2452,7 +3265,7 @@ In local/non-cloud MCP mode, this tool reads filePath from the MCP server filesy
 
 In hosted CLOUD_SERVICE mode, this tool is a two-call flow because hosted MCP cannot read your local filesystem:
 1. Call with filePath, contentType, parse options, and optional declaredSizeBytes. The hosted server mints a short-lived upload URL and returns a safe local curl PUT command plus nextToolCall.
-2. Run the returned curl command locally, then call firecrawl_parse again with uploadRef and the desired parse options. The hosted server calls /v2/parse server-side with your session credential.
+2. Run the returned curl command locally, then call firecrawl_parse again with uploadRef and the desired parse options. The hosted server calls /v2/parse server-side with your session credential or keyless proxy eligibility.
 
 **Best for:** Extracting content from a local document (PDF, Word, Excel, HTML, etc.); pulling structured data out of a file with JSON format; converting binary documents into markdown for downstream reasoning.
 **Not recommended for:** Remote URLs (use firecrawl_scrape); multiple files at once (call parse multiple times); documents that require interactive actions, screenshots, or change tracking — those aren't supported by the parse endpoint.
@@ -2519,7 +3332,7 @@ Add \`"parsers": ["pdf"]\` (optionally with \`pdfOptions.maxPages\`) when parsin
       contentType?: string;
     } & Record<string, unknown>;
 
-    const absPath = path.resolve(filePath);
+    const absPath = assertLocalPathWithinRoot(filePath);
     const buffer = await readFile(absPath);
     const filename = path.basename(absPath);
     const fileContentType =
@@ -2545,7 +3358,7 @@ Add \`"parsers": ["pdf"]\` (optionally with \`pdfOptions.maxPages\`) when parsin
     }
 
     const endpoint = `${apiUrl.replace(/\/$/, '')}/v2/parse`;
-    log.info('Parsing local file', {
+    safeToolLog(log, 'info', 'Parsing local file', {
       endpoint,
       filename,
       size: buffer.length,
@@ -2599,6 +3412,71 @@ if (
     transportType: 'stdio',
   };
 }
+
+
+function hostedReadinessFailures(): string[] {
+  if (process.env.CLOUD_SERVICE !== 'true') return [];
+  const failures: string[] = [];
+  const requireEnv = (name: string) => {
+    if (!normalizeHeader(process.env[name])) failures.push(`${name} is required`);
+  };
+  requireEnv('FIRECRAWL_API_URL');
+  requireEnv('FIRECRAWL_OAUTH_INTROSPECT_SECRET');
+  requireEnv('FIRECRAWL_MCP_ACTION_LOG_SECRET');
+  const endpoint = normalizeHeader(process.env.FASTMCP_ENDPOINT);
+  if (endpoint === '/v2/mcp') {
+    requireEnv('KEYLESS_PROXY_SECRET');
+  }
+  if (process.env.HTTP_STREAMABLE_SERVER !== 'true') {
+    failures.push('HTTP_STREAMABLE_SERVER must be true');
+  }
+  if (endpoint !== '/v2/mcp' && endpoint !== '/v2/mcp-oauth') {
+    failures.push('FASTMCP_ENDPOINT must be /v2/mcp or /v2/mcp-oauth');
+  }
+  const resourceUrl = normalizeHeader(process.env.FIRECRAWL_MCP_RESOURCE_URL) ?? DEFAULT_MCP_RESOURCE_URL;
+  if (
+    endpoint === '/v2/mcp' &&
+    !canonicalResource(resourceUrl).endsWith('/v2/mcp')
+  ) {
+    failures.push(
+      'FIRECRAWL_MCP_RESOURCE_URL must end with /v2/mcp when FASTMCP_ENDPOINT is /v2/mcp'
+    );
+  }
+  if (
+    endpoint === '/v2/mcp-oauth' &&
+    !canonicalResource(resourceUrl).endsWith('/v2/mcp-oauth')
+  ) {
+    failures.push(
+      'FIRECRAWL_MCP_RESOURCE_URL must end with /v2/mcp-oauth when FASTMCP_ENDPOINT is /v2/mcp-oauth'
+    );
+  }
+  for (const [name, value] of [
+    ['FIRECRAWL_API_URL', process.env.FIRECRAWL_API_URL],
+    ['FIRECRAWL_OAUTH_ISSUER', process.env.FIRECRAWL_OAUTH_ISSUER],
+    ['FIRECRAWL_MCP_RESOURCE_URL', process.env.FIRECRAWL_MCP_RESOURCE_URL],
+    ['FIRECRAWL_MCP_ACTION_LOG_URL', process.env.FIRECRAWL_MCP_ACTION_LOG_URL],
+  ] as const) {
+    const normalized = normalizeHeader(value);
+    if (!normalized) continue;
+    try {
+      const url = new URL(normalized);
+      if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+        failures.push(`${name} must be an http(s) URL`);
+      }
+    } catch {
+      failures.push(`${name} must be a valid URL`);
+    }
+  }
+  return failures;
+}
+
+server.getApp().get('/ready', (context) => {
+  const failures = hostedReadinessFailures();
+  if (failures.length > 0) {
+    return context.json({ ok: false, failures }, 503);
+  }
+  return context.json({ ok: true }, 200);
+});
 
 registerMonitorTools(server);
 registerResearchTools(server, getClient);
