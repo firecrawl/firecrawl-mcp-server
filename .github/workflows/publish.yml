@@ -6,6 +6,10 @@ on:
       - main
     paths:
       - package.json
+      - server.json
+      - pnpm-lock.yaml
+      - src/**
+      - .github/workflows/publish.yml
   workflow_dispatch:
 
 jobs:
@@ -15,6 +19,9 @@ jobs:
     permissions:
       id-token: write  # Required for OIDC authentication with MCP registry
       contents: read
+    env:
+      MCP_PUBLISHER_VERSION: v1.7.9
+      MCP_PUBLISHER_CHECKSUM_FILE: registry_1.7.9_checksums.txt
 
     steps:
       - uses: actions/checkout@v5
@@ -22,46 +29,45 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4
         with:
-          version: 10
+          version: 10.17.1
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: "pnpm"
+          node-version: '22.x'
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
 
-      - name: Authenticate
-        run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify package gates
+        run: |
+          pnpm run lint
+          pnpm run typecheck
+          pnpm run check:manifest
+          pnpm test
 
       - name: Publish to NPM
-        run: |
-          pnpm install
-          pnpm run build
-          pnpm publish --access public --no-git-checks
+        run: pnpm publish --access public --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Install MCP Publisher
+      - name: Install verified MCP Publisher
+        shell: bash
         run: |
-          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          set -euo pipefail
+          os=$(uname -s | tr '[:upper:]' '[:lower:]')
+          arch=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+          asset="mcp-publisher_${os}_${arch}.tar.gz"
+          base="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
+          curl -fsSLO "${base}/${asset}"
+          curl -fsSLO "${base}/${MCP_PUBLISHER_CHECKSUM_FILE}"
+          grep " ${asset}$" "${MCP_PUBLISHER_CHECKSUM_FILE}" | sha256sum -c -
+          tar xzf "${asset}" mcp-publisher
 
       - name: Login to MCP Registry
         run: ./mcp-publisher login github-oidc
-
-      - name: Sync MCP Registry version
-        run: |
-          node -e "
-            const fs = require('fs');
-            const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-            const manifest = JSON.parse(fs.readFileSync('server.json', 'utf8'));
-            manifest.version = packageJson.version;
-            for (const pkg of manifest.packages ?? []) {
-              if (pkg.registryType === 'npm' && pkg.identifier === 'firecrawl-mcp') {
-                pkg.version = packageJson.version;
-              }
-            }
-            fs.writeFileSync('server.json', JSON.stringify(manifest, null, 2) + '\n');
-          "
 
       - name: Publish to MCP Registry
         run: ./mcp-publisher publish

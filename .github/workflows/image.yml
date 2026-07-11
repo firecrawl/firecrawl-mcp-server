@@ -1,8 +1,5 @@
 name: Deploy Images to GHCR
 
-env:
-  DOTNET_VERSION: '6.0.x'
-
 on:
   push:
     branches:
@@ -10,28 +7,74 @@ on:
   workflow_dispatch:
 
 jobs:
-  push-image:
+  verify-image:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - name: 'Checkout GitHub Action'
-        uses: actions/checkout@main
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
 
-      - name: 'Login to GitHub Container Registry'
-        uses: docker/login-action@v1
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Check MCP manifest
+        run: pnpm run check:manifest
+
+      - name: Test
+        run: pnpm test
+
+  push-image:
+    needs: verify-image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{github.actor}}
-          password: ${{secrets.GITHUB_TOKEN}}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 'Set up Docker Buildx'
-        uses: docker/setup-buildx-action@v1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: 'Build Service Image'
-        uses: docker/build-push-action@v2
+      - name: Build Service Image
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile.service
           push: true
-          tags: ghcr.io/firecrawl/firecrawl-mcp-server:latest
+          tags: |
+            ghcr.io/firecrawl/firecrawl-mcp-server:${{ github.sha }}
+            ghcr.io/firecrawl/firecrawl-mcp-server:latest
           cache-from: type=registry,ref=ghcr.io/firecrawl/firecrawl-mcp-server:latest
           cache-to: type=inline
+          provenance: true
+          sbom: true

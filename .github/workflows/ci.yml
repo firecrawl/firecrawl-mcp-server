@@ -7,25 +7,49 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: 10.17.1
 
       - name: Use Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '22.x'
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: pnpm run build
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Check MCP manifest
+        run: pnpm run check:manifest
+
+      - name: Test
+        run: pnpm test
+
+      - name: Hosted OAuth audience replay gate
+        run: pnpm run test:hosted-auth
+
+  docker-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build service image
+        run: docker build -f Dockerfile.service -t firecrawl-mcp-service:ci .
+
+      - name: Smoke service image
+        run: bash scripts/docker-smoke.sh firecrawl-mcp-service:ci
