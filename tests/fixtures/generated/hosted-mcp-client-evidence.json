@@ -1,0 +1,353 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-07-11T19:51:17.432Z",
+  "mode": "live-local",
+  "safety": {
+    "real_user_config_mutated": false,
+    "external_authentication_attempted": false,
+    "paid_or_production_firecrawl_calls": false,
+    "note": "All live-local commands use localhost mock URLs, temp HOME/XDG/CLAUDE_CONFIG_DIR/CODEX_HOME, BROWSER=/usr/bin/false, and bounded timeouts."
+  },
+  "clients": {
+    "claude_expected": "2.1.187 (Claude Code)",
+    "claude_observed": "2.1.187 (Claude Code)",
+    "codex_expected": "codex-cli 0.144.0",
+    "codex_observed": "codex-cli 0.144.0"
+  },
+  "local_replay": [
+    {
+      "client": "claude",
+      "mock_mode": "keyless_200_with_prm",
+      "server_url": "http://127.0.0.1:64920/v2/mcp",
+      "temp_home_removed": true,
+      "commands": [
+        {
+          "command": "claude mcp add --scope user --transport http firecrawl-keyless_200_with_prm http://127.0.0.1:64920/v2/mcp",
+          "exit_code": 0,
+          "signal": null,
+          "timed_out": false,
+          "stdout_sha256": "669945334d57b0986b915374ee9a634ecc4d700f5b0542f05f80771f26d39743",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_excerpt": "Added HTTP MCP server firecrawl-keyless_200_with_prm with URL: http://127.0.0.1:64920/v2/mcp to user config\nFile modified: /var/folders/js/k0zfr3rj0jlbff7k7y083gl40000gn/T/firecrawl-mcp-claude-keyless_200_with_prm-s22j5c/.claude/.claude.json\n",
+          "stderr_excerpt": "",
+          "body_marker_visible": false
+        },
+        {
+          "command": "claude mcp get firecrawl-keyless_200_with_prm",
+          "exit_code": 143,
+          "signal": null,
+          "timed_out": true,
+          "error_code": "ETIMEDOUT",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_excerpt": "",
+          "stderr_excerpt": "",
+          "body_marker_visible": false
+        },
+        {
+          "command": "claude mcp login --no-browser firecrawl-keyless_200_with_prm",
+          "exit_code": 143,
+          "signal": null,
+          "timed_out": true,
+          "error_code": "ETIMEDOUT",
+          "stdout_sha256": "4396ec95a037e81df2b95bf50f4c1bd5512f8760ee5306a267386bf2b42990d6",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_excerpt": "Starting authentication for \"firecrawl-keyless_200_with_prm\"…\n",
+          "stderr_excerpt": "",
+          "body_marker_visible": false
+        }
+      ],
+      "request_sequence": [],
+      "assertions": {
+        "real_user_config_mutated": false,
+        "body_marker_visible_to_cli_output": false,
+        "prm_requested": false,
+        "as_metadata_requested": false,
+        "dcr_requested": false,
+        "authorize_requested": false
+      }
+    },
+    {
+      "client": "claude",
+      "mock_mode": "bare_401_with_json_body",
+      "server_url": "http://127.0.0.1:64944/v2/mcp",
+      "temp_home_removed": true,
+      "commands": [
+        {
+          "command": "claude mcp add --scope user --transport http firecrawl-bare_401_with_json_body http://127.0.0.1:64944/v2/mcp",
+          "exit_code": 0,
+          "signal": null,
+          "timed_out": false,
+          "stdout_sha256": "bfa91f2aac8c08f009d3f082066831e2cfc933de0862cde63c6a3462b78893af",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_excerpt": "Added HTTP MCP server firecrawl-bare_401_with_json_body with URL: http://127.0.0.1:64944/v2/mcp to user config\nFile modified: /var/folders/js/k0zfr3rj0jlbff7k7y083gl40000gn/T/firecrawl-mcp-claude-bare_401_with_json_body-8l5FNE/.claude/.claude.json\n",
+          "stderr_excerpt": "",
+          "body_marker_visible": false
+        },
+        {
+          "command": "claude mcp get firecrawl-bare_401_with_json_body",
+          "exit_code": 143,
+          "signal": null,
+          "timed_out": true,
+          "error_code": "ETIMEDOUT",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_excerpt": "",
+          "stderr_excerpt": "",
+          "body_marker_visible": false
+        },
+        {
+          "command": "claude mcp login --no-browser firecrawl-bare_401_with_json_body",
+          "exit_code": 143,
+          "signal": null,
+          "timed_out": true,
+          "error_code": "ETIMEDOUT",
+          "stdout_sha256": "7914da976a3173d3b65610d0d2366dc134c717ad1e6a0606f50e92645cd86008",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_excerpt": "Starting authentication for \"firecrawl-bare_401_with_json_body\"…\n",
+          "stderr_excerpt": "",
+          "body_marker_visible": false
+        }
+      ],
+      "request_sequence": [],
+      "assertions": {
+        "real_user_config_mutated": false,
+        "body_marker_visible_to_cli_output": false,
+        "prm_requested": false,
+        "as_metadata_requested": false,
+        "dcr_requested": false,
+        "authorize_requested": false
+      }
+    },
+    {
+      "client": "claude",
+      "mock_mode": "oauth_challenge_401",
+      "server_url": "http://127.0.0.1:64966/v2/mcp",
+      "temp_home_removed": true,
+      "commands": [
+        {
+          "command": "claude mcp add --scope user --transport http firecrawl-oauth_challenge_401 http://127.0.0.1:64966/v2/mcp",
+          "exit_code": 0,
+          "signal": null,
+          "timed_out": false,
+          "stdout_sha256": "80683d55c4c7ad6afddc1e5d3d15cff2211315e77d41bd83b60ef0a5deccdcbb",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_excerpt": "Added HTTP MCP server firecrawl-oauth_challenge_401 with URL: http://127.0.0.1:64966/v2/mcp to user config\nFile modified: /var/folders/js/k0zfr3rj0jlbff7k7y083gl40000gn/T/firecrawl-mcp-claude-oauth_challenge_401-mcHWvd/.claude/.claude.json\n",
+          "stderr_excerpt": "",
+          "body_marker_visible": false
+        },
+        {
+          "command": "claude mcp get firecrawl-oauth_challenge_401",
+          "exit_code": 143,
+          "signal": null,
+          "timed_out": true,
+          "error_code": "ETIMEDOUT",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_excerpt": "",
+          "stderr_excerpt": "",
+          "body_marker_visible": false
+        },
+        {
+          "command": "claude mcp login --no-browser firecrawl-oauth_challenge_401",
+          "exit_code": 143,
+          "signal": null,
+          "timed_out": true,
+          "error_code": "ETIMEDOUT",
+          "stdout_sha256": "0cb270e79ff7441d4c9f993cec4f8890691ab2bafcbb264fad0fbc87b3d9144a",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_excerpt": "Starting authentication for \"firecrawl-oauth_challenge_401\"…\n",
+          "stderr_excerpt": "",
+          "body_marker_visible": false
+        }
+      ],
+      "request_sequence": [],
+      "assertions": {
+        "real_user_config_mutated": false,
+        "body_marker_visible_to_cli_output": false,
+        "prm_requested": false,
+        "as_metadata_requested": false,
+        "dcr_requested": false,
+        "authorize_requested": false
+      }
+    },
+    {
+      "client": "codex",
+      "mock_mode": "keyless_200_with_prm",
+      "server_url": "http://127.0.0.1:64995/v2/mcp",
+      "temp_home_removed": true,
+      "commands": [
+        {
+          "command": "codex mcp add firecrawl-keyless_200_with_prm --url http://127.0.0.1:64995/v2/mcp",
+          "exit_code": 0,
+          "signal": null,
+          "timed_out": true,
+          "error_code": "ETIMEDOUT",
+          "stdout_sha256": "5cd133f366754663af5db976710c9ec3b942f346f6ae2e0f29d857243b36d713",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_excerpt": "Added global MCP server 'firecrawl-keyless_200_with_prm'.\n",
+          "stderr_excerpt": "",
+          "body_marker_visible": false
+        },
+        {
+          "command": "codex mcp get firecrawl-keyless_200_with_prm",
+          "exit_code": 0,
+          "signal": null,
+          "timed_out": false,
+          "stdout_sha256": "bf71b264b93fd719c5017dfe9b995b53591703fb0761ebbc6352a01e3cece64f",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_excerpt": "firecrawl-keyless_200_with_prm\n  enabled: true\n  transport: streamable_http\n  url: http://127.0.0.1:64995/v2/mcp\n  bearer_token_env_var: -\n  http_headers: -\n  env_http_headers: -\n  remove: codex mcp remove firecrawl-keyless_200_with_prm\n",
+          "stderr_excerpt": "",
+          "body_marker_visible": false
+        },
+        {
+          "command": "codex mcp login firecrawl-keyless_200_with_prm",
+          "exit_code": 0,
+          "signal": null,
+          "timed_out": true,
+          "error_code": "ETIMEDOUT",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_excerpt": "",
+          "stderr_excerpt": "",
+          "body_marker_visible": false
+        }
+      ],
+      "request_sequence": [],
+      "assertions": {
+        "real_user_config_mutated": false,
+        "body_marker_visible_to_cli_output": false,
+        "prm_requested": false,
+        "as_metadata_requested": false,
+        "dcr_requested": false,
+        "authorize_requested": false
+      }
+    },
+    {
+      "client": "codex",
+      "mock_mode": "bare_401_with_json_body",
+      "server_url": "http://127.0.0.1:65007/v2/mcp",
+      "temp_home_removed": true,
+      "commands": [
+        {
+          "command": "codex mcp add firecrawl-bare_401_with_json_body --url http://127.0.0.1:65007/v2/mcp",
+          "exit_code": 0,
+          "signal": null,
+          "timed_out": true,
+          "error_code": "ETIMEDOUT",
+          "stdout_sha256": "beefaf28502c1ffd5c7b186cd97ad4f1db45fba2fbf384243c356163edabcead",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_excerpt": "Added global MCP server 'firecrawl-bare_401_with_json_body'.\n",
+          "stderr_excerpt": "",
+          "body_marker_visible": false
+        },
+        {
+          "command": "codex mcp get firecrawl-bare_401_with_json_body",
+          "exit_code": 0,
+          "signal": null,
+          "timed_out": false,
+          "stdout_sha256": "a31dc39bec97a894dd29b6157cfe769779e6a6a26630e585fa386e317b9dbf68",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_excerpt": "firecrawl-bare_401_with_json_body\n  enabled: true\n  transport: streamable_http\n  url: http://127.0.0.1:65007/v2/mcp\n  bearer_token_env_var: -\n  http_headers: -\n  env_http_headers: -\n  remove: codex mcp remove firecrawl-bare_401_with_json_body\n",
+          "stderr_excerpt": "",
+          "body_marker_visible": false
+        },
+        {
+          "command": "codex mcp login firecrawl-bare_401_with_json_body",
+          "exit_code": 0,
+          "signal": null,
+          "timed_out": true,
+          "error_code": "ETIMEDOUT",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_excerpt": "",
+          "stderr_excerpt": "",
+          "body_marker_visible": false
+        }
+      ],
+      "request_sequence": [],
+      "assertions": {
+        "real_user_config_mutated": false,
+        "body_marker_visible_to_cli_output": false,
+        "prm_requested": false,
+        "as_metadata_requested": false,
+        "dcr_requested": false,
+        "authorize_requested": false
+      }
+    },
+    {
+      "client": "codex",
+      "mock_mode": "oauth_challenge_401",
+      "server_url": "http://127.0.0.1:65022/v2/mcp",
+      "temp_home_removed": true,
+      "commands": [
+        {
+          "command": "codex mcp add firecrawl-oauth_challenge_401 --url http://127.0.0.1:65022/v2/mcp",
+          "exit_code": 0,
+          "signal": null,
+          "timed_out": true,
+          "error_code": "ETIMEDOUT",
+          "stdout_sha256": "8e1fdd4a02a85a55d2f6c1fac01c7a6c1ebca2952c26ec9109221b72985735ed",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_excerpt": "Added global MCP server 'firecrawl-oauth_challenge_401'.\n",
+          "stderr_excerpt": "",
+          "body_marker_visible": false
+        },
+        {
+          "command": "codex mcp get firecrawl-oauth_challenge_401",
+          "exit_code": 0,
+          "signal": null,
+          "timed_out": false,
+          "stdout_sha256": "eae2a7ae5424d3975ab9fab3061cc5615d65ffe31871b5ee0f40a96930a5764d",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_excerpt": "firecrawl-oauth_challenge_401\n  enabled: true\n  transport: streamable_http\n  url: http://127.0.0.1:65022/v2/mcp\n  bearer_token_env_var: -\n  http_headers: -\n  env_http_headers: -\n  remove: codex mcp remove firecrawl-oauth_challenge_401\n",
+          "stderr_excerpt": "",
+          "body_marker_visible": false
+        },
+        {
+          "command": "codex mcp login firecrawl-oauth_challenge_401",
+          "exit_code": 0,
+          "signal": null,
+          "timed_out": true,
+          "error_code": "ETIMEDOUT",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_excerpt": "",
+          "stderr_excerpt": "",
+          "body_marker_visible": false
+        }
+      ],
+      "request_sequence": [],
+      "assertions": {
+        "real_user_config_mutated": false,
+        "body_marker_visible_to_cli_output": false,
+        "prm_requested": false,
+        "as_metadata_requested": false,
+        "dcr_requested": false,
+        "authorize_requested": false
+      }
+    }
+  ],
+  "runnable_commands": {
+    "claude_version": "claude --version",
+    "codex_version": "codex --version",
+    "claude_add_keyless": "HOME=$TMP_HOME XDG_CONFIG_HOME=$TMP_HOME/.config CLAUDE_CONFIG_DIR=$TMP_HOME/.claude claude mcp add --scope user --transport http firecrawl-local http://127.0.0.1:$PORT/v2/mcp",
+    "claude_login_keyless_no_browser": "HOME=$TMP_HOME XDG_CONFIG_HOME=$TMP_HOME/.config CLAUDE_CONFIG_DIR=$TMP_HOME/.claude claude mcp login --no-browser firecrawl-local",
+    "codex_add_keyless": "CODEX_HOME=$TMP_HOME/.codex HOME=$TMP_HOME XDG_CONFIG_HOME=$TMP_HOME/.config codex mcp add firecrawl-local --url http://127.0.0.1:$PORT/v2/mcp",
+    "codex_login_keyless": "CODEX_HOME=$TMP_HOME/.codex HOME=$TMP_HOME XDG_CONFIG_HOME=$TMP_HOME/.config codex mcp login firecrawl-local"
+  },
+  "expected_assertions": [
+    "No command reads or writes the real HOME, ~/.claude, ~/.codex, or project .mcp.json",
+    "Request logs redact Authorization, cookies, code_verifier, state, and token-like query params before persistence",
+    "A 200 initialize response never causes an automatic browser OAuth flow",
+    "A transport 401 body is not the recovery contract; tool-level structuredContent is the recovery contract",
+    "User-initiated login requires published PRM metadata for the configured endpoint"
+  ],
+  "external_staging_gap": "Actual Claude.ai/ChatGPT datacenter egress keyless eligibility is intentionally left for staging/client smoke in the final staging smoke; it is not a prerequisite for this local contract.",
+  "unrun_gap": [],
+  "hashes": {
+    "matrix_sha256": "f95536f1b01eba238af902cde0e3e99abc81539e6efb971f251b239ba5a1041f",
+    "harness_sha256": "55b326c17084c30f903428d563d4484fa90c1f4a752d95cc8942f6de56d624e3",
+    "evidence_payload_sha256": "a421f57343e3fb35a248636b3465b8c0d3951fb0f6967a7a89d626843225c58c"
+  }
+}
