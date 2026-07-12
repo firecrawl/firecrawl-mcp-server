@@ -8,7 +8,8 @@
     "firecrawl-mcp": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "publishConfig": {
     "access": "public"
@@ -17,24 +18,27 @@
     "build": "rm -rf dist && tsup && node -e \"require('fs').chmodSync('dist/index.js', '755')\"",
     "test": "npm run build && node --test --test-concurrency=1 tests/*.test.mjs tests/contract/*.test.mjs",
     "test:hosted-auth": "npm run build && node --test --test-concurrency=1 --test-name-pattern \"hosted OAuth audience gate\" tests/mcp-smoke.test.mjs",
+    "test:packed": "npm run build && npm run check:third-party-notices && node scripts/verify-packed-package.mjs",
     "start": "node dist/index.js",
     "start:cloud": "CLOUD_SERVICE=true node dist/index.js",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "format": "prettier --write .",
     "prepare": "npm run build",
-    "publish-prod": "npm run build && npm publish",
-    "publish-beta": "npm run build && npm publish --tag beta",
+    "publish-prod": "npm run build && npm run check:third-party-notices && npm publish",
+    "publish-beta": "npm run build && npm run check:third-party-notices && npm publish --tag beta",
     "typecheck": "tsc --noEmit",
     "check:manifest": "node scripts/check-manifest.mjs",
+    "generate:third-party-notices": "npm run build && node scripts/generate-third-party-notices.mjs --write",
+    "check:third-party-notices": "node scripts/generate-third-party-notices.mjs --check",
     "test:docker-smoke": "bash scripts/docker-smoke.sh"
   },
   "license": "MIT",
   "dependencies": {
     "@mendable/firecrawl-js": "4.25.2",
     "dotenv": "^17.2.2",
-    "fastmcp": "4.3.2",
-    "zod": "^4.1.5"
+    "undici": "7.28.0",
+    "zod": "4.4.3"
   },
   "engines": {
     "node": ">=22.0.0"
@@ -61,6 +65,7 @@
     "@typescript-eslint/parser": "8.48.1",
     "eslint": "8.57.1",
     "eslint-config-prettier": "10.1.8",
+    "fastmcp": "4.3.2",
     "tsup": "^8.5.0",
     "typescript": "^5.9.2"
   }

@@ -42,7 +42,7 @@ interface SessionData {
   requestId?: string;
   teamId?: string;
   userId?: string;
-  apiKeyId?: number;
+  apiKeyId?: string;
   oauthClientId?: string;
   resource?: string;
   [key: string]: unknown;
@@ -51,7 +51,7 @@ interface SessionData {
 type CredentialMetadata = {
   teamId?: string;
   userId?: string;
-  apiKeyId?: number;
+  apiKeyId?: string;
   oauthClientId?: string;
   resource?: string;
 };
@@ -336,11 +336,21 @@ type OAuthIntrospectionResponse = {
   api_key?: string;
   team_id?: string;
   sub?: string;
-  api_key_id?: number;
+  api_key_id?: string;
   client_id?: string;
   aud?: string | string[];
   scope?: string | string[];
 };
+
+const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n;
+
+function isCanonicalApiKeyId(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    /^[1-9]\d*$/.test(value) &&
+    BigInt(value) <= POSTGRES_BIGINT_MAX
+  );
+}
 
 function canonicalResource(value: string): string {
   try {
@@ -418,7 +428,9 @@ function metadataFromIntrospection(
   return {
     teamId: typeof data.team_id === 'string' ? data.team_id : undefined,
     userId: typeof data.sub === 'string' ? data.sub : undefined,
-    apiKeyId: typeof data.api_key_id === 'number' ? data.api_key_id : undefined,
+    apiKeyId: isCanonicalApiKeyId(data.api_key_id)
+      ? data.api_key_id
+      : undefined,
     oauthClientId:
       typeof data.client_id === 'string' ? data.client_id : undefined,
     resource,
@@ -962,7 +974,7 @@ function keylessUserError(
 }
 
 type ActionTrace = {
-  apiKeyId?: number;
+  apiKeyId?: string;
   authType: SessionData['authType'];
   clientName?: string;
   clientVersion?: string;
@@ -1095,8 +1107,22 @@ server.addTool = ((tool: Parameters<typeof server.addTool>[0]) => {
       ? { _meta: { ...tool._meta, requires_auth: true } }
       : {}),
     canAccess: (session: SessionData) =>
-      canAccessTool(tool.name, session) &&
+      !session?.credentialError &&
       (existingCanAccess ? existingCanAccess(session) : true),
+    beforeValidate: (_args: unknown, session: SessionData) => {
+      if (!isHostedAccountTool || !isHostedKeylessSession(session)) {
+        return undefined;
+      }
+      const payload = keylessRecoveryPayload('KEYLESS_TOOL_NOT_AVAILABLE', {
+        request_id: randomUUID(),
+      });
+      return {
+        content: [{ text: String(payload.message), type: 'text' as const }],
+        isError: true,
+        structuredContent: payload,
+      };
+    },
+    canList: (session: SessionData) => canAccessTool(tool.name, session),
     execute: async (args, context) => {
       const requestId = randomUUID();
       const invocationContext = {

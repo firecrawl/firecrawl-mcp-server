@@ -7,6 +7,14 @@ const IMAGE_WORKFLOWS = [
   '.github/workflows/image-staging.yml',
 ];
 
+test('package publishing includes patched dependency inputs', async () => {
+  const workflow = await readFile('.github/workflows/publish.yml', 'utf8');
+  const pathsBlock = workflow.match(/    paths:\n((?:      - .+\n?)+)/)?.[1] ?? '';
+
+  assert.match(pathsBlock, /^      - pnpm-workspace\.yaml$/m);
+  assert.match(pathsBlock, /^      - patches\/\*\*$/m);
+});
+
 function extractJobBlocks(workflow) {
   const jobsStart = workflow.search(/^jobs:\s*$/m);
   assert.notEqual(jobsStart, -1, 'workflow must define jobs');
@@ -129,6 +137,8 @@ test('CI service-image smoke covers keyless and OAuth hosted endpoints', async (
   assert.match(smokeScript, /firecrawl_scrape/);
   assert.match(smokeScript, /firecrawl_search/);
   assert.match(smokeScript, /firecrawl_parse/);
+  assert.match(smokeScript, /KEYLESS_TOOL_NOT_AVAILABLE/);
+  assert.match(smokeScript, /firecrawl_map/);
   assert.match(smokeScript, /firecrawl_monitor_get/);
   assert.match(smokeScript, /firecrawl_research_read_paper/);
 });

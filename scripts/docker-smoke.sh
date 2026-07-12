@@ -103,6 +103,26 @@ for endpoint in /v2/mcp /v2/mcp/ /mcp /mcp/; do
   assert_tools "$out.body" keyless
 done
 
+gated_out="$TMPDIR/keyless-gated-tool"
+gated_status=$(curl -sS -o "$gated_out.body" -D "$gated_out.headers" -w '%{http_code}' \
+  -H 'accept: application/json, text/event-stream' \
+  -H 'content-type: application/json' \
+  -H 'x-forwarded-for: 8.8.8.8' \
+  -d '{"id":2,"jsonrpc":"2.0","method":"tools/call","params":{"name":"firecrawl_map","arguments":{}}}' \
+  "http://127.0.0.1:$port/v2/mcp")
+test "$gated_status" = "200"
+python3 - "$gated_out.body" <<'PY'
+import json
+import sys
+
+body = open(sys.argv[1], encoding='utf-8').read()
+line = next((entry for entry in body.splitlines() if entry.startswith('data: ')), None)
+assert line, f'missing SSE data line: {body}'
+result = json.loads(line[6:])['result']
+assert result['isError'] is True, result
+assert result['structuredContent']['code'] == 'KEYLESS_TOOL_NOT_AVAILABLE', result
+PY
+
 for endpoint in /fc-smoke-key/v2/mcp /fc-smoke-key/mcp; do
   out="$TMPDIR/legacy-${endpoint//\//_}"
   http_status=$(mcp_tools_list "$port" "$endpoint" "$out")

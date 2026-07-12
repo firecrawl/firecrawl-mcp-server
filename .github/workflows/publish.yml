@@ -8,7 +8,14 @@ on:
       - package.json
       - server.json
       - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - patches/**
+      - scripts/generate-third-party-notices.mjs
+      - scripts/verify-packed-package.mjs
       - src/**
+      - tests/package-delivery.test.mjs
+      - THIRD_PARTY_NOTICES.md
+      - tsup.config.ts
       - .github/workflows/publish.yml
   workflow_dispatch:
 
@@ -17,7 +24,7 @@ jobs:
     name: Publish
     runs-on: ubuntu-latest
     permissions:
-      id-token: write  # Required for OIDC authentication with MCP registry
+      id-token: write # Required for OIDC authentication with MCP registry
       contents: read
     env:
       MCP_PUBLISHER_VERSION: v1.7.9
@@ -47,6 +54,8 @@ jobs:
           pnpm run typecheck
           pnpm run check:manifest
           pnpm test
+          pnpm run check:third-party-notices
+          pnpm run test:packed
 
       - name: Publish to NPM
         run: pnpm publish --access public --no-git-checks

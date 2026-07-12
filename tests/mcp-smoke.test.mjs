@@ -203,7 +203,7 @@ async function startFakeFirecrawlBackend(options = {}) {
   const {
     apiKeyFromIntrospection = 'fc-from-introspection',
     introspectionMetadata = {
-      api_key_id: 123,
+      api_key_id: '123',
       aud: 'https://mcp.firecrawl.dev/v2/mcp',
       scope: 'firecrawl:global',
       client_id: 'dyn_test_client',
@@ -1477,7 +1477,7 @@ test('HTTP cloud action traces and remote logs canonicalize client identity', as
   const backend = await startFakeFirecrawlBackend({
     apiKeyFromIntrospection: 'fc-known-client-key',
     introspectionMetadata: {
-      api_key_id: 789,
+      api_key_id: '789',
       team_id: '00000000-0000-4000-8000-000000000004',
     },
   });
@@ -1560,7 +1560,7 @@ test('HTTP cloud action traces and remote logs drop malicious client identity in
   const backend = await startFakeFirecrawlBackend({
     apiKeyFromIntrospection: 'fc-identity-key',
     introspectionMetadata: {
-      api_key_id: 790,
+      api_key_id: '790',
       team_id: '00000000-0000-4000-8000-000000000005',
     },
   });
@@ -1727,7 +1727,7 @@ test('HTTP cloud OAuth sessions emit one terminal account-visible action log per
     assert.equal(request.headers.authorization, 'Bearer action-log-secret');
     assert.equal(request.body.team_id, '00000000-0000-4000-8000-000000000001');
     assert.equal(request.body.user_id, '00000000-0000-4000-8000-000000000002');
-    assert.equal(request.body.api_key_id, 123);
+    assert.equal(request.body.api_key_id, '123');
     assert.equal(request.body.oauth_client_id, 'dyn_test_client');
     assert.equal(request.body.auth_type, 'oauth');
     assert.equal(request.body.tool_name, 'firecrawl_search');
@@ -1754,10 +1754,11 @@ test('HTTP cloud OAuth sessions emit one terminal account-visible action log per
 });
 
 test('HTTP cloud bearer API-key sessions emit strict terminal action logs after metadata introspection', async (t) => {
+  const apiKeyId = '9007199254740993';
   const backend = await startFakeFirecrawlBackend({
     apiKeyFromIntrospection: 'fc-api-key',
     introspectionMetadata: {
-      api_key_id: 456,
+      api_key_id: apiKeyId,
       client_id: 'must-not-be-sent-for-api-keys',
       sub: '00000000-0000-4000-8000-000000000099',
       team_id: '00000000-0000-4000-8000-000000000003',
@@ -1807,7 +1808,7 @@ test('HTTP cloud bearer API-key sessions emit strict terminal action logs after 
 
   for (const request of actionLogCalls) {
     assert.equal(request.body.team_id, '00000000-0000-4000-8000-000000000003');
-    assert.equal(request.body.api_key_id, 456);
+    assert.equal(request.body.api_key_id, apiKeyId);
     assert.equal(request.body.auth_type, 'api-key');
     assert.equal(request.body.tool_name, 'firecrawl_search');
     assert.equal(request.body.status, 'success');
@@ -1818,11 +1819,54 @@ test('HTTP cloud bearer API-key sessions emit strict terminal action logs after 
   }
 });
 
+test('HTTP cloud rejects malformed API-key IDs from introspection', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    apiKeyFromIntrospection: 'fc-malformed-id-key',
+    introspectionMetadata: {
+      api_key_id: '9007199254740993x',
+      team_id: '00000000-0000-4000-8000-000000000003',
+    },
+  });
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_MCP_ACTION_LOG_SECRET: 'action-log-secret',
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+
+  await waitForHealth(port, child);
+  const toolCall = await httpToolCall(port, {
+    id: 22,
+    headers: { authorization: 'Bearer fc-malformed-id-key' },
+    params: {
+      arguments: { limit: 1, query: 'example domain' },
+      name: 'firecrawl_search',
+    },
+  });
+  assert.equal(toolCall.status, 200);
+  assert.notEqual(parseSseJson(await toolCall.text()).result.isError, true);
+
+  await delay(100);
+  assert.equal(
+    backend.requests.filter((request) => request.url === '/v2/mcp/action-logs')
+      .length,
+    0
+  );
+});
+
 test('HTTP cloud authenticated failures emit one remote error action log', async (t) => {
   const backend = await startFakeFirecrawlBackend({
     apiKeyFromIntrospection: 'fc-error-key',
     introspectionMetadata: {
-      api_key_id: 457,
+      api_key_id: '457',
       team_id: '00000000-0000-4000-8000-000000000006',
     },
     searchStatus: 500,
@@ -1862,7 +1906,7 @@ test('HTTP cloud authenticated failures emit one remote error action log', async
   }, 'expected one remote error action log');
   assert.equal(actionLog.body.status, 'error');
   assert.equal(actionLog.body.auth_type, 'api-key');
-  assert.equal(actionLog.body.api_key_id, 457);
+  assert.equal(actionLog.body.api_key_id, '457');
   assert.match(actionLog.body.request_id, /^[0-9a-f-]{36}$/);
 });
 
@@ -2045,7 +2089,11 @@ test('HTTP cloud keyless sessions expose the executable triad and gate account t
   });
   assert.equal(mapCall.status, 200);
   const mapMessage = parseSseJson(await mapCall.text());
-  assert.match(mapMessage.error?.message ?? '', /Unknown tool: firecrawl_map/);
+  assert.equal(mapMessage.result?.isError, true);
+  assert.equal(
+    mapMessage.result?.structuredContent?.code,
+    'KEYLESS_TOOL_NOT_AVAILABLE'
+  );
   assert.equal(backend.requests.some((r) => r.url === '/v2/map'), false);
   assertNoTypeError(stderr);
 });

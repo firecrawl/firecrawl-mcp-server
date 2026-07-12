@@ -9,6 +9,20 @@ test('service image config keeps Node app and nginx endpoints aligned', async ()
 
   assert.match(dockerfile, /FROM node:22-alpine AS builder/);
   assert.match(dockerfile, /FROM node:22-alpine AS runner/);
+  assert.equal(
+    (
+      dockerfile.match(
+        /COPY package\.json pnpm-lock\.yaml pnpm-workspace\.yaml \.\//g
+      ) ?? []
+    ).length,
+    2,
+    'builder and runner must copy the pnpm workspace patch configuration'
+  );
+  assert.equal(
+    (dockerfile.match(/COPY patches \.\/patches/g) ?? []).length,
+    2,
+    'builder and runner must copy patched dependencies before frozen install'
+  );
   assert.match(dockerfile, /COPY --from=builder \/app\/dist \.\/dist/);
   assert.match(dockerfile, /COPY docker\/nginx\.conf \/etc\/nginx\/nginx\.conf/);
   assert.match(dockerfile, /COPY docker\/entrypoint\.sh \/entrypoint\.sh/);

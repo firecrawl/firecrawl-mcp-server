@@ -87,7 +87,7 @@ async function startFakeFirecrawlBackend(options = {}) {
   const {
     apiKeyFromIntrospection = 'fc-from-introspection',
     introspectionMetadata = {
-      api_key_id: 123,
+      api_key_id: '123',
       aud: 'https://mcp.firecrawl.dev/v2/mcp',
       scope: 'firecrawl:global',
       client_id: 'dyn_test_client',
@@ -588,7 +588,7 @@ test('/v2/mcp-oauth accepts Bearer API keys as an account-door credential', asyn
 test('/v2/mcp-oauth accepts legacy /v2/mcp OAuth audience by default', async (t) => {
   const backend = await startFakeFirecrawlBackend({
     introspectionMetadata: {
-      api_key_id: 456,
+      api_key_id: '456',
       aud: 'https://mcp.firecrawl.dev/v2/mcp',
       scope: 'firecrawl:global',
       client_id: 'legacy_client',
@@ -652,7 +652,7 @@ test('/v2/mcp invalid presented Bearer returns 401 invalid_token without keyless
   );
 });
 
-test('direct keyless call to hidden account tool returns no upstream execution', async (t) => {
+test('direct keyless call to hidden account tool returns structured recovery without upstream execution', async (t) => {
   const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
   t.after(() => backend.close());
   const port = await getFreePort();
@@ -691,13 +691,76 @@ test('direct keyless call to hidden account tool returns no upstream execution',
 
     assert.equal(response.status, 200);
     const message = await parseMcpResponse(response);
-    assert.match(message.error?.message ?? '', new RegExp(`Unknown tool: ${hiddenTool.name}`));
+    assert.equal(message.result?.isError, true);
+    assertRecoveryPayload(
+      extractStructuredPayload(message),
+      'KEYLESS_TOOL_NOT_AVAILABLE'
+    );
     assert.equal(
       backend.requests.some((request) => request.url?.startsWith(hiddenTool.forbiddenPath)),
       false,
       `${hiddenTool.name} must not reach upstream ${hiddenTool.forbiddenPath}`
     );
   }
+});
+
+test('direct keyless call to an unregistered tool remains unknown', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(hostedEnv(port, backend));
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await mcpRequest(port, '/v2/mcp', {
+    id: 88,
+    method: 'tools/call',
+    params: { name: 'firecrawl_not_registered', arguments: {} },
+    headers: { 'x-forwarded-for': '8.8.8.8' },
+  });
+
+  assert.equal(response.status, 200);
+  const message = await parseMcpResponse(response);
+  assert.match(
+    message.error?.message ?? '',
+    /Unknown tool: firecrawl_not_registered/
+  );
+});
+
+test('keyless gated-tool recovery precedes account-tool argument validation', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(hostedEnv(port, backend));
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  for (const [index, argumentsValue] of [
+    { url: 'https://example.com' },
+    {},
+    { url: 123 },
+  ].entries()) {
+    const response = await mcpRequest(port, '/v2/mcp', {
+      id: 90 + index,
+      method: 'tools/call',
+      params: { name: 'firecrawl_map', arguments: argumentsValue },
+      headers: { 'x-forwarded-for': '8.8.8.8' },
+    });
+
+    assert.equal(response.status, 200);
+    const message = await parseMcpResponse(response);
+    assert.equal(message.result?.isError, true);
+    assertRecoveryPayload(
+      extractStructuredPayload(message),
+      'KEYLESS_TOOL_NOT_AVAILABLE'
+    );
+  }
+
+  assert.equal(
+    backend.requests.some((request) => request.url?.startsWith('/v2/map')),
+    false,
+    'gated tool arguments must not reach the upstream API'
+  );
 });
 
 test('application quota 429 is translated to structured MCP recovery, not an OAuth challenge', async (t) => {
