@@ -104,7 +104,7 @@ function recoveryPayload() {
         kind: 'configure_api_key',
         requires_interactive_browser: false,
         header: 'Authorization: Bearer <FIRECRAWL_API_KEY>',
-        docs_url: 'https://docs.firecrawl.dev/mcp/headless',
+        docs_url: 'https://docs.firecrawl.dev/mcp-server',
       },
     ],
     request_id: 'local-mock-request',

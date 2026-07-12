@@ -147,13 +147,38 @@ async function startFakeFirecrawlApi() {
     req.setEncoding('utf8');
     for await (const chunk of req) body += chunk;
 
-    const parsedBody = body ? JSON.parse(body) : undefined;
+    const contentType = req.headers['content-type'] ?? '';
+    const parsedBody = body
+      ? contentType.includes('application/x-www-form-urlencoded')
+        ? Object.fromEntries(new URLSearchParams(body))
+        : JSON.parse(body)
+      : undefined;
     requests.push({
       body: parsedBody,
       headers: req.headers,
       method: req.method,
       url: req.url,
     });
+
+    if (req.method === 'POST' && req.url === '/api/oauth/introspect') {
+      const token = parsedBody?.token ?? '';
+      const active = token.startsWith('fc-') && !token.includes('invalid');
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify(
+          active
+            ? {
+                active: true,
+                api_key: token,
+                api_key_id: '123',
+                scope: 'firecrawl:global',
+                team_id: '00000000-0000-4000-8000-000000000001',
+              }
+            : { active: false }
+        )
+      );
+      return;
+    }
 
     if (req.method === 'POST' && req.url === '/v2/search') {
       res.writeHead(200, { 'content-type': 'application/json' });
@@ -250,7 +275,9 @@ async function startFakeFirecrawlBackend(options = {}) {
           active
             ? {
                 active: true,
-                api_key: apiKeyFromIntrospection,
+                api_key: token.startsWith('fc-')
+                  ? token
+                  : apiKeyFromIntrospection,
                 ...introspectionMetadata,
               }
             : { active: false }
@@ -454,12 +481,16 @@ async function httpInitialize(port, { id, headers, clientInfo }) {
 }
 
 test('HTTP cloud transport preserves Firecrawl OAuth and well-known routes', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
   const port = await getFreePort();
   const child = spawnServer({
     CLOUD_SERVICE: 'true',
+    FIRECRAWL_API_URL: backend.url,
     HTTP_STREAMABLE_SERVER: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
     OPENAI_APPS_CHALLENGE_TOKEN: 'challenge-123',
     PORT: String(port),
   });
@@ -483,7 +514,7 @@ test('HTTP cloud transport preserves Firecrawl OAuth and well-known routes', asy
   );
   assert.equal(prm.status, 200);
   assert.deepEqual(await prm.json(), {
-    authorization_servers: ['https://www.firecrawl.dev'],
+    authorization_servers: [backend.url],
     bearer_methods_supported: ['header'],
     resource: 'https://mcp.firecrawl.dev/v2/mcp',
     resource_name: 'Firecrawl MCP',
@@ -571,6 +602,8 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: fakeApi.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: fakeApi.url,
     HTTP_STREAMABLE_SERVER: 'true',
     PORT: String(port),
   });
@@ -620,18 +653,28 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
     success: true,
   });
 
-  assert.equal(fakeApi.requests.length, 1);
-  assert.equal(fakeApi.requests[0].method, 'POST');
-  assert.equal(fakeApi.requests[0].url, '/v2/search');
+  const searchRequest = fakeApi.requests.find(
+    (request) => request.url === '/v2/search'
+  );
+  assert.ok(searchRequest);
+  assert.equal(searchRequest.method, 'POST');
   assert.equal(
-    fakeApi.requests[0].headers.authorization,
+    searchRequest.headers.authorization,
     'Bearer fc-http-test'
   );
-  assert.deepEqual(fakeApi.requests[0].body, {
+  assert.deepEqual(searchRequest.body, {
     limit: 1,
     origin: 'mcp-fastmcp',
     query: 'example domain',
   });
+  assert.equal(
+    fakeApi.requests.some(
+      (request) =>
+        request.url === '/api/oauth/introspect' &&
+        request.body?.token === 'fc-http-test'
+    ),
+    true
+  );
   assertNoTypeError(stderr);
 });
 
@@ -1162,6 +1205,8 @@ test('HTTP cloud transport accepts the x-firecrawl-api-key header', async (t) =>
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
     HTTP_STREAMABLE_SERVER: 'true',
     PORT: String(port),
   });
@@ -1191,7 +1236,7 @@ test('HTTP cloud transport accepts the x-firecrawl-api-key header', async (t) =>
   assertNoTypeError(stderr);
 });
 
-test('HTTP cloud transport rejects non-API-key bearer credentials before keyless fallback', async (t) => {
+test('HTTP cloud transport isolates non-API-key bearer credentials before keyless fallback', async (t) => {
   const backend = await startFakeFirecrawlBackend();
   t.after(() => backend.close());
 
@@ -1200,6 +1245,8 @@ test('HTTP cloud transport rejects non-API-key bearer credentials before keyless
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
     HTTP_STREAMABLE_SERVER: 'true',
     PORT: String(port),
   });
@@ -1224,10 +1271,8 @@ test('HTTP cloud transport rejects non-API-key bearer credentials before keyless
     },
     method: 'POST',
   });
-  assert.equal(initialize.status, 401);
-  assert.match(initialize.headers.get('www-authenticate') ?? '', /invalid_token/);
-  const body = await initialize.json();
-  assert.equal(body.error, 'invalid_token');
+  assert.equal(initialize.status, 200);
+  assert.equal(initialize.headers.has('www-authenticate'), false);
   assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
   assert.equal(backend.requests.some((r) => r.url === '/v2/keyless/eligibility'), false);
 });
@@ -1241,6 +1286,8 @@ test('HTTP cloud transport accepts bearer API-key fallback for headless clients'
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
     HTTP_STREAMABLE_SERVER: 'true',
     PORT: String(port),
   });
@@ -1279,6 +1326,8 @@ test('HTTP cloud transport accepts the x-api-key header alias', async (t) => {
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
     HTTP_STREAMABLE_SERVER: 'true',
     PORT: String(port),
   });
@@ -1309,10 +1358,15 @@ test('HTTP cloud transport accepts the x-api-key header alias', async (t) => {
 });
 
 test('HTTP cloud authenticated sessions expose the full Firecrawl tool surface', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
   const port = await getFreePort();
   const child = spawnServer({
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
     HTTP_STREAMABLE_SERVER: 'true',
     PORT: String(port),
   });
@@ -1374,6 +1428,8 @@ test('HTTP cloud transport serves an eligible keyless client and forwards its IP
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
     HTTP_STREAMABLE_SERVER: 'true',
     KEYLESS_PROXY_SECRET: 'keyless-secret',
     PORT: String(port),
@@ -1423,6 +1479,8 @@ test('HTTP cloud tool calls emit safe MCP action traces', async (t) => {
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
     HTTP_STREAMABLE_SERVER: 'true',
     PORT: String(port),
   });
@@ -1919,6 +1977,8 @@ test('HTTP cloud keyless sessions can call scrape without leaking raw IP in trac
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
     HTTP_STREAMABLE_SERVER: 'true',
     KEYLESS_PROXY_SECRET: 'keyless-secret',
     PORT: String(port),
@@ -1990,6 +2050,8 @@ test('HTTP cloud hosted tool logs redact scrape map crawl interact inputs', asyn
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
     HTTP_STREAMABLE_SERVER: 'true',
     PORT: String(port),
   });
@@ -2046,6 +2108,8 @@ test('HTTP cloud keyless sessions expose the executable triad and gate account t
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
     HTTP_STREAMABLE_SERVER: 'true',
     KEYLESS_PROXY_SECRET: 'keyless-secret',
     PORT: String(port),
@@ -2107,6 +2171,8 @@ test('HTTP cloud keyless parse phase 1 mints upload-url without API key or local
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
     HTTP_STREAMABLE_SERVER: 'true',
     KEYLESS_PROXY_SECRET: 'keyless-secret',
     PORT: String(port),
@@ -2207,6 +2273,8 @@ test('HTTP cloud keyless parse phase 2 forwards uploadRef without API key', asyn
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
     HTTP_STREAMABLE_SERVER: 'true',
     KEYLESS_PROXY_SECRET: 'keyless-secret',
     PORT: String(port),
@@ -2296,6 +2364,8 @@ test('HTTP cloud keyless rejects nested or private forwarded IP identity', async
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
     HTTP_STREAMABLE_SERVER: 'true',
     KEYLESS_PROXY_SECRET: 'keyless-secret',
     PORT: String(port),
@@ -2329,6 +2399,8 @@ test('HTTP cloud transport returns structured keyless recovery with no forwarded
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
     HTTP_STREAMABLE_SERVER: 'true',
     KEYLESS_PROXY_SECRET: 'keyless-secret',
     PORT: String(port),
@@ -2379,6 +2451,8 @@ for (const [status, expectedCode] of [
       CLOUD_SERVICE: 'true',
       FASTMCP_ENDPOINT: '/v2/mcp',
       FIRECRAWL_API_URL: backend.url,
+      FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+      FIRECRAWL_OAUTH_ISSUER: backend.url,
       HTTP_STREAMABLE_SERVER: 'true',
       KEYLESS_PROXY_SECRET: 'keyless-secret',
       PORT: String(port),
@@ -2418,6 +2492,8 @@ test('HTTP cloud tool calls emit an error action trace when the tool throws', as
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
     HTTP_STREAMABLE_SERVER: 'true',
     KEYLESS_PROXY_SECRET: 'keyless-secret',
     PORT: String(port),
@@ -2469,6 +2545,8 @@ test('HTTP cloud scrape rejects non-public and credentialed URLs before API call
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
     HTTP_STREAMABLE_SERVER: 'true',
     PORT: String(port),
   });
@@ -2665,6 +2743,8 @@ test('HTTP cloud keyless sessions cannot call a non-keyless tool', async (t) => 
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
     HTTP_STREAMABLE_SERVER: 'true',
     KEYLESS_PROXY_SECRET: 'keyless-secret',
     PORT: String(port),

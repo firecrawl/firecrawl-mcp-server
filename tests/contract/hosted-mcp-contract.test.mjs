@@ -94,6 +94,7 @@ async function startFakeFirecrawlBackend(options = {}) {
       sub: '00000000-0000-4000-8000-000000000002',
       team_id: '00000000-0000-4000-8000-000000000001',
     },
+    introspectionStatus = 200,
     keylessEligible = false,
     keylessEligibilityHangs = false,
     searchRetryAfter = '60',
@@ -122,6 +123,11 @@ async function startFakeFirecrawlBackend(options = {}) {
     });
 
     if (req.method === 'POST' && req.url === '/api/oauth/introspect') {
+      if (introspectionStatus !== 200) {
+        res.writeHead(introspectionStatus, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: 'temporary introspection failure' }));
+        return;
+      }
       const token = parsedBody?.token ?? '';
       const active =
         (token.startsWith('fco_') || token.startsWith('fc-')) &&
@@ -131,7 +137,13 @@ async function startFakeFirecrawlBackend(options = {}) {
       res.end(
         JSON.stringify(
           active
-            ? { active: true, api_key: apiKeyFromIntrospection, ...introspectionMetadata }
+            ? {
+                active: true,
+                api_key: token.startsWith('fc-')
+                  ? token
+                  : apiKeyFromIntrospection,
+                ...introspectionMetadata,
+              }
             : { active: false }
         )
       );
@@ -286,10 +298,20 @@ function assertRecoveryPayload(payload, expectedCode) {
     'firecrawl_search',
     'firecrawl_parse',
   ]);
-  assert.ok(
-    payload?.unavailable_without_account?.includes('firecrawl_crawl'),
-    'recovery payload must name gated tools so agents do not offer trained-knowledge tools'
-  );
+  assert.deepEqual(payload?.unavailable_without_account, [
+    'firecrawl_crawl',
+    'firecrawl_map',
+    'firecrawl_extract',
+    'firecrawl_agent',
+    'firecrawl_interact',
+    'firecrawl_monitor_create',
+  ]);
+  assert.equal(payload?.additional_unavailable_tool_count, 17);
+  assert.match(payload?.message ?? '', /person is present/i);
+  assert.match(payload?.message ?? '', /CI, servers, or unattended agents/i);
+  assert.match(payload?.message ?? '', /free Firecrawl account/i);
+  assert.match(payload?.message ?? '', /no credit card/i);
+  assert.match(payload?.message ?? '', /monthly credits/i);
   const serialized = JSON.stringify(payload);
   for (const forbidden of ['team_id', 'teamId', 'user_id', 'userId', 'api_key_id', 'apiKeyId', 'oauth_client_id', 'oauthClientId']) {
     assert.equal(serialized.includes(forbidden), false, `${forbidden} must not appear in keyless recovery payload`);
@@ -301,7 +323,7 @@ function assertRecoveryPayload(payload, expectedCode) {
   assert.equal(connect?.docs_url, 'https://docs.firecrawl.dev/mcp-server');
   assert.equal(apiKey?.requires_interactive_browser, false);
   assert.equal(apiKey?.header, 'Authorization: Bearer <FIRECRAWL_API_KEY>');
-  assert.equal(apiKey?.docs_url, 'https://docs.firecrawl.dev/mcp/headless');
+  assert.equal(apiKey?.docs_url, 'https://docs.firecrawl.dev/mcp-server');
   assert.equal(payload?.retryable, expectedCode === 'KEYLESS_QUOTA_EXHAUSTED');
 }
 
@@ -436,10 +458,11 @@ test('/v2/mcp recovery metadata matches the registered account-tool complement',
   const deniedMessage = await parseMcpResponse(deniedResponse);
   const payload = extractStructuredPayload(deniedMessage);
   assertRecoveryPayload(payload, 'KEYLESS_ACCESS_NOT_AVAILABLE');
-  assert.deepEqual(
-    payload.unavailable_without_account,
-    registeredAccountTools,
-    'recovery metadata must derive from actual registered tools minus the exact keyless triad'
+  assert.equal(
+    payload.unavailable_without_account.length +
+      payload.additional_unavailable_tool_count,
+    registeredAccountTools.length,
+    'recovery metadata must account for every registered tool outside the keyless triad'
   );
 });
 
@@ -556,7 +579,7 @@ test('/v2/mcp-oauth anonymous challenge points at its own PRM and omits invalid_
   assert.equal(challenge.includes('error_description'), false);
 });
 
-test('/v2/mcp-oauth accepts Bearer API keys as an account-door credential', async (t) => {
+test('/v2/mcp-oauth accepts validated Bearer API keys as an account-door credential', async (t) => {
   const backend = await startFakeFirecrawlBackend();
   t.after(() => backend.close());
   const port = await getFreePort();
@@ -583,6 +606,92 @@ test('/v2/mcp-oauth accepts Bearer API keys as an account-door credential', asyn
   const message = await parseMcpResponse(response);
   assert.equal(message.result?.isError, undefined);
   assert.equal(backend.requests.some((request) => request.url === '/v2/search'), true);
+  assert.equal(
+    backend.requests.some(
+      (request) =>
+        request.url === '/api/oauth/introspect' &&
+        request.body?.token === 'fc-account-door-key'
+    ),
+    true
+  );
+});
+
+test('/v2/mcp-oauth gives an invalid API key a correction-only session', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(
+    hostedEnv(port, backend, {
+      FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+      FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+    })
+  );
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const initializeResponse = await initialize(port, '/v2/mcp-oauth', {
+    authorization: 'Bearer fc-invalid-account-door-key',
+  });
+  assert.equal(initializeResponse.status, 200);
+  assert.equal(initializeResponse.headers.has('www-authenticate'), false);
+
+  const toolsResponse = await mcpRequest(port, '/v2/mcp-oauth', {
+    id: 51,
+    method: 'tools/list',
+    headers: { authorization: 'Bearer fc-invalid-account-door-key' },
+  });
+  assert.equal(toolsResponse.status, 200);
+  const toolsMessage = await parseMcpResponse(toolsResponse);
+  assert.deepEqual(toolsMessage.result.tools, []);
+
+  const callResponse = await mcpRequest(port, '/v2/mcp-oauth', {
+    id: 52,
+    method: 'tools/call',
+    params: {
+      name: 'firecrawl_search',
+      arguments: { query: 'must not execute' },
+    },
+    headers: { authorization: 'Bearer fc-invalid-account-door-key' },
+  });
+  assert.equal(callResponse.status, 200);
+  assert.equal(callResponse.headers.has('www-authenticate'), false);
+  const callMessage = await parseMcpResponse(callResponse);
+  assert.equal(callMessage.result?.isError, true);
+  assert.equal(
+    extractStructuredPayload(callMessage)?.code,
+    'CREDENTIAL_INVALID'
+  );
+  assert.equal(
+    backend.requests.some((request) => request.url === '/v2/search'),
+    false
+  );
+});
+
+test('/v2/mcp-oauth reports API-key validation outages without an OAuth challenge', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ introspectionStatus: 503 });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(
+    hostedEnv(port, backend, {
+      FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+      FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+    })
+  );
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await initialize(port, '/v2/mcp-oauth', {
+    authorization: 'Bearer fc-temporarily-unverifiable',
+  });
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.has('www-authenticate'), false);
+  assert.equal(response.headers.get('retry-after'), '5');
+  assert.deepEqual(await response.json(), {
+    code: 'CREDENTIAL_VALIDATION_UNAVAILABLE',
+    error: 'temporarily_unavailable',
+    error_description:
+      'Firecrawl credential validation is temporarily unavailable.',
+  });
 });
 
 test('/v2/mcp-oauth accepts legacy /v2/mcp OAuth audience by default', async (t) => {
@@ -623,7 +732,7 @@ test('/v2/mcp-oauth accepts legacy /v2/mcp OAuth audience by default', async (t)
   assert.equal(backend.requests.some((request) => request.url === '/v2/search'), true);
 });
 
-test('/v2/mcp invalid presented Bearer returns 401 invalid_token without keyless downgrade', async (t) => {
+test('/v2/mcp invalid presented Bearer gets a correction-only session without keyless downgrade', async (t) => {
   const backend = await startFakeFirecrawlBackend({ keylessEligible: false });
   t.after(() => backend.close());
   const port = await getFreePort();
@@ -635,11 +744,26 @@ test('/v2/mcp invalid presented Bearer returns 401 invalid_token without keyless
     authorization: 'Bearer not-a-firecrawl-token',
   });
 
-  assert.equal(response.status, 401);
-  assert.match(response.headers.get('www-authenticate') ?? '', /invalid_token/);
-  const body = await response.json();
-  assert.equal(body.error, 'invalid_token');
-  assert.match(body.error_description, /Invalid Firecrawl credential/);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.has('www-authenticate'), false);
+  const toolsResponse = await mcpRequest(port, '/v2/mcp', {
+    id: 61,
+    method: 'tools/list',
+    headers: { authorization: 'Bearer not-a-firecrawl-token' },
+  });
+  const toolsMessage = await parseMcpResponse(toolsResponse);
+  assert.deepEqual(toolsMessage.result.tools, []);
+  const callResponse = await mcpRequest(port, '/v2/mcp', {
+    id: 62,
+    method: 'tools/call',
+    params: {
+      name: 'firecrawl_search',
+      arguments: { query: 'must not execute' },
+    },
+    headers: { authorization: 'Bearer not-a-firecrawl-token' },
+  });
+  const callMessage = await parseMcpResponse(callResponse);
+  assert.equal(extractStructuredPayload(callMessage)?.code, 'CREDENTIAL_INVALID');
   assert.equal(
     backend.requests.some((request) => request.url === '/api/oauth/introspect'),
     false,

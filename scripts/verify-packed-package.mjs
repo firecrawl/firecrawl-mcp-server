@@ -9,6 +9,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import net from 'node:net';
+import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -62,6 +63,42 @@ async function exists(filePath) {
   }
 }
 
+async function startCredentialServer() {
+  const server = createServer(async (request, response) => {
+    let raw = '';
+    for await (const chunk of request) raw += chunk;
+    if (request.method === 'POST' && request.url === '/api/oauth/introspect') {
+      const token = new URLSearchParams(raw).get('token') ?? '';
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(
+        JSON.stringify(
+          token === 'fc-packed-consumer-test'
+            ? {
+                active: true,
+                api_key: token,
+                api_key_id: '123',
+                scope: 'firecrawl:global',
+                team_id: '00000000-0000-4000-8000-000000000001',
+              }
+            : { active: false }
+        )
+      );
+      return;
+    }
+    response.writeHead(404).end();
+  });
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const address = server.address();
+  assert.equal(typeof address, 'object');
+  return {
+    close: () => new Promise((resolve) => server.close(resolve)),
+    url: `http://127.0.0.1:${address.port}`,
+  };
+}
+
 function parseMcpBody(body) {
   const data = body.split(/\r?\n/).find((line) => line.startsWith('data: '));
   assert.ok(data, `missing MCP SSE data: ${body}`);
@@ -98,6 +135,7 @@ async function verifyInstalledConsumer(consumer, label) {
   assert.doesNotMatch(bundledCode, /require\(['"]fastmcp['"]\)/);
 
   const port = await freePort();
+  const credentialServer = await startCredentialServer();
   let stderr = '';
   const child = spawn(process.execPath, [bundledEntry], {
     cwd: consumer,
@@ -105,9 +143,10 @@ async function verifyInstalledConsumer(consumer, label) {
       ...process.env,
       CLOUD_SERVICE: 'true',
       FASTMCP_ENDPOINT: '/v2/mcp',
-      FIRECRAWL_API_URL: 'http://127.0.0.1:1',
+      FIRECRAWL_API_URL: credentialServer.url,
       FIRECRAWL_MCP_ACTION_LOG_SECRET: 'packed-action-log-secret',
       FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'packed-introspection-secret',
+      FIRECRAWL_OAUTH_ISSUER: credentialServer.url,
       HTTP_STREAMABLE_SERVER: 'true',
       KEYLESS_PROXY_SECRET: 'packed-keyless-secret',
       PORT: String(port),
@@ -176,6 +215,7 @@ async function verifyInstalledConsumer(consumer, label) {
       ]);
       if (child.exitCode === null) child.kill('SIGKILL');
     }
+    await credentialServer.close();
   }
 }
 

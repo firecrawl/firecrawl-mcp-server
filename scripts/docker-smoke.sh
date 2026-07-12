@@ -9,6 +9,8 @@ fi
 TMPDIR="$(mktemp -d)"
 keyless_cid=""
 oauth_cid=""
+credential_cid=""
+network_name="firecrawl-mcp-smoke-$$"
 cleanup() {
   if [ -n "${keyless_cid:-}" ]; then
     docker logs "$keyless_cid" || true
@@ -18,9 +20,17 @@ cleanup() {
     docker logs "$oauth_cid" || true
     docker rm -f "$oauth_cid" >/dev/null 2>&1 || true
   fi
+  if [ -n "${credential_cid:-}" ]; then
+    docker rm -f "$credential_cid" >/dev/null 2>&1 || true
+  fi
+  docker network rm "$network_name" >/dev/null 2>&1 || true
   rm -rf "$TMPDIR"
 }
 trap cleanup EXIT
+
+docker network create "$network_name" >/dev/null
+credential_cid=$(docker run -d --network "$network_name" --name credential-mock node:22-alpine \
+  node -e 'require("http").createServer(async (req,res)=>{let raw="";for await(const chunk of req)raw+=chunk;if(req.method==="POST"&&req.url==="/api/oauth/introspect"){const token=new URLSearchParams(raw).get("token")||"";res.writeHead(200,{"content-type":"application/json"});res.end(JSON.stringify(token.startsWith("fc-")?{active:true,api_key:token,api_key_id:"123",scope:"firecrawl:global",team_id:"00000000-0000-4000-8000-000000000001"}:{active:false}));return;}res.writeHead(404).end();}).listen(8080,"0.0.0.0")')
 
 wait_for_service() {
   local cid="$1"
@@ -85,10 +95,11 @@ else:
 PY
 }
 
-keyless_cid=$(docker run -d -P \
-  -e FIRECRAWL_API_URL=https://api.firecrawl.dev \
+keyless_cid=$(docker run -d -P --network "$network_name" \
+  -e FIRECRAWL_API_URL=http://credential-mock:8080 \
   -e FIRECRAWL_MCP_ACTION_LOG_SECRET=action-log-secret \
   -e FIRECRAWL_OAUTH_INTROSPECT_SECRET=test-secret \
+  -e FIRECRAWL_OAUTH_ISSUER=http://credential-mock:8080 \
   -e KEYLESS_PROXY_SECRET=keyless-secret \
   "$IMAGE")
 
@@ -132,12 +143,13 @@ for endpoint in /fc-smoke-key/v2/mcp /fc-smoke-key/mcp; do
   assert_tools "$out.body" account
 done
 
-oauth_cid=$(docker run -d -P \
+oauth_cid=$(docker run -d -P --network "$network_name" \
   -e FASTMCP_ENDPOINT=/v2/mcp-oauth \
-  -e FIRECRAWL_API_URL=https://api.firecrawl.dev \
+  -e FIRECRAWL_API_URL=http://credential-mock:8080 \
   -e FIRECRAWL_MCP_ACTION_LOG_SECRET=action-log-secret \
   -e FIRECRAWL_MCP_RESOURCE_URL=https://mcp.firecrawl.dev/v2/mcp-oauth \
   -e FIRECRAWL_OAUTH_INTROSPECT_SECRET=test-secret \
+  -e FIRECRAWL_OAUTH_ISSUER=http://credential-mock:8080 \
   "$IMAGE")
 oauth_port=$(wait_for_service "$oauth_cid")
 wait_for_ready "$oauth_port"

@@ -29,6 +29,7 @@
     "publish-beta": "npm run build && npm run check:third-party-notices && npm publish --tag beta",
     "typecheck": "tsc --noEmit",
     "check:manifest": "node scripts/check-manifest.mjs",
+    "check:hosted-mcp-contract": "node scripts/check-hosted-mcp-contract.mjs",
     "generate:third-party-notices": "npm run build && node scripts/generate-third-party-notices.mjs --write",
     "check:third-party-notices": "node scripts/generate-third-party-notices.mjs --check",
     "test:docker-smoke": "bash scripts/docker-smoke.sh"

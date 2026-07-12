@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mcp.firecrawl.dev/contracts/hosted-mcp/v1/schema.json",
+  "type": "object",
+  "required": [
+    "version",
+    "profiles",
+    "audience_compatibility",
+    "credential_failures",
+    "keyless_tools",
+    "recovery"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "const": "1.0.0" },
+    "profiles": {
+      "type": "object",
+      "required": ["keyless", "account"],
+      "properties": {
+        "keyless": { "$ref": "#/$defs/profile" },
+        "account": { "$ref": "#/$defs/profile" }
+      },
+      "additionalProperties": false
+    },
+    "audience_compatibility": {
+      "type": "object",
+      "required": [
+        "policy",
+        "legacy_audience",
+        "legacy_tokens_on_account_endpoint",
+        "new_account_tokens_on_keyless_endpoint"
+      ]
+    },
+    "credential_failures": { "type": "object" },
+    "keyless_tools": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "recovery": { "type": "object" }
+  },
+  "$defs": {
+    "profile": {
+      "type": "object",
+      "required": [
+        "endpoint",
+        "resource",
+        "anonymous_initialize",
+        "accepted_credentials",
+        "protected_resource_metadata_paths"
+      ],
+      "properties": {
+        "endpoint": { "type": "string" },
+        "resource": { "type": "string", "format": "uri" },
+        "anonymous_initialize": { "type": "string" },
+        "accepted_credentials": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "protected_resource_metadata_paths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

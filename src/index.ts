@@ -287,6 +287,23 @@ function createOAuthChallengeResponse(error: unknown): Response | undefined {
     return undefined;
   }
 
+  if (error instanceof CredentialValidationUnavailableError) {
+    return new Response(
+      JSON.stringify({
+        code: 'CREDENTIAL_VALIDATION_UNAVAILABLE',
+        error: 'temporarily_unavailable',
+        error_description: 'Firecrawl credential validation is temporarily unavailable.',
+      }),
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Retry-After': '5',
+        },
+        status: 503,
+      }
+    );
+  }
+
   const errorMessage =
     error instanceof Error ? error.message : String(error || 'Unauthorized');
   const isAnonymousAccountDoorChallenge =
@@ -341,6 +358,13 @@ type OAuthIntrospectionResponse = {
   aud?: string | string[];
   scope?: string | string[];
 };
+
+class CredentialValidationUnavailableError extends Error {
+  constructor() {
+    super('Firecrawl credential validation is temporarily unavailable');
+    this.name = 'CredentialValidationUnavailableError';
+  }
+}
 
 const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n;
 
@@ -447,23 +471,28 @@ async function introspectToken(
 }> {
   const introspectionSecret = getOAuthIntrospectionSecret();
   if (!introspectionSecret) {
-    throw new Error('OAuth token introspection is not configured');
+    throw new CredentialValidationUnavailableError();
   }
 
-  const response = await fetch(getOAuthIntrospectionEndpoint(), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: `Bearer ${introspectionSecret}`,
-    },
-    body: new URLSearchParams({
-      token,
-      token_type_hint: 'access_token',
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(getOAuthIntrospectionEndpoint(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: `Bearer ${introspectionSecret}`,
+      },
+      body: new URLSearchParams({
+        token,
+        token_type_hint: 'access_token',
+      }),
+    });
+  } catch {
+    throw new CredentialValidationUnavailableError();
+  }
 
   if (!response.ok) {
-    throw new Error(`OAuth token introspection failed: ${response.status}`);
+    throw new CredentialValidationUnavailableError();
   }
 
   const data = (await response.json()) as OAuthIntrospectionResponse;
@@ -522,6 +551,18 @@ async function maybeIntrospectApiKeyMetadata(
   }
 }
 
+async function validateHostedApiKey(token: string): Promise<ResolvedCredential> {
+  const result = await introspectToken(token);
+  if (!result.active || !result.credential) {
+    return { credentialError: 'CREDENTIAL_INVALID', source: 'invalid' };
+  }
+  return {
+    credential: result.credential,
+    metadata: result.metadata,
+    source: 'bearer-api-key',
+  };
+}
+
 async function resolveCredentialFromHeaders(
   headers: IncomingHttpHeaders
 ): Promise<ResolvedCredential> {
@@ -537,6 +578,10 @@ async function resolveCredentialFromHeaders(
     if (isMcpOAuthEnabled() && !isFirecrawlApiKey(headerApiKey)) {
       return { credentialError: 'CREDENTIAL_INVALID', source: 'invalid' };
     }
+    if (isMcpOAuthEnabled()) {
+      const resolved = await validateHostedApiKey(headerApiKey);
+      return { ...resolved, source: 'api-key-header' };
+    }
     return {
       credential: headerApiKey,
       metadata: await maybeIntrospectApiKeyMetadata(headerApiKey),
@@ -546,6 +591,9 @@ async function resolveCredentialFromHeaders(
   if (bearer) {
     if (isMcpOAuthEnabled() && !isFirecrawlApiKey(bearer)) {
       return { credentialError: 'CREDENTIAL_INVALID', source: 'invalid' };
+    }
+    if (isMcpOAuthEnabled()) {
+      return validateHostedApiKey(bearer);
     }
     return {
       credential: bearer,
@@ -616,7 +664,7 @@ async function authenticateRequest(
 
   if (process.env.CLOUD_SERVICE === 'true') {
     if (headerCred.credentialError) {
-      throw new Error('Invalid Firecrawl credential');
+      return sessionDataFromCredential(headerCred, traceData);
     }
     if (!headerCred.credential) {
       if (canonicalResource(getMcpResourceUrl()).endsWith('/v2/mcp-oauth')) {
@@ -915,7 +963,14 @@ function canAccessTool(toolName: string, session?: SessionData): boolean {
 }
 
 const MCP_DOCS_URL = 'https://docs.firecrawl.dev/mcp-server';
-const MCP_HEADLESS_DOCS_URL = 'https://docs.firecrawl.dev/mcp/headless';
+const RECOVERY_HEADLINE_ACCOUNT_TOOLS = [
+  'firecrawl_crawl',
+  'firecrawl_map',
+  'firecrawl_extract',
+  'firecrawl_agent',
+  'firecrawl_interact',
+  'firecrawl_monitor_create',
+] as const;
 
 function hostedAccountToolNames(): string[] {
   return Array.from(REGISTERED_TOOL_NAMES)
@@ -927,14 +982,19 @@ function keylessRecoveryPayload(
   code: string,
   overrides: Record<string, unknown> = {}
 ): Record<string, unknown> {
+  const unavailableTools = hostedAccountToolNames();
+  const headlineTools = RECOVERY_HEADLINE_ACCOUNT_TOOLS.filter((toolName) =>
+    unavailableTools.includes(toolName)
+  );
+  const reason =
+    code === 'KEYLESS_TOOL_NOT_AVAILABLE'
+      ? 'This tool is not available in keyless mode.'
+      : code === 'KEYLESS_QUOTA_EXHAUSTED'
+        ? 'The anonymous Firecrawl quota is exhausted.'
+        : 'Anonymous Firecrawl access is not currently available.';
   return {
     code,
-    message:
-      code === 'KEYLESS_TOOL_NOT_AVAILABLE'
-        ? 'This Firecrawl tool requires an account or API key.'
-        : code === 'KEYLESS_QUOTA_EXHAUSTED'
-          ? 'Anonymous Firecrawl quota is exhausted.'
-          : 'Anonymous Firecrawl keyless access is not currently available.',
+    message: `${reason} If a person is present, connect a free Firecrawl account in the browser; no credit card is required and free accounts include monthly credits. For CI, servers, or unattended agents, configure an API key in the Authorization header. Then retry the same tool call.`,
     auth_mode: 'keyless',
     request_id: overrides.request_id,
     docs_url: MCP_DOCS_URL,
@@ -946,7 +1006,11 @@ function keylessRecoveryPayload(
     },
     retryable: code === 'KEYLESS_QUOTA_EXHAUSTED',
     available_tools: KEYLESS_AVAILABLE_TOOL_NAMES,
-    unavailable_without_account: hostedAccountToolNames(),
+    unavailable_without_account: headlineTools,
+    additional_unavailable_tool_count: Math.max(
+      0,
+      unavailableTools.length - headlineTools.length
+    ),
     next_actions: [
       {
         kind: 'connect_account',
@@ -958,7 +1022,7 @@ function keylessRecoveryPayload(
         kind: 'configure_api_key',
         requires_interactive_browser: false,
         header: 'Authorization: Bearer <FIRECRAWL_API_KEY>',
-        docs_url: MCP_HEADLESS_DOCS_URL,
+        docs_url: MCP_DOCS_URL,
       },
     ],
     ...overrides,
@@ -971,6 +1035,18 @@ function keylessUserError(
 ) {
   const payload = keylessRecoveryPayload(code, overrides);
   return new UserError(String(payload.message), payload);
+}
+
+function credentialErrorPayload(requestId = randomUUID()) {
+  return {
+    code: 'CREDENTIAL_INVALID',
+    auth_mode: 'credential_error',
+    message:
+      'The supplied Firecrawl credential is invalid or revoked. Replace the API key or reconnect the account, then retry. This session cannot use Firecrawl tools until the credential is corrected.',
+    request_id: requestId,
+    retryable: false,
+    docs_url: MCP_DOCS_URL,
+  };
 }
 
 type ActionTrace = {
@@ -1107,9 +1183,16 @@ server.addTool = ((tool: Parameters<typeof server.addTool>[0]) => {
       ? { _meta: { ...tool._meta, requires_auth: true } }
       : {}),
     canAccess: (session: SessionData) =>
-      !session?.credentialError &&
-      (existingCanAccess ? existingCanAccess(session) : true),
+      existingCanAccess ? existingCanAccess(session) : true,
     beforeValidate: (_args: unknown, session: SessionData) => {
+      if (session?.credentialError) {
+        const payload = credentialErrorPayload();
+        return {
+          content: [{ text: String(payload.message), type: 'text' as const }],
+          isError: true,
+          structuredContent: payload,
+        };
+      }
       if (!isHostedAccountTool || !isHostedKeylessSession(session)) {
         return undefined;
       }
