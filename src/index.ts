@@ -1225,7 +1225,7 @@ server.addTool({
   name: 'firecrawl_search',
   annotations: {
     title: 'Search the web',
-    readOnlyHint: true, // Runs a web search and returns results; does not modify external sites.
+    readOnlyHint: SAFE_MODE, // Align with firecrawl_scrape: read-only in cloud/safe mode where interactive actions are disabled.
     openWorldHint: true, // Searches the open web across arbitrary domains and sources.
     destructiveHint: false, // Query-only; no destructive side effects on external entities.
   },
