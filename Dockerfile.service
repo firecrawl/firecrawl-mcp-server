@@ -36,6 +36,7 @@ COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENV PORT=3000
+ENV HOST=127.0.0.1
 EXPOSE 8080
 
 CMD ["/entrypoint.sh"]
