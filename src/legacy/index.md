@@ -45,7 +45,7 @@ This is the most powerful, fastest and most reliable scraper tool, if available 
   }
 }
 \`\`\`
-**Performance:** Add maxAge parameter for 500% faster scrapes using cached data.
+**Performance:** Use `maxAge` to allow lower-latency responses from recent cached data when freshness-sensitive work does not require a fresh fetch. Attested Firecrawl-index cache hits include `metadata.cache`; absence of that object is not a liveness signal.
 **Returns:** Markdown, HTML, or other formats as specified.
 `,
   inputSchema: {
@@ -208,7 +208,7 @@ This is the most powerful, fastest and most reliable scraper tool, if available 
         type: 'number',
         default: 172800000,
         description:
-          'Maximum age in milliseconds for cached content. Use cached data if available and younger than maxAge, otherwise scrape fresh. Enables 500% faster scrapes for recently cached pages. Default: 172800000',
+          'Maximum age in milliseconds for cached content. Use cached data if available and younger than maxAge, otherwise scrape fresh. Can reduce latency for recently cached pages. Attested Firecrawl-index cache hits include metadata.cache; absence is not proof of a miss, fresh scrape, bypass, or source-page liveness. Default: 172800000',
       },
     },
     required: ['url'],

@@ -1112,7 +1112,7 @@ If JSON extraction returns empty, minimal, or just navigation content, the page 
 }
 \`\`\`
 **Branding format:** Extracts comprehensive brand identity (colors, fonts, typography, spacing, logo, UI components) for design analysis or style replication.
-**Performance:** Add maxAge parameter for 500% faster scrapes using cached data.
+**Performance:** Use \`maxAge\` to allow lower-latency responses from recent cached data when freshness-sensitive work does not require a fresh fetch. Attested Firecrawl-index cache hits include \`metadata.cache\`; absence of that object is not a liveness signal.
 **Lockdown mode:** Set \`lockdown: true\` to serve the request only from the existing index/cache without any outbound network request. For air-gapped or compliance-constrained use where the request URL itself is considered sensitive. Errors on cache miss. Billed at 5 credits.
 **Privacy:** Set \`redactPII: true\` to return content with personally identifiable information redacted.
 **Returns:** JSON structured data, markdown, branding profile, or other formats as specified.
