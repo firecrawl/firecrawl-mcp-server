@@ -33,6 +33,30 @@
       ],
       "resource": "https://mcp.firecrawl.dev/v2/mcp-oauth"
     },
+    "anthropic_search": {
+      "accepted_credentials": [
+        "firecrawl_api_key",
+        "oauth_same_resource"
+      ],
+      "anonymous_initialize": "401_bare_bearer_challenge",
+      "endpoint": "/v2/mcp-search",
+      "legacy_audience_accepted": false,
+      "protected_resource_metadata_paths": [
+        "/.well-known/oauth-protected-resource/v2/mcp-search"
+      ],
+      "resource": "https://mcp.firecrawl.dev/v2/mcp-search",
+      "schema_overrides": {
+        "firecrawl_search": "scrapeOptions omitted"
+      },
+      "tool_allowlist": [
+        "firecrawl_search",
+        "firecrawl_research_search_papers",
+        "firecrawl_research_inspect_paper",
+        "firecrawl_research_related_papers",
+        "firecrawl_research_read_paper",
+        "firecrawl_research_search_github"
+      ]
+    },
     "keyless": {
       "accepted_credentials": [
         "anonymous_keyless",
@@ -72,5 +96,5 @@
     ],
     "remaining_unavailable_count_field": "additional_unavailable_tool_count"
   },
-  "version": "1.0.0"
+  "version": "1.1.0"
 }

@@ -227,6 +227,14 @@ const KEYLESS_TOOL_NAMES = new Set([
   'firecrawl_scrape',
   'firecrawl_search',
 ]);
+const ANTHROPIC_SEARCH_PROFILE_TOOL_NAMES = [
+  'firecrawl_research_inspect_paper',
+  'firecrawl_research_read_paper',
+  'firecrawl_research_related_papers',
+  'firecrawl_research_search_github',
+  'firecrawl_research_search_papers',
+  'firecrawl_search',
+];
 
 function toolNames(tools) {
   return tools.map((tool) => tool.name).sort();
@@ -552,6 +560,25 @@ test('OAuth protected-resource metadata uses independent endpoint resources', as
   const oauthMetadata = await oauthPrm.json();
   assert.equal(oauthMetadata.resource, 'https://mcp.firecrawl.dev/v2/mcp-oauth');
   assert.notEqual(oauthMetadata.resource, 'https://mcp.firecrawl.dev/v2/mcp');
+
+  const searchPort = await getFreePort();
+  const search = spawnServer(
+    hostedEnv(searchPort, backend, {
+      FASTMCP_ENDPOINT: '/v2/mcp-search',
+      FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-search',
+    })
+  );
+  t.after(() => stopChild(search));
+  await waitForHealth(searchPort, search);
+
+  const searchPrm = await fetch(
+    `http://127.0.0.1:${searchPort}/.well-known/oauth-protected-resource/v2/mcp-search`
+  );
+  assert.equal(searchPrm.status, 200);
+  const searchMetadata = await searchPrm.json();
+  assert.equal(searchMetadata.resource, 'https://mcp.firecrawl.dev/v2/mcp-search');
+  assert.notEqual(searchMetadata.resource, 'https://mcp.firecrawl.dev/v2/mcp');
+  assert.notEqual(searchMetadata.resource, 'https://mcp.firecrawl.dev/v2/mcp-oauth');
 });
 
 test('/v2/mcp-oauth anonymous challenge points at its own PRM and omits invalid_token', async (t) => {
@@ -577,6 +604,142 @@ test('/v2/mcp-oauth anonymous challenge points at its own PRM and omits invalid_
   );
   assert.equal(challenge.includes('invalid_token'), false);
   assert.equal(challenge.includes('error_description'), false);
+});
+
+test('/v2/mcp-search anonymous challenge points at its own PRM and omits invalid_token', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(
+    hostedEnv(port, backend, {
+      FASTMCP_ENDPOINT: '/v2/mcp-search',
+      FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-search',
+    })
+  );
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await initialize(port, '/v2/mcp-search');
+
+  assert.equal(response.status, 401);
+  const challenge = response.headers.get('www-authenticate') ?? '';
+  assert.match(
+    challenge,
+    /^Bearer resource_metadata="https:\/\/mcp\.firecrawl\.dev\/\.well-known\/oauth-protected-resource\/v2\/mcp-search"$/
+  );
+  assert.equal(challenge.includes('invalid_token'), false);
+  assert.equal(challenge.includes('error_description'), false);
+});
+
+test('/v2/mcp-search exposes exactly the Anthropic six-tool profile without scrapeOptions', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    introspectionMetadata: {
+      api_key_id: '789',
+      aud: 'https://mcp.firecrawl.dev/v2/mcp-search',
+      scope: 'firecrawl:global',
+      client_id: 'anthropic_search_client',
+      sub: '00000000-0000-4000-8000-000000000006',
+      team_id: '00000000-0000-4000-8000-000000000005',
+    },
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(
+    hostedEnv(port, backend, {
+      FASTMCP_ENDPOINT: '/v2/mcp-search',
+      FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-search',
+    })
+  );
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await mcpRequest(port, '/v2/mcp-search', {
+    id: 57,
+    method: 'tools/list',
+    headers: { authorization: 'Bearer fco_search_profile_token' },
+  });
+
+  assert.equal(response.status, 200);
+  const message = await parseMcpResponse(response);
+  assert.deepEqual(toolNames(message.result.tools), ANTHROPIC_SEARCH_PROFILE_TOOL_NAMES);
+  const searchTool = message.result.tools.find((tool) => tool.name === 'firecrawl_search');
+  assert.ok(searchTool, 'search profile must expose firecrawl_search');
+  assert.equal(JSON.stringify(searchTool).includes('scrapeOptions'), false);
+});
+
+test('/v2/mcp-search rejects legacy /v2/mcp OAuth audience by default', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    introspectionMetadata: {
+      api_key_id: '790',
+      aud: 'https://mcp.firecrawl.dev/v2/mcp',
+      scope: 'firecrawl:global',
+      client_id: 'legacy_client',
+      sub: '00000000-0000-4000-8000-000000000008',
+      team_id: '00000000-0000-4000-8000-000000000007',
+    },
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(
+    hostedEnv(port, backend, {
+      FASTMCP_ENDPOINT: '/v2/mcp-search',
+      FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-search',
+    })
+  );
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await mcpRequest(port, '/v2/mcp-search', {
+    id: 58,
+    method: 'tools/list',
+    headers: { authorization: 'Bearer fco_legacy_search_profile_token' },
+  });
+
+  assert.equal(response.status, 401);
+  const challenge = response.headers.get('www-authenticate') ?? '';
+  assert.match(challenge, /resource_metadata="https:\/\/mcp\.firecrawl\.dev\/\.well-known\/oauth-protected-resource\/v2\/mcp-search"/);
+  assert.match(challenge, /error="invalid_token"/);
+});
+
+test('/v2/mcp-search rejects non-profile tool calls without upstream execution', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    introspectionMetadata: {
+      api_key_id: '791',
+      aud: 'https://mcp.firecrawl.dev/v2/mcp-search',
+      scope: 'firecrawl:global',
+      client_id: 'anthropic_search_client',
+      sub: '00000000-0000-4000-8000-000000000010',
+      team_id: '00000000-0000-4000-8000-000000000009',
+    },
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(
+    hostedEnv(port, backend, {
+      FASTMCP_ENDPOINT: '/v2/mcp-search',
+      FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-search',
+    })
+  );
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await mcpRequest(port, '/v2/mcp-search', {
+    id: 59,
+    method: 'tools/call',
+    params: {
+      name: 'firecrawl_scrape',
+      arguments: { url: 'https://example.com/' },
+    },
+    headers: { authorization: 'Bearer fco_search_profile_token' },
+  });
+
+  assert.equal(response.status, 200);
+  const message = await parseMcpResponse(response);
+  assert.equal(extractStructuredPayload(message)?.code, 'TOOL_NOT_AVAILABLE_IN_PROFILE');
+  assert.equal(
+    backend.requests.some((request) => request.url === '/v2/scrape'),
+    false
+  );
 });
 
 test('/v2/mcp-oauth accepts validated Bearer API keys as an account-door credential', async (t) => {

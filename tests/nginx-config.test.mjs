@@ -69,6 +69,19 @@ test('nginx routes hosted MCP endpoints before the generic /v2 API rewrite', () 
     '/v2/mcp-oauth must be declared before the generic /v2 API rewrite'
   );
 
+  const search = firstRegexLocationFor('/v2/mcp-search');
+  assert.ok(search, 'missing /v2/mcp-search nginx location');
+  assert.equal(search.pattern, '^/v2/mcp-search/?$');
+  assert.equal(rewrittenPath(search, '/v2/mcp-search'), '/v2/mcp-search');
+  assert.equal(rewrittenPath(search, '/v2/mcp-search/'), '/v2/mcp-search');
+  assertProxyHeader(search, 'Host');
+  assertProxyHeader(search, 'X-Forwarded-Proto');
+  assertProxyHeader(search, 'X-Request-ID');
+  assert.ok(
+    locationIndex('^/v2/mcp-search/?$') < locationIndex('^/v(?:1|2)/(.*)$'),
+    '/v2/mcp-search must be declared before the generic /v2 API rewrite'
+  );
+
   const keyless = firstRegexLocationFor('/v2/mcp');
   assert.ok(keyless, 'missing /v2/mcp nginx location');
   assert.equal(keyless.pattern, '^/(?:v2/mcp|mcp)/?$');

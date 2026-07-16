@@ -8,5 +8,5 @@ test('hosted MCP contract artifact and hash are current', () => {
     encoding: 'utf8',
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /Hosted MCP contract 1\.0\.0 verified/);
+  assert.match(result.stdout, /Hosted MCP contract 1\.1\.0 verified/);
 });

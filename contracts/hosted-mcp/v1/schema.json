@@ -12,13 +12,14 @@
   ],
   "properties": {
     "$schema": { "type": "string" },
-    "version": { "const": "1.0.0" },
+    "version": { "const": "1.1.0" },
     "profiles": {
       "type": "object",
-      "required": ["keyless", "account"],
+      "required": ["keyless", "account", "anthropic_search"],
       "properties": {
         "keyless": { "$ref": "#/$defs/profile" },
-        "account": { "$ref": "#/$defs/profile" }
+        "account": { "$ref": "#/$defs/profile" },
+        "anthropic_search": { "$ref": "#/$defs/profile" }
       },
       "additionalProperties": false
     },
@@ -64,6 +65,16 @@
           "type": "array",
           "items": { "type": "string" },
           "uniqueItems": true
+        },
+        "tool_allowlist": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "legacy_audience_accepted": { "type": "boolean" },
+        "schema_overrides": {
+          "type": "object",
+          "additionalProperties": true
         }
       },
       "additionalProperties": false

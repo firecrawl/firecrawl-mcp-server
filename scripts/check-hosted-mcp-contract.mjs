@@ -76,7 +76,7 @@ const canonical = `${JSON.stringify(canonicalize(contract), null, 2)}\n`;
 assert.equal(readFileSync(contractPath, 'utf8'), canonical, 'contract.json must be canonical JSON');
 validateAgainstSchema(contract, schema, schema);
 
-assert.equal(contract.version, '1.0.0');
+assert.equal(contract.version, '1.1.0');
 assert.equal(contract.profiles.keyless.endpoint, '/v2/mcp');
 assert.equal(contract.profiles.keyless.resource, 'https://mcp.firecrawl.dev/v2/mcp');
 assert.equal(contract.profiles.account.endpoint, '/v2/mcp-oauth');
@@ -84,6 +84,24 @@ assert.equal(contract.profiles.account.resource, 'https://mcp.firecrawl.dev/v2/m
 assert.deepEqual(contract.profiles.account.protected_resource_metadata_paths, [
   '/.well-known/oauth-protected-resource/v2/mcp-oauth',
 ]);
+assert.equal(contract.profiles.anthropic_search.endpoint, '/v2/mcp-search');
+assert.equal(contract.profiles.anthropic_search.resource, 'https://mcp.firecrawl.dev/v2/mcp-search');
+assert.equal(contract.profiles.anthropic_search.legacy_audience_accepted, false);
+assert.deepEqual(contract.profiles.anthropic_search.protected_resource_metadata_paths, [
+  '/.well-known/oauth-protected-resource/v2/mcp-search',
+]);
+assert.deepEqual(contract.profiles.anthropic_search.tool_allowlist, [
+  'firecrawl_search',
+  'firecrawl_research_search_papers',
+  'firecrawl_research_inspect_paper',
+  'firecrawl_research_related_papers',
+  'firecrawl_research_read_paper',
+  'firecrawl_research_search_github',
+]);
+assert.equal(
+  contract.profiles.anthropic_search.schema_overrides.firecrawl_search,
+  'scrapeOptions omitted'
+);
 assert.equal(contract.audience_compatibility.policy, 'one_way');
 assert.equal(contract.audience_compatibility.legacy_tokens_on_account_endpoint.default, true);
 assert.equal(contract.audience_compatibility.new_account_tokens_on_keyless_endpoint, false);
@@ -97,4 +115,4 @@ const digest = createHash('sha256').update(canonical).digest('hex');
 const expectedHashFile = `${digest}  contract.json\n`;
 if (write) writeFileSync(hashPath, expectedHashFile);
 assert.equal(readFileSync(hashPath, 'utf8'), expectedHashFile, 'contract.sha256 is stale');
-console.log(`Hosted MCP contract 1.0.0 verified (${digest})`);
+console.log(`Hosted MCP contract 1.1.0 verified (${digest})`);
