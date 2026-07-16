@@ -8,11 +8,12 @@
     "audience_compatibility",
     "credential_failures",
     "keyless_tools",
-    "recovery"
+    "recovery",
+    "tool_selection"
   ],
   "properties": {
     "$schema": { "type": "string" },
-    "version": { "const": "1.1.0" },
+    "version": { "const": "1.2.0" },
     "profiles": {
       "type": "object",
       "required": ["keyless", "account", "anthropic_search"],
@@ -40,7 +41,8 @@
       "items": { "type": "string" },
       "uniqueItems": true
     },
-    "recovery": { "type": "object" }
+    "recovery": { "type": "object" },
+    "tool_selection": { "type": "object" }
   },
   "$defs": {
     "profile": {

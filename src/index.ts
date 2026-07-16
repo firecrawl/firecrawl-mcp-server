@@ -45,6 +45,7 @@ interface SessionData {
   apiKeyId?: string;
   oauthClientId?: string;
   resource?: string;
+  selectedTools?: string[];
   [key: string]: unknown;
 }
 
@@ -688,8 +689,12 @@ async function authenticateRequest(
         'OAuth access token required for the Firecrawl marketplace search profile'
       );
     }
+    rejectMarketplaceSelectionParams(request);
     if (headerCred.credentialError) {
-      return sessionDataFromCredential(headerCred, traceData);
+      return withSelectedTools(
+        request,
+        sessionDataFromCredential(headerCred, traceData)
+      );
     }
     if (!headerCred.credential) {
       if (isAccountRequiredMcpResource()) {
@@ -703,14 +708,17 @@ async function authenticateRequest(
       // but defer remote eligibility I/O until an allowed keyless tool executes
       // so connection and discovery cannot hang on the Firecrawl API.
       const clientIp = extractClientIp(request);
-      return {
+      return withSelectedTools(request, {
         ...traceData,
         authType: 'keyless',
         firecrawlApiKey: undefined,
         keylessClientIp: clientIp,
-      };
+      });
     }
-    return sessionDataFromCredential(headerCred, traceData);
+    return withSelectedTools(
+      request,
+      sessionDataFromCredential(headerCred, traceData)
+    );
   }
 
   const resolved = headerCred.credential ? headerCred : envCred;
@@ -740,7 +748,7 @@ async function authenticateRequest(
     process.exit(1);
   }
 
-  return sessionDataFromCredential(resolved, traceData);
+  return withSelectedTools(request, sessionDataFromCredential(resolved, traceData));
 }
 
 async function authenticateWithOAuthChallenge(
@@ -751,6 +759,9 @@ async function authenticateWithOAuthChallenge(
   }
 
   const authResult = authenticateRequest(request).catch((error) => {
+    if (error instanceof Response) {
+      throw error;
+    }
     const oauthChallenge = createOAuthChallengeResponse(error);
     if (oauthChallenge) {
       throw oauthChallenge;
@@ -998,6 +1009,15 @@ const MARKETPLACE_SEARCH_TOOL_NAMES = [
 const MARKETPLACE_SEARCH_TOOL_NAME_SET: ReadonlySet<string> = new Set(
   MARKETPLACE_SEARCH_TOOL_NAMES
 );
+const CORE_V1_TOOL_NAMES = [
+  'firecrawl_search',
+  'firecrawl_scrape',
+  'firecrawl_parse',
+] as const;
+const TOOL_SELECTOR_LIMITS = {
+  maxUtf8Bytes: 1024,
+  maxSelectors: 64,
+} as const;
 
 const REGISTERED_TOOL_NAMES = new Set<string>();
 
@@ -1019,8 +1039,157 @@ function isHostedKeylessSession(session?: SessionData): boolean {
 function canAccessTool(toolName: string, session?: SessionData): boolean {
   if (!isAllowedByEndpointProfile(toolName)) return false;
   if (session?.credentialError) return false;
+  if (isHostedKeylessSession(session) && !KEYLESS_TOOL_NAMES.has(toolName)) {
+    return false;
+  }
+  if (session?.selectedTools && !session.selectedTools.includes(toolName)) {
+    return false;
+  }
+  return true;
+}
+
+function isCredentialEntitledToTool(
+  toolName: string,
+  session?: SessionData
+): boolean {
+  if (session?.credentialError) return false;
   if (isHostedKeylessSession(session)) return KEYLESS_TOOL_NAMES.has(toolName);
   return true;
+}
+
+function toolSelectorErrorResponse(
+  status: number,
+  code: number,
+  message: string,
+  data: Record<string, unknown>
+): Response {
+  return new Response(
+    JSON.stringify({
+      jsonrpc: '2.0',
+      id: null,
+      error: {
+        code,
+        message,
+        data,
+      },
+    }),
+    {
+      headers: { 'Content-Type': 'application/json' },
+      status,
+    }
+  );
+}
+
+function invalidToolSelectorResponse(
+  invalidSelectors: string[] = []
+): Response {
+  return toolSelectorErrorResponse(400, -32602, 'Invalid tool selector', {
+    code: 'INVALID_TOOL_SELECTOR',
+    parameter: 'tools',
+    invalidSelectors,
+    limits: TOOL_SELECTOR_LIMITS,
+  });
+}
+
+function notEntitledToolSelectorResponse(selectors: string[]): Response {
+  return toolSelectorErrorResponse(
+    403,
+    -32003,
+    'Tool selection is not permitted for these credentials',
+    {
+      code: 'TOOL_SELECTOR_NOT_ENTITLED',
+      selectors,
+      nextActions: keylessRecoveryPayload('KEYLESS_TOOL_NOT_AVAILABLE')
+        .next_actions,
+    }
+  );
+}
+
+function selectedToolNamesFromRequest(
+  request: MCPAuthRequest | undefined,
+  session: SessionData
+): string[] | undefined {
+  if (!request?.url) return undefined;
+
+  let url: URL;
+  try {
+    url = new URL(request.url, 'http://mcp.firecrawl.dev');
+  } catch {
+    throw invalidToolSelectorResponse();
+  }
+
+  if (
+    url.searchParams.has('add') ||
+    url.searchParams.has('toolsets') ||
+    (isMarketplaceSearchProfile() && url.search)
+  ) {
+    throw invalidToolSelectorResponse();
+  }
+
+  const rawSelectors = url.searchParams.getAll('tools');
+  if (rawSelectors.length === 0) return undefined;
+  if (rawSelectors.length !== 1) throw invalidToolSelectorResponse(['tools']);
+
+  const raw = rawSelectors[0] ?? '';
+  if (
+    raw.trim() === '' ||
+    Buffer.byteLength(raw, 'utf8') > TOOL_SELECTOR_LIMITS.maxUtf8Bytes
+  ) {
+    throw invalidToolSelectorResponse();
+  }
+
+  const selectors = raw.split(',');
+  if (
+    selectors.length > TOOL_SELECTOR_LIMITS.maxSelectors ||
+    selectors.some((selector) => selector.trim() === '')
+  ) {
+    throw invalidToolSelectorResponse(selectors.filter((selector) => !selector));
+  }
+
+  const requested = new Set<string>();
+  const invalid: string[] = [];
+  for (const selector of selectors) {
+    if (selector === '@core-v1') {
+      for (const toolName of CORE_V1_TOOL_NAMES) requested.add(toolName);
+    } else if (selector === '@full-v1') {
+      for (const toolName of REGISTERED_TOOL_NAMES) requested.add(toolName);
+    } else if (selector.startsWith('@')) {
+      invalid.push(selector);
+    } else if (REGISTERED_TOOL_NAMES.has(selector)) {
+      requested.add(selector);
+    } else {
+      invalid.push(selector);
+    }
+  }
+  if (invalid.length) throw invalidToolSelectorResponse(invalid);
+
+  const notEntitled = Array.from(requested).filter(
+    (toolName) => !isCredentialEntitledToTool(toolName, session)
+  );
+  if (notEntitled.length) throw notEntitledToolSelectorResponse(notEntitled);
+
+  return Array.from(REGISTERED_TOOL_NAMES).filter((toolName) =>
+    requested.has(toolName)
+  );
+}
+
+function withSelectedTools(
+  request: MCPAuthRequest | undefined,
+  session: SessionData
+): SessionData {
+  const selectedTools = selectedToolNamesFromRequest(request, session);
+  return selectedTools ? { ...session, selectedTools } : session;
+}
+
+function rejectMarketplaceSelectionParams(request: MCPAuthRequest | undefined) {
+  if (!isMarketplaceSearchProfile() || !request?.url) return;
+  let url: URL;
+  try {
+    url = new URL(request.url, 'http://mcp.firecrawl.dev');
+  } catch {
+    throw invalidToolSelectorResponse();
+  }
+  if (url.search) throw invalidToolSelectorResponse();
 }
 
 const MCP_DOCS_URL = 'https://docs.firecrawl.dev/mcp-server';
@@ -1096,6 +1265,26 @@ function keylessUserError(
 ) {
   const payload = keylessRecoveryPayload(code, overrides);
   return new UserError(String(payload.message), payload);
+}
+
+function toolNotSelectedPayload(
+  toolName: string,
+  selectedTools: string[] | undefined
+) {
+  return {
+    code: 'TOOL_NOT_SELECTED',
+    message:
+      'This Firecrawl MCP session did not select the requested tool. Update the tools query parameter or use a selected tool.',
+    tool: toolName,
+    selectedTools: selectedTools ?? [],
+    nextActions: [
+      {
+        kind: 'update_tool_selection',
+        parameter: 'tools',
+        examples: ['?tools=@full-v1', '?tools=@core-v1'],
+      },
+    ],
+  };
 }
 
 function credentialErrorPayload(requestId = randomUUID()) {
@@ -1270,6 +1459,17 @@ server.addTool = ((tool: Parameters<typeof server.addTool>[0]) => {
         };
       }
       if (!isHostedAccountTool || !isHostedKeylessSession(session)) {
+        if (
+          session?.selectedTools &&
+          !session.selectedTools.includes(tool.name)
+        ) {
+          const payload = toolNotSelectedPayload(tool.name, session.selectedTools);
+          return {
+            content: [{ text: String(payload.message), type: 'text' as const }],
+            isError: true,
+            structuredContent: payload,
+          };
+        }
         return undefined;
       }
       const payload = keylessRecoveryPayload('KEYLESS_TOOL_NOT_AVAILABLE', {
@@ -1306,6 +1506,16 @@ server.addTool = ((tool: Parameters<typeof server.addTool>[0]) => {
         throw keylessUserError('KEYLESS_TOOL_NOT_AVAILABLE', {
           request_id: requestId,
         });
+      }
+      if (
+        invocationContext.session?.selectedTools &&
+        !invocationContext.session.selectedTools.includes(tool.name)
+      ) {
+        const payload = toolNotSelectedPayload(
+          tool.name,
+          invocationContext.session.selectedTools
+        );
+        throw new UserError(String(payload.message), payload);
       }
 
       if (!ACTION_TRACES_ENABLED) return execute(args, invocationContext);

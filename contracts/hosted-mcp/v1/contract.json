@@ -90,7 +90,8 @@
       "KEYLESS_QUOTA_EXHAUSTED",
       "KEYLESS_ACCESS_NOT_AVAILABLE",
       "CREDENTIAL_INVALID",
-      "CREDENTIAL_VALIDATION_UNAVAILABLE"
+      "CREDENTIAL_VALIDATION_UNAVAILABLE",
+      "TOOL_NOT_SELECTED"
     ],
     "configure_api_key_docs_url": "https://docs.firecrawl.dev/mcp-server",
     "headline_unavailable_tools": [
@@ -107,5 +108,36 @@
     ],
     "remaining_unavailable_count_field": "additional_unavailable_tool_count"
   },
-  "version": "1.1.0"
+  "tool_selection": {
+    "invalid_selector_error": {
+      "code": "INVALID_TOOL_SELECTOR",
+      "http_status": 400,
+      "jsonrpc_code": -32602
+    },
+    "limits": {
+      "max_selectors": 64,
+      "max_utf8_bytes": 1024
+    },
+    "marketplace_profiles_accept_selectors": false,
+    "not_entitled_error": {
+      "code": "TOOL_SELECTOR_NOT_ENTITLED",
+      "http_status": 403,
+      "jsonrpc_code": -32003
+    },
+    "not_selected_tool_result": {
+      "code": "TOOL_NOT_SELECTED",
+      "http_status": 200
+    },
+    "presets": {
+      "@core-v1": [
+        "firecrawl_search",
+        "firecrawl_scrape",
+        "firecrawl_parse"
+      ],
+      "@full-v1": "all active generic tools in registry binding order"
+    },
+    "semantics": "exact replacement of credential-class defaults; never grants unavailable credentials",
+    "syntax": "?tools=<selector>(,<selector>)*"
+  },
+  "version": "1.2.0"
 }

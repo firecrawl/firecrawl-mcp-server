@@ -78,7 +78,7 @@ const canonical = `${JSON.stringify(canonicalize(contract), null, 2)}\n`;
 assert.equal(readFileSync(contractPath, 'utf8'), canonical, 'contract.json must be canonical JSON');
 validateAgainstSchema(contract, schema, schema);
 
-assert.equal(contract.version, '1.1.0');
+assert.equal(contract.version, '1.2.0');
 assert.equal(contract.profiles.keyless.endpoint, '/v2/mcp');
 assert.equal(contract.profiles.keyless.resource, 'https://mcp.firecrawl.dev/v2/mcp');
 assert.equal(contract.profiles.account.endpoint, '/v2/mcp-oauth');
@@ -134,6 +134,31 @@ assert.equal(
   contract.profiles.anthropic_search.schema_overrides.firecrawl_search,
   'scrapeOptions and enterprise omitted'
 );
+assert.equal(contract.tool_selection.syntax, '?tools=<selector>(,<selector>)*');
+assert.deepEqual(contract.tool_selection.presets['@core-v1'], [
+  'firecrawl_search',
+  'firecrawl_scrape',
+  'firecrawl_parse',
+]);
+assert.equal(
+  contract.tool_selection.semantics,
+  'exact replacement of credential-class defaults; never grants unavailable credentials'
+);
+assert.deepEqual(contract.tool_selection.limits, {
+  max_selectors: 64,
+  max_utf8_bytes: 1024,
+});
+assert.deepEqual(contract.tool_selection.invalid_selector_error, {
+  code: 'INVALID_TOOL_SELECTOR',
+  http_status: 400,
+  jsonrpc_code: -32602,
+});
+assert.deepEqual(contract.tool_selection.not_entitled_error, {
+  code: 'TOOL_SELECTOR_NOT_ENTITLED',
+  http_status: 403,
+  jsonrpc_code: -32003,
+});
+assert.equal(contract.tool_selection.marketplace_profiles_accept_selectors, false);
 assert.equal(contract.audience_compatibility.policy, 'one_way');
 assert.equal(contract.audience_compatibility.legacy_tokens_on_account_endpoint.default, true);
 assert.equal(contract.audience_compatibility.new_account_tokens_on_keyless_endpoint, false);
@@ -147,4 +172,4 @@ const digest = createHash('sha256').update(canonical).digest('hex');
 const expectedHashFile = `${digest}  contract.json\n`;
 if (write) writeFileSync(hashPath, expectedHashFile);
 assert.equal(readFileSync(hashPath, 'utf8'), expectedHashFile, 'contract.sha256 is stale');
-console.log(`Hosted MCP contract 1.1.0 verified (${digest})`);
+console.log(`Hosted MCP contract 1.2.0 verified (${digest})`);
