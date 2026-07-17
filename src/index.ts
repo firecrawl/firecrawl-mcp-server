@@ -1792,6 +1792,7 @@ async function executeHostedParse(
   if (isHostedKeylessSession(session) && args.zeroDataRetention === true) {
     throw keylessUserError('KEYLESS_OPTION_NOT_AVAILABLE', {
       option: 'zeroDataRetention',
+      request_id: session?.requestId,
       message:
         'Zero Data Retention is not available in anonymous keyless mode. Omit zeroDataRetention to parse with keyless access, or connect an account or configure an API key for a team where Zero Data Retention is enabled, then retry.',
     });

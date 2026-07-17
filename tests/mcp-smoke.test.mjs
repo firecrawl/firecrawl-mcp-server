@@ -2351,7 +2351,7 @@ test('HTTP cloud keyless parse phase 2 forwards uploadRef without API key', asyn
   assertNoTypeError(stderr);
 });
 
-test('HTTP cloud keyless parse rejects zeroDataRetention before creating an upload', async (t) => {
+test('HTTP cloud keyless parse rejects zeroDataRetention before upload or parse', async (t) => {
   const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
   t.after(() => backend.close());
 
@@ -2370,35 +2370,51 @@ test('HTTP cloud keyless parse rejects zeroDataRetention before creating an uplo
 
   await waitForHealth(port, child);
 
-  const toolCall = await httpToolCall(port, {
-    id: 44,
-    headers: { 'x-forwarded-for': '8.8.8.44' },
-    params: {
-      arguments: {
+  for (const [id, arguments_] of [
+    [
+      44,
+      {
         contentType: 'application/pdf',
         filePath: '/definitely/not/read/keyless-zdr-report.pdf',
         formats: ['markdown'],
         parsers: ['pdf'],
         zeroDataRetention: true,
       },
-      name: 'firecrawl_parse',
-    },
-  });
-  assert.equal(toolCall.status, 200);
-  const message = parseSseJson(await toolCall.text());
-  assert.equal(message.result?.isError, true);
-  assert.equal(
-    message.result?.structuredContent?.code,
-    'KEYLESS_OPTION_NOT_AVAILABLE'
-  );
-  assert.equal(
-    message.result?.structuredContent?.option,
-    'zeroDataRetention'
-  );
-  assert.match(
-    message.result?.structuredContent?.message ?? '',
-    /Omit zeroDataRetention.*connect an account.*API key/i
-  );
+    ],
+    [
+      45,
+      {
+        formats: ['markdown'],
+        parsers: ['pdf'],
+        uploadRef: 'upload-ref-keyless-zdr',
+        zeroDataRetention: true,
+      },
+    ],
+  ]) {
+    const toolCall = await httpToolCall(port, {
+      id,
+      headers: {
+        'x-forwarded-for': '8.8.8.44',
+        'x-request-id': 'untrusted-keyless-zdr-request-id',
+      },
+      params: { arguments: arguments_, name: 'firecrawl_parse' },
+    });
+    assert.equal(toolCall.status, 200);
+    const message = parseSseJson(await toolCall.text());
+    const structured = message.result?.structuredContent;
+    assert.equal(message.result?.isError, true);
+    assert.equal(structured?.code, 'KEYLESS_OPTION_NOT_AVAILABLE');
+    assert.equal(structured?.option, 'zeroDataRetention');
+    assert.match(
+      structured?.message ?? '',
+      /Omit zeroDataRetention.*connect an account.*API key/i
+    );
+    assert.match(structured?.request_id ?? '', /^[0-9a-f-]{36}$/);
+    assert.notEqual(
+      structured?.request_id,
+      'untrusted-keyless-zdr-request-id'
+    );
+  }
   assert.equal(
     backend.requests.some(
       (request) =>
@@ -2406,6 +2422,80 @@ test('HTTP cloud keyless parse rejects zeroDataRetention before creating an uplo
     ),
     false
   );
+});
+
+test('HTTP cloud API-key parse preserves zeroDataRetention for Core enforcement', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+
+  await waitForHealth(port, child);
+  const headers = { authorization: 'Bearer fc-zdr-enabled-team-key' };
+
+  const phaseOneCall = await httpToolCall(port, {
+    id: 46,
+    headers,
+    params: {
+      arguments: {
+        contentType: 'application/pdf',
+        filePath: '/definitely/not/read/account-zdr-report.pdf',
+        formats: ['markdown'],
+        parsers: ['pdf'],
+        zeroDataRetention: true,
+      },
+      name: 'firecrawl_parse',
+    },
+  });
+  assert.equal(phaseOneCall.status, 200);
+  const phaseOneMessage = parseSseJson(await phaseOneCall.text());
+  assert.notEqual(phaseOneMessage.result?.isError, true);
+  const phaseOnePayload = JSON.parse(phaseOneMessage.result.content[0].text);
+  assert.equal(
+    phaseOnePayload.nextToolCall.arguments.zeroDataRetention,
+    true
+  );
+
+  const phaseTwoCall = await httpToolCall(port, {
+    id: 47,
+    headers,
+    params: {
+      arguments: phaseOnePayload.nextToolCall.arguments,
+      name: 'firecrawl_parse',
+    },
+  });
+  assert.equal(phaseTwoCall.status, 200);
+  const phaseTwoMessage = parseSseJson(await phaseTwoCall.text());
+  assert.notEqual(phaseTwoMessage.result?.isError, true);
+
+  const uploadUrlCalls = backend.requests.filter(
+    (request) => request.url === '/v2/parse/upload-url'
+  );
+  assert.equal(uploadUrlCalls.length, 1);
+  assert.equal(
+    uploadUrlCalls[0].headers.authorization,
+    'Bearer fc-zdr-enabled-team-key'
+  );
+
+  const parseCalls = backend.requests.filter(
+    (request) => request.url === '/v2/parse'
+  );
+  assert.equal(parseCalls.length, 1);
+  assert.equal(
+    parseCalls[0].headers.authorization,
+    'Bearer fc-zdr-enabled-team-key'
+  );
+  assert.equal(parseCalls[0].body.zeroDataRetention, true);
 });
 
 test('HTTP cloud keyless rejects nested or private forwarded IP identity', async (t) => {
