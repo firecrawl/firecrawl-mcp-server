@@ -178,6 +178,49 @@ async function startFakeFirecrawlBackend(options = {}) {
       return;
     }
 
+    if (req.method === 'GET' && req.url?.startsWith('/v2/search/research/')) {
+      const url = new URL(req.url, 'http://fake-firecrawl.test');
+      const paper = {
+        abstract: 'Attention models are useful for sequence transduction.',
+        authors: 'A. Author, B. Researcher',
+        categories: ['cs.CL'],
+        createdDate: '2017-06-12',
+        ids: { arxiv: ['1706.03762'] },
+        paperId: 'arxiv:1706.03762',
+        primaryId: 'arxiv:1706.03762',
+        title: 'Attention Is All You Need',
+        updateDate: '2017-06-13',
+      };
+      let responseBody;
+      if (url.pathname === '/v2/search/research/papers') {
+        responseBody = { results: [paper] };
+      } else if (url.pathname === '/v2/search/research/papers/arxiv%3A1706.03762/similar') {
+        responseBody = { note: 'contract related papers', poolSize: 1, results: [paper] };
+      } else if (url.pathname === '/v2/search/research/papers/arxiv%3A1706.03762') {
+        responseBody = url.searchParams.has('query')
+          ? { passages: [{ text: 'The Transformer relies entirely on attention mechanisms.' }] }
+          : { paper };
+      } else if (url.pathname === '/v2/search/research/github') {
+        responseBody = {
+          results: [
+            {
+              contentMd: 'A repository README mentioning Firecrawl MCP research tools.',
+              readmeUrl: 'https://github.com/firecrawl/firecrawl#readme',
+              repo: 'firecrawl/firecrawl',
+              resultType: 'repo_readme',
+            },
+          ],
+        };
+      } else {
+        res.writeHead(404, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: `Unhandled research endpoint ${req.url}` }));
+        return;
+      }
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(responseBody));
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/v2/map') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ links: [{ url: parsedBody?.url }], success: true }));
@@ -235,6 +278,24 @@ const ANTHROPIC_SEARCH_PROFILE_TOOL_NAMES = [
   'firecrawl_research_search_papers',
   'firecrawl_search',
 ];
+
+const ANTHROPIC_SEARCH_PROFILE_TOKEN_METADATA = {
+  api_key_id: '789',
+  aud: 'https://mcp.firecrawl.dev/v2/mcp-search',
+  scope: 'firecrawl:global',
+  client_id: 'anthropic_search_client',
+  sub: '00000000-0000-4000-8000-000000000006',
+  team_id: '00000000-0000-4000-8000-000000000005',
+};
+
+function profileBackendRequestUrls(backend) {
+  return backend.requests
+    .filter((request) =>
+      request.url !== '/api/oauth/introspect' &&
+      request.url !== '/v2/mcp/action-logs'
+    )
+    .map((request) => request.url);
+}
 
 function toolNames(tools) {
   return tools.map((tool) => tool.name).sort();
@@ -633,14 +694,7 @@ test('/v2/mcp-search anonymous challenge points at its own PRM and omits invalid
 
 test('/v2/mcp-search exposes exactly the Anthropic six-tool profile without scrapeOptions', async (t) => {
   const backend = await startFakeFirecrawlBackend({
-    introspectionMetadata: {
-      api_key_id: '789',
-      aud: 'https://mcp.firecrawl.dev/v2/mcp-search',
-      scope: 'firecrawl:global',
-      client_id: 'anthropic_search_client',
-      sub: '00000000-0000-4000-8000-000000000006',
-      team_id: '00000000-0000-4000-8000-000000000005',
-    },
+    introspectionMetadata: ANTHROPIC_SEARCH_PROFILE_TOKEN_METADATA,
   });
   t.after(() => backend.close());
   const port = await getFreePort();
@@ -665,6 +719,88 @@ test('/v2/mcp-search exposes exactly the Anthropic six-tool profile without scra
   const searchTool = message.result.tools.find((tool) => tool.name === 'firecrawl_search');
   assert.ok(searchTool, 'search profile must expose firecrawl_search');
   assert.equal(JSON.stringify(searchTool).includes('scrapeOptions'), false);
+});
+
+const SEARCH_PROFILE_TOOL_CALL_CASES = [
+  {
+    name: 'firecrawl_search',
+    args: {
+      query: 'Firecrawl MCP research tools',
+      categories: ['github', 'research'],
+      scrapeOptions: { formats: ['markdown'] },
+    },
+    expectedUrl: '/v2/search',
+  },
+  {
+    name: 'firecrawl_research_search_papers',
+    args: { query: 'attention mechanisms', k: 1 },
+    expectedUrl: '/v2/search/research/papers?query=attention+mechanisms&k=1',
+  },
+  {
+    name: 'firecrawl_research_inspect_paper',
+    args: { paperId: 'arxiv:1706.03762' },
+    expectedUrl: '/v2/search/research/papers/arxiv%3A1706.03762',
+  },
+  {
+    name: 'firecrawl_research_related_papers',
+    args: { seed_ids: ['arxiv:1706.03762'], intent: 'transformers', mode: 'similar', k: 1 },
+    expectedUrl: '/v2/search/research/papers/arxiv%3A1706.03762/similar?intent=transformers&mode=similar&k=1',
+  },
+  {
+    name: 'firecrawl_research_read_paper',
+    args: { paperId: 'arxiv:1706.03762', question: 'What mechanism is used?', k: 1 },
+    expectedUrl: '/v2/search/research/papers/arxiv%3A1706.03762?query=What+mechanism+is+used%3F&k=1',
+  },
+  {
+    name: 'firecrawl_research_search_github',
+    args: { query: 'Firecrawl MCP', k: 1 },
+    expectedUrl: '/v2/search/research/github?query=Firecrawl+MCP&k=1',
+  },
+];
+
+test('/v2/mcp-search executes every allowed profile tool only against search/research endpoints', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    introspectionMetadata: ANTHROPIC_SEARCH_PROFILE_TOKEN_METADATA,
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(
+    hostedEnv(port, backend, {
+      FASTMCP_ENDPOINT: '/v2/mcp-search',
+      FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-search',
+    })
+  );
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  for (const [index, call] of SEARCH_PROFILE_TOOL_CALL_CASES.entries()) {
+    const response = await mcpRequest(port, '/v2/mcp-search', {
+      id: 570 + index,
+      method: 'tools/call',
+      params: { name: call.name, arguments: call.args },
+      headers: { authorization: 'Bearer fco_search_profile_token' },
+    });
+    assert.equal(response.status, 200, `${call.name} HTTP status`);
+    const message = await parseMcpResponse(response);
+    assert.notEqual(message.result?.isError, true, `${call.name} should not return an MCP tool error`);
+  }
+
+  const urls = profileBackendRequestUrls(backend);
+  for (const expectedUrl of SEARCH_PROFILE_TOOL_CALL_CASES.map((call) => call.expectedUrl)) {
+    assert.ok(urls.includes(expectedUrl), `missing backend request ${expectedUrl}; saw ${urls.join(', ')}`);
+  }
+  assert.equal(
+    backend.requests.some((request) => request.url === '/v2/scrape' || request.url === '/v2/map'),
+    false,
+    'search profile tools must not dispatch arbitrary URL fetch/scrape/map requests'
+  );
+  const searchRequest = backend.requests.find((request) => request.url === '/v2/search');
+  assert.ok(searchRequest, 'firecrawl_search should call /v2/search');
+  assert.equal(
+    Object.hasOwn(searchRequest.body ?? {}, 'scrapeOptions'),
+    false,
+    'mcp-search must strip/omit scrapeOptions before dispatching firecrawl_search'
+  );
 });
 
 test('/v2/mcp-search rejects legacy /v2/mcp OAuth audience by default', async (t) => {
