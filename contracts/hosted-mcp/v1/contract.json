@@ -28,6 +28,7 @@
       ],
       "anonymous_initialize": "401_bare_bearer_challenge",
       "endpoint": "/v2/mcp-oauth",
+      "instructions_sha256": "7e67b0d0fc16f7c99445799d6dbdc3840f5245060aa3241e49f85869c3fa901b",
       "protected_resource_metadata_paths": [
         "/.well-known/oauth-protected-resource/v2/mcp-oauth"
       ],
@@ -35,18 +36,22 @@
     },
     "anthropic_search": {
       "accepted_credentials": [
-        "firecrawl_api_key",
         "oauth_same_resource"
       ],
       "anonymous_initialize": "401_bare_bearer_challenge",
+      "context_budget": {
+        "estimated_token_ceiling": 2700,
+        "serialized_bytes_ceiling": 10800
+      },
       "endpoint": "/v2/mcp-search",
+      "instructions_sha256": "cf1c1d6dad4913d73193bde96f74afa5f4ad774848bdaf7d61d9474125ead2ca",
       "legacy_audience_accepted": false,
       "protected_resource_metadata_paths": [
         "/.well-known/oauth-protected-resource/v2/mcp-search"
       ],
       "resource": "https://mcp.firecrawl.dev/v2/mcp-search",
       "schema_overrides": {
-        "firecrawl_search": "scrapeOptions omitted"
+        "firecrawl_search": "scrapeOptions and enterprise omitted"
       },
       "tool_allowlist": [
         "firecrawl_search",
@@ -65,6 +70,7 @@
       ],
       "anonymous_initialize": "200_without_auth_challenge",
       "endpoint": "/v2/mcp",
+      "instructions_sha256": "7e67b0d0fc16f7c99445799d6dbdc3840f5245060aa3241e49f85869c3fa901b",
       "protected_resource_metadata_paths": [
         "/.well-known/oauth-protected-resource",
         "/.well-known/oauth-protected-resource/v2/mcp"

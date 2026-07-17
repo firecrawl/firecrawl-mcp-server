@@ -50,12 +50,23 @@
         "resource",
         "anonymous_initialize",
         "accepted_credentials",
+        "instructions_sha256",
         "protected_resource_metadata_paths"
       ],
       "properties": {
         "endpoint": { "type": "string" },
         "resource": { "type": "string", "format": "uri" },
         "anonymous_initialize": { "type": "string" },
+        "context_budget": {
+          "type": "object",
+          "required": ["estimated_token_ceiling", "serialized_bytes_ceiling"],
+          "properties": {
+            "estimated_token_ceiling": { "type": "number" },
+            "serialized_bytes_ceiling": { "type": "number" }
+          },
+          "additionalProperties": false
+        },
+        "instructions_sha256": { "type": "string" },
         "accepted_credentials": {
           "type": "array",
           "items": { "type": "string" },

@@ -67,6 +67,8 @@ function validateAgainstSchema(value, rule, schema, path = '$') {
   } else if (rule.type === 'string') {
     assert.equal(typeof value, 'string', `${path}: expected string`);
     if (rule.format === 'uri') assert.doesNotThrow(() => new URL(value), `${path}: expected URI`);
+  } else if (rule.type === 'number') {
+    assert.equal(typeof value, 'number', `${path}: expected number`);
   }
 }
 
@@ -81,12 +83,31 @@ assert.equal(contract.profiles.keyless.endpoint, '/v2/mcp');
 assert.equal(contract.profiles.keyless.resource, 'https://mcp.firecrawl.dev/v2/mcp');
 assert.equal(contract.profiles.account.endpoint, '/v2/mcp-oauth');
 assert.equal(contract.profiles.account.resource, 'https://mcp.firecrawl.dev/v2/mcp-oauth');
+assert.equal(
+  contract.profiles.keyless.instructions_sha256,
+  '7e67b0d0fc16f7c99445799d6dbdc3840f5245060aa3241e49f85869c3fa901b'
+);
+assert.equal(
+  contract.profiles.account.instructions_sha256,
+  contract.profiles.keyless.instructions_sha256
+);
 assert.deepEqual(contract.profiles.account.protected_resource_metadata_paths, [
   '/.well-known/oauth-protected-resource/v2/mcp-oauth',
 ]);
 assert.equal(contract.profiles.anthropic_search.endpoint, '/v2/mcp-search');
 assert.equal(contract.profiles.anthropic_search.resource, 'https://mcp.firecrawl.dev/v2/mcp-search');
 assert.equal(contract.profiles.anthropic_search.legacy_audience_accepted, false);
+assert.deepEqual(contract.profiles.anthropic_search.accepted_credentials, [
+  'oauth_same_resource',
+]);
+assert.equal(
+  contract.profiles.anthropic_search.instructions_sha256,
+  'cf1c1d6dad4913d73193bde96f74afa5f4ad774848bdaf7d61d9474125ead2ca'
+);
+assert.deepEqual(contract.profiles.anthropic_search.context_budget, {
+  estimated_token_ceiling: 2700,
+  serialized_bytes_ceiling: 10800,
+});
 assert.deepEqual(contract.profiles.anthropic_search.protected_resource_metadata_paths, [
   '/.well-known/oauth-protected-resource/v2/mcp-search',
 ]);
@@ -100,7 +121,7 @@ assert.deepEqual(contract.profiles.anthropic_search.tool_allowlist, [
 ]);
 assert.equal(
   contract.profiles.anthropic_search.schema_overrides.firecrawl_search,
-  'scrapeOptions omitted'
+  'scrapeOptions and enterprise omitted'
 );
 assert.equal(contract.audience_compatibility.policy, 'one_way');
 assert.equal(contract.audience_compatibility.legacy_tokens_on_account_endpoint.default, true);
