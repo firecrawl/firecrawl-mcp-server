@@ -59,14 +59,24 @@
         "anonymous_initialize": { "type": "string" },
         "context_budget": {
           "type": "object",
-          "required": ["estimated_token_ceiling", "serialized_bytes_ceiling"],
+          "required": [
+            "descriptions_bytes_ceiling",
+            "estimated_token_ceiling",
+            "instructions_bytes_ceiling",
+            "schemas_bytes_ceiling",
+            "serialized_bytes_ceiling"
+          ],
           "properties": {
+            "descriptions_bytes_ceiling": { "type": "number" },
             "estimated_token_ceiling": { "type": "number" },
+            "instructions_bytes_ceiling": { "type": "number" },
+            "schemas_bytes_ceiling": { "type": "number" },
             "serialized_bytes_ceiling": { "type": "number" }
           },
           "additionalProperties": false
         },
         "instructions_sha256": { "type": "string" },
+        "tool_metadata_sha256": { "type": "string" },
         "accepted_credentials": {
           "type": "array",
           "items": { "type": "string" },

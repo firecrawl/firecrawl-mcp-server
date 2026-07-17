@@ -102,10 +102,17 @@ assert.deepEqual(contract.profiles.anthropic_search.accepted_credentials, [
 ]);
 assert.equal(
   contract.profiles.anthropic_search.instructions_sha256,
-  'cf1c1d6dad4913d73193bde96f74afa5f4ad774848bdaf7d61d9474125ead2ca'
+  'b90f35b354f3a6f4509392ee7a923f19872d006ad3a35d8da776d4feab77330f'
+);
+assert.equal(
+  contract.profiles.anthropic_search.tool_metadata_sha256,
+  '37c8372433074bac81943cc1408a24d34deffe65bb2dc487e8925eec7da9ecae'
 );
 assert.deepEqual(contract.profiles.anthropic_search.context_budget, {
+  descriptions_bytes_ceiling: 3200,
   estimated_token_ceiling: 2700,
+  instructions_bytes_ceiling: 1024,
+  schemas_bytes_ceiling: 4000,
   serialized_bytes_ceiling: 10800,
 });
 assert.deepEqual(contract.profiles.anthropic_search.protected_resource_metadata_paths, [

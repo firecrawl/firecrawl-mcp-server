@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import net from 'node:net';
 import test from 'node:test';
@@ -289,10 +290,24 @@ const ANTHROPIC_SEARCH_PROFILE_TOKEN_METADATA = {
   team_id: '00000000-0000-4000-8000-000000000005',
 };
 
-const FROZEN_GENERIC_INSTRUCTIONS_SHA256 =
-  '7e67b0d0fc16f7c99445799d6dbdc3840f5245060aa3241e49f85869c3fa901b';
-const ANTHROPIC_SEARCH_INSTRUCTIONS_SHA256 =
-  'cf1c1d6dad4913d73193bde96f74afa5f4ad774848bdaf7d61d9474125ead2ca';
+const HOSTED_MCP_CONTRACT = JSON.parse(
+  readFileSync(
+    new URL('../../contracts/hosted-mcp/v1/contract.json', import.meta.url),
+    'utf8'
+  )
+);
+
+function canonicalize(value) {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, canonicalize(value[key])])
+    );
+  }
+  return value;
+}
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -730,6 +745,13 @@ test('/v2/mcp-search exposes exactly the Anthropic six-tool profile without scra
   assert.ok(searchTool, 'search profile must expose firecrawl_search');
   assert.equal(JSON.stringify(searchTool).includes('scrapeOptions'), false);
   assert.equal(JSON.stringify(searchTool).includes('enterprise'), false);
+  for (const tool of message.result.tools) {
+    assert.equal(typeof tool.annotations?.title, 'string', `${tool.name} title`);
+    assert.ok(tool.annotations.title.length > 0, `${tool.name} title`);
+    assert.equal(tool.annotations.readOnlyHint, true, `${tool.name} readOnlyHint`);
+    assert.equal(tool.annotations.destructiveHint, false, `${tool.name} destructiveHint`);
+    assert.equal(tool.annotations.openWorldHint, true, `${tool.name} openWorldHint`);
+  }
 
   const initializeResponse = await initialize(port, '/v2/mcp-search', {
     authorization: 'Bearer fco_search_profile_token',
@@ -742,9 +764,30 @@ test('/v2/mcp-search exposes exactly the Anthropic six-tool profile without scra
       tools: message.result.tools,
     })
   );
+  const budget = HOSTED_MCP_CONTRACT.profiles.anthropic_search.context_budget;
+  const componentBytes = {
+    descriptions: message.result.tools.reduce(
+      (total, tool) => total + Buffer.byteLength(tool.description ?? ''),
+      0
+    ),
+    instructions: Buffer.byteLength(initializeMessage.result.instructions ?? ''),
+    schemas: message.result.tools.reduce(
+      (total, tool) =>
+        total + Buffer.byteLength(JSON.stringify(tool.inputSchema ?? {})),
+      0
+    ),
+  };
+  assert.ok(componentBytes.instructions <= budget.instructions_bytes_ceiling);
+  assert.ok(componentBytes.descriptions <= budget.descriptions_bytes_ceiling);
+  assert.ok(componentBytes.schemas <= budget.schemas_bytes_ceiling);
   assert.ok(
-    serializedContextBytes <= 10_800,
-    `marketplace initialize metadata is ${serializedContextBytes} bytes; hard ceiling is 10800 (~2.7k estimated tokens)`
+    serializedContextBytes <= budget.serialized_bytes_ceiling,
+    `marketplace initialize metadata is ${serializedContextBytes} bytes; hard ceiling is ${budget.serialized_bytes_ceiling} (~${budget.estimated_token_ceiling} estimated tokens)`
+  );
+  assert.equal(
+    sha256(JSON.stringify(canonicalize(message.result.tools))),
+    HOSTED_MCP_CONTRACT.profiles.anthropic_search.tool_metadata_sha256,
+    'titles, descriptions, schemas, annotations, names, or ordering changed'
   );
 });
 
@@ -757,13 +800,13 @@ test('hosted profile instructions are byte-frozen and capability-honest', async 
   for (const profile of [
     {
       endpoint: '/v2/mcp',
-      expectedHash: FROZEN_GENERIC_INSTRUCTIONS_SHA256,
+      expectedHash: HOSTED_MCP_CONTRACT.profiles.keyless.instructions_sha256,
       headers: {},
       overrides: {},
     },
     {
       endpoint: '/v2/mcp-oauth',
-      expectedHash: FROZEN_GENERIC_INSTRUCTIONS_SHA256,
+      expectedHash: HOSTED_MCP_CONTRACT.profiles.account.instructions_sha256,
       headers: { authorization: 'Bearer fc-account-instructions' },
       overrides: {
         FASTMCP_ENDPOINT: '/v2/mcp-oauth',
@@ -772,7 +815,7 @@ test('hosted profile instructions are byte-frozen and capability-honest', async 
     },
     {
       endpoint: '/v2/mcp-search',
-      expectedHash: ANTHROPIC_SEARCH_INSTRUCTIONS_SHA256,
+      expectedHash: HOSTED_MCP_CONTRACT.profiles.anthropic_search.instructions_sha256,
       headers: { authorization: 'Bearer fco_search_instructions' },
       overrides: {
         FASTMCP_ENDPOINT: '/v2/mcp-search',
@@ -793,6 +836,17 @@ test('hosted profile instructions are byte-frozen and capability-honest', async 
 
     if (profile.endpoint === '/v2/mcp-search') {
       assert.match(instructions, /six read-only search and research tools/i);
+      for (const toolName of ANTHROPIC_SEARCH_PROFILE_TOOL_NAMES) {
+        assert.match(instructions, new RegExp(`\\b${toolName}\\b`));
+      }
+      const mentionedToolNames = [
+        ...new Set(instructions.match(/\bfirecrawl_[a-z0-9_]+\b/g) ?? []),
+      ].sort();
+      assert.deepEqual(
+        mentionedToolNames,
+        ANTHROPIC_SEARCH_PROFILE_TOOL_NAMES,
+        'profile instructions may mention only tools present in tools/list'
+      );
       assert.doesNotMatch(
         instructions,
         /\bscrap(?:e|ing)|\bcrawl(?:ing)?|\bmonitor|\binteract/i

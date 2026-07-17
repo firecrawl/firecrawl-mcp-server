@@ -40,11 +40,14 @@
       ],
       "anonymous_initialize": "401_bare_bearer_challenge",
       "context_budget": {
+        "descriptions_bytes_ceiling": 3200,
         "estimated_token_ceiling": 2700,
+        "instructions_bytes_ceiling": 1024,
+        "schemas_bytes_ceiling": 4000,
         "serialized_bytes_ceiling": 10800
       },
       "endpoint": "/v2/mcp-search",
-      "instructions_sha256": "cf1c1d6dad4913d73193bde96f74afa5f4ad774848bdaf7d61d9474125ead2ca",
+      "instructions_sha256": "b90f35b354f3a6f4509392ee7a923f19872d006ad3a35d8da776d4feab77330f",
       "legacy_audience_accepted": false,
       "protected_resource_metadata_paths": [
         "/.well-known/oauth-protected-resource/v2/mcp-search"
@@ -60,7 +63,8 @@
         "firecrawl_research_related_papers",
         "firecrawl_research_read_paper",
         "firecrawl_research_search_github"
-      ]
+      ],
+      "tool_metadata_sha256": "37c8372433074bac81943cc1408a24d34deffe65bb2dc487e8925eec7da9ecae"
     },
     "keyless": {
       "accepted_credentials": [
