@@ -2657,7 +2657,29 @@ test('HTTP cloud readiness separates liveness from launch-required configuration
   assert.equal(keylessWrongResource.status, 503);
   const keylessWrongResourceBody = await keylessWrongResource.json();
   assert.deepEqual(keylessWrongResourceBody.failures, [
-    'FIRECRAWL_MCP_RESOURCE_URL must end with /v2/mcp when FASTMCP_ENDPOINT is /v2/mcp',
+    'FIRECRAWL_MCP_RESOURCE_URL must equal https://mcp.firecrawl.dev/v2/mcp when FASTMCP_ENDPOINT is /v2/mcp',
+  ]);
+
+  const spoofedOriginPort = await getFreePort();
+  const spoofedOriginChild = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp-search',
+    FIRECRAWL_API_URL: 'https://api.firecrawl.dev',
+    FIRECRAWL_MCP_ACTION_LOG_SECRET: 'action-log-secret',
+    FIRECRAWL_MCP_RESOURCE_URL: 'https://attacker.example/v2/mcp-search',
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(spoofedOriginPort),
+  });
+  t.after(() => stopChild(spoofedOriginChild));
+  await waitForHealth(spoofedOriginPort, spoofedOriginChild);
+
+  const spoofedOrigin = await fetch(
+    `http://127.0.0.1:${spoofedOriginPort}/ready`
+  );
+  assert.equal(spoofedOrigin.status, 503);
+  assert.deepEqual((await spoofedOrigin.json()).failures, [
+    'FIRECRAWL_MCP_RESOURCE_URL must equal https://mcp.firecrawl.dev/v2/mcp-search when FASTMCP_ENDPOINT is /v2/mcp-search',
   ]);
 
   const oauthReadyPort = await getFreePort();
@@ -2697,7 +2719,7 @@ test('HTTP cloud readiness separates liveness from launch-required configuration
   assert.equal(oauthWrongResource.status, 503);
   const oauthWrongResourceBody = await oauthWrongResource.json();
   assert.deepEqual(oauthWrongResourceBody.failures, [
-    'FIRECRAWL_MCP_RESOURCE_URL must end with /v2/mcp-oauth when FASTMCP_ENDPOINT is /v2/mcp-oauth',
+    'FIRECRAWL_MCP_RESOURCE_URL must equal https://mcp.firecrawl.dev/v2/mcp-oauth when FASTMCP_ENDPOINT is /v2/mcp-oauth',
   ]);
 });
 

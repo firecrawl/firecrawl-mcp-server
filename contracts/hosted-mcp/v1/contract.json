@@ -32,7 +32,8 @@
       "protected_resource_metadata_paths": [
         "/.well-known/oauth-protected-resource/v2/mcp-oauth"
       ],
-      "resource": "https://mcp.firecrawl.dev/v2/mcp-oauth"
+      "resource": "https://mcp.firecrawl.dev/v2/mcp-oauth",
+      "tool_metadata_sha256": "b8753aacbd3db0e3cd19f0e18104cf51b467c1c494f36085ef4dce539fd930e7"
     },
     "anthropic_search": {
       "accepted_credentials": [
@@ -64,7 +65,7 @@
         "firecrawl_research_read_paper",
         "firecrawl_research_search_github"
       ],
-      "tool_metadata_sha256": "37c8372433074bac81943cc1408a24d34deffe65bb2dc487e8925eec7da9ecae"
+      "tool_metadata_sha256": "228fad23f5ddb17395948b02ddb8dcdf135c2db2b930f15992ff508a05388923"
     },
     "keyless": {
       "accepted_credentials": [

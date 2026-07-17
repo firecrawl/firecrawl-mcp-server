@@ -791,6 +791,32 @@ test('/v2/mcp-search exposes exactly the Anthropic six-tool profile without scra
   );
 });
 
+test('/v2/mcp-oauth full tool metadata is byte-frozen for the OpenAI rescan surface', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(
+    hostedEnv(port, backend, {
+      FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+      FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+    })
+  );
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await mcpRequest(port, '/v2/mcp-oauth', {
+    method: 'tools/list',
+    headers: { authorization: 'Bearer fc-account-metadata' },
+  });
+  assert.equal(response.status, 200);
+  const message = await parseMcpResponse(response);
+  assert.equal(
+    sha256(JSON.stringify(canonicalize(message.result.tools))),
+    HOSTED_MCP_CONTRACT.profiles.account.tool_metadata_sha256,
+    'OpenAI full-MCP names, descriptions, schemas, annotations, or ordering changed'
+  );
+});
+
 test('hosted profile instructions are byte-frozen and capability-honest', async (t) => {
   const backend = await startFakeFirecrawlBackend({
     introspectionMetadata: ANTHROPIC_SEARCH_PROFILE_TOKEN_METADATA,

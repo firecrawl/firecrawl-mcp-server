@@ -91,6 +91,10 @@ assert.equal(
   contract.profiles.account.instructions_sha256,
   contract.profiles.keyless.instructions_sha256
 );
+assert.equal(
+  contract.profiles.account.tool_metadata_sha256,
+  'b8753aacbd3db0e3cd19f0e18104cf51b467c1c494f36085ef4dce539fd930e7'
+);
 assert.deepEqual(contract.profiles.account.protected_resource_metadata_paths, [
   '/.well-known/oauth-protected-resource/v2/mcp-oauth',
 ]);
@@ -106,7 +110,7 @@ assert.equal(
 );
 assert.equal(
   contract.profiles.anthropic_search.tool_metadata_sha256,
-  '37c8372433074bac81943cc1408a24d34deffe65bb2dc487e8925eec7da9ecae'
+  '228fad23f5ddb17395948b02ddb8dcdf135c2db2b930f15992ff508a05388923'
 );
 assert.deepEqual(contract.profiles.anthropic_search.context_budget, {
   descriptions_bytes_ceiling: 3200,

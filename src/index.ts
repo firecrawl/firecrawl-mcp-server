@@ -2177,7 +2177,7 @@ server.addTool({
   },
   description: isMarketplaceSearchProfile()
     ? `
-Search Firecrawl's hosted search indexes for web, news, images, GitHub, research, and PDF results. Use this when the task needs public web discovery or index-backed search results from a bounded Firecrawl-operated service.
+Search through Firecrawl's operated search service for web, news, images, GitHub, research, and PDF results without retrieving page bodies. Use this when the task needs public web discovery or bounded search results.
 
 **Best for:** general web search, recent news, image discovery, GitHub/code discovery, academic/research discovery, and PDF discovery.
 **Use categories when helpful:** \`github\`, \`research\`, or \`pdf\`.
@@ -3654,28 +3654,20 @@ function hostedReadinessFailures(): string[] {
     );
   }
   const resourceUrl = normalizeHeader(process.env.FIRECRAWL_MCP_RESOURCE_URL) ?? DEFAULT_MCP_RESOURCE_URL;
+  const expectedResourceByEndpoint = {
+    '/v2/mcp': DEFAULT_MCP_RESOURCE_URL,
+    '/v2/mcp-oauth': 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+    '/v2/mcp-search': 'https://mcp.firecrawl.dev/v2/mcp-search',
+  } as const;
+  const expectedResource = endpoint
+    ? expectedResourceByEndpoint[endpoint as keyof typeof expectedResourceByEndpoint]
+    : undefined;
   if (
-    endpoint === '/v2/mcp' &&
-    !canonicalResource(resourceUrl).endsWith('/v2/mcp')
+    expectedResource &&
+    canonicalResource(resourceUrl) !== canonicalResource(expectedResource)
   ) {
     failures.push(
-      'FIRECRAWL_MCP_RESOURCE_URL must end with /v2/mcp when FASTMCP_ENDPOINT is /v2/mcp'
-    );
-  }
-  if (
-    endpoint === '/v2/mcp-oauth' &&
-    !canonicalResource(resourceUrl).endsWith('/v2/mcp-oauth')
-  ) {
-    failures.push(
-      'FIRECRAWL_MCP_RESOURCE_URL must end with /v2/mcp-oauth when FASTMCP_ENDPOINT is /v2/mcp-oauth'
-    );
-  }
-  if (
-    endpoint === '/v2/mcp-search' &&
-    !canonicalResource(resourceUrl).endsWith('/v2/mcp-search')
-  ) {
-    failures.push(
-      'FIRECRAWL_MCP_RESOURCE_URL must end with /v2/mcp-search when FASTMCP_ENDPOINT is /v2/mcp-search'
+      `FIRECRAWL_MCP_RESOURCE_URL must equal ${expectedResource} when FASTMCP_ENDPOINT is ${endpoint}`
     );
   }
   for (const [name, value] of [
