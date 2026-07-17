@@ -1205,6 +1205,111 @@ test('/v2/mcp rejects invalid and repeated tool selectors before dispatch', asyn
   assert.equal((await parseJsonResponse(repeated)).error.data.code, 'INVALID_TOOL_SELECTOR');
 });
 
+test('/v2/mcp enforces decoded UTF-8 selector byte boundaries', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(hostedEnv(port, backend));
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const exactlyAtLimit = 'é'.repeat(512);
+  assert.equal(Buffer.byteLength(exactlyAtLimit, 'utf8'), 1024);
+  const boundaryResponse = await mcpRequest(
+    port,
+    `/v2/mcp?tools=${encodeURIComponent(exactlyAtLimit)}`,
+    { id: 751, method: 'tools/list' }
+  );
+  assert.equal(boundaryResponse.status, 400);
+  const boundaryBody = await parseJsonResponse(boundaryResponse);
+  assert.deepEqual(boundaryBody.error.data.invalidSelectors, [exactlyAtLimit]);
+
+  const overLimit = `${exactlyAtLimit}a`;
+  assert.equal(Buffer.byteLength(overLimit, 'utf8'), 1025);
+  const overLimitResponse = await mcpRequest(
+    port,
+    `/v2/mcp?tools=${encodeURIComponent(overLimit)}`,
+    { id: 752, method: 'tools/list' }
+  );
+  assert.equal(overLimitResponse.status, 400);
+  const overLimitBody = await parseJsonResponse(overLimitResponse);
+  assert.deepEqual(overLimitBody.error.data.invalidSelectors, []);
+
+  const percentDecodedValid = await mcpRequest(
+    port,
+    '/v2/mcp?tools=firecrawl%5Fsearch',
+    { id: 753, method: 'tools/list' }
+  );
+  assert.equal(percentDecodedValid.status, 200);
+  const percentDecodedMessage = await parseMcpResponse(percentDecodedValid);
+  assert.deepEqual(toolNames(percentDecodedMessage.result.tools), [
+    'firecrawl_search',
+  ]);
+});
+
+test('/v2/mcp enforces selector-count boundaries after decoding', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(hostedEnv(port, backend));
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const atLimit = Array.from({ length: 64 }, () => '@core-v1').join(',');
+  const boundaryResponse = await mcpRequest(
+    port,
+    `/v2/mcp?tools=${atLimit}`,
+    { id: 754, method: 'tools/list' }
+  );
+  assert.equal(boundaryResponse.status, 200);
+  const boundaryMessage = await parseMcpResponse(boundaryResponse);
+  assert.deepEqual(toolNames(boundaryMessage.result.tools), [
+    'firecrawl_parse',
+    'firecrawl_scrape',
+    'firecrawl_search',
+  ]);
+
+  const overLimit = `${atLimit},@core-v1`;
+  const overLimitResponse = await mcpRequest(
+    port,
+    `/v2/mcp?tools=${overLimit}`,
+    { id: 755, method: 'tools/list' }
+  );
+  assert.equal(overLimitResponse.status, 400);
+  const overLimitBody = await parseJsonResponse(overLimitResponse);
+  assert.deepEqual(overLimitBody.error.data.invalidSelectors, []);
+});
+
+test('/v2/mcp reports empty and whitespace-only selector entries precisely', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(hostedEnv(port, backend));
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await mcpRequest(
+    port,
+    '/v2/mcp?tools=firecrawl_search,,%20%20,firecrawl_scrape',
+    { id: 756, method: 'tools/list' }
+  );
+  assert.equal(response.status, 400);
+  const body = await parseJsonResponse(response);
+  assert.equal(body.id, null);
+  assert.equal(body.error.code, -32602);
+  assert.deepEqual(body.error.data.invalidSelectors, ['', '  ']);
+
+  for (const query of ['?tools=', '?tools=%20%20']) {
+    const emptyResponse = await mcpRequest(port, `/v2/mcp${query}`, {
+      id: 757,
+      method: 'tools/list',
+    });
+    assert.equal(emptyResponse.status, 400);
+    const emptyBody = await parseJsonResponse(emptyResponse);
+    assert.deepEqual(emptyBody.error.data.invalidSelectors, []);
+  }
+});
+
 test('/v2/mcp rejects credential-ineligible selectors atomically', async (t) => {
   const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
   t.after(() => backend.close());

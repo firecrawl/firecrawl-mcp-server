@@ -1183,7 +1183,9 @@ function selectedToolNamesFromRequest(
     selectors.length > TOOL_SELECTOR_LIMITS.maxSelectors ||
     selectors.some((selector) => selector.trim() === '')
   ) {
-    throw invalidToolSelectorResponse(selectors.filter((selector) => !selector));
+    throw invalidToolSelectorResponse(
+      selectors.filter((selector) => selector.trim() === '')
+    );
   }
 
   const requested = new Set<string>();
@@ -3963,5 +3965,18 @@ server.getApp().get('/ready', (context) => {
 
 registerMonitorTools(server);
 registerResearchTools(server, getClient);
+
+function assertVersionedToolPresetsRegistered(): void {
+  const missingFullV1Tools = FULL_V1_TOOL_NAMES.filter(
+    (toolName) => !REGISTERED_TOOL_NAMES.has(toolName)
+  );
+  if (missingFullV1Tools.length > 0) {
+    throw new Error(
+      `@full-v1 references tools that were not registered: ${missingFullV1Tools.join(', ')}`
+    );
+  }
+}
+
+assertVersionedToolPresetsRegistered();
 
 await server.start(args);
