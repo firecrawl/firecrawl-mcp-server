@@ -309,6 +309,9 @@ function canonicalize(value) {
   return value;
 }
 
+const OPTIMIZED_KEYLESS_INSTRUCTIONS_SHA256 =
+  '5dad2cc8e2e860d7bf21ee15f2ead16cfc011e0249c9139f89cfb5e1a28fb158';
+
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
 }
@@ -845,6 +848,12 @@ test('hosted profile instructions are byte-frozen and capability-honest', async 
       },
     },
     {
+      endpoint: '/v2/mcp',
+      expectedHash: OPTIMIZED_KEYLESS_INSTRUCTIONS_SHA256,
+      headers: {},
+      overrides: { MCP_OPTIMIZED_INSTRUCTIONS_ENABLED: 'true' },
+    },
+    {
       endpoint: '/v2/mcp-search',
       expectedHash: HOSTED_MCP_CONTRACT.profiles.anthropic_search.instructions_sha256,
       headers: { authorization: 'Bearer fco_search_instructions' },
@@ -885,6 +894,30 @@ test('hosted profile instructions are byte-frozen and capability-honest', async 
       assert.match(instructions, /stay offline/i);
     }
   }
+});
+
+test('optimized instruction experiment fails readiness outside /v2/mcp', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(
+    hostedEnv(port, backend, {
+      FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+      FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+      MCP_OPTIMIZED_INSTRUCTIONS_ENABLED: 'true',
+    })
+  );
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await fetch(`http://127.0.0.1:${port}/ready`);
+  assert.equal(response.status, 503);
+  const body = await response.json();
+  assert.ok(
+    body.failures.includes(
+      'MCP_OPTIMIZED_INSTRUCTIONS_ENABLED is allowed only when FASTMCP_ENDPOINT is /v2/mcp'
+    )
+  );
 });
 
 test('/v2/mcp-search rejects every Firecrawl API-key header because the profile is OAuth-only', async (t) => {

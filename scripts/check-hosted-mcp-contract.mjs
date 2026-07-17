@@ -79,6 +79,13 @@ assert.equal(readFileSync(contractPath, 'utf8'), canonical, 'contract.json must 
 validateAgainstSchema(contract, schema, schema);
 
 assert.equal(contract.version, '1.2.0');
+assert.deepEqual(contract.copy_experiments.optimized_keyless_instructions, {
+  allowed_endpoint: '/v2/mcp',
+  candidate_sha256:
+    '5dad2cc8e2e860d7bf21ee15f2ead16cfc011e0249c9139f89cfb5e1a28fb158',
+  default: false,
+  flag: 'MCP_OPTIMIZED_INSTRUCTIONS_ENABLED',
+});
 assert.equal(contract.profiles.keyless.endpoint, '/v2/mcp');
 assert.equal(contract.profiles.keyless.resource, 'https://mcp.firecrawl.dev/v2/mcp');
 assert.equal(contract.profiles.account.endpoint, '/v2/mcp-oauth');

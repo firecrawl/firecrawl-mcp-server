@@ -6,6 +6,7 @@
     "version",
     "profiles",
     "audience_compatibility",
+    "copy_experiments",
     "credential_failures",
     "keyless_tools",
     "recovery",
@@ -34,6 +35,7 @@
       ]
     },
     "credential_failures": { "type": "object" },
+    "copy_experiments": { "type": "object" },
     "keyless_tools": {
       "type": "array",
       "minItems": 3,

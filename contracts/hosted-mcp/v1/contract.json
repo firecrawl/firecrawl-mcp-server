@@ -9,6 +9,14 @@
     "new_account_tokens_on_keyless_endpoint": false,
     "policy": "one_way"
   },
+  "copy_experiments": {
+    "optimized_keyless_instructions": {
+      "allowed_endpoint": "/v2/mcp",
+      "candidate_sha256": "5dad2cc8e2e860d7bf21ee15f2ead16cfc011e0249c9139f89cfb5e1a28fb158",
+      "default": false,
+      "flag": "MCP_OPTIMIZED_INSTRUCTIONS_ENABLED"
+    }
+  },
   "credential_failures": {
     "expired_or_revoked_oauth": "resource_specific_401_invalid_token",
     "introspection_unavailable": "503_retry_after",
