@@ -78,7 +78,14 @@ const canonical = `${JSON.stringify(canonicalize(contract), null, 2)}\n`;
 assert.equal(readFileSync(contractPath, 'utf8'), canonical, 'contract.json must be canonical JSON');
 validateAgainstSchema(contract, schema, schema);
 
-assert.equal(contract.version, '1.1.0');
+assert.equal(contract.version, '1.2.0');
+assert.deepEqual(contract.copy_experiments.optimized_keyless_instructions, {
+  allowed_endpoint: '/v2/mcp',
+  candidate_sha256:
+    '5dad2cc8e2e860d7bf21ee15f2ead16cfc011e0249c9139f89cfb5e1a28fb158',
+  default: false,
+  flag: 'MCP_OPTIMIZED_INSTRUCTIONS_ENABLED',
+});
 assert.equal(contract.profiles.keyless.endpoint, '/v2/mcp');
 assert.equal(contract.profiles.keyless.resource, 'https://mcp.firecrawl.dev/v2/mcp');
 assert.equal(contract.profiles.account.endpoint, '/v2/mcp-oauth');
@@ -134,6 +141,61 @@ assert.equal(
   contract.profiles.anthropic_search.schema_overrides.firecrawl_search,
   'scrapeOptions and enterprise omitted'
 );
+assert.equal(contract.tool_selection.syntax, '?tools=<selector>(,<selector>)*');
+assert.deepEqual(contract.tool_selection.presets['@core-v1'], [
+  'firecrawl_search',
+  'firecrawl_scrape',
+  'firecrawl_parse',
+]);
+assert.deepEqual(contract.tool_selection.presets['@full-v1'], [
+  'firecrawl_scrape',
+  'firecrawl_map',
+  'firecrawl_search',
+  'firecrawl_search_feedback',
+  'firecrawl_feedback',
+  'firecrawl_crawl',
+  'firecrawl_check_crawl_status',
+  'firecrawl_extract',
+  'firecrawl_agent',
+  'firecrawl_agent_status',
+  'firecrawl_interact',
+  'firecrawl_interact_stop',
+  'firecrawl_parse',
+  'firecrawl_monitor_create',
+  'firecrawl_monitor_list',
+  'firecrawl_monitor_get',
+  'firecrawl_monitor_update',
+  'firecrawl_monitor_delete',
+  'firecrawl_monitor_run',
+  'firecrawl_monitor_checks',
+  'firecrawl_monitor_check',
+  'firecrawl_research_search_papers',
+  'firecrawl_research_inspect_paper',
+  'firecrawl_research_related_papers',
+  'firecrawl_research_read_paper',
+  'firecrawl_research_search_github',
+]);
+assert.equal(
+  contract.tool_selection.semantics,
+  'exact replacement of credential-class defaults; never grants unavailable credentials'
+);
+assert.equal(contract.tool_selection.selector_error_phase, 'pre_parse_auth_hook');
+assert.equal(contract.tool_selection.selector_error_jsonrpc_id, null);
+assert.deepEqual(contract.tool_selection.limits, {
+  max_selectors: 64,
+  max_utf8_bytes: 1024,
+});
+assert.deepEqual(contract.tool_selection.invalid_selector_error, {
+  code: 'INVALID_TOOL_SELECTOR',
+  http_status: 400,
+  jsonrpc_code: -32602,
+});
+assert.deepEqual(contract.tool_selection.not_entitled_error, {
+  code: 'TOOL_SELECTOR_NOT_ENTITLED',
+  http_status: 403,
+  jsonrpc_code: -32003,
+});
+assert.equal(contract.tool_selection.marketplace_profiles_accept_selectors, false);
 assert.equal(contract.audience_compatibility.policy, 'one_way');
 assert.equal(contract.audience_compatibility.legacy_tokens_on_account_endpoint.default, true);
 assert.equal(contract.audience_compatibility.new_account_tokens_on_keyless_endpoint, false);
@@ -147,4 +209,4 @@ const digest = createHash('sha256').update(canonical).digest('hex');
 const expectedHashFile = `${digest}  contract.json\n`;
 if (write) writeFileSync(hashPath, expectedHashFile);
 assert.equal(readFileSync(hashPath, 'utf8'), expectedHashFile, 'contract.sha256 is stale');
-console.log(`Hosted MCP contract 1.1.0 verified (${digest})`);
+console.log(`Hosted MCP contract 1.2.0 verified (${digest})`);

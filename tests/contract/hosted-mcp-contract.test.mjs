@@ -309,6 +309,9 @@ function canonicalize(value) {
   return value;
 }
 
+const OPTIMIZED_KEYLESS_INSTRUCTIONS_SHA256 =
+  '5dad2cc8e2e860d7bf21ee15f2ead16cfc011e0249c9139f89cfb5e1a28fb158';
+
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
 }
@@ -374,6 +377,11 @@ function extractStructuredPayload(message) {
     }
   }
   return result;
+}
+
+async function parseJsonResponse(response) {
+  const text = await response.text();
+  return JSON.parse(text);
 }
 
 function assertRecoveryPayload(payload, expectedCode) {
@@ -840,6 +848,12 @@ test('hosted profile instructions are byte-frozen and capability-honest', async 
       },
     },
     {
+      endpoint: '/v2/mcp',
+      expectedHash: OPTIMIZED_KEYLESS_INSTRUCTIONS_SHA256,
+      headers: {},
+      overrides: { MCP_OPTIMIZED_INSTRUCTIONS_ENABLED: 'true' },
+    },
+    {
       endpoint: '/v2/mcp-search',
       expectedHash: HOSTED_MCP_CONTRACT.profiles.anthropic_search.instructions_sha256,
       headers: { authorization: 'Bearer fco_search_instructions' },
@@ -880,6 +894,30 @@ test('hosted profile instructions are byte-frozen and capability-honest', async 
       assert.match(instructions, /stay offline/i);
     }
   }
+});
+
+test('optimized instruction experiment fails readiness outside /v2/mcp', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(
+    hostedEnv(port, backend, {
+      FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+      FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+      MCP_OPTIMIZED_INSTRUCTIONS_ENABLED: 'true',
+    })
+  );
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await fetch(`http://127.0.0.1:${port}/ready`);
+  assert.equal(response.status, 503);
+  const body = await response.json();
+  assert.ok(
+    body.failures.includes(
+      'MCP_OPTIMIZED_INSTRUCTIONS_ENABLED is allowed only when FASTMCP_ENDPOINT is /v2/mcp'
+    )
+  );
 });
 
 test('/v2/mcp-search rejects every Firecrawl API-key header because the profile is OAuth-only', async (t) => {
@@ -1073,6 +1111,364 @@ test('/v2/mcp-search rejects non-profile tool calls without upstream execution',
     backend.requests.some((request) => request.url === '/v2/scrape'),
     false
   );
+});
+
+test('/v2/mcp ?tools=@core-v1 lists only the core preset for anonymous keyless sessions', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    keylessEligibilityHangs: true,
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(hostedEnv(port, backend));
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await mcpRequest(port, '/v2/mcp?tools=@core-v1', {
+    id: 71,
+    method: 'tools/list',
+  });
+
+  assert.equal(response.status, 200);
+  const message = await parseMcpResponse(response);
+  assert.deepEqual(toolNames(message.result.tools), [
+    'firecrawl_parse',
+    'firecrawl_scrape',
+    'firecrawl_search',
+  ]);
+  assert.equal(
+    backend.requests.some((request) => request.url === '/v2/keyless/eligibility'),
+    false
+  );
+});
+
+test('/v2/mcp explicit ?tools selection replaces defaults and gates direct calls', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(hostedEnv(port, backend));
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const listResponse = await mcpRequest(port, '/v2/mcp?tools=firecrawl_search', {
+    id: 72,
+    method: 'tools/list',
+  });
+  assert.equal(listResponse.status, 200);
+  const listMessage = await parseMcpResponse(listResponse);
+  assert.deepEqual(toolNames(listMessage.result.tools), ['firecrawl_search']);
+
+  const callResponse = await mcpRequest(port, '/v2/mcp?tools=firecrawl_search', {
+    id: 73,
+    method: 'tools/call',
+    params: {
+      name: 'firecrawl_scrape',
+      arguments: { url: 'https://example.com/' },
+    },
+  });
+  assert.equal(callResponse.status, 200);
+  const callMessage = await parseMcpResponse(callResponse);
+  assert.equal(extractStructuredPayload(callMessage)?.code, 'TOOL_NOT_SELECTED');
+  assert.equal(
+    backend.requests.some((request) => request.url === '/v2/scrape'),
+    false
+  );
+});
+
+test('/v2/mcp rejects invalid and repeated tool selectors before dispatch', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(hostedEnv(port, backend));
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const unknown = await mcpRequest(port, '/v2/mcp?tools=firecrawl_nope', {
+    id: 74,
+    method: 'tools/list',
+  });
+  assert.equal(unknown.status, 400);
+  const unknownBody = await parseJsonResponse(unknown);
+  assert.equal(unknownBody.id, null);
+  assert.equal(unknownBody.error.code, -32602);
+  assert.equal(unknownBody.error.data.code, 'INVALID_TOOL_SELECTOR');
+  assert.deepEqual(unknownBody.error.data.invalidSelectors, ['firecrawl_nope']);
+
+  const repeated = await mcpRequest(
+    port,
+    '/v2/mcp?tools=firecrawl_search&tools=firecrawl_scrape',
+    {
+      id: 75,
+      method: 'tools/list',
+    }
+  );
+  assert.equal(repeated.status, 400);
+  assert.equal((await parseJsonResponse(repeated)).error.data.code, 'INVALID_TOOL_SELECTOR');
+});
+
+test('/v2/mcp enforces decoded UTF-8 selector byte boundaries', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(hostedEnv(port, backend));
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const exactlyAtLimit = 'é'.repeat(512);
+  assert.equal(Buffer.byteLength(exactlyAtLimit, 'utf8'), 1024);
+  const boundaryResponse = await mcpRequest(
+    port,
+    `/v2/mcp?tools=${encodeURIComponent(exactlyAtLimit)}`,
+    { id: 751, method: 'tools/list' }
+  );
+  assert.equal(boundaryResponse.status, 400);
+  const boundaryBody = await parseJsonResponse(boundaryResponse);
+  assert.deepEqual(boundaryBody.error.data.invalidSelectors, [exactlyAtLimit]);
+
+  const overLimit = `${exactlyAtLimit}a`;
+  assert.equal(Buffer.byteLength(overLimit, 'utf8'), 1025);
+  const overLimitResponse = await mcpRequest(
+    port,
+    `/v2/mcp?tools=${encodeURIComponent(overLimit)}`,
+    { id: 752, method: 'tools/list' }
+  );
+  assert.equal(overLimitResponse.status, 400);
+  const overLimitBody = await parseJsonResponse(overLimitResponse);
+  assert.deepEqual(overLimitBody.error.data.invalidSelectors, []);
+
+  const percentDecodedValid = await mcpRequest(
+    port,
+    '/v2/mcp?tools=firecrawl%5Fsearch',
+    { id: 753, method: 'tools/list' }
+  );
+  assert.equal(percentDecodedValid.status, 200);
+  const percentDecodedMessage = await parseMcpResponse(percentDecodedValid);
+  assert.deepEqual(toolNames(percentDecodedMessage.result.tools), [
+    'firecrawl_search',
+  ]);
+});
+
+test('/v2/mcp enforces selector-count boundaries after decoding', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(hostedEnv(port, backend));
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const atLimit = Array.from({ length: 64 }, () => '@core-v1').join(',');
+  const boundaryResponse = await mcpRequest(
+    port,
+    `/v2/mcp?tools=${atLimit}`,
+    { id: 754, method: 'tools/list' }
+  );
+  assert.equal(boundaryResponse.status, 200);
+  const boundaryMessage = await parseMcpResponse(boundaryResponse);
+  assert.deepEqual(toolNames(boundaryMessage.result.tools), [
+    'firecrawl_parse',
+    'firecrawl_scrape',
+    'firecrawl_search',
+  ]);
+
+  const overLimit = `${atLimit},@core-v1`;
+  const overLimitResponse = await mcpRequest(
+    port,
+    `/v2/mcp?tools=${overLimit}`,
+    { id: 755, method: 'tools/list' }
+  );
+  assert.equal(overLimitResponse.status, 400);
+  const overLimitBody = await parseJsonResponse(overLimitResponse);
+  assert.deepEqual(overLimitBody.error.data.invalidSelectors, []);
+});
+
+test('/v2/mcp reports empty and whitespace-only selector entries precisely', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(hostedEnv(port, backend));
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await mcpRequest(
+    port,
+    '/v2/mcp?tools=firecrawl_search,,%20%20,firecrawl_scrape',
+    { id: 756, method: 'tools/list' }
+  );
+  assert.equal(response.status, 400);
+  const body = await parseJsonResponse(response);
+  assert.equal(body.id, null);
+  assert.equal(body.error.code, -32602);
+  assert.deepEqual(body.error.data.invalidSelectors, ['', '  ']);
+
+  for (const query of ['?tools=', '?tools=%20%20']) {
+    const emptyResponse = await mcpRequest(port, `/v2/mcp${query}`, {
+      id: 757,
+      method: 'tools/list',
+    });
+    assert.equal(emptyResponse.status, 400);
+    const emptyBody = await parseJsonResponse(emptyResponse);
+    assert.deepEqual(emptyBody.error.data.invalidSelectors, []);
+  }
+});
+
+test('/v2/mcp rejects credential-ineligible selectors atomically', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(hostedEnv(port, backend));
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await mcpRequest(port, '/v2/mcp?tools=firecrawl_crawl', {
+    id: 76,
+    method: 'tools/list',
+  });
+
+  assert.equal(response.status, 403);
+  const body = await parseJsonResponse(response);
+  assert.equal(body.id, null);
+  assert.equal(body.error.code, -32003);
+  assert.equal(body.error.data.code, 'TOOL_SELECTOR_NOT_ENTITLED');
+  assert.deepEqual(body.error.data.selectors, ['firecrawl_crawl']);
+});
+
+test('/v2/mcp preserves correction-only invalid-credential behavior with a selector', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(hostedEnv(port, backend));
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await mcpRequest(port, '/v2/mcp?tools=firecrawl_search', {
+    id: 761,
+    method: 'tools/list',
+    headers: { authorization: 'Bearer fc-invalid-selector-key' },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.has('www-authenticate'), false);
+  const message = await parseMcpResponse(response);
+  assert.deepEqual(toolNames(message.result.tools), []);
+});
+
+test('/v2/mcp-oauth @full-v1 membership is the immutable v1 contract set', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(
+    hostedEnv(port, backend, {
+      FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+      FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+    })
+  );
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await mcpRequest(port, '/v2/mcp-oauth?tools=@full-v1', {
+    id: 762,
+    method: 'tools/list',
+    headers: { authorization: 'Bearer fc-full-v1-contract-key' },
+  });
+
+  assert.equal(response.status, 200);
+  const message = await parseMcpResponse(response);
+  assert.deepEqual(toolNames(message.result.tools), [
+    'firecrawl_agent',
+    'firecrawl_agent_status',
+    'firecrawl_check_crawl_status',
+    'firecrawl_crawl',
+    'firecrawl_extract',
+    'firecrawl_feedback',
+    'firecrawl_interact',
+    'firecrawl_interact_stop',
+    'firecrawl_map',
+    'firecrawl_monitor_check',
+    'firecrawl_monitor_checks',
+    'firecrawl_monitor_create',
+    'firecrawl_monitor_delete',
+    'firecrawl_monitor_get',
+    'firecrawl_monitor_list',
+    'firecrawl_monitor_run',
+    'firecrawl_monitor_update',
+    'firecrawl_parse',
+    'firecrawl_research_inspect_paper',
+    'firecrawl_research_read_paper',
+    'firecrawl_research_related_papers',
+    'firecrawl_research_search_github',
+    'firecrawl_research_search_papers',
+    'firecrawl_scrape',
+    'firecrawl_search',
+    'firecrawl_search_feedback',
+  ]);
+});
+
+test('/v2/mcp-oauth supports explicit ?tools opt-down for account sessions', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    introspectionMetadata: {
+      api_key_id: '792',
+      aud: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+      scope: 'firecrawl:global',
+      client_id: 'account_selector_client',
+      sub: '00000000-0000-4000-8000-000000000012',
+      team_id: '00000000-0000-4000-8000-000000000011',
+    },
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(
+    hostedEnv(port, backend, {
+      FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+      FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+    })
+  );
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await mcpRequest(port, '/v2/mcp-oauth?tools=@core-v1', {
+    id: 77,
+    method: 'tools/list',
+    headers: { authorization: 'Bearer fco_account_selector_token' },
+  });
+
+  assert.equal(response.status, 200);
+  const message = await parseMcpResponse(response);
+  assert.deepEqual(toolNames(message.result.tools), [
+    'firecrawl_parse',
+    'firecrawl_scrape',
+    'firecrawl_search',
+  ]);
+});
+
+test('/v2/mcp-search rejects selector query parameters as a frozen marketplace profile', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    introspectionMetadata: {
+      api_key_id: '793',
+      aud: 'https://mcp.firecrawl.dev/v2/mcp-search',
+      scope: 'firecrawl:global',
+      client_id: 'anthropic_search_client',
+      sub: '00000000-0000-4000-8000-000000000014',
+      team_id: '00000000-0000-4000-8000-000000000013',
+    },
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer(
+    hostedEnv(port, backend, {
+      FASTMCP_ENDPOINT: '/v2/mcp-search',
+      FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-search',
+    })
+  );
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await mcpRequest(port, '/v2/mcp-search?tools=@core-v1', {
+    id: 78,
+    method: 'tools/list',
+    headers: { authorization: 'Bearer fco_search_profile_token' },
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal((await parseJsonResponse(response)).error.data.code, 'INVALID_TOOL_SELECTOR');
 });
 
 test('/v2/mcp-oauth accepts validated Bearer API keys as an account-door credential', async (t) => {

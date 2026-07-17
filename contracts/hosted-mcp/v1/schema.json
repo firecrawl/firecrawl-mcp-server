@@ -6,13 +6,15 @@
     "version",
     "profiles",
     "audience_compatibility",
+    "copy_experiments",
     "credential_failures",
     "keyless_tools",
-    "recovery"
+    "recovery",
+    "tool_selection"
   ],
   "properties": {
     "$schema": { "type": "string" },
-    "version": { "const": "1.1.0" },
+    "version": { "const": "1.2.0" },
     "profiles": {
       "type": "object",
       "required": ["keyless", "account", "anthropic_search"],
@@ -33,6 +35,7 @@
       ]
     },
     "credential_failures": { "type": "object" },
+    "copy_experiments": { "type": "object" },
     "keyless_tools": {
       "type": "array",
       "minItems": 3,
@@ -40,7 +43,8 @@
       "items": { "type": "string" },
       "uniqueItems": true
     },
-    "recovery": { "type": "object" }
+    "recovery": { "type": "object" },
+    "tool_selection": { "type": "object" }
   },
   "$defs": {
     "profile": {
