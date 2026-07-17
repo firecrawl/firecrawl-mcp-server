@@ -1789,6 +1789,14 @@ async function executeHostedParse(
     });
   }
 
+  if (isHostedKeylessSession(session) && args.zeroDataRetention === true) {
+    throw keylessUserError('KEYLESS_OPTION_NOT_AVAILABLE', {
+      option: 'zeroDataRetention',
+      message:
+        'Zero Data Retention is not available in anonymous keyless mode. Omit zeroDataRetention to parse with keyless access, or connect an account or configure an API key for a team where Zero Data Retention is enabled, then retry.',
+    });
+  }
+
   const options = extractParseOptions(args);
 
   if (hasFilePath && args.filePath) {
@@ -3382,7 +3390,7 @@ In hosted CLOUD_SERVICE mode, this tool is a two-call flow because hosted MCP ca
 
 **Supported file types:** .html, .htm, .xhtml, .pdf, .docx, .doc, .odt, .rtf, .xlsx, .xls
 **Unsupported options:** actions, screenshot/branding/changeTracking formats, waitFor > 0, location, mobile, proxy values other than "auto" or "basic".
-**Privacy:** Set \`redactPII: true\` to return content with personally identifiable information redacted.
+**Privacy:** \`redactPII: true\` is available in every mode. \`zeroDataRetention: true\` requires an account or API-key team where Zero Data Retention is enabled; omit it in anonymous keyless mode.
 
 **CRITICAL - Format Selection (same rules as firecrawl_scrape):**
 When the user asks for SPECIFIC data points from a document, you MUST use JSON format with a schema. Only use markdown when the user needs the ENTIRE document content.
@@ -3398,8 +3406,7 @@ Add \`"parsers": ["pdf"]\` (optionally with \`pdfOptions.maxPages\`) when parsin
     "filePath": "/absolute/path/to/document.pdf",
     "contentType": "application/pdf",
     "formats": ["markdown"],
-    "parsers": ["pdf"],
-    "zeroDataRetention": true
+    "parsers": ["pdf"]
   }
 }
 \`\`\`
@@ -3411,8 +3418,7 @@ Add \`"parsers": ["pdf"]\` (optionally with \`pdfOptions.maxPages\`) when parsin
   "arguments": {
     "uploadRef": "upload-ref-from-phase-1",
     "formats": ["markdown"],
-    "parsers": ["pdf"],
-    "zeroDataRetention": true
+    "parsers": ["pdf"]
   }
 }
 \`\`\`

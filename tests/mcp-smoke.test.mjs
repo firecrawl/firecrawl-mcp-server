@@ -2198,7 +2198,6 @@ test('HTTP cloud keyless parse phase 1 mints upload-url without API key or local
         filePath: '/definitely/not/read/keyless-report.pdf',
         formats: ['markdown'],
         parsers: ['pdf'],
-        zeroDataRetention: true,
       },
       name: 'firecrawl_parse',
     },
@@ -2220,7 +2219,6 @@ test('HTTP cloud keyless parse phase 1 mints upload-url without API key or local
       formats: ['markdown'],
       parsers: ['pdf'],
       uploadRef: 'upload-ref-keyless-1',
-      zeroDataRetention: true,
     },
     name: 'firecrawl_parse',
   });
@@ -2298,7 +2296,6 @@ test('HTTP cloud keyless parse phase 2 forwards uploadRef without API key', asyn
         formats: ['markdown'],
         parsers: ['pdf'],
         uploadRef: 'upload-ref-keyless-1',
-        zeroDataRetention: true,
       },
       name: 'firecrawl_parse',
     },
@@ -2332,7 +2329,6 @@ test('HTTP cloud keyless parse phase 2 forwards uploadRef without API key', asyn
     origin: 'mcp-fastmcp',
     parsers: ['pdf'],
     uploadRef: 'upload-ref-keyless-1',
-    zeroDataRetention: true,
   });
   assert.equal(
     backend.requests.some((request) => request.url === '/v2/parse/upload-url'),
@@ -2353,6 +2349,63 @@ test('HTTP cloud keyless parse phase 2 forwards uploadRef without API key', asyn
   assert.equal(stderr.includes('8.8.8.43'), false);
   assert.equal(stderr.includes('keyless-secret'), false);
   assertNoTypeError(stderr);
+});
+
+test('HTTP cloud keyless parse rejects zeroDataRetention before creating an upload', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true',
+    KEYLESS_PROXY_SECRET: 'keyless-secret',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+
+  await waitForHealth(port, child);
+
+  const toolCall = await httpToolCall(port, {
+    id: 44,
+    headers: { 'x-forwarded-for': '8.8.8.44' },
+    params: {
+      arguments: {
+        contentType: 'application/pdf',
+        filePath: '/definitely/not/read/keyless-zdr-report.pdf',
+        formats: ['markdown'],
+        parsers: ['pdf'],
+        zeroDataRetention: true,
+      },
+      name: 'firecrawl_parse',
+    },
+  });
+  assert.equal(toolCall.status, 200);
+  const message = parseSseJson(await toolCall.text());
+  assert.equal(message.result?.isError, true);
+  assert.equal(
+    message.result?.structuredContent?.code,
+    'KEYLESS_OPTION_NOT_AVAILABLE'
+  );
+  assert.equal(
+    message.result?.structuredContent?.option,
+    'zeroDataRetention'
+  );
+  assert.match(
+    message.result?.structuredContent?.message ?? '',
+    /Omit zeroDataRetention.*connect an account.*API key/i
+  );
+  assert.equal(
+    backend.requests.some(
+      (request) =>
+        request.url === '/v2/parse/upload-url' || request.url === '/v2/parse'
+    ),
+    false
+  );
 });
 
 test('HTTP cloud keyless rejects nested or private forwarded IP identity', async (t) => {
