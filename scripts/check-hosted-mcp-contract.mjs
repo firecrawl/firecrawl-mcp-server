@@ -140,10 +140,40 @@ assert.deepEqual(contract.tool_selection.presets['@core-v1'], [
   'firecrawl_scrape',
   'firecrawl_parse',
 ]);
+assert.deepEqual(contract.tool_selection.presets['@full-v1'], [
+  'firecrawl_scrape',
+  'firecrawl_map',
+  'firecrawl_search',
+  'firecrawl_search_feedback',
+  'firecrawl_feedback',
+  'firecrawl_crawl',
+  'firecrawl_check_crawl_status',
+  'firecrawl_extract',
+  'firecrawl_agent',
+  'firecrawl_agent_status',
+  'firecrawl_interact',
+  'firecrawl_interact_stop',
+  'firecrawl_parse',
+  'firecrawl_monitor_create',
+  'firecrawl_monitor_list',
+  'firecrawl_monitor_get',
+  'firecrawl_monitor_update',
+  'firecrawl_monitor_delete',
+  'firecrawl_monitor_run',
+  'firecrawl_monitor_checks',
+  'firecrawl_monitor_check',
+  'firecrawl_research_search_papers',
+  'firecrawl_research_inspect_paper',
+  'firecrawl_research_related_papers',
+  'firecrawl_research_read_paper',
+  'firecrawl_research_search_github',
+]);
 assert.equal(
   contract.tool_selection.semantics,
   'exact replacement of credential-class defaults; never grants unavailable credentials'
 );
+assert.equal(contract.tool_selection.selector_error_phase, 'pre_parse_auth_hook');
+assert.equal(contract.tool_selection.selector_error_jsonrpc_id, null);
 assert.deepEqual(contract.tool_selection.limits, {
   max_selectors: 64,
   max_utf8_bytes: 1024,

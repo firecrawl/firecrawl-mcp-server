@@ -1014,6 +1014,37 @@ const CORE_V1_TOOL_NAMES = [
   'firecrawl_scrape',
   'firecrawl_parse',
 ] as const;
+// Public preset membership is versioned contract data. Do not derive this from
+// the live registry: adding or removing a tool must not silently change URLs
+// that explicitly request @full-v1.
+const FULL_V1_TOOL_NAMES = [
+  'firecrawl_scrape',
+  'firecrawl_map',
+  'firecrawl_search',
+  'firecrawl_search_feedback',
+  'firecrawl_feedback',
+  'firecrawl_crawl',
+  'firecrawl_check_crawl_status',
+  'firecrawl_extract',
+  'firecrawl_agent',
+  'firecrawl_agent_status',
+  'firecrawl_interact',
+  'firecrawl_interact_stop',
+  'firecrawl_parse',
+  'firecrawl_monitor_create',
+  'firecrawl_monitor_list',
+  'firecrawl_monitor_get',
+  'firecrawl_monitor_update',
+  'firecrawl_monitor_delete',
+  'firecrawl_monitor_run',
+  'firecrawl_monitor_checks',
+  'firecrawl_monitor_check',
+  'firecrawl_research_search_papers',
+  'firecrawl_research_inspect_paper',
+  'firecrawl_research_related_papers',
+  'firecrawl_research_read_paper',
+  'firecrawl_research_search_github',
+] as const;
 const TOOL_SELECTOR_LIMITS = {
   maxUtf8Bytes: 1024,
   maxSelectors: 64,
@@ -1152,7 +1183,7 @@ function selectedToolNamesFromRequest(
     if (selector === '@core-v1') {
       for (const toolName of CORE_V1_TOOL_NAMES) requested.add(toolName);
     } else if (selector === '@full-v1') {
-      for (const toolName of REGISTERED_TOOL_NAMES) requested.add(toolName);
+      for (const toolName of FULL_V1_TOOL_NAMES) requested.add(toolName);
     } else if (selector.startsWith('@')) {
       invalid.push(selector);
     } else if (REGISTERED_TOOL_NAMES.has(selector)) {
@@ -1163,9 +1194,14 @@ function selectedToolNamesFromRequest(
   }
   if (invalid.length) throw invalidToolSelectorResponse(invalid);
 
-  const notEntitled = Array.from(requested).filter(
-    (toolName) => !isCredentialEntitledToTool(toolName, session)
-  );
+  // Invalid credentials retain Train 1's correction-only session contract.
+  // A valid selector may narrow that empty session, but must not replace the
+  // CREDENTIAL_INVALID recovery with an entitlement error.
+  const notEntitled = session.credentialError
+    ? []
+    : Array.from(requested).filter(
+        (toolName) => !isCredentialEntitledToTool(toolName, session)
+      );
   if (notEntitled.length) throw notEntitledToolSelectorResponse(notEntitled);
 
   return Array.from(REGISTERED_TOOL_NAMES).filter((toolName) =>
