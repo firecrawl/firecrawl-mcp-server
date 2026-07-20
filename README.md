@@ -432,6 +432,7 @@ Search the web and optionally extract content from search results.
   "name": "firecrawl_search",
   "arguments": {
     "query": "latest AI research papers 2023",
+    "highlights": true,
     "limit": 5,
     "lang": "en",
     "country": "us",
@@ -443,6 +444,8 @@ Search the web and optionally extract content from search results.
   }
 }
 ```
+
+Set `highlights` to `true` to request query-relevant highlights or `false` to keep the original search snippets. Omit it to use the API's default behavior.
 
 **Returns:**
 

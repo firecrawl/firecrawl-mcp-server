@@ -1298,6 +1298,12 @@ The query also supports search operators, that you can use if needed to refine t
   parameters: z
     .object({
       query: z.string().min(1),
+      highlights: z
+        .boolean()
+        .optional()
+        .describe(
+          'Return query-relevant highlights for each search result. Set to false to keep the original search snippets.'
+        ),
       limit: z.number().optional(),
       tbs: z.string().optional(),
       filter: z.string().optional(),

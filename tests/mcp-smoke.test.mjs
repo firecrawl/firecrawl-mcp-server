@@ -319,6 +319,11 @@ test('HTTP cloud transport preserves Firecrawl OAuth and well-known routes', asy
   assert.ok(httpToolNames.includes('firecrawl_scrape'));
   assert.ok(httpToolNames.includes('firecrawl_search'));
   assert.ok(httpToolNames.includes('firecrawl_parse'));
+  const searchTool = toolsMessage.result.tools.find(
+    (tool) => tool.name === 'firecrawl_search'
+  );
+  assert.equal(searchTool.inputSchema.properties.highlights.type, 'boolean');
+  assert.equal('default' in searchTool.inputSchema.properties.highlights, false);
 
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
@@ -349,7 +354,7 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
       jsonrpc: '2.0',
       method: 'tools/call',
       params: {
-        arguments: { limit: 1, query: 'example domain' },
+        arguments: { highlights: false, limit: 1, query: 'example domain' },
         name: 'firecrawl_search',
       },
     }),
@@ -386,6 +391,7 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
   assert.equal(fakeApi.requests[0].url, '/v2/search');
   assert.equal(fakeApi.requests[0].headers.authorization, 'Bearer fc-http-test');
   assert.deepEqual(fakeApi.requests[0].body, {
+    highlights: false,
     limit: 1,
     origin: 'mcp-fastmcp',
     query: 'example domain',
