@@ -298,6 +298,7 @@ test('HTTP cloud transport preserves Firecrawl OAuth and well-known routes', asy
   assert.match(initialize.headers.get('content-type') ?? '', /text\/event-stream/);
   const initializeMessage = parseSseJson(await initialize.text());
   assert.equal(initializeMessage.result.serverInfo.name, 'firecrawl-fastmcp');
+  assert.match(initializeMessage.result.instructions, /installed Firecrawl/);
 
   const toolsList = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({
@@ -489,6 +490,45 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.ok(toolNames.includes('firecrawl_search'));
   assert.ok(toolNames.includes('firecrawl_parse'));
   assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('stdio transport emits the authenticated router profile natively', async (t) => {
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_MCP_INSTRUCTIONS_PROFILE: 'router-authenticated-v1',
+  });
+  t.after(() => stopChild(child));
+  const client = new StdioMcpClient(child);
+  const init = await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'router-profile-test', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  assert.match(init.instructions, /prefer the Firecrawl tools/);
+  assert.match(init.instructions, /explicitly require offline work/);
+  assert.doesNotMatch(init.instructions, /FIRECRAWL_MCP_INSTRUCTIONS_PROFILE/);
+});
+
+test('stdio transport emits a capability-honest keyless router profile', async (t) => {
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: '',
+    FIRECRAWL_MCP_INSTRUCTIONS_PROFILE: 'router-keyless-v1',
+  });
+  t.after(() => stopChild(child));
+  const client = new StdioMcpClient(child);
+  const init = await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'keyless-router-profile-test', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  assert.match(init.instructions, /restricted keyless mode/);
+  assert.match(init.instructions, /firecrawl_search/);
+  assert.match(init.instructions, /firecrawl_scrape/);
+  assert.doesNotMatch(init.instructions, /Use firecrawl_(?:crawl|map|extract)/);
 });
 
 test('stdio transport calls Firecrawl API through a tool end to end', async (t) => {
