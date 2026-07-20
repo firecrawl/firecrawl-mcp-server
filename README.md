@@ -52,7 +52,7 @@ A read-only, search-only surface is also hosted at:
 https://mcp.firecrawl.dev/v2/mcp-search
 ```
 
-It exposes a fixed set of six read-only tools — `firecrawl_search` and the five `firecrawl_research_*` tools — and performs no page-content fetching. It has its own OAuth identity; the full endpoint above is unchanged. See [docs/search-profile.md](docs/search-profile.md) for the full contract.
+It exposes a fixed set of six read-only tools: `firecrawl_search` and the five `firecrawl_research_*` tools. It performs no page-content fetching and has its own OAuth identity; the full endpoint above is unchanged. See [docs/search-profile.md](docs/search-profile.md) for the full contract.
 
 ### Running with npx
 
@@ -225,12 +225,9 @@ Use **access** tokens (`fco_…`) only. Refresh tokens (`fcr_…`) must be excha
 
 #### Search-only surface (hosted)
 
-In hosted mode (`CLOUD_SERVICE=true`) a second in-process instance serves the [search-only endpoint](#search-only-endpoint) on its own port. It is controlled by:
+In hosted mode (`CLOUD_SERVICE=true`) a second in-process instance serves the [search-only endpoint](#search-only-endpoint). The bundled service has a fixed deployment contract: nginx routes `/v2/mcp-search` to the instance on local port `3001`, and the OAuth protected-resource identifier is `https://mcp.firecrawl.dev/v2/mcp-search`.
 
-- `FIRECRAWL_MCP_SEARCH_ENABLED` (default `true`): set to `false` to not start the search instance.
-- `FIRECRAWL_MCP_SEARCH_PORT` (default `3001`): local port the search instance listens on (internal; fronted by the reverse proxy).
-- `FIRECRAWL_MCP_SEARCH_ENDPOINT` (default `/v2/mcp-search`): the endpoint path it serves.
-- `FIRECRAWL_MCP_SEARCH_RESOURCE_URL` (default `https://mcp.firecrawl.dev/v2/mcp-search`): its OAuth protected-resource identifier.
+`FIRECRAWL_MCP_SEARCH_ENABLED` (default `true`) is the supported operational toggle; set it to `false` to prevent the search instance from starting. The Node process also accepts `FIRECRAWL_MCP_SEARCH_PORT`, `FIRECRAWL_MCP_SEARCH_ENDPOINT`, and `FIRECRAWL_MCP_SEARCH_RESOURCE_URL` for isolated tests. Those overrides do not reconfigure the bundled nginx routes or the authorization server allowlist and must not be used independently in the hosted deployment.
 
 The search instance requires authentication for every request (including `tools/list`) and rejects OAuth tokens whose audience does not match its own resource.
 

@@ -38,7 +38,8 @@ type ToolLogger = Pick<Logger, 'debug' | 'error' | 'info' | 'warn'>;
  * A server profile parameterizes how a FastMCP instance is constructed. Two
  * profiles run side by side in one process: the default `full` profile (the
  * complete tool surface) and the `search` profile (a fixed, read-only subset).
- * Only the request path decides which surface answers — never client identity.
+ * Only the request path decides which surface answers. Client identity is never
+ * inspected.
  */
 type ServerProfile = {
   id: 'full' | 'search';
@@ -299,7 +300,7 @@ async function authenticateRequest(
 
   // On surfaces that opt in, an OAuth access token must be bound to this exact
   // resource: reject tokens minted for a different resource AND tokens with no
-  // audience binding at all (fail closed — an unbound token must not unlock a
+  // audience binding at all (fail closed; an unbound token must not unlock a
   // resource-scoped surface). Plain API keys carry no audience and are a direct
   // credential, so they are unaffected.
   if (profile.enforceAudience && resolved?.viaOAuth) {
@@ -2741,7 +2742,7 @@ Add \`"parsers": ["pdf"]\` (optionally with \`pdfOptions.maxPages\`) when parsin
 
 // Search-surface variant of firecrawl_search. It takes no scrapeOptions and
 // builds the outbound /v2/search body from an explicit set of fields, so the
-// surface never asks the API to fetch page content — the omission is enforced
+// surface never asks the API to fetch page content. The omission is enforced
 // by the schema and the body construction, not a runtime filter.
 function registerMarketplaceSearchTool(
   registrar: ToolRegistrar,
@@ -2827,8 +2828,8 @@ The query supports search operators to refine results:
         excludeDomains
       );
 
-      // Build the outbound body from allowed fields only — never spread the raw
-      // arguments — so no scrape/content-fetch options can reach the API.
+      // Build the outbound body from allowed fields only. Never spread the raw
+      // arguments, so no scrape/content-fetch options can reach the API.
       const searchBody = {
         query: searchQuery,
         ...removeEmptyTopLevel({

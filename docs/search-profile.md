@@ -2,8 +2,8 @@
 
 The server runs two FastMCP instances in one process:
 
-- The **full** surface at `/v2/mcp` — the complete tool set, unchanged.
-- The **search** surface at `/v2/mcp-search` — a fixed, read-only subset.
+- The **full** surface at `/v2/mcp`, with the complete tool set unchanged.
+- The **search** surface at `/v2/mcp-search`, with a fixed, read-only subset.
 
 Only the request path selects the surface. There is no inspection of client
 identity, `User-Agent`, or `clientInfo`.
@@ -22,8 +22,8 @@ The search surface exposes exactly these six read-only tools and nothing else:
 | `firecrawl_research_search_github` | Search public repository history and readmes |
 
 Registration on this instance is filtered against that allowlist, so any tool
-outside the set — scrape, map, crawl, extract, agent, interact, parse, monitor,
-and the feedback tools — is never registered. Both `tools/list` and
+outside the set, including scrape, map, crawl, extract, agent, interact, parse,
+monitor, and the feedback tools, is never registered. Both `tools/list` and
 `tools/call` reflect only the six tools; calling anything else returns an
 unknown-tool error.
 
@@ -35,8 +35,8 @@ outbound `/v2/search` body from an explicit list of allowed fields
 (`query`, `limit`, `tbs`, `filter`, `location`, `sources`, `categories`,
 `highlights`, `enterprise`) plus `origin`. It never spreads raw arguments, so
 no request from this surface can ask the API to fetch third-party page content.
-This is enforced by the schema and body construction, and covered by contract
-tests — not by a runtime filter.
+The schema and body construction enforce this directly, and contract tests guard
+the behavior. No runtime filter is involved.
 
 ## OAuth
 
@@ -47,11 +47,11 @@ tests — not by a runtime filter.
   is served at `/.well-known/oauth-protected-resource/v2/mcp-search`. The 401
   challenge's `WWW-Authenticate: ... resource_metadata=...` points at that
   document.
-- **Authenticated discovery.** Every request — including `tools/list` — requires
+- **Authenticated discovery.** Every request, including `tools/list`, requires
   a credential; the keyless free-tier fallback does not apply here.
 - **Audience enforcement.** OAuth access tokens are introspected and must be
   bound to this exact resource: a token whose audience names a different
-  resource — or that carries no audience binding at all — is rejected with a
+  resource, or that carries no audience binding at all, is rejected with a
   401 (fail closed). Plain API keys carry no audience and are a direct
   credential, so they are unaffected.
 
@@ -64,11 +64,15 @@ Both instances start from the same image and process. The in-pod reverse proxy
 routes `/v2/mcp-search` (and its key-in-path form `/{apiKey}/v2/mcp-search`)
 plus the metadata path to the search instance's local port; everything else
 routes to the full instance as before. If the search instance fails to bind its
-port, it is logged and skipped — the full instance is unaffected. No new domain
+port, it is logged and skipped; the full instance is unaffected. No new domain
 and no infrastructure changes are required.
 
-Relevant configuration lives in `FIRECRAWL_MCP_SEARCH_*` environment variables
-(see the README) and the `/v2/mcp-search` routing in `docker/nginx.conf`.
+The bundled hosted deployment fixes the public path at `/v2/mcp-search`, the
+internal search port at `3001`, and the OAuth resource at
+`https://mcp.firecrawl.dev/v2/mcp-search`. `FIRECRAWL_MCP_SEARCH_ENABLED` is the
+supported operational toggle. Node-level overrides for the port, endpoint, and
+resource exist for isolated tests only; they do not update `docker/nginx.conf`
+or the authorization server allowlist.
 
 ## Tests
 
