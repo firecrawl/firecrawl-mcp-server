@@ -49,9 +49,11 @@ tests — not by a runtime filter.
   document.
 - **Authenticated discovery.** Every request — including `tools/list` — requires
   a credential; the keyless free-tier fallback does not apply here.
-- **Audience enforcement.** OAuth access tokens are introspected; a token whose
-  audience does not name this resource is rejected with a 401. (Plain API keys
-  carry no audience and are unaffected.)
+- **Audience enforcement.** OAuth access tokens are introspected and must be
+  bound to this exact resource: a token whose audience names a different
+  resource — or that carries no audience binding at all — is rejected with a
+  401 (fail closed). Plain API keys carry no audience and are a direct
+  credential, so they are unaffected.
 
 The full surface's OAuth behavior is unchanged (origin-level metadata, no
 audience enforcement, keyless fallback intact).
@@ -59,9 +61,11 @@ audience enforcement, keyless fallback intact).
 ## Deployment
 
 Both instances start from the same image and process. The in-pod reverse proxy
-routes `/v2/mcp-search` and its metadata path to the search instance's local
-port; everything else routes to the full instance as before. No new domain and
-no infrastructure changes are required.
+routes `/v2/mcp-search` (and its key-in-path form `/{apiKey}/v2/mcp-search`)
+plus the metadata path to the search instance's local port; everything else
+routes to the full instance as before. If the search instance fails to bind its
+port, it is logged and skipped — the full instance is unaffected. No new domain
+and no infrastructure changes are required.
 
 Relevant configuration lives in `FIRECRAWL_MCP_SEARCH_*` environment variables
 (see the README) and the `/v2/mcp-search` routing in `docker/nginx.conf`.

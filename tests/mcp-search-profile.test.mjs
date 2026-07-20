@@ -382,6 +382,30 @@ test('search surface rejects a token minted for a different resource', async (t)
   assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
 });
 
+test('search surface rejects an OAuth token with no audience binding', async (t) => {
+  // Introspection returns no `aud` (token was minted without a resource
+  // binding). A locked-down surface must fail closed rather than accept it.
+  const backend = await startFakeBackend({
+    apiKeyFromIntrospection: 'fc-introspected',
+    // introspectionAud omitted → introspect response has no aud field
+  });
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+  });
+
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 8,
+    method: 'tools/call',
+    params: { arguments: { query: 'x', limit: 1 }, name: 'firecrawl_search' },
+    headers: { authorization: 'Bearer fco_unbound_token' },
+  });
+  assert.equal(res.status, 401);
+  assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
+});
+
 test('search surface accepts a token minted for its own resource', async (t) => {
   const backend = await startFakeBackend({
     apiKeyFromIntrospection: 'fc-introspected',

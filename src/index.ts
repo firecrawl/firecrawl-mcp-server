@@ -212,6 +212,8 @@ type OAuthIntrospectionResponse = {
 type ResolvedCredential = {
   credential: string;
   aud?: string | string[];
+  /** True when the credential came from introspecting an OAuth access token. */
+  viaOAuth: boolean;
 };
 
 async function introspectOAuthAccessToken(
@@ -270,13 +272,13 @@ async function resolveCredentialFromHeaders(
 
   if (bearer && isFirecrawlOAuthAccessToken(bearer)) {
     const { apiKey, aud } = await introspectOAuthAccessToken(bearer);
-    return { credential: apiKey, aud };
+    return { credential: apiKey, aud, viaOAuth: true };
   }
   if (headerApiKey) {
-    return { credential: headerApiKey };
+    return { credential: headerApiKey, viaOAuth: false };
   }
   if (bearer) {
-    return { credential: bearer };
+    return { credential: bearer, viaOAuth: false };
   }
   return undefined;
 }
@@ -295,16 +297,15 @@ async function authenticateRequest(
     ? await resolveCredentialFromHeaders(request.headers)
     : undefined;
 
-  // Reject tokens minted for a different resource. Only surfaces that opt in
-  // enforce this: a token issued for another resource must not be replayed
-  // against a resource-scoped surface. Plain API keys carry no audience and
-  // are unaffected.
-  if (
-    profile.enforceAudience &&
-    resolved &&
-    !audienceMatchesResource(resolved.aud, profile.resourceUrl)
-  ) {
-    throw new Error('OAuth token audience does not match this resource');
+  // On surfaces that opt in, an OAuth access token must be bound to this exact
+  // resource: reject tokens minted for a different resource AND tokens with no
+  // audience binding at all (fail closed — an unbound token must not unlock a
+  // resource-scoped surface). Plain API keys carry no audience and are a direct
+  // credential, so they are unaffected.
+  if (profile.enforceAudience && resolved?.viaOAuth) {
+    if (!resolved.aud || !audienceMatchesResource(resolved.aud, profile.resourceUrl)) {
+      throw new Error('OAuth token audience does not match this resource');
+    }
   }
 
   const headerCred = resolved?.credential;
@@ -441,6 +442,46 @@ function buildSearchQueryWithDomains(
 
   return query;
 }
+
+// Parameter fields shared by both firecrawl_search surfaces. The full surface
+// adds `scrapeOptions` on top; the search surface uses these as-is (strict, no
+// scrapeOptions). Defining the field set once keeps the two surfaces from
+// drifting when a source type, category, or filter changes.
+const searchToolBaseFields = {
+  query: z.string().min(1),
+  highlights: z
+    .boolean()
+    .optional()
+    .describe(
+      'Return query-relevant highlights for each search result. Set to false to keep the original search snippets.'
+    ),
+  limit: z.number().optional(),
+  tbs: z.string().optional(),
+  filter: z.string().optional(),
+  location: z.string().optional(),
+  includeDomains: z.array(searchDomainSchema).optional(),
+  excludeDomains: z.array(searchDomainSchema).optional(),
+  sources: z
+    .array(z.object({ type: z.enum(['web', 'images', 'news']) }))
+    .optional(),
+  categories: z
+    .array(z.enum(['github', 'research', 'pdf']))
+    .optional()
+    .describe(
+      'Limit results to specific source types. `github` searches GitHub repositories, code, issues, and docs; `research` searches academic and research sources; `pdf` searches PDF results.'
+    ),
+  enterprise: z.array(z.enum(['default', 'anon', 'zdr'])).optional(),
+};
+
+// Both surfaces forbid specifying includeDomains and excludeDomains together.
+function searchDomainsAreExclusive(args: {
+  includeDomains?: string[];
+  excludeDomains?: string[];
+}): boolean {
+  return !(args.includeDomains?.length && args.excludeDomains?.length);
+}
+const SEARCH_DOMAINS_CONFLICT_MESSAGE =
+  'includeDomains and excludeDomains cannot both be specified';
 
 class ConsoleLogger implements Logger {
   private shouldLog =
@@ -1442,38 +1483,13 @@ The query also supports search operators, that you can use if needed to refine t
 `,
   parameters: z
     .object({
-      query: z.string().min(1),
-      highlights: z
-        .boolean()
-        .optional()
-        .describe(
-          'Return query-relevant highlights for each search result. Set to false to keep the original search snippets.'
-        ),
-      limit: z.number().optional(),
-      tbs: z.string().optional(),
-      filter: z.string().optional(),
-      location: z.string().optional(),
-      includeDomains: z.array(searchDomainSchema).optional(),
-      excludeDomains: z.array(searchDomainSchema).optional(),
-      sources: z
-        .array(z.object({ type: z.enum(['web', 'images', 'news']) }))
-        .optional(),
-      categories: z
-        .array(z.enum(['github', 'research', 'pdf']))
-        .optional()
-        .describe(
-          'Limit results to specific source types. `github` searches GitHub repositories, code, issues, and docs; `research` searches academic and research sources; `pdf` searches PDF results.'
-        ),
+      ...searchToolBaseFields,
       scrapeOptions: scrapeParamsSchema
         .omit({ url: true })
         .partial()
         .optional(),
-      enterprise: z.array(z.enum(['default', 'anon', 'zdr'])).optional(),
     })
-    .refine(
-      (args) => !(args.includeDomains?.length && args.excludeDomains?.length),
-      'includeDomains and excludeDomains cannot both be specified'
-    ),
+    .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE),
   execute: async (args: unknown, { session, log }): Promise<string> => {
     const { query, ...opts } = args as Record<string, unknown>;
 
@@ -2772,39 +2788,12 @@ The query supports search operators to refine results:
 **Returns:** A JSON envelope of the form \`{ success, data: { web?, images?, news? }, id, creditsUsed }\`. Each result array contains the ranked results for that source.
 `,
     parameters: z
-      .object({
-        query: z.string().min(1),
-        highlights: z
-          .boolean()
-          .optional()
-          .describe(
-            'Return query-relevant highlights for each search result. Set to false to keep the original search snippets.'
-          ),
-        limit: z.number().optional(),
-        tbs: z.string().optional(),
-        filter: z.string().optional(),
-        location: z.string().optional(),
-        includeDomains: z.array(searchDomainSchema).optional(),
-        excludeDomains: z.array(searchDomainSchema).optional(),
-        sources: z
-          .array(z.object({ type: z.enum(['web', 'images', 'news']) }))
-          .optional(),
-        categories: z
-          .array(z.enum(['github', 'research', 'pdf']))
-          .optional()
-          .describe(
-            'Limit results to specific source types. `github` searches GitHub repositories, code, issues, and docs; `research` searches academic and research sources; `pdf` searches PDF results.'
-          ),
-        enterprise: z.array(z.enum(['default', 'anon', 'zdr'])).optional(),
-      })
+      .object({ ...searchToolBaseFields })
       // Reject unknown fields (notably scrapeOptions): this surface exposes no
       // way to request page-content fetching, and an unexpected field is an
       // error rather than being silently dropped.
       .strict()
-      .refine(
-        (args) => !(args.includeDomains?.length && args.excludeDomains?.length),
-        'includeDomains and excludeDomains cannot both be specified'
-      ),
+      .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE),
     execute: async (args: unknown, { session, log }): Promise<string> => {
       const {
         query,
@@ -2921,13 +2910,24 @@ if (searchProfileEnabled) {
   registerResearchTools(searchRegistrar, getClient);
   registerMarketplaceSearchTool(searchRegistrar, getClient);
 
-  await searchServer.start({
-    transportType: 'httpStream',
-    httpStream: {
-      port: searchProfile.port,
-      host: HOST,
-      endpoint: searchProfile.endpoint,
-      stateless: true,
-    },
-  });
+  // Isolate the search instance from the already-serving full instance: if it
+  // fails to bind (port in use, etc.), log and carry on rather than let a
+  // top-level rejection exit the process and take the healthy full surface down.
+  try {
+    await searchServer.start({
+      transportType: 'httpStream',
+      httpStream: {
+        port: searchProfile.port,
+        host: HOST,
+        endpoint: searchProfile.endpoint,
+        stateless: true,
+      },
+    });
+  } catch (error) {
+    console.error(
+      `[search-profile] failed to start on port ${searchProfile.port}; ` +
+        'the full surface is unaffected',
+      error
+    );
+  }
 }
