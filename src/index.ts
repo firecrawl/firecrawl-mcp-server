@@ -498,13 +498,6 @@ function makeAuthenticate(profile: ServerProfile) {
     }
 
     const authResult = authenticateRequest(request, profile).catch((error) => {
-      const shouldChallenge = requestShouldReceiveOAuthChallenge(request);
-      const oauthChallenge = shouldChallenge
-        ? createOAuthChallengeResponse(error, profile)
-        : undefined;
-      if (oauthChallenge) {
-        throw oauthChallenge;
-      }
       if (error instanceof CredentialValidationUnavailableError) {
         throw new Response(
           JSON.stringify({
@@ -516,6 +509,13 @@ function makeAuthenticate(profile: ServerProfile) {
             status: 503,
           }
         );
+      }
+      const shouldChallenge = requestShouldReceiveOAuthChallenge(request);
+      const oauthChallenge = shouldChallenge
+        ? createOAuthChallengeResponse(error, profile)
+        : undefined;
+      if (oauthChallenge) {
+        throw oauthChallenge;
       }
       throw error;
     });
@@ -790,7 +790,7 @@ function emitActionLog(
     tool_name: toolName,
     status,
     request_id: requestId,
-    resource: session?.resource ?? primaryProfile.resourceUrl,
+    resource: primaryProfile.resourceUrl,
     ...(error
       ? { error_class: error instanceof Error ? error.name : typeof error }
       : {}),
@@ -876,7 +876,7 @@ server.getApp().get('/ready', (context) => {
     'FIRECRAWL_API_URL',
     'FIRECRAWL_OAUTH_INTROSPECT_SECRET',
     'FIRECRAWL_MCP_ACTION_LOG_SECRET',
-    ...(primaryProfile.allowKeyless ? ['KEYLESS_PROXY_SECRET'] : []),
+    'KEYLESS_PROXY_SECRET',
   ].filter((name) => !normalizeHeader(process.env[name]));
   const configuredEndpoint = getPrimaryEndpoint();
   if (

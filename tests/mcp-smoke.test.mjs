@@ -813,6 +813,7 @@ test('account endpoint challenges anonymous clients and accepts API keys', async
     FIRECRAWL_OAUTH_ISSUER: backend.url,
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
     HTTP_STREAMABLE_SERVER: 'true',
+    KEYLESS_PROXY_SECRET: 'delegation-secret',
     PORT: String(port),
   });
   t.after(() => stopChild(child));
@@ -862,7 +863,33 @@ test('account endpoint challenges anonymous clients and accepts API keys', async
   assert.ok(names.length > 3);
 });
 
-test('API-key validation outages do not misdirect clients into OAuth', async (t) => {
+test('account readiness requires the managed OAuth delegation secret', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_MCP_ACTION_LOG_SECRET: 'action-secret',
+    FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const ready = await fetch(`http://127.0.0.1:${port}/ready`);
+  assert.equal(ready.status, 503);
+  assert.deepEqual(await ready.json(), {
+    missing: ['KEYLESS_PROXY_SECRET'],
+    ok: false,
+  });
+});
+
+test('credential validation outages do not misdirect clients into OAuth', async (t) => {
   const backend = await startFakeFirecrawlBackend();
   t.after(() => backend.close());
   const unavailableIssuerPort = await getFreePort();
@@ -880,18 +907,20 @@ test('API-key validation outages do not misdirect clients into OAuth', async (t)
   t.after(() => stopChild(child));
   await waitForHealth(port, child);
 
-  const response = await fetch(`http://127.0.0.1:${port}/v2/mcp-oauth`, {
-    body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'tools/list', params: {} }),
-    headers: {
-      accept: 'application/json, text/event-stream',
-      authorization: 'Bearer fc-account-key',
-      'content-type': 'application/json',
-    },
-    method: 'POST',
-  });
-  assert.equal(response.status, 503);
-  assert.equal(response.headers.has('www-authenticate'), false);
-  assert.equal((await response.json()).error, 'temporarily_unavailable');
+  for (const token of ['fc-account-key', 'fco_account_token']) {
+    const response = await fetch(`http://127.0.0.1:${port}/v2/mcp-oauth`, {
+      body: JSON.stringify({ id: token, jsonrpc: '2.0', method: 'tools/list', params: {} }),
+      headers: {
+        accept: 'application/json, text/event-stream',
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      method: 'POST',
+    });
+    assert.equal(response.status, 503, token);
+    assert.equal(response.headers.has('www-authenticate'), false, token);
+    assert.equal((await response.json()).error, 'temporarily_unavailable', token);
+  }
 });
 
 test('account endpoint accepts legacy OAuth one way and delegates managed keys', async (t) => {
@@ -992,6 +1021,7 @@ test('account endpoint accepts legacy OAuth one way and delegates managed keys',
     assert.equal(request.body.team_id, metadata.team_id);
     assert.equal(request.body.user_id, metadata.sub);
     assert.equal(request.body.oauth_client_id, metadata.client_id);
+    assert.equal(request.body.resource, accountResource);
     assert.equal(JSON.stringify(request.body).includes('fc-managed-secret'), false);
     assert.equal(JSON.stringify(request.body).includes('fco_'), false);
   }
