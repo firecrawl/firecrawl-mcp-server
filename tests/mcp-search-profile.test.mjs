@@ -120,14 +120,20 @@ async function startFakeBackend(options = {}) {
 
     if (req.method === 'POST' && req.url === '/api/oauth/introspect') {
       const token = body?.token ?? '';
-      const active = token.startsWith('fco_') && !token.includes('invalid');
+      const active = /^(?:fco_|fc-)/.test(token) && !token.includes('invalid');
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify(
           active
             ? {
                 active: true,
-                api_key: apiKeyFromIntrospection,
+                api_key: token.startsWith('fc-')
+                  ? token
+                  : apiKeyFromIntrospection,
+                credential_purpose: token.startsWith('fco_')
+                  ? 'hosted_mcp_oauth'
+                  : 'general',
+                scope: 'firecrawl:global',
                 ...(introspectionAud ? { aud: introspectionAud } : {}),
               }
             : { active: false }
@@ -171,6 +177,8 @@ async function startFakeBackend(options = {}) {
 // Spawn a hosted server with both the full and search instances running, and
 // wait until the search instance is healthy. Returns ports + a stderr accessor.
 async function startHostedServer(t, extraEnv = {}) {
+  const defaultBackend = await startFakeBackend();
+  t.after(() => defaultBackend.close());
   const fullPort = await getFreePort();
   const searchPort = await getFreePort();
   const child = spawnServer({
@@ -178,6 +186,9 @@ async function startHostedServer(t, extraEnv = {}) {
     HTTP_STREAMABLE_SERVER: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    KEYLESS_PROXY_SECRET: 'delegation-secret',
+    FIRECRAWL_API_URL: defaultBackend.url,
+    FIRECRAWL_OAUTH_ISSUER: defaultBackend.url,
     PORT: String(fullPort),
     FIRECRAWL_MCP_SEARCH_PORT: String(searchPort),
     ...extraEnv,
@@ -188,7 +199,13 @@ async function startHostedServer(t, extraEnv = {}) {
   });
   t.after(() => stopChild(child));
   await waitForHealth(searchPort, child);
-  return { child, fullPort, searchPort, getStderr: () => stderr };
+  return {
+    child,
+    fullPort,
+    searchPort,
+    issuerUrl: extraEnv.FIRECRAWL_OAUTH_ISSUER ?? defaultBackend.url,
+    getStderr: () => stderr,
+  };
 }
 
 function jsonRpc(port, endpoint, { id, method, params = {}, headers = {} }) {
@@ -328,7 +345,7 @@ test('search firecrawl_search sends a clean body built from allowed fields only'
 });
 
 test('search surface requires authentication for tools/list', async (t) => {
-  const { searchPort } = await startHostedServer(t);
+  const { searchPort, issuerUrl } = await startHostedServer(t);
 
   const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
     id: 5,
@@ -345,14 +362,14 @@ test('search surface requires authentication for tools/list', async (t) => {
 });
 
 test('search surface serves path-scoped protected-resource metadata', async (t) => {
-  const { searchPort } = await startHostedServer(t);
+  const { searchPort, issuerUrl } = await startHostedServer(t);
 
   const res = await fetch(
     `http://127.0.0.1:${searchPort}/.well-known/oauth-protected-resource${SEARCH_ENDPOINT}`
   );
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), {
-    authorization_servers: ['https://www.firecrawl.dev'],
+    authorization_servers: [issuerUrl],
     bearer_methods_supported: ['header'],
     resource: SEARCH_RESOURCE,
     resource_name: 'Firecrawl Search',
@@ -429,11 +446,11 @@ test('search surface accepts a token minted for its own resource', async (t) => 
   assert.notEqual(message.result?.isError, true, JSON.stringify(message));
   const searchCalls = backend.requests.filter((r) => r.url === '/v2/search');
   assert.equal(searchCalls.length, 1);
-  assert.equal(searchCalls[0].headers.authorization, 'Bearer fc-introspected');
+  assert.match(searchCalls[0].headers.authorization ?? '', /^Bearer fcmcp_/);
 });
 
 test('full surface still exposes its complete tool set alongside the search surface', async (t) => {
-  const { fullPort } = await startHostedServer(t);
+  const { fullPort, issuerUrl } = await startHostedServer(t);
 
   // Full surface is reachable on its own port with all tools intact.
   const names = await listTools(fullPort, '/v2/mcp', { 'x-api-key': 'fc-test' });
@@ -448,7 +465,7 @@ test('full surface still exposes its complete tool set alongside the search surf
   );
   assert.equal(prm.status, 200);
   assert.deepEqual(await prm.json(), {
-    authorization_servers: ['https://www.firecrawl.dev'],
+    authorization_servers: [issuerUrl],
     bearer_methods_supported: ['header'],
     resource: 'https://mcp.firecrawl.dev/v2/mcp',
     resource_name: 'Firecrawl MCP',

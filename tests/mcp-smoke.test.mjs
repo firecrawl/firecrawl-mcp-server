@@ -76,13 +76,31 @@ async function startFakeFirecrawlApi() {
     req.setEncoding('utf8');
     for await (const chunk of req) body += chunk;
 
-    const parsedBody = body ? JSON.parse(body) : undefined;
+    const contentType = req.headers['content-type'] ?? '';
+    const parsedBody = body
+      ? contentType.includes('application/x-www-form-urlencoded')
+        ? Object.fromEntries(new URLSearchParams(body))
+        : JSON.parse(body)
+      : undefined;
     requests.push({
       body: parsedBody,
       headers: req.headers,
       method: req.method,
       url: req.url,
     });
+
+    if (req.method === 'POST' && req.url === '/api/oauth/introspect') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          active: true,
+          api_key: 'fc-http-test',
+          credential_purpose: 'general',
+          scope: 'firecrawl:global',
+        })
+      );
+      return;
+    }
 
     if (req.method === 'POST' && req.url === '/v2/search') {
       res.writeHead(200, { 'content-type': 'application/json' });
@@ -129,8 +147,12 @@ async function startFakeFirecrawlApi() {
 // (token introspection + keyless eligibility) AND the Firecrawl API. Every
 // request is recorded so tests can assert what the MCP server forwarded.
 async function startFakeFirecrawlBackend(options = {}) {
-  const { apiKeyFromIntrospection = 'fc-from-introspection', keylessEligible = false } =
-    options;
+  const {
+    apiKeyFromIntrospection = 'fc-from-introspection',
+    introspectionHandler,
+    introspectionMetadata = {},
+    keylessEligible = false,
+  } = options;
   const requests = [];
   const server = createServer(async (req, res) => {
     let raw = '';
@@ -155,11 +177,25 @@ async function startFakeFirecrawlBackend(options = {}) {
     // OAuth token introspection (issuer origin).
     if (req.method === 'POST' && req.url === '/api/oauth/introspect') {
       const token = parsedBody?.token ?? '';
-      const active = token.startsWith('fco_') && !token.includes('invalid');
+      const active = /^(?:fco_|fc-)/.test(token) && !token.includes('invalid');
+      const custom = introspectionHandler?.(parsedBody);
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify(
-          active ? { active: true, api_key: apiKeyFromIntrospection } : { active: false }
+          custom ?? (active
+            ? {
+                active: true,
+                api_key: token.startsWith('fc-')
+                  ? token
+                  : apiKeyFromIntrospection,
+                credential_purpose: 'general',
+                scope: 'firecrawl:global',
+                ...(token.startsWith('fco_')
+                  ? { aud: 'https://mcp.firecrawl.dev/v2/mcp' }
+                  : {}),
+                ...introspectionMetadata,
+              }
+            : { active: false })
         )
       );
       return;
@@ -206,8 +242,8 @@ async function startFakeFirecrawlBackend(options = {}) {
   };
 }
 
-async function httpToolCall(port, { id, headers, params }) {
-  return fetch(`http://127.0.0.1:${port}/v2/mcp`, {
+async function httpToolCall(port, { endpoint = '/v2/mcp', id, headers, params }) {
+  return fetch(`http://127.0.0.1:${port}${endpoint}`, {
     body: JSON.stringify({ id, jsonrpc: '2.0', method: 'tools/call', params }),
     headers: {
       accept: 'application/json, text/event-stream',
@@ -219,12 +255,16 @@ async function httpToolCall(port, { id, headers, params }) {
 }
 
 test('HTTP cloud transport preserves Firecrawl OAuth and well-known routes', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
   const port = await getFreePort();
   const child = spawnServer({
     CLOUD_SERVICE: 'true',
     HTTP_STREAMABLE_SERVER: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_API_URL: backend.url,
     OPENAI_APPS_CHALLENGE_TOKEN: 'challenge-123',
     PORT: String(port),
   });
@@ -248,7 +288,7 @@ test('HTTP cloud transport preserves Firecrawl OAuth and well-known routes', asy
   );
   assert.equal(prm.status, 200);
   assert.deepEqual(await prm.json(), {
-    authorization_servers: ['https://www.firecrawl.dev'],
+    authorization_servers: [backend.url],
     bearer_methods_supported: ['header'],
     resource: 'https://mcp.firecrawl.dev/v2/mcp',
     resource_name: 'Firecrawl MCP',
@@ -262,19 +302,18 @@ test('HTTP cloud transport preserves Firecrawl OAuth and well-known routes', asy
       method: 'tools/list',
       params: {},
     }),
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      accept: 'application/json, text/event-stream',
+      'content-type': 'application/json',
+    },
     method: 'POST',
   });
-  assert.equal(unauthenticated.status, 401);
-  assert.equal(
-    unauthenticated.headers.get('www-authenticate'),
-    'Bearer resource_metadata="https://mcp.firecrawl.dev/.well-known/oauth-protected-resource", error="invalid_token", error_description="Firecrawl credentials required: OAuth access token (Authorization: Bearer fco_...) or API key (x-firecrawl-api-key)"'
+  assert.equal(unauthenticated.status, 200);
+  const anonymousTools = parseSseJson(await unauthenticated.text()).result.tools;
+  assert.deepEqual(
+    anonymousTools.map((tool) => tool.name).sort(),
+    ['firecrawl_parse', 'firecrawl_scrape', 'firecrawl_search']
   );
-  assert.deepEqual(await unauthenticated.json(), {
-    error: 'invalid_token',
-    error_description:
-      'Firecrawl credentials required: OAuth access token (Authorization: Bearer fco_...) or API key (x-firecrawl-api-key)',
-  });
 
   const initialize = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({
@@ -337,6 +376,8 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: fakeApi.url,
+    FIRECRAWL_OAUTH_ISSUER: fakeApi.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
     HTTP_STREAMABLE_SERVER: 'true',
     PORT: String(port),
   });
@@ -386,11 +427,10 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
     success: true,
   });
 
-  assert.equal(fakeApi.requests.length, 1);
-  assert.equal(fakeApi.requests[0].method, 'POST');
-  assert.equal(fakeApi.requests[0].url, '/v2/search');
-  assert.equal(fakeApi.requests[0].headers.authorization, 'Bearer fc-http-test');
-  assert.deepEqual(fakeApi.requests[0].body, {
+  const searchRequest = fakeApi.requests.find((request) => request.url === '/v2/search');
+  assert.equal(searchRequest.method, 'POST');
+  assert.equal(searchRequest.headers.authorization, 'Bearer fc-http-test');
+  assert.deepEqual(searchRequest.body, {
     highlights: false,
     limit: 1,
     origin: 'mcp-fastmcp',
@@ -559,6 +599,7 @@ test('HTTP cloud transport swaps an fco_ OAuth token for its introspected API ke
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
     FIRECRAWL_OAUTH_ISSUER: backend.url,
     HTTP_STREAMABLE_SERVER: 'true',
@@ -652,6 +693,8 @@ test('HTTP cloud transport accepts the x-firecrawl-api-key header', async (t) =>
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
     HTTP_STREAMABLE_SERVER: 'true',
     PORT: String(port),
   });
@@ -721,7 +764,7 @@ test('HTTP cloud transport serves an eligible keyless client and forwards its IP
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
-test('HTTP cloud transport challenges a keyless client with no forwarded IP', async (t) => {
+test('HTTP cloud transport returns recovery when keyless identity has no client IP', async (t) => {
   const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
   t.after(() => backend.close());
 
@@ -742,14 +785,299 @@ test('HTTP cloud transport challenges a keyless client with no forwarded IP', as
 
   await waitForHealth(port, child);
 
-  // No x-forwarded-for and no credential: per-IP cap is unenforceable, so the
-  // server must fall through to the OAuth challenge rather than grant keyless.
+  // Discovery remains keyless-first, but the actual call fails closed because
+  // the API cannot enforce the anonymous per-IP allowance.
   const toolCall = await httpToolCall(port, {
     id: 14,
     headers: {},
     params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
   });
-  assert.equal(toolCall.status, 401);
+  assert.equal(toolCall.status, 200);
+  const result = parseSseJson(await toolCall.text()).result;
+  assert.equal(result.isError, true);
+  assert.equal(result.structuredContent.code, 'KEYLESS_ACCESS_NOT_AVAILABLE');
   assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
   assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('account endpoint challenges anonymous clients and accepts API keys', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_MCP_ACTION_LOG_SECRET: 'action-secret',
+    FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const ready = await fetch(`http://127.0.0.1:${port}/ready`);
+  assert.equal(ready.status, 200);
+  assert.deepEqual(await ready.json(), { ok: true });
+
+  const prm = await fetch(
+    `http://127.0.0.1:${port}/.well-known/oauth-protected-resource/v2/mcp-oauth`
+  );
+  assert.equal(prm.status, 200);
+  assert.equal(
+    (await prm.json()).resource,
+    'https://mcp.firecrawl.dev/v2/mcp-oauth'
+  );
+
+  const anonymous = await fetch(`http://127.0.0.1:${port}/v2/mcp-oauth`, {
+    body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'tools/list', params: {} }),
+    headers: {
+      accept: 'application/json, text/event-stream',
+      'content-type': 'application/json',
+    },
+    method: 'POST',
+  });
+  assert.equal(anonymous.status, 401);
+  assert.match(
+    anonymous.headers.get('www-authenticate') ?? '',
+    /oauth-protected-resource\/v2\/mcp-oauth/
+  );
+
+  const authenticated = await fetch(`http://127.0.0.1:${port}/v2/mcp-oauth`, {
+    body: JSON.stringify({ id: 2, jsonrpc: '2.0', method: 'tools/list', params: {} }),
+    headers: {
+      accept: 'application/json, text/event-stream',
+      'content-type': 'application/json',
+      authorization: 'Bearer fc-account-key',
+    },
+    method: 'POST',
+  });
+  assert.equal(authenticated.status, 200);
+  const names = parseSseJson(await authenticated.text()).result.tools.map(
+    (tool) => tool.name
+  );
+  assert.ok(names.includes('firecrawl_crawl'));
+  assert.ok(names.length > 3);
+});
+
+test('API-key validation outages do not misdirect clients into OAuth', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const unavailableIssuerPort = await getFreePort();
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+    FIRECRAWL_OAUTH_ISSUER: `http://127.0.0.1:${unavailableIssuerPort}`,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await fetch(`http://127.0.0.1:${port}/v2/mcp-oauth`, {
+    body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'tools/list', params: {} }),
+    headers: {
+      accept: 'application/json, text/event-stream',
+      authorization: 'Bearer fc-account-key',
+      'content-type': 'application/json',
+    },
+    method: 'POST',
+  });
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.has('www-authenticate'), false);
+  assert.equal((await response.json()).error, 'temporarily_unavailable');
+});
+
+test('account endpoint accepts legacy OAuth one way and delegates managed keys', async (t) => {
+  const accountResource = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
+  const legacyResource = 'https://mcp.firecrawl.dev/v2/mcp';
+  const metadata = {
+    active: true,
+    api_key: 'fc-managed-secret',
+    api_key_id: '42',
+    client_id: 'https://claude.ai/oauth/mcp-oauth-client-metadata',
+    credential_purpose: 'hosted_mcp_oauth',
+    scope: 'firecrawl:global',
+    sub: '00000000-0000-4000-8000-000000000001',
+    team_id: '00000000-0000-4000-8000-000000000002',
+  };
+  const backend = await startFakeFirecrawlBackend({
+    introspectionHandler: ({ resource, token }) => {
+      if (token === 'fco_account') return { ...metadata, aud: accountResource };
+      if (token === 'fco_legacy') {
+        return resource === legacyResource
+          ? { ...metadata, aud: legacyResource }
+          : { active: false };
+      }
+      return { active: false };
+    },
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_MCP_ACTION_LOG_SECRET: 'action-secret',
+    FIRECRAWL_MCP_RESOURCE_URL: accountResource,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    KEYLESS_PROXY_SECRET: 'delegation-secret',
+    PORT: String(port),
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  for (const token of ['fco_account', 'fco_legacy']) {
+    const response = await httpToolCall(port, {
+      endpoint: '/v2/mcp-oauth',
+      headers: { authorization: `Bearer ${token}` },
+      id: token,
+      params: {
+        arguments: { limit: 1, query: 'delegated credential' },
+        name: 'firecrawl_search',
+      },
+    });
+    assert.equal(response.status, 200);
+    assert.notEqual(parseSseJson(await response.text()).result.isError, true);
+  }
+
+  const searchCalls = backend.requests.filter((request) => request.url === '/v2/search');
+  assert.equal(searchCalls.length, 2);
+  for (const request of searchCalls) {
+    const assertion = request.headers.authorization?.replace(/^Bearer /, '');
+    assert.match(assertion ?? '', /^fcmcp_/);
+    const payload = JSON.parse(
+      Buffer.from(assertion.split('.')[0].slice('fcmcp_'.length), 'base64url').toString()
+    );
+    assert.equal(payload.api_key, 'fc-managed-secret');
+    assert.equal(payload.purpose, 'hosted_mcp_oauth');
+  }
+  const legacyAttempts = backend.requests
+    .filter((request) => request.url === '/api/oauth/introspect')
+    .filter((request) => request.body.token === 'fco_legacy')
+    .map((request) => request.body.resource);
+  assert.deepEqual(legacyAttempts, [accountResource, legacyResource]);
+
+  for (let i = 0; i < 20; i += 1) {
+    if (
+      backend.requests.filter(
+        (request) => request.url === '/v2/mcp/action-logs'
+      ).length === 2
+    ) {
+      break;
+    }
+    await delay(25);
+  }
+  const actionLogs = backend.requests.filter(
+    (request) => request.url === '/v2/mcp/action-logs'
+  );
+  assert.equal(actionLogs.length, 2);
+  for (const request of actionLogs) {
+    assert.equal(request.headers.authorization, 'Bearer action-secret');
+    assert.equal(request.body.auth_type, 'oauth');
+    assert.equal(request.body.status, 'success');
+    assert.equal(request.body.api_key_id, '42');
+    assert.equal(request.body.team_id, metadata.team_id);
+    assert.equal(request.body.user_id, metadata.sub);
+    assert.equal(request.body.oauth_client_id, metadata.client_id);
+    assert.equal(JSON.stringify(request.body).includes('fc-managed-secret'), false);
+    assert.equal(JSON.stringify(request.body).includes('fco_'), false);
+  }
+  assert.equal(stderr.includes('fc-managed-secret'), false);
+  assert.equal(stderr.includes('fco_account'), false);
+  assert.equal(stderr.includes('fco_legacy'), false);
+});
+
+test('hosted profile selection fails closed for an unsupported endpoint', async () => {
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/not-a-real-profile',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(await getFreePort()),
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  const exitCode = await Promise.race([
+    new Promise((resolve) => child.once('exit', resolve)),
+    delay(5_000).then(() => 'timeout'),
+  ]);
+  if (exitCode === 'timeout') {
+    await stopChild(child);
+    assert.fail('server did not fail closed for unsupported FASTMCP_ENDPOINT');
+  }
+  assert.notEqual(exitCode, 0);
+  assert.match(stderr, /Unsupported FASTMCP_ENDPOINT/);
+});
+
+test('account OAuth tokens cannot replay on keyless and invalid keys get correction', async (t) => {
+  const accountResource = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
+  const backend = await startFakeFirecrawlBackend({
+    introspectionHandler: ({ token }) =>
+      token === 'fco_account'
+        ? {
+            active: true,
+            api_key: 'fc-managed-secret',
+            aud: accountResource,
+            credential_purpose: 'hosted_mcp_oauth',
+            scope: 'firecrawl:global',
+          }
+        : { active: false },
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    KEYLESS_PROXY_SECRET: 'delegation-secret',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const replay = await httpToolCall(port, {
+    headers: { authorization: 'Bearer fco_account' },
+    id: 1,
+    params: { arguments: { query: 'x' }, name: 'firecrawl_search' },
+  });
+  assert.equal(replay.status, 401);
+
+  const invalidList = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
+    body: JSON.stringify({ id: 2, jsonrpc: '2.0', method: 'tools/list', params: {} }),
+    headers: {
+      accept: 'application/json, text/event-stream',
+      authorization: 'Bearer fc-invalid',
+      'content-type': 'application/json',
+    },
+    method: 'POST',
+  });
+  assert.equal(invalidList.status, 200);
+  assert.deepEqual(parseSseJson(await invalidList.text()).result.tools, []);
+
+  const invalidCall = await httpToolCall(port, {
+    headers: { authorization: 'Bearer fc-invalid' },
+    id: 3,
+    params: { arguments: { query: 'x' }, name: 'firecrawl_search' },
+  });
+  assert.equal(invalidCall.status, 200);
+  const result = parseSseJson(await invalidCall.text()).result;
+  assert.equal(result.isError, true);
+  assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID');
 });
