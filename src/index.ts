@@ -245,6 +245,10 @@ function isMcpOAuthEnabled(): boolean {
 
 type OAuthCredentialPurpose = 'general' | 'hosted_mcp_oauth';
 
+function isOAuthCredentialPurpose(value: unknown): value is OAuthCredentialPurpose {
+  return value === 'general' || value === 'hosted_mcp_oauth';
+}
+
 type OAuthIntrospectionResponse = {
   active?: boolean;
   api_key?: string;
@@ -339,7 +343,7 @@ async function introspectToken(
   if (
     data.active &&
     (!data.api_key ||
-      !data.credential_purpose ||
+      !isOAuthCredentialPurpose(data.credential_purpose) ||
       !values(data.scope).includes(MCP_GLOBAL_SCOPE))
   ) {
     throw new CredentialValidationUnavailableError();

@@ -221,6 +221,12 @@ async function startFakeFirecrawlBackend(options = {}) {
       return;
     }
 
+    if (req.method === 'GET' && req.url?.startsWith('/v2/monitor')) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ success: true, data: [] }));
+      return;
+    }
+
     res.writeHead(404, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ error: `Unhandled ${req.method} ${req.url}` }));
   });
@@ -923,6 +929,47 @@ test('credential validation outages do not misdirect clients into OAuth', async 
   }
 });
 
+test('active introspection with an unknown credential purpose fails closed', async (t) => {
+  const accountResource = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
+  const backend = await startFakeFirecrawlBackend({
+    introspectionHandler: () => ({
+      active: true,
+      api_key: 'fc-untrusted-purpose',
+      credential_purpose: 'unexpected',
+      scope: 'firecrawl:global',
+      aud: accountResource,
+    }),
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_MCP_RESOURCE_URL: accountResource,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    KEYLESS_PROXY_SECRET: 'delegation-secret',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await fetch(`http://127.0.0.1:${port}/v2/mcp-oauth`, {
+    body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'tools/list', params: {} }),
+    headers: {
+      accept: 'application/json, text/event-stream',
+      authorization: 'Bearer fco_unknown_purpose',
+      'content-type': 'application/json',
+    },
+    method: 'POST',
+  });
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.has('www-authenticate'), false);
+  assert.equal((await response.json()).error, 'temporarily_unavailable');
+});
+
 test('account endpoint accepts legacy OAuth one way and delegates managed keys', async (t) => {
   const accountResource = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
   const legacyResource = 'https://mcp.firecrawl.dev/v2/mcp';
@@ -957,6 +1004,7 @@ test('account endpoint accepts legacy OAuth one way and delegates managed keys',
     FIRECRAWL_MCP_RESOURCE_URL: accountResource,
     FIRECRAWL_OAUTH_ISSUER: backend.url,
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    FIRECRAWL_API_KEY: 'fc-shared-env-must-not-be-used',
     HTTP_STREAMABLE_SERVER: 'true',
     KEYLESS_PROXY_SECRET: 'delegation-secret',
     PORT: String(port),
@@ -993,6 +1041,33 @@ test('account endpoint accepts legacy OAuth one way and delegates managed keys',
     assert.equal(payload.api_key, 'fc-managed-secret');
     assert.equal(payload.purpose, 'hosted_mcp_oauth');
   }
+
+  const monitorResponse = await httpToolCall(port, {
+    endpoint: '/v2/mcp-oauth',
+    headers: { authorization: 'Bearer fco_account' },
+    id: 'managed-monitor',
+    params: {
+      arguments: { limit: 1 },
+      name: 'firecrawl_monitor_list',
+    },
+  });
+  assert.equal(monitorResponse.status, 200);
+  assert.notEqual(parseSseJson(await monitorResponse.text()).result.isError, true);
+  const monitorCalls = backend.requests.filter((request) =>
+    request.url?.startsWith('/v2/monitor')
+  );
+  assert.equal(monitorCalls.length, 1);
+  const monitorAssertion = monitorCalls[0].headers.authorization?.replace(/^Bearer /, '');
+  assert.match(monitorAssertion ?? '', /^fcmcp_/);
+  assert.notEqual(monitorAssertion, 'fc-shared-env-must-not-be-used');
+  const monitorPayload = JSON.parse(
+    Buffer.from(
+      monitorAssertion.split('.')[0].slice('fcmcp_'.length),
+      'base64url'
+    ).toString()
+  );
+  assert.equal(monitorPayload.api_key, 'fc-managed-secret');
+  assert.equal(monitorPayload.purpose, 'hosted_mcp_oauth');
   const legacyAttempts = backend.requests
     .filter((request) => request.url === '/api/oauth/introspect')
     .filter((request) => request.body.token === 'fco_legacy')
@@ -1003,7 +1078,7 @@ test('account endpoint accepts legacy OAuth one way and delegates managed keys',
     if (
       backend.requests.filter(
         (request) => request.url === '/v2/mcp/action-logs'
-      ).length === 2
+      ).length === 3
     ) {
       break;
     }
@@ -1012,7 +1087,7 @@ test('account endpoint accepts legacy OAuth one way and delegates managed keys',
   const actionLogs = backend.requests.filter(
     (request) => request.url === '/v2/mcp/action-logs'
   );
-  assert.equal(actionLogs.length, 2);
+  assert.equal(actionLogs.length, 3);
   for (const request of actionLogs) {
     assert.equal(request.headers.authorization, 'Bearer action-secret');
     assert.equal(request.body.auth_type, 'oauth');
