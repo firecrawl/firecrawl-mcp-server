@@ -229,7 +229,7 @@ function fmtGithub(results?: GitHubItem[]): string {
 }
 
 export function registerResearchTools(
-  server: FastMCP<SessionData>,
+  server: Pick<FastMCP<SessionData>, 'addTool'>,
   getClient: GetClient
 ): void {
   // --- search_papers ---

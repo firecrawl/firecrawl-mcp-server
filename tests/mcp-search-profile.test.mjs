@@ -1,0 +1,457 @@
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { createServer } from 'node:http';
+import net from 'node:net';
+import test from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
+
+// The fixed contract of the search surface. Nothing outside this set may ever
+// appear on its tools/list or be callable through it.
+const SEARCH_TOOLS = [
+  'firecrawl_search',
+  'firecrawl_research_search_papers',
+  'firecrawl_research_inspect_paper',
+  'firecrawl_research_related_papers',
+  'firecrawl_research_read_paper',
+  'firecrawl_research_search_github',
+];
+
+// A representative sample of the full-surface tools that must NOT leak here.
+const EXCLUDED_TOOLS = [
+  'firecrawl_scrape',
+  'firecrawl_map',
+  'firecrawl_crawl',
+  'firecrawl_check_crawl_status',
+  'firecrawl_extract',
+  'firecrawl_agent',
+  'firecrawl_interact',
+  'firecrawl_parse',
+  'firecrawl_monitor_create',
+  'firecrawl_search_feedback',
+  'firecrawl_feedback',
+];
+
+const SEARCH_ENDPOINT = '/v2/mcp-search';
+const SEARCH_RESOURCE = 'https://mcp.firecrawl.dev/v2/mcp-search';
+
+async function getFreePort() {
+  const server = net.createServer();
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const { port } = server.address();
+  await new Promise((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+  });
+  return port;
+}
+
+async function waitForHealth(port, child) {
+  const url = `http://127.0.0.1:${port}/health`;
+  let lastError;
+  for (let i = 0; i < 60; i += 1) {
+    if (child.exitCode !== null) {
+      throw new Error(`server exited early with code ${child.exitCode}`);
+    }
+    try {
+      const response = await fetch(url);
+      if (response.ok) return response;
+      lastError = new Error(`health returned ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+    await delay(100);
+  }
+  throw lastError ?? new Error('server did not become healthy');
+}
+
+function parseSseJson(body) {
+  const dataLine = body
+    .split(/\r?\n/)
+    .find((line) => line.startsWith('data: '));
+  assert.ok(dataLine, `Missing SSE data line in body: ${body}`);
+  return JSON.parse(dataLine.slice('data: '.length));
+}
+
+function spawnServer(env) {
+  const child = spawn(process.execPath, ['dist/index.js'], {
+    env: { ...process.env, ...env },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  child.stderr.setEncoding('utf8');
+  child.stdout.setEncoding('utf8');
+  return child;
+}
+
+async function stopChild(child) {
+  if (child.exitCode !== null) return;
+  child.kill('SIGTERM');
+  await Promise.race([
+    new Promise((resolve) => child.once('exit', resolve)),
+    delay(2_000).then(() => {
+      if (child.exitCode === null) child.kill('SIGKILL');
+    }),
+  ]);
+}
+
+// Fake origin standing in for both the Firecrawl API (/v2/search) and the OAuth
+// issuer (/api/oauth/introspect). Introspection echoes a configurable audience
+// so audience-enforcement can be exercised.
+async function startFakeBackend(options = {}) {
+  const {
+    apiKeyFromIntrospection = 'fc-from-introspection',
+    introspectionAud,
+  } = options;
+  const requests = [];
+  const server = createServer(async (req, res) => {
+    let raw = '';
+    req.setEncoding('utf8');
+    for await (const chunk of req) raw += chunk;
+
+    const contentType = req.headers['content-type'] ?? '';
+    let body;
+    if (raw && contentType.includes('application/json')) {
+      body = JSON.parse(raw);
+    } else if (raw && contentType.includes('application/x-www-form-urlencoded')) {
+      body = Object.fromEntries(new URLSearchParams(raw));
+    }
+    requests.push({ body, headers: req.headers, method: req.method, url: req.url });
+
+    if (req.method === 'POST' && req.url === '/api/oauth/introspect') {
+      const token = body?.token ?? '';
+      const active = token.startsWith('fco_') && !token.includes('invalid');
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify(
+          active
+            ? {
+                active: true,
+                api_key: apiKeyFromIntrospection,
+                ...(introspectionAud ? { aud: introspectionAud } : {}),
+              }
+            : { active: false }
+        )
+      );
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/search') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          creditsUsed: 1,
+          data: { web: [{ title: 'Example Domain', url: 'https://example.com/' }] },
+          id: '00000000-0000-4000-8000-000000000000',
+          success: true,
+        })
+      );
+      return;
+    }
+
+    res.writeHead(404, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: `Unhandled ${req.method} ${req.url}` }));
+  });
+
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const { port } = server.address();
+  return {
+    requests,
+    url: `http://127.0.0.1:${port}`,
+    close: () =>
+      new Promise((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      }),
+  };
+}
+
+// Spawn a hosted server with both the full and search instances running, and
+// wait until the search instance is healthy. Returns ports + a stderr accessor.
+async function startHostedServer(t, extraEnv = {}) {
+  const fullPort = await getFreePort();
+  const searchPort = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    HTTP_STREAMABLE_SERVER: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    PORT: String(fullPort),
+    FIRECRAWL_MCP_SEARCH_PORT: String(searchPort),
+    ...extraEnv,
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(searchPort, child);
+  return { child, fullPort, searchPort, getStderr: () => stderr };
+}
+
+function jsonRpc(port, endpoint, { id, method, params = {}, headers = {} }) {
+  return fetch(`http://127.0.0.1:${port}${endpoint}`, {
+    body: JSON.stringify({ id, jsonrpc: '2.0', method, params }),
+    headers: {
+      accept: 'application/json, text/event-stream',
+      'content-type': 'application/json',
+      ...headers,
+    },
+    method: 'POST',
+  });
+}
+
+async function listTools(port, endpoint, headers) {
+  const res = await jsonRpc(port, endpoint, {
+    id: 1,
+    method: 'tools/list',
+    headers,
+  });
+  assert.equal(res.status, 200, `tools/list returned ${res.status}`);
+  const message = parseSseJson(await res.text());
+  return message.result.tools.map((tool) => tool.name);
+}
+
+test('search surface lists exactly the six read-only tools', async (t) => {
+  const { searchPort, getStderr } = await startHostedServer(t);
+
+  const names = await listTools(searchPort, SEARCH_ENDPOINT, {
+    'x-api-key': 'fc-test',
+  });
+
+  assert.deepEqual([...names].sort(), [...SEARCH_TOOLS].sort());
+  for (const excluded of EXCLUDED_TOOLS) {
+    assert.equal(names.includes(excluded), false, `${excluded} must not appear`);
+  }
+  assert.equal(getStderr().includes('TypeError'), false, getStderr());
+});
+
+test('search surface does not expose an excluded tool', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+  });
+
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 2,
+    method: 'tools/call',
+    params: { arguments: { url: 'https://example.com' }, name: 'firecrawl_scrape' },
+    headers: { 'x-api-key': 'fc-test' },
+  });
+  // Unknown tool: either a JSON-RPC error or an error result, never a scrape.
+  const message = parseSseJson(await res.text());
+  const errored = Boolean(message.error) || message.result?.isError === true;
+  assert.equal(errored, true, JSON.stringify(message));
+  assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
+});
+
+test('search firecrawl_search rejects scrapeOptions and never fetches page content', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+  });
+
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 3,
+    method: 'tools/call',
+    params: {
+      arguments: {
+        query: 'example domain',
+        limit: 1,
+        scrapeOptions: { formats: ['markdown'] },
+      },
+      name: 'firecrawl_search',
+    },
+    headers: { 'x-api-key': 'fc-test' },
+  });
+  const message = parseSseJson(await res.text());
+  const errored = Boolean(message.error) || message.result?.isError === true;
+  assert.equal(errored, true, JSON.stringify(message));
+  // The rejected call must not have reached the API.
+  assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
+});
+
+test('search firecrawl_search sends a clean body built from allowed fields only', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+  });
+
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 4,
+    method: 'tools/call',
+    params: {
+      arguments: {
+        query: 'example domain',
+        limit: 1,
+        sources: [{ type: 'web' }],
+      },
+      name: 'firecrawl_search',
+    },
+    headers: { 'x-api-key': 'fc-search-key' },
+  });
+  assert.equal(res.status, 200);
+  const message = parseSseJson(await res.text());
+  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+
+  const searchCalls = backend.requests.filter((r) => r.url === '/v2/search');
+  assert.equal(searchCalls.length, 1);
+  assert.equal(searchCalls[0].headers.authorization, 'Bearer fc-search-key');
+  const sentBody = searchCalls[0].body;
+  assert.equal('scrapeOptions' in sentBody, false);
+  const allowedKeys = new Set([
+    'query',
+    'limit',
+    'tbs',
+    'filter',
+    'location',
+    'sources',
+    'categories',
+    'highlights',
+    'enterprise',
+    'origin',
+  ]);
+  for (const key of Object.keys(sentBody)) {
+    assert.equal(allowedKeys.has(key), true, `unexpected outbound field: ${key}`);
+  }
+  assert.deepEqual(sentBody, {
+    query: 'example domain',
+    limit: 1,
+    sources: [{ type: 'web' }],
+    origin: 'mcp-fastmcp',
+  });
+});
+
+test('search surface requires authentication for tools/list', async (t) => {
+  const { searchPort } = await startHostedServer(t);
+
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 5,
+    method: 'tools/list',
+  });
+  assert.equal(res.status, 401);
+  const wwwAuthenticate = res.headers.get('www-authenticate') ?? '';
+  assert.match(wwwAuthenticate, /^Bearer /);
+  assert.match(
+    wwwAuthenticate,
+    /resource_metadata="https:\/\/mcp\.firecrawl\.dev\/\.well-known\/oauth-protected-resource\/v2\/mcp-search"/
+  );
+  assert.match(wwwAuthenticate, /error="invalid_token"/);
+});
+
+test('search surface serves path-scoped protected-resource metadata', async (t) => {
+  const { searchPort } = await startHostedServer(t);
+
+  const res = await fetch(
+    `http://127.0.0.1:${searchPort}/.well-known/oauth-protected-resource${SEARCH_ENDPOINT}`
+  );
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), {
+    authorization_servers: ['https://www.firecrawl.dev'],
+    bearer_methods_supported: ['header'],
+    resource: SEARCH_RESOURCE,
+    resource_name: 'Firecrawl Search',
+    scopes_supported: ['firecrawl:global'],
+  });
+});
+
+test('search surface rejects a token minted for a different resource', async (t) => {
+  const backend = await startFakeBackend({
+    apiKeyFromIntrospection: 'fc-introspected',
+    introspectionAud: 'https://mcp.firecrawl.dev/v2/mcp', // the full resource, not search
+  });
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+  });
+
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 6,
+    method: 'tools/call',
+    params: { arguments: { query: 'x', limit: 1 }, name: 'firecrawl_search' },
+    headers: { authorization: 'Bearer fco_other_resource_token' },
+  });
+  assert.equal(res.status, 401);
+  assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
+});
+
+test('search surface rejects an OAuth token with no audience binding', async (t) => {
+  // Introspection returns no `aud` (token was minted without a resource
+  // binding). A locked-down surface must fail closed rather than accept it.
+  const backend = await startFakeBackend({
+    apiKeyFromIntrospection: 'fc-introspected',
+    // introspectionAud omitted → introspect response has no aud field
+  });
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+  });
+
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 8,
+    method: 'tools/call',
+    params: { arguments: { query: 'x', limit: 1 }, name: 'firecrawl_search' },
+    headers: { authorization: 'Bearer fco_unbound_token' },
+  });
+  assert.equal(res.status, 401);
+  assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
+});
+
+test('search surface accepts a token minted for its own resource', async (t) => {
+  const backend = await startFakeBackend({
+    apiKeyFromIntrospection: 'fc-introspected',
+    introspectionAud: SEARCH_RESOURCE,
+  });
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+  });
+
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 7,
+    method: 'tools/call',
+    params: { arguments: { query: 'x', limit: 1 }, name: 'firecrawl_search' },
+    headers: { authorization: 'Bearer fco_search_resource_token' },
+  });
+  assert.equal(res.status, 200);
+  const message = parseSseJson(await res.text());
+  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+  const searchCalls = backend.requests.filter((r) => r.url === '/v2/search');
+  assert.equal(searchCalls.length, 1);
+  assert.equal(searchCalls[0].headers.authorization, 'Bearer fc-introspected');
+});
+
+test('full surface still exposes its complete tool set alongside the search surface', async (t) => {
+  const { fullPort } = await startHostedServer(t);
+
+  // Full surface is reachable on its own port with all tools intact.
+  const names = await listTools(fullPort, '/v2/mcp', { 'x-api-key': 'fc-test' });
+  assert.ok(names.includes('firecrawl_scrape'));
+  assert.ok(names.includes('firecrawl_search'));
+  assert.ok(names.includes('firecrawl_parse'));
+  assert.ok(names.length > SEARCH_TOOLS.length);
+
+  // Its protected-resource metadata stays origin-level and unchanged.
+  const prm = await fetch(
+    `http://127.0.0.1:${fullPort}/.well-known/oauth-protected-resource`
+  );
+  assert.equal(prm.status, 200);
+  assert.deepEqual(await prm.json(), {
+    authorization_servers: ['https://www.firecrawl.dev'],
+    bearer_methods_supported: ['header'],
+    resource: 'https://mcp.firecrawl.dev/v2/mcp',
+    resource_name: 'Firecrawl MCP',
+    scopes_supported: ['firecrawl:global'],
+  });
+});

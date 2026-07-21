@@ -1,6 +1,6 @@
 {
   "name": "firecrawl-mcp",
-  "version": "3.23.0",
+  "version": "3.22.4",
   "description": "MCP server for Firecrawl — search, scrape, and interact with the web. Supports both cloud and self-hosted instances. Features include web search, scraping, page interaction, batch processing, and LLM-powered content analysis.",
   "type": "module",
   "mcpName": "io.github.firecrawl/firecrawl-mcp-server",
@@ -8,38 +8,29 @@
     "firecrawl-mcp": "dist/index.js"
   },
   "files": [
-    "dist",
-    "THIRD_PARTY_NOTICES.md"
+    "dist"
   ],
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "build": "rm -rf dist && tsup && node -e \"require('fs').chmodSync('dist/index.js', '755')\"",
-    "test": "npm run build && node --test --test-concurrency=1 tests/*.test.mjs tests/contract/*.test.mjs",
-    "test:hosted-auth": "npm run build && node --test --test-concurrency=1 --test-name-pattern \"hosted OAuth audience gate\" tests/mcp-smoke.test.mjs",
-    "test:packed": "npm run build && npm run check:third-party-notices && node scripts/verify-packed-package.mjs",
+    "test": "npm run build && node --test tests/*.test.mjs",
     "start": "node dist/index.js",
     "start:cloud": "CLOUD_SERVICE=true node dist/index.js",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "format": "prettier --write .",
     "prepare": "npm run build",
-    "publish-prod": "npm run build && npm run check:third-party-notices && npm publish",
-    "publish-beta": "npm run build && npm run check:third-party-notices && npm publish --tag beta",
-    "typecheck": "tsc --noEmit",
-    "check:manifest": "node scripts/check-manifest.mjs",
-    "check:hosted-mcp-contract": "node scripts/check-hosted-mcp-contract.mjs",
-    "generate:third-party-notices": "npm run build && node scripts/generate-third-party-notices.mjs --write",
-    "check:third-party-notices": "node scripts/generate-third-party-notices.mjs --check",
-    "test:docker-smoke": "bash scripts/docker-smoke.sh"
+    "publish-prod": "npm run build && npm publish",
+    "publish-beta": "npm run build && npm publish --tag beta"
   },
   "license": "MIT",
   "dependencies": {
     "@mendable/firecrawl-js": "4.25.2",
     "dotenv": "^17.2.2",
-    "undici": "7.28.0",
-    "zod": "4.4.3"
+    "fastmcp": "4.3.2",
+    "zod": "^4.1.5"
   },
   "engines": {
     "node": ">=22.0.0"
@@ -66,7 +57,6 @@
     "@typescript-eslint/parser": "8.48.1",
     "eslint": "8.57.1",
     "eslint-config-prettier": "10.1.8",
-    "fastmcp": "4.3.2",
     "tsup": "^8.5.0",
     "typescript": "^5.9.2"
   }

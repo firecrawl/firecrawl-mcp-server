@@ -1,20 +1,13 @@
 #!/usr/bin/env sh
 set -e
 
+# Start Node app in background
 node dist/index.js &
 APP_PID=$!
 
-shutdown() {
-  kill "$APP_PID" 2>/dev/null || true
-}
-trap shutdown INT TERM EXIT
+# Start NGINX in foreground
+nginx -g 'daemon off;'
 
-nginx -g 'daemon off;' &
-NGINX_PID=$!
-
-wait -n "$APP_PID" "$NGINX_PID"
-EXIT_CODE=$?
-shutdown
-exit "$EXIT_CODE"
+wait $APP_PID
 
 

@@ -26,173 +26,39 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 
 ## Installation
 
-### Remote Hosted MCP
+### Hosted MCP (keyless free tier)
 
-Connect to Firecrawl's hosted MCP server with no local process. Use the keyless endpoint for local/headless agents that should not start browser OAuth automatically:
+Connect to the remote hosted server with no setup:
 
-```text
+```
 https://mcp.firecrawl.dev/v2/mcp
 ```
 
-Use the account/OAuth endpoint for hosted connectors and clients where users should connect a Firecrawl account through browser sign-in:
+On the keyless free tier, `scrape`, `search`, and `interact` work without an API key (rate-limited). Other tools such as `crawl`, `map`, `agent`, and `extract` still need a key.
 
-```text
-https://mcp.firecrawl.dev/v2/mcp-oauth
+Prefer an API key or OAuth whenever the human can sign up. It unlocks the full tool set and higher limits. With a key, use:
+
 ```
-
-Both endpoints support Streamable HTTP. OAuth-capable clients on `/v2/mcp-oauth` open a browser sign-in on Firecrawl, let the user choose an account, approve access, and return to a connected MCP session. Anonymous `/v2/mcp` stays keyless and does not force browser OAuth.
-
-Authenticated hosted sessions expose the full Firecrawl tool surface through one integration: scrape, search, map, crawl, extract, parse, agent, monitor, research, interact, and feedback. The keyless free tier is intentionally limited to `firecrawl_scrape`, `firecrawl_search`, and hosted `firecrawl_parse` via upload refs while eligible and rate-limited by client IP.
-
-#### OAuth setup by client
-
-Claude Code:
-
-```bash
-claude mcp add --transport http firecrawl https://mcp.firecrawl.dev/v2/mcp-oauth
+https://mcp.firecrawl.dev/{FIRECRAWL_API_KEY}/v2/mcp
 ```
-
-Then run `/mcp` in Claude Code and select `firecrawl` to complete browser OAuth.
-
-Claude web/desktop:
-
-```text
-Settings → Connectors → Add custom connector → https://mcp.firecrawl.dev/v2/mcp-oauth
-```
-
-Cursor:
-
-Cursor remote MCP/OAuth behavior varies by version, and bare-URL OAuth for this hosted server is not verified here. Use one of the approved credential paths instead:
-
-- If your Cursor version supports remote MCP headers, configure the hosted URL with `Authorization: Bearer fc-YOUR_API_KEY`.
-- Otherwise, bridge the hosted server through `mcp-remote` and pass the Bearer header from an environment variable:
-
-```json
-{
-  "mcpServers": {
-    "firecrawl": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote@latest",
-        "https://mcp.firecrawl.dev/v2/mcp",
-        "--header",
-        "Authorization: Bearer ${FIRECRAWL_API_KEY}"
-      ],
-      "env": {
-        "FIRECRAWL_API_KEY": "fc-YOUR_API_KEY"
-      }
-    }
-  }
-}
-```
-
-Codex:
-
-```bash
-codex mcp add firecrawl --url https://mcp.firecrawl.dev/v2/mcp-oauth
-codex mcp login firecrawl
-```
-
-GitHub Copilot in VS Code:
-
-```json
-{
-  "mcp": {
-    "servers": {
-      "firecrawl": {
-        "type": "http",
-        "url": "https://mcp.firecrawl.dev/v2/mcp-oauth"
-      }
-    }
-  }
-}
-```
-
-Windsurf:
-
-```json
-{
-  "mcpServers": {
-    "firecrawl": {
-      "serverUrl": "https://mcp.firecrawl.dev/v2/mcp-oauth"
-    }
-  }
-}
-```
-
-Warp:
-
-```json
-{
-  "firecrawl": {
-    "serverUrl": "https://mcp.firecrawl.dev/v2/mcp-oauth"
-  }
-}
-```
-
-OpenCode:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "firecrawl": {
-      "type": "remote",
-      "url": "https://mcp.firecrawl.dev/v2/mcp-oauth",
-      "enabled": true
-    }
-  }
-}
-```
-
-#### Headless/API-key fallback
-
-If your client runs where browser login is unavailable, pass a Firecrawl API key as a standard Bearer token:
-
-```bash
-claude mcp add --transport http firecrawl https://mcp.firecrawl.dev/v2/mcp \
-  --header "Authorization: Bearer fc-YOUR_API_KEY"
-```
-
-JSON-configured clients can use:
-
-```json
-{
-  "mcpServers": {
-    "firecrawl": {
-      "url": "https://mcp.firecrawl.dev/v2/mcp",
-      "headers": {
-        "Authorization": "Bearer fc-YOUR_API_KEY"
-      }
-    }
-  }
-}
-```
-
-`x-firecrawl-api-key` and `x-api-key` are also accepted for compatibility. Prefer `/v2/mcp-oauth` for interactive account connectors, `/v2/mcp` for keyless/local agents, and `Authorization: Bearer <fc-key>` for CI, servers, scripts, and headless agents.
-
-Legacy API-key-in-URL examples are deprecated because credentials can appear in logs and browser history. Use OAuth or headers instead.
-
-MCP actions emitted by this server include safe trace metadata such as tool name, auth type, timestamp, request id, and user agent. Account-visible log storage and OAuth grant revocation are completed by the Firecrawl backend/dashboard surfaces.
 
 See the [MCP server docs](https://docs.firecrawl.dev/mcp-server) and the [agent onboarding guide](https://www.firecrawl.dev/agent-onboarding/SKILL.md) for setup details.
 
-### Local MCP Server with npx
+#### Search-only endpoint
 
-Use local stdio when you prefer self-hosting, air-gapped usage, or clients that do not support remote MCP:
+A read-only, search-only surface is also hosted at:
+
+```
+https://mcp.firecrawl.dev/v2/mcp-search
+```
+
+It exposes a fixed set of six read-only tools: `firecrawl_search` and the five `firecrawl_research_*` tools. It performs no page-content fetching and has its own OAuth identity; the full endpoint above is unchanged. See [docs/search-profile.md](docs/search-profile.md) for the full contract.
+
+### Running with npx
 
 ```bash
 env FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
 ```
-
-### Local Streamable HTTP
-
-```bash
-env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
-```
-
-Use the URL: `http://localhost:3000/mcp`.
 
 ### Manual Installation
 
@@ -348,36 +214,22 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
   - Example: `https://firecrawl.your-domain.com`
   - If not provided, the cloud API will be used (requires API key)
 
-#### MCP OAuth and hosted auth
+#### MCP OAuth (Bearer access tokens)
 
-Hosted Firecrawl issues OAuth **access tokens** (`fco_…`) via the authorization server on [firecrawl.dev](https://firecrawl.dev). The hosted MCP server introspects those tokens and forwards the resulting Firecrawl API credential to the Firecrawl API.
+Hosted Firecrawl can issue OAuth **access tokens** (`fco_…`) via the authorization server on [firecrawl.dev](https://firecrawl.dev). This MCP server forwards whichever credential it resolves to the Firecrawl API as `Authorization: Bearer …`.
 
-- **Hosted HTTP** (`CLOUD_SERVICE=true`): interactive clients should send `Authorization: Bearer <fco_access_token>` after browser OAuth.
-- **Headless hosted HTTP:** use `Authorization: Bearer <fc_api_key>`, `x-firecrawl-api-key`, or `x-api-key`.
-- **stdio/local HTTP:** use `FIRECRAWL_OAUTH_TOKEN` for a static access token, `FIRECRAWL_API_KEY` for an API key, or request headers in local HTTP mode.
+- **HTTP stream transports** (`CLOUD_SERVICE=true`, `HTTP_STREAMABLE_SERVER=true`, or `SSE_LOCAL=true`): Clients should send `Authorization: Bearer <fco_access_token>` on MCP requests. An OAuth bearer token takes precedence over `x-firecrawl-api-key` / `x-api-key` when both are present.
+- **stdio:** Use `FIRECRAWL_OAUTH_TOKEN` for a static access token, or keep using `FIRECRAWL_API_KEY` for an API key.
 
-Use **access** tokens (`fco_…`) only. Refresh tokens (`fcr_…`) must be exchanged at the token endpoint, not passed to MCP tools or Firecrawl APIs.
+Use **access** tokens (`fco_…`) only. Refresh tokens (`fcr_…`) must be exchanged at the token endpoint, not passed to the scrape/search API.
 
-#### Hosted deployment environment
+#### Search-only surface (hosted)
 
-The managed hosted service image sets the HTTP transport defaults in `Dockerfile.service`:
+In hosted mode (`CLOUD_SERVICE=true`) a second in-process instance serves the [search-only endpoint](#search-only-endpoint). The bundled service has a fixed deployment contract: nginx routes `/v2/mcp-search` to the instance on local port `3001`, and the OAuth protected-resource identifier is `https://mcp.firecrawl.dev/v2/mcp-search`.
 
-- `CLOUD_SERVICE=true`
-- `HTTP_STREAMABLE_SERVER=true`
-- `FASTMCP_ENDPOINT=/v2/mcp` (keyless/default service)
+`FIRECRAWL_MCP_SEARCH_ENABLED` (default `true`) is the supported operational toggle; set it to `false` to prevent the search instance from starting. The Node process also accepts `FIRECRAWL_MCP_SEARCH_PORT`, `FIRECRAWL_MCP_SEARCH_ENDPOINT`, and `FIRECRAWL_MCP_SEARCH_RESOURCE_URL` for isolated tests. Those overrides do not reconfigure the bundled nginx routes or the authorization server allowlist and must not be used independently in the hosted deployment.
 
-Production and staging deployments must also provide these runtime values:
-
-- `FIRECRAWL_API_URL`: Firecrawl API base URL used for tool calls and, by default, MCP action-log ingestion.
-- `FIRECRAWL_OAUTH_ISSUER` (optional): OAuth issuer. Defaults to `https://www.firecrawl.dev`.
-- `FIRECRAWL_MCP_RESOURCE_URL` (optional): canonical MCP resource URL. Defaults to `https://mcp.firecrawl.dev/v2/mcp`. Set `FASTMCP_ENDPOINT=/v2/mcp-oauth` and `FIRECRAWL_MCP_RESOURCE_URL=https://mcp.firecrawl.dev/v2/mcp-oauth` for the account/OAuth endpoint; readiness requires the resource URL to match the selected endpoint.
-- `FIRECRAWL_OAUTH_INTROSPECT_SECRET`: shared secret used when introspecting hosted OAuth `fco_…` access tokens. If missing in `CLOUD_SERVICE`, readiness fails and OAuth is not launch-ready.
-- `FIRECRAWL_MCP_ACTION_LOG_SECRET`: shared secret used to emit metadata-only MCP action logs to the Firecrawl API. Must match the API-side `MCP_ACTION_LOG_SECRET`.
-- `KEYLESS_PROXY_SECRET`: shared secret used to forward hosted keyless scrape/search/parse requests with the caller's client IP. Required for `FASTMCP_ENDPOINT=/v2/mcp`; not required for the account-only `/v2/mcp-oauth` deployment.
-- `KEYLESS_ELIGIBILITY_TIMEOUT_MS` (optional): maximum time to wait for the hosted keyless eligibility check when a keyless tool runs. Defaults to 1500 ms and is bounded between 50 ms and 10 seconds.
-- `FIRECRAWL_MCP_ACTION_LOG_URL` (optional): explicit action-log ingest endpoint. Defaults to `${FIRECRAWL_API_URL}/v2/mcp/action-logs`.
-
-Do not configure hosted examples with API keys in the URL. Browser/OAuth clients should use the bare `/v2/mcp-oauth` URL; keyless/local clients should use `/v2/mcp`; headless clients should pass their Firecrawl API key through `Authorization: Bearer`, `x-firecrawl-api-key`, or `x-api-key`.
+The search instance requires authentication for every request (including `tools/list`) and rejects OAuth tokens whose audience does not match its own resource.
 
 ### Configuration Examples
 
@@ -598,6 +450,7 @@ Search the web and optionally extract content from search results.
   "name": "firecrawl_search",
   "arguments": {
     "query": "latest AI research papers 2023",
+    "highlights": true,
     "limit": 5,
     "lang": "en",
     "country": "us",
@@ -609,6 +462,8 @@ Search the web and optionally extract content from search results.
   }
 }
 ```
+
+Set `highlights` to `true` to request query-relevant highlights or `false` to keep the original search snippets. Omit it to use the API's default behavior.
 
 **Returns:**
 
@@ -767,7 +622,7 @@ Parse local files or hosted upload references with Firecrawl's `/v2/parse` endpo
 
 **Not recommended for:** Remote URLs (use scrape), multiple files in one call (call parse once per file), or browser-only actions such as screenshots and clicks.
 
-**Hosted MCP flow:** Hosted MCP cannot read the caller's filesystem directly. Authenticated and eligible keyless hosted sessions can call `firecrawl_parse` with `filePath` to receive a short-lived upload command and `nextToolCall`, upload the file locally, then call `firecrawl_parse` again with the returned `uploadRef`. The hosted keyless surface is `firecrawl_scrape`, `firecrawl_search`, and `firecrawl_parse` via upload refs; non-keyless tools still require Firecrawl auth. In local `npx firecrawl-mcp` mode, direct file parsing currently requires `FIRECRAWL_API_URL` pointing to a self-hosted Firecrawl API; a plain cloud API-key-only local server cannot read and upload files through this tool.
+**Hosted MCP flow:** Hosted MCP cannot read the caller's filesystem directly. Call `firecrawl_parse` with `filePath` to receive a short-lived upload command and `nextToolCall`, upload the file locally, then call `firecrawl_parse` again with the returned `uploadRef`. Minting the hosted upload URL requires Firecrawl auth or keyless eligibility. In local `npx firecrawl-mcp` mode, direct file parsing currently requires `FIRECRAWL_API_URL` pointing to a self-hosted Firecrawl API; a plain cloud API-key-only local server cannot read and upload files through this tool.
 
 **Usage Example:**
 
@@ -1084,19 +939,19 @@ Pass `body` when you need crawl targets, JSON change tracking, custom retention,
 
 ## Logging System
 
-The server includes privacy-safe operational logging:
+The server includes comprehensive logging:
 
 - Operation status and progress
 - Performance metrics
 - Rate limit tracking
-- Bounded error classes/status codes
+- Error conditions
 
-Hosted/HTTP runtime logs redact target URLs, tool arguments, credentials, tokens, and raw IP addresses. Example log messages:
+Example log messages:
 
 ```
 [INFO] Firecrawl MCP Server initialized successfully
-[INFO] Scraping URL { lockdown: false }
-[ERROR] Firecrawl request failed { errorClass: "Error" }
+[INFO] Starting scrape for URL: https://example.com
+[ERROR] Rate limit exceeded
 ```
 
 ## Error Handling
@@ -1104,7 +959,7 @@ Hosted/HTTP runtime logs redact target URLs, tool arguments, credentials, tokens
 The server provides robust error handling:
 
 - API rate-limit errors surfaced to the MCP client
-- Structured error responses
+- Detailed error messages
 - Network resilience
 
 Example error response:
