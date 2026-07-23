@@ -1764,12 +1764,13 @@ Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the 
 
 - **rating** — overall result quality: \`good\`, \`partial\`, or \`bad\`.
 - **valuableSources** — which result URLs were actually useful, and a short reason why.
+- **valuableResultPositions** — 1-indexed positions in the returned \`data.web\` array that were useful. Prefer this when you used specific search results so Firecrawl can map positions to stable result document IDs.
 - **missingContent** — **the most important field.** An ARRAY of specific pieces of content you expected to find but didn't. One entry per missing piece, each with a short \`topic\` and an optional longer \`description\`. Examples: \`{"topic":"enterprise pricing","description":"no pricing tier table for the Enterprise plan was returned"}\`, \`{"topic":"API rate limits"}\`, \`{"topic":"comparison vs competitors"}\`. **Be specific** — these aggregate across teams and tell us what to index next. Do not pack multiple topics into one entry.
 - **querySuggestions** — how the query or response shape could be improved (e.g. "would have liked official docs first", "should boost github.com").
 
 **Substantive-feedback requirement** (zero-effort feedback is rejected with HTTP 400):
-- \`good\` — must include at least one \`valuableSources\` entry
-- \`partial\` — must include \`valuableSources\` or at least one \`missingContent\` entry
+- \`good\` — must include at least one \`valuableSources\` entry or \`valuableResultPositions\`
+- \`partial\` — must include \`valuableSources\`, \`valuableResultPositions\`, or at least one \`missingContent\` entry
 - \`bad\` — must include at least one \`missingContent\` entry or \`querySuggestions\`
 
 **Time window:** Feedback must be submitted within ~2 minutes of the search. Beyond that, the call returns HTTP 409 with \`feedbackErrorCode: "FEEDBACK_WINDOW_EXPIRED"\` — do not retry, just move on. Same goes for any 4xx response: do not retry-loop.
@@ -1792,6 +1793,7 @@ Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the 
     "valuableSources": [
       { "url": "https://docs.firecrawl.dev/features/search", "reason": "Most up-to-date description of /search." }
     ],
+    "valuableResultPositions": [1],
     "missingContent": [
       { "topic": "Pricing for the search endpoint", "description": "No pricing tier table for /search specifically." },
       { "topic": "Rate limits", "description": "Per-team RPS for /search not documented." }
@@ -1832,6 +1834,14 @@ Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the 
         )
         .max(50)
         .optional(),
+      valuableResultPositions: z
+        .array(z.number().int().positive())
+        .max(50)
+        .optional()
+        .describe(
+          '1-indexed positions in the returned `data.web` array that were useful. ' +
+            'The API maps these to stable search result document IDs.'
+        ),
       missingContent: z
         .array(
           z.object({
@@ -1856,12 +1866,14 @@ Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the 
         searchId,
         rating,
         valuableSources,
+        valuableResultPositions,
         missingContent,
         querySuggestions,
       } = args as {
         searchId: string;
         rating: 'good' | 'bad' | 'partial';
         valuableSources?: { url: string; reason?: string }[];
+        valuableResultPositions?: number[];
         missingContent?: { topic: string; description?: string }[];
         querySuggestions?: string;
       };
@@ -1877,6 +1889,9 @@ Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the 
       };
       if (valuableSources && valuableSources.length > 0) {
         body.valuableSources = valuableSources;
+      }
+      if (valuableResultPositions && valuableResultPositions.length > 0) {
+        body.valuableResultPositions = valuableResultPositions;
       }
       if (missingContent && missingContent.length > 0) {
         body.missingContent = missingContent;
