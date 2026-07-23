@@ -54,3 +54,14 @@ test('specific MCP identities precede generic legacy regex routes', () => {
     assert.ok(config.indexOf(route) < genericKeyed, `${route} ordering`);
   }
 });
+
+test('legacy MCP aliases stay bound to the full identity', () => {
+  for (const route of [
+    'location = /mcp',
+    'location ~ ^/(?<apikey>[^/]+)/(?:v2/mcp|mcp)/?$',
+  ]) {
+    const body = locationBody(route);
+    assert.match(body, /rewrite \^ \/v2\/mcp break;/);
+    assert.doesNotMatch(body, /mcp-oauth/);
+  }
+});

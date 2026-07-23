@@ -361,6 +361,42 @@ test('search surface requires authentication for tools/list', async (t) => {
   assert.match(wwwAuthenticate, /error="invalid_token"/);
 });
 
+test('search surface hides tools from an invalid credential', async (t) => {
+  const { searchPort } = await startHostedServer(t);
+
+  const names = await listTools(searchPort, SEARCH_ENDPOINT, {
+    'x-api-key': 'fc-invalid',
+  });
+  assert.deepEqual(names, []);
+});
+
+test('search surface returns structured recovery for an invalid credential', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+  });
+
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 9,
+    method: 'tools/call',
+    params: {
+      arguments: { query: 'example domain', limit: 1 },
+      name: 'firecrawl_search',
+    },
+    headers: { 'x-api-key': 'fc-invalid' },
+  });
+  assert.equal(res.status, 200);
+  const message = parseSseJson(await res.text());
+  assert.equal(message.result?.isError, true, JSON.stringify(message));
+  assert.equal(
+    message.result?.structuredContent?.code,
+    'CREDENTIAL_INVALID',
+    JSON.stringify(message)
+  );
+  assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
+});
+
 test('search surface serves path-scoped protected-resource metadata', async (t) => {
   const { searchPort, issuerUrl } = await startHostedServer(t);
 

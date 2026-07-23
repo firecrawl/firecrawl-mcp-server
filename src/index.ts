@@ -740,6 +740,7 @@ function createServer(profile: ServerProfile): FastMCP<SessionData> {
 
 const primaryProfile = makeFullProfile();
 const server = createServer(primaryProfile);
+type RegisteredTool = Parameters<typeof server.addTool>[0];
 
 const KEYLESS_TOOL_NAMES = new Set([
   'firecrawl_scrape',
@@ -818,11 +819,13 @@ function emitActionLog(
   }).catch(() => undefined);
 }
 
-const addTool = server.addTool.bind(server);
-server.addTool = ((tool: Parameters<typeof server.addTool>[0]) => {
+function guardHostedTool(
+  tool: RegisteredTool,
+  { logActions }: { logActions: boolean }
+): RegisteredTool {
   const keylessTool = KEYLESS_TOOL_NAMES.has(tool.name);
   const execute = tool.execute;
-  addTool({
+  return {
     ...tool,
     canList: (session: SessionData) =>
       !session?.credentialError &&
@@ -850,6 +853,8 @@ server.addTool = ((tool: Parameters<typeof server.addTool>[0]) => {
         const payload = recoveryPayload('KEYLESS_TOOL_NOT_AVAILABLE');
         throw new UserError(String(payload.message), payload);
       }
+      if (!logActions) return execute(args, context);
+
       const requestId = randomUUID();
       emitActionLog(tool.name, 'started', context.session, undefined, requestId);
       try {
@@ -861,7 +866,12 @@ server.addTool = ((tool: Parameters<typeof server.addTool>[0]) => {
         throw error;
       }
     },
-  });
+  };
+}
+
+const addTool = server.addTool.bind(server);
+server.addTool = ((tool: RegisteredTool) => {
+  addTool(guardHostedTool(tool, { logActions: true }));
 }) as typeof server.addTool;
 
 if (openAiAppsChallengeToken) {
@@ -3214,7 +3224,7 @@ if (searchProfileEnabled) {
     addTool: ((tool: { name: string }) => {
       if (searchProfile.toolAllowlist?.has(tool.name)) {
         searchServer.addTool(
-          tool as Parameters<typeof searchServer.addTool>[0]
+          guardHostedTool(tool as RegisteredTool, { logActions: false })
         );
       }
     }) as FastMCP<SessionData>['addTool'],
