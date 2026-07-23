@@ -891,6 +891,7 @@ server.getApp().get('/ready', (context) => {
     'FIRECRAWL_OAUTH_INTROSPECT_SECRET',
     'FIRECRAWL_MCP_ACTION_LOG_SECRET',
     'KEYLESS_PROXY_SECRET',
+    'MCP_DELEGATED_CREDENTIAL_SECRET',
   ].filter((name) => !normalizeHeader(process.env[name]));
   const configuredEndpoint = getPrimaryEndpoint();
   if (

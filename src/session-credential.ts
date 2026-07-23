@@ -30,7 +30,7 @@ type McpDelegatedCredentialPayload = {
 };
 
 function delegationSecret(): string {
-  const secret = process.env.KEYLESS_PROXY_SECRET?.trim();
+  const secret = process.env.MCP_DELEGATED_CREDENTIAL_SECRET?.trim();
   if (!secret) throw new CredentialValidationUnavailableError();
   return secret;
 }

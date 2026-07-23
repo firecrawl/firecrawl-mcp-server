@@ -76,7 +76,12 @@ function parseSseJson(body) {
 
 function spawnServer(env) {
   const child = spawn(process.execPath, ['dist/index.js'], {
-    env: { ...process.env, ...env },
+    env: {
+      ...process.env,
+      MCP_DELEGATED_CREDENTIAL_SECRET:
+        'test-mcp-delegated-credential-secret-32',
+      ...env,
+    },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
   child.stderr.setEncoding('utf8');
