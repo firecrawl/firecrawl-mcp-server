@@ -239,6 +239,22 @@ async function listTools(port, endpoint, headers) {
 test('search surface lists exactly the six read-only tools', async (t) => {
   const { searchPort, getStderr } = await startHostedServer(t);
 
+  const initialize = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 0,
+    method: 'initialize',
+    params: {
+      capabilities: {},
+      clientInfo: { name: 'search-profile-test', version: '0.0.0' },
+      protocolVersion: '2025-06-18',
+    },
+    headers: { 'x-api-key': 'fc-test' },
+  });
+  assert.equal(initialize.status, 200);
+  const initializeMessage = parseSseJson(await initialize.text());
+  const instructions = initializeMessage.result.instructions ?? '';
+  assert.match(instructions, /read-only web and research search tools/i);
+  assert.doesNotMatch(instructions, /instead of built-in|always default|richer results/i);
+
   const names = await listTools(searchPort, SEARCH_ENDPOINT, {
     'x-api-key': 'fc-test',
   });

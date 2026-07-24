@@ -242,13 +242,9 @@ export function registerResearchTools(
       destructiveHint: false, // Query-only; no writes to external sources or the research index.
     },
     description:
-      'Primary entry point for finding research papers by topic across AI/ML, computer science, ' +
-      'math, physics, biomedical, life sciences, and clinical literature. Semantic (HyDE) search ' +
-      'over indexed paper metadata and abstracts; returns ranked papers with paper id, title, ' +
-      'authors, and abstract. The query should be a natural-language research topic or question. ' +
-      'Run SEVERAL distinct framings of the question (sibling domains, rival methods, dataset or ' +
-      'benchmark names, conditions, populations, interventions, or outcomes) rather than one query ' +
-      '— recall improves markedly with diverse framings.',
+      'Search indexed research-paper metadata and abstracts by natural-language topic or question. ' +
+      'Returns ranked papers with identifiers, titles, authors, and abstracts across computer ' +
+      'science, mathematics, physics, biomedical, life-science, and clinical sources.',
     parameters: z.object({
       query: z
         .string()
@@ -324,9 +320,8 @@ export function registerResearchTools(
       destructiveHint: false, // Read-only metadata lookup.
     },
     description:
-      'Fetch canonical metadata for one paper by primaryId or canonical paperId. ' +
-      'Use this after search/related results when you need the full title, abstract, authors, ' +
-      'categories, source ids, and dates rendered as markdown.',
+      'Retrieve canonical metadata for one paper by primary or canonical paper ID. Returns the ' +
+      'title, abstract, authors, categories, source identifiers, and dates as markdown.',
     parameters: z.object({
       paperId: z
         .string()
@@ -356,19 +351,31 @@ export function registerResearchTools(
       destructiveHint: false, // Read-only graph query; no modifications.
     },
     description:
-      'Expand from anchor papers you have already found, via the citation graph, ranked and filtered ' +
-      'to a natural-language `intent`. Pass arXiv ids of your strongest hits as `seed_ids`. Modes: ' +
-      '`similar` (cocitation/coupling — papers in the same niche; the default), `citers` (papers ' +
-      'that cite the anchors), `references` (papers the anchors cite). This reaches relevant papers ' +
-      'that plain search misses, so use it on your best hits before finishing. A `similar` call ' +
-      'already runs a DEEP multi-round expansion internally (re-seeding from each round’s best ' +
-      'finds), so one call reaches the wider neighborhood — no need to chain many. Returns the ' +
-      'candidates plus the pool size.',
+      'Find papers related to one or more arXiv seed papers through citation relationships and rank ' +
+      'them against a natural-language intent. `similar` uses cocitation and bibliographic coupling, ' +
+      '`citers` returns papers that cite the seeds, and `references` returns papers cited by the seeds. ' +
+      'Returns ranked candidates and the candidate-pool size.',
     parameters: z.object({
-      seed_ids: z.array(z.string()).min(1).max(10),
-      intent: z.string().min(1),
-      mode: z.enum(['similar', 'citers', 'references']).optional(),
-      k: z.number().int().min(1).max(500).optional(),
+      seed_ids: z
+        .array(z.string())
+        .min(1)
+        .max(10)
+        .describe('One to ten arXiv IDs used as citation-graph seeds.'),
+      intent: z
+        .string()
+        .min(1)
+        .describe('Natural-language topic used to rank related papers.'),
+      mode: z
+        .enum(['similar', 'citers', 'references'])
+        .optional()
+        .describe('Citation relationship to traverse. Defaults to similar.'),
+      k: z
+        .number()
+        .int()
+        .min(1)
+        .max(500)
+        .optional()
+        .describe('Maximum ranked papers to return.'),
       rerank: z
         .boolean()
         .optional()
@@ -418,10 +425,8 @@ export function registerResearchTools(
       destructiveHint: false, // Read-only passage retrieval.
     },
     description:
-      'Read the most relevant in-body (full-text) passages of ONE specific paper for a question. Use ' +
-      'this to VERIFY whether a candidate actually satisfies a constraint before you include or ' +
-      "reject it (e.g. 'does this paper actually use technique X / report a score on benchmark Y'). " +
-      "Returns the best-matching passages, or a notice if the paper's full text is unavailable.",
+      'Retrieve full-text passages from one paper that are relevant to a supplied question. Returns ' +
+      "matching passages, or a notice when the paper's full text is unavailable.",
     parameters: z.object({
       paperId: z
         .string()
@@ -429,7 +434,10 @@ export function registerResearchTools(
         .describe(
           'Canonical paperId or primaryId such as `arxiv:1706.03762`, `pmcid:PMC12530322`, `pmid:40953549`, or `doi:10.1016/j.neunet.2025.108095`.'
         ),
-      question: z.string().min(1),
+      question: z
+        .string()
+        .min(1)
+        .describe('Question used to select relevant passages from the paper.'),
       k: z
         .number()
         .int()
@@ -472,8 +480,17 @@ export function registerResearchTools(
       'Search GitHub issue/PR history and repository readmes. Returns ranked matches with repo, ' +
       'url, a short snippet, and (when available) the full matched content in markdown.',
     parameters: z.object({
-      query: z.string().min(1),
-      k: z.number().int().min(1).max(100).optional(),
+      query: z
+        .string()
+        .min(1)
+        .describe('Natural-language query for indexed public GitHub content.'),
+      k: z
+        .number()
+        .int()
+        .min(1)
+        .max(100)
+        .optional()
+        .describe('Maximum ranked matches to return.'),
     }),
     execute: async (args: unknown, { session }): Promise<string> => {
       const { query, k } = args as { query: string; k?: number };

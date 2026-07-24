@@ -5,6 +5,19 @@ import net from 'node:net';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 
+const NON_NEUTRAL_METADATA_PATTERNS = [
+  /most powerful/i,
+  /always default/i,
+  /instead of built-in/i,
+  /faster and cheaper/i,
+  /\bmust use\b/i,
+  /\bprefer\b/i,
+  /call this immediately/i,
+  /last resort/i,
+  /do not give up/i,
+  /\brefund\b/i,
+];
+
 async function getFreePort() {
   const server = net.createServer();
   await new Promise((resolve, reject) => {
@@ -348,6 +361,11 @@ test('HTTP cloud transport preserves Firecrawl OAuth and well-known routes', asy
   assert.match(initialize.headers.get('content-type') ?? '', /text\/event-stream/);
   const initializeMessage = parseSseJson(await initialize.text());
   assert.equal(initializeMessage.result.serverInfo.name, 'firecrawl-fastmcp');
+  const instructions = initializeMessage.result.instructions ?? '';
+  assert.match(instructions, /Firecrawl provides tools/i);
+  for (const pattern of NON_NEUTRAL_METADATA_PATTERNS) {
+    assert.doesNotMatch(instructions, pattern);
+  }
 
   const toolsList = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({
@@ -369,11 +387,39 @@ test('HTTP cloud transport preserves Firecrawl OAuth and well-known routes', asy
   assert.ok(httpToolNames.includes('firecrawl_scrape'));
   assert.ok(httpToolNames.includes('firecrawl_search'));
   assert.ok(httpToolNames.includes('firecrawl_parse'));
+  for (const tool of toolsMessage.result.tools) {
+    assert.ok(
+      typeof tool.description === 'string' && tool.description.trim().length >= 40,
+      `${tool.name} must have a specific description`
+    );
+    for (const pattern of NON_NEUTRAL_METADATA_PATTERNS) {
+      assert.doesNotMatch(tool.description, pattern, `${tool.name} description`);
+    }
+  }
   const searchTool = toolsMessage.result.tools.find(
     (tool) => tool.name === 'firecrawl_search'
   );
   assert.equal(searchTool.inputSchema.properties.highlights.type, 'boolean');
   assert.equal('default' in searchTool.inputSchema.properties.highlights, false);
+  assert.match(searchTool.inputSchema.properties.query.description, /search query/i);
+  const scrapeTool = toolsMessage.result.tools.find(
+    (tool) => tool.name === 'firecrawl_scrape'
+  );
+  assert.match(scrapeTool.inputSchema.properties.url.description, /URL/i);
+  assert.match(
+    scrapeTool.inputSchema.properties.zeroDataRetention.description,
+    /without retaining/i
+  );
+  const searchFeedbackTool = toolsMessage.result.tools.find(
+    (tool) => tool.name === 'firecrawl_search_feedback'
+  );
+  assert.equal(searchFeedbackTool.annotations.readOnlyHint, false);
+  assert.match(searchFeedbackTool.description, /user explicitly asks/i);
+  const interactTool = toolsMessage.result.tools.find(
+    (tool) => tool.name === 'firecrawl_interact'
+  );
+  assert.equal(interactTool.annotations.destructiveHint, true);
+  assert.match(interactTool.description, /external side effects/i);
 
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
