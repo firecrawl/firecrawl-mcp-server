@@ -835,7 +835,8 @@ function preserveParameterDescriptions(parameters: unknown): unknown {
     '~standard': {
       ...standard,
       jsonSchema: {
-        input: () => z.toJSONSchema(schema, { target: 'draft-7' }),
+        input: () =>
+          z.toJSONSchema(schema, { target: 'draft-7', io: 'input' }),
       },
     },
   };

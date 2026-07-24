@@ -267,11 +267,17 @@ Use \`body\` for custom schedules, crawl targets, change tracking, and retention
       page: optionalUrl.describe('Single page URL to monitor.'),
       pages: optionalUrlList.describe('Page URLs to monitor.'),
       queries: z
-        .array(z.string())
-        .min(1)
-        .max(12)
-        .optional()
-        .describe('Search queries to run on each check. Mutually exclusive with page and pages.'),
+        .preprocess((value) => {
+          if (!Array.isArray(value)) return value;
+          const cleaned = value
+            .filter((q): q is string => typeof q === 'string')
+            .map((q) => q.trim())
+            .filter(Boolean);
+          return cleaned.length === 0 ? undefined : cleaned;
+        }, z.array(z.string()).min(1).max(12).optional())
+        .describe(
+          'Search queries to run on each check. Mutually exclusive with page and pages.'
+        ),
       searchWindow: z
         .enum(['5m', '15m', '1h', '6h', '24h', '7d'])
         .optional()
