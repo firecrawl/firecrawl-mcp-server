@@ -109,19 +109,20 @@ function splitPages(page?: string, pages?: string[]): string[] {
     .filter(Boolean);
 }
 
-/** Models often omit unused optionals as "". Treat blanks as unset. */
+/** Models often omit unused optionals as "". Trim and treat blanks as unset. */
 function blankToUndefined(value: unknown): unknown {
-  if (typeof value === 'string' && value.trim() === '') return undefined;
-  return value;
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
 }
 
 const optionalUrl = z.preprocess(blankToUndefined, z.url().optional());
 const optionalEmail = z.preprocess(blankToUndefined, z.email().optional());
 const optionalUrlList = z.preprocess((value) => {
   if (!Array.isArray(value)) return value;
-  return value.filter(
-    (item) => !(typeof item === 'string' && item.trim() === '')
-  );
+  return value
+    .map((item) => (typeof item === 'string' ? item.trim() : item))
+    .filter((item) => !(typeof item === 'string' && item === ''));
 }, z.array(z.url()).optional());
 
 function buildMonitorCreateBody(
