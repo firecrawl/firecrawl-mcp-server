@@ -244,7 +244,22 @@ Create a recurring monitor that retrieves pages, crawls a site, or runs searches
 Simple path: \`page\`/\`pages\` or \`queries\` plus \`goal\`, which schedules every 30 minutes unless \`scheduleText\` is supplied; \`email\` sends summaries and \`webhookUrl\` sends monitor events.
 Use \`body\` for custom schedules, crawl targets, change tracking, and retention. Returns the JSON monitor record from the API.
 `,
-    parameters: z.object({
+    parameters: z.preprocess((raw) => {
+      // Advanced `body` path ignores shorthand fields in execute; drop them
+      // before validation so invalid/empty shorthand cannot fail a valid body.
+      if (
+        raw &&
+        typeof raw === 'object' &&
+        !Array.isArray(raw) &&
+        'body' in raw
+      ) {
+        const body = (raw as { body?: unknown }).body;
+        if (body && typeof body === 'object' && !Array.isArray(body)) {
+          return { body };
+        }
+      }
+      return raw;
+    }, z.object({
       body: z
         .record(z.string(), z.any())
         .optional()
@@ -284,7 +299,7 @@ Use \`body\` for custom schedules, crawl targets, change tracking, and retention
       webhookUrl: optionalUrl.describe(
         'External URL that receives monitor events.'
       ),
-    }),
+    })),
     execute: async (args: unknown, { session, log }): Promise<string> => {
       const body = buildMonitorCreateBody(args as Record<string, unknown>);
       log.info('Creating monitor', { name: String(body.name) });
