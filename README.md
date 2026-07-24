@@ -1,3 +1,5 @@
+[![MCP Toplist](https://mcptoplist.com/badge/io.github.firecrawl%2Ffirecrawl-mcp-server.svg)](https://mcptoplist.com/server/io.github.firecrawl%2Ffirecrawl-mcp-server)
+
 <div align="center">
   <a name="readme-top"></a>
   <img
