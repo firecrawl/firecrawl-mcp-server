@@ -11,9 +11,12 @@
 
 import { z } from 'zod';
 import type { FastMCP } from 'fastmcp';
+import {
+  credentialForOutboundRequest,
+  type CredentialSession,
+} from './session-credential';
 
-interface SessionData {
-  firecrawlApiKey?: string;
+interface SessionData extends CredentialSession {
   [key: string]: unknown;
 }
 
@@ -29,7 +32,13 @@ function resolveAuth(session?: SessionData): {
   apiKey?: string;
   baseUrl: string;
 } {
-  const apiKey = session?.firecrawlApiKey ?? process.env.FIRECRAWL_API_KEY;
+  // A request-scoped session is authoritative. In particular, managed OAuth
+  // credentials must become short-lived delegated assertions and must never
+  // fall through to a process-wide API key.
+  const apiKey =
+    session === undefined
+      ? process.env.FIRECRAWL_API_KEY
+      : credentialForOutboundRequest(session);
   const baseUrl = (process.env.FIRECRAWL_API_URL ?? DEFAULT_API_URL).replace(
     /\/$/,
     ''
