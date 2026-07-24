@@ -233,8 +233,8 @@ Use \`body\` for custom schedules, crawl targets, change tracking, and retention
         .record(z.string(), z.any())
         .optional()
         .describe('Advanced monitor request body. Do not combine with simple fields.'),
-      page: z.string().url().optional().describe('Single page URL to monitor.'),
-      pages: z.array(z.string().url()).optional().describe('Page URLs to monitor.'),
+      page: z.url().optional().describe('Single page URL to monitor.'),
+      pages: z.array(z.url()).optional().describe('Page URLs to monitor.'),
       queries: z
         .array(z.string())
         .min(1)
@@ -259,7 +259,6 @@ Use \`body\` for custom schedules, crawl targets, change tracking, and retention
         .describe('Natural-language schedule. Defaults to every 30 minutes.'),
       timezone: z.string().optional().describe('Timezone used to interpret the schedule.'),
       email: z
-        .string()
         .email()
         .optional()
         .describe('Email address that receives monitor summaries.'),
@@ -268,7 +267,6 @@ Use \`body\` for custom schedules, crawl targets, change tracking, and retention
         .optional()
         .describe('Include content diffs in configured notifications.'),
       webhookUrl: z
-        .string()
         .url()
         .optional()
         .describe('External URL that receives monitor events.'),

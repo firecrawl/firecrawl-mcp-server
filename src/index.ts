@@ -1118,7 +1118,7 @@ function transformScrapeParams(
 }
 
 const scrapeParamsSchema = z.object({
-  url: z.string().url().describe('Public URL of the page to retrieve.'),
+  url: z.url().describe('Public URL of the page to retrieve.'),
   formats: z
     .array(
       z.enum([
@@ -1721,7 +1721,7 @@ Discover URLs on a website and return them as a list without retrieving each pag
 Use for a site's URL inventory or to locate a page within a site; optional \`search\` filters discovered URLs by topic. Returns a URL list with optional title and description per link.
 `,
   parameters: z.object({
-    url: z.string().url().describe('Website URL to map.'),
+    url: z.url().describe('Website URL to map.'),
     search: z
       .string()
       .optional()
@@ -2012,7 +2012,7 @@ const feedbackIssueSchema = z
   );
 
 const valuableSourceSchema = z.object({
-  url: z.string().url(),
+  url: z.url(),
   reason: z.string().max(1000).optional(),
 });
 
@@ -2064,7 +2064,6 @@ Feedback is accepted for roughly two minutes after the search. When the response
 `,
     parameters: z.object({
       searchId: z
-        .string()
         .uuid('searchId must be the UUID returned by firecrawl_search')
         .describe('Search response ID that the user is evaluating.'),
       rating: z
@@ -2073,7 +2072,7 @@ Feedback is accepted for roughly two minutes after the search. When the response
       valuableSources: z
         .array(
           z.object({
-            url: z.string().url().describe('Result URL the user found useful.'),
+            url: z.url().describe('Result URL the user found useful.'),
             reason: z
               .string()
               .max(1000)
@@ -2211,7 +2210,6 @@ Include only concise confirmed details; do not include full page contents, crede
         .enum(['search', 'scrape', 'parse', 'map'])
         .describe('Endpoint that produced the evaluated job.'),
       jobId: z
-        .string()
         .uuid('jobId must be the UUID returned by Firecrawl')
         .describe('Job ID returned by the evaluated endpoint.'),
       rating: z
@@ -2227,7 +2225,7 @@ Include only concise confirmed details; do not include full page contents, crede
       valuableSources: z.array(valuableSourceSchema).max(50).optional(),
       missingContent: z.array(missingContentSchema).max(50).optional(),
       querySuggestions: z.string().max(2000).optional(),
-      url: z.string().url().optional(),
+      url: z.url().optional(),
       pageNumbers: z.array(z.number().int().positive()).max(100).optional(),
       metadata: z
         .record(z.string(), z.unknown())
@@ -2343,7 +2341,7 @@ Use for multiple related pages on a site. Scope with \`includePaths\`, \`exclude
  }
  `,
   parameters: z.object({
-    url: z.string().url().describe('URL where the crawl begins.'),
+    url: z.url().describe('URL where the crawl begins.'),
     prompt: z
       .string()
       .optional()
@@ -2399,7 +2397,6 @@ Use for multiple related pages on a site. Scope with \`includePaths\`, \`exclude
       ? {}
       : {
           webhook: z
-            .string()
             .url()
             .optional()
             .describe('Webhook URL that receives crawl events. Sends data outside Firecrawl.'),
@@ -2497,7 +2494,7 @@ Extract structured data from one or more specified web pages according to a prom
 Use when URLs are known and a consistent data structure is needed across those pages. Optional link, subdomain, and web-search settings can broaden the sources used for extraction. Returns an extraction result whose \`data\` matches the prompt or schema.
 `,
   parameters: z.object({
-    urls: z.array(z.string().url()).min(1).describe('Web pages to process.'),
+    urls: z.array(z.url()).min(1).describe('Web pages to process.'),
     prompt: z
       .string()
       .optional()
@@ -2559,7 +2556,7 @@ The response contains a job \`id\`; \`firecrawl_agent_status\` retrieves status 
       .max(10000)
       .describe('Research task and requested output, written in natural language.'),
     urls: z
-      .array(z.string().url())
+      .array(z.url())
       .optional()
       .describe('Optional URLs that constrain or seed the research.'),
     schema: z
@@ -2637,8 +2634,6 @@ Provide exactly one of \`url\` or \`scrapeId\`, and at least one of \`prompt\` o
         .optional()
         .describe('Existing scrape session ID to interact with. Mutually exclusive with url.'),
       url: z
-        .string()
-        .trim()
         .url()
         .optional()
         .describe('Page URL for a new interaction session. Mutually exclusive with scrapeId.'),
