@@ -242,9 +242,9 @@ export function registerResearchTools(
       destructiveHint: false, // Query-only; no writes to external sources or the research index.
     },
     description:
-      'Search indexed research-paper metadata and abstracts by natural-language topic or question. ' +
-      'Returns ranked papers with identifiers, titles, authors, and abstracts across computer ' +
-      'science, mathematics, physics, biomedical, life-science, and clinical sources.',
+      'Semantically search indexed research-paper metadata and abstracts by natural-language ' +
+      'topic or question. Returns ranked papers as text with identifiers, titles, authors, and ' +
+      'abstracts.',
     parameters: z.object({
       query: z
         .string()
@@ -351,10 +351,9 @@ export function registerResearchTools(
       destructiveHint: false, // Read-only graph query; no modifications.
     },
     description:
-      'Find papers related to one or more arXiv seed papers through citation relationships and rank ' +
-      'them against a natural-language intent. `similar` uses cocitation and bibliographic coupling, ' +
-      '`citers` returns papers that cite the seeds, and `references` returns papers cited by the seeds. ' +
-      'Returns ranked candidates and the candidate-pool size.',
+      'Find papers related to arXiv seed papers through citation relationships and rank them ' +
+      'against a natural-language intent. Returns ranked candidates as text plus the ' +
+      'candidate-pool size.',
     parameters: z.object({
       seed_ids: z
         .array(z.string())
@@ -477,8 +476,8 @@ export function registerResearchTools(
       destructiveHint: false, // Query-only; does not create issues, PRs, or modify repositories.
     },
     description:
-      'Search GitHub issue/PR history and repository readmes. Returns ranked matches with repo, ' +
-      'url, a short snippet, and (when available) the full matched content in markdown.',
+      'Search public GitHub issue/PR history and repository readmes. Returns ranked matches with ' +
+      'repo, url, a short snippet, and, when available, the full matched content in markdown.',
     parameters: z.object({
       query: z
         .string()

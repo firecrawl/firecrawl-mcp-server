@@ -224,10 +224,9 @@ export function registerMonitorTools(server: FastMCP<SessionData>): void {
       destructiveHint: false, // Additive; creates a new monitor without deleting existing monitors or external content.
     },
     description: `
-Create a recurring monitor that retrieves pages, crawls a site, or runs searches and compares each result with the previous retained snapshot.
-Creating a monitor stores its configuration and schedules future network requests. Use this tool only when the user asks to create recurring monitoring.
-For a page monitor, provide \`page\` or \`pages\` and a \`goal\`. For a search monitor, provide \`queries\` and a \`goal\`. These simple fields create a 30-minute schedule unless \`scheduleText\` is supplied. \`email\` sends summaries to that address; \`webhookUrl\` sends monitor events to an external endpoint.
-The \`body\` field accepts the advanced API shape for custom schedules, crawl targets, structured change tracking, notification settings, and retention.
+Create a recurring monitor that retrieves pages, crawls a site, or runs searches and compares each result with the previous retained snapshot. Use this tool only when the user asks to create recurring monitoring.
+Simple path: \`page\`/\`pages\` or \`queries\` plus \`goal\`, which schedules every 30 minutes unless \`scheduleText\` is supplied; \`email\` sends summaries and \`webhookUrl\` sends monitor events.
+Use \`body\` for custom schedules, crawl targets, change tracking, and retention. Returns the JSON monitor record from the API.
 `,
     parameters: z.object({
       body: z
@@ -294,7 +293,7 @@ The \`body\` field accepts the advanced API shape for custom schedules, crawl ta
       destructiveHint: false, // Read-only listing.
     },
     description: `
-List all Firecrawl monitors for the authenticated account.
+List all Firecrawl monitors for the authenticated account. Optional \`limit\` and \`offset\`. Returns a JSON list of monitors.
 `,
     parameters: z.object({
       limit: z.number().int().positive().optional().describe('Maximum monitors to return.'),
@@ -318,7 +317,7 @@ List all Firecrawl monitors for the authenticated account.
       destructiveHint: false, // Read-only retrieval.
     },
     description: `
-Retrieve the saved configuration and current status of one monitor by its ID.
+Retrieve the saved configuration and current status of one monitor by its \`id\`. Returns the JSON monitor record from the API.
 `,
     parameters: z.object({ id: z.string().describe('Monitor ID to retrieve.') }),
     execute: async (args: unknown, { session }): Promise<string> => {
@@ -340,8 +339,8 @@ Retrieve the saved configuration and current status of one monitor by its ID.
       destructiveHint: true, // Can pause, replace, or remove monitor configuration; changes overwrite prior settings.
     },
     description: `
-Update a monitor. Pass any subset of fields to patch: \`name\`, \`status\` ("active" | "paused"), \`schedule\`, \`targets\`, \`goal\`, \`judgeEnabled\`, \`webhook\`, \`notification\`, \`retentionDays\`.
-This changes the saved configuration and can alter future network requests and notifications.
+Update a monitor. Pass \`id\` and nest any subset of patch fields inside \`body\`: \`name\`, \`status\` ("active" | "paused"), \`schedule\`, \`targets\`, \`goal\`, \`judgeEnabled\`, \`webhook\`, \`notification\`, \`retentionDays\`.
+Returns the JSON monitor record from the API.
 `,
     parameters: z.object({
       id: z.string().describe('Monitor ID to update.'),
@@ -396,8 +395,7 @@ Permanently delete a monitor and stop its schedule. This cannot be undone.
       destructiveHint: false, // Starts a read-only check job; does not delete the monitor or external sites.
     },
     description: `
-Trigger a monitor check immediately, outside its normal schedule. Returns the queued check.
-This starts network requests against the monitor's configured targets.
+Trigger a monitor check immediately, outside its normal schedule. Returns the JSON check record from the API.
 `,
     parameters: z.object({ id: z.string().describe('Monitor ID to run now.') }),
     execute: async (args: unknown, { session }): Promise<string> => {
@@ -420,7 +418,7 @@ This starts network requests against the monitor's configured targets.
       destructiveHint: false, // Read-only listing.
     },
     description: `
-List historical check runs for a monitor, with optional pagination and status filtering.
+List historical check runs for a monitor, with optional \`limit\`/\`offset\` and \`status\` filtering. Returns a JSON list of checks.
 `,
     parameters: z.object({
       id: z.string().describe('Monitor ID whose check history will be listed.'),
@@ -453,9 +451,9 @@ List historical check runs for a monitor, with optional pagination and status fi
       destructiveHint: false, // Read-only retrieval of diff snapshots and judgments.
     },
     description: `
-Get a single check with page-level diff results. Filter \`pageStatus\` to surface only the pages that changed (or were new, removed, etc.).
-Each page result includes its URL and status. Changed pages may include a markdown diff, structured JSON field changes, a current snapshot, and an optional goal-based judgment, depending on the monitor configuration.
-The result is paginated and may include a top-level \`next\` URL.
+Get a single check with page-level diff results. Filter \`pageStatus\` (\`same\` | \`new\` | \`changed\` | \`removed\` | \`error\`).
+Changed pages may include a markdown diff, structured JSON field changes, a current snapshot, and an optional goal-based judgment, depending on monitor configuration.
+Returns JSON check detail; may include a top-level \`next\` URL for page pagination.
 `,
     parameters: z.object({
       id: z.string().describe('Monitor ID that owns the check.'),

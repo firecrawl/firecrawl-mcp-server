@@ -1664,9 +1664,8 @@ server.addTool({
     destructiveHint: false, // Does not modify, delete, or write to external websites.
   },
   description: `
-Retrieve content from one URL and return it in the requested formats, including markdown, HTML, links, screenshots, summaries, branding data, or schema-constrained JSON.
-Use this tool when the user has identified a specific page. For targeted fields, request JSON with \`jsonOptions\`; for readable page content, request markdown; for a focused answer from a long page, request query output.
-The tool retrieves page content and does not submit forms or modify the target website.
+Retrieve content from a URL in the requested \`formats\`, such as markdown, \`json\` with a schema, summary, or screenshot.
+Use for a known page URL. Returns each requested format plus page metadata.
 ${
   SAFE_MODE
     ? 'Interactive browser actions are unavailable on this hosted surface.'
@@ -1719,7 +1718,7 @@ server.addTool({
   },
   description: `
 Discover URLs on a website and return them as a list without retrieving each page's content.
-Use this tool when the user wants a site's URL inventory or needs to locate a page within a site. The optional \`search\` argument filters discovered URLs by topic.
+Use for a site's URL inventory or to locate a page within a site; optional \`search\` filters discovered URLs by topic. Returns a URL list with optional title and description per link.
 `,
   parameters: z.object({
     url: z.string().url().describe('Website URL to map.'),
@@ -1771,9 +1770,9 @@ server.addTool({
     destructiveHint: false, // Query-only; no destructive side effects on external entities.
   },
   description: `
-Search web, news, and image indexes and return ranked results for a query.
-Use this tool when the user asks to find information across sites or does not already have a specific URL. Domain filters, source types, categories, location, and time filters can narrow the results.
-When \`scrapeOptions\` is supplied, results may also include retrieved page content. The response includes a search \`id\` and credit usage when provided by the API.
+Search web, news, image, and specialized indexes and return ranked results for a query.
+Optional filters: domains, sources, categories, location, time. Optional \`highlights\` for query-relevant excerpts (omit for API default; \`false\` for original snippets). Optional \`scrapeOptions\` for retrieved page content.
+Returns a search \`id\` and credit usage when provided.
 `,
   parameters: z
     .object({
@@ -2059,9 +2058,9 @@ if (!SEARCH_FEEDBACK_DISABLED) {
       destructiveHint: false, // Additive only; records feedback and may refund credits, does not delete data.
     },
     description: `
-Submit the user's quality feedback about a previous \`firecrawl_search\` result.
-This creates a private feedback record and may change the account's credit balance, so use it only when the user explicitly asks to submit feedback. Pass the search response's \`id\`, a rating, and details that reflect the user's assessment.
-Feedback is accepted for a limited time after the search and is idempotent per search ID. A 4xx response is terminal and should not be retried.
+Submit quality feedback about a previous \`firecrawl_search\` result. This creates a private feedback record, so use it only when the user explicitly asks to submit feedback.
+Pass \`searchId\` (the search response's top-level \`id\`), a rating, and concise assessment details. The first accepted feedback for a search id refunds 1 credit (a search costs 2); later submissions for the same id are idempotent and no additional credits are refunded.
+Feedback is accepted for roughly two minutes after the search. When the response sets \`dailyCapReached\`, stop requesting refunds for the rest of the UTC day. A 4xx response is terminal and should not be retried.
 `,
     parameters: z.object({
       searchId: z
@@ -2204,8 +2203,8 @@ if (!ENDPOINT_FEEDBACK_DISABLED) {
       destructiveHint: false, // Additive only; submits ratings and notes, does not delete jobs or external content.
     },
     description: `
-Submit the user's quality feedback for a completed search, scrape, parse, or map job.
-This creates a private feedback record and may change the account's credit balance, so use it only when the user explicitly asks to submit feedback. Include only concise details supplied or confirmed by the user; do not include full page contents, credentials, or unrelated personal data.
+Submit quality feedback for a completed search, scrape, parse, or map job. This creates a private feedback record, so use it only when the user explicitly asks to submit feedback.
+Include only concise confirmed details; do not include full page contents, credentials, or unrelated personal data. Returns \`creditsRefunded\` and may include daily-cap fields.
 `,
     parameters: z.object({
       endpoint: z
@@ -2335,8 +2334,8 @@ server.addTool({
     destructiveHint: false, // Reads pages from target sites; does not delete or alter external websites.
   },
   description: `
-Start a crawl at one URL, retrieve content from matching linked pages, wait for the crawl to finish, and return the final status and collected data.
-Use this tool when the user requests content from multiple related pages on a site. Scope and size controls such as \`includePaths\`, \`excludePaths\`, \`maxDiscoveryDepth\`, and \`limit\` determine which pages are processed and how much data is returned.
+Start a crawl at a URL, retrieve content from matching linked pages, wait for the crawl to finish, and return the final status and collected data.
+Use for multiple related pages on a site. Scope with \`includePaths\`, \`excludePaths\`, \`maxDiscoveryDepth\`, and \`limit\`. Returns crawl \`id\`, status, and collected page data; responses can be large, so keep \`limit\` tight.
  ${
    SAFE_MODE
     ? 'Webhooks and interactive browser actions are unavailable on this hosted surface.'
@@ -2469,7 +2468,7 @@ server.addTool({
     destructiveHint: false, // Status lookup only; no deletes or updates.
   },
   description: `
-Retrieve the status, progress, and available results of an existing crawl job by its ID.
+Retrieve status, progress, and available results for an existing crawl job by its \`id\`.
 `,
   parameters: z.object({
     id: z.string().describe('Crawl job ID returned by firecrawl_crawl or the API.'),
@@ -2495,7 +2494,7 @@ server.addTool({
   },
   description: `
 Extract structured data from one or more specified web pages according to a prompt or JSON Schema.
-Use this tool when the user provides URLs and requests a consistent data structure across those pages. Optional link, subdomain, and web-search settings can broaden the sources used for extraction.
+Use when URLs are known and a consistent data structure is needed across those pages. Optional link, subdomain, and web-search settings can broaden the sources used for extraction. Returns an extraction result whose \`data\` matches the prompt or schema.
 `,
   parameters: z.object({
     urls: z.array(z.string().url()).min(1).describe('Web pages to process.'),
@@ -2549,9 +2548,9 @@ server.addTool({
     destructiveHint: false, // Gathers information only; does not delete external data or user resources.
   },
   description: `
-Start an asynchronous web-research job that can search, navigate pages, and return free-form or schema-constrained data for a user-supplied research task.
-Use this tool for multi-source research where the relevant pages are not known in advance, or when the user explicitly requests autonomous web research. Optional URLs constrain the starting sources.
-The response contains a job ID. \`firecrawl_agent_status\` retrieves its progress and result.
+Start an asynchronous web-research job that can search, navigate pages, and return free-form or schema-constrained data for a research task.
+Use for multi-source research where relevant pages are not known in advance, or when autonomous web research is explicitly requested. Optional URLs constrain the starting sources.
+The response contains a job \`id\`; \`firecrawl_agent_status\` retrieves status and result.
 `,
   parameters: z.object({
     prompt: z
@@ -2597,8 +2596,8 @@ server.addTool({
     destructiveHint: false, // Read-only status check.
   },
   description: `
-Retrieve the status, progress, and available result of an existing web-research job by its ID.
-Processing jobs have not finished; completed jobs include results; failed jobs include failure information.
+Retrieve the status and available result of a web-research job by its \`id\`.
+Status is \`processing\`, \`completed\`, or \`failed\`. Completed jobs include results; failed jobs include failure information.
 `,
   parameters: z.object({
     id: z.string().describe('Agent job ID returned by firecrawl_agent.'),
@@ -2625,9 +2624,9 @@ server.addTool({
     destructiveHint: true, // Interactions can submit forms or otherwise change state on external sites.
   },
   description: `
-Run browser interactions on a user-specified page or an existing scrape session.
-This tool can click controls, enter text, navigate, or execute supplied code, which may cause external side effects such as form submission. Use it only when those interactions are part of the user's request, and do not perform purchases, account changes, messages, or other consequential actions without the user's confirmation.
-Provide exactly one of \`url\` or \`scrapeId\`, and provide \`prompt\` or \`code\`. The result includes execution output and the active scrape session ID.
+Run browser interactions in a live session: click controls, enter text, navigate, or execute supplied code.
+Runs against the live site, so external side effects such as form submission persist after the session ends.
+Provide exactly one of \`url\` or \`scrapeId\`, and at least one of \`prompt\` or \`code\`. Returns execution output (and live view URLs when present); when started from \`url\`, also returns \`scrapeId\` for follow-up or stop.
 `,
   parameters: z
     .object({
@@ -2786,9 +2785,9 @@ server.addTool({
     destructiveHint: false, // Read-only parsing; no deletion or writes to the source file.
   },
   description: `
-Parse one local HTML, PDF, Word, OpenDocument, RTF, or Excel file and return the requested text or structured formats.
-On a local server, \`filePath\` is read directly. On the hosted server, the first call with \`filePath\` returns a short-lived upload URL and a local upload command; after that upload, a second call with \`uploadRef\` parses the file. Hosted calls must provide exactly one of \`filePath\` and \`uploadRef\`.
-The hosted upload command sends the selected local file to Firecrawl for processing. \`zeroDataRetention\` requests processing without retaining document content after completion.
+Parse a local HTML, PDF, Word, OpenDocument, RTF, or Excel file into the requested formats (\`markdown\`, \`html\`, \`rawHtml\`, \`links\`, \`summary\`, \`json\`, or \`query\`).
+Local MCP reads \`filePath\` directly; hosted MCP returns upload instructions for \`filePath\`, then parses via \`uploadRef\`. Hosted calls require exactly one of \`filePath\` or \`uploadRef\`.
+Returns the selected formats, or upload instructions on the first hosted call.
 `,
   parameters: parseParamsSchema,
   execute: async (args: unknown, { session, log }): Promise<string> => {
@@ -2883,8 +2882,8 @@ function registerMarketplaceSearchTool(
     },
     description: `
 Search web, news, image, and specialized indexes and return ranked results for a query.
-Domain filters, source types, categories, location, and time filters can narrow the results. This search-only surface does not retrieve full page content.
-The response includes a search \`id\` and credit usage when provided by the API.
+Optional filters: domains, sources, categories, location, time. Optional \`highlights\` for query-relevant excerpts (omit for API default; \`false\` for original snippets). Does not retrieve full page content.
+Returns a search \`id\` and credit usage when provided.
 `,
     parameters: z
       .object({ ...searchToolBaseFields })
