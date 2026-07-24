@@ -2633,10 +2633,13 @@ Provide exactly one of \`url\` or \`scrapeId\`, and at least one of \`prompt\` o
         .min(1)
         .optional()
         .describe('Existing scrape session ID to interact with. Mutually exclusive with url.'),
-      url: z
-        .url()
-        .optional()
-        .describe('Page URL for a new interaction session. Mutually exclusive with scrapeId.'),
+      url: z.preprocess((value) => {
+        if (typeof value !== 'string') return value;
+        const trimmed = value.trim();
+        return trimmed === '' ? undefined : trimmed;
+      }, z.url().optional()).describe(
+        'Page URL for a new interaction session. Mutually exclusive with scrapeId.'
+      ),
       prompt: z
         .string()
         .trim()

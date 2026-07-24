@@ -109,6 +109,21 @@ function splitPages(page?: string, pages?: string[]): string[] {
     .filter(Boolean);
 }
 
+/** Models often omit unused optionals as "". Treat blanks as unset. */
+function blankToUndefined(value: unknown): unknown {
+  if (typeof value === 'string' && value.trim() === '') return undefined;
+  return value;
+}
+
+const optionalUrl = z.preprocess(blankToUndefined, z.url().optional());
+const optionalEmail = z.preprocess(blankToUndefined, z.email().optional());
+const optionalUrlList = z.preprocess((value) => {
+  if (!Array.isArray(value)) return value;
+  return value.filter(
+    (item) => !(typeof item === 'string' && item.trim() === '')
+  );
+}, z.array(z.url()).optional());
+
 function buildMonitorCreateBody(
   args: Record<string, unknown>
 ): Record<string, unknown> {
@@ -233,8 +248,8 @@ Use \`body\` for custom schedules, crawl targets, change tracking, and retention
         .record(z.string(), z.any())
         .optional()
         .describe('Advanced monitor request body. Do not combine with simple fields.'),
-      page: z.url().optional().describe('Single page URL to monitor.'),
-      pages: z.array(z.url()).optional().describe('Page URLs to monitor.'),
+      page: optionalUrl.describe('Single page URL to monitor.'),
+      pages: optionalUrlList.describe('Page URLs to monitor.'),
       queries: z
         .array(z.string())
         .min(1)
@@ -258,18 +273,16 @@ Use \`body\` for custom schedules, crawl targets, change tracking, and retention
         .optional()
         .describe('Natural-language schedule. Defaults to every 30 minutes.'),
       timezone: z.string().optional().describe('Timezone used to interpret the schedule.'),
-      email: z
-        .email()
-        .optional()
-        .describe('Email address that receives monitor summaries.'),
+      email: optionalEmail.describe(
+        'Email address that receives monitor summaries.'
+      ),
       includeDiffs: z
         .boolean()
         .optional()
         .describe('Include content diffs in configured notifications.'),
-      webhookUrl: z
-        .url()
-        .optional()
-        .describe('External URL that receives monitor events.'),
+      webhookUrl: optionalUrl.describe(
+        'External URL that receives monitor events.'
+      ),
     }),
     execute: async (args: unknown, { session, log }): Promise<string> => {
       const body = buildMonitorCreateBody(args as Record<string, unknown>);
