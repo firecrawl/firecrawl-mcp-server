@@ -199,8 +199,12 @@ async function startHostedServer(t, extraEnv = {}) {
     ...extraEnv,
   });
   let stderr = '';
+  let stdout = '';
   child.stderr.on('data', (chunk) => {
     stderr += chunk;
+  });
+  child.stdout.on('data', (chunk) => {
+    stdout += chunk;
   });
   t.after(() => stopChild(child));
   await waitForHealth(searchPort, child);
@@ -210,6 +214,40 @@ async function startHostedServer(t, extraEnv = {}) {
     searchPort,
     issuerUrl: extraEnv.FIRECRAWL_OAUTH_ISSUER ?? defaultBackend.url,
     getStderr: () => stderr,
+    getStdout: () => stdout,
+  };
+}
+
+// The dedicated search deployment runs the search profile as its primary
+// listener on :3000. Unlike the live companion, it deliberately has no
+// KEYLESS_PROXY_SECRET and rejects every API-key transport.
+async function startPrimarySearchServer(t, extraEnv = {}) {
+  const defaultBackend = await startFakeBackend({ introspectionAud: SEARCH_RESOURCE });
+  t.after(() => defaultBackend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    HTTP_STREAMABLE_SERVER: 'true',
+    FASTMCP_ENDPOINT: SEARCH_ENDPOINT,
+    FIRECRAWL_API_URL: defaultBackend.url,
+    FIRECRAWL_MCP_SEARCH_RESOURCE_URL: SEARCH_RESOURCE,
+    FIRECRAWL_MCP_SEARCH_OAUTH_ONLY: 'true',
+    FIRECRAWL_OAUTH_ISSUER: defaultBackend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    PORT: String(port),
+    ...extraEnv,
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+  return {
+    child,
+    getStderr: () => stderr,
+    issuerUrl: extraEnv.FIRECRAWL_OAUTH_ISSUER ?? defaultBackend.url,
+    port,
   };
 }
 
@@ -225,7 +263,7 @@ function jsonRpc(port, endpoint, { id, method, params = {}, headers = {} }) {
   });
 }
 
-async function listTools(port, endpoint, headers) {
+async function listToolDefinitions(port, endpoint, headers) {
   const res = await jsonRpc(port, endpoint, {
     id: 1,
     method: 'tools/list',
@@ -233,7 +271,12 @@ async function listTools(port, endpoint, headers) {
   });
   assert.equal(res.status, 200, `tools/list returned ${res.status}`);
   const message = parseSseJson(await res.text());
-  return message.result.tools.map((tool) => tool.name);
+  return message.result.tools;
+}
+
+async function listTools(port, endpoint, headers) {
+  const tools = await listToolDefinitions(port, endpoint, headers);
+  return tools.map((tool) => tool.name);
 }
 
 test('search surface lists exactly the six read-only tools', async (t) => {
@@ -512,4 +555,236 @@ test('full surface still exposes its complete tool set alongside the search surf
     resource_name: 'Firecrawl MCP',
     scopes_supported: ['firecrawl:global'],
   });
+});
+
+test('primary search profile is OAuth-only, six-tool frozen, and ready without keyless configuration', async (t) => {
+  const { port, issuerUrl } = await startPrimarySearchServer(t);
+
+  const ready = await fetch(`http://127.0.0.1:${port}/ready`);
+  assert.equal(ready.status, 200);
+  assert.deepEqual(await ready.json(), { ok: true });
+
+  const anonymous = await jsonRpc(port, SEARCH_ENDPOINT, {
+    id: 10,
+    method: 'tools/list',
+  });
+  assert.equal(anonymous.status, 401);
+  assert.match(
+    anonymous.headers.get('www-authenticate') ?? '',
+    /oauth-protected-resource\/v2\/mcp-search/
+  );
+
+  for (const headers of [
+    { authorization: 'Bearer fc-primary-search-api-key' },
+    { 'x-api-key': 'fc-primary-search-api-key' },
+    { 'x-firecrawl-api-key': 'fc-primary-search-api-key' },
+  ]) {
+    const response = await jsonRpc(port, SEARCH_ENDPOINT, {
+      id: JSON.stringify(headers),
+      method: 'tools/list',
+      headers,
+    });
+    assert.equal(response.status, 401, JSON.stringify(headers));
+    assert.match(response.headers.get('www-authenticate') ?? '', /Bearer /);
+  }
+
+  const prm = await fetch(
+    `http://127.0.0.1:${port}/.well-known/oauth-protected-resource${SEARCH_ENDPOINT}`
+  );
+  assert.equal(prm.status, 200);
+  assert.deepEqual(await prm.json(), {
+    authorization_servers: [issuerUrl],
+    bearer_methods_supported: ['header'],
+    resource: SEARCH_RESOURCE,
+    resource_name: 'Firecrawl Search',
+    scopes_supported: ['firecrawl:global'],
+  });
+
+  const names = await listTools(port, SEARCH_ENDPOINT, {
+    authorization: 'Bearer fco_primary_search_resource_token',
+  });
+  assert.deepEqual([...names].sort(), [...SEARCH_TOOLS].sort());
+});
+
+test('primary search readiness requires the exact canonical resource origin', async (t) => {
+  const { port } = await startPrimarySearchServer(t, {
+    FIRECRAWL_MCP_SEARCH_RESOURCE_URL: `https://example.invalid${SEARCH_ENDPOINT}`,
+  });
+
+  const ready = await fetch(`http://127.0.0.1:${port}/ready`);
+  assert.equal(ready.status, 503);
+  assert.deepEqual(await ready.json(), {
+    ok: false,
+    missing: ['FIRECRAWL_MCP_SEARCH_RESOURCE_URL (endpoint mismatch)'],
+  });
+});
+
+test('primary search profile uses the strict marketplace search tool, not the full search variant', async (t) => {
+  const { port } = await startPrimarySearchServer(t);
+  const headers = { authorization: 'Bearer fco_primary_strict_search' };
+  const tools = await listToolDefinitions(port, SEARCH_ENDPOINT, headers);
+  const search = tools.find((tool) => tool.name === 'firecrawl_search');
+  assert.ok(search, 'primary profile must register firecrawl_search');
+  assert.doesNotMatch(JSON.stringify(search.inputSchema), /scrapeOptions/);
+  assert.doesNotMatch(search.description ?? '', /search_feedback|refund/i);
+
+  const response = await jsonRpc(port, SEARCH_ENDPOINT, {
+    id: 13,
+    method: 'tools/call',
+    params: {
+      arguments: {
+        query: 'strict marketplace search',
+        scrapeOptions: { formats: ['markdown'] },
+      },
+      name: 'firecrawl_search',
+    },
+    headers,
+  });
+  assert.equal(response.status, 200);
+  const message = parseSseJson(await response.text());
+  assert.equal(
+    Boolean(message.error) || message.result?.isError === true,
+    true,
+    JSON.stringify(message)
+  );
+});
+
+test('primary search profile fails closed unless the canonical OAuth-only flag is enabled', async (t) => {
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    HTTP_STREAMABLE_SERVER: 'true',
+    FASTMCP_ENDPOINT: SEARCH_ENDPOINT,
+    FIRECRAWL_API_URL: 'http://127.0.0.1:9',
+    FIRECRAWL_MCP_SEARCH_RESOURCE_URL: SEARCH_RESOURCE,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    PORT: String(port),
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  await Promise.race([
+    new Promise((resolve) => child.once('exit', resolve)),
+    delay(2_000).then(() => assert.fail('primary search profile unexpectedly started')),
+  ]);
+  assert.notEqual(child.exitCode, 0);
+  assert.match(stderr, /FIRECRAWL_MCP_SEARCH_OAUTH_ONLY=true/);
+});
+
+test('primary search profile rejects legacy /v2/mcp audience and requires the delegated signing secret', async (t) => {
+  const legacyBackend = await startFakeBackend({
+    introspectionAud: 'https://mcp.firecrawl.dev/v2/mcp',
+  });
+  t.after(() => legacyBackend.close());
+  const { port } = await startPrimarySearchServer(t, {
+    FIRECRAWL_API_URL: legacyBackend.url,
+    FIRECRAWL_OAUTH_ISSUER: legacyBackend.url,
+  });
+
+  const wrongAudience = await jsonRpc(port, SEARCH_ENDPOINT, {
+    id: 11,
+    method: 'tools/list',
+    headers: { authorization: 'Bearer fco_legacy_audience' },
+  });
+  assert.equal(wrongAudience.status, 401);
+
+  // A separate process proves readiness is profile-specific: search needs the
+  // fcmcp_ signer but intentionally does not require KEYLESS_PROXY_SECRET.
+  const unavailablePort = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    HTTP_STREAMABLE_SERVER: 'true',
+    FASTMCP_ENDPOINT: SEARCH_ENDPOINT,
+    FIRECRAWL_API_URL: legacyBackend.url,
+    FIRECRAWL_MCP_SEARCH_RESOURCE_URL: SEARCH_RESOURCE,
+    FIRECRAWL_MCP_SEARCH_OAUTH_ONLY: 'true',
+    FIRECRAWL_OAUTH_ISSUER: legacyBackend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    MCP_DELEGATED_CREDENTIAL_SECRET: '',
+    PORT: String(unavailablePort),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(unavailablePort, child);
+  const ready = await fetch(`http://127.0.0.1:${unavailablePort}/ready`);
+  assert.equal(ready.status, 503);
+  assert.deepEqual(await ready.json(), {
+    missing: ['MCP_DELEGATED_CREDENTIAL_SECRET'],
+    ok: false,
+  });
+});
+
+test('companion stays API-key compatible by default and only becomes OAuth-only behind its explicit flag', async (t) => {
+  const backend = await startFakeBackend({ introspectionAud: SEARCH_RESOURCE });
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_MCP_SEARCH_OAUTH_ONLY: 'true',
+  });
+
+  const apiKey = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 12,
+    method: 'tools/list',
+    headers: { authorization: 'Bearer fc-companion-api-key' },
+  });
+  assert.equal(apiKey.status, 401);
+
+  const names = await listTools(searchPort, SEARCH_ENDPOINT, {
+    authorization: 'Bearer fco_companion_search_resource_token',
+  });
+  assert.deepEqual([...names].sort(), [...SEARCH_TOOLS].sort());
+});
+
+test('companion emits sanitized auth-mode telemetry without credential material', async (t) => {
+  const { searchPort, getStdout } = await startHostedServer(t);
+  await listTools(searchPort, SEARCH_ENDPOINT, {
+    authorization: 'Bearer fc-telemetry-must-not-appear',
+  });
+  await delay(25);
+  const logs = getStdout();
+  const eventLine = logs
+    .split(/\r?\n/)
+    .find((line) => line.startsWith('[MCP_SEARCH_AUTH] '));
+  assert.ok(eventLine, logs);
+  const event = JSON.parse(eventLine.slice('[MCP_SEARCH_AUTH] '.length));
+  assert.deepEqual(event, {
+    auth_mode: 'api-key',
+    outcome: 'accepted',
+    profile: 'companion',
+    event_id: event.event_id,
+    route: SEARCH_ENDPOINT,
+  });
+  assert.match(
+    event.event_id,
+    /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i
+  );
+  assert.doesNotMatch(logs, /fc-telemetry-must-not-appear/);
+  assert.doesNotMatch(logs, /authorization/i);
+});
+
+test('companion telemetry follows credential precedence and rejects invalid credentials', async (t) => {
+  const { searchPort, getStdout } = await startHostedServer(t);
+
+  await listTools(searchPort, SEARCH_ENDPOINT, {
+    authorization: 'Bearer fco_secondary-credential',
+    'x-api-key': 'fc-primary-credential',
+  });
+  await listTools(searchPort, SEARCH_ENDPOINT, {
+    authorization: 'Bearer fc-invalid-credential',
+  });
+  await delay(25);
+
+  const events = getStdout()
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('[MCP_SEARCH_AUTH] '))
+    .map((line) => JSON.parse(line.slice('[MCP_SEARCH_AUTH] '.length)));
+  assert.deepEqual(
+    events.map(({ auth_mode, outcome }) => ({ auth_mode, outcome })),
+    [
+      { auth_mode: 'api-key', outcome: 'accepted' },
+      { auth_mode: 'api-key', outcome: 'rejected' },
+    ]
+  );
+  assert.doesNotMatch(getStdout(), /fc-primary-credential|fco_secondary-credential/);
 });

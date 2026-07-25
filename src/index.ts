@@ -73,6 +73,12 @@ type ServerProfile = {
   toolAllowlist?: Set<string>;
   /** Allow the keyless free-tier fallback (no credential required). */
   allowKeyless: boolean;
+  /** Whether ordinary Firecrawl API keys are accepted for this identity. */
+  acceptApiKeys: boolean;
+  /** Require a managed hosted-MCP OAuth grant, never a legacy/general token. */
+  requireManagedOAuth?: boolean;
+  /** Whether this process's primary listener owns this profile. */
+  primary?: boolean;
   /** Accept tokens minted for the legacy /v2/mcp resource during migration. */
   acceptLegacyAudience?: boolean;
 };
@@ -114,8 +120,13 @@ function isFirecrawlApiKey(token: string): boolean {
 }
 
 function requestShouldReceiveOAuthChallenge(
-  request: MCPAuthRequest | undefined
+  request: MCPAuthRequest | undefined,
+  profile: ServerProfile
 ): boolean {
+  // OAuth-only profiles must challenge API-key and key-in-path attempts too;
+  // otherwise FastMCP would return a generic error instead of the resource's
+  // reconnectable OAuth challenge.
+  if (!profile.acceptApiKeys) return true;
   if (!request?.headers) return true;
   const headerApiKey = normalizeHeader(
     request.headers['x-firecrawl-api-key'] ?? request.headers['x-api-key']
@@ -162,11 +173,17 @@ function getMcpResourceUrl(): string {
   );
 }
 
-function getPrimaryEndpoint(): '/v2/mcp' | '/v2/mcp-oauth' {
+function getPrimaryEndpoint(): '/v2/mcp' | '/v2/mcp-oauth' | '/v2/mcp-search' {
   const endpoint = normalizeHeader(process.env.FASTMCP_ENDPOINT) ?? '/v2/mcp';
-  if (endpoint === '/v2/mcp' || endpoint === '/v2/mcp-oauth') return endpoint;
+  if (
+    endpoint === '/v2/mcp' ||
+    endpoint === '/v2/mcp-oauth' ||
+    endpoint === '/v2/mcp-search'
+  ) {
+    return endpoint;
+  }
   throw new Error(
-    `Unsupported FASTMCP_ENDPOINT: ${endpoint}. Expected /v2/mcp or /v2/mcp-oauth.`
+    `Unsupported FASTMCP_ENDPOINT: ${endpoint}. Expected /v2/mcp, /v2/mcp-oauth, or /v2/mcp-search.`
   );
 }
 
@@ -361,6 +378,11 @@ async function resolveCredentialFromHeaders(
   );
   const token = headerApiKey ?? bearer;
   if (!token) return undefined;
+  if (!profile.acceptApiKeys && !isFirecrawlOAuthAccessToken(token)) {
+    throw new Error(
+      `OAuth access token required for the Firecrawl MCP resource ${profile.endpoint}`
+    );
+  }
   if (!isFirecrawlOAuthAccessToken(token) && !isFirecrawlApiKey(token)) {
     return { invalid: true };
   }
@@ -396,6 +418,12 @@ async function resolveCredentialFromHeaders(
       : profile.resourceUrl;
   if (!audienceMatchesResource(data.aud, expectedAudience)) {
     throw new Error('OAuth token audience does not match this resource');
+  }
+  if (
+    profile.requireManagedOAuth &&
+    data.credential_purpose !== 'hosted_mcp_oauth'
+  ) {
+    throw new Error('OAuth token is not a managed Firecrawl MCP credential');
   }
   if (data.credential_purpose === 'hosted_mcp_oauth') {
     requireDelegatedCredentialSigning();
@@ -433,6 +461,11 @@ async function authenticateRequest(
   if (process.env.CLOUD_SERVICE === 'true') {
     if (!headerCred && !managedCred) {
       if (resolved?.invalid) {
+        if (!profile.acceptApiKeys) {
+          throw new Error(
+            `OAuth access token required for the Firecrawl MCP resource ${profile.endpoint}`
+          );
+        }
         return { authType: 'none', credentialError: 'CREDENTIAL_INVALID' };
       }
       if (profile.allowKeyless) {
@@ -488,6 +521,59 @@ async function authenticateRequest(
   return managedCred ? setManagedOAuthApiKey(session, managedCred) : session;
 }
 
+type SearchCompanionAuthMode = 'oauth' | 'api-key' | 'none';
+
+function searchCompanionAuthMode(
+  request?: MCPAuthRequest,
+  session?: SessionData
+): SearchCompanionAuthMode {
+  if (session?.authType === 'oauth') return 'oauth';
+  if (session?.authType === 'api-key') return 'api-key';
+  // Mirror resolveCredentialFromHeaders precedence: explicit API-key headers
+  // win over Authorization when both are present.
+  const headerApiKey = normalizeHeader(
+    request?.headers?.['x-firecrawl-api-key'] ?? request?.headers?.['x-api-key']
+  );
+  if (headerApiKey) return 'api-key';
+  const bearer = request?.headers ? extractBearerToken(request.headers) : undefined;
+  if (bearer?.startsWith('fco_')) return 'oauth';
+  if (bearer) return 'api-key';
+  return 'none';
+}
+
+/**
+ * Additive, intentionally low-cardinality companion traffic telemetry. This
+ * is the only reliable way to establish whether the live companion is still
+ * serving API-key consumers before its explicit OAuth-only cutover. Do not add
+ * identifiers, credentials, request URLs, user agents, or hashes here.
+ */
+function emitSearchCompanionAuthTelemetry(
+  profile: ServerProfile,
+  request: MCPAuthRequest | undefined,
+  outcome: 'accepted' | 'rejected',
+  session?: SessionData
+): void {
+  if (
+    process.env.CLOUD_SERVICE !== 'true' ||
+    profile.id !== 'search' ||
+    profile.primary === true
+  ) {
+    return;
+  }
+  console.log(
+    '[MCP_SEARCH_AUTH]',
+    JSON.stringify({
+      auth_mode: searchCompanionAuthMode(request, session),
+      outcome,
+      profile: 'companion',
+      // Unique only to this telemetry record; it is not a cross-service
+      // correlation ID and does not accept client-controlled identifiers.
+      event_id: randomUUID(),
+      route: DEFAULT_MCP_SEARCH_ENDPOINT,
+    })
+  );
+}
+
 /**
  * Builds the `authenticate` hook for one profile. FastMCP runs it on every
  * request (including `tools/list`), so a rejection here yields a 401 with the
@@ -501,28 +587,39 @@ function makeAuthenticate(profile: ServerProfile) {
       return request[authResultByRequest];
     }
 
-    const authResult = authenticateRequest(request, profile).catch((error) => {
-      if (error instanceof CredentialValidationUnavailableError) {
-        throw new Response(
-          JSON.stringify({
-            error: 'temporarily_unavailable',
-            error_description: error.message,
-          }),
-          {
-            headers: { 'Content-Type': 'application/json' },
-            status: 503,
-          }
+    const authResult = authenticateRequest(request, profile)
+      .then((session) => {
+        emitSearchCompanionAuthTelemetry(
+          profile,
+          request,
+          session.credentialError ? 'rejected' : 'accepted',
+          session
         );
-      }
-      const shouldChallenge = requestShouldReceiveOAuthChallenge(request);
-      const oauthChallenge = shouldChallenge
-        ? createOAuthChallengeResponse(error, profile)
-        : undefined;
-      if (oauthChallenge) {
-        throw oauthChallenge;
-      }
-      throw error;
-    });
+        return session;
+      })
+      .catch((error) => {
+        emitSearchCompanionAuthTelemetry(profile, request, 'rejected');
+        if (error instanceof CredentialValidationUnavailableError) {
+          throw new Response(
+            JSON.stringify({
+              error: 'temporarily_unavailable',
+              error_description: error.message,
+            }),
+            {
+              headers: { 'Content-Type': 'application/json' },
+              status: 503,
+            }
+          );
+        }
+        const shouldChallenge = requestShouldReceiveOAuthChallenge(request, profile);
+        const oauthChallenge = shouldChallenge
+          ? createOAuthChallengeResponse(error, profile)
+          : undefined;
+        if (oauthChallenge) {
+          throw oauthChallenge;
+        }
+        throw error;
+      });
 
     if (request) {
       request[authResultByRequest] = authResult;
@@ -692,22 +789,48 @@ function makeFullProfile(): ServerProfile {
     endpoint: account ? '/v2/mcp-oauth' : undefined,
     port: Number(process.env.PORT || 3000),
     allowKeyless: !account,
+    acceptApiKeys: true,
     acceptLegacyAudience:
       account && process.env.MCP_OAUTH_ACCEPT_LEGACY_V2_MCP_AUD !== 'false',
+    primary: true,
   };
 }
 
-function makeSearchProfile(): ServerProfile {
+function searchOAuthOnly(): boolean {
+  return process.env.FIRECRAWL_MCP_SEARCH_OAUTH_ONLY === 'true';
+}
+
+function makeSearchProfile({ primary = false }: { primary?: boolean } = {}): ServerProfile {
+  const oauthOnly = searchOAuthOnly();
+  if (primary && !oauthOnly) {
+    throw new Error(
+      'FASTMCP_ENDPOINT=/v2/mcp-search requires FIRECRAWL_MCP_SEARCH_OAUTH_ONLY=true'
+    );
+  }
   return {
     id: 'search',
     resourceName: 'Firecrawl Search',
     instructions: SEARCH_PROFILE_INSTRUCTIONS,
     resourceUrl: getSearchMcpResourceUrl(),
-    endpoint: getSearchMcpEndpoint(),
-    port: Number(process.env.FIRECRAWL_MCP_SEARCH_PORT || 3001),
+    endpoint: primary ? DEFAULT_MCP_SEARCH_ENDPOINT : getSearchMcpEndpoint(),
+    port: primary
+      ? Number(process.env.PORT || 3000)
+      : Number(process.env.FIRECRAWL_MCP_SEARCH_PORT || 3001),
     toolAllowlist: SEARCH_PROFILE_TOOLS,
     allowKeyless: false,
+    // This is deliberately default-false because the image auto-deploys: the
+    // existing in-process companion remains API-key compatible unless its
+    // deployment explicitly enables the same profile flag used by primary.
+    acceptApiKeys: !oauthOnly,
+    requireManagedOAuth: oauthOnly,
+    primary,
   };
+}
+
+function makePrimaryProfile(): ServerProfile {
+  return getPrimaryEndpoint() === '/v2/mcp-search'
+    ? makeSearchProfile({ primary: true })
+    : makeFullProfile();
 }
 
 function createServer(profile: ServerProfile): FastMCP<SessionData> {
@@ -738,7 +861,7 @@ function createServer(profile: ServerProfile): FastMCP<SessionData> {
   });
 }
 
-const primaryProfile = makeFullProfile();
+const primaryProfile = makePrimaryProfile();
 const server = createServer(primaryProfile);
 type RegisteredTool = Parameters<typeof server.addTool>[0];
 
@@ -871,7 +994,24 @@ function guardHostedTool(
 
 const addTool = server.addTool.bind(server);
 server.addTool = ((tool: RegisteredTool) => {
-  addTool(guardHostedTool(tool, { logActions: true }));
+  // A dedicated search process registers through the same module-level tool
+  // setup as full MCP. Filter at the server boundary so an accidental future
+  // registration cannot widen its frozen public contract.
+  if (
+    primaryProfile.toolAllowlist &&
+    !primaryProfile.toolAllowlist.has(tool.name)
+  ) {
+    return;
+  }
+  // The module registers the full `firecrawl_search` before startup. A primary
+  // search profile must instead receive the strict marketplace variant below:
+  // it has no scrapeOptions and no instructions referring to the excluded
+  // feedback tool. Keep the name filter here so the full registration cannot
+  // leak into the frozen six-tool surface.
+  if (primaryProfile.id === 'search' && tool.name === 'firecrawl_search') {
+    return;
+  }
+  addTool(guardHostedTool(tool, { logActions: primaryProfile.id !== 'search' }));
 }) as typeof server.addTool;
 
 if (openAiAppsChallengeToken) {
@@ -886,20 +1026,37 @@ server.getApp().get('/ready', (context) => {
   if (process.env.CLOUD_SERVICE !== 'true') {
     return context.json({ ok: true }, 200);
   }
-  const missing = [
-    'FIRECRAWL_API_URL',
-    'FIRECRAWL_OAUTH_INTROSPECT_SECRET',
-    'FIRECRAWL_MCP_ACTION_LOG_SECRET',
-    'KEYLESS_PROXY_SECRET',
-    'MCP_DELEGATED_CREDENTIAL_SECRET',
-  ].filter((name) => !normalizeHeader(process.env[name]));
+  const searchPrimary = primaryProfile.id === 'search';
+  const required = searchPrimary
+    ? [
+        // A search primary only serves account OAuth. It must be able to
+        // introspect and sign the short-lived fcmcp_ credential, but it never
+        // uses the keyless eligibility proxy or action-log ingestion secret.
+        'FIRECRAWL_API_URL',
+        'FIRECRAWL_OAUTH_INTROSPECT_SECRET',
+        'MCP_DELEGATED_CREDENTIAL_SECRET',
+      ]
+    : [
+        'FIRECRAWL_API_URL',
+        'FIRECRAWL_OAUTH_INTROSPECT_SECRET',
+        'FIRECRAWL_MCP_ACTION_LOG_SECRET',
+        'KEYLESS_PROXY_SECRET',
+        'MCP_DELEGATED_CREDENTIAL_SECRET',
+      ];
+  const missing = required.filter((name) => !normalizeHeader(process.env[name]));
   const configuredEndpoint = getPrimaryEndpoint();
-  if (
-    withoutTrailingSlash(primaryProfile.resourceUrl).endsWith(
-      configuredEndpoint
-    ) === false
-  ) {
-    missing.push('FIRECRAWL_MCP_RESOURCE_URL (endpoint mismatch)');
+  const resourceMatchesEndpoint = searchPrimary
+    ? withoutTrailingSlash(primaryProfile.resourceUrl) ===
+      DEFAULT_MCP_SEARCH_RESOURCE_URL
+    : withoutTrailingSlash(primaryProfile.resourceUrl).endsWith(
+        configuredEndpoint
+      );
+  if (!resourceMatchesEndpoint) {
+    missing.push(
+      searchPrimary
+        ? 'FIRECRAWL_MCP_SEARCH_RESOURCE_URL (endpoint mismatch)'
+        : 'FIRECRAWL_MCP_RESOURCE_URL (endpoint mismatch)'
+    );
   }
   return missing.length
     ? context.json({ ok: false, missing }, 503)
@@ -3205,6 +3362,20 @@ if (
 
 registerMonitorTools(server);
 registerResearchTools(server, getClient);
+
+if (primaryProfile.id === 'search') {
+  // The strict marketplace search tool intentionally replaces the full
+  // surface's same-named registration above. Register through the original
+  // bound method so the name-level guard cannot suppress this replacement.
+  const primarySearchRegistrar: ToolRegistrar = {
+    addTool: ((tool: { name: string }) => {
+      if (primaryProfile.toolAllowlist?.has(tool.name)) {
+        addTool(guardHostedTool(tool as RegisteredTool, { logActions: false }));
+      }
+    }) as FastMCP<SessionData>['addTool'],
+  };
+  registerMarketplaceSearchTool(primarySearchRegistrar, getClient);
+}
 
 await server.start(args);
 

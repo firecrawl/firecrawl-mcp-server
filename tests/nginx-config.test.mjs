@@ -65,3 +65,19 @@ test('legacy MCP aliases stay bound to the full identity', () => {
     assert.doesNotMatch(body, /mcp-oauth/);
   }
 });
+
+test('search routes are rendered to a fixed upstream and readiness reaches Node', async () => {
+  assert.match(config, /proxy_pass http:\/\/__MCP_SEARCH_UPSTREAM__;/);
+  const entrypoint = await readFile(
+    new URL('../docker/entrypoint.sh', import.meta.url),
+    'utf8'
+  );
+  assert.match(entrypoint, /FASTMCP_ENDPOINT:-\/v2\/mcp/);
+  assert.match(entrypoint, /\[ "\$\{FASTMCP_ENDPOINT:-\/v2\/mcp\}" = "\/v2\/mcp-search" \]/);
+  assert.match(entrypoint, /SEARCH_UPSTREAM=app_search/);
+  assert.match(entrypoint, /SEARCH_UPSTREAM=app/);
+  assert.match(entrypoint, /s\/__MCP_SEARCH_UPSTREAM__\/\$\{SEARCH_UPSTREAM\}\/g/);
+
+  const ready = locationBody('location = /ready');
+  assert.match(ready, /proxy_pass http:\/\/app\/ready;/);
+});
