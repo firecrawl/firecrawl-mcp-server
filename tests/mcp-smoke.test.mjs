@@ -824,7 +824,6 @@ test('account endpoint challenges anonymous clients and accepts API keys', async
     FIRECRAWL_OAUTH_ISSUER: backend.url,
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
     HTTP_STREAMABLE_SERVER: 'true',
-    KEYLESS_PROXY_SECRET: 'delegation-secret',
     PORT: String(port),
   });
   t.after(() => stopChild(child));
@@ -896,7 +895,7 @@ test('account readiness requires the managed OAuth delegation secret', async (t)
   const ready = await fetch(`http://127.0.0.1:${port}/ready`);
   assert.equal(ready.status, 503);
   assert.deepEqual(await ready.json(), {
-    missing: ['KEYLESS_PROXY_SECRET', 'MCP_DELEGATED_CREDENTIAL_SECRET'],
+    missing: ['MCP_DELEGATED_CREDENTIAL_SECRET'],
     ok: false,
   });
 });
