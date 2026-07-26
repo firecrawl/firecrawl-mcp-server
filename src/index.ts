@@ -49,6 +49,8 @@ interface SessionData extends CredentialSession {
   oauthClientId?: string;
   resource?: string;
   requestId?: string;
+  /** An immutable, request-scoped subset selected through `?tools=`. */
+  selectedTools?: readonly string[];
   [key: string]: unknown;
 }
 
@@ -593,16 +595,18 @@ function makeAuthenticate(profile: ServerProfile) {
 
     const authResult = authenticateRequest(request, profile)
       .then((session) => {
+        const selectedSession = withSelectedTools(request, profile, session);
         emitSearchCompanionAuthTelemetry(
           profile,
           request,
-          session.credentialError ? 'rejected' : 'accepted',
-          session
+          selectedSession.credentialError ? 'rejected' : 'accepted',
+          selectedSession
         );
-        return session;
+        return selectedSession;
       })
       .catch((error) => {
         emitSearchCompanionAuthTelemetry(profile, request, 'rejected');
+        if (error instanceof Response) throw error;
         if (error instanceof CredentialValidationUnavailableError) {
           throw new Response(
             JSON.stringify({
@@ -877,6 +881,181 @@ const KEYLESS_TOOL_NAMES = new Set([
   'firecrawl_parse',
 ]);
 
+const CORE_V1_TOOL_NAMES = [
+  'firecrawl_scrape',
+  'firecrawl_search',
+  'firecrawl_parse',
+] as const;
+
+// A versioned preset is intentionally not derived from the live registry: a
+// future tool registration must not widen clients that explicitly select it.
+const FULL_V1_TOOL_NAMES = [
+  'firecrawl_scrape',
+  'firecrawl_map',
+  'firecrawl_search',
+  'firecrawl_search_feedback',
+  'firecrawl_feedback',
+  'firecrawl_crawl',
+  'firecrawl_check_crawl_status',
+  'firecrawl_extract',
+  'firecrawl_agent',
+  'firecrawl_agent_status',
+  'firecrawl_interact',
+  'firecrawl_interact_stop',
+  'firecrawl_parse',
+  'firecrawl_monitor_create',
+  'firecrawl_monitor_list',
+  'firecrawl_monitor_get',
+  'firecrawl_monitor_update',
+  'firecrawl_monitor_delete',
+  'firecrawl_monitor_run',
+  'firecrawl_monitor_checks',
+  'firecrawl_monitor_check',
+  'firecrawl_research_search_papers',
+  'firecrawl_research_inspect_paper',
+  'firecrawl_research_related_papers',
+  'firecrawl_research_read_paper',
+  'firecrawl_research_search_github',
+] as const;
+
+const TOOL_SELECTOR_LIMITS = {
+  maxSelectors: 64,
+  maxUtf8Bytes: 1024,
+} as const;
+
+const REGISTERED_TOOL_NAMES = new Set<string>();
+
+function selectorsEnabledFor(profile: ServerProfile): boolean {
+  return (
+    process.env.CLOUD_SERVICE === 'true' &&
+    profile.id === 'full' &&
+    profile.primary === true
+  );
+}
+
+function toolSelectorErrorResponse(
+  status: number,
+  code: number,
+  message: string,
+  data: Record<string, unknown>
+): Response {
+  return new Response(
+    JSON.stringify({ jsonrpc: '2.0', id: null, error: { code, message, data } }),
+    { headers: { 'content-type': 'application/json' }, status }
+  );
+}
+
+function invalidToolSelectorResponse(invalidSelectors: string[] = []): Response {
+  return toolSelectorErrorResponse(400, -32602, 'Invalid tool selector', {
+    code: 'INVALID_TOOL_SELECTOR',
+    invalidSelectors,
+    limits: TOOL_SELECTOR_LIMITS,
+    parameter: 'tools',
+  });
+}
+
+function unsupportedToolSelectorResponse(profile: ServerProfile): Response {
+  return toolSelectorErrorResponse(
+    400,
+    -32602,
+    'Tool selection is not supported for this Firecrawl MCP resource',
+    {
+      code: 'TOOL_SELECTOR_UNSUPPORTED',
+      parameter: 'tools',
+      resource: profile.resourceUrl,
+    }
+  );
+}
+
+function notEntitledToolSelectorResponse(selectors: string[]): Response {
+  return toolSelectorErrorResponse(
+    403,
+    -32003,
+    'Tool selection is not permitted for these credentials',
+    { code: 'TOOL_SELECTOR_NOT_ENTITLED', selectors }
+  );
+}
+
+function selectedToolNamesFromRequest(
+  request: MCPAuthRequest | undefined,
+  profile: ServerProfile,
+  session: SessionData
+): readonly string[] | undefined {
+  if (!request?.url) return undefined;
+
+  const url = new URL(request.url, 'http://mcp.firecrawl.dev');
+  const rawSelectors = url.searchParams.getAll('tools');
+  if (rawSelectors.length === 0) return undefined;
+  if (!selectorsEnabledFor(profile)) {
+    throw unsupportedToolSelectorResponse(profile);
+  }
+  if (rawSelectors.length !== 1) throw invalidToolSelectorResponse(['tools']);
+
+  const raw = rawSelectors[0] ?? '';
+  if (
+    raw.trim() === '' ||
+    Buffer.byteLength(raw, 'utf8') > TOOL_SELECTOR_LIMITS.maxUtf8Bytes
+  ) {
+    throw invalidToolSelectorResponse();
+  }
+
+  const selectors = raw.split(',');
+  if (
+    selectors.length > TOOL_SELECTOR_LIMITS.maxSelectors ||
+    selectors.some((selector) => selector.trim() === '')
+  ) {
+    throw invalidToolSelectorResponse(
+      selectors.filter((selector) => selector.trim() === '')
+    );
+  }
+
+  const requested = new Set<string>();
+  const invalid: string[] = [];
+  for (const selector of selectors) {
+    if (selector === '@core-v1') {
+      CORE_V1_TOOL_NAMES.forEach((toolName) => requested.add(toolName));
+    } else if (selector === '@full-v1') {
+      FULL_V1_TOOL_NAMES.forEach((toolName) => requested.add(toolName));
+    } else if (REGISTERED_TOOL_NAMES.has(selector)) {
+      requested.add(selector);
+    } else {
+      invalid.push(selector);
+    }
+  }
+  if (invalid.length > 0) throw invalidToolSelectorResponse(invalid);
+
+  if (!session.credentialError && isHostedKeylessSession(session)) {
+    const notEntitled = Array.from(requested).filter(
+      (toolName) => !KEYLESS_TOOL_NAMES.has(toolName)
+    );
+    if (notEntitled.length > 0) {
+      throw notEntitledToolSelectorResponse(notEntitled);
+    }
+  }
+
+  // Preserve registry order while intersecting only with tools actually
+  // registered in this process. This cannot grant a tool the profile omitted.
+  return Array.from(REGISTERED_TOOL_NAMES).filter((toolName) =>
+    requested.has(toolName)
+  );
+}
+
+function withSelectedTools(
+  request: MCPAuthRequest | undefined,
+  profile: ServerProfile,
+  session: SessionData
+): SessionData {
+  const selectedTools = selectedToolNamesFromRequest(request, profile, session);
+  if (!selectedTools) return session;
+  const selectedSession = { ...session, selectedTools };
+  emitSelectorOutcomeTelemetry(profile, selectedSession, 'applied');
+  return selectedSession;
+}
+
+function isSelectedTool(toolName: string, session?: SessionData): boolean {
+  return !session?.selectedTools || session.selectedTools.includes(toolName);
+}
+
 function isHostedKeylessSession(session?: SessionData): boolean {
   return (
     process.env.CLOUD_SERVICE === 'true' &&
@@ -910,6 +1089,31 @@ function recoveryPayload(
 }
 
 type ActionStatus = 'started' | 'success' | 'error';
+
+/**
+ * Selector telemetry is deliberately low-cardinality. Do not add selector
+ * text, request URLs, credentials, IPs, users, teams, or hashes: this event
+ * proves adoption and rejected execution without becoming an identifier log.
+ */
+function emitSelectorOutcomeTelemetry(
+  profile: ServerProfile,
+  session: SessionData | undefined,
+  outcome: 'applied' | 'rejected',
+  reason?: 'tool_not_selected'
+): void {
+  if (!selectorsEnabledFor(profile)) return;
+  console.error(
+    '[MCP_SELECTOR]',
+    JSON.stringify({
+      event: 'selector_outcome',
+      outcome,
+      ...(reason ? { reason } : {}),
+      auth_type: session?.authType ?? 'none',
+      selected_tool_count: session?.selectedTools?.length ?? 0,
+      resource: profile.resourceUrl,
+    })
+  );
+}
 
 function emitActionLog(
   toolName: string,
@@ -954,28 +1158,46 @@ function emitActionLog(
 
 function guardHostedTool(
   tool: RegisteredTool,
-  { logActions }: { logActions: boolean }
+  { logActions, profile }: { logActions: boolean; profile: ServerProfile }
 ): RegisteredTool {
   const keylessTool = KEYLESS_TOOL_NAMES.has(tool.name);
+  REGISTERED_TOOL_NAMES.add(tool.name);
   const execute = tool.execute;
   return {
     ...tool,
     canList: (session: SessionData) =>
       !session?.credentialError &&
-      (!isHostedKeylessSession(session) || keylessTool),
+      (!isHostedKeylessSession(session) || keylessTool) &&
+      isSelectedTool(tool.name, session),
     beforeValidate: (_args: unknown, session: SessionData) => {
       const code = session?.credentialError
         ? 'CREDENTIAL_INVALID'
         : isHostedKeylessSession(session) && !keylessTool
           ? 'KEYLESS_TOOL_NOT_AVAILABLE'
           : undefined;
-      if (!code) return undefined;
-      const payload = recoveryPayload(code);
-      return {
-        content: [{ type: 'text' as const, text: String(payload.message) }],
-        isError: true,
-        structuredContent: payload,
-      };
+      if (code) {
+        const payload = recoveryPayload(code);
+        return {
+          content: [{ type: 'text' as const, text: String(payload.message) }],
+          isError: true,
+          structuredContent: payload,
+        };
+      }
+      if (!isSelectedTool(tool.name, session)) {
+        emitSelectorOutcomeTelemetry(profile, session, 'rejected', 'tool_not_selected');
+        const payload = {
+          code: 'TOOL_NOT_SELECTED',
+          message:
+            'This tool is not available in the selected Firecrawl MCP tool subset.',
+          selected_tools: session?.selectedTools,
+        };
+        return {
+          content: [{ type: 'text' as const, text: String(payload.message) }],
+          isError: true,
+          structuredContent: payload,
+        };
+      }
+      return undefined;
     },
     execute: async (args, context) => {
       const requestId = randomUUID();
@@ -995,6 +1217,21 @@ function guardHostedTool(
       }
       if (isHostedKeylessSession(invocationSession) && !keylessTool) {
         const payload = recoveryPayload('KEYLESS_TOOL_NOT_AVAILABLE', requestId);
+        throw new UserError(String(payload.message), payload);
+      }
+      if (!isSelectedTool(tool.name, invocationSession)) {
+        emitSelectorOutcomeTelemetry(
+          profile,
+          invocationSession,
+          'rejected',
+          'tool_not_selected'
+        );
+        const payload = {
+          code: 'TOOL_NOT_SELECTED',
+          message:
+            'This tool is not available in the selected Firecrawl MCP tool subset.',
+          selected_tools: invocationSession.selectedTools,
+        };
         throw new UserError(String(payload.message), payload);
       }
       if (!logActions) return execute(args, invocationContext);
@@ -1060,6 +1297,7 @@ server.addTool = ((tool: RegisteredTool) => {
   addTool(
     guardHostedTool(withClaudeAlwaysLoad(tool, primaryProfile), {
       logActions: primaryProfile.id !== 'search',
+      profile: primaryProfile,
     })
   );
 }) as typeof server.addTool;
@@ -3429,8 +3667,8 @@ if (primaryProfile.id === 'search') {
       if (primaryProfile.toolAllowlist?.has(tool.name)) {
         addTool(
           guardHostedTool(
-            withClaudeAlwaysLoad(tool as RegisteredTool, primaryProfile),
-            { logActions: false }
+            tool as RegisteredTool,
+            { logActions: false, profile: primaryProfile }
           )
         );
       }
@@ -3459,8 +3697,8 @@ if (searchProfileEnabled) {
       if (searchProfile.toolAllowlist?.has(tool.name)) {
         searchServer.addTool(
           guardHostedTool(
-            withClaudeAlwaysLoad(tool as RegisteredTool, searchProfile),
-            { logActions: false }
+            tool as RegisteredTool,
+            { logActions: false, profile: searchProfile }
           )
         );
       }

@@ -1548,3 +1548,268 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
     'invalid-client-request-header-id',
   ]);
 });
+
+test('hosted full profile enforces request-scoped tool selectors without widening access', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+
+  const list = async (endpoint, headers = { 'x-api-key': 'fc-test' }) => {
+    const response = await fetch(`http://127.0.0.1:${port}${endpoint}`, {
+      body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'tools/list', params: {} }),
+      headers: {
+        accept: 'application/json, text/event-stream',
+        'content-type': 'application/json',
+        ...headers,
+      },
+      method: 'POST',
+    });
+    return response;
+  };
+
+  const defaultResponse = await list('/v2/mcp');
+  assert.equal(defaultResponse.status, 200);
+  const defaultTools = parseSseJson(await defaultResponse.text()).result.tools;
+  const defaultNames = defaultTools.map((tool) => tool.name);
+
+  const corePresetResponse = await list('/v2/mcp?tools=@core-v1');
+  assert.equal(corePresetResponse.status, 200);
+  assert.deepEqual(
+    parseSseJson(await corePresetResponse.text()).result.tools.map((tool) => tool.name).sort(),
+    ['firecrawl_parse', 'firecrawl_scrape', 'firecrawl_search']
+  );
+
+  const coreInitialize = await fetch(`http://127.0.0.1:${port}/v2/mcp?tools=@core-v1`, {
+    body: JSON.stringify({
+      id: 11,
+      jsonrpc: '2.0',
+      method: 'initialize',
+      params: {
+        capabilities: {},
+        clientInfo: { name: 'selector-smoke', version: '0.0.0' },
+        protocolVersion: '2025-06-18',
+      },
+    }),
+    headers: {
+      accept: 'application/json, text/event-stream',
+      'content-type': 'application/json',
+      'x-api-key': 'fc-test',
+    },
+    method: 'POST',
+  });
+  assert.equal(coreInitialize.status, 200);
+  const coreInstructions = parseSseJson(await coreInitialize.text()).result.instructions;
+  assert.match(coreInstructions, /firecrawl_search/);
+  assert.doesNotMatch(
+    coreInstructions,
+    /firecrawl_search_feedback|firecrawl_crawl|firecrawl_extract/
+  );
+
+  const keylessNarrowedResponse = await list('/v2/mcp?tools=firecrawl_search', {});
+  assert.equal(keylessNarrowedResponse.status, 200);
+  assert.deepEqual(
+    parseSseJson(await keylessNarrowedResponse.text()).result.tools.map((tool) => tool.name),
+    ['firecrawl_search']
+  );
+
+  const narrowedResponse = await list('/v2/mcp?tools=firecrawl_search');
+  assert.equal(narrowedResponse.status, 200);
+  assert.deepEqual(
+    parseSseJson(await narrowedResponse.text()).result.tools.map((tool) => tool.name),
+    ['firecrawl_search']
+  );
+
+  const directCall = await httpToolCall(port, {
+    endpoint: '/v2/mcp?tools=firecrawl_search',
+    headers: { 'x-api-key': 'fc-test' },
+    id: 2,
+    params: { arguments: { url: 'https://example.com' }, name: 'firecrawl_scrape' },
+  });
+  assert.equal(directCall.status, 200);
+  const directPayload = parseSseJson(await directCall.text()).result;
+  assert.equal(directPayload.isError, true);
+  assert.equal(directPayload.structuredContent.code, 'TOOL_NOT_SELECTED');
+  assert.equal(
+    backend.requests.some((request) => request.url === '/v2/scrape'),
+    false
+  );
+
+  const directParseCall = await httpToolCall(port, {
+    endpoint: '/v2/mcp?tools=firecrawl_search',
+    headers: { 'x-api-key': 'fc-test' },
+    id: 13,
+    params: {
+      arguments: {
+        contentType: 'application/pdf',
+        filePath: '/never-uploaded-by-selector-rejection.pdf',
+        formats: ['markdown'],
+      },
+      name: 'firecrawl_parse',
+    },
+  });
+  assert.equal(directParseCall.status, 200);
+  assert.equal(
+    parseSseJson(await directParseCall.text()).result.structuredContent.code,
+    'TOOL_NOT_SELECTED'
+  );
+  assert.equal(
+    backend.requests.some(
+      (request) => request.url?.startsWith('/v2/parse') || request.url?.includes('upload')
+    ),
+    false
+  );
+
+  const invalidSelectedCall = await httpToolCall(port, {
+    endpoint: '/v2/mcp?tools=firecrawl_search',
+    headers: { authorization: 'Bearer fc-invalid' },
+    id: 12,
+    params: { arguments: { url: 'https://example.com' }, name: 'firecrawl_scrape' },
+  });
+  assert.equal(invalidSelectedCall.status, 200);
+  assert.equal(
+    parseSseJson(await invalidSelectedCall.text()).result.structuredContent.code,
+    'CREDENTIAL_INVALID'
+  );
+  assert.equal(
+    backend.requests.some((request) => request.url === '/v2/scrape'),
+    false
+  );
+
+  const fullPresetResponse = await list('/v2/mcp?tools=@full-v1');
+  assert.equal(fullPresetResponse.status, 200);
+  assert.deepEqual(parseSseJson(await fullPresetResponse.text()).result.tools, defaultTools);
+
+  const repeatSelector = await list(
+    '/v2/mcp?tools=firecrawl_search&tools=firecrawl_scrape'
+  );
+  assert.equal(repeatSelector.status, 400);
+  assert.equal((await repeatSelector.json()).error.data.code, 'INVALID_TOOL_SELECTOR');
+
+  const unknownSelector = await list('/v2/mcp?tools=firecrawl_not_real');
+  assert.equal(unknownSelector.status, 400);
+  assert.deepEqual((await unknownSelector.json()).error.data.invalidSelectors, [
+    'firecrawl_not_real',
+  ]);
+
+  const atSelectorCountBoundary = Array.from({ length: 64 }, () => '@core-v1').join(',');
+  assert.ok(Buffer.byteLength(atSelectorCountBoundary, 'utf8') < 1024);
+  const atSelectorCountBoundaryResponse = await list(
+    `/v2/mcp?tools=${atSelectorCountBoundary}`
+  );
+  assert.equal(atSelectorCountBoundaryResponse.status, 200);
+  assert.deepEqual(
+    parseSseJson(await atSelectorCountBoundaryResponse.text()).result.tools
+      .map((tool) => tool.name)
+      .sort(),
+    ['firecrawl_parse', 'firecrawl_scrape', 'firecrawl_search']
+  );
+
+  const overSelectorCount = Array.from({ length: 65 }, () => '@core-v1').join(',');
+  assert.ok(Buffer.byteLength(overSelectorCount, 'utf8') < 1024);
+  for (const endpoint of [
+    '/v2/mcp?tools=',
+    `/v2/mcp?tools=${overSelectorCount}`,
+    `/v2/mcp?tools=${'x'.repeat(1025)}`,
+  ]) {
+    const response = await list(endpoint);
+    assert.equal(response.status, 400, endpoint);
+    assert.equal((await response.json()).error.data.code, 'INVALID_TOOL_SELECTOR');
+  }
+
+  const keylessEscalation = await list('/v2/mcp?tools=@full-v1', {});
+  assert.equal(keylessEscalation.status, 403);
+  assert.equal(
+    (await keylessEscalation.json()).error.data.code,
+    'TOOL_SELECTOR_NOT_ENTITLED'
+  );
+
+  // HTTP transport is stateless: an unselected request is a fresh session and
+  // remains exactly backward-compatible; a client must retain `?tools=` on
+  // each request to keep its intentionally narrowed view.
+  const reconnectResponse = await list('/v2/mcp');
+  assert.equal(reconnectResponse.status, 200);
+  assert.deepEqual(
+    parseSseJson(await reconnectResponse.text()).result.tools.map((tool) => tool.name),
+    defaultNames
+  );
+
+  await delay(20);
+  const selectorEvents = stderr
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('[MCP_SELECTOR] '))
+    .map((line) => JSON.parse(line.slice('[MCP_SELECTOR] '.length)));
+  const rejectedSelectorEvent = selectorEvents.find(
+    (event) => event.outcome === 'rejected'
+  );
+  assert.deepEqual(rejectedSelectorEvent, {
+    auth_type: 'api-key',
+    event: 'selector_outcome',
+    outcome: 'rejected',
+    reason: 'tool_not_selected',
+    resource: 'https://mcp.firecrawl.dev/v2/mcp',
+    selected_tool_count: 1,
+  });
+  assert.equal(JSON.stringify(selectorEvents).includes('@core-v1'), false);
+  assert.equal(JSON.stringify(selectorEvents).includes('fc-test'), false);
+  assert.equal(JSON.stringify(selectorEvents).includes('127.0.0.1'), false);
+});
+
+test('account endpoint rejects selector usage explicitly', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_MCP_ACTION_LOG_SECRET: 'action-secret',
+    FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const list = async (path) => {
+    const response = await fetch(`http://127.0.0.1:${port}${path}`, {
+      body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'tools/list', params: {} }),
+      headers: {
+        accept: 'application/json, text/event-stream',
+        authorization: 'Bearer fc-account-key',
+        'content-type': 'application/json',
+      },
+      method: 'POST',
+    });
+    return response;
+  };
+
+  const defaultResponse = await list('/v2/mcp-oauth');
+  assert.equal(defaultResponse.status, 200);
+  const selectedResponse = await list('/v2/mcp-oauth?tools=firecrawl_search');
+  assert.equal(selectedResponse.status, 400);
+  assert.deepEqual(
+    (await selectedResponse.json()).error.data,
+    {
+      code: 'TOOL_SELECTOR_UNSUPPORTED',
+      parameter: 'tools',
+      resource: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+    }
+  );
+});

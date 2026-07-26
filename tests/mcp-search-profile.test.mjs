@@ -298,6 +298,35 @@ test('search surface lists exactly the six read-only tools', async (t) => {
   assert.equal(getStderr().includes('TypeError'), false, getStderr());
 });
 
+test('search surface rejects selector usage and remains six-tool frozen by default', async (t) => {
+  const { searchPort } = await startHostedServer(t);
+
+  const response = await fetch(
+    `http://127.0.0.1:${searchPort}${SEARCH_ENDPOINT}?tools=@full-v1`,
+    {
+      body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'tools/list', params: {} }),
+      headers: {
+        accept: 'application/json, text/event-stream',
+        'content-type': 'application/json',
+        'x-api-key': 'fc-test',
+      },
+      method: 'POST',
+    }
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual((await response.json()).error.data, {
+    code: 'TOOL_SELECTOR_UNSUPPORTED',
+    parameter: 'tools',
+    resource: SEARCH_RESOURCE,
+  });
+
+  const names = await listTools(searchPort, SEARCH_ENDPOINT, {
+    'x-api-key': 'fc-test',
+  });
+  assert.deepEqual([...names].sort(), [...SEARCH_TOOLS].sort());
+});
+
 test('search surface does not expose an excluded tool', async (t) => {
   const backend = await startFakeBackend();
   t.after(() => backend.close());
