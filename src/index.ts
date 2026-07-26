@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { z } from 'zod';
-import { extractSinglePublicClientIp } from './keyless-client-ip';
+import { extractSingleTrustedClientIp } from './keyless-client-ip';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
 import {
@@ -2027,7 +2027,7 @@ function resolveApiBaseUrl(): string {
 function extractClientIp(request?: {
   headers: IncomingHttpHeaders;
 }): string | undefined {
-  return extractSinglePublicClientIp(request?.headers?.['x-forwarded-for']);
+  return extractSingleTrustedClientIp(request?.headers?.['x-forwarded-for']);
 }
 
 /**

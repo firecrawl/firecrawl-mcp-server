@@ -802,7 +802,7 @@ test('HTTP cloud transport serves an eligible keyless client and forwards its IP
     (r) => r.url === '/v2/keyless/eligibility'
   );
   assert.equal(eligibilityCalls.length >= 1, true);
-  // nginx replaces XFF with one public client IP before this process sees it.
+  // nginx replaces XFF with one source IP before this process sees it.
   assert.equal(eligibilityCalls[0].headers['x-firecrawl-keyless-ip'], '8.8.8.7');
   assert.equal(
     eligibilityCalls[0].headers['x-firecrawl-keyless-secret'],
@@ -918,7 +918,7 @@ test('HTTP cloud keyless Parse rejects zeroDataRetention before any backend call
   assert.equal(stderr.includes('8.8.8.44'), false, stderr);
 });
 
-test('HTTP cloud keyless rejects multi-hop or non-public forwarded IP identity', async (t) => {
+test('HTTP cloud keyless rejects multi-hop or malformed forwarded IP identity', async (t) => {
   const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
   t.after(() => backend.close());
 
@@ -934,7 +934,7 @@ test('HTTP cloud keyless rejects multi-hop or non-public forwarded IP identity',
   t.after(() => stopChild(child));
   await waitForHealth(port, child);
 
-  for (const xff of ['8.8.8.8, 10.0.0.1', '10.0.0.1', '::1']) {
+  for (const xff of ['8.8.8.8, 10.0.0.1', 'not-an-ip']) {
     const response = await httpToolCall(port, {
       id: `keyless-untrusted-ip-${xff}`,
       headers: { 'x-forwarded-for': xff },
@@ -949,6 +949,36 @@ test('HTTP cloud keyless rejects multi-hop or non-public forwarded IP identity',
     assert.equal(result.structuredContent.code, 'KEYLESS_ACCESS_NOT_AVAILABLE', xff);
   }
   assert.equal(backend.requests.length, 0, JSON.stringify(backend.requests));
+});
+
+test('HTTP cloud keyless accepts one internal IP supplied by the trusted edge', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true',
+    KEYLESS_PROXY_SECRET: 'keyless-secret',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await httpToolCall(port, {
+    id: 'keyless-trusted-internal-ip',
+    headers: { 'x-forwarded-for': '10.0.0.1' },
+    params: {
+      arguments: { limit: 1, query: 'example domain' },
+      name: 'firecrawl_search',
+    },
+  });
+  assert.equal(response.status, 200);
+  assert.notEqual(parseSseJson(await response.text()).result.isError, true);
+  const eligibility = backend.requests.find((r) => r.url === '/v2/keyless/eligibility');
+  assert.equal(eligibility.headers['x-firecrawl-keyless-ip'], '10.0.0.1');
 });
 
 test('HTTP cloud authenticated Parse forwards ZDR for API-key and managed OAuth sessions', async (t) => {
