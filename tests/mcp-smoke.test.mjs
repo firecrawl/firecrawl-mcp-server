@@ -802,7 +802,7 @@ test('HTTP cloud transport serves an eligible keyless client and forwards its IP
     (r) => r.url === '/v2/keyless/eligibility'
   );
   assert.equal(eligibilityCalls.length >= 1, true);
-  // nginx replaces XFF with one source IP before this process sees it.
+  // nginx preserves the single source IP sanitized by the trusted ingress.
   assert.equal(eligibilityCalls[0].headers['x-firecrawl-keyless-ip'], '8.8.8.7');
   assert.equal(
     eligibilityCalls[0].headers['x-firecrawl-keyless-secret'],
