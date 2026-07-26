@@ -81,3 +81,15 @@ test('search routes are rendered to a fixed upstream and readiness reaches Node'
   const ready = locationBody('location = /ready');
   assert.match(ready, /proxy_pass http:\/\/app\/ready;/);
 });
+
+test('nginx preserves only the trusted edge forwarding chain', () => {
+  const forwardedForDirectives = [
+    ...config.matchAll(/proxy_set_header X-Forwarded-For ([^;]+);/g),
+  ];
+  assert.ok(forwardedForDirectives.length > 0);
+  for (const [, value] of forwardedForDirectives) {
+    assert.equal(value, '$http_x_forwarded_for');
+  }
+  assert.doesNotMatch(config, /X-Forwarded-For \$remote_addr/);
+  assert.doesNotMatch(config, /\$proxy_add_x_forwarded_for/);
+});
