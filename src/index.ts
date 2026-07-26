@@ -1027,22 +1027,18 @@ server.getApp().get('/ready', (context) => {
     return context.json({ ok: true }, 200);
   }
   const searchPrimary = primaryProfile.id === 'search';
-  const required = searchPrimary
-    ? [
-        // A search primary only serves account OAuth. It must be able to
-        // introspect and sign the short-lived fcmcp_ credential, but it never
-        // uses the keyless eligibility proxy or action-log ingestion secret.
-        'FIRECRAWL_API_URL',
-        'FIRECRAWL_OAUTH_INTROSPECT_SECRET',
-        'MCP_DELEGATED_CREDENTIAL_SECRET',
-      ]
-    : [
-        'FIRECRAWL_API_URL',
-        'FIRECRAWL_OAUTH_INTROSPECT_SECRET',
-        'FIRECRAWL_MCP_ACTION_LOG_SECRET',
-        'KEYLESS_PROXY_SECRET',
-        'MCP_DELEGATED_CREDENTIAL_SECRET',
-      ];
+  // Readiness covers only dependencies that can prevent this profile from
+  // serving authenticated requests. Account and search identities never take
+  // the keyless path; action logging is intentionally best-effort (see
+  // emitActionLog), so neither should make those profiles unavailable.
+  const required = [
+    'FIRECRAWL_API_URL',
+    'FIRECRAWL_OAUTH_INTROSPECT_SECRET',
+    'MCP_DELEGATED_CREDENTIAL_SECRET',
+  ];
+  if (primaryProfile.allowKeyless) {
+    required.push('KEYLESS_PROXY_SECRET');
+  }
   const missing = required.filter((name) => !normalizeHeader(process.env[name]));
   const configuredEndpoint = getPrimaryEndpoint();
   const resourceMatchesEndpoint = searchPrimary
