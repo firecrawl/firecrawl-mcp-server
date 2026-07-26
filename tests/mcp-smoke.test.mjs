@@ -586,6 +586,14 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.ok(toolNames.includes('firecrawl_scrape'));
   assert.ok(toolNames.includes('firecrawl_search'));
   assert.ok(toolNames.includes('firecrawl_parse'));
+  const searchTool = tools.tools.find((tool) => tool.name === 'firecrawl_search');
+  const scrapeTool = tools.tools.find((tool) => tool.name === 'firecrawl_scrape');
+  assert.equal(
+    searchTool?.annotations?.readOnlyHint,
+    scrapeTool?.annotations?.readOnlyHint,
+    'firecrawl_search readOnlyHint should match firecrawl_scrape'
+  );
+  assert.equal(searchTool?.annotations?.readOnlyHint, false);
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
