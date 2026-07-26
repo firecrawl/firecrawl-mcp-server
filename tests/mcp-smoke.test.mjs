@@ -48,6 +48,17 @@ function parseSseJson(body) {
   return JSON.parse(dataLine.slice('data: '.length));
 }
 
+function assertServerGeneratedRequestId(payload, untrustedValues = []) {
+  assert.match(
+    payload.request_id,
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  );
+  for (const value of untrustedValues) {
+    assert.notEqual(payload.request_id, value);
+  }
+  return payload.request_id;
+}
+
 function spawnServer(env) {
   const child = spawn(process.execPath, ['dist/index.js'], {
     env: {
@@ -897,13 +908,19 @@ test('HTTP cloud keyless Parse rejects zeroDataRetention before any backend call
   t.after(() => stopChild(child));
   await waitForHealth(port, child);
 
+  const requestIds = [];
   for (const arguments_ of [
     { filePath: '/not-read-by-hosted-mcp/zdr.pdf', zeroDataRetention: true },
     { uploadRef: 'test-upload-ref', zeroDataRetention: true },
   ]) {
+    const clientRequestId = `client-${'filePath' in arguments_ ? 'phase-one' : 'phase-two'}`;
+    const jsonRpcId = `keyless-zdr-${'filePath' in arguments_ ? 'phase-one' : 'phase-two'}`;
     const response = await httpToolCall(port, {
-      id: `keyless-zdr-${'filePath' in arguments_ ? 'phase-one' : 'phase-two'}`,
-      headers: { 'x-forwarded-for': '8.8.8.44' },
+      id: jsonRpcId,
+      headers: {
+        'x-forwarded-for': '8.8.8.44',
+        'x-request-id': clientRequestId,
+      },
       params: { arguments: arguments_, name: 'firecrawl_parse' },
     });
     assert.equal(response.status, 200);
@@ -912,8 +929,24 @@ test('HTTP cloud keyless Parse rejects zeroDataRetention before any backend call
     assert.equal(result.structuredContent.code, 'KEYLESS_OPTION_NOT_AVAILABLE');
     assert.equal(result.structuredContent.option, 'zeroDataRetention');
     assert.match(result.structuredContent.message, /omit zeroDataRetention/i);
+    requestIds.push(
+      assertServerGeneratedRequestId(result.structuredContent, [
+        clientRequestId,
+        jsonRpcId,
+      ])
+    );
   }
   assert.equal(backend.requests.length, 0, JSON.stringify(backend.requests));
+  const loggedErrorRequestIds = stderr
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('[MCP_ACTION] '))
+    .map((line) => JSON.parse(line.slice('[MCP_ACTION] '.length)))
+    .filter(
+      (entry) =>
+        entry.tool_name === 'firecrawl_parse' && entry.status === 'error'
+    )
+    .map((entry) => entry.request_id);
+  assert.deepEqual(new Set(loggedErrorRequestIds), new Set(requestIds));
   assert.equal(stderr.includes('keyless-zdr-secret'), false, stderr);
   assert.equal(stderr.includes('8.8.8.44'), false, stderr);
 });
@@ -1090,14 +1123,18 @@ test('HTTP cloud transport returns recovery when keyless identity has no client 
   // Discovery remains keyless-first, but the actual call fails closed because
   // the API cannot enforce the anonymous per-IP allowance.
   const toolCall = await httpToolCall(port, {
-    id: 14,
-    headers: {},
+    id: 'client-json-rpc-id',
+    headers: { 'x-request-id': 'client-request-header-id' },
     params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
   });
   assert.equal(toolCall.status, 200);
   const result = parseSseJson(await toolCall.text()).result;
   assert.equal(result.isError, true);
   assert.equal(result.structuredContent.code, 'KEYLESS_ACCESS_NOT_AVAILABLE');
+  assertServerGeneratedRequestId(result.structuredContent, [
+    'client-json-rpc-id',
+    'client-request-header-id',
+  ]);
   assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
@@ -1473,7 +1510,10 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
   assert.deepEqual(parseSseJson(await invalidList.text()).result.tools, []);
 
   const invalidCall = await httpToolCall(port, {
-    headers: { authorization: 'Bearer fc-invalid' },
+    headers: {
+      authorization: 'Bearer fc-invalid',
+      'x-request-id': 'invalid-client-request-header-id',
+    },
     id: 3,
     params: { arguments: { query: 'x' }, name: 'firecrawl_search' },
   });
@@ -1481,4 +1521,8 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
   const result = parseSseJson(await invalidCall.text()).result;
   assert.equal(result.isError, true);
   assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID');
+  assertServerGeneratedRequestId(result.structuredContent, [
+    3,
+    'invalid-client-request-header-id',
+  ]);
 });

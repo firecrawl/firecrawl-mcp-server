@@ -13,6 +13,7 @@ import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
 import {
   credentialForOutboundRequest,
+  copyManagedOAuthApiKey,
   CredentialValidationUnavailableError,
   hasCredential,
   hasManagedOAuthCredential,
@@ -47,6 +48,7 @@ interface SessionData extends CredentialSession {
   apiKeyId?: string;
   oauthClientId?: string;
   resource?: string;
+  requestId?: string;
   [key: string]: unknown;
 }
 
@@ -880,9 +882,13 @@ function isHostedKeylessSession(session?: SessionData): boolean {
   );
 }
 
-function recoveryPayload(code: string): Record<string, unknown> {
+function recoveryPayload(
+  code: string,
+  requestId = randomUUID()
+): Record<string, unknown> {
   return {
     code,
+    request_id: requestId,
     auth_mode: code === 'CREDENTIAL_INVALID' ? 'credential_error' : 'keyless',
     message:
       code === 'CREDENTIAL_INVALID'
@@ -969,24 +975,34 @@ function guardHostedTool(
       };
     },
     execute: async (args, context) => {
-      if (context.session?.credentialError) {
-        const payload = recoveryPayload('CREDENTIAL_INVALID');
-        throw new UserError(String(payload.message), payload);
-      }
-      if (isHostedKeylessSession(context.session) && !keylessTool) {
-        const payload = recoveryPayload('KEYLESS_TOOL_NOT_AVAILABLE');
-        throw new UserError(String(payload.message), payload);
-      }
-      if (!logActions) return execute(args, context);
-
       const requestId = randomUUID();
-      emitActionLog(tool.name, 'started', context.session, undefined, requestId);
+      const invocationSession: SessionData = {
+        ...context.session,
+        requestId,
+      };
+      copyManagedOAuthApiKey(context.session, invocationSession);
+      const invocationContext = {
+        ...context,
+        session: invocationSession,
+      };
+
+      if (invocationSession.credentialError) {
+        const payload = recoveryPayload('CREDENTIAL_INVALID', requestId);
+        throw new UserError(String(payload.message), payload);
+      }
+      if (isHostedKeylessSession(invocationSession) && !keylessTool) {
+        const payload = recoveryPayload('KEYLESS_TOOL_NOT_AVAILABLE', requestId);
+        throw new UserError(String(payload.message), payload);
+      }
+      if (!logActions) return execute(args, invocationContext);
+
+      emitActionLog(tool.name, 'started', invocationSession, undefined, requestId);
       try {
-        const result = await execute(args, context);
-        emitActionLog(tool.name, 'success', context.session, undefined, requestId);
+        const result = await execute(args, invocationContext);
+        emitActionLog(tool.name, 'success', invocationSession, undefined, requestId);
         return result;
       } catch (error) {
-        emitActionLog(tool.name, 'error', context.session, error, requestId);
+        emitActionLog(tool.name, 'error', invocationSession, error, requestId);
         throw error;
       }
     },
@@ -1589,7 +1605,7 @@ async function executeHostedParse(
 
   if (isHostedKeylessSession(session) && args.zeroDataRetention === true) {
     const payload = {
-      ...recoveryPayload('KEYLESS_OPTION_NOT_AVAILABLE'),
+      ...recoveryPayload('KEYLESS_OPTION_NOT_AVAILABLE', session?.requestId),
       option: 'zeroDataRetention',
       message:
         'Zero Data Retention is not available in anonymous keyless mode. Omit zeroDataRetention to parse with keyless access, or connect an account or configure an API key for a team where Zero Data Retention is enabled, then retry.',
@@ -2076,7 +2092,10 @@ async function keylessPost(
     isHostedKeylessSession(session) &&
     (!session?.keylessClientIp || !(await keylessEligible(session.keylessClientIp)))
   ) {
-    const payload = recoveryPayload('KEYLESS_ACCESS_NOT_AVAILABLE');
+    const payload = recoveryPayload(
+      'KEYLESS_ACCESS_NOT_AVAILABLE',
+      session?.requestId
+    );
     throw new UserError(String(payload.message), payload);
   }
   const headers: Record<string, string> = {
@@ -2097,7 +2116,10 @@ async function keylessPost(
   const json: any = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (isHostedKeylessSession(session) && [401, 402, 429].includes(response.status)) {
-      const payload = recoveryPayload('KEYLESS_QUOTA_EXHAUSTED');
+      const payload = recoveryPayload(
+        'KEYLESS_QUOTA_EXHAUSTED',
+        session?.requestId
+      );
       throw new UserError(String(payload.message), payload);
     }
     throw new Error(
