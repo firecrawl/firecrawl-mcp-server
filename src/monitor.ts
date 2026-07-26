@@ -246,13 +246,13 @@ Simple fields:
 
 \`\`\`json
 {
-  "name": "firecrawl_monitor_create",
-  "arguments": {
-    "queries": ["new LLM release", "frontier model launch"],
-    "goal": "Notify me about major new LLM model releases.",
-    "searchWindow": "24h",
-    "maxResults": 10
-  }
+  "queries": [
+    "new LLM release",
+    "frontier model launch"
+  ],
+  "goal": "Notify me about major new LLM model releases.",
+  "searchWindow": "24h",
+  "maxResults": 10
 }
 \`\`\`
 
@@ -277,12 +277,9 @@ Full \`body\` requests require: \`name\`, \`schedule\` (with \`cron\` or \`text\
 
 \`\`\`json
 {
-  "name": "firecrawl_monitor_create",
-  "arguments": {
-    "page": "https://example.com/blog",
-    "goal": "Alert when a new blog post is published or an existing headline changes.",
-    "email": "alerts@example.com"
-  }
+  "page": "https://example.com/blog",
+  "goal": "Alert when a new blog post is published or an existing headline changes.",
+  "email": "alerts@example.com"
 }
 \`\`\`
 
@@ -290,12 +287,12 @@ Full \`body\` requests require: \`name\`, \`schedule\` (with \`cron\` or \`text\
 
 \`\`\`json
 {
-  "name": "firecrawl_monitor_create",
-  "arguments": {
-    "pages": ["https://example.com/pricing", "https://example.com/changelog"],
-    "goal": "Alert when pricing, packaging, or launch messaging changes.",
-    "webhookUrl": "https://example.com/webhooks/firecrawl"
-  }
+  "pages": [
+    "https://example.com/pricing",
+    "https://example.com/changelog"
+  ],
+  "goal": "Alert when pricing, packaging, or launch messaging changes.",
+  "webhookUrl": "https://example.com/webhooks/firecrawl"
 }
 \`\`\`
 
@@ -303,40 +300,57 @@ Full \`body\` requests require: \`name\`, \`schedule\` (with \`cron\` or \`text\
 
 \`\`\`json
 {
-  "name": "firecrawl_monitor_create",
-  "arguments": {
-    "body": {
-      "name": "Pricing watch",
-      "schedule": { "text": "hourly", "timezone": "UTC" },
-      "goal": "Alert when a pricing tier, price, billing period, limit, or headline feature changes. Ignore unrelated marketing copy unless it changes the pricing offer.",
-      "targets": [{
+  "body": {
+    "name": "Pricing watch",
+    "schedule": {
+      "text": "hourly",
+      "timezone": "UTC"
+    },
+    "goal": "Alert when a pricing tier, price, billing period, limit, or headline feature changes. Ignore unrelated marketing copy unless it changes the pricing offer.",
+    "targets": [
+      {
         "type": "scrape",
-        "urls": ["https://example.com/pricing"],
+        "urls": [
+          "https://example.com/pricing"
+        ],
         "scrapeOptions": {
-          "formats": [{
-            "type": "changeTracking",
-            "modes": ["json"],
-            "prompt": "Extract pricing tiers and headline features for each plan.",
-            "schema": {
-              "type": "object",
-              "properties": {
-                "plans": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "name":     { "type": "string" },
-                      "price":    { "type": "string" },
-                      "features": { "type": "array", "items": { "type": "string" } }
+          "formats": [
+            {
+              "type": "changeTracking",
+              "modes": [
+                "json"
+              ],
+              "prompt": "Extract pricing tiers and headline features for each plan.",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "plans": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "price": {
+                          "type": "string"
+                        },
+                        "features": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
                     }
                   }
                 }
               }
             }
-          }]
+          ]
         }
-      }]
-    }
+      }
+    ]
   }
 }
 \`\`\`
@@ -384,7 +398,9 @@ List all Firecrawl monitors for the authenticated account.
 
 **Usage Example:**
 \`\`\`json
-{ "name": "firecrawl_monitor_list", "arguments": { "limit": 20 } }
+{
+  "limit": 20
+}
 \`\`\`
 `,
     parameters: z.object({
@@ -413,7 +429,9 @@ Get a single monitor by ID.
 
 **Usage Example:**
 \`\`\`json
-{ "name": "firecrawl_monitor_get", "arguments": { "id": "mon_abc123" } }
+{
+  "id": "mon_abc123"
+}
 \`\`\`
 `,
     parameters: z.object({ id: z.string() }),
@@ -441,10 +459,9 @@ Update a monitor. Pass any subset of fields to patch: \`name\`, \`status\` ("act
 **Usage Example:**
 \`\`\`json
 {
-  "name": "firecrawl_monitor_update",
-  "arguments": {
-    "id": "mon_abc123",
-    "body": { "status": "paused" }
+  "id": "mon_abc123",
+  "body": {
+    "status": "paused"
   }
 }
 \`\`\`
@@ -480,7 +497,9 @@ Permanently delete a monitor and stop its schedule. This cannot be undone.
 
 **Usage Example:**
 \`\`\`json
-{ "name": "firecrawl_monitor_delete", "arguments": { "id": "mon_abc123" } }
+{
+  "id": "mon_abc123"
+}
 \`\`\`
 `,
     parameters: z.object({ id: z.string() }),
@@ -509,7 +528,9 @@ Trigger a monitor check immediately, outside its normal schedule. Returns the qu
 
 **Usage Example:**
 \`\`\`json
-{ "name": "firecrawl_monitor_run", "arguments": { "id": "mon_abc123" } }
+{
+  "id": "mon_abc123"
+}
 \`\`\`
 `,
     parameters: z.object({ id: z.string() }),
@@ -537,7 +558,11 @@ List historical checks for a monitor.
 
 **Usage Example:**
 \`\`\`json
-{ "name": "firecrawl_monitor_checks", "arguments": { "id": "mon_abc123", "limit": 10, "status": "completed" } }
+{
+  "id": "mon_abc123",
+  "limit": 10,
+  "status": "completed"
+}
 \`\`\`
 `,
     parameters: z.object({
@@ -617,12 +642,9 @@ The endpoint paginates via a top-level \`next\` URL; this tool returns one page 
 **Usage Example:**
 \`\`\`json
 {
-  "name": "firecrawl_monitor_check",
-  "arguments": {
-    "id": "mon_abc123",
-    "checkId": "chk_xyz",
-    "pageStatus": "changed"
-  }
+  "id": "mon_abc123",
+  "checkId": "chk_xyz",
+  "pageStatus": "changed"
 }
 \`\`\`
 `,
