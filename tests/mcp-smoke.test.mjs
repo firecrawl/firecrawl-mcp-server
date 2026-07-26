@@ -372,6 +372,13 @@ test('HTTP cloud transport preserves Firecrawl OAuth and well-known routes', asy
   assert.match(anonymousParse.description, /redactPII/i);
   assert.match(anonymousParse.description, /omit it for anonymous keyless/i);
   assert.doesNotMatch(anonymousParse.description, /"zeroDataRetention"\s*:\s*true/);
+  assert.deepEqual(
+    anonymousTools
+      .filter((tool) => tool._meta?.['anthropic/alwaysLoad'] === true)
+      .map((tool) => tool.name)
+      .sort(),
+    ['firecrawl_parse', 'firecrawl_scrape', 'firecrawl_search']
+  );
 
   const initialize = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({
@@ -416,6 +423,18 @@ test('HTTP cloud transport preserves Firecrawl OAuth and well-known routes', asy
   assert.ok(httpToolNames.includes('firecrawl_scrape'));
   assert.ok(httpToolNames.includes('firecrawl_search'));
   assert.ok(httpToolNames.includes('firecrawl_parse'));
+  assert.deepEqual(
+    toolsMessage.result.tools
+      .filter((tool) => tool._meta?.['anthropic/alwaysLoad'] === true)
+      .map((tool) => tool.name)
+      .sort(),
+    ['firecrawl_parse', 'firecrawl_scrape', 'firecrawl_search']
+  );
+  assert.equal(
+    toolsMessage.result.tools.find((tool) => tool.name === 'firecrawl_crawl')
+      ?._meta?.['anthropic/alwaysLoad'],
+    undefined
+  );
   const searchTool = toolsMessage.result.tools.find(
     (tool) => tool.name === 'firecrawl_search'
   );
@@ -1194,11 +1213,14 @@ test('account endpoint challenges anonymous clients and accepts API keys', async
     method: 'POST',
   });
   assert.equal(authenticated.status, 200);
-  const names = parseSseJson(await authenticated.text()).result.tools.map(
-    (tool) => tool.name
-  );
+  const accountTools = parseSseJson(await authenticated.text()).result.tools;
+  const names = accountTools.map((tool) => tool.name);
   assert.ok(names.includes('firecrawl_crawl'));
   assert.ok(names.length > 3);
+  assert.equal(
+    accountTools.some((tool) => tool._meta?.['anthropic/alwaysLoad'] === true),
+    false
+  );
 });
 
 test('account readiness requires the managed OAuth delegation secret', async (t) => {

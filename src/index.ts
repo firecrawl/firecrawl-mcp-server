@@ -1012,6 +1012,32 @@ function guardHostedTool(
   };
 }
 
+// Claude honors this extension to keep the core discovery tools in context.
+// Other MCP clients receive ordinary tool metadata and safely ignore it.
+const CLAUDE_ALWAYS_LOAD_TOOL_NAMES = new Set(KEYLESS_TOOL_NAMES);
+
+function withClaudeAlwaysLoad(
+  tool: RegisteredTool,
+  profile: ServerProfile
+): RegisteredTool {
+  if (
+    process.env.CLOUD_SERVICE !== 'true' ||
+    profile.id !== 'full' ||
+    profile.primary !== true ||
+    !CLAUDE_ALWAYS_LOAD_TOOL_NAMES.has(tool.name)
+  ) {
+    return tool;
+  }
+
+  return {
+    ...tool,
+    _meta: {
+      ...tool._meta,
+      'anthropic/alwaysLoad': true,
+    },
+  };
+}
+
 const addTool = server.addTool.bind(server);
 server.addTool = ((tool: RegisteredTool) => {
   // A dedicated search process registers through the same module-level tool
@@ -1031,7 +1057,11 @@ server.addTool = ((tool: RegisteredTool) => {
   if (primaryProfile.id === 'search' && tool.name === 'firecrawl_search') {
     return;
   }
-  addTool(guardHostedTool(tool, { logActions: primaryProfile.id !== 'search' }));
+  addTool(
+    guardHostedTool(withClaudeAlwaysLoad(tool, primaryProfile), {
+      logActions: primaryProfile.id !== 'search',
+    })
+  );
 }) as typeof server.addTool;
 
 if (openAiAppsChallengeToken) {
@@ -3397,7 +3427,12 @@ if (primaryProfile.id === 'search') {
   const primarySearchRegistrar: ToolRegistrar = {
     addTool: ((tool: { name: string }) => {
       if (primaryProfile.toolAllowlist?.has(tool.name)) {
-        addTool(guardHostedTool(tool as RegisteredTool, { logActions: false }));
+        addTool(
+          guardHostedTool(
+            withClaudeAlwaysLoad(tool as RegisteredTool, primaryProfile),
+            { logActions: false }
+          )
+        );
       }
     }) as FastMCP<SessionData>['addTool'],
   };
@@ -3423,7 +3458,10 @@ if (searchProfileEnabled) {
     addTool: ((tool: { name: string }) => {
       if (searchProfile.toolAllowlist?.has(tool.name)) {
         searchServer.addTool(
-          guardHostedTool(tool as RegisteredTool, { logActions: false })
+          guardHostedTool(
+            withClaudeAlwaysLoad(tool as RegisteredTool, searchProfile),
+            { logActions: false }
+          )
         );
       }
     }) as FastMCP<SessionData>['addTool'],

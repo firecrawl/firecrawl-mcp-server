@@ -282,11 +282,16 @@ async function listTools(port, endpoint, headers) {
 test('search surface lists exactly the six read-only tools', async (t) => {
   const { searchPort, getStderr } = await startHostedServer(t);
 
-  const names = await listTools(searchPort, SEARCH_ENDPOINT, {
+  const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, {
     'x-api-key': 'fc-test',
   });
+  const names = tools.map((tool) => tool.name);
 
   assert.deepEqual([...names].sort(), [...SEARCH_TOOLS].sort());
+  assert.equal(
+    tools.some((tool) => tool._meta?.['anthropic/alwaysLoad'] === true),
+    false
+  );
   for (const excluded of EXCLUDED_TOOLS) {
     assert.equal(names.includes(excluded), false, `${excluded} must not appear`);
   }
