@@ -8,6 +8,7 @@ import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { z } from 'zod';
+import { extractSinglePublicClientIp } from './keyless-client-ip';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
 import {
@@ -1586,6 +1587,16 @@ async function executeHostedParse(
     });
   }
 
+  if (isHostedKeylessSession(session) && args.zeroDataRetention === true) {
+    const payload = {
+      ...recoveryPayload('KEYLESS_OPTION_NOT_AVAILABLE'),
+      option: 'zeroDataRetention',
+      message:
+        'Zero Data Retention is not available in anonymous keyless mode. Omit zeroDataRetention to parse with keyless access, or connect an account or configure an API key for a team where Zero Data Retention is enabled, then retry.',
+    };
+    throw new UserError(String(payload.message), payload);
+  }
+
   const options = extractParseOptions(args);
 
   if (hasFilePath && args.filePath) {
@@ -2016,10 +2027,7 @@ function resolveApiBaseUrl(): string {
 function extractClientIp(request?: {
   headers: IncomingHttpHeaders;
 }): string | undefined {
-  const xff = request?.headers?.['x-forwarded-for'];
-  const raw = Array.isArray(xff) ? xff[0] : xff;
-  const first = typeof raw === 'string' ? raw.split(',')[0].trim() : undefined;
-  return first || undefined;
+  return extractSinglePublicClientIp(request?.headers?.['x-forwarded-for']);
 }
 
 /**
@@ -3094,7 +3102,7 @@ In local/non-cloud MCP mode, this tool reads filePath from the MCP server filesy
 
 In hosted CLOUD_SERVICE mode, this tool is a two-call flow because hosted MCP cannot read your local filesystem:
 1. Call with filePath, contentType, parse options, and optional declaredSizeBytes. The hosted server mints a short-lived upload URL and returns a safe local curl PUT command plus nextToolCall.
-2. Run the returned curl command locally, then call firecrawl_parse again with uploadRef and the desired parse options. The hosted server calls /v2/parse server-side with your session credential.
+2. Run the returned curl command locally, then call firecrawl_parse again with uploadRef and the desired parse options. The hosted server calls /v2/parse server-side with your account credential or eligible anonymous keyless session.
 
 **Best for:** Extracting content from a local document (PDF, Word, Excel, HTML, etc.); pulling structured data out of a file with JSON format; converting binary documents into markdown for downstream reasoning.
 **Not recommended for:** Remote URLs (use firecrawl_scrape); multiple files at once (call parse multiple times); documents that require interactive actions, screenshots, or change tracking — those aren't supported by the parse endpoint.
@@ -3102,7 +3110,7 @@ In hosted CLOUD_SERVICE mode, this tool is a two-call flow because hosted MCP ca
 
 **Supported file types:** .html, .htm, .xhtml, .pdf, .docx, .doc, .odt, .rtf, .xlsx, .xls
 **Unsupported options:** actions, screenshot/branding/changeTracking formats, waitFor > 0, location, mobile, proxy values other than "auto" or "basic".
-**Privacy:** Set \`redactPII: true\` to return content with personally identifiable information redacted.
+**Privacy:** Set \`redactPII: true\` to return content with personally identifiable information redacted. \`zeroDataRetention: true\` requires an account or API key for a team where Zero Data Retention is enabled; omit it for anonymous keyless use.
 
 **CRITICAL - Format Selection (same rules as firecrawl_scrape):**
 When the user asks for SPECIFIC data points from a document, you MUST use JSON format with a schema. Only use markdown when the user needs the ENTIRE document content.
@@ -3118,8 +3126,7 @@ Add \`"parsers": ["pdf"]\` (optionally with \`pdfOptions.maxPages\`) when parsin
     "filePath": "/absolute/path/to/document.pdf",
     "contentType": "application/pdf",
     "formats": ["markdown"],
-    "parsers": ["pdf"],
-    "zeroDataRetention": true
+    "parsers": ["pdf"]
   }
 }
 \`\`\`
@@ -3131,8 +3138,7 @@ Add \`"parsers": ["pdf"]\` (optionally with \`pdfOptions.maxPages\`) when parsin
   "arguments": {
     "uploadRef": "upload-ref-from-phase-1",
     "formats": ["markdown"],
-    "parsers": ["pdf"],
-    "zeroDataRetention": true
+    "parsers": ["pdf"]
   }
 }
 \`\`\`

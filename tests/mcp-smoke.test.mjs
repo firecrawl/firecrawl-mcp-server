@@ -226,6 +226,35 @@ async function startFakeFirecrawlBackend(options = {}) {
       return;
     }
 
+    if (req.method === 'POST' && req.url === '/v2/parse/upload-url') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: {
+            expiresAt: '2030-01-01T00:00:00.000Z',
+            headers: { 'x-upload-token': 'test-upload-token' },
+            maxSizeBytes: 1024,
+            method: 'PUT',
+            uploadRef: 'test-upload-ref',
+            uploadUrl: 'https://uploads.invalid/test-upload',
+          },
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/parse') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: { markdown: '# Parsed fixture' },
+          success: true,
+        })
+      );
+      return;
+    }
+
     if (req.method === 'GET' && req.url?.startsWith('/v2/monitor')) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ success: true, data: [] }));
@@ -325,6 +354,13 @@ test('HTTP cloud transport preserves Firecrawl OAuth and well-known routes', asy
     anonymousTools.map((tool) => tool.name).sort(),
     ['firecrawl_parse', 'firecrawl_scrape', 'firecrawl_search']
   );
+  const anonymousParse = anonymousTools.find(
+    (tool) => tool.name === 'firecrawl_parse'
+  );
+  assert.ok(anonymousParse);
+  assert.match(anonymousParse.description, /redactPII/i);
+  assert.match(anonymousParse.description, /omit it for anonymous keyless/i);
+  assert.doesNotMatch(anonymousParse.description, /"zeroDataRetention"\s*:\s*true/);
 
   const initialize = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({
@@ -755,7 +791,7 @@ test('HTTP cloud transport serves an eligible keyless client and forwards its IP
 
   const toolCall = await httpToolCall(port, {
     id: 13,
-    headers: { 'x-forwarded-for': '203.0.113.7, 10.0.0.1' },
+    headers: { 'x-forwarded-for': '8.8.8.7' },
     params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
   });
   assert.equal(toolCall.status, 200);
@@ -766,13 +802,238 @@ test('HTTP cloud transport serves an eligible keyless client and forwards its IP
     (r) => r.url === '/v2/keyless/eligibility'
   );
   assert.equal(eligibilityCalls.length >= 1, true);
-  // The client's real (left-most XFF) IP and the secret must gate eligibility.
-  assert.equal(eligibilityCalls[0].headers['x-firecrawl-keyless-ip'], '203.0.113.7');
+  // nginx replaces XFF with one public client IP before this process sees it.
+  assert.equal(eligibilityCalls[0].headers['x-firecrawl-keyless-ip'], '8.8.8.7');
   assert.equal(
     eligibilityCalls[0].headers['x-firecrawl-keyless-secret'],
     'keyless-secret'
   );
   assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('HTTP cloud keyless Parse completes both phases without credentials and forwards redactPII', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true',
+    KEYLESS_PROXY_SECRET: 'keyless-parse-secret',
+    PORT: String(port),
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const phaseOne = await httpToolCall(port, {
+    id: 'keyless-parse-phase-one',
+    headers: { 'x-forwarded-for': '8.8.8.43' },
+    params: {
+      arguments: {
+        contentType: 'application/pdf',
+        filePath: '/not-read-by-hosted-mcp/document.pdf',
+        formats: ['markdown'],
+        parsers: ['pdf'],
+      },
+      name: 'firecrawl_parse',
+    },
+  });
+  assert.equal(phaseOne.status, 200);
+  const phaseOneResult = parseSseJson(await phaseOne.text()).result;
+  assert.notEqual(phaseOneResult.isError, true);
+  const phaseOnePayload = JSON.parse(phaseOneResult.content[0].text);
+  assert.equal(phaseOnePayload.upload.uploadRef, 'test-upload-ref');
+  assert.equal(phaseOnePayload.nextToolCall.arguments.uploadRef, 'test-upload-ref');
+
+  const phaseTwo = await httpToolCall(port, {
+    id: 'keyless-parse-phase-two',
+    headers: { 'x-forwarded-for': '8.8.8.43' },
+    params: {
+      arguments: {
+        formats: ['markdown'],
+        redactPII: true,
+        uploadRef: 'test-upload-ref',
+      },
+      name: 'firecrawl_parse',
+    },
+  });
+  assert.equal(phaseTwo.status, 200);
+  assert.notEqual(parseSseJson(await phaseTwo.text()).result.isError, true);
+
+  const uploadCalls = backend.requests.filter((r) => r.url === '/v2/parse/upload-url');
+  const parseCalls = backend.requests.filter((r) => r.url === '/v2/parse');
+  assert.equal(uploadCalls.length, 1);
+  assert.equal(parseCalls.length, 1);
+  assert.equal(uploadCalls[0].headers.authorization, undefined);
+  assert.equal(parseCalls[0].headers.authorization, undefined);
+  assert.equal(parseCalls[0].body.uploadRef, 'test-upload-ref');
+  assert.equal(parseCalls[0].body.redactPII, true);
+  assert.equal(parseCalls[0].body.origin, 'mcp-fastmcp');
+  assert.equal(stderr.includes('keyless-parse-secret'), false, stderr);
+  assert.equal(stderr.includes('8.8.8.43'), false, stderr);
+});
+
+test('HTTP cloud keyless Parse rejects zeroDataRetention before any backend call', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true',
+    KEYLESS_PROXY_SECRET: 'keyless-zdr-secret',
+    PORT: String(port),
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  for (const arguments_ of [
+    { filePath: '/not-read-by-hosted-mcp/zdr.pdf', zeroDataRetention: true },
+    { uploadRef: 'test-upload-ref', zeroDataRetention: true },
+  ]) {
+    const response = await httpToolCall(port, {
+      id: `keyless-zdr-${'filePath' in arguments_ ? 'phase-one' : 'phase-two'}`,
+      headers: { 'x-forwarded-for': '8.8.8.44' },
+      params: { arguments: arguments_, name: 'firecrawl_parse' },
+    });
+    assert.equal(response.status, 200);
+    const result = parseSseJson(await response.text()).result;
+    assert.equal(result.isError, true);
+    assert.equal(result.structuredContent.code, 'KEYLESS_OPTION_NOT_AVAILABLE');
+    assert.equal(result.structuredContent.option, 'zeroDataRetention');
+    assert.match(result.structuredContent.message, /omit zeroDataRetention/i);
+  }
+  assert.equal(backend.requests.length, 0, JSON.stringify(backend.requests));
+  assert.equal(stderr.includes('keyless-zdr-secret'), false, stderr);
+  assert.equal(stderr.includes('8.8.8.44'), false, stderr);
+});
+
+test('HTTP cloud keyless rejects multi-hop or non-public forwarded IP identity', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true',
+    KEYLESS_PROXY_SECRET: 'keyless-secret',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  for (const xff of ['8.8.8.8, 10.0.0.1', '10.0.0.1', '::1']) {
+    const response = await httpToolCall(port, {
+      id: `keyless-untrusted-ip-${xff}`,
+      headers: { 'x-forwarded-for': xff },
+      params: {
+        arguments: { limit: 1, query: 'example domain' },
+        name: 'firecrawl_search',
+      },
+    });
+    assert.equal(response.status, 200, xff);
+    const result = parseSseJson(await response.text()).result;
+    assert.equal(result.isError, true, xff);
+    assert.equal(result.structuredContent.code, 'KEYLESS_ACCESS_NOT_AVAILABLE', xff);
+  }
+  assert.equal(backend.requests.length, 0, JSON.stringify(backend.requests));
+});
+
+test('HTTP cloud authenticated Parse forwards ZDR for API-key and managed OAuth sessions', async (t) => {
+  const accountResource = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
+  const backend = await startFakeFirecrawlBackend({
+    introspectionHandler: ({ token }) =>
+      token === 'fc-parse-api-key'
+        ? {
+            active: true,
+            api_key: 'fc-parse-api-key',
+            credential_purpose: 'general',
+            scope: 'firecrawl:global',
+          }
+        : token === 'fco_parse'
+        ? {
+            active: true,
+            api_key: 'fc-managed-parse-key',
+            api_key_id: '42',
+            aud: accountResource,
+            credential_purpose: 'hosted_mcp_oauth',
+            scope: 'firecrawl:global',
+            sub: '00000000-0000-4000-8000-000000000001',
+            team_id: '00000000-0000-4000-8000-000000000002',
+          }
+        : { active: false },
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_MCP_RESOURCE_URL: accountResource,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  for (const [label, headers] of [
+    ['api-key', { 'x-firecrawl-api-key': 'fc-parse-api-key' }],
+    ['managed-oauth', { authorization: 'Bearer fco_parse' }],
+  ]) {
+    const phaseOne = await httpToolCall(port, {
+      endpoint: '/v2/mcp-oauth',
+      headers,
+      id: `${label}-parse-phase-one`,
+      params: {
+        arguments: { filePath: `/not-read-by-hosted-mcp/${label}.pdf`, zeroDataRetention: true },
+        name: 'firecrawl_parse',
+      },
+    });
+    assert.equal(phaseOne.status, 200);
+    const phaseOnePayload = JSON.parse(parseSseJson(await phaseOne.text()).result.content[0].text);
+    assert.equal(phaseOnePayload.nextToolCall.arguments.zeroDataRetention, true);
+
+    const phaseTwo = await httpToolCall(port, {
+      endpoint: '/v2/mcp-oauth',
+      headers,
+      id: `${label}-parse-phase-two`,
+      params: {
+        arguments: { uploadRef: 'test-upload-ref', zeroDataRetention: true },
+        name: 'firecrawl_parse',
+      },
+    });
+    assert.equal(phaseTwo.status, 200);
+    assert.notEqual(parseSseJson(await phaseTwo.text()).result.isError, true);
+  }
+
+  const uploads = backend.requests.filter((r) => r.url === '/v2/parse/upload-url');
+  const parses = backend.requests.filter((r) => r.url === '/v2/parse');
+  assert.equal(uploads.length, 2);
+  assert.equal(parses.length, 2);
+  assert.equal(uploads[0].headers.authorization, 'Bearer fc-parse-api-key');
+  assert.equal(parses[0].headers.authorization, 'Bearer fc-parse-api-key');
+  for (const request of [uploads[1], parses[1]]) {
+    const assertion = request.headers.authorization?.replace(/^Bearer /, '');
+    assert.match(assertion ?? '', /^fcmcp_/);
+    assert.equal(assertion?.includes('fc-managed-parse-key'), false);
+    assert.equal(assertion?.includes('fco_parse'), false);
+  }
+  assert.equal(parses[0].body.zeroDataRetention, true);
+  assert.equal(parses[1].body.zeroDataRetention, true);
 });
 
 test('HTTP cloud transport returns recovery when keyless identity has no client IP', async (t) => {
