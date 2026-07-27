@@ -569,6 +569,9 @@ test('primary search profile is OAuth-only, six-tool frozen, and ready without k
     method: 'tools/list',
   });
   assert.equal(anonymous.status, 401);
+  const anonymousBody = await anonymous.text();
+  assert.match(anonymousBody, /OAuth access token required/);
+  assert.doesNotMatch(anonymousBody, /API key/i);
   assert.match(
     anonymous.headers.get('www-authenticate') ?? '',
     /oauth-protected-resource\/v2\/mcp-search/

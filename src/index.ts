@@ -510,6 +510,11 @@ async function authenticateRequest(
           keylessClientIp: extractClientIp(request),
         };
       }
+      if (!profile.acceptApiKeys) {
+        throw new Error(
+          `OAuth access token required for the Firecrawl MCP resource ${profile.endpoint}`
+        );
+      }
       throw new Error(
         'Firecrawl credentials required: OAuth access token (Authorization: Bearer fco_...) or API key (x-firecrawl-api-key)'
       );
