@@ -79,6 +79,28 @@ test('legacy MCP aliases stay bound to the full identity', () => {
   }
 });
 
+test('only the legacy full-MCP route can mark a request as credential-in-path', () => {
+  for (const route of [
+    'location ~ ^/v2/mcp-oauth/?$',
+    'location ~ ^/v2/mcp/?$',
+    'location = /mcp',
+    'location ~ ^/v2/mcp-search(?:/|$)',
+    'location /mcp',
+    'location /messages',
+    'location /sse',
+  ]) {
+    assert.match(
+      locationBody(route),
+      /proxy_set_header X-Firecrawl-Key-Transport "";/,
+      `${route} must clear a client-supplied legacy-path marker`
+    );
+  }
+  assert.match(
+    locationBody('location ~ ^/(?<apikey>[^/]+)/(?:v2/mcp|mcp)/?$'),
+    /proxy_set_header X-Firecrawl-Key-Transport path;/
+  );
+});
+
 test('search routes are rendered to a fixed upstream and readiness reaches Node', async () => {
   assert.match(config, /proxy_pass http:\/\/__MCP_SEARCH_UPSTREAM__;/);
   const entrypoint = await readFile(

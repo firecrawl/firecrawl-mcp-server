@@ -43,6 +43,8 @@ interface SessionData extends CredentialSession {
   keylessClientIp?: string;
   authType?: 'api-key' | 'oauth' | 'env' | 'keyless' | 'none';
   credentialError?: 'CREDENTIAL_INVALID';
+  /** Internal nginx marker for the deprecated credential-in-path route. */
+  keyTransport?: 'path';
   teamId?: string;
   userId?: string;
   apiKeyId?: string;
@@ -120,6 +122,10 @@ function isFirecrawlOAuthAccessToken(token: string): boolean {
 
 function isFirecrawlApiKey(token: string): boolean {
   return token.startsWith('fc-');
+}
+
+function isLegacyKeyPathRequest(request: MCPAuthRequest | undefined): boolean {
+  return normalizeHeader(request?.headers?.['x-firecrawl-key-transport']) === 'path';
 }
 
 function requestShouldReceiveOAuthChallenge(
@@ -251,6 +257,19 @@ function createOAuthChallengeResponse(
   );
 }
 
+function createInvalidCredentialResponse(error: InvalidFirecrawlCredentialError): Response {
+  return new Response(
+    JSON.stringify({
+      error: 'invalid_api_key',
+      error_description: error.message,
+    }),
+    {
+      headers: { 'Content-Type': 'application/json' },
+      status: 401,
+    }
+  );
+}
+
 function getOAuthIntrospectionEndpoint(): string {
   return `${getOAuthIssuer()}/api/oauth/introspect`;
 }
@@ -293,6 +312,13 @@ type ResolvedCredential = {
   source?: 'api-key' | 'oauth' | 'env';
   metadata?: CredentialMetadata;
 };
+
+class InvalidFirecrawlCredentialError extends Error {
+  constructor() {
+    super('The supplied Firecrawl credential is invalid or revoked. Replace it and retry.');
+    this.name = 'InvalidFirecrawlCredentialError';
+  }
+}
 
 const MCP_GLOBAL_SCOPE = 'firecrawl:global';
 
@@ -469,6 +495,12 @@ async function authenticateRequest(
             `OAuth access token required for the Firecrawl MCP resource ${profile.endpoint}`
           );
         }
+        // The credential-in-path compatibility route is the only legacy shape
+        // that must fail at connection time. Header clients keep their existing
+        // recovery payload contract while this compatibility fix stays narrow.
+        if (isLegacyKeyPathRequest(request)) {
+          throw new InvalidFirecrawlCredentialError();
+        }
         return { authType: 'none', credentialError: 'CREDENTIAL_INVALID' };
       }
       if (profile.allowKeyless) {
@@ -485,6 +517,7 @@ async function authenticateRequest(
     const session: SessionData = {
       authType: resolved?.source === 'oauth' ? 'oauth' : 'api-key',
       firecrawlApiKey: headerCred,
+      ...(isLegacyKeyPathRequest(request) ? { keyTransport: 'path' as const } : {}),
       ...resolved?.metadata,
     };
     return managedCred ? setManagedOAuthApiKey(session, managedCred) : session;
@@ -577,6 +610,24 @@ function emitSearchCompanionAuthTelemetry(
   );
 }
 
+function emitLegacyKeyPathTelemetry(
+  profile: ServerProfile,
+  request: MCPAuthRequest | undefined,
+  outcome: 'accepted' | 'rejected',
+  session?: SessionData
+): void {
+  if (profile.id !== 'full' || !isLegacyKeyPathRequest(request)) return;
+  console.log(
+    '[MCP_LEGACY_KEY_PATH]',
+    JSON.stringify({
+      auth_type: session?.authType ?? 'none',
+      key_transport: 'path',
+      outcome,
+      resource: profile.resourceUrl,
+    })
+  );
+}
+
 /**
  * Builds the `authenticate` hook for one profile. FastMCP runs it on every
  * request (including `tools/list`), so a rejection here yields a 401 with the
@@ -598,10 +649,20 @@ function makeAuthenticate(profile: ServerProfile) {
           session.credentialError ? 'rejected' : 'accepted',
           session
         );
+        emitLegacyKeyPathTelemetry(
+          profile,
+          request,
+          session.credentialError ? 'rejected' : 'accepted',
+          session
+        );
         return session;
       })
       .catch((error) => {
         emitSearchCompanionAuthTelemetry(profile, request, 'rejected');
+        emitLegacyKeyPathTelemetry(profile, request, 'rejected');
+        if (error instanceof InvalidFirecrawlCredentialError) {
+          throw createInvalidCredentialResponse(error);
+        }
         if (error instanceof CredentialValidationUnavailableError) {
           throw new Response(
             JSON.stringify({
