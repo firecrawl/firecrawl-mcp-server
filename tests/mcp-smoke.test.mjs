@@ -377,7 +377,7 @@ test('HTTP cloud transport preserves Firecrawl OAuth and well-known routes', asy
       .filter((tool) => tool._meta?.['anthropic/alwaysLoad'] === true)
       .map((tool) => tool.name)
       .sort(),
-    ['firecrawl_parse', 'firecrawl_scrape', 'firecrawl_search']
+    ['firecrawl_scrape', 'firecrawl_search']
   );
 
   const initialize = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
@@ -428,10 +428,15 @@ test('HTTP cloud transport preserves Firecrawl OAuth and well-known routes', asy
       .filter((tool) => tool._meta?.['anthropic/alwaysLoad'] === true)
       .map((tool) => tool.name)
       .sort(),
-    ['firecrawl_parse', 'firecrawl_scrape', 'firecrawl_search']
+    ['firecrawl_scrape', 'firecrawl_search']
   );
   assert.equal(
     toolsMessage.result.tools.find((tool) => tool.name === 'firecrawl_crawl')
+      ?._meta?.['anthropic/alwaysLoad'],
+    undefined
+  );
+  assert.equal(
+    toolsMessage.result.tools.find((tool) => tool.name === 'firecrawl_parse')
       ?._meta?.['anthropic/alwaysLoad'],
     undefined
   );
@@ -1591,7 +1596,7 @@ test('hosted full profile enforces request-scoped tool selectors without widenin
   assert.equal(corePresetResponse.status, 200);
   assert.deepEqual(
     parseSseJson(await corePresetResponse.text()).result.tools.map((tool) => tool.name).sort(),
-    ['firecrawl_parse', 'firecrawl_scrape', 'firecrawl_search']
+    ['firecrawl_map', 'firecrawl_scrape', 'firecrawl_search']
   );
 
   const coreInitialize = await fetch(`http://127.0.0.1:${port}/v2/mcp?tools=@core-v1`, {
@@ -1716,7 +1721,7 @@ test('hosted full profile enforces request-scoped tool selectors without widenin
     parseSseJson(await atSelectorCountBoundaryResponse.text()).result.tools
       .map((tool) => tool.name)
       .sort(),
-    ['firecrawl_parse', 'firecrawl_scrape', 'firecrawl_search']
+    ['firecrawl_map', 'firecrawl_scrape', 'firecrawl_search']
   );
 
   const overSelectorCount = Array.from({ length: 65 }, () => '@core-v1').join(',');

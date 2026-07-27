@@ -884,7 +884,7 @@ const KEYLESS_TOOL_NAMES = new Set([
 const CORE_V1_TOOL_NAMES = [
   'firecrawl_scrape',
   'firecrawl_search',
-  'firecrawl_parse',
+  'firecrawl_map',
 ] as const;
 
 // A versioned preset is intentionally not derived from the live registry: a
@@ -1249,9 +1249,15 @@ function guardHostedTool(
   };
 }
 
-// Claude honors this extension to keep the core discovery tools in context.
-// Other MCP clients receive ordinary tool metadata and safely ignore it.
-const CLAUDE_ALWAYS_LOAD_TOOL_NAMES = new Set(KEYLESS_TOOL_NAMES);
+// Claude honors this extension to keep the highest-volume discovery tools in
+// context. This is intentionally independent from the opt-in @core-v1 preset:
+// preloading prioritizes frequent calls, while a preset bounds the available
+// tool surface. Other MCP clients receive ordinary tool metadata and safely
+// ignore it.
+const CLAUDE_ALWAYS_LOAD_TOOL_NAMES = new Set([
+  'firecrawl_scrape',
+  'firecrawl_search',
+]);
 
 function withClaudeAlwaysLoad(
   tool: RegisteredTool,
