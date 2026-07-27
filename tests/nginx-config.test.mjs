@@ -22,7 +22,6 @@ function locationBody(pattern) {
 
 test('key-bearing routes disable access logs before forwarding credentials', () => {
   for (const route of [
-    'location ~ ^/(?<apikey>[^/]+)/v2/mcp-search(?:/|$)',
     'location ~ ^/(?<apikey>[^/]+)/(?:v2/mcp|mcp)/?$',
     'location ~ ^/(?<apikey>[^/]+)/v(?:1|2)/(.*)$',
     'location ~ ^/(?<apikey>[^/]+)/(.*)$',
@@ -31,6 +30,20 @@ test('key-bearing routes disable access logs before forwarding credentials', () 
     assert.match(body, /access_log off;/);
     assert.match(body, /proxy_set_header X-Firecrawl-API-Key \$apikey;/);
   }
+});
+
+test('legacy key-in-path search returns a terminal migration response', () => {
+  const route = 'location ~ ^/(?<apikey>[^/]+)/v2/mcp-search(?:/|$)';
+  const start = config.indexOf(route);
+  assert.notEqual(start, -1, `missing nginx location: ${route}`);
+  const nextLocation = config.indexOf('\n    location ', start + route.length);
+  const body = config.slice(start, nextLocation === -1 ? config.length : nextLocation);
+
+  assert.match(body, /access_log off;/);
+  assert.match(body, /default_type application\/json;/);
+  assert.match(body, /return 410/);
+  assert.match(body, /"migration_url":"https:\/\/docs\.firecrawl\.dev\/mcp-server"/);
+  assert.doesNotMatch(body, /proxy_pass|X-Firecrawl-API-Key/);
 });
 
 test('specific MCP identities precede generic legacy regex routes', () => {
