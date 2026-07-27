@@ -1975,7 +1975,7 @@ server.addTool({
   description: `
 Scrape content from a single URL with advanced options. Use it when you know the page URL and need page content or structured extraction.
 
-**Best for:** Single page content extraction, when you know exactly which page contains the information.
+**Use when:** Single page content extraction, when you know exactly which page contains the information.
 **Not recommended for:** Multiple pages (call scrape multiple times or use crawl), unknown page location (use search).
 **Common mistakes:** Using markdown format when extracting specific data points (use JSON instead).
 **Other Features:** Use 'branding' format to extract brand identity (colors, fonts, typography, spacing, UI components) for design analysis or style replication.
@@ -2034,7 +2034,7 @@ If JSON extraction returns empty, minimal, or just navigation content, the page 
 }
 \`\`\`
 
-**Prefer markdown format by default.** You can read and reason over the full page content directly — no need for an intermediate query step. Use markdown for questions about page content, factual lookups, and any task where you need to understand the page.
+**Markdown format:** Returns full page content for reading, summaries, factual lookups, and tasks that require page context.
 
 **Use JSON format when user needs:**
 - Structured data with specific fields (extract all products with name, price, description)
@@ -2067,7 +2067,7 @@ If JSON extraction returns empty, minimal, or just navigation content, the page 
 }
 \`\`\`
 **Branding format:** Extracts comprehensive brand identity (colors, fonts, typography, spacing, logo, UI components) for design analysis or style replication.
-**Performance:** Add maxAge parameter for 500% faster scrapes using cached data.
+**Caching:** Set maxAge to allow a response to use cached content that is no older than the specified duration.
 **Lockdown mode:** Set \`lockdown: true\` to serve the request only from the existing index/cache without any outbound network request. For air-gapped or compliance-constrained use where the request URL itself is considered sensitive. Errors on cache miss. Billed at 5 credits.
 **Privacy:** Set \`redactPII: true\` to return content with personally identifiable information redacted.
 **Returns:** JSON structured data, markdown, branding profile, or other formats as specified.
@@ -2124,11 +2124,11 @@ server.addTool({
   description: `
 Map a website to discover all indexed URLs on the site.
 
-**Best for:** Discovering URLs on a website before deciding what to scrape; finding specific sections or pages within a large site; locating the correct page when scrape returns empty or incomplete results.
+**Use when:** Discovering URLs on a website before deciding what to scrape; finding specific sections or pages within a large site; locating the correct page when scrape returns empty or incomplete results.
 **Not recommended for:** When you already know which specific URL you need (use scrape); when you need the content of the pages (use scrape after mapping).
 **Common mistakes:** Using crawl to discover URLs instead of map; jumping straight to firecrawl_agent when scrape fails instead of using map first to find the right page.
 
-**IMPORTANT - Use map before agent:** If \`firecrawl_scrape\` returns empty, minimal, or irrelevant content, use \`firecrawl_map\` with the \`search\` parameter to find the specific page URL containing your target content. This is faster and cheaper than using \`firecrawl_agent\`. Only use the agent as a last resort after map+scrape fails.
+**When scrape does not return the needed content:** Use \`firecrawl_map\` with the \`search\` parameter to identify a specific page URL, then scrape that URL. Use \`firecrawl_agent\` for research tasks that need multi-step navigation or investigation.
 
 **Prompt Example:** "Find the webhook documentation page on this API docs site."
 **Usage Example (discover all URLs):**
@@ -2201,7 +2201,7 @@ The query also supports search operators, that you can use if needed to refine t
 | \`imagesize:\` | Only returns images with exact dimensions | \`imagesize:1920x1080\`
 | \`larger:\` | Only returns images larger than specified dimensions | \`larger:1920x1080\`
 
-**Best for:** Finding specific information across multiple websites, when you don't know which website has the information; when you need the most relevant content for a query.
+**Use when:** Finding specific information across multiple websites, when you don't know which website has the information; when you need the most relevant content for a query.
 **Not recommended for:** When you need to search the filesystem. When you already know which website to scrape (use scrape); when you need comprehensive coverage of a single website (use map or crawl.
 **Common mistakes:** Using crawl or map for open-ended questions (use search instead).
 **Prompt Example:** "Find the latest research papers on AI published in 2023."
@@ -2212,7 +2212,7 @@ The query also supports search operators, that you can use if needed to refine t
 **Optimal Workflow:** Search first using firecrawl_search without formats, then after fetching the results, use the scrape tool to get the content of the relevantpage(s) that you want to scrape
 **After the search:** Once you have processed the results (or decided they were not useful), call \`firecrawl_search_feedback\` with the \`id\` from this response. The first feedback per search refunds 1 credit and helps Firecrawl improve search quality.
 
-**Usage Example without formats (Preferred):**
+**Usage Example without formats:**
 \`\`\`json
 {
   "name": "firecrawl_search",
@@ -2729,7 +2729,7 @@ if (!ENDPOINT_FEEDBACK_DISABLED) {
     description: `
 Send structured feedback for a completed Firecrawl v2 job. Use this for endpoint-level feedback on \`scrape\`, \`parse\`, \`map\`, or \`search\` jobs when the job result was useful, partially useful, or failed to meet expectations.
 
-For search-result quality specifically, prefer \`firecrawl_search_feedback\` when available because it has search-focused guidance. This generic tool posts to \`/v2/feedback\` and accepts endpoint-wide signals:
+For search-result quality, use \`firecrawl_search_feedback\` when available; it accepts search-specific feedback. This generic tool posts to \`/v2/feedback\` and accepts endpoint-wide signals:
 
 - **endpoint** — one of \`search\`, \`scrape\`, \`parse\`, or \`map\`.
 - **jobId** — the id returned by that endpoint.
@@ -2859,7 +2859,7 @@ server.addTool({
   description: `
  Starts a crawl job on a website, polls until it reaches a terminal state, and returns the final crawl status/data.
  
- **Best for:** Extracting content from multiple related pages, when you need comprehensive coverage.
+ **Use when:** Extracting content from multiple related pages, when you need comprehensive coverage.
  **Not recommended for:** Extracting content from a single page (use scrape); when token limits are a concern (use map + scrape for tighter control); when you need fast results (crawling can be slow).
  **Warning:** Crawl responses can be very large and may exceed token limits. Limit the crawl depth and number of pages, or use map + scrape for tighter control.
  **Common mistakes:** Setting limit or maxDiscoveryDepth too high (causes token overflow) or too low (causes missing pages); using crawl for a single page (use scrape instead). Using a /* wildcard is not recommended.
@@ -3000,7 +3000,7 @@ server.addTool({
   description: `
 Extract structured information from web pages using LLM capabilities. Supports both cloud AI and self-hosted LLM extraction.
 
-**Best for:** Extracting specific structured data like prices, names, details from web pages.
+**Use when:** Extracting specific structured data like prices, names, details from web pages.
 **Not recommended for:** When you need the full content of a page (use scrape); when you're not looking for specific structured data.
 **Arguments:**
 - urls: Array of URLs to extract information from
@@ -3087,9 +3087,9 @@ Autonomous web research agent. This is a separate AI agent layer that independen
 - Complex research across multiple sites: 2-5 minutes
 - Deep research tasks: 5+ minutes
 
-**Best for:** Complex research tasks where you don't know the exact URLs; multi-source data gathering; finding information scattered across the web; extracting data from JavaScript-heavy SPAs that fail with regular scrape.
+**Use when:** Complex research tasks where you don't know the exact URLs; multi-source data gathering; finding information scattered across the web; extracting data from JavaScript-heavy SPAs that fail with regular scrape.
 **Not recommended for:**
-- Single-page extraction when you have a URL (use firecrawl_scrape, faster and cheaper)
+- Single-page extraction when you have a URL (use firecrawl_scrape)
 - Web search (use firecrawl_search first)
 - Interactive page tasks like clicking, filling forms, login, or navigating JS-heavy SPAs (use firecrawl_scrape + firecrawl_interact)
 - Extracting specific data from a known page (use firecrawl_scrape with JSON format)
@@ -3222,10 +3222,10 @@ server.addTool({
   description: `
 Interact with a page in a live browser session: click buttons, fill forms, extract dynamic content, or navigate deeper.
 
-**Best for:** Multi-step workflows on a single page — searching a site, clicking through results, filling forms, extracting data that requires interaction.
+**Use when:** Multi-step workflows on a single page — searching a site, clicking through results, filling forms, extracting data that requires interaction.
 **Two ways to target a page:**
 - Pass a \`url\` to interact directly. The session is opened for you in one call (use this for a fresh page).
-- Pass a \`scrapeId\` from a previous firecrawl_scrape to reuse that already-loaded page (cheaper when you just scraped it).
+- Pass a \`scrapeId\` from a previous firecrawl_scrape to reuse that already-loaded page.
 
 **Arguments:**
 - url: Page to interact with; opens a session for you (use this OR scrapeId)
@@ -3402,7 +3402,7 @@ In hosted CLOUD_SERVICE mode, this tool is a two-call flow because hosted MCP ca
 1. Call with filePath, contentType, parse options, and optional declaredSizeBytes. The hosted server mints a short-lived upload URL and returns a safe local curl PUT command plus nextToolCall.
 2. Run the returned curl command locally, then call firecrawl_parse again with uploadRef and the desired parse options. The hosted server calls /v2/parse server-side with your account credential or eligible anonymous keyless session.
 
-**Best for:** Extracting content from a local document (PDF, Word, Excel, HTML, etc.); pulling structured data out of a file with JSON format; converting binary documents into markdown for downstream reasoning.
+**Use when:** Extracting content from a local document (PDF, Word, Excel, HTML, etc.); pulling structured data out of a file with JSON format; converting binary documents into markdown for downstream reasoning.
 **Not recommended for:** Remote URLs (use firecrawl_scrape); multiple files at once (call parse multiple times); documents that require interactive actions, screenshots, or change tracking — those aren't supported by the parse endpoint.
 **Common mistakes:** In hosted mode, do not pass both filePath and uploadRef. Phase 1 uses filePath only to generate upload instructions; phase 2 uses uploadRef only to parse server-side.
 
@@ -3547,7 +3547,7 @@ The query supports search operators to refine results:
 | \`intitle:\` | Only returns results that include a word in the title of the page | \`intitle:Firecrawl\`
 | \`related:\` | Only returns results that are related to a specific domain | \`related:firecrawl.dev\`
 
-**Best for:** Finding relevant results across many websites when you don't know which site has the information.
+**Use when:** Finding relevant results across many websites when you don't know which site has the information.
 **Sources:** web, images, news; default to web unless images or news are needed.
 **Categories:** Optional filter to limit result types: \`github\` (GitHub repositories, code, issues, and docs), \`research\` (academic and research sources), \`pdf\` (PDF results).
 **Domain filters:** Use includeDomains to restrict results to specific domains, or excludeDomains to remove domains. Do not use both in the same request. Domains must be hostnames only, without protocol or path.

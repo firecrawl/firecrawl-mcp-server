@@ -15,6 +15,10 @@ const coercivePhrases = [
   /most powerful(?: web search tool)? available/i,
   /always default(?: to using)?/i,
   /call this immediately after a search/i,
+  /\*\*best for:\*\*/i,
+  /\bprefer(?:red)?\b/i,
+  /\bfaster and cheaper\b/i,
+  /\b\d+% faster\b/i,
 ];
 
 test('agent-visible Firecrawl copy is capability-honest and non-coercive', async () => {
