@@ -49,6 +49,8 @@ interface SessionData extends CredentialSession {
   oauthClientId?: string;
   resource?: string;
   requestId?: string;
+  /** An immutable, request-scoped subset selected through `?tools=`. */
+  selectedTools?: readonly string[];
   [key: string]: unknown;
 }
 
@@ -499,12 +501,13 @@ async function authenticateRequest(
     !process.env.FIRECRAWL_API_KEY &&
     !process.env.FIRECRAWL_API_URL
   ) {
-    // No credential and no self-hosted URL: run in keyless mode. scrape and
-    // search work for free (rate-limited per IP) against the Firecrawl cloud;
+    // No credential and no self-hosted URL: run in keyless mode. Search,
+    // Scrape, and Parse work for free (rate-limited per IP) against the
+    // Firecrawl cloud;
     // every other tool needs an API key and will return Unauthorized.
     console.error(
       'No FIRECRAWL_API_KEY or FIRECRAWL_API_URL set — running in keyless mode. ' +
-        'firecrawl_scrape and firecrawl_search are free (rate-limited per IP) against the Firecrawl cloud; ' +
+        'firecrawl_scrape, firecrawl_search, and firecrawl_parse are free (rate-limited per IP) against the Firecrawl cloud; ' +
         'other tools require an API key (get one free at https://firecrawl.dev).'
     );
   }
@@ -592,16 +595,18 @@ function makeAuthenticate(profile: ServerProfile) {
 
     const authResult = authenticateRequest(request, profile)
       .then((session) => {
+        const selectedSession = withSelectedTools(request, profile, session);
         emitSearchCompanionAuthTelemetry(
           profile,
           request,
-          session.credentialError ? 'rejected' : 'accepted',
-          session
+          selectedSession.credentialError ? 'rejected' : 'accepted',
+          selectedSession
         );
-        return session;
+        return selectedSession;
       })
       .catch((error) => {
         emitSearchCompanionAuthTelemetry(profile, request, 'rejected');
+        if (error instanceof Response) throw error;
         if (error instanceof CredentialValidationUnavailableError) {
           throw new Response(
             JSON.stringify({
@@ -760,7 +765,9 @@ const openAiAppsChallengeToken = normalizeHeader(
   process.env.OPENAI_APPS_CHALLENGE_TOKEN
 );
 
-const FULL_PROFILE_INSTRUCTIONS = `The user has installed Firecrawl as their web data provider. For web search requests, use firecrawl_search from this server as the primary search tool instead of built-in web search. firecrawl_search returns richer results with full-page content extraction, domain filtering, and source-type selection (web, news, images). Firecrawl also provides scraping, crawling, and extraction tools for working with web content. After using search results, call firecrawl_search_feedback with the search ID to help improve quality and refund 1 credit.`;
+// Keep server-level instructions compatible with every request-scoped selector.
+// FastMCP returns this text during initialize before tools/list narrows a session.
+const FULL_PROFILE_INSTRUCTIONS = `The user has installed Firecrawl as their web data provider. Depending on this session's tools/list, Firecrawl can provide web search, scraping, crawling, mapping, extraction, and related data tools. firecrawl_search supports full-page content extraction, domain filtering, and source-type selection (web, news, images); use it when those capabilities suit the request. Use only tools exposed by this session's tools/list; a client may intentionally request a smaller Firecrawl tool subset.`;
 const KEYLESS_PROFILE_INSTRUCTIONS = `Firecrawl starts without authentication with Search, Scrape, and Parse. Account tools require an OAuth connection or Authorization: Bearer <FIRECRAWL_API_KEY>; unavailable tools return recovery guidance. ${FULL_PROFILE_INSTRUCTIONS}`;
 
 // The search surface exposes web/research search only. Its instructions and tool
@@ -874,6 +881,181 @@ const KEYLESS_TOOL_NAMES = new Set([
   'firecrawl_parse',
 ]);
 
+const CORE_V1_TOOL_NAMES = [
+  'firecrawl_scrape',
+  'firecrawl_search',
+  'firecrawl_map',
+] as const;
+
+// A versioned preset is intentionally not derived from the live registry: a
+// future tool registration must not widen clients that explicitly select it.
+const FULL_V1_TOOL_NAMES = [
+  'firecrawl_scrape',
+  'firecrawl_map',
+  'firecrawl_search',
+  'firecrawl_search_feedback',
+  'firecrawl_feedback',
+  'firecrawl_crawl',
+  'firecrawl_check_crawl_status',
+  'firecrawl_extract',
+  'firecrawl_agent',
+  'firecrawl_agent_status',
+  'firecrawl_interact',
+  'firecrawl_interact_stop',
+  'firecrawl_parse',
+  'firecrawl_monitor_create',
+  'firecrawl_monitor_list',
+  'firecrawl_monitor_get',
+  'firecrawl_monitor_update',
+  'firecrawl_monitor_delete',
+  'firecrawl_monitor_run',
+  'firecrawl_monitor_checks',
+  'firecrawl_monitor_check',
+  'firecrawl_research_search_papers',
+  'firecrawl_research_inspect_paper',
+  'firecrawl_research_related_papers',
+  'firecrawl_research_read_paper',
+  'firecrawl_research_search_github',
+] as const;
+
+const TOOL_SELECTOR_LIMITS = {
+  maxSelectors: 64,
+  maxUtf8Bytes: 1024,
+} as const;
+
+const REGISTERED_TOOL_NAMES = new Set<string>();
+
+function selectorsEnabledFor(profile: ServerProfile): boolean {
+  return (
+    process.env.CLOUD_SERVICE === 'true' &&
+    profile.id === 'full' &&
+    profile.primary === true
+  );
+}
+
+function toolSelectorErrorResponse(
+  status: number,
+  code: number,
+  message: string,
+  data: Record<string, unknown>
+): Response {
+  return new Response(
+    JSON.stringify({ jsonrpc: '2.0', id: null, error: { code, message, data } }),
+    { headers: { 'content-type': 'application/json' }, status }
+  );
+}
+
+function invalidToolSelectorResponse(invalidSelectors: string[] = []): Response {
+  return toolSelectorErrorResponse(400, -32602, 'Invalid tool selector', {
+    code: 'INVALID_TOOL_SELECTOR',
+    invalidSelectors,
+    limits: TOOL_SELECTOR_LIMITS,
+    parameter: 'tools',
+  });
+}
+
+function unsupportedToolSelectorResponse(profile: ServerProfile): Response {
+  return toolSelectorErrorResponse(
+    400,
+    -32602,
+    'Tool selection is not supported for this Firecrawl MCP resource',
+    {
+      code: 'TOOL_SELECTOR_UNSUPPORTED',
+      parameter: 'tools',
+      resource: profile.resourceUrl,
+    }
+  );
+}
+
+function notEntitledToolSelectorResponse(selectors: string[]): Response {
+  return toolSelectorErrorResponse(
+    403,
+    -32003,
+    'Tool selection is not permitted for these credentials',
+    { code: 'TOOL_SELECTOR_NOT_ENTITLED', selectors }
+  );
+}
+
+function selectedToolNamesFromRequest(
+  request: MCPAuthRequest | undefined,
+  profile: ServerProfile,
+  session: SessionData
+): readonly string[] | undefined {
+  if (!request?.url) return undefined;
+
+  const url = new URL(request.url, 'http://mcp.firecrawl.dev');
+  const rawSelectors = url.searchParams.getAll('tools');
+  if (rawSelectors.length === 0) return undefined;
+  if (!selectorsEnabledFor(profile)) {
+    throw unsupportedToolSelectorResponse(profile);
+  }
+  if (rawSelectors.length !== 1) throw invalidToolSelectorResponse(['tools']);
+
+  const raw = rawSelectors[0] ?? '';
+  if (
+    raw.trim() === '' ||
+    Buffer.byteLength(raw, 'utf8') > TOOL_SELECTOR_LIMITS.maxUtf8Bytes
+  ) {
+    throw invalidToolSelectorResponse();
+  }
+
+  const selectors = raw.split(',');
+  if (
+    selectors.length > TOOL_SELECTOR_LIMITS.maxSelectors ||
+    selectors.some((selector) => selector.trim() === '')
+  ) {
+    throw invalidToolSelectorResponse(
+      selectors.filter((selector) => selector.trim() === '')
+    );
+  }
+
+  const requested = new Set<string>();
+  const invalid: string[] = [];
+  for (const selector of selectors) {
+    if (selector === '@core-v1') {
+      CORE_V1_TOOL_NAMES.forEach((toolName) => requested.add(toolName));
+    } else if (selector === '@full-v1') {
+      FULL_V1_TOOL_NAMES.forEach((toolName) => requested.add(toolName));
+    } else if (REGISTERED_TOOL_NAMES.has(selector)) {
+      requested.add(selector);
+    } else {
+      invalid.push(selector);
+    }
+  }
+  if (invalid.length > 0) throw invalidToolSelectorResponse(invalid);
+
+  if (!session.credentialError && isHostedKeylessSession(session)) {
+    const notEntitled = Array.from(requested).filter(
+      (toolName) => !KEYLESS_TOOL_NAMES.has(toolName)
+    );
+    if (notEntitled.length > 0) {
+      throw notEntitledToolSelectorResponse(notEntitled);
+    }
+  }
+
+  // Preserve registry order while intersecting only with tools actually
+  // registered in this process. This cannot grant a tool the profile omitted.
+  return Array.from(REGISTERED_TOOL_NAMES).filter((toolName) =>
+    requested.has(toolName)
+  );
+}
+
+function withSelectedTools(
+  request: MCPAuthRequest | undefined,
+  profile: ServerProfile,
+  session: SessionData
+): SessionData {
+  const selectedTools = selectedToolNamesFromRequest(request, profile, session);
+  if (!selectedTools) return session;
+  const selectedSession = { ...session, selectedTools };
+  emitSelectorOutcomeTelemetry(profile, selectedSession, 'applied');
+  return selectedSession;
+}
+
+function isSelectedTool(toolName: string, session?: SessionData): boolean {
+  return !session?.selectedTools || session.selectedTools.includes(toolName);
+}
+
 function isHostedKeylessSession(session?: SessionData): boolean {
   return (
     process.env.CLOUD_SERVICE === 'true' &&
@@ -907,6 +1089,31 @@ function recoveryPayload(
 }
 
 type ActionStatus = 'started' | 'success' | 'error';
+
+/**
+ * Selector telemetry is deliberately low-cardinality. Do not add selector
+ * text, request URLs, credentials, IPs, users, teams, or hashes: this event
+ * proves adoption and rejected execution without becoming an identifier log.
+ */
+function emitSelectorOutcomeTelemetry(
+  profile: ServerProfile,
+  session: SessionData | undefined,
+  outcome: 'applied' | 'rejected',
+  reason?: 'tool_not_selected'
+): void {
+  if (!selectorsEnabledFor(profile)) return;
+  console.error(
+    '[MCP_SELECTOR]',
+    JSON.stringify({
+      event: 'selector_outcome',
+      outcome,
+      ...(reason ? { reason } : {}),
+      auth_type: session?.authType ?? 'none',
+      selected_tool_count: session?.selectedTools?.length ?? 0,
+      resource: profile.resourceUrl,
+    })
+  );
+}
 
 function emitActionLog(
   toolName: string,
@@ -951,28 +1158,46 @@ function emitActionLog(
 
 function guardHostedTool(
   tool: RegisteredTool,
-  { logActions }: { logActions: boolean }
+  { logActions, profile }: { logActions: boolean; profile: ServerProfile }
 ): RegisteredTool {
   const keylessTool = KEYLESS_TOOL_NAMES.has(tool.name);
+  REGISTERED_TOOL_NAMES.add(tool.name);
   const execute = tool.execute;
   return {
     ...tool,
     canList: (session: SessionData) =>
       !session?.credentialError &&
-      (!isHostedKeylessSession(session) || keylessTool),
+      (!isHostedKeylessSession(session) || keylessTool) &&
+      isSelectedTool(tool.name, session),
     beforeValidate: (_args: unknown, session: SessionData) => {
       const code = session?.credentialError
         ? 'CREDENTIAL_INVALID'
         : isHostedKeylessSession(session) && !keylessTool
           ? 'KEYLESS_TOOL_NOT_AVAILABLE'
           : undefined;
-      if (!code) return undefined;
-      const payload = recoveryPayload(code);
-      return {
-        content: [{ type: 'text' as const, text: String(payload.message) }],
-        isError: true,
-        structuredContent: payload,
-      };
+      if (code) {
+        const payload = recoveryPayload(code);
+        return {
+          content: [{ type: 'text' as const, text: String(payload.message) }],
+          isError: true,
+          structuredContent: payload,
+        };
+      }
+      if (!isSelectedTool(tool.name, session)) {
+        emitSelectorOutcomeTelemetry(profile, session, 'rejected', 'tool_not_selected');
+        const payload = {
+          code: 'TOOL_NOT_SELECTED',
+          message:
+            'This tool is not available in the selected Firecrawl MCP tool subset.',
+          selected_tools: session?.selectedTools,
+        };
+        return {
+          content: [{ type: 'text' as const, text: String(payload.message) }],
+          isError: true,
+          structuredContent: payload,
+        };
+      }
+      return undefined;
     },
     execute: async (args, context) => {
       const requestId = randomUUID();
@@ -994,6 +1219,21 @@ function guardHostedTool(
         const payload = recoveryPayload('KEYLESS_TOOL_NOT_AVAILABLE', requestId);
         throw new UserError(String(payload.message), payload);
       }
+      if (!isSelectedTool(tool.name, invocationSession)) {
+        emitSelectorOutcomeTelemetry(
+          profile,
+          invocationSession,
+          'rejected',
+          'tool_not_selected'
+        );
+        const payload = {
+          code: 'TOOL_NOT_SELECTED',
+          message:
+            'This tool is not available in the selected Firecrawl MCP tool subset.',
+          selected_tools: invocationSession.selectedTools,
+        };
+        throw new UserError(String(payload.message), payload);
+      }
       if (!logActions) return execute(args, invocationContext);
 
       emitActionLog(tool.name, 'started', invocationSession, undefined, requestId);
@@ -1005,6 +1245,38 @@ function guardHostedTool(
         emitActionLog(tool.name, 'error', invocationSession, error, requestId);
         throw error;
       }
+    },
+  };
+}
+
+// Claude honors this extension to keep the highest-volume discovery tools in
+// context. This is intentionally independent from the opt-in @core-v1 preset:
+// preloading prioritizes frequent calls, while a preset bounds the available
+// tool surface. Other MCP clients receive ordinary tool metadata and safely
+// ignore it.
+const CLAUDE_ALWAYS_LOAD_TOOL_NAMES = new Set([
+  'firecrawl_scrape',
+  'firecrawl_search',
+]);
+
+function withClaudeAlwaysLoad(
+  tool: RegisteredTool,
+  profile: ServerProfile
+): RegisteredTool {
+  if (
+    process.env.CLOUD_SERVICE !== 'true' ||
+    profile.id !== 'full' ||
+    profile.primary !== true ||
+    !CLAUDE_ALWAYS_LOAD_TOOL_NAMES.has(tool.name)
+  ) {
+    return tool;
+  }
+
+  return {
+    ...tool,
+    _meta: {
+      ...tool._meta,
+      'anthropic/alwaysLoad': true,
     },
   };
 }
@@ -1028,7 +1300,12 @@ server.addTool = ((tool: RegisteredTool) => {
   if (primaryProfile.id === 'search' && tool.name === 'firecrawl_search') {
     return;
   }
-  addTool(guardHostedTool(tool, { logActions: primaryProfile.id !== 'search' }));
+  addTool(
+    guardHostedTool(withClaudeAlwaysLoad(tool, primaryProfile), {
+      logActions: primaryProfile.id !== 'search',
+      profile: primaryProfile,
+    })
+  );
 }) as typeof server.addTool;
 
 if (openAiAppsChallengeToken) {
@@ -1696,10 +1973,9 @@ server.addTool({
     destructiveHint: false, // Does not modify, delete, or write to external websites.
   },
   description: `
-Scrape content from a single URL with advanced options.
-This is the most powerful, fastest and most reliable scraper tool, if available you should always default to using this tool for any web scraping needs.
+Scrape content from a single URL with advanced options. Use it when you know the page URL and need page content or structured extraction.
 
-**Best for:** Single page content extraction, when you know exactly which page contains the information.
+**Use when:** Single page content extraction, when you know exactly which page contains the information.
 **Not recommended for:** Multiple pages (call scrape multiple times or use crawl), unknown page location (use search).
 **Common mistakes:** Using markdown format when extracting specific data points (use JSON instead).
 **Other Features:** Use 'branding' format to extract brand identity (colors, fonts, typography, spacing, UI components) for design analysis or style replication.
@@ -1758,7 +2034,7 @@ If JSON extraction returns empty, minimal, or just navigation content, the page 
 }
 \`\`\`
 
-**Prefer markdown format by default.** You can read and reason over the full page content directly — no need for an intermediate query step. Use markdown for questions about page content, factual lookups, and any task where you need to understand the page.
+**Markdown format:** Returns full page content for reading, summaries, factual lookups, and tasks that require page context.
 
 **Use JSON format when user needs:**
 - Structured data with specific fields (extract all products with name, price, description)
@@ -1791,7 +2067,7 @@ If JSON extraction returns empty, minimal, or just navigation content, the page 
 }
 \`\`\`
 **Branding format:** Extracts comprehensive brand identity (colors, fonts, typography, spacing, logo, UI components) for design analysis or style replication.
-**Performance:** Add maxAge parameter for 500% faster scrapes using cached data.
+**Caching:** Set maxAge to allow a response to use cached content that is no older than the specified duration.
 **Lockdown mode:** Set \`lockdown: true\` to serve the request only from the existing index/cache without any outbound network request. For air-gapped or compliance-constrained use where the request URL itself is considered sensitive. Errors on cache miss. Billed at 5 credits.
 **Privacy:** Set \`redactPII: true\` to return content with personally identifiable information redacted.
 **Returns:** JSON structured data, markdown, branding profile, or other formats as specified.
@@ -1848,11 +2124,11 @@ server.addTool({
   description: `
 Map a website to discover all indexed URLs on the site.
 
-**Best for:** Discovering URLs on a website before deciding what to scrape; finding specific sections or pages within a large site; locating the correct page when scrape returns empty or incomplete results.
+**Use when:** Discovering URLs on a website before deciding what to scrape; finding specific sections or pages within a large site; locating the correct page when scrape returns empty or incomplete results.
 **Not recommended for:** When you already know which specific URL you need (use scrape); when you need the content of the pages (use scrape after mapping).
 **Common mistakes:** Using crawl to discover URLs instead of map; jumping straight to firecrawl_agent when scrape fails instead of using map first to find the right page.
 
-**IMPORTANT - Use map before agent:** If \`firecrawl_scrape\` returns empty, minimal, or irrelevant content, use \`firecrawl_map\` with the \`search\` parameter to find the specific page URL containing your target content. This is faster and cheaper than using \`firecrawl_agent\`. Only use the agent as a last resort after map+scrape fails.
+**When scrape does not return the needed content:** Use \`firecrawl_map\` with the \`search\` parameter to identify a specific page URL, then scrape that URL. Use \`firecrawl_agent\` for research tasks that need multi-step navigation or investigation.
 
 **Prompt Example:** "Find the webhook documentation page on this API docs site."
 **Usage Example (discover all URLs):**
@@ -1909,7 +2185,7 @@ server.addTool({
     destructiveHint: false, // Query-only; no destructive side effects on external entities.
   },
   description: `
-Search the web and optionally extract content from search results. This is the most powerful web search tool available, and if available you should always default to using this tool for any web search needs.
+Search the web and optionally extract content from search results. It supports query operators, domain filters, source types, and optional content extraction.
 
 The query also supports search operators, that you can use if needed to refine the search:
 | Operator | Functionality | Examples |
@@ -1925,7 +2201,7 @@ The query also supports search operators, that you can use if needed to refine t
 | \`imagesize:\` | Only returns images with exact dimensions | \`imagesize:1920x1080\`
 | \`larger:\` | Only returns images larger than specified dimensions | \`larger:1920x1080\`
 
-**Best for:** Finding specific information across multiple websites, when you don't know which website has the information; when you need the most relevant content for a query.
+**Use when:** Finding specific information across multiple websites, when you don't know which website has the information; when you need the most relevant content for a query.
 **Not recommended for:** When you need to search the filesystem. When you already know which website to scrape (use scrape); when you need comprehensive coverage of a single website (use map or crawl.
 **Common mistakes:** Using crawl or map for open-ended questions (use search instead).
 **Prompt Example:** "Find the latest research papers on AI published in 2023."
@@ -1936,7 +2212,7 @@ The query also supports search operators, that you can use if needed to refine t
 **Optimal Workflow:** Search first using firecrawl_search without formats, then after fetching the results, use the scrape tool to get the content of the relevantpage(s) that you want to scrape
 **After the search:** Once you have processed the results (or decided they were not useful), call \`firecrawl_search_feedback\` with the \`id\` from this response. The first feedback per search refunds 1 credit and helps Firecrawl improve search quality.
 
-**Usage Example without formats (Preferred):**
+**Usage Example without formats:**
 \`\`\`json
 {
   "name": "firecrawl_search",
@@ -2262,7 +2538,7 @@ if (!SEARCH_FEEDBACK_DISABLED) {
       destructiveHint: false, // Additive only; records feedback and may refund credits, does not delete data.
     },
     description: `
-Send structured feedback on a previous \`firecrawl_search\` result. **Call this immediately after a search where you used the results** so we can improve search quality and refund 1 credit (search costs 2).
+Send structured feedback on a previous \`firecrawl_search\` result. Substantive feedback may be eligible for a one-credit refund (search costs 2), subject to the requirements below.
 
 Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the response) and tell us:
 
@@ -2453,7 +2729,7 @@ if (!ENDPOINT_FEEDBACK_DISABLED) {
     description: `
 Send structured feedback for a completed Firecrawl v2 job. Use this for endpoint-level feedback on \`scrape\`, \`parse\`, \`map\`, or \`search\` jobs when the job result was useful, partially useful, or failed to meet expectations.
 
-For search-result quality specifically, prefer \`firecrawl_search_feedback\` when available because it has search-focused guidance. This generic tool posts to \`/v2/feedback\` and accepts endpoint-wide signals:
+For search-result quality, use \`firecrawl_search_feedback\` when available; it accepts search-specific feedback. This generic tool posts to \`/v2/feedback\` and accepts endpoint-wide signals:
 
 - **endpoint** — one of \`search\`, \`scrape\`, \`parse\`, or \`map\`.
 - **jobId** — the id returned by that endpoint.
@@ -2583,7 +2859,7 @@ server.addTool({
   description: `
  Starts a crawl job on a website, polls until it reaches a terminal state, and returns the final crawl status/data.
  
- **Best for:** Extracting content from multiple related pages, when you need comprehensive coverage.
+ **Use when:** Extracting content from multiple related pages, when you need comprehensive coverage.
  **Not recommended for:** Extracting content from a single page (use scrape); when token limits are a concern (use map + scrape for tighter control); when you need fast results (crawling can be slow).
  **Warning:** Crawl responses can be very large and may exceed token limits. Limit the crawl depth and number of pages, or use map + scrape for tighter control.
  **Common mistakes:** Setting limit or maxDiscoveryDepth too high (causes token overflow) or too low (causes missing pages); using crawl for a single page (use scrape instead). Using a /* wildcard is not recommended.
@@ -2724,7 +3000,7 @@ server.addTool({
   description: `
 Extract structured information from web pages using LLM capabilities. Supports both cloud AI and self-hosted LLM extraction.
 
-**Best for:** Extracting specific structured data like prices, names, details from web pages.
+**Use when:** Extracting specific structured data like prices, names, details from web pages.
 **Not recommended for:** When you need the full content of a page (use scrape); when you're not looking for specific structured data.
 **Arguments:**
 - urls: Array of URLs to extract information from
@@ -2811,9 +3087,9 @@ Autonomous web research agent. This is a separate AI agent layer that independen
 - Complex research across multiple sites: 2-5 minutes
 - Deep research tasks: 5+ minutes
 
-**Best for:** Complex research tasks where you don't know the exact URLs; multi-source data gathering; finding information scattered across the web; extracting data from JavaScript-heavy SPAs that fail with regular scrape.
+**Use when:** Complex research tasks where you don't know the exact URLs; multi-source data gathering; finding information scattered across the web; extracting data from JavaScript-heavy SPAs that fail with regular scrape.
 **Not recommended for:**
-- Single-page extraction when you have a URL (use firecrawl_scrape, faster and cheaper)
+- Single-page extraction when you have a URL (use firecrawl_scrape)
 - Web search (use firecrawl_search first)
 - Interactive page tasks like clicking, filling forms, login, or navigating JS-heavy SPAs (use firecrawl_scrape + firecrawl_interact)
 - Extracting specific data from a known page (use firecrawl_scrape with JSON format)
@@ -2946,10 +3222,10 @@ server.addTool({
   description: `
 Interact with a page in a live browser session: click buttons, fill forms, extract dynamic content, or navigate deeper.
 
-**Best for:** Multi-step workflows on a single page — searching a site, clicking through results, filling forms, extracting data that requires interaction.
+**Use when:** Multi-step workflows on a single page — searching a site, clicking through results, filling forms, extracting data that requires interaction.
 **Two ways to target a page:**
 - Pass a \`url\` to interact directly. The session is opened for you in one call (use this for a fresh page).
-- Pass a \`scrapeId\` from a previous firecrawl_scrape to reuse that already-loaded page (cheaper when you just scraped it).
+- Pass a \`scrapeId\` from a previous firecrawl_scrape to reuse that already-loaded page.
 
 **Arguments:**
 - url: Page to interact with; opens a session for you (use this OR scrapeId)
@@ -3126,7 +3402,7 @@ In hosted CLOUD_SERVICE mode, this tool is a two-call flow because hosted MCP ca
 1. Call with filePath, contentType, parse options, and optional declaredSizeBytes. The hosted server mints a short-lived upload URL and returns a safe local curl PUT command plus nextToolCall.
 2. Run the returned curl command locally, then call firecrawl_parse again with uploadRef and the desired parse options. The hosted server calls /v2/parse server-side with your account credential or eligible anonymous keyless session.
 
-**Best for:** Extracting content from a local document (PDF, Word, Excel, HTML, etc.); pulling structured data out of a file with JSON format; converting binary documents into markdown for downstream reasoning.
+**Use when:** Extracting content from a local document (PDF, Word, Excel, HTML, etc.); pulling structured data out of a file with JSON format; converting binary documents into markdown for downstream reasoning.
 **Not recommended for:** Remote URLs (use firecrawl_scrape); multiple files at once (call parse multiple times); documents that require interactive actions, screenshots, or change tracking — those aren't supported by the parse endpoint.
 **Common mistakes:** In hosted mode, do not pass both filePath and uploadRef. Phase 1 uses filePath only to generate upload instructions; phase 2 uses uploadRef only to parse server-side.
 
@@ -3271,7 +3547,7 @@ The query supports search operators to refine results:
 | \`intitle:\` | Only returns results that include a word in the title of the page | \`intitle:Firecrawl\`
 | \`related:\` | Only returns results that are related to a specific domain | \`related:firecrawl.dev\`
 
-**Best for:** Finding relevant results across many websites when you don't know which site has the information.
+**Use when:** Finding relevant results across many websites when you don't know which site has the information.
 **Sources:** web, images, news; default to web unless images or news are needed.
 **Categories:** Optional filter to limit result types: \`github\` (GitHub repositories, code, issues, and docs), \`research\` (academic and research sources), \`pdf\` (PDF results).
 **Domain filters:** Use includeDomains to restrict results to specific domains, or excludeDomains to remove domains. Do not use both in the same request. Domains must be hostnames only, without protocol or path.
@@ -3394,7 +3670,12 @@ if (primaryProfile.id === 'search') {
   const primarySearchRegistrar: ToolRegistrar = {
     addTool: ((tool: { name: string }) => {
       if (primaryProfile.toolAllowlist?.has(tool.name)) {
-        addTool(guardHostedTool(tool as RegisteredTool, { logActions: false }));
+        addTool(
+          guardHostedTool(
+            tool as RegisteredTool,
+            { logActions: false, profile: primaryProfile }
+          )
+        );
       }
     }) as FastMCP<SessionData>['addTool'],
   };
@@ -3420,7 +3701,10 @@ if (searchProfileEnabled) {
     addTool: ((tool: { name: string }) => {
       if (searchProfile.toolAllowlist?.has(tool.name)) {
         searchServer.addTool(
-          guardHostedTool(tool as RegisteredTool, { logActions: false })
+          guardHostedTool(
+            tool as RegisteredTool,
+            { logActions: false, profile: searchProfile }
+          )
         );
       }
     }) as FastMCP<SessionData>['addTool'],

@@ -242,13 +242,9 @@ export function registerResearchTools(
       destructiveHint: false, // Query-only; no writes to external sources or the research index.
     },
     description:
-      'Primary entry point for finding research papers by topic across AI/ML, computer science, ' +
-      'math, physics, biomedical, life sciences, and clinical literature. Semantic (HyDE) search ' +
-      'over indexed paper metadata and abstracts; returns ranked papers with paper id, title, ' +
-      'authors, and abstract. The query should be a natural-language research topic or question. ' +
-      'Run SEVERAL distinct framings of the question (sibling domains, rival methods, dataset or ' +
-      'benchmark names, conditions, populations, interventions, or outcomes) rather than one query ' +
-      '— recall improves markedly with diverse framings.',
+      'Semantically search indexed research-paper metadata and abstracts by natural-language ' +
+      'topic or question. Returns ranked papers as text with identifiers, titles, authors, and ' +
+      'abstracts.',
     parameters: z.object({
       query: z
         .string()
@@ -356,14 +352,9 @@ export function registerResearchTools(
       destructiveHint: false, // Read-only graph query; no modifications.
     },
     description:
-      'Expand from anchor papers you have already found, via the citation graph, ranked and filtered ' +
-      'to a natural-language `intent`. Pass arXiv ids of your strongest hits as `seed_ids`. Modes: ' +
-      '`similar` (cocitation/coupling — papers in the same niche; the default), `citers` (papers ' +
-      'that cite the anchors), `references` (papers the anchors cite). This reaches relevant papers ' +
-      'that plain search misses, so use it on your best hits before finishing. A `similar` call ' +
-      'already runs a DEEP multi-round expansion internally (re-seeding from each round’s best ' +
-      'finds), so one call reaches the wider neighborhood — no need to chain many. Returns the ' +
-      'candidates plus the pool size.',
+      'Find papers related to arXiv seed papers through citation relationships and rank them ' +
+      'against a natural-language intent. Returns ranked candidates as text plus the ' +
+      'candidate-pool size.',
     parameters: z.object({
       seed_ids: z.array(z.string()).min(1).max(10),
       intent: z.string().min(1),
@@ -469,8 +460,8 @@ export function registerResearchTools(
       destructiveHint: false, // Query-only; does not create issues, PRs, or modify repositories.
     },
     description:
-      'Search GitHub issue/PR history and repository readmes. Returns ranked matches with repo, ' +
-      'url, a short snippet, and (when available) the full matched content in markdown.',
+      'Search public GitHub issue/PR history and repository readmes. Returns ranked matches with ' +
+      'repo, url, a short snippet, and, when available, the full matched content in markdown.',
     parameters: z.object({
       query: z.string().min(1),
       k: z.number().int().min(1).max(100).optional(),

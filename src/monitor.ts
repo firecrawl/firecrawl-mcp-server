@@ -436,7 +436,7 @@ Get a single monitor by ID.
       destructiveHint: true, // Can pause, replace, or remove monitor configuration; changes overwrite prior settings.
     },
     description: `
-Update a monitor. Pass any subset of fields to patch: \`name\`, \`status\` ("active" | "paused"), \`schedule\`, \`targets\`, \`goal\`, \`judgeEnabled\`, \`webhook\`, \`notification\`, \`retentionDays\`.
+Update a monitor. Pass \`id\` and nest any subset of patch fields inside \`body\`: \`name\`, \`status\` ("active" | "paused"), \`schedule\`, \`targets\`, \`goal\`, \`judgeEnabled\`, \`webhook\`, \`notification\`, \`retentionDays\`. Returns the JSON monitor record from the API.
 
 **Usage Example:**
 \`\`\`json
@@ -505,7 +505,7 @@ Permanently delete a monitor and stop its schedule. This cannot be undone.
       destructiveHint: false, // Starts a read-only check job; does not delete the monitor or external sites.
     },
     description: `
-Trigger a monitor check immediately, outside its normal schedule. Returns the queued check.
+Trigger a monitor check immediately, outside its normal schedule. Returns the JSON check record from the API.
 
 **Usage Example:**
 \`\`\`json
@@ -533,7 +533,7 @@ Trigger a monitor check immediately, outside its normal schedule. Returns the qu
       destructiveHint: false, // Read-only listing.
     },
     description: `
-List historical checks for a monitor.
+List historical checks for a monitor, with optional \`limit\`/\`offset\` and \`status\` filtering. Returns a JSON list of checks.
 
 **Usage Example:**
 \`\`\`json

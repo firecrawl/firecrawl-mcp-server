@@ -34,12 +34,13 @@ Connect to the remote hosted server with no setup:
 https://mcp.firecrawl.dev/v2/mcp
 ```
 
-On the keyless free tier, `scrape`, `search`, and `interact` work without an API key (rate-limited). Other tools such as `crawl`, `map`, `agent`, and `extract` still need a key.
+On the keyless free tier, `scrape`, `search`, and `parse` work without an API key (rate-limited). Other tools such as `interact`, `crawl`, `map`, `agent`, and `extract` still need a key.
 
 Prefer an API key or OAuth whenever the human can sign up. It unlocks the full tool set and higher limits. With a key, use:
 
 ```
-https://mcp.firecrawl.dev/{FIRECRAWL_API_KEY}/v2/mcp
+https://mcp.firecrawl.dev/v2/mcp
+Authorization: Bearer <FIRECRAWL_API_KEY>
 ```
 
 See the [MCP server docs](https://docs.firecrawl.dev/mcp-server) and the [agent onboarding guide](https://www.firecrawl.dev/agent-onboarding/SKILL.md) for setup details.
@@ -57,7 +58,7 @@ It exposes a fixed set of six read-only tools: `firecrawl_search` and the five `
 ### Running with npx
 
 ```bash
-env FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
+env FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp@3.22.4
 ```
 
 ### Manual Installation
@@ -101,9 +102,9 @@ To configure Firecrawl MCP in Cursor **v0.45.6**
 4. Enter the following:
    - Name: "firecrawl-mcp" (or your preferred name)
    - Type: "command"
-   - Command: `env FIRECRAWL_API_KEY=your-api-key npx -y firecrawl-mcp`
+   - Command: `env FIRECRAWL_API_KEY=your-api-key npx -y firecrawl-mcp@3.22.4`
 
-> If you are using Windows and are running into issues, try `cmd /c "set FIRECRAWL_API_KEY=your-api-key && npx -y firecrawl-mcp"`
+> If you are using Windows and are running into issues, try `cmd /c "set FIRECRAWL_API_KEY=your-api-key && npx -y firecrawl-mcp@3.22.4"`
 
 Replace `your-api-key` with your Firecrawl API key. If you don't have one yet, you can create an account and get it from https://www.firecrawl.dev/app/api-keys
 
@@ -132,7 +133,7 @@ Add this to your `./codeium/windsurf/model_config.json`:
 To run the server using Streamable HTTP locally instead of the default stdio transport:
 
 ```bash
-env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp
+env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecrawl-mcp@3.22.4
 ```
 
 Use the url: http://localhost:3000/mcp
