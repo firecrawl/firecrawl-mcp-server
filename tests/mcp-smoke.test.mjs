@@ -1438,6 +1438,56 @@ test('account endpoint accepts legacy OAuth one way and delegates managed keys',
   assert.equal(stderr.includes('fco_legacy'), false);
 });
 
+test('legacy key-in-path telemetry is sanitized and does not leak the credential', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const legacyCredential = 'fc-legacy-path-secret';
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  let stdout = '';
+  child.stdout.on('data', (chunk) => {
+    stdout += chunk;
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
+    body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'tools/list', params: {} }),
+    headers: {
+      accept: 'application/json, text/event-stream',
+      'content-type': 'application/json',
+      'x-firecrawl-api-key': legacyCredential,
+      'x-firecrawl-key-transport': 'path',
+    },
+    method: 'POST',
+  });
+  assert.equal(response.status, 200);
+  const legacyTools = parseSseJson(await response.text()).result.tools.map((tool) => tool.name);
+  assert.ok(legacyTools.includes('firecrawl_scrape'));
+  assert.ok(legacyTools.includes('firecrawl_search'));
+  assert.ok(legacyTools.includes('firecrawl_map'), legacyTools.join(', '));
+  await delay(25);
+
+  const telemetry = stdout
+    .split(/\r?\n/)
+    .find((line) => line.includes('[MCP_LEGACY_KEY_PATH]'));
+  assert.ok(telemetry, stdout);
+  assert.match(telemetry, /"key_transport":"path"/);
+  assert.match(telemetry, /"outcome":"accepted"/);
+  assert.match(telemetry, /"resource":"https:\/\/mcp\.firecrawl\.dev\/v2\/mcp"/);
+  assert.doesNotMatch(telemetry, new RegExp(legacyCredential));
+  assert.doesNotMatch(telemetry, /\bfc-[^\s"]+/);
+  assert.doesNotMatch(telemetry, /(?:\d{1,3}\.){3}\d{1,3}|::1/);
+});
+
 test('hosted profile selection fails closed for an unsupported endpoint', async () => {
   const child = spawnServer({
     CLOUD_SERVICE: 'true',
@@ -1487,6 +1537,10 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
     KEYLESS_PROXY_SECRET: 'delegation-secret',
     PORT: String(port),
   });
+  let stdout = '';
+  child.stdout.on('data', (chunk) => {
+    stdout += chunk;
+  });
   t.after(() => stopChild(child));
   await waitForHealth(port, child);
 
@@ -1525,4 +1579,29 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
     3,
     'invalid-client-request-header-id',
   ]);
+
+  const invalidLegacyPath = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
+    body: JSON.stringify({ id: 4, jsonrpc: '2.0', method: 'tools/list', params: {} }),
+    headers: {
+      accept: 'application/json, text/event-stream',
+      'content-type': 'application/json',
+      'x-firecrawl-api-key': 'fc-invalid',
+      'x-firecrawl-key-transport': 'path',
+    },
+    method: 'POST',
+  });
+  assert.equal(invalidLegacyPath.status, 401);
+  assert.equal(invalidLegacyPath.headers.has('www-authenticate'), false);
+  assert.deepEqual(await invalidLegacyPath.json(), {
+    error: 'invalid_api_key',
+    error_description:
+      'The supplied Firecrawl credential is invalid or revoked. Replace it and retry.',
+  });
+  await delay(25);
+  const rejectedTelemetry = stdout
+    .split(/\r?\n/)
+    .find((line) => line.includes('[MCP_LEGACY_KEY_PATH]') && line.includes('\"outcome\":\"rejected\"'));
+  assert.ok(rejectedTelemetry, stdout);
+  assert.doesNotMatch(rejectedTelemetry, /\bfc-[^\s"]+/);
+  assert.doesNotMatch(rejectedTelemetry, /(?:\d{1,3}\.){3}\d{1,3}|::1/);
 });
