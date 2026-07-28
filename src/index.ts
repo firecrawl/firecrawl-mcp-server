@@ -950,7 +950,7 @@ function isHostedKeylessSession(session?: SessionData): boolean {
 
 function recoveryPayload(
   code: string,
-  requestId = randomUUID()
+  requestId: string = randomUUID()
 ): Record<string, unknown> {
   return {
     code,
