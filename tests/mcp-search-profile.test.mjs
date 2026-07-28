@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import net from 'node:net';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
+import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
 
 // The fixed contract of the search surface. Nothing outside this set may ever
 // appear on its tools/list or be callable through it.
@@ -272,6 +273,21 @@ async function listToolDefinitions(port, endpoint, headers) {
   assert.equal(res.status, 200, `tools/list returned ${res.status}`);
   const message = parseSseJson(await res.text());
   return message.result.tools;
+}
+
+async function initializeProfile(port, endpoint, headers) {
+  const res = await jsonRpc(port, endpoint, {
+    id: 0,
+    method: 'initialize',
+    params: {
+      capabilities: {},
+      clientInfo: { name: 'firecrawl-search-profile-test', version: '1.0.0' },
+      protocolVersion: '2025-06-18',
+    },
+    headers,
+  });
+  assert.equal(res.status, 200, `initialize returned ${res.status}`);
+  return parseSseJson(await res.text()).result;
 }
 
 async function listTools(port, endpoint, headers) {
@@ -649,6 +665,18 @@ test('primary search profile uses the strict marketplace search tool, not the fu
     Boolean(message.error) || message.result?.isError === true,
     true,
     JSON.stringify(message)
+  );
+});
+
+test('primary search profile agent language satisfies metadata policy gates', async (t) => {
+  const { port } = await startPrimarySearchServer(t);
+  const headers = { authorization: 'Bearer fco_primary_search_metadata' };
+  const initialize = await initializeProfile(port, SEARCH_ENDPOINT, headers);
+  const tools = await listToolDefinitions(port, SEARCH_ENDPOINT, headers);
+
+  assertAgentMetadataPolicy(
+    [initialize.instructions, ...tools.map((tool) => tool.description ?? '')],
+    assert
   );
 });
 

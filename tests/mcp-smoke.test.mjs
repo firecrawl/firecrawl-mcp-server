@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import net from 'node:net';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
+import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
 
 async function getFreePort() {
   const server = net.createServer();
@@ -586,6 +587,60 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.ok(toolNames.includes('firecrawl_scrape'));
   assert.ok(toolNames.includes('firecrawl_search'));
   assert.ok(toolNames.includes('firecrawl_parse'));
+
+  const byName = new Map(tools.tools.map((tool) => [tool.name, tool]));
+  assert.match(init.instructions, /firecrawl_scrape retrieves one supplied page/i);
+  assert.match(init.instructions, /firecrawl_map enumerates URLs under a site/i);
+  assert.match(
+    init.instructions,
+    /firecrawl_agent starts multi-source research whose result is read with firecrawl_agent_status/i
+  );
+  assert.match(
+    byName.get('firecrawl_scrape').description,
+    /request identifies a page and needs its content or defined fields/i
+  );
+  assert.match(
+    byName.get('firecrawl_map').description,
+    /returns matching URLs rather than page bodies/i
+  );
+  assert.match(
+    byName.get('firecrawl_agent').description,
+    /returns only a job ID, not the research result/i
+  );
+  assert.match(
+    byName.get('firecrawl_agent_status').description,
+    /processing.*non-terminal.*does not contain the final research result/is
+  );
+  assert.match(
+    byName.get('firecrawl_search').description,
+    /operators include.*related:host.*non-exhaustive/is
+  );
+  assert.match(
+    byName.get('firecrawl_search_feedback').description,
+    /good.*valuable source.*partial.*missing topic.*bad.*query suggestion/is
+  );
+  assert.match(
+    byName.get('firecrawl_search_feedback').description,
+    /50.*valuableSources.*20.*missingContent.*feedback age window.*idempotent.*daily-cap/is
+  );
+  assert.match(
+    byName.get('firecrawl_research_search_papers').description,
+    /topics represented in the indexed corpus/i
+  );
+  assert.match(
+    byName.get('firecrawl_research_related_papers').description,
+    /seed_ids.*first ID.*primary seed.*later IDs.*anchors/is
+  );
+  assert.match(
+    byName.get('firecrawl_research_related_papers').description,
+    /mode.*defaults to.*similar.*citers.*references/is
+  );
+
+  const renderedLanguage = [
+    init.instructions,
+    ...tools.tools.map((tool) => tool.description),
+  ].join('\n');
+  assertAgentMetadataPolicy(renderedLanguage, assert);
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
