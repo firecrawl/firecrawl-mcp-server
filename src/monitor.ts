@@ -226,7 +226,7 @@ export function registerMonitorTools(server: FastMCP<SessionData>): void {
     description: `
 Create a recurring scrape, crawl, or search monitor that compares each check with its retained predecessor. The simple form accepts \`page\`/\`pages\` or \`queries\` plus a plain-language \`goal\`; the advanced \`body\` form controls targets, schedule, change-tracking formats, judging, retention, webhook, and notifications.
 
-Page and query targets are mutually exclusive in the simple form, and search targets require a goal. A monitor schedules future network checks and can send configured email or webhook notifications. Returns the created monitor.
+In the simple form, a \`goal\` is required. If \`queries\` contains one or more non-empty values and is supplied with \`page\`/\`pages\`, \`queries\` create the search target and page targets are ignored. A monitor schedules future network checks and can send configured email or webhook notifications. Returns the created monitor.
 `,
     parameters: z.object({
       body: z.record(z.string(), z.any()).optional(),

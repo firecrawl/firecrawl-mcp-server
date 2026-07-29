@@ -44,23 +44,23 @@ function appearsInEitherOrder(statement, first, second) {
 
 function containsNativeToolDisplacement(statement) {
   if (
-    !new RegExp(FIRECRAWL, 'i').test(statement) ||
+    !new RegExp(TOOL_REFERENCE, 'i').test(statement) ||
     !new RegExp(NATIVE_OR_BUILT_IN, 'i').test(statement)
   ) {
     return false;
   }
 
   return (
-    (appearsInEitherOrder(statement, FIRECRAWL, DISPLACEMENT) &&
+    (appearsInEitherOrder(statement, TOOL_REFERENCE, DISPLACEMENT) &&
       appearsInEitherOrder(statement, NATIVE_OR_BUILT_IN, DISPLACEMENT)) ||
     new RegExp(NEGATED_NATIVE_SELECTION, 'i').test(statement)
   );
 }
 
-function containsFirecrawlSelection(statement) {
+function containsToolSelection(statement) {
   return (
-    new RegExp(FIRECRAWL, 'i').test(statement) &&
-    appearsInEitherOrder(statement, FIRECRAWL, SELECTION)
+    new RegExp(TOOL_REFERENCE, 'i').test(statement) &&
+    appearsInEitherOrder(statement, TOOL_REFERENCE, SELECTION)
   );
 }
 
@@ -120,6 +120,13 @@ function containsCriticalSelectionCoercion(statement) {
     (hasMandatory && (hasSelection || hasToolReference)) ||
     (hasSelection && hasToolReference)
   );
+}
+
+function containsPredicativeMandatorySelection(statement) {
+  return new RegExp(
+    `${TOOL_REFERENCE}\\s+(?:is|are)\\s+(?:the\\s+)?(?:required|mandatory|necessary)\\b`,
+    'i'
+  ).test(statement);
 }
 
 function containsFeedbackInducement(statement) {
@@ -182,21 +189,21 @@ function containsNearbyFeedbackInducement(statements) {
 
 function containsAdjacentNativeDisplacement(first, second) {
   return (
-    (containsFirecrawlSelection(first) && containsNegatedNativeSelection(second)) ||
-    (containsNegatedNativeSelection(first) && containsFirecrawlSelection(second))
+    (containsToolSelection(first) && containsNegatedNativeSelection(second)) ||
+    (containsNegatedNativeSelection(first) && containsToolSelection(second))
   );
 }
 
 function containsAdjacentDefaultCoercion(first, second) {
   return (
-    (containsFirecrawlSelection(first) &&
+    (containsToolSelection(first) &&
       (
         containsDefaultChoiceCoercion(second) ||
         containsReverseDefaultChoiceCoercion(second)
       )) ||
     ((containsDefaultChoiceCoercion(first) ||
       containsReverseDefaultChoiceCoercion(first)) &&
-      containsFirecrawlSelection(second))
+      containsToolSelection(second))
   );
 }
 
@@ -244,6 +251,11 @@ const POLICY_RULES = [
     id: 'critical-selection-coercion',
     label: 'critical mandatory/selection coercion',
     violates: containsCriticalSelectionCoercion,
+  },
+  {
+    id: 'mandatory-selection-coercion',
+    label: 'mandatory routing coercion',
+    violates: containsPredicativeMandatorySelection,
   },
   FEEDBACK_INDUCEMENT_RULE,
   {

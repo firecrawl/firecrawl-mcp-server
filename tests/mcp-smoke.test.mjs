@@ -139,6 +139,17 @@ async function startFakeFirecrawlApi() {
       return;
     }
 
+    if (req.method === 'POST' && req.url === '/v2/monitor') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: { id: 'mon_001' },
+          success: true,
+        })
+      );
+      return;
+    }
+
     res.writeHead(404, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ error: `Unhandled ${req.method} ${req.url}` }));
   });
@@ -635,6 +646,10 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     byName.get('firecrawl_research_related_papers').description,
     /mode.*defaults to.*similar.*citers.*references/is
   );
+  assert.match(
+    byName.get('firecrawl_monitor_create').description,
+    /queries.*create the search target.*page targets are ignored/is
+  );
 
   const renderedLanguage = [
     init.instructions,
@@ -642,6 +657,57 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   ].join('\n');
   assertAgentMetadataPolicy(renderedLanguage, assert);
   assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('monitor create gives queries precedence over page targets', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-monitor-precedence', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const result = await client.request('tools/call', {
+    arguments: {
+      goal: 'Track new pages about Firecrawl',
+      page: 'https://example.com/ignored',
+      pages: ['https://example.org/also-ignored'],
+      queries: ['firecrawl release notes'],
+    },
+    name: 'firecrawl_monitor_create',
+  });
+
+  assert.notEqual(result.isError, true);
+  const whitespaceQueryResult = await client.request('tools/call', {
+    arguments: {
+      goal: 'Track the supplied page',
+      page: 'https://example.com/retained',
+      queries: [' ', ''],
+    },
+    name: 'firecrawl_monitor_create',
+  });
+  assert.notEqual(whitespaceQueryResult.isError, true);
+
+  const monitorRequests = fakeApi.requests.filter(
+    (request) => request.method === 'POST' && request.url === '/v2/monitor'
+  );
+  assert.equal(monitorRequests.length, 2);
+  assert.deepEqual(monitorRequests[0].body.targets, [
+    { queries: ['firecrawl release notes'], type: 'search' },
+  ]);
+  assert.deepEqual(monitorRequests[1].body.targets, [
+    { type: 'scrape', urls: ['https://example.com/retained'] },
+  ]);
 });
 
 test('stdio transport calls Firecrawl API through a tool end to end', async (t) => {
