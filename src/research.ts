@@ -241,14 +241,11 @@ export function registerResearchTools(
       openWorldHint: true, // Searches the Firecrawl research paper index.
       destructiveHint: false, // Query-only; no writes to external sources or the research index.
     },
-    description:
-      'Primary entry point for finding research papers by topic across AI/ML, computer science, ' +
-      'math, physics, biomedical, life sciences, and clinical literature. Semantic (HyDE) search ' +
-      'over indexed paper metadata and abstracts; returns ranked papers with paper id, title, ' +
-      'authors, and abstract. The query should be a natural-language research topic or question. ' +
-      'Run SEVERAL distinct framings of the question (sibling domains, rival methods, dataset or ' +
-      'benchmark names, conditions, populations, interventions, or outcomes) rather than one query ' +
-      '— recall improves markedly with diverse framings.',
+    description: `
+For topics represented in the indexed corpus, search paper metadata and abstracts with a natural-language query. Optional author, category, and date filters constrain results.
+
+Returns ranked papers with canonical IDs, titles, authors, and abstracts.
+`,
     parameters: z.object({
       query: z
         .string()
@@ -323,10 +320,9 @@ export function registerResearchTools(
       openWorldHint: true, // Retrieves metadata for papers in public indexes (arXiv, PMC, DOI, etc.).
       destructiveHint: false, // Read-only metadata lookup.
     },
-    description:
-      'Fetch canonical metadata for one paper by primaryId or canonical paperId. ' +
-      'Use this after search/related results when you need the full title, abstract, authors, ' +
-      'categories, source ids, and dates rendered as markdown.',
+    description: `
+Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DOI identifier. Returns the title, abstract, authors, categories, source IDs, and dates as markdown.
+`,
     parameters: z.object({
       paperId: z
         .string()
@@ -355,15 +351,11 @@ export function registerResearchTools(
       openWorldHint: true, // Traverses relationships across the public research paper corpus.
       destructiveHint: false, // Read-only graph query; no modifications.
     },
-    description:
-      'Expand from anchor papers you have already found, via the citation graph, ranked and filtered ' +
-      'to a natural-language `intent`. Pass arXiv ids of your strongest hits as `seed_ids`. Modes: ' +
-      '`similar` (cocitation/coupling — papers in the same niche; the default), `citers` (papers ' +
-      'that cite the anchors), `references` (papers the anchors cite). This reaches relevant papers ' +
-      'that plain search misses, so use it on your best hits before finishing. A `similar` call ' +
-      'already runs a DEEP multi-round expansion internally (re-seeding from each round’s best ' +
-      'finds), so one call reaches the wider neighborhood — no need to chain many. Returns the ' +
-      'candidates plus the pool size.',
+    description: `
+Find citation-graph candidates from one to ten \`seed_ids\`; the first ID is the primary seed and later IDs are anchors. \`mode\` defaults to \`similar\` (co-citation/bibliographic coupling); \`citers\` returns papers citing a seed and \`references\` papers cited by a seed. \`intent\` ranks candidates.
+
+Returns ranked candidates and the evaluated pool size.
+`,
     parameters: z.object({
       seed_ids: z.array(z.string()).min(1).max(10),
       intent: z.string().min(1),
@@ -417,11 +409,11 @@ export function registerResearchTools(
       openWorldHint: true, // Reads from publicly indexed paper full text when available.
       destructiveHint: false, // Read-only passage retrieval.
     },
-    description:
-      'Read the most relevant in-body (full-text) passages of ONE specific paper for a question. Use ' +
-      'this to VERIFY whether a candidate actually satisfies a constraint before you include or ' +
-      "reject it (e.g. 'does this paper actually use technique X / report a score on benchmark Y'). " +
-      "Returns the best-matching passages, or a notice if the paper's full text is unavailable.",
+    description: `
+Retrieve in-body passages from one paper that are relevant to a specific question. Full text is available only for indexed papers; \`k\` controls the number of passages.
+
+Returns matching passages or a notice when full text is unavailable.
+`,
     parameters: z.object({
       paperId: z
         .string()
@@ -468,9 +460,9 @@ export function registerResearchTools(
       openWorldHint: true, // Searches public GitHub content.
       destructiveHint: false, // Query-only; does not create issues, PRs, or modify repositories.
     },
-    description:
-      'Search GitHub issue/PR history and repository readmes. Returns ranked matches with repo, ' +
-      'url, a short snippet, and (when available) the full matched content in markdown.',
+    description: `
+Search indexed public GitHub issue, pull-request, and README content. Returns ranked matches with repository, URL, snippet, and full matched markdown when available.
+`,
     parameters: z.object({
       query: z.string().min(1),
       k: z.number().int().min(1).max(100).optional(),

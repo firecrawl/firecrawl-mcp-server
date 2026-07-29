@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import net from 'node:net';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
+import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
 
 async function getFreePort() {
   const server = net.createServer();
@@ -132,6 +133,17 @@ async function startFakeFirecrawlApi() {
             ],
           },
           id: '00000000-0000-4000-8000-000000000000',
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/monitor') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: { id: 'mon_001' },
           success: true,
         })
       );
@@ -586,7 +598,116 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.ok(toolNames.includes('firecrawl_scrape'));
   assert.ok(toolNames.includes('firecrawl_search'));
   assert.ok(toolNames.includes('firecrawl_parse'));
+
+  const byName = new Map(tools.tools.map((tool) => [tool.name, tool]));
+  assert.match(init.instructions, /firecrawl_scrape retrieves one supplied page/i);
+  assert.match(init.instructions, /firecrawl_map enumerates URLs under a site/i);
+  assert.match(
+    init.instructions,
+    /firecrawl_agent starts multi-source research whose result is read with firecrawl_agent_status/i
+  );
+  assert.match(
+    byName.get('firecrawl_scrape').description,
+    /request identifies a page and needs its content or defined fields/i
+  );
+  assert.match(
+    byName.get('firecrawl_map').description,
+    /returns matching URLs rather than page bodies/i
+  );
+  assert.match(
+    byName.get('firecrawl_agent').description,
+    /returns only a job ID, not the research result/i
+  );
+  assert.match(
+    byName.get('firecrawl_agent_status').description,
+    /processing.*non-terminal.*does not contain the final research result/is
+  );
+  assert.match(
+    byName.get('firecrawl_search').description,
+    /operators include.*related:host.*non-exhaustive/is
+  );
+  assert.match(
+    byName.get('firecrawl_search_feedback').description,
+    /good.*valuable source.*partial.*missing topic.*bad.*query suggestion/is
+  );
+  assert.match(
+    byName.get('firecrawl_search_feedback').description,
+    /50.*valuableSources.*20.*missingContent.*feedback age window.*idempotent.*daily-cap/is
+  );
+  assert.match(
+    byName.get('firecrawl_research_search_papers').description,
+    /topics represented in the indexed corpus/i
+  );
+  assert.match(
+    byName.get('firecrawl_research_related_papers').description,
+    /seed_ids.*first ID.*primary seed.*later IDs.*anchors/is
+  );
+  assert.match(
+    byName.get('firecrawl_research_related_papers').description,
+    /mode.*defaults to.*similar.*citers.*references/is
+  );
+  assert.match(
+    byName.get('firecrawl_monitor_create').description,
+    /queries.*create the search target.*page targets are ignored/is
+  );
+
+  const renderedLanguage = [
+    init.instructions,
+    ...tools.tools.map((tool) => tool.description),
+  ].join('\n');
+  assertAgentMetadataPolicy(renderedLanguage, assert);
   assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('monitor create gives queries precedence over page targets', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-monitor-precedence', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const result = await client.request('tools/call', {
+    arguments: {
+      goal: 'Track new pages about Firecrawl',
+      page: 'https://example.com/ignored',
+      pages: ['https://example.org/also-ignored'],
+      queries: ['firecrawl release notes'],
+    },
+    name: 'firecrawl_monitor_create',
+  });
+
+  assert.notEqual(result.isError, true);
+  const whitespaceQueryResult = await client.request('tools/call', {
+    arguments: {
+      goal: 'Track the supplied page',
+      page: 'https://example.com/retained',
+      queries: [' ', ''],
+    },
+    name: 'firecrawl_monitor_create',
+  });
+  assert.notEqual(whitespaceQueryResult.isError, true);
+
+  const monitorRequests = fakeApi.requests.filter(
+    (request) => request.method === 'POST' && request.url === '/v2/monitor'
+  );
+  assert.equal(monitorRequests.length, 2);
+  assert.deepEqual(monitorRequests[0].body.targets, [
+    { queries: ['firecrawl release notes'], type: 'search' },
+  ]);
+  assert.deepEqual(monitorRequests[1].body.targets, [
+    { type: 'scrape', urls: ['https://example.com/retained'] },
+  ]);
 });
 
 test('stdio transport calls Firecrawl API through a tool end to end', async (t) => {
