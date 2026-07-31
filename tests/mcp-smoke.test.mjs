@@ -180,6 +180,7 @@ async function startFakeFirecrawlBackend(options = {}) {
     introspectionHandler,
     introspectionMetadata = {},
     keylessEligible = false,
+    searchResponse,
   } = options;
   const requests = [];
   const server = createServer(async (req, res) => {
@@ -237,6 +238,11 @@ async function startFakeFirecrawlBackend(options = {}) {
     }
 
     if (req.method === 'POST' && req.url === '/v2/search') {
+      if (searchResponse) {
+        res.writeHead(searchResponse.status, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(searchResponse.body));
+        return;
+      }
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify({
@@ -941,6 +947,40 @@ test('HTTP cloud transport serves an eligible keyless client and forwards its IP
     'keyless-secret'
   );
   assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('HTTP cloud keyless keeps 429 recovery structured during API deploy skew', async (t) => {
+  for (const [label, body, expectedCode] of [
+    ['with-reason', { error: 'limit', reason: 'credits', retry_after_seconds: 42 }, 'KEYLESS_QUOTA_EXHAUSTED'],
+    ['without-reason', { error: 'limit' }, 'KEYLESS_LIMIT_REACHED'],
+  ]) {
+    const backend = await startFakeFirecrawlBackend({
+      keylessEligible: true,
+      searchResponse: { status: 429, body },
+    });
+    const port = await getFreePort();
+    const child = spawnServer({
+      CLOUD_SERVICE: 'true',
+      FASTMCP_ENDPOINT: '/v2/mcp',
+      FIRECRAWL_API_URL: backend.url,
+      HTTP_STREAMABLE_SERVER: 'true',
+      KEYLESS_PROXY_SECRET: 'keyless-secret',
+      PORT: String(port),
+    });
+    await waitForHealth(port, child);
+    const response = await httpToolCall(port, {
+      id: `keyless-${label}`,
+      headers: { 'x-forwarded-for': '8.8.8.7' },
+      params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
+    });
+    const result = parseSseJson(await response.text()).result;
+    assert.equal(result.isError, true, label);
+    assert.equal(result.structuredContent.code, expectedCode, label);
+    assert.equal(result.structuredContent.next_actions[0].kind, 'connect_oauth', label);
+    if (label === 'with-reason') assert.equal(result.structuredContent.retry_after_seconds, 42);
+    await stopChild(child);
+    await backend.close();
+  }
 });
 
 test('HTTP cloud keyless Parse completes both phases without credentials and forwards redactPII', async (t) => {

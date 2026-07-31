@@ -956,7 +956,8 @@ function recoveryPayload(
   options: { retryAfterSeconds?: number } = {}
 ): Record<string, unknown> {
   const retryAfterSeconds = options.retryAfterSeconds;
-  const isQuotaExhausted = code === 'KEYLESS_QUOTA_EXHAUSTED';
+  const isQuotaExhausted =
+    code === 'KEYLESS_QUOTA_EXHAUSTED' || code === 'KEYLESS_LIMIT_REACHED';
   const isToolUnavailable =
     code === 'KEYLESS_TOOL_NOT_AVAILABLE' ||
     code === 'KEYLESS_ACCESS_NOT_AVAILABLE';
@@ -2041,11 +2042,18 @@ async function keylessPost(
   });
   const json: any = await response.json().catch(() => ({}));
   if (!response.ok) {
-    if (isKeylessMode(session) && response.status === 429 && keylessQuotaReason(json?.reason)) {
-      const payload = recoveryPayload('KEYLESS_QUOTA_EXHAUSTED', session?.requestId, {
-        retryAfterSeconds: Number.isFinite(json?.retry_after_seconds) && json.retry_after_seconds > 0
-          ? json.retry_after_seconds
-          : undefined,
+    if (isKeylessMode(session) && response.status === 429) {
+      // The API normally supplies requests|credits. Preserve a structured,
+      // non-specific recovery payload during a skewed or legacy deployment.
+      const code = keylessQuotaReason(json?.reason)
+        ? 'KEYLESS_QUOTA_EXHAUSTED'
+        : 'KEYLESS_LIMIT_REACHED';
+      const payload = recoveryPayload(code, session?.requestId, {
+        retryAfterSeconds:
+          Number.isFinite(json?.retry_after_seconds) &&
+          json.retry_after_seconds > 0
+            ? json.retry_after_seconds
+            : undefined,
       });
       throw new UserError(String(payload.message), payload);
     }
