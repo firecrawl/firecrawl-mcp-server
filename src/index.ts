@@ -958,9 +958,8 @@ function recoveryPayload(
   const retryAfterSeconds = options.retryAfterSeconds;
   const isQuotaExhausted =
     code === 'KEYLESS_QUOTA_EXHAUSTED' || code === 'KEYLESS_LIMIT_REACHED';
-  const isToolUnavailable =
-    code === 'KEYLESS_TOOL_NOT_AVAILABLE' ||
-    code === 'KEYLESS_ACCESS_NOT_AVAILABLE';
+  const isToolUnavailable = code === 'KEYLESS_TOOL_NOT_AVAILABLE';
+  const isKeylessAccessUnavailable = code === 'KEYLESS_ACCESS_NOT_AVAILABLE';
   const oauthUrl = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
   return {
     code,
@@ -973,11 +972,13 @@ function recoveryPayload(
           ? `The free daily limit for this network has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue now, connect a Firecrawl account via OAuth or configure an API key.`
           : isToolUnavailable
             ? 'The free tier includes Search, Scrape, and Parse. This tool needs a connected account; Search, Scrape, and Parse still work, so no action is required.'
+            : isKeylessAccessUnavailable
+              ? 'Anonymous keyless access is unavailable for this request. To continue, connect a Firecrawl account via OAuth or configure an API key.'
             : 'This tool requires a Firecrawl account or API key. Connect an account or configure Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.',
-    available_tools: [...KEYLESS_TOOL_NAMES],
+    ...(isToolUnavailable ? { available_tools: [...KEYLESS_TOOL_NAMES] } : {}),
     docs_url: 'https://docs.firecrawl.dev/mcp-server',
     ...(retryAfterSeconds ? { retry_after_seconds: retryAfterSeconds } : {}),
-    next_actions: isQuotaExhausted
+    next_actions: isQuotaExhausted || isKeylessAccessUnavailable
       ? [
           { kind: 'connect_oauth', url: oauthUrl, client_commands: [{ client: 'claude-code', command: 'claude mcp add --transport http firecrawl https://mcp.firecrawl.dev/v2/mcp-oauth' }] },
           { kind: 'configure_api_key', header: 'Authorization: Bearer <FIRECRAWL_API_KEY>' },

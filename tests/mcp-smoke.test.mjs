@@ -1141,6 +1141,8 @@ test('HTTP cloud keyless rejects multi-hop or malformed forwarded IP identity', 
     const result = parseSseJson(await response.text()).result;
     assert.equal(result.isError, true, xff);
     assert.equal(result.structuredContent.code, 'KEYLESS_ACCESS_NOT_AVAILABLE', xff);
+    assert.equal(result.structuredContent.next_actions[0].kind, 'connect_oauth', xff);
+    assert.equal(result.structuredContent.available_tools, undefined, xff);
   }
   assert.equal(backend.requests.length, 0, JSON.stringify(backend.requests));
 });
@@ -1292,6 +1294,8 @@ test('HTTP cloud transport returns recovery when keyless identity has no client 
   const result = parseSseJson(await toolCall.text()).result;
   assert.equal(result.isError, true);
   assert.equal(result.structuredContent.code, 'KEYLESS_ACCESS_NOT_AVAILABLE');
+  assert.equal(result.structuredContent.next_actions[0].kind, 'connect_oauth');
+  assert.equal(result.structuredContent.available_tools, undefined);
   assertServerGeneratedRequestId(result.structuredContent, [
     'client-json-rpc-id',
     'client-request-header-id',
