@@ -180,6 +180,7 @@ async function startFakeFirecrawlBackend(options = {}) {
     introspectionHandler,
     introspectionMetadata = {},
     keylessEligible = false,
+    keylessEligibilityResponse,
     searchResponse,
   } = options;
   const requests = [];
@@ -232,8 +233,12 @@ async function startFakeFirecrawlBackend(options = {}) {
 
     // Keyless free-tier eligibility (secret-gated, read-only).
     if (req.method === 'GET' && req.url === '/v2/keyless/eligibility') {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ eligible: keylessEligible }));
+      const response = keylessEligibilityResponse ?? {
+        status: 200,
+        body: { eligible: keylessEligible },
+      };
+      res.writeHead(response.status, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(response.body));
       return;
     }
 
@@ -949,6 +954,87 @@ test('HTTP cloud transport serves an eligible keyless client and forwards its IP
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
+test('HTTP cloud keyless returns retry recovery when eligibility is unavailable', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    keylessEligibilityResponse: { status: 503, body: { error: 'unavailable' } },
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true',
+    KEYLESS_PROXY_SECRET: 'keyless-secret',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await httpToolCall(port, {
+    id: 'keyless-eligibility-unavailable',
+    headers: { 'x-forwarded-for': '8.8.8.7' },
+    params: {
+      arguments: { limit: 1, query: 'example domain' },
+      name: 'firecrawl_search',
+    },
+  });
+  const result = parseSseJson(await response.text()).result;
+  assert.equal(result.isError, true);
+  assert.equal(
+    result.structuredContent.code,
+    'KEYLESS_ELIGIBILITY_UNAVAILABLE'
+  );
+  assert.deepEqual(result.structuredContent.next_actions, [
+    { kind: 'retry_later', after_seconds: 30 },
+  ]);
+  assert.equal(
+    result.structuredContent.available_tools.includes('firecrawl_search'),
+    true
+  );
+  assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
+});
+
+test('HTTP cloud keyless continues with free-tier tools when an account-only tool is selected', async (t) => {
+  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true',
+    KEYLESS_PROXY_SECRET: 'keyless-secret',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await httpToolCall(port, {
+    id: 'keyless-account-only-tool',
+    headers: { 'x-forwarded-for': '8.8.8.7' },
+    params: {
+      arguments: { url: 'https://example.com/' },
+      name: 'firecrawl_crawl',
+    },
+  });
+  const result = parseSseJson(await response.text()).result;
+  assert.equal(result.isError, true);
+  assert.equal(result.structuredContent.code, 'KEYLESS_TOOL_NOT_AVAILABLE');
+  assert.deepEqual(result.structuredContent.next_actions, [
+    {
+      kind: 'continue_keyless',
+      tools: ['firecrawl_scrape', 'firecrawl_search', 'firecrawl_parse'],
+    },
+  ]);
+  assert.deepEqual(result.structuredContent.available_tools, [
+    'firecrawl_scrape',
+    'firecrawl_search',
+    'firecrawl_parse',
+  ]);
+  assert.equal(backend.requests.some((r) => r.url === '/v2/crawl'), false);
+});
+
 test('HTTP cloud keyless keeps 429 recovery structured during API deploy skew', async (t) => {
   for (const [label, body, expectedCode] of [
     ['with-reason', { error: 'limit', reason: 'credits', retry_after_seconds: 42 }, 'KEYLESS_QUOTA_EXHAUSTED'],
@@ -1302,6 +1388,31 @@ test('HTTP cloud transport returns recovery when keyless identity has no client 
   ]);
   assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
   assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('hosted keyless warns when KEYLESS_PROXY_SECRET is missing', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    KEYLESS_PROXY_SECRET: '',
+    PORT: String(port),
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const ready = await fetch(`http://127.0.0.1:${port}/ready`);
+  assert.equal(ready.status, 503);
+  assert.match(stderr, /KEYLESS_PROXY_SECRET is missing/);
 });
 
 test('account endpoint challenges anonymous clients and accepts API keys', async (t) => {

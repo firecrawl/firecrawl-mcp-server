@@ -960,6 +960,8 @@ function recoveryPayload(
     code === 'KEYLESS_QUOTA_EXHAUSTED' || code === 'KEYLESS_LIMIT_REACHED';
   const isToolUnavailable = code === 'KEYLESS_TOOL_NOT_AVAILABLE';
   const isKeylessAccessUnavailable = code === 'KEYLESS_ACCESS_NOT_AVAILABLE';
+  const isKeylessEligibilityUnavailable =
+    code === 'KEYLESS_ELIGIBILITY_UNAVAILABLE';
   const oauthUrl = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
   return {
     code,
@@ -974,11 +976,17 @@ function recoveryPayload(
             ? 'The free tier includes Search, Scrape, and Parse. This tool needs a connected account; Search, Scrape, and Parse still work, so no action is required.'
             : isKeylessAccessUnavailable
               ? 'Anonymous keyless access is unavailable for this request. To continue, connect a Firecrawl account via OAuth or configure an API key.'
-            : 'This tool requires a Firecrawl account or API key. Connect an account or configure Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.',
-    ...(isToolUnavailable ? { available_tools: [...KEYLESS_TOOL_NAMES] } : {}),
+              : isKeylessEligibilityUnavailable
+                ? 'The anonymous keyless eligibility check is temporarily unavailable. Retry shortly.'
+              : 'This tool requires a Firecrawl account or API key. Connect an account or configure Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.',
+    ...(isKeylessAccessUnavailable
+      ? {}
+      : { available_tools: [...KEYLESS_TOOL_NAMES] }),
     docs_url: 'https://docs.firecrawl.dev/mcp-server',
     ...(retryAfterSeconds ? { retry_after_seconds: retryAfterSeconds } : {}),
-    next_actions: isQuotaExhausted || isKeylessAccessUnavailable
+    next_actions: isKeylessEligibilityUnavailable
+      ? [{ kind: 'retry_later', after_seconds: 30 }]
+      : isQuotaExhausted || isKeylessAccessUnavailable
       ? [
           { kind: 'connect_oauth', url: oauthUrl, client_commands: [{ client: 'claude-code', command: 'claude mcp add --transport http firecrawl https://mcp.firecrawl.dev/v2/mcp-oauth' }] },
           { kind: 'configure_api_key', header: 'Authorization: Bearer <FIRECRAWL_API_KEY>' },
@@ -1965,7 +1973,12 @@ function extractClientIp(request?: {
  * Read-only keyless check. MCP tool failures are returned in-band, not as an
  * OAuth transport challenge, so preserve only the quota details needed for recovery.
  */
-type KeylessEligibility = { eligible: boolean; reason?: string; retryAfterSeconds?: number };
+type KeylessEligibility = {
+  eligible: boolean;
+  reason?: string;
+  retryAfterSeconds?: number;
+  unavailable?: boolean;
+};
 
 function keylessQuotaReason(reason: unknown): reason is 'requests' | 'credits' {
   return reason === 'requests' || reason === 'credits';
@@ -1973,7 +1986,7 @@ function keylessQuotaReason(reason: unknown): reason is 'requests' | 'credits' {
 
 async function keylessEligible(clientIp: string): Promise<KeylessEligibility> {
   const secret = process.env.KEYLESS_PROXY_SECRET;
-  if (!secret) return { eligible: false };
+  if (!secret) return { eligible: false, unavailable: true };
   try {
     const response = await fetch(
       `${resolveApiBaseUrl()}/v2/keyless/eligibility`,
@@ -1985,8 +1998,11 @@ async function keylessEligible(clientIp: string): Promise<KeylessEligibility> {
         },
       }
     );
-    if (!response.ok) return { eligible: false };
-    const json: any = await response.json().catch(() => ({}));
+    if (!response.ok) return { eligible: false, unavailable: true };
+    const json: any = await response.json().catch(() => null);
+    if (typeof json?.eligible !== 'boolean') {
+      return { eligible: false, unavailable: true };
+    }
     return {
       eligible: json?.eligible === true,
       ...(typeof json?.reason === 'string' ? { reason: json.reason } : {}),
@@ -1995,7 +2011,7 @@ async function keylessEligible(clientIp: string): Promise<KeylessEligibility> {
         : {}),
     };
   } catch {
-    return { eligible: false };
+    return { eligible: false, unavailable: true };
   }
 }
 function isKeylessMode(session?: SessionData): boolean {
@@ -2017,9 +2033,11 @@ async function keylessPost(
       ? await keylessEligible(session.keylessClientIp)
       : { eligible: false };
     if (!eligibility.eligible) {
-      const code = keylessQuotaReason(eligibility.reason)
-        ? 'KEYLESS_QUOTA_EXHAUSTED'
-        : 'KEYLESS_ACCESS_NOT_AVAILABLE';
+      const code = eligibility.unavailable
+        ? 'KEYLESS_ELIGIBILITY_UNAVAILABLE'
+        : keylessQuotaReason(eligibility.reason)
+          ? 'KEYLESS_QUOTA_EXHAUSTED'
+          : 'KEYLESS_ACCESS_NOT_AVAILABLE';
       const payload = recoveryPayload(code, session?.requestId, {
         retryAfterSeconds: eligibility.retryAfterSeconds,
       });
@@ -2989,6 +3007,16 @@ if (
 registerMonitorTools(server);
 registerResearchTools(server, getClient);
 registerDeveloperTools(server, getClient);
+
+if (
+  process.env.CLOUD_SERVICE === 'true' &&
+  primaryProfile.allowKeyless &&
+  !normalizeHeader(process.env.KEYLESS_PROXY_SECRET)
+) {
+  console.warn(
+    '[firecrawl-mcp] KEYLESS_PROXY_SECRET is missing; keyless requests will be unavailable and /ready will fail.'
+  );
+}
 
 if (primaryProfile.id === 'search') {
   // The strict marketplace search tool intentionally replaces the full
