@@ -1025,7 +1025,8 @@ function emitActionLog(
   if (!secret || !endpoint || !payload.team_id || status === 'started') return;
   // `code` is an MCP console-log discriminator, not part of the account-scoped
   // action-log API contract.
-  const { code: _code, ...actionLogPayload } = payload;
+  const actionLogPayload = { ...payload };
+  delete actionLogPayload.code;
   void fetch(endpoint, {
     method: 'POST',
     headers: {
