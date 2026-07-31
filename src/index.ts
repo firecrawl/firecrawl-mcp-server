@@ -1023,13 +1023,16 @@ function emitActionLog(
     normalizeHeader(process.env.FIRECRAWL_MCP_ACTION_LOG_URL) ??
     (apiUrl ? `${withoutTrailingSlash(apiUrl)}/v2/mcp/action-logs` : undefined);
   if (!secret || !endpoint || !payload.team_id || status === 'started') return;
+  // `code` is an MCP console-log discriminator, not part of the account-scoped
+  // action-log API contract.
+  const { code: _code, ...actionLogPayload } = payload;
   void fetch(endpoint, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${secret}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(actionLogPayload),
     signal: AbortSignal.timeout(1500),
   }).catch(() => undefined);
 }
@@ -1052,9 +1055,10 @@ function guardHostedTool(
           ? 'KEYLESS_TOOL_NOT_AVAILABLE'
           : undefined;
       if (!code) return undefined;
-      const payload = recoveryPayload(code);
+      const requestId = randomUUID();
+      const payload = recoveryPayload(code, requestId);
       if (logActions) {
-        emitActionLog(tool.name, 'error', session, new UserError(String(payload.message), payload), undefined, code);
+        emitActionLog(tool.name, 'error', session, new UserError(String(payload.message), payload), requestId, code);
       }
       return {
         content: [{ type: 'text' as const, text: String(payload.message) }],
