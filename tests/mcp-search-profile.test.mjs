@@ -149,11 +149,31 @@ async function startFakeBackend(options = {}) {
     }
 
     if (req.method === 'POST' && req.url === '/v2/search') {
+      // The developer category is an extra arm: the API returns its hits in a
+      // `data.developer` group beside the web results.
+      const wantsDeveloper = (body?.categories ?? []).some((category) =>
+        typeof category === 'string'
+          ? category === 'developer'
+          : category?.type === 'developer'
+      );
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify({
           creditsUsed: 1,
-          data: { web: [{ title: 'Example Domain', url: 'https://example.com/' }] },
+          data: {
+            web: [{ title: 'Example Domain', url: 'https://example.com/' }],
+            ...(wantsDeveloper
+              ? {
+                  developer: [
+                    {
+                      description: 'The matched passage.',
+                      title: 'Fix the retry loop',
+                      url: 'https://github.com/firecrawl/firecrawl/issues/1',
+                    },
+                  ],
+                }
+              : {}),
+          },
           id: '00000000-0000-4000-8000-000000000000',
           success: true,
         })
@@ -406,6 +426,46 @@ test('search firecrawl_search sends a clean body built from allowed fields only'
     sources: [{ type: 'web' }],
     origin: 'mcp-fastmcp',
   });
+});
+
+test('search firecrawl_search forwards the developer category and returns its group', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+  });
+
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 41,
+    method: 'tools/call',
+    params: {
+      arguments: {
+        query: 'retry loop backoff',
+        categories: ['developer'],
+        limit: 1,
+      },
+      name: 'firecrawl_search',
+    },
+    headers: { 'x-api-key': 'fc-search-key' },
+  });
+  assert.equal(res.status, 200);
+  const message = parseSseJson(await res.text());
+  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+
+  const searchCalls = backend.requests.filter((r) => r.url === '/v2/search');
+  assert.equal(searchCalls.length, 1);
+  assert.deepEqual(searchCalls[0].body.categories, ['developer']);
+
+  // The tool returns the API envelope unchanged, so the developer group must
+  // survive into the tool result.
+  const envelope = JSON.parse(message.result.content[0].text);
+  assert.deepEqual(envelope.data.developer, [
+    {
+      description: 'The matched passage.',
+      title: 'Fix the retry loop',
+      url: 'https://github.com/firecrawl/firecrawl/issues/1',
+    },
+  ]);
 });
 
 test('search surface requires authentication for tools/list', async (t) => {

@@ -771,10 +771,10 @@ const searchToolBaseFields = {
     .array(z.object({ type: z.enum(['web', 'images', 'news']) }))
     .optional(),
   categories: z
-    .array(z.enum(['github', 'research', 'pdf']))
+    .array(z.enum(['github', 'research', 'pdf', 'developer']))
     .optional()
     .describe(
-      'Limit results to specific source types. `github` searches GitHub repositories, code, issues, and docs; `research` searches academic and research sources; `pdf` searches PDF results.'
+      'Limit results to specific source types. `github` searches GitHub repositories, code, issues, and docs; `research` searches academic and research sources; `pdf` searches PDF results; `developer` searches an index built for coding agents over GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. `developer` adds a `data.developer` group of `{ url, title, description }` results, where `description` holds the matched passage; the other categories filter `data.web`.'
     ),
   enterprise: z.array(z.enum(['default', 'anon', 'zdr'])).optional(),
 };
@@ -831,7 +831,7 @@ const KEYLESS_PROFILE_INSTRUCTIONS = `Without authentication, this endpoint expo
 
 // The search surface exposes web/research search only. Its instructions and tool
 // copy describe just those tools and stay neutral about how a client uses them.
-const SEARCH_PROFILE_INSTRUCTIONS = `Firecrawl provides web and research search. Use firecrawl_search to find relevant results across the web and specialized indexes. Use the firecrawl_research_* tools to search academic and research literature, expand from anchor papers via the citation graph, read full-text passages from a specific paper, and search public code repositories. All tools are read-only and return ranked results.`;
+const SEARCH_PROFILE_INSTRUCTIONS = `Firecrawl provides web, developer, and research search. Use firecrawl_search to find relevant results across the web and specialized indexes. For a programming question, call firecrawl_search with categories: ["developer"] to search indexed GitHub issues, merged pull requests, READMEs, and documentation. Use the firecrawl_research_* tools to search academic and research literature, expand from anchor papers via the citation graph, read full-text passages from a specific paper, and search public code repositories. All tools are read-only and return ranked results.`;
 
 // The exact set of tools the search surface exposes. Registration is filtered
 // against this set, so anything not listed here can never appear on that
@@ -1850,7 +1850,9 @@ server.addTool({
     destructiveHint: false, // Query-only; no destructive side effects on external entities.
   },
   description: `
-Search web, news, or image sources and return ranked results. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit results to GitHub, research, or PDF sources.
+Search web, news, or image sources and return ranked results. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit results to GitHub, research, PDF, or developer sources.
+
+For a programming question, add \`categories: ["developer"]\`. It searches an index of GitHub issues, merged pull requests, repository READMEs, and curated documentation sites, and returns the hits in \`data.developer\` beside the web results.
 
 \`scrapeOptions\` can attach extracted page content. Returns source-type result groups, an \`id\` for optional search feedback, and usage metadata.
 `,
@@ -2830,7 +2832,9 @@ function registerMarketplaceSearchTool(
       destructiveHint: false,
     },
     description: `
-Search web and specialized indexes, returning ranked results. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit result types to \`github\`, \`research\`, or \`pdf\`.
+Search web and specialized indexes, returning ranked results. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit result types to \`github\`, \`research\`, \`pdf\`, or \`developer\`.
+
+For a programming question, add \`categories: ["developer"]\`. It searches an index of GitHub issues, merged pull requests, repository READMEs, and curated documentation sites, and returns the hits in \`data.developer\` beside the web results.
 
 Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
 `,
