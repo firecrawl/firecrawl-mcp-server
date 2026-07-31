@@ -635,6 +635,10 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     /50.*valuableSources.*20.*missingContent.*feedback age window.*idempotent.*daily-cap/is
   );
   assert.match(
+    byName.get('firecrawl_search_feedback').description,
+    /eligible first feedback.*can refund 1 credit.*daily cap.*response reports whether a refund was applied/is
+  );
+  assert.match(
     byName.get('firecrawl_research_search_papers').description,
     /topics represented in the indexed corpus/i
   );

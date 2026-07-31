@@ -2162,7 +2162,7 @@ if (!SEARCH_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
     description: `
 Records schema-validated quality feedback for a prior \`firecrawl_search\` UUID \`searchId\`. A \`good\` rating requires a valuable source, \`partial\` a valuable source or missing topic, and \`bad\` a missing topic or query suggestion; caps are 50 \`valuableSources\` and 20 \`missingContent\` entries.
 
-Eligibility is limited to successful searches within the feedback age window. The record is idempotent per search ID. Eligible first feedback for a search can refund 1 credit (a search costs 2); refunds are subject to the team's daily cap. The response reports whether a refund was applied, along with submission and daily-cap status.
+Eligibility is limited to successful searches within the feedback age window. The record is idempotent per search ID. Eligible first feedback for a search can refund 1 credit; refunds are subject to the team's daily cap. The response reports whether a refund was applied, along with submission and daily-cap status.
 `,
     parameters: z.object({
       searchId: z
