@@ -950,6 +950,17 @@ function isHostedKeylessSession(session?: SessionData): boolean {
   );
 }
 
+// A stdio client without a cloud credential can use only the keyless tools.
+// Do this at registration time so unsupported feedback tools are not advertised.
+function isLocalKeylessStartup(): boolean {
+  return (
+    process.env.CLOUD_SERVICE !== 'true' &&
+    !isHttpStreamingTransport() &&
+    !resolveCredentialFromEnv() &&
+    !normalizeHeader(process.env.FIRECRAWL_API_URL)
+  );
+}
+
 function recoveryPayload(
   code: string,
   requestId: string = randomUUID()
@@ -1856,7 +1867,7 @@ Search web, news, or image sources and return ranked results. Operators include 
 
 For a programming question, add \`categories: ["developer"]\`. It searches an index of GitHub issues, merged pull requests, repository READMEs, and curated documentation sites, and returns the hits in \`data.developer\` beside the web results.
 
-\`scrapeOptions\` can attach extracted page content. Returns source-type result groups, an \`id\` for optional search feedback, and usage metadata.
+\`scrapeOptions\` can attach extracted page content. Returns source-type result groups and usage metadata.
 `,
   parameters: z
     .object({
@@ -1896,7 +1907,10 @@ For a programming question, add \`categories: ["developer"]\`. It searches an in
     };
     if (isKeylessMode(session)) {
       const json = await keylessPost('/v2/search', searchBody, session);
-      return asText(json ?? {});
+      // Search feedback requires an authenticated account. Do not expose its
+      // identifier to keyless clients, where it would invite an unusable call.
+      const { id: _feedbackId, ...keylessResponse } = json ?? {};
+      return asText(keylessResponse);
     }
     // Call /v2/search through the SDK's HTTP layer (auth + retries) instead
     // of `client.search()` so we preserve the full response envelope. The
@@ -2136,7 +2150,7 @@ if (SEARCH_FEEDBACK_DISABLED) {
   );
 }
 
-if (!SEARCH_FEEDBACK_DISABLED) {
+if (!SEARCH_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
   server.addTool({
     name: 'firecrawl_search_feedback',
     annotations: {
@@ -2269,7 +2283,7 @@ if (ENDPOINT_FEEDBACK_DISABLED) {
   );
 }
 
-if (!ENDPOINT_FEEDBACK_DISABLED) {
+if (!ENDPOINT_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
   server.addTool({
     name: 'firecrawl_feedback',
     annotations: {

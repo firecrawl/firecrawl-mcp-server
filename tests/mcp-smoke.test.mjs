@@ -659,6 +659,30 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
+test('local keyless stdio omits feedback tools and search-feedback framing', async (t) => {
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: '',
+    FIRECRAWL_API_URL: '',
+    FIRECRAWL_OAUTH_TOKEN: '',
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-local-keyless', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+  const tools = await client.request('tools/list');
+  const toolNames = tools.tools.map((tool) => tool.name);
+  assert.equal(toolNames.includes('firecrawl_search_feedback'), false);
+  assert.equal(toolNames.includes('firecrawl_feedback'), false);
+  const search = tools.tools.find((tool) => tool.name === 'firecrawl_search');
+  assert.ok(search);
+  assert.doesNotMatch(search.description, /id.*feedback/i);
+});
+
 test('monitor create gives queries precedence over page targets', async (t) => {
   const fakeApi = await startFakeFirecrawlApi();
   t.after(() => fakeApi.close());
@@ -929,6 +953,8 @@ test('HTTP cloud transport serves an eligible keyless client and forwards its IP
   assert.equal(toolCall.status, 200);
   const message = parseSseJson(await toolCall.text());
   assert.notEqual(message.result.isError, true);
+  const keylessSearchPayload = JSON.parse(message.result.content[0].text);
+  assert.equal('id' in keylessSearchPayload, false);
 
   const eligibilityCalls = backend.requests.filter(
     (r) => r.url === '/v2/keyless/eligibility'
