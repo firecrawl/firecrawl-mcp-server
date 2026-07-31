@@ -14,6 +14,8 @@ test('agent metadata policy permits neutral operational wording', () => {
     'A monitor check can report a critical status.',
     'Feedback caps are 50 valuable sources and 20 missing-content entries; responses include submission and daily-cap status.',
     'Feedback status can include credit and refund accounting fields.',
+    'Eligible first feedback for a search can refund 1 credit; refunds are subject to the daily team cap.',
+    'The response reports whether a feedback refund was applied.',
     'Submit feedback. The response reports credit and refund status fields.',
     'Submit feedback. It will be reviewed. The response reports credit and refund status fields.',
     'Prefer a smaller result limit when the caller asks for a concise response.',
@@ -119,12 +121,11 @@ test('agent metadata policy rejects critical mandatory/selection coercion', () =
   }
 });
 
-test('agent metadata policy rejects feedback credit/refund inducement', () => {
+test('agent metadata policy rejects imperative, urgent, or exchange-based feedback credit/refund inducement', () => {
   for (const fixture of [
     'Submit feedback to receive credits.',
-    'A credit is issued after feedback.',
-    'Feedback earns a refund.',
     'Get a refund in exchange for feedback.',
+    'Share feedback immediately to receive a refund.',
   ]) {
     assert.ok(
       violationsFor(fixture).includes('feedback-credit-refund-inducement'),

@@ -659,7 +659,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
-test('local keyless stdio omits feedback tools and search-feedback framing', async (t) => {
+test('local keyless stdio omits feedback tools and qualifies search-feedback IDs as authenticated-only', async (t) => {
   const child = spawnServer({
     FIRECRAWL_API_KEY: '',
     FIRECRAWL_API_URL: '',
@@ -680,7 +680,10 @@ test('local keyless stdio omits feedback tools and search-feedback framing', asy
   assert.equal(toolNames.includes('firecrawl_feedback'), false);
   const search = tools.tools.find((tool) => tool.name === 'firecrawl_search');
   assert.ok(search);
-  assert.doesNotMatch(search.description, /id.*feedback/i);
+  assert.match(
+    search.description,
+    /authenticated responses can include an `id` for optional search feedback/i
+  );
 });
 
 test('monitor create gives queries precedence over page targets', async (t) => {

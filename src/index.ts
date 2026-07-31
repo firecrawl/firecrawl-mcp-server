@@ -1867,7 +1867,7 @@ Search web, news, or image sources and return ranked results. Operators include 
 
 For a programming question, add \`categories: ["developer"]\`. It searches an index of GitHub issues, merged pull requests, repository READMEs, and curated documentation sites, and returns the hits in \`data.developer\` beside the web results.
 
-\`scrapeOptions\` can attach extracted page content. Returns source-type result groups and usage metadata.
+\`scrapeOptions\` can attach extracted page content. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
 `,
   parameters: z
     .object({
@@ -1916,8 +1916,7 @@ For a programming question, add \`categories: ["developer"]\`. It searches an in
     // Call /v2/search through the SDK's HTTP layer (auth + retries) instead
     // of `client.search()` so we preserve the full response envelope. The
     // high-level `search()` helper strips `id` and `creditsUsed`, which
-    // breaks the `firecrawl_search_feedback` workflow that this server
-    // explicitly tells the LLM to use after every search.
+    // supports the optional authenticated `firecrawl_search_feedback` workflow.
     const client = getClient(session);
     const httpRes = await (client as any).http.post('/v2/search', searchBody);
     return asText(httpRes?.data ?? {});
@@ -2163,7 +2162,7 @@ if (!SEARCH_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
     description: `
 Records schema-validated quality feedback for a prior \`firecrawl_search\` UUID \`searchId\`. A \`good\` rating requires a valuable source, \`partial\` a valuable source or missing topic, and \`bad\` a missing topic or query suggestion; caps are 50 \`valuableSources\` and 20 \`missingContent\` entries.
 
-Eligibility is limited to successful searches within the feedback age window. The record is idempotent per search ID. Returns submission and daily-cap status with accounting fields.
+Eligibility is limited to successful searches within the feedback age window. The record is idempotent per search ID. Eligible first feedback for a search can refund 1 credit (a search costs 2); refunds are subject to the team's daily cap. The response reports whether a refund was applied, along with submission and daily-cap status.
 `,
     parameters: z.object({
       searchId: z
