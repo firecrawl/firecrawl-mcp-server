@@ -772,8 +772,50 @@ function buildSearchQueryWithDomains(
 // adds `scrapeOptions` on top; the search surface uses these as-is (strict, no
 // scrapeOptions). Defining the field set once keeps the two surfaces from
 // drifting when a source type, category, or filter changes.
+const exchangeSourceSchema = z.object({
+  type: z.literal('exchange'),
+  categories: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Limit discovery to provider cohorts, for instance `people` or `finance`.'
+    ),
+  providers: z
+    .array(z.string())
+    .optional()
+    .describe('Limit discovery to named provider slugs.'),
+  capabilities: z
+    .array(z.string())
+    .optional()
+    .describe('Limit discovery to specific `provider/capability` pairs.'),
+});
+
+const exchangeCallSchema = z.object({
+  provider: z.string().min(1).describe('Provider slug, for instance `apollo`.'),
+  capability: z
+    .string()
+    .min(1)
+    .describe('Capability slug published by that provider.'),
+  options: z
+    .record(z.string(), z.unknown())
+    .describe("Arguments matching the capability's published input schema."),
+  providerApiKey: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Your own credential for a bring-your-own-key capability. Forwarded for this call only and never stored.'
+    ),
+});
+
 const searchToolBaseFields = {
-  query: z.string().min(1),
+  query: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Web search query. Optional when the request only browses the Exchange catalog or only executes `exchange` calls.'
+    ),
   highlights: z
     .boolean()
     .optional()
@@ -787,8 +829,23 @@ const searchToolBaseFields = {
   includeDomains: z.array(searchDomainSchema).optional(),
   excludeDomains: z.array(searchDomainSchema).optional(),
   sources: z
-    .array(z.object({ type: z.enum(['web', 'images', 'news']) }))
-    .optional(),
+    .array(
+      z.union([
+        z.object({ type: z.enum(['web', 'images', 'news']) }),
+        exchangeSourceSchema,
+      ])
+    )
+    .optional()
+    .describe(
+      'Result sources. Add `{ "type": "exchange" }` to search the Exchange catalog of data providers alongside web results; it adds no credits.'
+    ),
+  exchange: z
+    .array(exchangeCallSchema)
+    .max(10)
+    .optional()
+    .describe(
+      'Execute Exchange capabilities and return their structured results under `data.exchange`. Each call bills the published `creditsPerCall`.'
+    ),
   categories: z
     .array(z.enum(['github', 'research', 'pdf']))
     .optional()
@@ -807,6 +864,22 @@ function searchDomainsAreExclusive(args: {
 }
 const SEARCH_DOMAINS_CONFLICT_MESSAGE =
   'includeDomains and excludeDomains cannot both be specified';
+
+// A request needs something to do: a web query, an Exchange source to browse,
+// or an Exchange call to execute.
+function searchHasSomethingToDo(args: {
+  query?: string;
+  sources?: Array<{ type: string }>;
+  exchange?: unknown[];
+}): boolean {
+  return Boolean(
+    args.query ||
+    args.exchange?.length ||
+    args.sources?.some((source) => source?.type === 'exchange')
+  );
+}
+const SEARCH_EMPTY_REQUEST_MESSAGE =
+  'Provide a query, an exchange source, or at least one exchange call';
 
 class ConsoleLogger implements Logger {
   private shouldLog =
@@ -1903,7 +1976,8 @@ Search web, news, or image sources and return ranked results. Operators include 
         .partial()
         .optional(),
     })
-    .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE),
+    .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE)
+    .refine(searchHasSomethingToDo, SEARCH_EMPTY_REQUEST_MESSAGE),
   execute: async (args: unknown, { session, log }): Promise<string> => {
     const { query, ...opts } = args as Record<string, unknown>;
 
@@ -1920,14 +1994,17 @@ Search web, news, or image sources and return ranked results. Operators include 
     }
 
     const cleaned = removeEmptyTopLevel(searchOpts);
-    const searchQuery = buildSearchQueryWithDomains(
-      query as string,
-      includeDomains,
-      excludeDomains
-    );
-    log.info('Searching', { query: searchQuery });
+    const searchQuery =
+      query === undefined
+        ? undefined
+        : buildSearchQueryWithDomains(
+            query as string,
+            includeDomains,
+            excludeDomains
+          );
+    log.info('Searching', { query: searchQuery ?? '(exchange only)' });
     const searchBody = {
-      query: searchQuery,
+      ...(searchQuery === undefined ? {} : { query: searchQuery }),
       ...(cleaned as any),
       origin: ORIGIN,
     };
@@ -2893,7 +2970,8 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
       // way to request page-content fetching, and an unexpected field is an
       // error rather than being silently dropped.
       .strict()
-      .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE),
+      .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE)
+      .refine(searchHasSomethingToDo, SEARCH_EMPTY_REQUEST_MESSAGE),
     execute: async (args: unknown, { session, log }): Promise<string> => {
       const {
         query,
@@ -2907,8 +2985,9 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
         categories,
         highlights,
         enterprise,
+        exchange,
       } = args as {
-        query: string;
+        query?: string;
         includeDomains?: string[];
         excludeDomains?: string[];
         limit?: number;
@@ -2919,18 +2998,18 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
         categories?: string[];
         highlights?: boolean;
         enterprise?: string[];
+        exchange?: unknown[];
       };
 
-      const searchQuery = buildSearchQueryWithDomains(
-        query,
-        includeDomains,
-        excludeDomains
-      );
+      const searchQuery =
+        query === undefined
+          ? undefined
+          : buildSearchQueryWithDomains(query, includeDomains, excludeDomains);
 
       // Build the outbound body from allowed fields only. Never spread the raw
       // arguments, so no scrape/content-fetch options can reach the API.
       const searchBody = {
-        query: searchQuery,
+        ...(searchQuery === undefined ? {} : { query: searchQuery }),
         ...removeEmptyTopLevel({
           limit,
           tbs,
@@ -2940,11 +3019,12 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
           categories,
           highlights,
           enterprise,
+          exchange,
         }),
         origin: ORIGIN,
       };
 
-      log.info('Searching', { query: searchQuery });
+      log.info('Searching', { query: searchQuery ?? '(exchange only)' });
       const client = getClientFn(session);
       const httpRes = await (client as any).http.post('/v2/search', searchBody);
       return asText(httpRes?.data ?? {});
