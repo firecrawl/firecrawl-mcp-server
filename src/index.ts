@@ -125,7 +125,9 @@ function isFirecrawlApiKey(token: string): boolean {
 }
 
 function isLegacyKeyPathRequest(request: MCPAuthRequest | undefined): boolean {
-  return normalizeHeader(request?.headers?.['x-firecrawl-key-transport']) === 'path';
+  return (
+    normalizeHeader(request?.headers?.['x-firecrawl-key-transport']) === 'path'
+  );
 }
 
 function requestShouldReceiveOAuthChallenge(
@@ -162,7 +164,8 @@ function isHttpStreamingTransport(): boolean {
 const DEFAULT_OAUTH_ISSUER = 'https://www.firecrawl.dev';
 const DEFAULT_MCP_RESOURCE_URL = 'https://mcp.firecrawl.dev/v2/mcp';
 const DEFAULT_MCP_OAUTH_RESOURCE_URL = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
-const DEFAULT_MCP_SEARCH_RESOURCE_URL = 'https://mcp.firecrawl.dev/v2/mcp-search';
+const DEFAULT_MCP_SEARCH_RESOURCE_URL =
+  'https://mcp.firecrawl.dev/v2/mcp-search';
 const DEFAULT_MCP_SEARCH_ENDPOINT = '/v2/mcp-search';
 
 function withoutTrailingSlash(value: string): string {
@@ -257,7 +260,9 @@ function createOAuthChallengeResponse(
   );
 }
 
-function createInvalidCredentialResponse(error: InvalidFirecrawlCredentialError): Response {
+function createInvalidCredentialResponse(
+  error: InvalidFirecrawlCredentialError
+): Response {
   return new Response(
     JSON.stringify({
       error: 'invalid_api_key',
@@ -284,7 +289,9 @@ function isMcpOAuthEnabled(): boolean {
 
 type OAuthCredentialPurpose = 'general' | 'hosted_mcp_oauth';
 
-function isOAuthCredentialPurpose(value: unknown): value is OAuthCredentialPurpose {
+function isOAuthCredentialPurpose(
+  value: unknown
+): value is OAuthCredentialPurpose {
   return value === 'general' || value === 'hosted_mcp_oauth';
 }
 
@@ -315,7 +322,9 @@ type ResolvedCredential = {
 
 class InvalidFirecrawlCredentialError extends Error {
   constructor() {
-    super('The supplied Firecrawl credential is invalid or revoked. Replace it and retry.');
+    super(
+      'The supplied Firecrawl credential is invalid or revoked. Replace it and retry.'
+    );
     this.name = 'InvalidFirecrawlCredentialError';
   }
 }
@@ -337,7 +346,9 @@ function audienceMatchesResource(
   return values(aud).some((entry) => withoutTrailingSlash(entry) === target);
 }
 
-function credentialMetadata(data: OAuthIntrospectionResponse): CredentialMetadata {
+function credentialMetadata(
+  data: OAuthIntrospectionResponse
+): CredentialMetadata {
   return {
     teamId: typeof data.team_id === 'string' ? data.team_id : undefined,
     userId: typeof data.sub === 'string' ? data.sub : undefined,
@@ -522,7 +533,9 @@ async function authenticateRequest(
     const session: SessionData = {
       authType: resolved?.source === 'oauth' ? 'oauth' : 'api-key',
       firecrawlApiKey: headerCred,
-      ...(isLegacyKeyPathRequest(request) ? { keyTransport: 'path' as const } : {}),
+      ...(isLegacyKeyPathRequest(request)
+        ? { keyTransport: 'path' as const }
+        : {}),
       ...resolved?.metadata,
     };
     return managedCred ? setManagedOAuthApiKey(session, managedCred) : session;
@@ -555,7 +568,8 @@ async function authenticateRequest(
   }
 
   const session: SessionData = {
-    authType: resolved?.source === 'oauth' ? 'oauth' : credential ? 'env' : 'none',
+    authType:
+      resolved?.source === 'oauth' ? 'oauth' : credential ? 'env' : 'none',
     firecrawlApiKey: headerCred ?? envCred,
     ...resolved?.metadata,
   };
@@ -576,7 +590,9 @@ function searchCompanionAuthMode(
     request?.headers?.['x-firecrawl-api-key'] ?? request?.headers?.['x-api-key']
   );
   if (headerApiKey) return 'api-key';
-  const bearer = request?.headers ? extractBearerToken(request.headers) : undefined;
+  const bearer = request?.headers
+    ? extractBearerToken(request.headers)
+    : undefined;
   if (bearer?.startsWith('fco_')) return 'oauth';
   if (bearer) return 'api-key';
   return 'none';
@@ -680,7 +696,10 @@ function makeAuthenticate(profile: ServerProfile) {
             }
           );
         }
-        const shouldChallenge = requestShouldReceiveOAuthChallenge(request, profile);
+        const shouldChallenge = requestShouldReceiveOAuthChallenge(
+          request,
+          profile
+        );
         const oauthChallenge = shouldChallenge
           ? createOAuthChallengeResponse(error, profile)
           : undefined;
@@ -850,10 +869,12 @@ function makeFullProfile(): ServerProfile {
   return {
     id: account ? 'account' : 'full',
     resourceName: account ? 'Firecrawl MCP Account' : 'Firecrawl MCP',
-    instructions: account ? FULL_PROFILE_INSTRUCTIONS : KEYLESS_PROFILE_INSTRUCTIONS,
+    instructions: account
+      ? FULL_PROFILE_INSTRUCTIONS
+      : KEYLESS_PROFILE_INSTRUCTIONS,
     resourceUrl: account
-      ? normalizeHeader(process.env.FIRECRAWL_MCP_RESOURCE_URL) ??
-        DEFAULT_MCP_OAUTH_RESOURCE_URL
+      ? (normalizeHeader(process.env.FIRECRAWL_MCP_RESOURCE_URL) ??
+        DEFAULT_MCP_OAUTH_RESOURCE_URL)
       : getMcpResourceUrl(),
     endpoint: account ? '/v2/mcp-oauth' : undefined,
     port: Number(process.env.PORT || 3000),
@@ -869,7 +890,9 @@ function searchOAuthOnly(): boolean {
   return process.env.FIRECRAWL_MCP_SEARCH_OAUTH_ONLY === 'true';
 }
 
-function makeSearchProfile({ primary = false }: { primary?: boolean } = {}): ServerProfile {
+function makeSearchProfile({
+  primary = false,
+}: { primary?: boolean } = {}): ServerProfile {
   const oauthOnly = searchOAuthOnly();
   if (primary && !oauthOnly) {
     throw new Error(
@@ -1057,15 +1080,30 @@ function guardHostedTool(
         throw new UserError(String(payload.message), payload);
       }
       if (isHostedKeylessSession(invocationSession) && !keylessTool) {
-        const payload = recoveryPayload('KEYLESS_TOOL_NOT_AVAILABLE', requestId);
+        const payload = recoveryPayload(
+          'KEYLESS_TOOL_NOT_AVAILABLE',
+          requestId
+        );
         throw new UserError(String(payload.message), payload);
       }
       if (!logActions) return execute(args, invocationContext);
 
-      emitActionLog(tool.name, 'started', invocationSession, undefined, requestId);
+      emitActionLog(
+        tool.name,
+        'started',
+        invocationSession,
+        undefined,
+        requestId
+      );
       try {
         const result = await execute(args, invocationContext);
-        emitActionLog(tool.name, 'success', invocationSession, undefined, requestId);
+        emitActionLog(
+          tool.name,
+          'success',
+          invocationSession,
+          undefined,
+          requestId
+        );
         return result;
       } catch (error) {
         emitActionLog(tool.name, 'error', invocationSession, error, requestId);
@@ -1094,7 +1132,9 @@ server.addTool = ((tool: RegisteredTool) => {
   if (primaryProfile.id === 'search' && tool.name === 'firecrawl_search') {
     return;
   }
-  addTool(guardHostedTool(tool, { logActions: primaryProfile.id !== 'search' }));
+  addTool(
+    guardHostedTool(tool, { logActions: primaryProfile.id !== 'search' })
+  );
 }) as typeof server.addTool;
 
 if (openAiAppsChallengeToken) {
@@ -1122,7 +1162,9 @@ server.getApp().get('/ready', (context) => {
   if (primaryProfile.allowKeyless) {
     required.push('KEYLESS_PROXY_SECRET');
   }
-  const missing = required.filter((name) => !normalizeHeader(process.env[name]));
+  const missing = required.filter(
+    (name) => !normalizeHeader(process.env[name])
+  );
   const configuredEndpoint = getPrimaryEndpoint();
   const resourceMatchesEndpoint = searchPrimary
     ? withoutTrailingSlash(primaryProfile.resourceUrl) ===
@@ -1227,8 +1269,7 @@ function buildFormatsArray(
       result.push({ type: 'json', ...jsonOpts });
     } else if (fmt === 'query') {
       const queryOpts = args.queryOptions as
-        | Record<string, unknown>
-        | undefined;
+        Record<string, unknown> | undefined;
       result.push({ type: 'query', ...queryOpts });
     } else if (fmt === 'screenshot' && args.screenshotOptions) {
       const ssOpts = args.screenshotOptions as Record<string, unknown>;
@@ -1970,7 +2011,8 @@ async function keylessPost(
 ): Promise<any> {
   if (
     isHostedKeylessSession(session) &&
-    (!session?.keylessClientIp || !(await keylessEligible(session.keylessClientIp)))
+    (!session?.keylessClientIp ||
+      !(await keylessEligible(session.keylessClientIp)))
   ) {
     const payload = recoveryPayload(
       'KEYLESS_ACCESS_NOT_AVAILABLE',
@@ -1995,7 +2037,10 @@ async function keylessPost(
   });
   const json: any = await response.json().catch(() => ({}));
   if (!response.ok) {
-    if (isHostedKeylessSession(session) && [401, 402, 429].includes(response.status)) {
+    if (
+      isHostedKeylessSession(session) &&
+      [401, 402, 429].includes(response.status)
+    ) {
       const payload = recoveryPayload(
         'KEYLESS_QUOTA_EXHAUSTED',
         session?.requestId
@@ -2617,7 +2662,10 @@ This acts on the live site, so actions such as form submission can create persis
       code: z.string().trim().min(1).optional(),
       language: z.enum(['bash', 'python', 'node']).optional(),
       timeout: z.number().min(1).max(300).optional(),
-      scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+      scrapeOptions: scrapeParamsSchema
+        .omit({ url: true })
+        .partial()
+        .optional(),
     })
     .refine((data) => Boolean(data.scrapeId) !== Boolean(data.url), {
       message:
@@ -2682,7 +2730,12 @@ This acts on the live site, so actions such as form submission can create persis
     if (language) interactArgs.language = language;
     if (timeout != null) interactArgs.timeout = timeout;
     const res = await client.interact(activeScrapeId, interactArgs as any);
-    if (openedFromUrl && res && typeof res === 'object' && !Array.isArray(res)) {
+    if (
+      openedFromUrl &&
+      res &&
+      typeof res === 'object' &&
+      !Array.isArray(res)
+    ) {
       return asText({
         ...(res as unknown as Record<string, unknown>),
         scrapeId: activeScrapeId,
