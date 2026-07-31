@@ -121,11 +121,14 @@ test('agent metadata policy rejects critical mandatory/selection coercion', () =
   }
 });
 
-test('agent metadata policy rejects imperative, urgent, or exchange-based feedback credit/refund inducement', () => {
+test('agent metadata policy rejects imperative, urgent, exchange-based, or unconditional feedback credit/refund inducement', () => {
   for (const fixture of [
     'Submit feedback to receive credits.',
     'Get a refund in exchange for feedback.',
     'Share feedback immediately to receive a refund.',
+    'Feedback earns a refund.',
+    'You receive a refund for every feedback submission.',
+    'A credit is issued after feedback.',
   ]) {
     assert.ok(
       violationsFor(fixture).includes('feedback-credit-refund-inducement'),

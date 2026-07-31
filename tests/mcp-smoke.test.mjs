@@ -628,7 +628,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   assert.match(
     byName.get('firecrawl_search_feedback').description,
-    /good.*valuable source.*partial.*missing topic.*bad.*query suggestion/is
+    /good.*valuable source.*partial.*missingContent.*bad.*missingContent.*query suggestion/is
   );
   assert.match(
     byName.get('firecrawl_search_feedback').description,
@@ -637,6 +637,10 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.match(
     byName.get('firecrawl_search_feedback').description,
     /eligible first feedback.*can refund 1 credit.*daily cap.*response reports whether a refund was applied/is
+  );
+  assert.doesNotMatch(
+    byName.get('firecrawl_search_feedback').description,
+    /costs?\s+2\s+credits?/i
   );
   assert.match(
     byName.get('firecrawl_research_search_papers').description,

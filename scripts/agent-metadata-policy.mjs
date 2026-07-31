@@ -23,6 +23,8 @@ const FEEDBACK_EXPLICIT_EXCHANGE =
   '\\b(?:in\\s+exchange\\s+for|in\\s+return\\s+for)\\b';
 const FEEDBACK_URGENCY =
   '\\b(?:immediately|right\\s+away|now|as\\s+soon\\s+as|every\\s+search|each\\s+search)\\b';
+const FEEDBACK_CONDITIONAL_HEDGE =
+  '\\b(?:eligible|can|may|subject\\s+to|if\\s+(?:eligible|applicable|available)|when\\s+eligible)\\b';
 
 function descriptions(language) {
   return (Array.isArray(language) ? language : [language]).map((description) =>
@@ -149,6 +151,8 @@ function containsFeedbackInducement(statement) {
   return (
     containsFeedbackSubmissionDirective(statement) ||
     new RegExp(FEEDBACK_EXPLICIT_EXCHANGE, 'i').test(statement) ||
+    (new RegExp(FEEDBACK_REWARD_ACTION, 'i').test(statement) &&
+      !new RegExp(FEEDBACK_CONDITIONAL_HEDGE, 'i').test(statement)) ||
     (new RegExp(FEEDBACK_URGENCY, 'i').test(statement) &&
       appearsInEitherOrder(statement, FEEDBACK, FEEDBACK_ACTION))
   );
@@ -227,8 +231,9 @@ function containsNearbyDefaultCoercion(statements) {
   return firstNearbyStatementPair(statements, containsAdjacentDefaultCoercion);
 }
 
-// Product decision (2026-08-01): factual, conditional refund disclosures are
-// permitted. Imperative, urgent, or quid-pro-quo refund language is not.
+// Product decision — Himadri (2026-08-01): factual, conditional refund
+// disclosures are permitted. Imperative, urgent, quid-pro-quo, and
+// unconditional reward language is not.
 const FEEDBACK_INDUCEMENT_RULE = {
   id: 'feedback-credit-refund-inducement',
   label: 'feedback credit/refund inducement (not factual disclosure)',
