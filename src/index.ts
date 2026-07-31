@@ -1909,7 +1909,8 @@ For a programming question, add \`categories: ["developer"]\`. It searches an in
       const json = await keylessPost('/v2/search', searchBody, session);
       // Search feedback requires an authenticated account. Do not expose its
       // identifier to keyless clients, where it would invite an unusable call.
-      const { id: _feedbackId, ...keylessResponse } = json ?? {};
+      const keylessResponse = { ...(json ?? {}) };
+      delete keylessResponse.id;
       return asText(keylessResponse);
     }
     // Call /v2/search through the SDK's HTTP layer (auth + retries) instead
