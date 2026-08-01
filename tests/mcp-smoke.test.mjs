@@ -659,6 +659,78 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
+// The five cloud-only wrappers over /v2/search/research/*. Self-hosted
+// instances have none of those routes, so the tools must not register there
+// (#341) while every other configuration keeps them.
+const RESEARCH_TOOLS = [
+  'firecrawl_research_search_papers',
+  'firecrawl_research_inspect_paper',
+  'firecrawl_research_related_papers',
+  'firecrawl_research_read_paper',
+  'firecrawl_research_search_github',
+];
+
+test('self-hosted FIRECRAWL_API_URL hides the cloud-only research tools', async (t) => {
+  const child = spawnServer({
+    CLOUD_SERVICE: '',
+    FIRECRAWL_API_KEY: 'fc-test',
+    // Self-hosted target; tools/list never contacts it.
+    FIRECRAWL_API_URL: 'http://127.0.0.1:4242',
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-self-hosted-research', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const tools = await client.request('tools/list');
+  const toolNames = tools.tools.map((tool) => tool.name);
+  for (const name of RESEARCH_TOOLS) {
+    assert.equal(toolNames.includes(name), false, `${name} must not register`);
+  }
+  assert.equal(
+    toolNames.some((name) => name.startsWith('firecrawl_research_')),
+    false
+  );
+  // The rest of the surface is untouched.
+  assert.ok(toolNames.includes('firecrawl_scrape'));
+  assert.ok(toolNames.includes('firecrawl_search'));
+  assert.match(stderr, /skipping the cloud-only firecrawl_research_\* tools/);
+});
+
+test('explicit cloud FIRECRAWL_API_URL keeps the research tools registered', async (t) => {
+  const child = spawnServer({
+    CLOUD_SERVICE: '',
+    FIRECRAWL_API_KEY: 'fc-test',
+    // Explicitly targeting the cloud (trailing slash exercises normalization)
+    // is not self-hosted.
+    FIRECRAWL_API_URL: 'https://api.firecrawl.dev/',
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-cloud-url-research', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const tools = await client.request('tools/list');
+  const toolNames = tools.tools.map((tool) => tool.name);
+  for (const name of RESEARCH_TOOLS) {
+    assert.ok(toolNames.includes(name), `${name} must stay registered`);
+  }
+});
+
 test('monitor create gives queries precedence over page targets', async (t) => {
   const fakeApi = await startFakeFirecrawlApi();
   t.after(() => fakeApi.close());

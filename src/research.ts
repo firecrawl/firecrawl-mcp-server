@@ -35,6 +35,23 @@ type GetClient = (session?: SessionData) => unknown;
 const BASE = '/v2/search/research';
 const ORIGIN_HEADERS = { 'X-Origin': 'mcp-fastmcp' };
 
+const DEFAULT_CLOUD_API_URL = 'https://api.firecrawl.dev';
+
+/**
+ * The research index only exists on the Firecrawl cloud API; self-hosted
+ * instances have no `/v2/search/research/*` routes and answer every research
+ * call with a 404 (firecrawl/firecrawl-mcp-server#341). A target counts as
+ * self-hosted when FIRECRAWL_API_URL points somewhere other than the cloud —
+ * except under the hosted multi-tenant deployment (CLOUD_SERVICE), which also
+ * sets FIRECRAWL_API_URL but always fronts the cloud API.
+ */
+function targetsSelfHostedApi(): boolean {
+  if (process.env.CLOUD_SERVICE === 'true') return false;
+  const apiUrl = process.env.FIRECRAWL_API_URL?.trim().replace(/\/$/, '');
+  if (!apiUrl) return false;
+  return apiUrl !== DEFAULT_CLOUD_API_URL;
+}
+
 /** Append a value (or repeated array values) to a URLSearchParams instance. */
 function appendParam(
   params: URLSearchParams,
@@ -232,6 +249,17 @@ export function registerResearchTools(
   server: Pick<FastMCP<SessionData>, 'addTool'>,
   getClient: GetClient
 ): void {
+  if (targetsSelfHostedApi()) {
+    // Registering these against a self-hosted instance only surfaces tools
+    // that fail with a bare 404, so skip them and say why.
+    console.error(
+      'FIRECRAWL_API_URL points at a self-hosted instance — skipping the ' +
+        'cloud-only firecrawl_research_* tools (the research index only ' +
+        'exists on the Firecrawl cloud API).'
+    );
+    return;
+  }
+
   // --- search_papers ---
   server.addTool({
     name: 'firecrawl_research_search_papers',
