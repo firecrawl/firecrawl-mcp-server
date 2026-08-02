@@ -87,7 +87,7 @@ export function registerDeveloperTools(
       destructiveHint: false, // Query-only; no writes to external sources or the developer index.
     },
     description: `
-For a developer question — code behaviour, a library or framework, an API contract, an error message, or a known bug — search an index built for coding agents. The index covers GitHub issues, merged pull requests, repository READMEs, and curated documentation sites.
+For a developer question — code behaviour, a library or framework, an API contract, an error message, or a known bug — search an index built for coding agents. The index covers GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. Set skills to "only" to limit the search to agent-skill files.
 
 Returns ranked results with an ID, source type, URL, title, and the matched passages in markdown.
 `,
@@ -105,12 +105,21 @@ Returns ranked results with an ID, source type, URL, title, and the matched pass
         .max(100)
         .optional()
         .describe('Number of ranked results to return (default 20).'),
+      skills: z
+        .enum(['only'])
+        .optional()
+        .describe('Set to "only" to search only agent-skill files.'),
     }),
     execute: async (args: unknown, { session }): Promise<string> => {
-      const { query, k } = args as { query: string; k?: number };
+      const { query, k, skills } = args as {
+        query: string;
+        k?: number;
+        skills?: 'only';
+      };
       const params = new URLSearchParams();
       params.append('query', query);
       if (k != null) params.append('k', String(k));
+      if (skills != null) params.append('skills', skills);
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ results?: DeveloperHit[] }>(
         `${BASE}?${params.toString()}`,
