@@ -529,6 +529,36 @@ test('search firecrawl_developer_search forwards query and k to the developer en
   assert.match(text, /The matched passage\./);
 });
 
+test('search firecrawl_developer_search forwards skills=only when requested', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+  });
+
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 43,
+    method: 'tools/call',
+    params: {
+      arguments: { query: 'scrape a page', skills: 'only' },
+      name: 'firecrawl_developer_search',
+    },
+    headers: { 'x-api-key': 'fc-search-key' },
+  });
+  assert.equal(res.status, 200);
+  const message = parseSseJson(await res.text());
+  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+
+  const developerCalls = backend.requests.filter((r) =>
+    r.url.startsWith('/v2/developer/search')
+  );
+  assert.equal(developerCalls.length, 1);
+  const params = new URLSearchParams(developerCalls[0].url.split('?')[1]);
+  assert.equal(params.get('query'), 'scrape a page');
+  assert.equal(params.get('skills'), 'only');
+  assert.deepEqual([...params.keys()].sort(), ['query', 'skills']);
+});
+
 test('search surface requires authentication for tools/list', async (t) => {
   const { searchPort, issuerUrl } = await startHostedServer(t);
 
