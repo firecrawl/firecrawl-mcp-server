@@ -1053,6 +1053,14 @@ test('HTTP cloud keyless keeps 429 recovery structured during API deploy skew', 
       KEYLESS_PROXY_SECRET: 'keyless-secret',
       PORT: String(port),
     });
+    let cleanedUp = false;
+    const cleanup = async () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      await stopChild(child);
+      await backend.close();
+    };
+    t.after(cleanup);
     await waitForHealth(port, child);
     const response = await httpToolCall(port, {
       id: `keyless-${label}`,
@@ -1064,8 +1072,7 @@ test('HTTP cloud keyless keeps 429 recovery structured during API deploy skew', 
     assert.equal(result.structuredContent.code, expectedCode, label);
     assert.equal(result.structuredContent.next_actions[0].kind, 'connect_oauth', label);
     if (label === 'with-reason') assert.equal(result.structuredContent.retry_after_seconds, 42);
-    await stopChild(child);
-    await backend.close();
+    await cleanup();
   }
 });
 
