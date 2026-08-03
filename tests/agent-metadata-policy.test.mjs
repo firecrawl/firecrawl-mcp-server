@@ -17,6 +17,7 @@ test('agent metadata policy permits neutral operational wording', () => {
     'Eligible first feedback for a search can refund 1 credit; refunds are subject to the daily team cap.',
     'A one-credit refund may be issued for eligible search feedback.',
     'Eligible search feedback may, subject to the daily team cap, receive a credit.',
+    'A credit is issued for eligible search feedback, subject to the daily team cap.',
     'The response reports whether a feedback refund was applied.',
     'Submit feedback. The response reports credit and refund status fields.',
     'Submit feedback. It will be reviewed. The response reports credit and refund status fields.',
@@ -134,6 +135,8 @@ test('agent metadata policy rejects imperative, urgent, exchange-based, or uncon
     'Feedback: submit it; eligible submissions can receive a credit.',
     'You receive a refund for your feedback, and reviews may take up to a day.',
     'Feedback earns a credit, but may receive a refund after review.',
+    'You can earn a credit by providing feedback.',
+    'You may earn a credit for feedback, subject to the daily team cap.',
   ]) {
     assert.ok(
       violationsFor(fixture).includes('feedback-credit-refund-inducement'),

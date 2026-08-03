@@ -23,8 +23,10 @@ const FEEDBACK_EXPLICIT_EXCHANGE =
   '\\b(?:in\\s+exchange\\s+for|in\\s+return\\s+for)\\b';
 const FEEDBACK_URGENCY =
   '\\b(?:immediately|right\\s+away|now|as\\s+soon\\s+as|every\\s+search|each\\s+search)\\b';
-const CONDITIONAL_REWARD_PREFIX =
-  '\\b(?:can|may)(?:\\s+be)?(?:\\s*,?\\s*subject\\s+to\\s+(?:the\\s+)?(?:daily\\s+)?(?:team\\s+)?cap\\s*,?)?\\s*$';
+const CONDITIONAL_REWARD_CAP =
+  '\\bsubject\\s+to\\s+(?:the\\s+)?(?:daily\\s+)?(?:team\\s+)?cap\\b';
+const PERSONAL_REWARD_PROMISE =
+  '\\byou\\s+(?:can|may|will)\\s+(?:earn(?:s|ed|ing)?|receiv(?:e|es|ed|ing)|get|qualif(?:y|ies)|be\\s+(?:issued|rewarded|granted))\\b';
 
 function descriptions(language) {
   return (Array.isArray(language) ? language : [language]).map((description) =>
@@ -141,9 +143,22 @@ function containsFeedbackSubmissionDirective(statement) {
   );
 }
 
+function isFactualConditionalReward(statement) {
+  if (new RegExp(PERSONAL_REWARD_PROMISE, 'i').test(statement)) {
+    return false;
+  }
+
+  const hasEligibility = /\beligible\b/i.test(statement);
+  const hasCap = new RegExp(CONDITIONAL_REWARD_CAP, 'i').test(statement);
+  const hasConditionalModal = /\b(?:can|may)\b/i.test(statement);
+
+  return (hasConditionalModal && (hasEligibility || hasCap)) || (hasEligibility && hasCap);
+}
+
 function containsUnconditionalFeedbackReward(statement) {
   const rewardActionPattern = new RegExp(FEEDBACK_REWARD_ACTION, 'gi');
   const creditOrRefundPattern = new RegExp(CREDIT_OR_REFUND, 'i');
+  const factualConditionalReward = isFactualConditionalReward(statement);
 
   for (const match of statement.matchAll(rewardActionPattern)) {
     const start = match.index ?? 0;
@@ -157,7 +172,7 @@ function containsUnconditionalFeedbackReward(statement) {
     }
     if (
       (creditOrRefundPattern.test(before) || creditOrRefundPattern.test(after)) &&
-      !new RegExp(CONDITIONAL_REWARD_PREFIX, 'i').test(before)
+      !factualConditionalReward
     ) {
       return true;
     }
