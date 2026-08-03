@@ -639,11 +639,19 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   assert.match(
     byName.get('firecrawl_search_feedback').description,
-    /good.*valuable source.*partial.*missing topic.*bad.*query suggestion/is
+    /good.*valuable source.*partial.*missingContent.*bad.*missingContent.*query suggestion/is
   );
   assert.match(
     byName.get('firecrawl_search_feedback').description,
     /50.*valuableSources.*20.*missingContent.*feedback age window.*idempotent.*daily-cap/is
+  );
+  assert.match(
+    byName.get('firecrawl_search_feedback').description,
+    /eligible first feedback.*can refund 1 credit.*daily cap.*response reports whether a refund was applied/is
+  );
+  assert.doesNotMatch(
+    byName.get('firecrawl_search_feedback').description,
+    /costs?\s+2\s+credits?/i
   );
   assert.match(
     byName.get('firecrawl_research_search_papers').description,
@@ -668,6 +676,33 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   ].join('\n');
   assertAgentMetadataPolicy(renderedLanguage, assert);
   assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('local keyless stdio omits feedback tools and qualifies search-feedback IDs as authenticated-only', async (t) => {
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: '',
+    FIRECRAWL_API_URL: '',
+    FIRECRAWL_OAUTH_TOKEN: '',
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-local-keyless', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+  const tools = await client.request('tools/list');
+  const toolNames = tools.tools.map((tool) => tool.name);
+  assert.equal(toolNames.includes('firecrawl_search_feedback'), false);
+  assert.equal(toolNames.includes('firecrawl_feedback'), false);
+  const search = tools.tools.find((tool) => tool.name === 'firecrawl_search');
+  assert.ok(search);
+  assert.match(
+    search.description,
+    /authenticated responses can include an `id` for optional search feedback/i
+  );
 });
 
 test('monitor create gives queries precedence over page targets', async (t) => {
@@ -940,6 +975,8 @@ test('HTTP cloud transport serves an eligible keyless client and forwards its IP
   assert.equal(toolCall.status, 200);
   const message = parseSseJson(await toolCall.text());
   assert.notEqual(message.result.isError, true);
+  const keylessSearchPayload = JSON.parse(message.result.content[0].text);
+  assert.equal('id' in keylessSearchPayload, false);
 
   const eligibilityCalls = backend.requests.filter(
     (r) => r.url === '/v2/keyless/eligibility'

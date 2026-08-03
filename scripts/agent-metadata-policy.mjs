@@ -15,12 +15,18 @@ const FEEDBACK = '\\bfeedback\\b';
 const CREDIT_OR_REFUND = '\\b(?:credit|credits|refund|refunds)\\b';
 const FEEDBACK_ACTION =
   '\\b(?:submit|send|provide|leave|share|give|rate|report|offer|complete|earn(?:s|ed|ing)?|receiv(?:e|es|ed|ing)|get|issu(?:e|es|ed|ing)|qualif(?:y|ies)|reward(?:s|ed)?)\\b';
-const FEEDBACK_SUBMISSION_ACTION =
-  '\\b(?:submit(?:s|ted|ting)?|send(?:s|ing)?|provide(?:s|d|ing)?|leave(?:s|ing)?|share(?:s|d|ing)?|give(?:s|n|ing)?|rate(?:s|d|ing)?|report(?:s|ed|ing)?|offer(?:s|ed|ing)?|complete(?:s|d|ing)?)\\b';
+const FEEDBACK_DIRECTIVE_ACTION =
+  '\\b(?:submit(?:s|ted|ting)?|send(?:s|ing)?|provide(?:s|d|ing)?|leave(?:s|ing)?|share(?:s|d|ing)?|give(?:s|n|ing)?|rate(?:s|d|ing)?|complete(?:s|d|ing)?)\\b';
 const FEEDBACK_REWARD_ACTION =
-  '\\b(?:earn(?:s|ed|ing)?|receiv(?:e|es|ed|ing)|get|issu(?:e|es|ed|ing)|qualif(?:y|ies)|reward(?:s|ed|ing)?|grant(?:s|ed|ing)?)\\b';
-const FEEDBACK_EXCHANGE =
-  '\\b(?:for|after|upon|when|in\\s+exchange\\s+for|in\\s+return\\s+for)\\b';
+  '\\b(?:earn(?:s|ed|ing)?|receiv(?:e|es|ed|ing)|get|issu(?:e|es|ed|ing)|qualif(?:y|ies)|reward(?:s|ed|ing)?|refund(?:s|ed|ing)?|grant(?:s|ed|ing)?)\\b';
+const FEEDBACK_EXPLICIT_EXCHANGE =
+  '\\b(?:in\\s+exchange\\s+for|in\\s+return\\s+for)\\b';
+const FEEDBACK_URGENCY =
+  '\\b(?:immediately|right\\s+away|now|as\\s+soon\\s+as|every\\s+search|each\\s+search)\\b';
+const CONDITIONAL_REWARD_CAP =
+  '\\bsubject\\s+to\\s+(?:the\\s+)?(?:daily\\s+)?(?:team\\s+)?cap\\b';
+const PERSONAL_REWARD_PROMISE =
+  '\\byou\\s+(?:can|may|will)\\s+(?:earn(?:s|ed|ing)?|receiv(?:e|es|ed|ing)|get|qualif(?:y|ies)|be\\s+(?:issued|rewarded|granted))\\b';
 
 function descriptions(language) {
   return (Array.isArray(language) ? language : [language]).map((description) =>
@@ -129,6 +135,52 @@ function containsPredicativeMandatorySelection(statement) {
   ).test(statement);
 }
 
+function containsFeedbackSubmissionDirective(statement) {
+  return appearsInEitherOrder(
+    statement,
+    FEEDBACK_DIRECTIVE_ACTION,
+    FEEDBACK
+  );
+}
+
+function isFactualConditionalReward(statement) {
+  if (new RegExp(PERSONAL_REWARD_PROMISE, 'i').test(statement)) {
+    return false;
+  }
+
+  const hasEligibility = /\beligible\b/i.test(statement);
+  const hasCap = new RegExp(CONDITIONAL_REWARD_CAP, 'i').test(statement);
+  const hasConditionalModal = /\b(?:can|may)\b/i.test(statement);
+
+  return (hasConditionalModal && (hasEligibility || hasCap)) || (hasEligibility && hasCap);
+}
+
+function containsUnconditionalFeedbackReward(statement) {
+  const rewardActionPattern = new RegExp(FEEDBACK_REWARD_ACTION, 'gi');
+  const creditOrRefundPattern = new RegExp(CREDIT_OR_REFUND, 'i');
+  const factualConditionalReward = isFactualConditionalReward(statement);
+
+  for (const match of statement.matchAll(rewardActionPattern)) {
+    const start = match.index ?? 0;
+    const before = statement.slice(Math.max(0, start - 80), start);
+    const after = statement.slice(start + match[0].length, start + match[0].length + 80);
+    if (
+      /^refund/i.test(match[0]) &&
+      !/^\s+(?:(?:a|an|one|\d+)\s+)?credits?\b/i.test(after)
+    ) {
+      continue;
+    }
+    if (
+      (creditOrRefundPattern.test(before) || creditOrRefundPattern.test(after)) &&
+      !factualConditionalReward
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function containsFeedbackInducement(statement) {
   if (
     !new RegExp(FEEDBACK, 'i').test(statement) ||
@@ -138,22 +190,20 @@ function containsFeedbackInducement(statement) {
   }
 
   return (
-    appearsInEitherOrder(statement, FEEDBACK, FEEDBACK_ACTION) ||
-    appearsInEitherOrder(statement, CREDIT_OR_REFUND, FEEDBACK_ACTION) ||
-    appearsInEitherOrder(statement, FEEDBACK, FEEDBACK_EXCHANGE) ||
-    appearsInEitherOrder(statement, CREDIT_OR_REFUND, FEEDBACK_EXCHANGE)
+    containsFeedbackSubmissionDirective(statement) ||
+    new RegExp(FEEDBACK_EXPLICIT_EXCHANGE, 'i').test(statement) ||
+    containsUnconditionalFeedbackReward(statement) ||
+    (new RegExp(FEEDBACK_URGENCY, 'i').test(statement) &&
+      appearsInEitherOrder(statement, FEEDBACK, FEEDBACK_ACTION))
   );
 }
 
 function containsFeedbackSubmission(statement) {
-  return appearsInEitherOrder(statement, FEEDBACK, FEEDBACK_SUBMISSION_ACTION);
+  return containsFeedbackSubmissionDirective(statement);
 }
 
 function containsCreditOrRefundReward(statement) {
-  return (
-    new RegExp(CREDIT_OR_REFUND, 'i').test(statement) &&
-    new RegExp(FEEDBACK_REWARD_ACTION, 'i').test(statement)
-  );
+  return containsUnconditionalFeedbackReward(statement);
 }
 
 function containsAdjacentFeedbackInducement(first, second) {
@@ -218,9 +268,12 @@ function containsNearbyDefaultCoercion(statements) {
   return firstNearbyStatementPair(statements, containsAdjacentDefaultCoercion);
 }
 
+// Product decision — Himadri (2026-08-01): factual, conditional refund
+// disclosures are permitted. Imperative, urgent, quid-pro-quo, and
+// unconditional reward language is not.
 const FEEDBACK_INDUCEMENT_RULE = {
   id: 'feedback-credit-refund-inducement',
-  label: 'feedback credit/refund inducement',
+  label: 'feedback credit/refund inducement (not factual disclosure)',
   violates: containsFeedbackInducement,
 };
 
