@@ -23,6 +23,8 @@ const FEEDBACK_EXPLICIT_EXCHANGE =
   '\\b(?:in\\s+exchange\\s+for|in\\s+return\\s+for)\\b';
 const FEEDBACK_URGENCY =
   '\\b(?:immediately|right\\s+away|now|as\\s+soon\\s+as|every\\s+search|each\\s+search)\\b';
+const CONDITIONAL_REWARD_PREFIX =
+  '\\b(?:can|may)(?:\\s+be)?(?:\\s*,?\\s*subject\\s+to\\s+(?:the\\s+)?(?:daily\\s+)?(?:team\\s+)?cap\\s*,?)?\\s*$';
 
 function descriptions(language) {
   return (Array.isArray(language) ? language : [language]).map((description) =>
@@ -155,7 +157,7 @@ function containsUnconditionalFeedbackReward(statement) {
     }
     if (
       (creditOrRefundPattern.test(before) || creditOrRefundPattern.test(after)) &&
-      !/\b(?:can|may)(?:\s+be)?\s*$/i.test(before)
+      !new RegExp(CONDITIONAL_REWARD_PREFIX, 'i').test(before)
     ) {
       return true;
     }
