@@ -155,7 +155,7 @@ function containsUnconditionalFeedbackReward(statement) {
     }
     if (
       (creditOrRefundPattern.test(before) || creditOrRefundPattern.test(after)) &&
-      !/\b(?:can|may)\b\s*$/i.test(before)
+      !/\b(?:can|may)(?:\s+be)?\s*$/i.test(before)
     ) {
       return true;
     }

@@ -15,6 +15,7 @@ test('agent metadata policy permits neutral operational wording', () => {
     'Feedback caps are 50 valuable sources and 20 missing-content entries; responses include submission and daily-cap status.',
     'Feedback status can include credit and refund accounting fields.',
     'Eligible first feedback for a search can refund 1 credit; refunds are subject to the daily team cap.',
+    'A one-credit refund may be issued for eligible search feedback.',
     'The response reports whether a feedback refund was applied.',
     'Submit feedback. The response reports credit and refund status fields.',
     'Submit feedback. It will be reviewed. The response reports credit and refund status fields.',
