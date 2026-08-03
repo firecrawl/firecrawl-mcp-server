@@ -952,8 +952,17 @@ function isHostedKeylessSession(session?: SessionData): boolean {
 
 function recoveryPayload(
   code: string,
-  requestId: string = randomUUID()
+  requestId: string = randomUUID(),
+  options: { retryAfterSeconds?: number } = {}
 ): Record<string, unknown> {
+  const retryAfterSeconds = options.retryAfterSeconds;
+  const isQuotaExhausted =
+    code === 'KEYLESS_QUOTA_EXHAUSTED' || code === 'KEYLESS_LIMIT_REACHED';
+  const isToolUnavailable = code === 'KEYLESS_TOOL_NOT_AVAILABLE';
+  const isKeylessAccessUnavailable = code === 'KEYLESS_ACCESS_NOT_AVAILABLE';
+  const isKeylessEligibilityUnavailable =
+    code === 'KEYLESS_ELIGIBILITY_UNAVAILABLE';
+  const oauthUrl = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
   return {
     code,
     request_id: requestId,
@@ -961,19 +970,35 @@ function recoveryPayload(
     message:
       code === 'CREDENTIAL_INVALID'
         ? 'The supplied Firecrawl credential is invalid or revoked. Replace it or reconnect the account, then retry.'
-        : 'This tool requires a Firecrawl account or API key. Connect an account or configure Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.',
-    available_tools: [...KEYLESS_TOOL_NAMES],
+        : isQuotaExhausted
+          ? `The free daily limit for this network has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue now, connect a Firecrawl account via OAuth or configure an API key.`
+          : isToolUnavailable
+            ? 'The free tier includes Search, Scrape, and Parse. This tool needs a connected account; Search, Scrape, and Parse still work, so no action is required.'
+            : isKeylessAccessUnavailable
+              ? 'Anonymous keyless access is unavailable for this request. To continue, connect a Firecrawl account via OAuth or configure an API key.'
+              : isKeylessEligibilityUnavailable
+                ? 'The anonymous keyless eligibility check is temporarily unavailable. Retry shortly.'
+              : 'This tool requires a Firecrawl account or API key. Connect an account or configure Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.',
+    ...(isKeylessAccessUnavailable
+      ? {}
+      : { available_tools: [...KEYLESS_TOOL_NAMES] }),
     docs_url: 'https://docs.firecrawl.dev/mcp-server',
-    next_actions: [
-      { kind: 'connect_account', url: 'https://firecrawl.dev/connect/mcp' },
-      {
-        kind: 'configure_api_key',
-        header: 'Authorization: Bearer <FIRECRAWL_API_KEY>',
-      },
-    ],
+    ...(retryAfterSeconds ? { retry_after_seconds: retryAfterSeconds } : {}),
+    next_actions: isKeylessEligibilityUnavailable
+      ? [{ kind: 'retry_later', after_seconds: 30 }]
+      : isQuotaExhausted || isKeylessAccessUnavailable
+      ? [
+          { kind: 'connect_oauth', url: oauthUrl, client_commands: [{ client: 'claude-code', command: 'claude mcp add --transport http firecrawl https://mcp.firecrawl.dev/v2/mcp-oauth' }] },
+          { kind: 'configure_api_key', header: 'Authorization: Bearer <FIRECRAWL_API_KEY>' },
+        ]
+      : isToolUnavailable
+        ? [{ kind: 'continue_keyless', tools: [...KEYLESS_TOOL_NAMES] }]
+        : [
+            { kind: 'connect_oauth', url: oauthUrl },
+            { kind: 'configure_api_key', header: 'Authorization: Bearer <FIRECRAWL_API_KEY>' },
+          ],
   };
 }
-
 type ActionStatus = 'started' | 'success' | 'error';
 
 function emitActionLog(
@@ -981,7 +1006,8 @@ function emitActionLog(
   status: ActionStatus,
   session?: SessionData,
   error?: unknown,
-  requestId = randomUUID()
+  requestId = randomUUID(),
+  code?: string
 ): void {
   if (process.env.CLOUD_SERVICE !== 'true') return;
   const payload = {
@@ -997,6 +1023,7 @@ function emitActionLog(
     ...(error
       ? { error_class: error instanceof Error ? error.name : typeof error }
       : {}),
+    ...(code ? { code } : {}),
   };
   console.error('[MCP_ACTION]', JSON.stringify(payload));
 
@@ -1006,13 +1033,17 @@ function emitActionLog(
     normalizeHeader(process.env.FIRECRAWL_MCP_ACTION_LOG_URL) ??
     (apiUrl ? `${withoutTrailingSlash(apiUrl)}/v2/mcp/action-logs` : undefined);
   if (!secret || !endpoint || !payload.team_id || status === 'started') return;
+  // `code` is an MCP console-log discriminator, not part of the account-scoped
+  // action-log API contract.
+  const actionLogPayload = { ...payload };
+  delete actionLogPayload.code;
   void fetch(endpoint, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${secret}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(actionLogPayload),
     signal: AbortSignal.timeout(1500),
   }).catch(() => undefined);
 }
@@ -1035,7 +1066,11 @@ function guardHostedTool(
           ? 'KEYLESS_TOOL_NOT_AVAILABLE'
           : undefined;
       if (!code) return undefined;
-      const payload = recoveryPayload(code);
+      const requestId = randomUUID();
+      const payload = recoveryPayload(code, requestId);
+      if (logActions) {
+        emitActionLog(tool.name, 'error', session, new UserError(String(payload.message), payload), requestId, code);
+      }
       return {
         content: [{ type: 'text' as const, text: String(payload.message) }],
         isError: true,
@@ -1055,11 +1090,15 @@ function guardHostedTool(
       };
 
       if (invocationSession.credentialError) {
-        const payload = recoveryPayload('CREDENTIAL_INVALID', requestId);
+        const code = 'CREDENTIAL_INVALID';
+        const payload = recoveryPayload(code, requestId);
+        if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
         throw new UserError(String(payload.message), payload);
       }
       if (isHostedKeylessSession(invocationSession) && !keylessTool) {
-        const payload = recoveryPayload('KEYLESS_TOOL_NOT_AVAILABLE', requestId);
+        const code = 'KEYLESS_TOOL_NOT_AVAILABLE';
+        const payload = recoveryPayload(code, requestId);
+        if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
         throw new UserError(String(payload.message), payload);
       }
       if (!logActions) return execute(args, invocationContext);
@@ -1931,14 +1970,23 @@ function extractClientIp(request?: {
 }
 
 /**
- * Read-only check (no quota consumed) of whether a client IP can still use the
- * keyless free tier, via the API's secret-gated eligibility endpoint. Fails
- * closed: anything other than a clear "eligible: true" means fall through to the
- * OAuth challenge rather than silently granting keyless.
+ * Read-only keyless check. MCP tool failures are returned in-band, not as an
+ * OAuth transport challenge, so preserve only the quota details needed for recovery.
  */
-async function keylessEligible(clientIp: string): Promise<boolean> {
+type KeylessEligibility = {
+  eligible: boolean;
+  reason?: string;
+  retryAfterSeconds?: number;
+  unavailable?: boolean;
+};
+
+function keylessQuotaReason(reason: unknown): reason is 'requests' | 'credits' {
+  return reason === 'requests' || reason === 'credits';
+}
+
+async function keylessEligible(clientIp: string): Promise<KeylessEligibility> {
   const secret = process.env.KEYLESS_PROXY_SECRET;
-  if (!secret) return false;
+  if (!secret) return { eligible: false, unavailable: true };
   try {
     const response = await fetch(
       `${resolveApiBaseUrl()}/v2/keyless/eligibility`,
@@ -1950,14 +1998,22 @@ async function keylessEligible(clientIp: string): Promise<boolean> {
         },
       }
     );
-    if (!response.ok) return false;
-    const json: any = await response.json().catch(() => ({}));
-    return json?.eligible === true;
+    if (!response.ok) return { eligible: false, unavailable: true };
+    const json: any = await response.json().catch(() => null);
+    if (typeof json?.eligible !== 'boolean') {
+      return { eligible: false, unavailable: true };
+    }
+    return {
+      eligible: json?.eligible === true,
+      ...(typeof json?.reason === 'string' ? { reason: json.reason } : {}),
+      ...(Number.isFinite(json?.retryAfterSeconds) && json.retryAfterSeconds > 0
+        ? { retryAfterSeconds: json.retryAfterSeconds }
+        : {}),
+    };
   } catch {
-    return false;
+    return { eligible: false, unavailable: true };
   }
 }
-
 function isKeylessMode(session?: SessionData): boolean {
   if (hasCredential(session) || session?.credentialError) return false;
   if (process.env.CLOUD_SERVICE === 'true') {
@@ -1972,15 +2028,21 @@ async function keylessPost(
   body: Record<string, unknown>,
   session?: SessionData
 ): Promise<any> {
-  if (
-    isHostedKeylessSession(session) &&
-    (!session?.keylessClientIp || !(await keylessEligible(session.keylessClientIp)))
-  ) {
-    const payload = recoveryPayload(
-      'KEYLESS_ACCESS_NOT_AVAILABLE',
-      session?.requestId
-    );
-    throw new UserError(String(payload.message), payload);
+  if (isHostedKeylessSession(session)) {
+    const eligibility = session?.keylessClientIp
+      ? await keylessEligible(session.keylessClientIp)
+      : { eligible: false };
+    if (!eligibility.eligible) {
+      const code = eligibility.unavailable
+        ? 'KEYLESS_ELIGIBILITY_UNAVAILABLE'
+        : keylessQuotaReason(eligibility.reason)
+          ? 'KEYLESS_QUOTA_EXHAUSTED'
+          : 'KEYLESS_ACCESS_NOT_AVAILABLE';
+      const payload = recoveryPayload(code, session?.requestId, {
+        retryAfterSeconds: eligibility.retryAfterSeconds,
+      });
+      throw new UserError(String(payload.message), payload);
+    }
   }
   const headers: Record<string, string> = {
     ...ORIGIN_HEADERS,
@@ -1999,11 +2061,19 @@ async function keylessPost(
   });
   const json: any = await response.json().catch(() => ({}));
   if (!response.ok) {
-    if (isHostedKeylessSession(session) && [401, 402, 429].includes(response.status)) {
-      const payload = recoveryPayload(
-        'KEYLESS_QUOTA_EXHAUSTED',
-        session?.requestId
-      );
+    if (isKeylessMode(session) && response.status === 429) {
+      // The API normally supplies requests|credits. Preserve a structured,
+      // non-specific recovery payload during a skewed or legacy deployment.
+      const code = keylessQuotaReason(json?.reason)
+        ? 'KEYLESS_QUOTA_EXHAUSTED'
+        : 'KEYLESS_LIMIT_REACHED';
+      const payload = recoveryPayload(code, session?.requestId, {
+        retryAfterSeconds:
+          Number.isFinite(json?.retry_after_seconds) &&
+          json.retry_after_seconds > 0
+            ? json.retry_after_seconds
+            : undefined,
+      });
       throw new UserError(String(payload.message), payload);
     }
     throw new Error(
@@ -2937,6 +3007,16 @@ if (
 registerMonitorTools(server);
 registerResearchTools(server, getClient);
 registerDeveloperTools(server, getClient);
+
+if (
+  process.env.CLOUD_SERVICE === 'true' &&
+  primaryProfile.allowKeyless &&
+  !normalizeHeader(process.env.KEYLESS_PROXY_SECRET)
+) {
+  console.warn(
+    '[firecrawl-mcp] KEYLESS_PROXY_SECRET is missing; keyless requests will be unavailable and /ready will fail.'
+  );
+}
 
 if (primaryProfile.id === 'search') {
   // The strict marketplace search tool intentionally replaces the full
