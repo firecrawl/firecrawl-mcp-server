@@ -134,8 +134,19 @@ function containsPredicativeMandatorySelection(statement) {
 }
 
 function containsFeedbackSubmissionDirective(statement) {
+  return appearsInEitherOrder(
+    statement,
+    FEEDBACK_DIRECTIVE_ACTION,
+    FEEDBACK
+  );
+}
+
+function hasConditionalFeedbackRewardDisclosure(statement) {
+  // A factual disclosure must tie a conditional modal ("can" or "may") to
+  // the reward itself. A hedge elsewhere in the sentence must not exempt an
+  // unconditional reward-for-feedback claim.
   return new RegExp(
-    `${FEEDBACK_DIRECTIVE_ACTION}${WINDOW}${FEEDBACK}`,
+    `\\b(?:can|may)\\b${WINDOW}${FEEDBACK_REWARD_ACTION}${WINDOW}${CREDIT_OR_REFUND}`,
     'i'
   ).test(statement);
 }
@@ -152,7 +163,7 @@ function containsFeedbackInducement(statement) {
     containsFeedbackSubmissionDirective(statement) ||
     new RegExp(FEEDBACK_EXPLICIT_EXCHANGE, 'i').test(statement) ||
     (new RegExp(FEEDBACK_REWARD_ACTION, 'i').test(statement) &&
-      !new RegExp(FEEDBACK_CONDITIONAL_HEDGE, 'i').test(statement)) ||
+      !hasConditionalFeedbackRewardDisclosure(statement)) ||
     (new RegExp(FEEDBACK_URGENCY, 'i').test(statement) &&
       appearsInEitherOrder(statement, FEEDBACK, FEEDBACK_ACTION))
   );

@@ -129,6 +129,8 @@ test('agent metadata policy rejects imperative, urgent, exchange-based, or uncon
     'Feedback earns a refund.',
     'You receive a refund for every feedback submission.',
     'A credit is issued after feedback.',
+    'Feedback: submit it; eligible submissions can receive a credit.',
+    'You receive a refund for your feedback, and reviews may take up to a day.',
   ]) {
     assert.ok(
       violationsFor(fixture).includes('feedback-credit-refund-inducement'),
