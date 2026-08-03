@@ -18,13 +18,11 @@ const FEEDBACK_ACTION =
 const FEEDBACK_DIRECTIVE_ACTION =
   '\\b(?:submit(?:s|ted|ting)?|send(?:s|ing)?|provide(?:s|d|ing)?|leave(?:s|ing)?|share(?:s|d|ing)?|give(?:s|n|ing)?|rate(?:s|d|ing)?|complete(?:s|d|ing)?)\\b';
 const FEEDBACK_REWARD_ACTION =
-  '\\b(?:earn(?:s|ed|ing)?|receiv(?:e|es|ed|ing)|get|issu(?:e|es|ed|ing)|qualif(?:y|ies)|reward(?:s|ed|ing)?|grant(?:s|ed|ing)?)\\b';
+  '\\b(?:earn(?:s|ed|ing)?|receiv(?:e|es|ed|ing)|get|issu(?:e|es|ed|ing)|qualif(?:y|ies)|reward(?:s|ed|ing)?|refund(?:s|ed|ing)?|grant(?:s|ed|ing)?)\\b';
 const FEEDBACK_EXPLICIT_EXCHANGE =
   '\\b(?:in\\s+exchange\\s+for|in\\s+return\\s+for)\\b';
 const FEEDBACK_URGENCY =
   '\\b(?:immediately|right\\s+away|now|as\\s+soon\\s+as|every\\s+search|each\\s+search)\\b';
-const FEEDBACK_CONDITIONAL_HEDGE =
-  '\\b(?:eligible|can|may|subject\\s+to|if\\s+(?:eligible|applicable|available)|when\\s+eligible)\\b';
 
 function descriptions(language) {
   return (Array.isArray(language) ? language : [language]).map((description) =>
@@ -141,14 +139,29 @@ function containsFeedbackSubmissionDirective(statement) {
   );
 }
 
-function hasConditionalFeedbackRewardDisclosure(statement) {
-  // A factual disclosure must tie a conditional modal ("can" or "may") to
-  // the reward itself. A hedge elsewhere in the sentence must not exempt an
-  // unconditional reward-for-feedback claim.
-  return new RegExp(
-    `\\b(?:can|may)\\b${WINDOW}${FEEDBACK_REWARD_ACTION}${WINDOW}${CREDIT_OR_REFUND}`,
-    'i'
-  ).test(statement);
+function containsUnconditionalFeedbackReward(statement) {
+  const rewardActionPattern = new RegExp(FEEDBACK_REWARD_ACTION, 'gi');
+  const creditOrRefundPattern = new RegExp(CREDIT_OR_REFUND, 'i');
+
+  for (const match of statement.matchAll(rewardActionPattern)) {
+    const start = match.index ?? 0;
+    const before = statement.slice(Math.max(0, start - 80), start);
+    const after = statement.slice(start + match[0].length, start + match[0].length + 80);
+    if (
+      /^refund/i.test(match[0]) &&
+      !/^\s+(?:(?:a|an|one|\d+)\s+)?credits?\b/i.test(after)
+    ) {
+      continue;
+    }
+    if (
+      (creditOrRefundPattern.test(before) || creditOrRefundPattern.test(after)) &&
+      !/\b(?:can|may)\b\s*$/i.test(before)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function containsFeedbackInducement(statement) {
@@ -162,8 +175,7 @@ function containsFeedbackInducement(statement) {
   return (
     containsFeedbackSubmissionDirective(statement) ||
     new RegExp(FEEDBACK_EXPLICIT_EXCHANGE, 'i').test(statement) ||
-    (new RegExp(FEEDBACK_REWARD_ACTION, 'i').test(statement) &&
-      !hasConditionalFeedbackRewardDisclosure(statement)) ||
+    containsUnconditionalFeedbackReward(statement) ||
     (new RegExp(FEEDBACK_URGENCY, 'i').test(statement) &&
       appearsInEitherOrder(statement, FEEDBACK, FEEDBACK_ACTION))
   );
@@ -174,10 +186,7 @@ function containsFeedbackSubmission(statement) {
 }
 
 function containsCreditOrRefundReward(statement) {
-  return (
-    new RegExp(CREDIT_OR_REFUND, 'i').test(statement) &&
-    new RegExp(FEEDBACK_REWARD_ACTION, 'i').test(statement)
-  );
+  return containsUnconditionalFeedbackReward(statement);
 }
 
 function containsAdjacentFeedbackInducement(first, second) {
