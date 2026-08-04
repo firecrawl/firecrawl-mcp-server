@@ -1,7 +1,7 @@
 /**
- * Firecrawl Developer search tool (experimental).
+ * Firecrawl Developer search tool.
  *
- * Thin MCP wrapper over the `/v2/developer/search` endpoint (GitHub issues,
+ * Thin MCP wrapper over the `/v2/search/developer` endpoint (GitHub issues,
  * merged pull requests, repository READMEs, and curated documentation sites).
  *
  * The installed `@mendable/firecrawl-js` predates a `developer` client, so we
@@ -32,7 +32,8 @@ type ClientLike = {
 // the callback loosely and narrow to `ClientLike` at each call site.
 type GetClient = (session?: SessionData) => unknown;
 
-const BASE = '/v2/developer/search';
+// The other mount, /v2/developer/search, may be withdrawn.
+const BASE = '/v2/search/developer';
 const ORIGIN_HEADERS = { 'X-Origin': 'mcp-fastmcp' };
 
 // Cap the matched passages per result so a page of hits stays within the MCP
@@ -104,7 +105,7 @@ Returns ranked results with an ID, source type, URL, title, and the matched pass
         .min(1)
         .max(100)
         .optional()
-        .describe('Number of ranked results to return (default 20).'),
+        .describe('Number of ranked results to return (default 10).'),
       skills: z
         .enum(['only'])
         .optional()

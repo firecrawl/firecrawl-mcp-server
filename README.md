@@ -15,6 +15,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 ## Features
 
 - Search the web and get full page content
+- Search an index built for coding agents: GitHub issues, merged pull requests, READMEs, and docs
 - Scrape any URL into clean, structured data
 - Interact with pages — click, navigate, and operate
 - Deep research with autonomous agent
@@ -275,6 +276,7 @@ Use this guide to select the right tool for your task:
 - **If you have multiple known URLs:** call **scrape** for each URL. If you specifically need one bulk API operation, use the Firecrawl API batch endpoint outside MCP.
 - **If you need to discover URLs on a site:** use **map**
 - **If you want to search the web for info:** use **search**
+- **If you have a programming question** (a library, an API contract, an error message, a known bug): use **developer search**
 - **If you need complex research across multiple unknown sources:** use **agent**
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
 - **If you need interactive browser automation** (click, type, navigate): use **interact** with a URL for a fresh page, or **scrape** + **interact** when you already scraped the page or need tighter scrape control
@@ -290,6 +292,7 @@ Use this guide to select the right tool for your task:
 | parse        | Files and hosted upload refs                   | markdown, JSON, or document output |
 | extract      | Structured extraction from URLs                | JSON structured data           |
 | search       | Web search for info                            | results[]                      |
+| developer    | Programming questions over developer sources   | results[] with passages        |
 | agent        | Complex multi-source research                  | JSON (structured data)         |
 | monitor      | Recurring page checks                          | monitor/check metadata and diffs |
 | research     | Paper and GitHub repository research           | research results and repo matches |
@@ -936,6 +939,33 @@ Pass `body` when you need crawl targets, JSON change tracking, custom retention,
 - `firecrawl_monitor_delete`: delete a monitor (destructive; only call when the user intends to remove it).
 - `firecrawl_monitor_checks`: list checks, optionally filtered by status.
 - `firecrawl_monitor_check`: get page-level results, including `diff`, `snapshot`, `judgment.meaningful`, and `judgment.meaningfulChanges`.
+
+### 14. Developer Search Tool (`firecrawl_developer_search`)
+
+Search an index built for coding agents. The index covers GitHub issues, merged pull requests, repository READMEs, and curated documentation sites.
+
+**Best for:** A programming question — code behaviour, a library or framework, an API contract, an error message, or a known bug.
+
+**Arguments:**
+
+```json
+{
+  "name": "firecrawl_developer_search",
+  "arguments": {
+    "query": "how do I configure retries",
+    "k": 10,
+    "skills": "only"
+  }
+}
+```
+
+- `query` (required): the developer question or search phrase.
+- `k`: number of ranked results. The default is 10 and the maximum is 100.
+- `skills`: set to `"only"` to search agent-skill files alone.
+
+**Returns:** Ranked results. Each result carries an ID, a source type (`issue`, `pull_request`, `readme`, or `doc`), a URL, a title, and the matched passages in markdown.
+
+`firecrawl_search` with `categories: ["developer"]` searches the same index beside the web results. Use this tool instead when you want the passages and no web results. The search-only endpoint does not expose this tool; it keeps its fixed set of six tools, and `firecrawl_search` reaches the developer index there.
 
 ## Logging System
 
