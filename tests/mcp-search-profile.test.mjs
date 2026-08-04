@@ -10,7 +10,6 @@ import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs'
 // appear on its tools/list or be callable through it.
 const SEARCH_TOOLS = [
   'firecrawl_search',
-  'firecrawl_developer_search',
   'firecrawl_research_search_papers',
   'firecrawl_research_inspect_paper',
   'firecrawl_research_related_papers',
@@ -29,6 +28,7 @@ const EXCLUDED_TOOLS = [
   'firecrawl_interact',
   'firecrawl_parse',
   'firecrawl_monitor_create',
+  'firecrawl_developer_search',
   'firecrawl_search_feedback',
   'firecrawl_feedback',
 ];
@@ -182,26 +182,6 @@ async function startFakeBackend(options = {}) {
       return;
     }
 
-    if (req.method === 'GET' && req.url?.startsWith('/v2/developer/search')) {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(
-        JSON.stringify({
-          reranked: true,
-          results: [
-            {
-              id: 'issue:firecrawl/firecrawl#1',
-              passages: [{ text: 'The matched passage.' }],
-              title: 'Fix the retry loop',
-              type: 'issue',
-              url: 'https://github.com/firecrawl/firecrawl/issues/1',
-            },
-          ],
-          success: true,
-        })
-      );
-      return;
-    }
-
     res.writeHead(404, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ error: `Unhandled ${req.method} ${req.url}` }));
   });
@@ -336,7 +316,7 @@ async function listTools(port, endpoint, headers) {
   return tools.map((tool) => tool.name);
 }
 
-test('search surface lists exactly the seven read-only tools', async (t) => {
+test('search surface lists exactly the six read-only tools', async (t) => {
   const { searchPort, getStderr } = await startHostedServer(t);
 
   const names = await listTools(searchPort, SEARCH_ENDPOINT, {
@@ -489,76 +469,6 @@ test('search firecrawl_search forwards the developer category and returns its gr
   ]);
 });
 
-test('search firecrawl_developer_search forwards query and k to the developer endpoint', async (t) => {
-  const backend = await startFakeBackend();
-  t.after(() => backend.close());
-  const { searchPort } = await startHostedServer(t, {
-    FIRECRAWL_API_URL: backend.url,
-  });
-
-  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
-    id: 42,
-    method: 'tools/call',
-    params: {
-      arguments: { query: 'retry loop backoff', k: 5 },
-      name: 'firecrawl_developer_search',
-    },
-    headers: { 'x-api-key': 'fc-search-key' },
-  });
-  assert.equal(res.status, 200);
-  const message = parseSseJson(await res.text());
-  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
-
-  const developerCalls = backend.requests.filter((r) =>
-    r.url.startsWith('/v2/developer/search')
-  );
-  assert.equal(developerCalls.length, 1);
-  assert.equal(developerCalls[0].method, 'GET');
-  assert.equal(
-    developerCalls[0].headers.authorization,
-    'Bearer fc-search-key'
-  );
-  const params = new URLSearchParams(developerCalls[0].url.split('?')[1]);
-  assert.equal(params.get('query'), 'retry loop backoff');
-  assert.equal(params.get('k'), '5');
-  assert.deepEqual([...params.keys()].sort(), ['k', 'query']);
-
-  const text = message.result.content[0].text;
-  assert.match(text, /\[issue:firecrawl\/firecrawl#1\] \(issue\) Fix the retry loop/);
-  assert.match(text, /https:\/\/github\.com\/firecrawl\/firecrawl\/issues\/1/);
-  assert.match(text, /The matched passage\./);
-});
-
-test('search firecrawl_developer_search forwards skills=only when requested', async (t) => {
-  const backend = await startFakeBackend();
-  t.after(() => backend.close());
-  const { searchPort } = await startHostedServer(t, {
-    FIRECRAWL_API_URL: backend.url,
-  });
-
-  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
-    id: 43,
-    method: 'tools/call',
-    params: {
-      arguments: { query: 'scrape a page', skills: 'only' },
-      name: 'firecrawl_developer_search',
-    },
-    headers: { 'x-api-key': 'fc-search-key' },
-  });
-  assert.equal(res.status, 200);
-  const message = parseSseJson(await res.text());
-  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
-
-  const developerCalls = backend.requests.filter((r) =>
-    r.url.startsWith('/v2/developer/search')
-  );
-  assert.equal(developerCalls.length, 1);
-  const params = new URLSearchParams(developerCalls[0].url.split('?')[1]);
-  assert.equal(params.get('query'), 'scrape a page');
-  assert.equal(params.get('skills'), 'only');
-  assert.deepEqual([...params.keys()].sort(), ['query', 'skills']);
-});
-
 test('search surface requires authentication for tools/list', async (t) => {
   const { searchPort, issuerUrl } = await startHostedServer(t);
 
@@ -707,6 +617,7 @@ test('full surface still exposes its complete tool set alongside the search surf
   const names = await listTools(fullPort, '/v2/mcp', { 'x-api-key': 'fc-test' });
   assert.ok(names.includes('firecrawl_scrape'));
   assert.ok(names.includes('firecrawl_search'));
+  assert.ok(names.includes('firecrawl_developer_search'));
   assert.ok(names.includes('firecrawl_parse'));
   assert.ok(names.length > SEARCH_TOOLS.length);
 

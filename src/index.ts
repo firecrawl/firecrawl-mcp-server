@@ -832,14 +832,13 @@ const KEYLESS_PROFILE_INSTRUCTIONS = `Without authentication, this endpoint expo
 
 // The search surface exposes web/research search only. Its instructions and tool
 // copy describe just those tools and stay neutral about how a client uses them.
-const SEARCH_PROFILE_INSTRUCTIONS = `Firecrawl provides web, developer, and research search. Use firecrawl_search to find relevant results across the web and specialized indexes. For a programming question, call firecrawl_developer_search — or firecrawl_search with categories: ["developer"] — to search indexed GitHub issues, merged pull requests, READMEs, and documentation. Use the firecrawl_research_* tools to search academic and research literature, expand from anchor papers via the citation graph, read full-text passages from a specific paper, and search public code repositories. All tools are read-only and return ranked results.`;
+const SEARCH_PROFILE_INSTRUCTIONS = `Firecrawl provides web, developer, and research search. Use firecrawl_search to find relevant results across the web and specialized indexes. For a programming question, use firecrawl_search with categories: ["developer"] to search indexed GitHub issues, merged pull requests, READMEs, and documentation. Use the firecrawl_research_* tools to search academic and research literature, expand from anchor papers via the citation graph, read full-text passages from a specific paper, and search public code repositories. All tools are read-only and return ranked results.`;
 
 // The exact set of tools the search surface exposes. Registration is filtered
 // against this set, so anything not listed here can never appear on that
 // instance's tools/list or be called through it.
 const SEARCH_PROFILE_TOOLS = new Set<string>([
   'firecrawl_search',
-  'firecrawl_developer_search',
   'firecrawl_research_search_papers',
   'firecrawl_research_inspect_paper',
   'firecrawl_research_related_papers',
@@ -3072,7 +3071,6 @@ if (searchProfileEnabled) {
   };
 
   registerResearchTools(searchRegistrar, getClient);
-  registerDeveloperTools(searchRegistrar, getClient);
   registerMarketplaceSearchTool(searchRegistrar, getClient);
 
   // Isolate the search instance from the already-serving full instance: if it
