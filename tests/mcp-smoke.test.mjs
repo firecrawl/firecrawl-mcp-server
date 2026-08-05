@@ -1880,8 +1880,13 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
     },
     method: 'POST',
   });
-  assert.equal(invalidList.status, 200);
-  assert.deepEqual(parseSseJson(await invalidList.text()).result.tools, []);
+  assert.equal(invalidList.status, 401);
+  assert.equal(invalidList.headers.has('www-authenticate'), false);
+  assert.deepEqual(await invalidList.json(), {
+    error: 'invalid_api_key',
+    error_description:
+      'The supplied Firecrawl credential is invalid or revoked. Replace it and retry.',
+  });
 
   const invalidCall = await httpToolCall(port, {
     headers: {
@@ -1891,14 +1896,13 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
     id: 3,
     params: { arguments: { query: 'x' }, name: 'firecrawl_search' },
   });
-  assert.equal(invalidCall.status, 200);
-  const result = parseSseJson(await invalidCall.text()).result;
-  assert.equal(result.isError, true);
-  assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID');
-  assertServerGeneratedRequestId(result.structuredContent, [
-    3,
-    'invalid-client-request-header-id',
-  ]);
+  assert.equal(invalidCall.status, 401);
+  assert.equal(invalidCall.headers.has('www-authenticate'), false);
+  assert.deepEqual(await invalidCall.json(), {
+    error: 'invalid_api_key',
+    error_description:
+      'The supplied Firecrawl credential is invalid or revoked. Replace it and retry.',
+  });
 
   const invalidLegacyPath = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({ id: 4, jsonrpc: '2.0', method: 'tools/list', params: {} }),

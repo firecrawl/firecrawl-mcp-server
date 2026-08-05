@@ -486,16 +486,24 @@ test('search surface requires authentication for tools/list', async (t) => {
   assert.match(wwwAuthenticate, /error="invalid_token"/);
 });
 
-test('search surface hides tools from an invalid credential', async (t) => {
+test('search surface rejects an invalid raw API credential during tools/list', async (t) => {
   const { searchPort } = await startHostedServer(t);
 
-  const names = await listTools(searchPort, SEARCH_ENDPOINT, {
-    'x-api-key': 'fc-invalid',
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 8,
+    method: 'tools/list',
+    headers: { 'x-api-key': 'fc-invalid' },
   });
-  assert.deepEqual(names, []);
+  assert.equal(res.status, 401);
+  assert.equal(res.headers.has('www-authenticate'), false);
+  assert.deepEqual(await res.json(), {
+    error: 'invalid_api_key',
+    error_description:
+      'The supplied Firecrawl credential is invalid or revoked. Replace it and retry.',
+  });
 });
 
-test('search surface returns structured recovery for an invalid credential', async (t) => {
+test('search surface rejects an invalid raw API credential before a tool call', async (t) => {
   const backend = await startFakeBackend();
   t.after(() => backend.close());
   const { searchPort } = await startHostedServer(t, {
@@ -511,14 +519,13 @@ test('search surface returns structured recovery for an invalid credential', asy
     },
     headers: { 'x-api-key': 'fc-invalid' },
   });
-  assert.equal(res.status, 200);
-  const message = parseSseJson(await res.text());
-  assert.equal(message.result?.isError, true, JSON.stringify(message));
-  assert.equal(
-    message.result?.structuredContent?.code,
-    'CREDENTIAL_INVALID',
-    JSON.stringify(message)
-  );
+  assert.equal(res.status, 401);
+  assert.equal(res.headers.has('www-authenticate'), false);
+  assert.deepEqual(await res.json(), {
+    error: 'invalid_api_key',
+    error_description:
+      'The supplied Firecrawl credential is invalid or revoked. Replace it and retry.',
+  });
   assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
 });
 
@@ -863,9 +870,12 @@ test('companion telemetry follows credential precedence and rejects invalid cred
     authorization: 'Bearer fco_secondary-credential',
     'x-api-key': 'fc-primary-credential',
   });
-  await listTools(searchPort, SEARCH_ENDPOINT, {
-    authorization: 'Bearer fc-invalid-credential',
+  const invalid = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 12,
+    method: 'tools/list',
+    headers: { authorization: 'Bearer fc-invalid-credential' },
   });
+  assert.equal(invalid.status, 401);
   await delay(25);
 
   const events = getStdout()
