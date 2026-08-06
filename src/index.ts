@@ -1463,7 +1463,10 @@ const parseOptionParamsSchema = z.object({
   skipTlsVerification: z.boolean().optional(),
   storeInCache: z.boolean().optional(),
   zeroDataRetention: z.boolean().optional(),
-  maxAge: z.number().optional(),
+  maxAge: z
+    .number()
+    .optional()
+    .describe('Ignored: parse never reuses or stores indexed content.'),
   proxy: z.enum(['basic', 'auto']).optional(),
 });
 
@@ -1811,6 +1814,8 @@ Retrieve and extract content from one supplied URL through Firecrawl. Use this w
 
 This tool operates on a known page. For a set of pages use \`firecrawl_crawl\`, and to discover page URLs use \`firecrawl_map\` or \`firecrawl_search\`. Options include JavaScript render delay, cache age, main-content filtering, PII redaction, and lockdown cache-only retrieval. Browser actions may change the live page when interactive actions are enabled.
 
+Firecrawl may reuse recently indexed content instead of refetching the page; the default window is about two days and can vary by domain. Set \`maxAge: 0\` to force a live fetch. A successful response does not by itself confirm that the state it describes is still current.
+
 Returns the selected content formats and page metadata.
 `,
   parameters: scrapeParamsSchema,
@@ -1899,7 +1904,7 @@ Search web, news, or image sources and return ranked results. Operators include 
 
 For a programming question, add \`categories: ["developer"]\`. It searches an index of GitHub issues, merged pull requests, repository READMEs, and curated documentation sites, and returns the hits in \`data.developer\` beside the web results.
 
-\`scrapeOptions\` can attach extracted page content. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
+\`scrapeOptions\` can attach extracted page content; pages fetched this way may reuse indexed content up to three days old and do not honor \`maxAge\`, so use \`firecrawl_scrape\` when a live fetch is required. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
 `,
   parameters: z
     .object({
