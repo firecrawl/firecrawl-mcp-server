@@ -491,18 +491,12 @@ async function authenticateRequest(
   if (process.env.CLOUD_SERVICE === 'true') {
     if (!headerCred && !managedCred) {
       if (resolved?.invalid) {
-        if (!profile.acceptApiKeys) {
-          throw new Error(
-            `OAuth access token required for the Firecrawl MCP resource ${profile.endpoint}`
-          );
-        }
-        // The credential-in-path compatibility route is the only legacy shape
-        // that must fail at connection time. Header clients keep their existing
-        // recovery payload contract while this compatibility fix stays narrow.
-        if (isLegacyKeyPathRequest(request)) {
-          throw new InvalidFirecrawlCredentialError();
-        }
-        return { authType: 'none', credentialError: 'CREDENTIAL_INVALID' };
+        // A supplied credential must never silently downgrade a hosted session
+        // to an empty tool list. MCP clients commonly stop after tools/list, so
+        // the old in-band recovery payload was unreachable for invalid header
+        // credentials. Keep unauthenticated requests on the keyless path; only
+        // reject requests that actually supplied an invalid credential.
+        throw new InvalidFirecrawlCredentialError();
       }
       if (profile.allowKeyless) {
         return {
