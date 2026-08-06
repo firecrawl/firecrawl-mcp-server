@@ -37,13 +37,27 @@ https://mcp.firecrawl.dev/v2/mcp
 
 On the keyless free tier, `scrape`, `search`, and `interact` work without an API key (rate-limited). Other tools such as `crawl`, `map`, `agent`, and `extract` still need a key.
 
-Prefer an API key or OAuth whenever the human can sign up. It unlocks the full tool set and higher limits. With a key, use:
+Prefer OAuth or an API key whenever the human can sign up. It unlocks the full tool set and higher limits.
+
+For an interactive account connection, use:
 
 ```
-https://mcp.firecrawl.dev/{FIRECRAWL_API_KEY}/v2/mcp
+https://mcp.firecrawl.dev/v2/mcp-oauth
 ```
 
-See the [MCP server docs](https://docs.firecrawl.dev/mcp-server) and the [agent onboarding guide](https://www.firecrawl.dev/agent-onboarding/SKILL.md) for setup details.
+For an API-key connection (for example, an unattended integration), keep the server URL as:
+
+```
+https://mcp.firecrawl.dev/v2/mcp
+```
+
+Then configure the client's secure header or secret setting with:
+
+```
+Authorization: Bearer <FIRECRAWL_API_KEY>
+```
+
+Never put an API key in the server URL. See the [hosted MCP setup guide](https://docs.firecrawl.dev/developer-guides/mcp-setup-guides/oauth) and the [agent onboarding guide](https://www.firecrawl.dev/agent-onboarding/SKILL.md) for client-specific instructions.
 
 #### Search-only endpoint
 
