@@ -973,7 +973,7 @@ function recoveryPayload(
     auth_mode: code === 'CREDENTIAL_INVALID' ? 'credential_error' : 'keyless',
     message:
       code === 'CREDENTIAL_INVALID'
-        ? `The supplied Firecrawl credential is invalid or revoked. Reconnect the account via OAuth (https://mcp.firecrawl.dev/v2/mcp-oauth) or create a new API key at https://www.firecrawl.dev/signin, then retry.`
+        ? `The supplied Firecrawl credential is invalid or revoked. Reconnect the account via OAuth (https://mcp.firecrawl.dev/v2/mcp-oauth) or create a new API key at https://www.firecrawl.dev/signin and send it as Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.`
         : isQuotaExhausted
           ? `The free daily limit for this network has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue now, connect a Firecrawl account via OAuth (https://mcp.firecrawl.dev/v2/mcp-oauth) or create a free API key at https://www.firecrawl.dev/signin and send it as Authorization: Bearer <FIRECRAWL_API_KEY>.`
           : isToolUnavailable
