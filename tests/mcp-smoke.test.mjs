@@ -1108,15 +1108,24 @@ test('HTTP cloud keyless keeps 429 recovery structured during API deploy skew', 
     assert.equal(result.isError, true, label);
     assert.equal(result.structuredContent.code, expectedCode, label);
     // Interactive OAuth routes to the dedicated account resource, which is the
-    // only endpoint allowed to initiate sign-in. No client-specific command:
-    // this payload is advisory to the model, and the harness owns the flow.
+    // only endpoint allowed to initiate sign-in, and it replaces the entry the
+    // client already has rather than adding a second one. No client-specific
+    // command: this is advisory to the model, and the harness owns the flow.
     assert.deepEqual(result.structuredContent.next_actions[0], {
       kind: 'connect_via_oauth',
       url: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+      requires_user_consent: true,
+      replace_current_server: true,
     }, label);
-    // Conversion needs a human, so the copy routes the choice to the user
-    // rather than handing the agent something to run on its own.
-    assert.match(result.structuredContent.message, /ask the user to connect/i, label);
+    // Retargeting mutates client config, so consent comes first and the copy
+    // must say to repoint the existing entry rather than register another.
+    assert.match(result.structuredContent.message, /Ask the user first/, label);
+    assert.match(result.structuredContent.message, /replace this Firecrawl server's URL/, label);
+    assert.match(
+      result.structuredContent.message,
+      /Do not modify MCP configuration before consent/,
+      label
+    );
     if (label === 'with-reason') {
       assert.equal(result.structuredContent.retry_after_seconds, 42);
       // The countdown is the live Redis TTL, so the copy interpolates it

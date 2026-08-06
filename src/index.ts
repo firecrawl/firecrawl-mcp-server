@@ -960,16 +960,19 @@ function isLocalKeylessStartup(): boolean {
   );
 }
 
-// Conversion is the user's decision, not the agent's: the payload asks the model
-// to put the choice to a human rather than to start an account flow itself.
-const CONNECT_ACCOUNT_GUIDANCE =
-  'ask the user to connect a Firecrawl account via OAuth or configure an API key.';
-
 // Interactive OAuth belongs to the dedicated account resource. `/v2/mcp` accepts
 // API keys and OAuth tokens already bound to it, but never initiates sign-in,
 // and it does not accept new tokens minted for the account resource. The
 // same-URL upgrade from keyless is the API key; OAuth is a move to `/v2/mcp-oauth`.
 const MCP_OAUTH_CONNECT_URL = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
+
+// Conversion is the user's decision, not the agent's, so the copy sends the
+// choice to a human first. After a yes, the move is to retarget the server entry
+// the client already has: the account resource challenges anonymous connects, so
+// repointing it is what makes the client open its own browser flow. Registering
+// a second entry instead leaves the in-use one keyless and duplicates the tools.
+const CONNECT_ACCOUNT_GUIDANCE =
+  "Ask the user first. If they agree, replace this Firecrawl server's URL while preserving its name and scope, initiate the client's OAuth flow, then retry. If interactive OAuth is unavailable, offer an API key. Do not modify MCP configuration before consent.";
 
 function recoveryPayload(
   code: string,
@@ -984,11 +987,19 @@ function recoveryPayload(
   const isKeylessEligibilityUnavailable =
     code === 'KEYLESS_ELIGIBILITY_UNAVAILABLE';
   // Advisory to the model, not a protocol signal a client acts on: nothing here
-  // opens a browser. The harness starts its own auth flow once a human agrees,
-  // so name the account resource and stay client-agnostic about how to reach it.
+  // opens a browser. Name the target, mark that it replaces the current entry
+  // rather than adding one, and leave the mechanics to the harness. Retargeting
+  // edits the user's client config, so the consent gate is data and not only
+  // prose: an agent reading next_actions alone must still see it.
   const connectOauthAction = {
     kind: 'connect_via_oauth',
     url: MCP_OAUTH_CONNECT_URL,
+    requires_user_consent: true,
+    // Nothing to replace when this deployment already is the account resource,
+    // which is reachable here through CREDENTIAL_INVALID.
+    ...(withoutTrailingSlash(primaryProfile.resourceUrl) === MCP_OAUTH_CONNECT_URL
+      ? {}
+      : { replace_current_server: true }),
   };
   return {
     code,
@@ -998,11 +1009,11 @@ function recoveryPayload(
       code === 'CREDENTIAL_INVALID'
         ? 'The supplied Firecrawl credential is invalid or revoked. Replace it or reconnect the account, then retry.'
         : isQuotaExhausted
-          ? `The free daily limit has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue with higher limits now, ${CONNECT_ACCOUNT_GUIDANCE}`
+          ? `The free daily limit has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue with higher limits now: ${CONNECT_ACCOUNT_GUIDANCE}`
           : isToolUnavailable
             ? 'The free tier includes Search, Scrape, and Parse. This tool needs a connected account; Search, Scrape, and Parse still work, so no action is required.'
             : isKeylessAccessUnavailable
-              ? `Anonymous keyless access is unavailable for this request. To continue, ${CONNECT_ACCOUNT_GUIDANCE}`
+              ? `Anonymous keyless access is unavailable for this request. To continue: ${CONNECT_ACCOUNT_GUIDANCE}`
               : isKeylessEligibilityUnavailable
                 ? 'The anonymous keyless eligibility check is temporarily unavailable. Retry shortly.'
               : 'This tool requires a Firecrawl account or API key. Connect an account or configure Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.',
