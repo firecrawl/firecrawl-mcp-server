@@ -2590,7 +2590,7 @@ Extract structured information from one or more URLs with an optional natural-la
 Use this for a defined structured result rather than full page content. Returns data shaped by the supplied schema or prompt.
 `,
   parameters: z.object({
-    urls: z.array(z.string()),
+    urls: z.array(z.string().url()),
     prompt: z.string().optional(),
     schema: z.record(z.string(), z.any()).optional(),
     allowExternalLinks: z.boolean().optional(),
