@@ -960,6 +960,17 @@ function isLocalKeylessStartup(): boolean {
   );
 }
 
+// Conversion is the user's decision, not the agent's: the payload asks the model
+// to put the choice to a human rather than to start an account flow itself.
+const CONNECT_ACCOUNT_GUIDANCE =
+  'ask the user to connect a Firecrawl account via OAuth or configure an API key.';
+
+// Interactive OAuth belongs to the dedicated account resource. `/v2/mcp` accepts
+// API keys and OAuth tokens already bound to it, but never initiates sign-in,
+// and it does not accept new tokens minted for the account resource. The
+// same-URL upgrade from keyless is the API key; OAuth is a move to `/v2/mcp-oauth`.
+const MCP_OAUTH_CONNECT_URL = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
+
 function recoveryPayload(
   code: string,
   requestId: string = randomUUID(),
@@ -972,7 +983,13 @@ function recoveryPayload(
   const isKeylessAccessUnavailable = code === 'KEYLESS_ACCESS_NOT_AVAILABLE';
   const isKeylessEligibilityUnavailable =
     code === 'KEYLESS_ELIGIBILITY_UNAVAILABLE';
-  const oauthUrl = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
+  // Advisory to the model, not a protocol signal a client acts on: nothing here
+  // opens a browser. The harness starts its own auth flow once a human agrees,
+  // so name the account resource and stay client-agnostic about how to reach it.
+  const connectOauthAction = {
+    kind: 'connect_via_oauth',
+    url: MCP_OAUTH_CONNECT_URL,
+  };
   return {
     code,
     request_id: requestId,
@@ -981,30 +998,25 @@ function recoveryPayload(
       code === 'CREDENTIAL_INVALID'
         ? 'The supplied Firecrawl credential is invalid or revoked. Replace it or reconnect the account, then retry.'
         : isQuotaExhausted
-          ? `The free daily limit for this network has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue now, connect a Firecrawl account via OAuth or configure an API key.`
+          ? `The free daily limit has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue with higher limits now, ${CONNECT_ACCOUNT_GUIDANCE}`
           : isToolUnavailable
             ? 'The free tier includes Search, Scrape, and Parse. This tool needs a connected account; Search, Scrape, and Parse still work, so no action is required.'
             : isKeylessAccessUnavailable
-              ? 'Anonymous keyless access is unavailable for this request. To continue, connect a Firecrawl account via OAuth or configure an API key.'
+              ? `Anonymous keyless access is unavailable for this request. To continue, ${CONNECT_ACCOUNT_GUIDANCE}`
               : isKeylessEligibilityUnavailable
                 ? 'The anonymous keyless eligibility check is temporarily unavailable. Retry shortly.'
               : 'This tool requires a Firecrawl account or API key. Connect an account or configure Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.',
     ...(isKeylessAccessUnavailable
       ? {}
-      : { available_tools: [...KEYLESS_TOOL_NAMES] }),
+      : { keyless_tools: [...KEYLESS_TOOL_NAMES] }),
     docs_url: 'https://docs.firecrawl.dev/mcp-server',
     ...(retryAfterSeconds ? { retry_after_seconds: retryAfterSeconds } : {}),
     next_actions: isKeylessEligibilityUnavailable
       ? [{ kind: 'retry_later', after_seconds: 30 }]
-      : isQuotaExhausted || isKeylessAccessUnavailable
-      ? [
-          { kind: 'connect_oauth', url: oauthUrl, client_commands: [{ client: 'claude-code', command: 'claude mcp add --transport http firecrawl https://mcp.firecrawl.dev/v2/mcp-oauth' }] },
-          { kind: 'configure_api_key', header: 'Authorization: Bearer <FIRECRAWL_API_KEY>' },
-        ]
       : isToolUnavailable
         ? [{ kind: 'continue_keyless', tools: [...KEYLESS_TOOL_NAMES] }]
         : [
-            { kind: 'connect_oauth', url: oauthUrl },
+            connectOauthAction,
             { kind: 'configure_api_key', header: 'Authorization: Bearer <FIRECRAWL_API_KEY>' },
           ],
   };

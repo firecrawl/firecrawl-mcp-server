@@ -1026,7 +1026,7 @@ test('HTTP cloud keyless returns retry recovery when eligibility is unavailable'
     { kind: 'retry_later', after_seconds: 30 },
   ]);
   assert.equal(
-    result.structuredContent.available_tools.includes('firecrawl_search'),
+    result.structuredContent.keyless_tools.includes('firecrawl_search'),
     true
   );
   assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
@@ -1064,7 +1064,7 @@ test('HTTP cloud keyless continues with free-tier tools when an account-only too
       tools: ['firecrawl_scrape', 'firecrawl_search', 'firecrawl_parse'],
     },
   ]);
-  assert.deepEqual(result.structuredContent.available_tools, [
+  assert.deepEqual(result.structuredContent.keyless_tools, [
     'firecrawl_scrape',
     'firecrawl_search',
     'firecrawl_parse',
@@ -1107,8 +1107,22 @@ test('HTTP cloud keyless keeps 429 recovery structured during API deploy skew', 
     const result = parseSseJson(await response.text()).result;
     assert.equal(result.isError, true, label);
     assert.equal(result.structuredContent.code, expectedCode, label);
-    assert.equal(result.structuredContent.next_actions[0].kind, 'connect_oauth', label);
-    if (label === 'with-reason') assert.equal(result.structuredContent.retry_after_seconds, 42);
+    // Interactive OAuth routes to the dedicated account resource, which is the
+    // only endpoint allowed to initiate sign-in. No client-specific command:
+    // this payload is advisory to the model, and the harness owns the flow.
+    assert.deepEqual(result.structuredContent.next_actions[0], {
+      kind: 'connect_via_oauth',
+      url: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+    }, label);
+    // Conversion needs a human, so the copy routes the choice to the user
+    // rather than handing the agent something to run on its own.
+    assert.match(result.structuredContent.message, /ask the user to connect/i, label);
+    if (label === 'with-reason') {
+      assert.equal(result.structuredContent.retry_after_seconds, 42);
+      // The countdown is the live Redis TTL, so the copy interpolates it
+      // instead of quoting a fixed window.
+      assert.match(result.structuredContent.message, /about 42 seconds/);
+    }
     await cleanup();
   }
 });
@@ -1271,8 +1285,8 @@ test('HTTP cloud keyless rejects multi-hop or malformed forwarded IP identity', 
     const result = parseSseJson(await response.text()).result;
     assert.equal(result.isError, true, xff);
     assert.equal(result.structuredContent.code, 'KEYLESS_ACCESS_NOT_AVAILABLE', xff);
-    assert.equal(result.structuredContent.next_actions[0].kind, 'connect_oauth', xff);
-    assert.equal(result.structuredContent.available_tools, undefined, xff);
+    assert.equal(result.structuredContent.next_actions[0].kind, 'connect_via_oauth', xff);
+    assert.equal(result.structuredContent.keyless_tools, undefined, xff);
   }
   assert.equal(backend.requests.length, 0, JSON.stringify(backend.requests));
 });
@@ -1424,8 +1438,8 @@ test('HTTP cloud transport returns recovery when keyless identity has no client 
   const result = parseSseJson(await toolCall.text()).result;
   assert.equal(result.isError, true);
   assert.equal(result.structuredContent.code, 'KEYLESS_ACCESS_NOT_AVAILABLE');
-  assert.equal(result.structuredContent.next_actions[0].kind, 'connect_oauth');
-  assert.equal(result.structuredContent.available_tools, undefined);
+  assert.equal(result.structuredContent.next_actions[0].kind, 'connect_via_oauth');
+  assert.equal(result.structuredContent.keyless_tools, undefined);
   assertServerGeneratedRequestId(result.structuredContent, [
     'client-json-rpc-id',
     'client-request-header-id',
