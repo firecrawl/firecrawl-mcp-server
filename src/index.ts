@@ -973,16 +973,16 @@ function recoveryPayload(
     auth_mode: code === 'CREDENTIAL_INVALID' ? 'credential_error' : 'keyless',
     message:
       code === 'CREDENTIAL_INVALID'
-        ? 'The supplied Firecrawl credential is invalid or revoked. Replace it or reconnect the account, then retry.'
+        ? `The supplied Firecrawl credential is invalid or revoked. Reconnect the account via OAuth (https://mcp.firecrawl.dev/v2/mcp-oauth) or create a new API key at https://www.firecrawl.dev/signin, then retry.`
         : isQuotaExhausted
-          ? `The free daily limit for this network has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue now, connect a Firecrawl account via OAuth or configure an API key.`
+          ? `The free daily limit for this network has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue now, connect a Firecrawl account via OAuth (https://mcp.firecrawl.dev/v2/mcp-oauth) or create a free API key at https://www.firecrawl.dev/signin and send it as Authorization: Bearer <FIRECRAWL_API_KEY>.`
           : isToolUnavailable
             ? 'The free tier includes Search, Scrape, and Parse. This tool needs a connected account; Search, Scrape, and Parse still work, so no action is required.'
             : isKeylessAccessUnavailable
-              ? 'Anonymous keyless access is unavailable for this request. To continue, connect a Firecrawl account via OAuth or configure an API key.'
+              ? `Anonymous keyless access is unavailable for this request. To continue, connect a Firecrawl account via OAuth (https://mcp.firecrawl.dev/v2/mcp-oauth) or create a free API key at https://www.firecrawl.dev/signin and send it as Authorization: Bearer <FIRECRAWL_API_KEY>.`
               : isKeylessEligibilityUnavailable
                 ? 'The anonymous keyless eligibility check is temporarily unavailable. Retry shortly.'
-              : 'This tool requires a Firecrawl account or API key. Connect an account or configure Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.',
+              : `This tool requires a Firecrawl account or API key. Connect an account via OAuth (https://mcp.firecrawl.dev/v2/mcp-oauth) or create a free API key at https://www.firecrawl.dev/signin and send it as Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.`,
     ...(isKeylessAccessUnavailable
       ? {}
       : { available_tools: [...KEYLESS_TOOL_NAMES] }),
