@@ -1091,7 +1091,7 @@ function guardHostedTool(
       !session?.credentialError &&
       (!isHostedKeylessSession(session) || keylessTool) &&
       (canList?.(session) ?? true),
-    beforeValidate: (args: unknown, session: SessionData) => {
+    beforeValidate: async (args: unknown, session: SessionData) => {
       const code = session?.credentialError
         ? 'CREDENTIAL_INVALID'
         : isHostedKeylessSession(session) && !keylessTool
@@ -1109,7 +1109,26 @@ function guardHostedTool(
           structuredContent: payload,
         };
       }
-      return beforeValidate?.(args, session);
+      const earlyResult = await beforeValidate?.(args, session);
+      const payload = earlyResult?.structuredContent;
+      const recoveryCode =
+        payload &&
+        typeof payload === 'object' &&
+        'code' in payload &&
+        typeof payload.code === 'string'
+          ? payload.code
+          : undefined;
+      if (logActions && earlyResult?.isError && recoveryCode) {
+        emitActionLog(
+          tool.name,
+          'error',
+          session,
+          new UserError(`Tool validation failed: ${recoveryCode}`, payload),
+          randomUUID(),
+          recoveryCode
+        );
+      }
+      return earlyResult;
     },
     execute: async (args, context) => {
       const requestId = randomUUID();
@@ -2626,16 +2645,8 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
     includeSubdomains: z.boolean().optional(),
   }),
   canList: () => false,
-  beforeValidate: (_args: unknown, session: SessionData) => {
+  beforeValidate: () => {
     const payload = deprecatedExtractPayload();
-    emitActionLog(
-      'firecrawl_extract',
-      'error',
-      session,
-      new UserError(payload.message, payload),
-      randomUUID(),
-      'DEPRECATED_TOOL'
-    );
     return {
       content: [{ type: 'text' as const, text: payload.message }],
       isError: true,
