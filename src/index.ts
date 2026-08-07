@@ -986,7 +986,7 @@ function recoveryPayload(
     auth_mode: code === 'CREDENTIAL_INVALID' ? 'credential_error' : 'keyless',
     message:
       code === 'CREDENTIAL_INVALID'
-        ? `The supplied Firecrawl credential is invalid or revoked. Reconnect the account via OAuth (https://mcp.firecrawl.dev/v2/mcp-oauth) or create a new API key at ${API_KEY_SIGNUP_URL} and send it as Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.`
+        ? `The supplied Firecrawl credential is invalid or revoked. Create a new API key at ${API_KEY_SIGNUP_URL} and send it as Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.`
         : isQuotaExhausted
           ? `The free daily limit for this network has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue on this Agent MCP server now, create a free API key at ${API_KEY_SIGNUP_URL} and set Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.`
           : isToolUnavailable
@@ -1003,30 +1003,22 @@ function recoveryPayload(
     ...(retryAfterSeconds ? { retry_after_seconds: retryAfterSeconds } : {}),
     next_actions: isKeylessEligibilityUnavailable
       ? [{ kind: 'retry_later', after_seconds: 30 }]
-      : code === 'CREDENTIAL_INVALID'
+      : isQuotaExhausted
         ? [
-            {
-              kind: 'connect_oauth',
-              url: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
-            },
             { ...CONFIGURE_API_KEY_ACTION },
+            ...(retryLaterAction ? [retryLaterAction] : []),
           ]
-        : isQuotaExhausted
-          ? [
-              { ...CONFIGURE_API_KEY_ACTION },
-              ...(retryLaterAction ? [retryLaterAction] : []),
-            ]
-          : isKeylessAccessUnavailable
-            ? [{ ...CONFIGURE_API_KEY_ACTION }]
-            : isToolUnavailable
-              ? [
-                  {
-                    kind: 'continue_keyless',
-                    tools: [...KEYLESS_TOOL_NAMES],
-                  },
-                  { ...CONFIGURE_API_KEY_ACTION },
-                ]
-              : [{ ...CONFIGURE_API_KEY_ACTION }],
+        : isKeylessAccessUnavailable
+          ? [{ ...CONFIGURE_API_KEY_ACTION }]
+          : isToolUnavailable
+            ? [
+                {
+                  kind: 'continue_keyless',
+                  tools: [...KEYLESS_TOOL_NAMES],
+                },
+                { ...CONFIGURE_API_KEY_ACTION },
+              ]
+            : [{ ...CONFIGURE_API_KEY_ACTION }],
   };
 }
 
