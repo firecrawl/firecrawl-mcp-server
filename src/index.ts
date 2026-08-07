@@ -988,11 +988,11 @@ function recoveryPayload(
       code === 'CREDENTIAL_INVALID'
         ? `The supplied Firecrawl credential is invalid or revoked. Create a new API key at ${API_KEY_SIGNUP_URL} and send it as Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.`
         : isQuotaExhausted
-          ? `The free daily limit for this network has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue on this Agent MCP server now, create a free API key at ${API_KEY_SIGNUP_URL} and set Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.`
+          ? `The free daily limit for this network has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue now on this MCP server, create a free API key at ${API_KEY_SIGNUP_URL} and set Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.`
           : isToolUnavailable
             ? 'Agent MCP keyless includes Search, Scrape, and Parse. This tool needs an API key on this server. Search, Scrape, and Parse still work with no action required.'
             : isKeylessAccessUnavailable
-              ? `Anonymous keyless access is unavailable for this request. To continue on this Agent MCP server, create a free API key at ${API_KEY_SIGNUP_URL} and set Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.`
+              ? `Anonymous keyless access is unavailable for this request. To continue now on this MCP server, create a free API key at ${API_KEY_SIGNUP_URL} and set Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.`
               : isKeylessEligibilityUnavailable
                 ? 'The anonymous keyless eligibility check is temporarily unavailable. Retry shortly.'
               : `This tool requires a Firecrawl API key. Create a free API key at ${API_KEY_SIGNUP_URL} and set Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.`,

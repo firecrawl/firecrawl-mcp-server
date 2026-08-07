@@ -1157,7 +1157,7 @@ test('HTTP cloud keyless keeps 429 recovery structured during API deploy skew', 
     );
     assert.match(
       result.structuredContent.message,
-      /Agent MCP server/,
+      /To continue now on this MCP server/,
       label
     );
     if (label === 'with-reason') {
