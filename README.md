@@ -35,7 +35,7 @@ Connect to the remote hosted server with no setup:
 https://mcp.firecrawl.dev/v2/mcp
 ```
 
-On the keyless free tier, `scrape`, `search`, and `interact` work without an API key (rate-limited). Other tools such as `crawl`, `map`, `agent`, and `extract` still need a key.
+On the keyless free tier, `scrape`, `search`, and `interact` work without an API key (rate-limited). Other tools such as `crawl`, `map`, and `agent` still need a key.
 
 Prefer OAuth or an API key whenever the human can sign up. It unlocks the full tool set and higher limits.
 
@@ -304,7 +304,6 @@ Use this guide to select the right tool for your task:
 | map          | Discovering URLs on a site                     | URL[]                          |
 | crawl        | Multi-page extraction (with limits)            | final crawl status/data after internal polling |
 | parse        | Files and hosted upload refs                   | markdown, JSON, or document output |
-| extract      | Structured extraction from URLs                | JSON structured data           |
 | search       | Web search for info                            | results[]                      |
 | developer    | Programming questions over developer sources   | results[] with passages        |
 | agent        | Complex multi-source research                  | JSON (structured data)         |
@@ -657,78 +656,33 @@ Parse local files or hosted upload references with Firecrawl's `/v2/parse` endpo
 
 **Returns:** Parsed document content or hosted upload instructions with a `nextToolCall`.
 
-### 7. Extract Tool (`firecrawl_extract`)
+### 7. Structured data with Scrape JSON
 
-Extract structured information from web pages using LLM capabilities. Supports both cloud AI and self-hosted LLM extraction.
-
-**Best for:**
-
-- Extracting specific structured data like prices, names, details.
-
-**Not recommended for:**
-
-- When you need the full content of a page (use scrape)
-- When you're not looking for specific structured data
-
-**Arguments:**
-
-- `urls`: Array of URLs to extract information from
-- `prompt`: Custom prompt for the LLM extraction
-- `systemPrompt`: System prompt to guide the LLM
-- `schema`: JSON schema for structured data extraction
-- `allowExternalLinks`: Allow extraction from external links
-- `enableWebSearch`: Enable web search for additional context
-- `includeSubdomains`: Include subdomains in extraction
-
-When using a self-hosted instance, the extraction will use your configured LLM. For cloud API, it uses Firecrawl's managed LLM service.
-**Prompt Example:**
-
-> "Extract the product name, price, and description from these product pages."
-
-**Usage Example:**
+For structured data from a known page, call `firecrawl_scrape` once per URL with `formats: ["json"]`. Put the extraction prompt and JSON schema in `jsonOptions`.
 
 ```json
 {
-  "name": "firecrawl_extract",
+  "name": "firecrawl_scrape",
   "arguments": {
-    "urls": ["https://example.com/page1", "https://example.com/page2"],
-    "prompt": "Extract product information including name, price, and description",
-    "systemPrompt": "You are a helpful assistant that extracts product information",
-    "schema": {
-      "type": "object",
-      "properties": {
-        "name": { "type": "string" },
-        "price": { "type": "number" },
-        "description": { "type": "string" }
-      },
-      "required": ["name", "price"]
-    },
-    "allowExternalLinks": false,
-    "enableWebSearch": false,
-    "includeSubdomains": false
+    "url": "https://example.com/product",
+    "formats": ["json"],
+    "jsonOptions": {
+      "prompt": "Extract the product name, price, and description.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "price": { "type": "number" },
+          "description": { "type": "string" }
+        },
+        "required": ["name", "price"]
+      }
+    }
   }
 }
 ```
 
-**Returns:**
-
-- Extracted structured data as defined by your schema
-
-```json
-{
-  "content": [
-    {
-      "type": "text",
-      "text": {
-        "name": "Example Product",
-        "price": 99.99,
-        "description": "This is an example product description"
-      }
-    }
-  ],
-  "isError": false
-}
-```
+For unknown URLs or multi-source research, use `firecrawl_search` or `firecrawl_agent` before Scrape.
 
 ### 8. Agent Tool (`firecrawl_agent`)
 

@@ -821,8 +821,8 @@ const openAiAppsChallengeToken = normalizeHeader(
   process.env.OPENAI_APPS_CHALLENGE_TOKEN
 );
 
-const FULL_PROFILE_INSTRUCTIONS = `Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured extraction, monitoring, and asynchronous research. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent starts multi-source research whose result is read with firecrawl_agent_status. Provide only the required inputs and account for stated network or external side effects.`;
-const KEYLESS_PROFILE_INSTRUCTIONS = `Without authentication, this endpoint exposes Search, Scrape, and Parse with usage limits. An OAuth connection or Authorization bearer API key exposes account tools; unavailable tools return connection guidance. Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured extraction, monitoring, and asynchronous research. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent starts multi-source research whose result is read with firecrawl_agent_status. Provide only the required inputs.`;
+const FULL_PROFILE_INSTRUCTIONS = `Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and asynchronous research. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent starts multi-source research whose result is read with firecrawl_agent_status. Provide only the required inputs and account for stated network or external side effects.`;
+const KEYLESS_PROFILE_INSTRUCTIONS = `Without authentication, this endpoint exposes Search, Scrape, and Parse with usage limits. An OAuth connection or Authorization bearer API key exposes account tools; unavailable tools return connection guidance. Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and asynchronous research. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent starts multi-source research whose result is read with firecrawl_agent_status. Provide only the required inputs.`;
 
 // The search surface exposes web/research search only. Its instructions and tool
 // copy describe just those tools and stay neutral about how a client uses them.
@@ -1003,6 +1003,31 @@ function recoveryPayload(
           ],
   };
 }
+
+function deprecatedExtractPayload() {
+  return {
+    code: 'DEPRECATED_TOOL',
+    message:
+      'firecrawl_extract is deprecated and unavailable through MCP. For structured data from a known page, call firecrawl_scrape once per URL with formats: ["json"] and jsonOptions containing the prompt and schema. For unknown URLs or multi-source research, use firecrawl_search or firecrawl_agent first.',
+    replacement: {
+      name: 'firecrawl_scrape',
+      instructions:
+        'Call once per known URL. Set formats to ["json"] and pass the extraction prompt and JSON schema in jsonOptions.',
+      example_arguments: {
+        url: 'https://example.com/page',
+        formats: ['json'],
+        jsonOptions: {
+          prompt: 'Extract the requested fields from this page.',
+          schema: {
+            type: 'object',
+            properties: {},
+          },
+        },
+      },
+    },
+    docs_url: 'https://docs.firecrawl.dev/developer-guides/usage-guides/choosing-the-data-extractor',
+  };
+}
 type ActionStatus = 'started' | 'success' | 'error';
 
 function emitActionLog(
@@ -1058,28 +1083,52 @@ function guardHostedTool(
 ): RegisteredTool {
   const keylessTool = KEYLESS_TOOL_NAMES.has(tool.name);
   const execute = tool.execute;
+  const canList = tool.canList;
+  const beforeValidate = tool.beforeValidate;
   return {
     ...tool,
     canList: (session: SessionData) =>
       !session?.credentialError &&
-      (!isHostedKeylessSession(session) || keylessTool),
-    beforeValidate: (_args: unknown, session: SessionData) => {
+      (!isHostedKeylessSession(session) || keylessTool) &&
+      (canList?.(session) ?? true),
+    beforeValidate: async (args: unknown, session: SessionData) => {
       const code = session?.credentialError
         ? 'CREDENTIAL_INVALID'
         : isHostedKeylessSession(session) && !keylessTool
           ? 'KEYLESS_TOOL_NOT_AVAILABLE'
           : undefined;
-      if (!code) return undefined;
-      const requestId = randomUUID();
-      const payload = recoveryPayload(code, requestId);
-      if (logActions) {
-        emitActionLog(tool.name, 'error', session, new UserError(String(payload.message), payload), requestId, code);
+      if (code) {
+        const requestId = randomUUID();
+        const payload = recoveryPayload(code, requestId);
+        if (logActions) {
+          emitActionLog(tool.name, 'error', session, new UserError(String(payload.message), payload), requestId, code);
+        }
+        return {
+          content: [{ type: 'text' as const, text: String(payload.message) }],
+          isError: true,
+          structuredContent: payload,
+        };
       }
-      return {
-        content: [{ type: 'text' as const, text: String(payload.message) }],
-        isError: true,
-        structuredContent: payload,
-      };
+      const earlyResult = await beforeValidate?.(args, session);
+      const payload = earlyResult?.structuredContent;
+      const recoveryCode =
+        payload &&
+        typeof payload === 'object' &&
+        'code' in payload &&
+        typeof payload.code === 'string'
+          ? payload.code
+          : undefined;
+      if (logActions && earlyResult?.isError && recoveryCode) {
+        emitActionLog(
+          tool.name,
+          'error',
+          session,
+          new UserError(`Tool validation failed: ${recoveryCode}`, payload),
+          randomUUID(),
+          recoveryCode
+        );
+      }
+      return earlyResult;
     },
     execute: async (args, context) => {
       const requestId = randomUUID();
@@ -2579,15 +2628,13 @@ Retrieve the current status, progress, and available results for an existing cra
 server.addTool({
   name: 'firecrawl_extract',
   annotations: {
-    title: 'Extract structured data',
-    readOnlyHint: true, // Uses LLM extraction to pull structured data from URLs without modifying those sites.
-    openWorldHint: true, // Accepts arbitrary user-supplied URLs on the public web.
-    destructiveHint: false, // Read-only extraction; no destructive changes to external content.
+    title: 'Deprecated: use Scrape JSON',
+    readOnlyHint: true,
+    openWorldHint: true,
+    destructiveHint: false,
   },
   description: `
-Extract structured information from one or more URLs with an optional natural-language prompt and JSON schema. It can include subdomains, follow external links, or use web search when those options are enabled.
-
-Use this for a defined structured result rather than full page content. Returns data shaped by the supplied schema or prompt.
+Deprecated compatibility entry point. Use firecrawl_scrape once per known URL with formats: ["json"] and jsonOptions containing the prompt and schema. Use firecrawl_search or firecrawl_agent before Scrape when URLs are not known.
 `,
   parameters: z.object({
     urls: z.array(z.string()),
@@ -2597,23 +2644,18 @@ Use this for a defined structured result rather than full page content. Returns 
     enableWebSearch: z.boolean().optional(),
     includeSubdomains: z.boolean().optional(),
   }),
-  execute: async (args: unknown, { session, log }): Promise<string> => {
-    const client = getClient(session);
-    const a = args as Record<string, unknown>;
-    log.info('Extracting from URLs', {
-      count: Array.isArray(a.urls) ? a.urls.length : 0,
-    });
-    const extractBody = removeEmptyTopLevel({
-      urls: a.urls as string[],
-      prompt: a.prompt as string | undefined,
-      schema: (a.schema as Record<string, unknown>) || undefined,
-      allowExternalLinks: a.allowExternalLinks as boolean | undefined,
-      enableWebSearch: a.enableWebSearch as boolean | undefined,
-      includeSubdomains: a.includeSubdomains as boolean | undefined,
-      origin: ORIGIN,
-    });
-    const res = await client.extract(extractBody as any);
-    return asText(res);
+  canList: () => false,
+  beforeValidate: () => {
+    const payload = deprecatedExtractPayload();
+    return {
+      content: [{ type: 'text' as const, text: payload.message }],
+      isError: true,
+      structuredContent: payload,
+    };
+  },
+  execute: async (): Promise<string> => {
+    const payload = deprecatedExtractPayload();
+    throw new UserError(payload.message, payload);
   },
 });
 

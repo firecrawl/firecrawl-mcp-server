@@ -439,6 +439,18 @@ test('HTTP cloud transport preserves Firecrawl OAuth and well-known routes', asy
   assert.ok(httpToolNames.includes('firecrawl_scrape'));
   assert.ok(httpToolNames.includes('firecrawl_search'));
   assert.ok(httpToolNames.includes('firecrawl_parse'));
+  assert.equal(httpToolNames.includes('firecrawl_extract'), false);
+
+  const deprecatedExtract = await httpToolCall(port, {
+    id: 31,
+    headers: { 'x-api-key': 'fc-test' },
+    params: { arguments: {}, name: 'firecrawl_extract' },
+  });
+  assert.equal(deprecatedExtract.status, 200);
+  const deprecatedExtractMessage = parseSseJson(await deprecatedExtract.text()).result;
+  assert.equal(deprecatedExtractMessage.isError, true);
+  assert.equal(deprecatedExtractMessage.structuredContent.code, 'DEPRECATED_TOOL');
+
   const searchTool = toolsMessage.result.tools.find(
     (tool) => tool.name === 'firecrawl_search'
   );
@@ -609,6 +621,23 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.ok(toolNames.includes('firecrawl_scrape'));
   assert.ok(toolNames.includes('firecrawl_search'));
   assert.ok(toolNames.includes('firecrawl_parse'));
+  assert.equal(toolNames.includes('firecrawl_extract'), false);
+
+  const deprecatedExtract = await client.request('tools/call', {
+    // beforeValidate must intercept before the legacy required `urls` schema.
+    arguments: {},
+    name: 'firecrawl_extract',
+  });
+  assert.equal(deprecatedExtract.isError, true);
+  assert.equal(deprecatedExtract.structuredContent.code, 'DEPRECATED_TOOL');
+  assert.equal(
+    deprecatedExtract.structuredContent.replacement.name,
+    'firecrawl_scrape'
+  );
+  assert.deepEqual(
+    deprecatedExtract.structuredContent.replacement.example_arguments.formats,
+    ['json']
+  );
 
   const byName = new Map(tools.tools.map((tool) => [tool.name, tool]));
   assert.match(init.instructions, /firecrawl_scrape retrieves one supplied page/i);
@@ -1721,6 +1750,20 @@ test('account endpoint accepts legacy OAuth one way and delegates managed keys',
   );
   assert.equal(monitorPayload.api_key, 'fc-managed-secret');
   assert.equal(monitorPayload.purpose, 'hosted_mcp_oauth');
+
+  const deprecatedExtractResponse = await httpToolCall(port, {
+    endpoint: '/v2/mcp-oauth',
+    headers: { authorization: 'Bearer fco_account' },
+    id: 'managed-deprecated-extract',
+    params: { arguments: {}, name: 'firecrawl_extract' },
+  });
+  assert.equal(deprecatedExtractResponse.status, 200);
+  const deprecatedExtractResult = parseSseJson(
+    await deprecatedExtractResponse.text()
+  ).result;
+  assert.equal(deprecatedExtractResult.isError, true);
+  assert.equal(deprecatedExtractResult.structuredContent.code, 'DEPRECATED_TOOL');
+
   const legacyAttempts = backend.requests
     .filter((request) => request.url === '/api/oauth/introspect')
     .filter((request) => request.body.token === 'fco_legacy')
@@ -1731,7 +1774,7 @@ test('account endpoint accepts legacy OAuth one way and delegates managed keys',
     if (
       backend.requests.filter(
         (request) => request.url === '/v2/mcp/action-logs'
-      ).length === 3
+      ).length === 4
     ) {
       break;
     }
@@ -1740,11 +1783,17 @@ test('account endpoint accepts legacy OAuth one way and delegates managed keys',
   const actionLogs = backend.requests.filter(
     (request) => request.url === '/v2/mcp/action-logs'
   );
-  assert.equal(actionLogs.length, 3);
+  assert.equal(actionLogs.length, 4);
+  const deprecatedExtractLog = actionLogs.find(
+    request => request.body.tool_name === 'firecrawl_extract'
+  );
+  assert.ok(deprecatedExtractLog);
+  assert.equal(deprecatedExtractLog.body.status, 'error');
+  assert.equal(deprecatedExtractLog.body.error_class, 'UserError');
+
   for (const request of actionLogs) {
     assert.equal(request.headers.authorization, 'Bearer action-secret');
     assert.equal(request.body.auth_type, 'oauth');
-    assert.equal(request.body.status, 'success');
     assert.equal(request.body.api_key_id, '42');
     assert.equal(request.body.team_id, metadata.team_id);
     assert.equal(request.body.user_id, metadata.sub);
@@ -1753,6 +1802,10 @@ test('account endpoint accepts legacy OAuth one way and delegates managed keys',
     assert.equal(JSON.stringify(request.body).includes('fc-managed-secret'), false);
     assert.equal(JSON.stringify(request.body).includes('fco_'), false);
   }
+  assert.equal(
+    actionLogs.filter(request => request.body.status === 'success').length,
+    3
+  );
   assert.equal(stderr.includes('fc-managed-secret'), false);
   assert.equal(stderr.includes('fco_account'), false);
   assert.equal(stderr.includes('fco_legacy'), false);
