@@ -2626,8 +2626,16 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
     includeSubdomains: z.boolean().optional(),
   }),
   canList: () => false,
-  beforeValidate: () => {
+  beforeValidate: (_args: unknown, session: SessionData) => {
     const payload = deprecatedExtractPayload();
+    emitActionLog(
+      'firecrawl_extract',
+      'error',
+      session,
+      new UserError(payload.message, payload),
+      randomUUID(),
+      'DEPRECATED_TOOL'
+    );
     return {
       content: [{ type: 'text' as const, text: payload.message }],
       isError: true,
