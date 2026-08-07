@@ -439,6 +439,18 @@ test('HTTP cloud transport preserves Firecrawl OAuth and well-known routes', asy
   assert.ok(httpToolNames.includes('firecrawl_scrape'));
   assert.ok(httpToolNames.includes('firecrawl_search'));
   assert.ok(httpToolNames.includes('firecrawl_parse'));
+  assert.equal(httpToolNames.includes('firecrawl_extract'), false);
+
+  const deprecatedExtract = await httpToolCall(port, {
+    id: 31,
+    headers: { 'x-api-key': 'fc-test' },
+    params: { arguments: {}, name: 'firecrawl_extract' },
+  });
+  assert.equal(deprecatedExtract.status, 200);
+  const deprecatedExtractMessage = parseSseJson(await deprecatedExtract.text()).result;
+  assert.equal(deprecatedExtractMessage.isError, true);
+  assert.equal(deprecatedExtractMessage.structuredContent.code, 'DEPRECATED_TOOL');
+
   const searchTool = toolsMessage.result.tools.find(
     (tool) => tool.name === 'firecrawl_search'
   );
@@ -609,6 +621,23 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.ok(toolNames.includes('firecrawl_scrape'));
   assert.ok(toolNames.includes('firecrawl_search'));
   assert.ok(toolNames.includes('firecrawl_parse'));
+  assert.equal(toolNames.includes('firecrawl_extract'), false);
+
+  const deprecatedExtract = await client.request('tools/call', {
+    // beforeValidate must intercept before the legacy required `urls` schema.
+    arguments: {},
+    name: 'firecrawl_extract',
+  });
+  assert.equal(deprecatedExtract.isError, true);
+  assert.equal(deprecatedExtract.structuredContent.code, 'DEPRECATED_TOOL');
+  assert.equal(
+    deprecatedExtract.structuredContent.replacement.name,
+    'firecrawl_scrape'
+  );
+  assert.deepEqual(
+    deprecatedExtract.structuredContent.replacement.example_arguments.formats,
+    ['json']
+  );
 
   const byName = new Map(tools.tools.map((tool) => [tool.name, tool]));
   assert.match(init.instructions, /firecrawl_scrape retrieves one supplied page/i);
