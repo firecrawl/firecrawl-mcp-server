@@ -951,6 +951,48 @@ test('HTTP cloud keyless transport rejects inactive OAuth without advertising lo
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
+test('HTTP transport returns invalid OAuth recovery without an OAuth challenge when OAuth is disabled', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'false',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    HOST: '127.0.0.1',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+
+  await waitForHealth(port, child);
+
+  const response = await httpToolCall(port, {
+    id: 'invalid-oauth-without-challenge',
+    headers: { authorization: 'Bearer fco_invalid_token' },
+    params: {
+      arguments: { limit: 1, query: 'example domain' },
+      name: 'firecrawl_search',
+    },
+  });
+
+  assert.equal(response.status, 401);
+  assert.equal(response.headers.get('www-authenticate'), null);
+  const body = await response.json();
+  assert.equal(body.error, 'invalid_token');
+  assert.equal(body.code, 'OAUTH_CONNECTION_INVALID');
+  assert.equal(body.auth_mode, 'oauth');
+  assert.match(body.error_description, /account connection is no longer valid/);
+  assert.match(
+    body.error_description,
+    /Never ask for, accept, or put an API key in chat/
+  );
+  assert.equal(backend.requests.some((request) => request.url === '/v2/search'), false);
+});
+
 test('HTTP cloud transport accepts the x-firecrawl-api-key header', async (t) => {
   const backend = await startFakeFirecrawlBackend();
   t.after(() => backend.close());
@@ -1127,11 +1169,13 @@ test('HTTP cloud keyless continues with free-tier tools when an account-only too
     'firecrawl_search',
     'firecrawl_parse',
   ]);
-  assert.match(result.content[0].text, /those keyless tools still work/);
-  assert.match(result.content[0].text, /To use this tool:/);
-  assert.match(result.content[0].text, /Ask the human to choose/);
-  assert.match(result.content[0].text, /outside this chat/);
-  assert.match(result.content[0].text, /new client session or run/);
+  assert.match(result.content[0].text, /Search, Scrape, and Parse remain available/);
+  assert.match(result.content[0].text, /continue with those if they can complete the task/);
+  assert.match(result.content[0].text, /Only if this task specifically requires this tool/);
+  assert.match(result.content[0].text, /https:\/\/docs\.firecrawl\.dev\/mcp-server/);
+  assert.match(result.content[0].text, /Never ask for or accept an API key in chat/);
+  assert.match(result.content[0].text, /new client session and retry/);
+  assert.doesNotMatch(result.content[0].text, /mcp\.firecrawl\.dev\/v2\/mcp-oauth/);
   assert.doesNotMatch(result.content[0].text, /no action is required/);
   assert.doesNotMatch(result.content[0].text, /Authorization: Bearer/);
   assert.equal(backend.requests.some((r) => r.url === '/v2/crawl'), false);

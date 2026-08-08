@@ -12,6 +12,7 @@ import { registerDeveloperTools } from './developer';
 import { extractSingleTrustedClientIp } from './keyless-client-ip';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
+import { escapeWWWAuthenticateValue } from './www-authenticate';
 import {
   credentialForOutboundRequest,
   copyManagedOAuthApiKey,
@@ -225,10 +226,6 @@ function getOAuthProtectedResourceMetadataUrl(profile: ServerProfile): string {
   return profile.id === 'full' ? base : `${base}${resource.pathname}`;
 }
 
-function escapeWWWAuthenticateValue(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
-
 function createOAuthChallengeResponse(
   error: unknown,
   profile: ServerProfile,
@@ -271,6 +268,22 @@ function createInvalidCredentialResponse(_error: InvalidFirecrawlCredentialError
   return new Response(
     JSON.stringify({
       error: 'invalid_api_key',
+      error_description: recovery.message,
+      ...recovery,
+    }),
+    {
+      headers: { 'Content-Type': 'application/json' },
+      status: 401,
+    }
+  );
+}
+
+function createInvalidOAuthRecoveryResponse(
+  recovery: Record<string, unknown> & { message: string }
+): Response {
+  return new Response(
+    JSON.stringify({
+      error: 'invalid_token',
       error_description: recovery.message,
       ...recovery,
     }),
@@ -687,7 +700,7 @@ function makeAuthenticate(profile: ServerProfile) {
             profile,
             recovery
           );
-          if (oauthChallenge) throw oauthChallenge;
+          throw oauthChallenge ?? createInvalidOAuthRecoveryResponse(recovery);
         }
         if (error instanceof CredentialValidationUnavailableError) {
           throw new Response(
@@ -994,6 +1007,9 @@ const API_KEY_SIGNUP_URL = 'https://www.firecrawl.dev/app/api-keys';
 const HUMAN_CONNECTION_GUIDANCE =
   `A human or operator must complete the connection because this session cannot reconnect Firecrawl itself. Ask the human to choose before changing anything: (1) in the MCP client's settings, update or replace the existing Firecrawl server entry so its URL is ${MCP_OAUTH_SERVER_URL}, then complete sign-in through the client. That URL is a client configuration value, not a page to open in a browser. Do not add a second Firecrawl server or change configuration without approval; or (2) have an operator create an API key at ${API_KEY_SIGNUP_URL} and configure it in the client or secret manager outside this chat. Never ask for, accept, or put an API key in chat or in an MCP URL. After the human confirms setup, start a new client session or run and retry the original task. Connection guide: ${MCP_CONNECTION_GUIDE_URL}`;
 
+const ACCOUNT_ONLY_TOOL_GUIDANCE =
+  `This tool needs a connected Firecrawl account. Search, Scrape, and Parse remain available, so continue with those if they can complete the task. Only if this task specifically requires this tool, tell the user that a human must update the existing Firecrawl connection using ${MCP_CONNECTION_GUIDE_URL}. Never ask for or accept an API key in chat. After setup, start a new client session and retry.`;
+
 const HUMAN_RECONNECT_ACCOUNT_ACTION = {
   kind: 'human_reconnect_account',
   actor: 'human',
@@ -1074,7 +1090,7 @@ function recoveryPayload(
         : isQuotaExhausted
           ? `The free daily limit for this network has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue now: ${HUMAN_CONNECTION_GUIDANCE}`
           : isToolUnavailable
-            ? `The free tier includes Search, Scrape, and Parse. This tool needs a connected account; those keyless tools still work. To use this tool: ${HUMAN_CONNECTION_GUIDANCE}`
+            ? ACCOUNT_ONLY_TOOL_GUIDANCE
             : isKeylessAccessUnavailable
               ? `Anonymous keyless access is unavailable for this request. To continue: ${HUMAN_CONNECTION_GUIDANCE}`
               : isKeylessEligibilityUnavailable
