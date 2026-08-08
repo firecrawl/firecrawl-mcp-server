@@ -496,11 +496,12 @@ test('search surface rejects an invalid raw API credential during tools/list', a
   });
   assert.equal(res.status, 401);
   assert.equal(res.headers.has('www-authenticate'), false);
-  assert.deepEqual(await res.json(), {
-    error: 'invalid_api_key',
-    error_description:
-      'The supplied Firecrawl credential is invalid or revoked. Replace it and retry.',
-  });
+  const body = await res.json();
+  assert.equal(body.error, 'invalid_api_key');
+  assert.equal(body.code, 'CREDENTIAL_INVALID');
+  assert.match(body.error_description, /outside this chat/);
+  assert.equal(body.next_actions[0].kind, 'operator_configure_api_key');
+  assert.equal(body.next_actions[0].requires_user_consent, true);
 });
 
 test('search surface rejects an invalid raw API credential before a tool call', async (t) => {
@@ -521,11 +522,12 @@ test('search surface rejects an invalid raw API credential before a tool call', 
   });
   assert.equal(res.status, 401);
   assert.equal(res.headers.has('www-authenticate'), false);
-  assert.deepEqual(await res.json(), {
-    error: 'invalid_api_key',
-    error_description:
-      'The supplied Firecrawl credential is invalid or revoked. Replace it and retry.',
-  });
+  const body = await res.json();
+  assert.equal(body.error, 'invalid_api_key');
+  assert.equal(body.code, 'CREDENTIAL_INVALID');
+  assert.match(body.error_description, /outside this chat/);
+  assert.equal(body.next_actions[0].kind, 'operator_configure_api_key');
+  assert.equal(body.next_actions[0].requires_user_consent, true);
   assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
 });
 
