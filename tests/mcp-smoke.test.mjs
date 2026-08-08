@@ -1082,7 +1082,21 @@ test('HTTP cloud keyless continues with free-tier tools when an account-only too
       kind: 'continue_keyless',
       tools: ['firecrawl_scrape', 'firecrawl_search', 'firecrawl_parse'],
     },
+    {
+      kind: 'configure_api_key',
+      header: 'Authorization: Bearer <FIRECRAWL_API_KEY>',
+      signup_url: 'https://www.firecrawl.dev/app/api-keys',
+    },
+    {
+      kind: 'connect_oauth',
+      url: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+      requires_user_consent: true,
+    },
   ]);
+  assert.match(
+    result.structuredContent.message,
+    /Agent MCP keyless includes Search, Scrape, and Parse/
+  );
   assert.deepEqual(result.structuredContent.available_tools, [
     'firecrawl_scrape',
     'firecrawl_search',
@@ -1126,8 +1140,48 @@ test('HTTP cloud keyless keeps 429 recovery structured during API deploy skew', 
     const result = parseSseJson(await response.text()).result;
     assert.equal(result.isError, true, label);
     assert.equal(result.structuredContent.code, expectedCode, label);
-    assert.equal(result.structuredContent.next_actions[0].kind, 'connect_oauth', label);
-    if (label === 'with-reason') assert.equal(result.structuredContent.retry_after_seconds, 42);
+    assert.equal(
+      result.structuredContent.next_actions[0].kind,
+      'configure_api_key',
+      label
+    );
+    assert.equal(
+      result.structuredContent.next_actions[0].signup_url,
+      'https://www.firecrawl.dev/app/api-keys',
+      label
+    );
+    assert.match(
+      result.structuredContent.message,
+      /To continue now on this MCP server/,
+      label
+    );
+    assert.match(
+      result.structuredContent.message,
+      /ask before switching this server to https:\/\/mcp\.firecrawl\.dev\/v2\/mcp-oauth/,
+      label
+    );
+    assert.deepEqual(result.structuredContent.next_actions, [
+      {
+        kind: 'configure_api_key',
+        header: 'Authorization: Bearer <FIRECRAWL_API_KEY>',
+        signup_url: 'https://www.firecrawl.dev/app/api-keys',
+      },
+      {
+        kind: 'connect_oauth',
+        url: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+        requires_user_consent: true,
+      },
+    ], label);
+    if (label === 'with-reason') {
+      assert.equal(result.structuredContent.retry_after_seconds, 42);
+      assert.match(
+        result.structuredContent.message,
+        /about 42 seconds/,
+        label
+      );
+    } else {
+      assert.equal(result.structuredContent.retry_after_seconds, undefined, label);
+    }
     await cleanup();
   }
 });
@@ -1290,7 +1344,7 @@ test('HTTP cloud keyless rejects multi-hop or malformed forwarded IP identity', 
     const result = parseSseJson(await response.text()).result;
     assert.equal(result.isError, true, xff);
     assert.equal(result.structuredContent.code, 'KEYLESS_ACCESS_NOT_AVAILABLE', xff);
-    assert.equal(result.structuredContent.next_actions[0].kind, 'connect_oauth', xff);
+    assert.equal(result.structuredContent.next_actions[0].kind, 'configure_api_key', xff);
     assert.equal(result.structuredContent.available_tools, undefined, xff);
   }
   assert.equal(backend.requests.length, 0, JSON.stringify(backend.requests));
@@ -1443,7 +1497,7 @@ test('HTTP cloud transport returns recovery when keyless identity has no client 
   const result = parseSseJson(await toolCall.text()).result;
   assert.equal(result.isError, true);
   assert.equal(result.structuredContent.code, 'KEYLESS_ACCESS_NOT_AVAILABLE');
-  assert.equal(result.structuredContent.next_actions[0].kind, 'connect_oauth');
+  assert.equal(result.structuredContent.next_actions[0].kind, 'configure_api_key');
   assert.equal(result.structuredContent.available_tools, undefined);
   assertServerGeneratedRequestId(result.structuredContent, [
     'client-json-rpc-id',

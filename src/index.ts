@@ -962,6 +962,28 @@ function isLocalKeylessStartup(): boolean {
   );
 }
 
+// Agent MCP (/v2/mcp) keyless recovery: same-URL API key first; OAuth is an
+// opt-in alternate (requires_user_consent) via /v2/mcp-oauth.
+// retry_after_seconds uses the live TTL from eligibility or 429 when the API
+// supplies one — never a hardcoded window. Wait is conveyed via that field and
+// the message, not a retry_later next_action on quota.
+const API_KEY_SIGNUP_URL = 'https://www.firecrawl.dev/app/api-keys';
+const MCP_OAUTH_URL = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
+const CONFIGURE_API_KEY_ACTION = {
+  kind: 'configure_api_key',
+  header: 'Authorization: Bearer <FIRECRAWL_API_KEY>',
+  signup_url: API_KEY_SIGNUP_URL,
+} as const;
+const CONNECT_OAUTH_ACTION = {
+  kind: 'connect_oauth',
+  url: MCP_OAUTH_URL,
+  requires_user_consent: true,
+} as const;
+const AUTH_UPGRADE_ACTIONS = [
+  { ...CONFIGURE_API_KEY_ACTION },
+  { ...CONNECT_OAUTH_ACTION },
+] as const;
+
 function recoveryPayload(
   code: string,
   requestId: string = randomUUID(),
@@ -974,23 +996,22 @@ function recoveryPayload(
   const isKeylessAccessUnavailable = code === 'KEYLESS_ACCESS_NOT_AVAILABLE';
   const isKeylessEligibilityUnavailable =
     code === 'KEYLESS_ELIGIBILITY_UNAVAILABLE';
-  const oauthUrl = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
   return {
     code,
     request_id: requestId,
     auth_mode: code === 'CREDENTIAL_INVALID' ? 'credential_error' : 'keyless',
     message:
       code === 'CREDENTIAL_INVALID'
-        ? `The supplied Firecrawl credential is invalid or revoked. Reconnect the account via OAuth (https://mcp.firecrawl.dev/v2/mcp-oauth) or create a new API key at https://www.firecrawl.dev/signin and send it as Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.`
+        ? `The supplied Firecrawl credential is invalid or revoked. Create a new API key at ${API_KEY_SIGNUP_URL} and send it as Authorization: Bearer <FIRECRAWL_API_KEY>, then retry. Or ask before switching this server to ${MCP_OAUTH_URL}.`
         : isQuotaExhausted
-          ? `The free daily limit for this network has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue now, connect a Firecrawl account via OAuth (https://mcp.firecrawl.dev/v2/mcp-oauth) or create a free API key at https://www.firecrawl.dev/signin and send it as Authorization: Bearer <FIRECRAWL_API_KEY>.`
+          ? `The free daily limit for this network has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue now on this MCP server, create a free API key at ${API_KEY_SIGNUP_URL} and set Authorization: Bearer <FIRECRAWL_API_KEY>, then retry. Or ask before switching this server to ${MCP_OAUTH_URL}.`
           : isToolUnavailable
-            ? 'The free tier includes Search, Scrape, and Parse. This tool needs a connected account; Search, Scrape, and Parse still work, so no action is required.'
+            ? 'Agent MCP keyless includes Search, Scrape, and Parse. This tool needs an API key on this server. Search, Scrape, and Parse still work with no action required.'
             : isKeylessAccessUnavailable
-              ? `Anonymous keyless access is unavailable for this request. To continue, connect a Firecrawl account via OAuth (https://mcp.firecrawl.dev/v2/mcp-oauth) or create a free API key at https://www.firecrawl.dev/signin and send it as Authorization: Bearer <FIRECRAWL_API_KEY>.`
+              ? `Anonymous keyless access is unavailable for this request. To continue now on this MCP server, create a free API key at ${API_KEY_SIGNUP_URL} and set Authorization: Bearer <FIRECRAWL_API_KEY>, then retry. Or ask before switching this server to ${MCP_OAUTH_URL}.`
               : isKeylessEligibilityUnavailable
                 ? 'The anonymous keyless eligibility check is temporarily unavailable. Retry shortly.'
-              : `This tool requires a Firecrawl account or API key. Connect an account via OAuth (https://mcp.firecrawl.dev/v2/mcp-oauth) or create a free API key at https://www.firecrawl.dev/signin and send it as Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.`,
+              : `This tool requires a Firecrawl API key. Create a free API key at ${API_KEY_SIGNUP_URL} and set Authorization: Bearer <FIRECRAWL_API_KEY>, then retry. Or ask before switching this server to ${MCP_OAUTH_URL}.`,
     ...(isKeylessAccessUnavailable
       ? {}
       : { available_tools: [...KEYLESS_TOOL_NAMES] }),
@@ -998,17 +1019,19 @@ function recoveryPayload(
     ...(retryAfterSeconds ? { retry_after_seconds: retryAfterSeconds } : {}),
     next_actions: isKeylessEligibilityUnavailable
       ? [{ kind: 'retry_later', after_seconds: 30 }]
-      : isQuotaExhausted || isKeylessAccessUnavailable
-      ? [
-          { kind: 'connect_oauth', url: oauthUrl, client_commands: [{ client: 'claude-code', command: 'claude mcp add --transport http firecrawl https://mcp.firecrawl.dev/v2/mcp-oauth' }] },
-          { kind: 'configure_api_key', header: 'Authorization: Bearer <FIRECRAWL_API_KEY>' },
-        ]
-      : isToolUnavailable
-        ? [{ kind: 'continue_keyless', tools: [...KEYLESS_TOOL_NAMES] }]
-        : [
-            { kind: 'connect_oauth', url: oauthUrl },
-            { kind: 'configure_api_key', header: 'Authorization: Bearer <FIRECRAWL_API_KEY>' },
-          ],
+      : isQuotaExhausted
+        ? [...AUTH_UPGRADE_ACTIONS]
+        : isKeylessAccessUnavailable
+          ? [...AUTH_UPGRADE_ACTIONS]
+          : isToolUnavailable
+            ? [
+                {
+                  kind: 'continue_keyless',
+                  tools: [...KEYLESS_TOOL_NAMES],
+                },
+                ...AUTH_UPGRADE_ACTIONS,
+              ]
+            : [...AUTH_UPGRADE_ACTIONS],
   };
 }
 
