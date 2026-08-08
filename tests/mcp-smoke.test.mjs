@@ -1162,10 +1162,13 @@ test('HTTP cloud keyless keeps 429 recovery structured during API deploy skew', 
     );
     if (label === 'with-reason') {
       assert.equal(result.structuredContent.retry_after_seconds, 42);
-      assert.deepEqual(result.structuredContent.next_actions[1], {
-        kind: 'retry_later',
-        after_seconds: 42,
-      });
+      assert.deepEqual(result.structuredContent.next_actions, [
+        {
+          kind: 'configure_api_key',
+          header: 'Authorization: Bearer <FIRECRAWL_API_KEY>',
+          signup_url: 'https://www.firecrawl.dev/app/api-keys',
+        },
+      ], label);
       assert.match(
         result.structuredContent.message,
         /about 42 seconds/,
@@ -1173,7 +1176,13 @@ test('HTTP cloud keyless keeps 429 recovery structured during API deploy skew', 
       );
     } else {
       assert.equal(result.structuredContent.retry_after_seconds, undefined, label);
-      assert.equal(result.structuredContent.next_actions.length, 1, label);
+      assert.deepEqual(result.structuredContent.next_actions, [
+        {
+          kind: 'configure_api_key',
+          header: 'Authorization: Bearer <FIRECRAWL_API_KEY>',
+          signup_url: 'https://www.firecrawl.dev/app/api-keys',
+        },
+      ], label);
     }
     await cleanup();
   }

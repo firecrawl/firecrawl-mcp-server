@@ -955,8 +955,9 @@ function isLocalKeylessStartup(): boolean {
 }
 
 // Agent MCP (/v2/mcp) keyless recovery: same-URL upgrade is an API key.
-// retry_after_seconds / retry_later use the live TTL from eligibility or 429
-// when the API supplies one — never a hardcoded window.
+// retry_after_seconds uses the live TTL from eligibility or 429 when the API
+// supplies one — never a hardcoded window. Wait is conveyed via that field and
+// the message, not a retry_later next_action on quota.
 const API_KEY_SIGNUP_URL = 'https://www.firecrawl.dev/app/api-keys';
 const CONFIGURE_API_KEY_ACTION = {
   kind: 'configure_api_key',
@@ -976,10 +977,6 @@ function recoveryPayload(
   const isKeylessAccessUnavailable = code === 'KEYLESS_ACCESS_NOT_AVAILABLE';
   const isKeylessEligibilityUnavailable =
     code === 'KEYLESS_ELIGIBILITY_UNAVAILABLE';
-  const retryLaterAction =
-    typeof retryAfterSeconds === 'number' && retryAfterSeconds > 0
-      ? { kind: 'retry_later', after_seconds: retryAfterSeconds }
-      : undefined;
   return {
     code,
     request_id: requestId,
@@ -1004,10 +1001,7 @@ function recoveryPayload(
     next_actions: isKeylessEligibilityUnavailable
       ? [{ kind: 'retry_later', after_seconds: 30 }]
       : isQuotaExhausted
-        ? [
-            { ...CONFIGURE_API_KEY_ACTION },
-            ...(retryLaterAction ? [retryLaterAction] : []),
-          ]
+        ? [{ ...CONFIGURE_API_KEY_ACTION }]
         : isKeylessAccessUnavailable
           ? [{ ...CONFIGURE_API_KEY_ACTION }]
           : isToolUnavailable
