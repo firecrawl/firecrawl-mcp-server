@@ -954,16 +954,27 @@ function isLocalKeylessStartup(): boolean {
   );
 }
 
-// Agent MCP (/v2/mcp) keyless recovery: same-URL upgrade is an API key.
+// Agent MCP (/v2/mcp) keyless recovery: same-URL API key first; OAuth is an
+// opt-in alternate (requires_user_consent) via /v2/mcp-oauth.
 // retry_after_seconds uses the live TTL from eligibility or 429 when the API
 // supplies one — never a hardcoded window. Wait is conveyed via that field and
 // the message, not a retry_later next_action on quota.
 const API_KEY_SIGNUP_URL = 'https://www.firecrawl.dev/app/api-keys';
+const MCP_OAUTH_URL = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
 const CONFIGURE_API_KEY_ACTION = {
   kind: 'configure_api_key',
   header: 'Authorization: Bearer <FIRECRAWL_API_KEY>',
   signup_url: API_KEY_SIGNUP_URL,
 } as const;
+const CONNECT_OAUTH_ACTION = {
+  kind: 'connect_oauth',
+  url: MCP_OAUTH_URL,
+  requires_user_consent: true,
+} as const;
+const AUTH_UPGRADE_ACTIONS = [
+  { ...CONFIGURE_API_KEY_ACTION },
+  { ...CONNECT_OAUTH_ACTION },
+] as const;
 
 function recoveryPayload(
   code: string,
@@ -983,16 +994,16 @@ function recoveryPayload(
     auth_mode: code === 'CREDENTIAL_INVALID' ? 'credential_error' : 'keyless',
     message:
       code === 'CREDENTIAL_INVALID'
-        ? `The supplied Firecrawl credential is invalid or revoked. Create a new API key at ${API_KEY_SIGNUP_URL} and send it as Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.`
+        ? `The supplied Firecrawl credential is invalid or revoked. Create a new API key at ${API_KEY_SIGNUP_URL} and send it as Authorization: Bearer <FIRECRAWL_API_KEY>, then retry. Or ask before switching this server to ${MCP_OAUTH_URL}.`
         : isQuotaExhausted
-          ? `The free daily limit for this network has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue now on this MCP server, create a free API key at ${API_KEY_SIGNUP_URL} and set Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.`
+          ? `The free daily limit for this network has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue now on this MCP server, create a free API key at ${API_KEY_SIGNUP_URL} and set Authorization: Bearer <FIRECRAWL_API_KEY>, then retry. Or ask before switching this server to ${MCP_OAUTH_URL}.`
           : isToolUnavailable
             ? 'Agent MCP keyless includes Search, Scrape, and Parse. This tool needs an API key on this server. Search, Scrape, and Parse still work with no action required.'
             : isKeylessAccessUnavailable
-              ? `Anonymous keyless access is unavailable for this request. To continue now on this MCP server, create a free API key at ${API_KEY_SIGNUP_URL} and set Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.`
+              ? `Anonymous keyless access is unavailable for this request. To continue now on this MCP server, create a free API key at ${API_KEY_SIGNUP_URL} and set Authorization: Bearer <FIRECRAWL_API_KEY>, then retry. Or ask before switching this server to ${MCP_OAUTH_URL}.`
               : isKeylessEligibilityUnavailable
                 ? 'The anonymous keyless eligibility check is temporarily unavailable. Retry shortly.'
-              : `This tool requires a Firecrawl API key. Create a free API key at ${API_KEY_SIGNUP_URL} and set Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.`,
+              : `This tool requires a Firecrawl API key. Create a free API key at ${API_KEY_SIGNUP_URL} and set Authorization: Bearer <FIRECRAWL_API_KEY>, then retry. Or ask before switching this server to ${MCP_OAUTH_URL}.`,
     ...(isKeylessAccessUnavailable
       ? {}
       : { available_tools: [...KEYLESS_TOOL_NAMES] }),
@@ -1001,18 +1012,18 @@ function recoveryPayload(
     next_actions: isKeylessEligibilityUnavailable
       ? [{ kind: 'retry_later', after_seconds: 30 }]
       : isQuotaExhausted
-        ? [{ ...CONFIGURE_API_KEY_ACTION }]
+        ? [...AUTH_UPGRADE_ACTIONS]
         : isKeylessAccessUnavailable
-          ? [{ ...CONFIGURE_API_KEY_ACTION }]
+          ? [...AUTH_UPGRADE_ACTIONS]
           : isToolUnavailable
             ? [
                 {
                   kind: 'continue_keyless',
                   tools: [...KEYLESS_TOOL_NAMES],
                 },
-                { ...CONFIGURE_API_KEY_ACTION },
+                ...AUTH_UPGRADE_ACTIONS,
               ]
-            : [{ ...CONFIGURE_API_KEY_ACTION }],
+            : [...AUTH_UPGRADE_ACTIONS],
   };
 }
 

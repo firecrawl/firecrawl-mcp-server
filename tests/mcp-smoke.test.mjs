@@ -1097,6 +1097,11 @@ test('HTTP cloud keyless continues with free-tier tools when an account-only too
       header: 'Authorization: Bearer <FIRECRAWL_API_KEY>',
       signup_url: 'https://www.firecrawl.dev/app/api-keys',
     },
+    {
+      kind: 'connect_oauth',
+      url: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+      requires_user_consent: true,
+    },
   ]);
   assert.match(
     result.structuredContent.message,
@@ -1160,15 +1165,25 @@ test('HTTP cloud keyless keeps 429 recovery structured during API deploy skew', 
       /To continue now on this MCP server/,
       label
     );
+    assert.match(
+      result.structuredContent.message,
+      /ask before switching this server to https:\/\/mcp\.firecrawl\.dev\/v2\/mcp-oauth/,
+      label
+    );
+    assert.deepEqual(result.structuredContent.next_actions, [
+      {
+        kind: 'configure_api_key',
+        header: 'Authorization: Bearer <FIRECRAWL_API_KEY>',
+        signup_url: 'https://www.firecrawl.dev/app/api-keys',
+      },
+      {
+        kind: 'connect_oauth',
+        url: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+        requires_user_consent: true,
+      },
+    ], label);
     if (label === 'with-reason') {
       assert.equal(result.structuredContent.retry_after_seconds, 42);
-      assert.deepEqual(result.structuredContent.next_actions, [
-        {
-          kind: 'configure_api_key',
-          header: 'Authorization: Bearer <FIRECRAWL_API_KEY>',
-          signup_url: 'https://www.firecrawl.dev/app/api-keys',
-        },
-      ], label);
       assert.match(
         result.structuredContent.message,
         /about 42 seconds/,
@@ -1176,13 +1191,6 @@ test('HTTP cloud keyless keeps 429 recovery structured during API deploy skew', 
       );
     } else {
       assert.equal(result.structuredContent.retry_after_seconds, undefined, label);
-      assert.deepEqual(result.structuredContent.next_actions, [
-        {
-          kind: 'configure_api_key',
-          header: 'Authorization: Bearer <FIRECRAWL_API_KEY>',
-          signup_url: 'https://www.firecrawl.dev/app/api-keys',
-        },
-      ], label);
     }
     await cleanup();
   }
