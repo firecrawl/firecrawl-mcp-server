@@ -1136,8 +1136,39 @@ test('HTTP cloud keyless keeps 429 recovery structured during API deploy skew', 
     const result = parseSseJson(await response.text()).result;
     assert.equal(result.isError, true, label);
     assert.equal(result.structuredContent.code, expectedCode, label);
-    assert.equal(result.structuredContent.next_actions[0].kind, 'connect_oauth', label);
-    if (label === 'with-reason') assert.equal(result.structuredContent.retry_after_seconds, 42);
+    assert.deepEqual(result.structuredContent.next_actions, [
+      {
+        kind: 'human_reconnect_account',
+        actor: 'human',
+        requires_user_consent: true,
+        existing_server_only: true,
+        server_url: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+        open_server_url_in_browser: false,
+        docs_url:
+          'https://docs.firecrawl.dev/mcp-server',
+      },
+      {
+        kind: 'operator_configure_api_key',
+        actor: 'human_or_operator',
+        requires_user_consent: true,
+        credential_delivery: 'outside_agent_chat',
+      },
+    ], label);
+    assert.match(result.content[0].text, /Ask the human to choose/, label);
+    assert.match(result.content[0].text, /update or replace the existing Firecrawl server entry/, label);
+    assert.match(result.content[0].text, /client configuration value, not a page to open/, label);
+    assert.match(result.content[0].text, /outside this chat/, label);
+    assert.match(result.content[0].text, /new client session or run/, label);
+    // The OAuth endpoint must be present and explicitly framed as configuration.
+    // This is the inverse of the earlier no-endpoint recovery contract.
+    assert.match(result.content[0].text, /mcp\.firecrawl\.dev\/v2\/mcp-oauth/, label);
+    assert.match(result.content[0].text, /docs\.firecrawl\.dev\/mcp-server(?:\s|$)/, label);
+    assert.doesNotMatch(result.content[0].text, /Authorization: Bearer/, label);
+    assert.doesNotMatch(result.content[0].text, /claude mcp add/, label);
+    if (label === 'with-reason') {
+      assert.equal(result.structuredContent.retry_after_seconds, 42);
+      assert.match(result.content[0].text, /about 42 seconds/);
+    }
     await cleanup();
   }
 });
@@ -1300,7 +1331,8 @@ test('HTTP cloud keyless rejects multi-hop or malformed forwarded IP identity', 
     const result = parseSseJson(await response.text()).result;
     assert.equal(result.isError, true, xff);
     assert.equal(result.structuredContent.code, 'KEYLESS_ACCESS_NOT_AVAILABLE', xff);
-    assert.equal(result.structuredContent.next_actions[0].kind, 'connect_oauth', xff);
+    assert.equal(result.structuredContent.next_actions[0].kind, 'human_reconnect_account', xff);
+    assert.equal(result.structuredContent.next_actions[0].actor, 'human', xff);
     assert.equal(result.structuredContent.available_tools, undefined, xff);
   }
   assert.equal(backend.requests.length, 0, JSON.stringify(backend.requests));
@@ -1453,7 +1485,8 @@ test('HTTP cloud transport returns recovery when keyless identity has no client 
   const result = parseSseJson(await toolCall.text()).result;
   assert.equal(result.isError, true);
   assert.equal(result.structuredContent.code, 'KEYLESS_ACCESS_NOT_AVAILABLE');
-  assert.equal(result.structuredContent.next_actions[0].kind, 'connect_oauth');
+  assert.equal(result.structuredContent.next_actions[0].kind, 'human_reconnect_account');
+  assert.equal(result.structuredContent.next_actions[0].actor, 'human');
   assert.equal(result.structuredContent.available_tools, undefined);
   assertServerGeneratedRequestId(result.structuredContent, [
     'client-json-rpc-id',

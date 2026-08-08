@@ -39,7 +39,7 @@ On the keyless free tier, `scrape`, `search`, and `interact` work without an API
 
 Prefer OAuth or an API key whenever the human can sign up. It unlocks the full tool set and higher limits.
 
-For an interactive account connection, use:
+For an interactive account connection, configure your MCP client to use this server URL. This is an MCP endpoint, **not a browser page**; use the client's account-connection flow and do not add a second Firecrawl server entry when reconnecting:
 
 ```
 https://mcp.firecrawl.dev/v2/mcp-oauth
@@ -57,7 +57,7 @@ Then configure the client's secure header or secret setting with:
 Authorization: Bearer <FIRECRAWL_API_KEY>
 ```
 
-Never put an API key in the server URL. See the [hosted MCP setup guide](https://docs.firecrawl.dev/developer-guides/mcp-setup-guides/oauth) and the [agent onboarding guide](https://www.firecrawl.dev/agent-onboarding/SKILL.md) for client-specific instructions.
+Never put an API key in the server URL. Never put an API key in an agent chat. Configure it directly in the client or secret manager. See the [hosted MCP setup guide](https://docs.firecrawl.dev/mcp-server) and the [agent onboarding guide](https://www.firecrawl.dev/agent-onboarding/SKILL.md) for client-specific instructions.
 
 #### Search-only endpoint
 
