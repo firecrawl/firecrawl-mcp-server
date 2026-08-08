@@ -969,9 +969,10 @@ function isLocalKeylessStartup(): boolean {
 const MCP_CONNECTION_GUIDE_URL =
   'https://docs.firecrawl.dev/mcp-server';
 const MCP_OAUTH_SERVER_URL = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
+const API_KEY_SIGNUP_URL = 'https://www.firecrawl.dev/app/api-keys';
 
 const HUMAN_CONNECTION_GUIDANCE =
-  `This session cannot reconnect Firecrawl itself. Ask the human to choose before changing anything: (1) in the MCP client's settings, update or replace the existing Firecrawl server entry so its URL is ${MCP_OAUTH_SERVER_URL}, then complete sign-in through the client. That URL is a client configuration value, not a page to open in a browser. Do not add a second Firecrawl server or change configuration without approval; or (2) have an operator configure an API key in the client or secret manager outside this chat. Never ask for, accept, or put an API key in chat or in an MCP URL. After the human confirms setup, start a new client session or run and retry the original task. Connection guide: ${MCP_CONNECTION_GUIDE_URL}`;
+  `A human or operator must complete the connection because this session cannot reconnect Firecrawl itself. Ask the human to choose before changing anything: (1) in the MCP client's settings, update or replace the existing Firecrawl server entry so its URL is ${MCP_OAUTH_SERVER_URL}, then complete sign-in through the client. That URL is a client configuration value, not a page to open in a browser. Do not add a second Firecrawl server or change configuration without approval; or (2) have an operator create an API key at ${API_KEY_SIGNUP_URL} and configure it in the client or secret manager outside this chat. Never ask for, accept, or put an API key in chat or in an MCP URL. After the human confirms setup, start a new client session or run and retry the original task. Connection guide: ${MCP_CONNECTION_GUIDE_URL}`;
 
 const HUMAN_CONNECTION_ACTIONS = [
   {
@@ -988,6 +989,7 @@ const HUMAN_CONNECTION_ACTIONS = [
     actor: 'human_or_operator',
     requires_user_consent: true,
     credential_delivery: 'outside_agent_chat',
+    signup_url: API_KEY_SIGNUP_URL,
   },
 ] as const;
 
@@ -1011,11 +1013,11 @@ function recoveryPayload(
       code === 'CREDENTIAL_INVALID'
         ? `The supplied Firecrawl credential is invalid or revoked. ${HUMAN_CONNECTION_GUIDANCE}`
         : isQuotaExhausted
-          ? `The free daily limit for this network has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue now, ${HUMAN_CONNECTION_GUIDANCE}`
+          ? `The free daily limit for this network has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue now: ${HUMAN_CONNECTION_GUIDANCE}`
           : isToolUnavailable
-            ? 'The free tier includes Search, Scrape, and Parse. This tool needs a connected account; Search, Scrape, and Parse still work, so no action is required.'
+            ? `The free tier includes Search, Scrape, and Parse. This tool needs a connected account; those keyless tools still work. To use this tool: ${HUMAN_CONNECTION_GUIDANCE}`
             : isKeylessAccessUnavailable
-              ? `Anonymous keyless access is unavailable for this request. To continue, ${HUMAN_CONNECTION_GUIDANCE}`
+              ? `Anonymous keyless access is unavailable for this request. To continue: ${HUMAN_CONNECTION_GUIDANCE}`
               : isKeylessEligibilityUnavailable
                 ? 'The anonymous keyless eligibility check is temporarily unavailable. Retry shortly.'
               : `This tool requires a Firecrawl account or API key. ${HUMAN_CONNECTION_GUIDANCE}`,
@@ -1029,7 +1031,10 @@ function recoveryPayload(
       : isQuotaExhausted || isKeylessAccessUnavailable
       ? HUMAN_CONNECTION_ACTIONS
       : isToolUnavailable
-        ? [{ kind: 'continue_keyless', tools: [...KEYLESS_TOOL_NAMES] }]
+        ? [
+            { kind: 'continue_keyless', tools: [...KEYLESS_TOOL_NAMES] },
+            ...HUMAN_CONNECTION_ACTIONS,
+          ]
         : [
             ...HUMAN_CONNECTION_ACTIONS,
           ],
