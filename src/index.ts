@@ -87,6 +87,8 @@ type ServerProfile = {
   primary?: boolean;
   /** Accept tokens minted for the legacy /v2/mcp resource during migration. */
   acceptLegacyAudience?: boolean;
+  /** Publish OAuth discovery metadata for clients configuring this surface. */
+  advertiseOAuth: boolean;
 };
 
 /** Registers a tool onto an instance; a subset of the FastMCP surface. */
@@ -238,7 +240,11 @@ function createOAuthChallengeResponse(
   const errorMessage =
     error instanceof Error ? error.message : String(error || 'Unauthorized');
   const wwwAuthenticate = [
-    `resource_metadata="${escapeWWWAuthenticateValue(getOAuthProtectedResourceMetadataUrl(profile))}"`,
+    ...(profile.advertiseOAuth
+      ? [
+          `resource_metadata="${escapeWWWAuthenticateValue(getOAuthProtectedResourceMetadataUrl(profile))}"`,
+        ]
+      : []),
     'error="invalid_token"',
     `error_description="${escapeWWWAuthenticateValue(errorMessage)}"`,
   ].join(', ');
@@ -856,6 +862,7 @@ function makeFullProfile(): ServerProfile {
     acceptApiKeys: true,
     acceptLegacyAudience:
       account && process.env.MCP_OAUTH_ACCEPT_LEGACY_V2_MCP_AUD !== 'false',
+    advertiseOAuth: account,
     primary: true,
   };
 }
@@ -887,6 +894,7 @@ function makeSearchProfile({ primary = false }: { primary?: boolean } = {}): Ser
     // deployment explicitly enables the same profile flag used by primary.
     acceptApiKeys: !oauthOnly,
     requireManagedOAuth: oauthOnly,
+    advertiseOAuth: true,
     primary,
   };
 }
@@ -905,7 +913,7 @@ function createServer(profile: ServerProfile): FastMCP<SessionData> {
     logger: new ConsoleLogger(),
     roots: { enabled: false },
     oauth: {
-      enabled: isMcpOAuthEnabled(),
+      enabled: isMcpOAuthEnabled() && profile.advertiseOAuth,
       protectedResource: {
         authorizationServers: [getOAuthIssuer()],
         bearerMethodsSupported: ['header'],

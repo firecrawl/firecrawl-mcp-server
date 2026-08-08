@@ -618,7 +618,7 @@ test('search surface accepts a token minted for its own resource', async (t) => 
 });
 
 test('full surface still exposes its complete tool set alongside the search surface', async (t) => {
-  const { fullPort, issuerUrl } = await startHostedServer(t);
+  const { fullPort } = await startHostedServer(t);
 
   // Full surface is reachable on its own port with all tools intact.
   const names = await listTools(fullPort, '/v2/mcp', { 'x-api-key': 'fc-test' });
@@ -628,18 +628,12 @@ test('full surface still exposes its complete tool set alongside the search surf
   assert.ok(names.includes('firecrawl_parse'));
   assert.ok(names.length > SEARCH_TOOLS.length);
 
-  // Its protected-resource metadata stays origin-level and unchanged.
+  // The anonymous full surface accepts credentials but does not advertise
+  // OAuth, so clients do not start login while configuring keyless MCP.
   const prm = await fetch(
     `http://127.0.0.1:${fullPort}/.well-known/oauth-protected-resource`
   );
-  assert.equal(prm.status, 200);
-  assert.deepEqual(await prm.json(), {
-    authorization_servers: [issuerUrl],
-    bearer_methods_supported: ['header'],
-    resource: 'https://mcp.firecrawl.dev/v2/mcp',
-    resource_name: 'Firecrawl MCP',
-    scopes_supported: ['firecrawl:global'],
-  });
+  assert.equal(prm.status, 404);
 });
 
 test('primary search profile is OAuth-only, six-tool frozen, and ready without keyless configuration', async (t) => {

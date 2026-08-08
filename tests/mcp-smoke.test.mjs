@@ -328,7 +328,7 @@ async function httpToolCall(port, { endpoint = '/v2/mcp', id, headers, params })
   });
 }
 
-test('HTTP cloud transport preserves Firecrawl OAuth and well-known routes', async (t) => {
+test('HTTP cloud keyless transport preserves app challenge without advertising OAuth', async (t) => {
   const backend = await startFakeFirecrawlBackend();
   t.after(() => backend.close());
   const port = await getFreePort();
@@ -360,14 +360,7 @@ test('HTTP cloud transport preserves Firecrawl OAuth and well-known routes', asy
   const prm = await fetch(
     `http://127.0.0.1:${port}/.well-known/oauth-protected-resource`
   );
-  assert.equal(prm.status, 200);
-  assert.deepEqual(await prm.json(), {
-    authorization_servers: [backend.url],
-    bearer_methods_supported: ['header'],
-    resource: 'https://mcp.firecrawl.dev/v2/mcp',
-    resource_name: 'Firecrawl MCP',
-    scopes_supported: ['firecrawl:global'],
-  });
+  assert.equal(prm.status, 404);
 
   const unauthenticated = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({
@@ -895,7 +888,7 @@ test('HTTP cloud transport swaps an fco_ OAuth token for its introspected API ke
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
-test('HTTP cloud transport rejects an inactive fco_ token with an OAuth challenge', async (t) => {
+test('HTTP cloud keyless transport rejects inactive OAuth without advertising login', async (t) => {
   const backend = await startFakeFirecrawlBackend();
   t.after(() => backend.close());
 
@@ -926,10 +919,7 @@ test('HTTP cloud transport rejects an inactive fco_ token with an OAuth challeng
   assert.equal(toolCall.status, 401);
   const wwwAuthenticate = toolCall.headers.get('www-authenticate') ?? '';
   assert.match(wwwAuthenticate, /^Bearer /);
-  assert.match(
-    wwwAuthenticate,
-    /resource_metadata="https:\/\/mcp\.firecrawl\.dev\/\.well-known\/oauth-protected-resource"/
-  );
+  assert.equal(wwwAuthenticate.includes('resource_metadata='), false);
   assert.match(wwwAuthenticate, /error="invalid_token"/);
   const body = await toolCall.json();
   assert.equal(body.error, 'invalid_token');
