@@ -1092,12 +1092,35 @@ test('HTTP cloud keyless continues with free-tier tools when an account-only too
       kind: 'continue_keyless',
       tools: ['firecrawl_scrape', 'firecrawl_search', 'firecrawl_parse'],
     },
+    {
+      kind: 'human_reconnect_account',
+      actor: 'human',
+      requires_user_consent: true,
+      existing_server_only: true,
+      server_url: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+      open_server_url_in_browser: false,
+      docs_url: 'https://docs.firecrawl.dev/mcp-server',
+    },
+    {
+      kind: 'operator_configure_api_key',
+      actor: 'human_or_operator',
+      requires_user_consent: true,
+      credential_delivery: 'outside_agent_chat',
+      signup_url: 'https://www.firecrawl.dev/app/api-keys',
+    },
   ]);
   assert.deepEqual(result.structuredContent.available_tools, [
     'firecrawl_scrape',
     'firecrawl_search',
     'firecrawl_parse',
   ]);
+  assert.match(result.content[0].text, /those keyless tools still work/);
+  assert.match(result.content[0].text, /To use this tool:/);
+  assert.match(result.content[0].text, /Ask the human to choose/);
+  assert.match(result.content[0].text, /outside this chat/);
+  assert.match(result.content[0].text, /new client session or run/);
+  assert.doesNotMatch(result.content[0].text, /no action is required/);
+  assert.doesNotMatch(result.content[0].text, /Authorization: Bearer/);
   assert.equal(backend.requests.some((r) => r.url === '/v2/crawl'), false);
 });
 
@@ -1152,6 +1175,7 @@ test('HTTP cloud keyless keeps 429 recovery structured during API deploy skew', 
         actor: 'human_or_operator',
         requires_user_consent: true,
         credential_delivery: 'outside_agent_chat',
+        signup_url: 'https://www.firecrawl.dev/app/api-keys',
       },
     ], label);
     assert.match(result.content[0].text, /Ask the human to choose/, label);
