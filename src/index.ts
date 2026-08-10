@@ -12,6 +12,7 @@ import { registerDeveloperTools } from './developer';
 import { extractSingleTrustedClientIp } from './keyless-client-ip';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
+import { escapeWWWAuthenticateValue } from './www-authenticate';
 import {
   credentialForOutboundRequest,
   copyManagedOAuthApiKey,
@@ -168,6 +169,20 @@ const DEFAULT_MCP_OAUTH_RESOURCE_URL = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
 const DEFAULT_MCP_SEARCH_RESOURCE_URL = 'https://mcp.firecrawl.dev/v2/mcp-search';
 const DEFAULT_MCP_SEARCH_ENDPOINT = '/v2/mcp-search';
 
+// Human-facing guidance values, co-located with the resource defaults above.
+// MCP_CONNECTION_GUIDE_URL stays a stable, neutral entry point even while the
+// docs routing evolves; do not bind recovery payloads to an auth-mode leaf
+// page. It is a human-facing guide, not an MCP endpoint.
+// MCP_OAUTH_SERVER_URL intentionally repeats the value of
+// DEFAULT_MCP_OAUTH_RESOURCE_URL without aliasing it: the resource constant is
+// protocol identity and can be overridden per deployment via
+// FIRECRAWL_MCP_RESOURCE_URL, while this one is the fixed value a human puts
+// in MCP client settings for the hosted service.
+const MCP_CONNECTION_GUIDE_URL =
+  'https://docs.firecrawl.dev/mcp-server';
+const MCP_OAUTH_SERVER_URL = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
+const API_KEY_SIGNUP_URL = 'https://www.firecrawl.dev/app/api-keys';
+
 function withoutTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
 }
@@ -225,13 +240,10 @@ function getOAuthProtectedResourceMetadataUrl(profile: ServerProfile): string {
   return profile.id === 'full' ? base : `${base}${resource.pathname}`;
 }
 
-function escapeWWWAuthenticateValue(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
-
 function createOAuthChallengeResponse(
   error: unknown,
-  profile: ServerProfile
+  profile: ServerProfile,
+  details: Record<string, unknown> = {}
 ): Response | undefined {
   if (!isMcpOAuthEnabled()) {
     return undefined;
@@ -253,6 +265,7 @@ function createOAuthChallengeResponse(
     JSON.stringify({
       error: 'invalid_token',
       error_description: errorMessage,
+      ...details,
     }),
     {
       headers: {
@@ -264,11 +277,29 @@ function createOAuthChallengeResponse(
   );
 }
 
-function createInvalidCredentialResponse(error: InvalidFirecrawlCredentialError): Response {
+function createInvalidCredentialResponse(_error: InvalidFirecrawlCredentialError): Response {
+  const recovery = invalidApiKeyRecoveryPayload();
   return new Response(
     JSON.stringify({
       error: 'invalid_api_key',
-      error_description: error.message,
+      error_description: recovery.message,
+      ...recovery,
+    }),
+    {
+      headers: { 'Content-Type': 'application/json' },
+      status: 401,
+    }
+  );
+}
+
+function createInvalidOAuthRecoveryResponse(
+  recovery: Record<string, unknown> & { message: string }
+): Response {
+  return new Response(
+    JSON.stringify({
+      error: 'invalid_token',
+      error_description: recovery.message,
+      ...recovery,
     }),
     {
       headers: { 'Content-Type': 'application/json' },
@@ -324,6 +355,13 @@ class InvalidFirecrawlCredentialError extends Error {
   constructor() {
     super('The supplied Firecrawl credential is invalid or revoked. Replace it and retry.');
     this.name = 'InvalidFirecrawlCredentialError';
+  }
+}
+
+class InvalidOAuthCredentialError extends Error {
+  constructor() {
+    super('Invalid OAuth access token');
+    this.name = 'InvalidOAuthCredentialError';
   }
 }
 
@@ -433,7 +471,7 @@ async function resolveCredentialFromHeaders(
   }
   if (!data.active || !data.api_key) {
     if (isFirecrawlOAuthAccessToken(token)) {
-      throw new Error('Invalid OAuth access token');
+      throw new InvalidOAuthCredentialError();
     }
     return { invalid: true };
   }
@@ -668,6 +706,15 @@ function makeAuthenticate(profile: ServerProfile) {
         emitLegacyKeyPathTelemetry(profile, request, 'rejected');
         if (error instanceof InvalidFirecrawlCredentialError) {
           throw createInvalidCredentialResponse(error);
+        }
+        if (error instanceof InvalidOAuthCredentialError) {
+          const recovery = invalidOAuthRecoveryPayload(profile);
+          const oauthChallenge = createOAuthChallengeResponse(
+            new Error(recovery.message),
+            profile,
+            recovery
+          );
+          throw oauthChallenge ?? createInvalidOAuthRecoveryResponse(recovery);
         }
         if (error instanceof CredentialValidationUnavailableError) {
           throw new Response(
@@ -962,6 +1009,97 @@ function isLocalKeylessStartup(): boolean {
   );
 }
 
+// Shared security-boundary phrasing: the API key must never pass through
+// chat/MCP URLs, and any recovery only takes effect on the next session/run.
+// Keep these as the single source of truth so every recovery/guidance string
+// that needs them composes from here instead of re-typing the wording.
+const NEVER_SHARE_API_KEY_SENTENCE =
+  'Never ask for, accept, or put an API key in chat or in an MCP URL.';
+const RETRY_AFTER_CONFIRM_SUFFIX =
+  'start a new client session or run and retry the original task.';
+
+const HUMAN_CONNECTION_GUIDANCE =
+  `A human or operator must complete the connection because this session cannot reconnect Firecrawl itself. Ask the human to choose before changing anything: (1) in the MCP client's settings, update or replace the existing Firecrawl server entry so its URL is ${MCP_OAUTH_SERVER_URL}, then complete sign-in through the client. That URL is a client configuration value, not a page to open in a browser. Do not add a second Firecrawl server or change configuration without approval; or (2) have an operator create an API key at ${API_KEY_SIGNUP_URL} and configure it in the client or secret manager outside this chat. ${NEVER_SHARE_API_KEY_SENTENCE} After the human confirms setup, ${RETRY_AFTER_CONFIRM_SUFFIX} Connection guide: ${MCP_CONNECTION_GUIDE_URL}`;
+
+const ACCOUNT_ONLY_TOOL_GUIDANCE =
+  `This tool needs a connected Firecrawl account. Search, Scrape, and Parse remain available, so continue with those if they can complete the task. Only if this task specifically requires this tool, tell the user that a human must update the existing Firecrawl connection using ${MCP_CONNECTION_GUIDE_URL}. Never ask for or accept an API key in chat. After setup, start a new client session and retry.`;
+
+const HUMAN_RECONNECT_ACCOUNT_ACTION = {
+  kind: 'human_reconnect_account',
+  actor: 'human',
+  requires_user_consent: true,
+  existing_server_only: true,
+  server_url: MCP_OAUTH_SERVER_URL,
+  open_server_url_in_browser: false,
+  docs_url: MCP_CONNECTION_GUIDE_URL,
+} as const;
+
+const OPERATOR_CONFIGURE_API_KEY_ACTION = {
+  kind: 'operator_configure_api_key',
+  actor: 'human_or_operator',
+  requires_user_consent: true,
+  credential_delivery: 'outside_agent_chat',
+  signup_url: API_KEY_SIGNUP_URL,
+} as const;
+
+const HUMAN_CONNECTION_ACTIONS = [
+  HUMAN_RECONNECT_ACCOUNT_ACTION,
+  OPERATOR_CONFIGURE_API_KEY_ACTION,
+] as const;
+
+// Shared shape for the two "existing connection is invalid" recovery
+// payloads below: same code/auth_mode/docs_url/next_actions fields, only the
+// message and next_actions ordering differ per credential type.
+function connectionRecoveryPayload(params: {
+  code: string;
+  authMode: string;
+  message: string;
+  nextActions: readonly unknown[];
+}): Record<string, unknown> & { message: string } {
+  return {
+    code: params.code,
+    auth_mode: params.authMode,
+    message: params.message,
+    docs_url: MCP_CONNECTION_GUIDE_URL,
+    next_actions: params.nextActions,
+  };
+}
+
+function invalidApiKeyRecoveryPayload(): Record<string, unknown> & { message: string } {
+  return connectionRecoveryPayload({
+    code: 'CREDENTIAL_INVALID',
+    authMode: 'api_key',
+    message:
+      `The Firecrawl API key configured for this server is invalid or revoked. Ask a human or operator to replace it in this existing server configuration or secret manager outside this chat. ${NEVER_SHARE_API_KEY_SENTENCE} After the human confirms the change, ${RETRY_AFTER_CONFIRM_SUFFIX}`,
+    nextActions: [OPERATOR_CONFIGURE_API_KEY_ACTION],
+  });
+}
+
+function invalidOAuthRecoveryPayload(
+  profile: ServerProfile
+): Record<string, unknown> & { message: string } {
+  // The reconnect-through-this-client message is only true when OAuth is
+  // globally enabled AND this profile advertises it; otherwise fall through to
+  // the guidance for servers that do not start account sign-in.
+  if (isMcpOAuthEnabled() && profile.advertiseOAuth) {
+    return connectionRecoveryPayload({
+      code: 'OAUTH_CONNECTION_INVALID',
+      authMode: 'oauth',
+      message:
+        `This Firecrawl account connection is no longer valid. Ask the human to sign in again through this MCP client's account-connection flow. Do not add a second Firecrawl server or open the MCP server URL directly in a browser. After sign-in, ${RETRY_AFTER_CONFIRM_SUFFIX}`,
+      nextActions: [HUMAN_RECONNECT_ACCOUNT_ACTION, OPERATOR_CONFIGURE_API_KEY_ACTION],
+    });
+  }
+
+  return connectionRecoveryPayload({
+    code: 'OAUTH_CONNECTION_INVALID',
+    authMode: 'oauth',
+    message:
+      `This Firecrawl account connection is no longer valid, and this server does not start account sign-in. Ask the human to choose before changing anything: (1) have an operator create a Firecrawl API key at ${API_KEY_SIGNUP_URL} and configure it on this existing server outside this chat; or (2) update this existing server's URL to ${MCP_OAUTH_SERVER_URL} and complete sign-in through the MCP client. That URL is a client configuration value, not a page to open in a browser. ${NEVER_SHARE_API_KEY_SENTENCE} After the human confirms the change, ${RETRY_AFTER_CONFIRM_SUFFIX}`,
+    nextActions: [OPERATOR_CONFIGURE_API_KEY_ACTION, HUMAN_RECONNECT_ACCOUNT_ACTION],
+  });
+}
+
 function recoveryPayload(
   code: string,
   requestId: string = randomUUID(),
@@ -974,40 +1112,38 @@ function recoveryPayload(
   const isKeylessAccessUnavailable = code === 'KEYLESS_ACCESS_NOT_AVAILABLE';
   const isKeylessEligibilityUnavailable =
     code === 'KEYLESS_ELIGIBILITY_UNAVAILABLE';
-  const oauthUrl = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
   return {
     code,
     request_id: requestId,
     auth_mode: code === 'CREDENTIAL_INVALID' ? 'credential_error' : 'keyless',
     message:
       code === 'CREDENTIAL_INVALID'
-        ? `The supplied Firecrawl credential is invalid or revoked. Reconnect the account via OAuth (https://mcp.firecrawl.dev/v2/mcp-oauth) or create a new API key at https://www.firecrawl.dev/signin and send it as Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.`
+        ? `The supplied Firecrawl credential is invalid or revoked. ${HUMAN_CONNECTION_GUIDANCE}`
         : isQuotaExhausted
-          ? `The free daily limit for this network has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue now, connect a Firecrawl account via OAuth (https://mcp.firecrawl.dev/v2/mcp-oauth) or create a free API key at https://www.firecrawl.dev/signin and send it as Authorization: Bearer <FIRECRAWL_API_KEY>.`
+          ? `The free daily limit for this network has been reached${retryAfterSeconds ? `; try again in about ${retryAfterSeconds} seconds` : ''}. To continue now: ${HUMAN_CONNECTION_GUIDANCE}`
           : isToolUnavailable
-            ? 'The free tier includes Search, Scrape, and Parse. This tool needs a connected account; Search, Scrape, and Parse still work, so no action is required.'
+            ? ACCOUNT_ONLY_TOOL_GUIDANCE
             : isKeylessAccessUnavailable
-              ? `Anonymous keyless access is unavailable for this request. To continue, connect a Firecrawl account via OAuth (https://mcp.firecrawl.dev/v2/mcp-oauth) or create a free API key at https://www.firecrawl.dev/signin and send it as Authorization: Bearer <FIRECRAWL_API_KEY>.`
+              ? `Anonymous keyless access is unavailable for this request. To continue: ${HUMAN_CONNECTION_GUIDANCE}`
               : isKeylessEligibilityUnavailable
                 ? 'The anonymous keyless eligibility check is temporarily unavailable. Retry shortly.'
-              : `This tool requires a Firecrawl account or API key. Connect an account via OAuth (https://mcp.firecrawl.dev/v2/mcp-oauth) or create a free API key at https://www.firecrawl.dev/signin and send it as Authorization: Bearer <FIRECRAWL_API_KEY>, then retry.`,
+              : `This tool requires a Firecrawl account or API key. ${HUMAN_CONNECTION_GUIDANCE}`,
     ...(isKeylessAccessUnavailable
       ? {}
       : { available_tools: [...KEYLESS_TOOL_NAMES] }),
-    docs_url: 'https://docs.firecrawl.dev/mcp-server',
+    docs_url: MCP_CONNECTION_GUIDE_URL,
     ...(retryAfterSeconds ? { retry_after_seconds: retryAfterSeconds } : {}),
     next_actions: isKeylessEligibilityUnavailable
       ? [{ kind: 'retry_later', after_seconds: 30 }]
       : isQuotaExhausted || isKeylessAccessUnavailable
-      ? [
-          { kind: 'connect_oauth', url: oauthUrl, client_commands: [{ client: 'claude-code', command: 'claude mcp add --transport http firecrawl https://mcp.firecrawl.dev/v2/mcp-oauth' }] },
-          { kind: 'configure_api_key', header: 'Authorization: Bearer <FIRECRAWL_API_KEY>' },
-        ]
+      ? HUMAN_CONNECTION_ACTIONS
       : isToolUnavailable
-        ? [{ kind: 'continue_keyless', tools: [...KEYLESS_TOOL_NAMES] }]
+        ? [
+            { kind: 'continue_keyless', tools: [...KEYLESS_TOOL_NAMES] },
+            ...HUMAN_CONNECTION_ACTIONS,
+          ]
         : [
-            { kind: 'connect_oauth', url: oauthUrl },
-            { kind: 'configure_api_key', header: 'Authorization: Bearer <FIRECRAWL_API_KEY>' },
+            ...HUMAN_CONNECTION_ACTIONS,
           ],
   };
 }

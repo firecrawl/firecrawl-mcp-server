@@ -923,9 +923,74 @@ test('HTTP cloud keyless transport rejects inactive OAuth without advertising lo
   assert.match(wwwAuthenticate, /error="invalid_token"/);
   const body = await toolCall.json();
   assert.equal(body.error, 'invalid_token');
+  assert.equal(body.code, 'OAUTH_CONNECTION_INVALID');
+  assert.equal(body.auth_mode, 'oauth');
+  assert.match(body.error_description, /server does not start account sign-in/);
+  assert.match(body.error_description, /client configuration value, not a page to open/);
+  assert.doesNotMatch(body.error_description, /Authorization: Bearer/);
+  assert.deepEqual(body.next_actions, [
+    {
+      kind: 'operator_configure_api_key',
+      actor: 'human_or_operator',
+      requires_user_consent: true,
+      credential_delivery: 'outside_agent_chat',
+      signup_url: 'https://www.firecrawl.dev/app/api-keys',
+    },
+    {
+      kind: 'human_reconnect_account',
+      actor: 'human',
+      requires_user_consent: true,
+      existing_server_only: true,
+      server_url: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+      open_server_url_in_browser: false,
+      docs_url: 'https://docs.firecrawl.dev/mcp-server',
+    },
+  ]);
   // The failed introspection must NOT leak downstream as an API call.
   assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
   assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('HTTP transport returns invalid OAuth recovery without an OAuth challenge when OAuth is disabled', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'false',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    HOST: '127.0.0.1',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+
+  await waitForHealth(port, child);
+
+  const response = await httpToolCall(port, {
+    id: 'invalid-oauth-without-challenge',
+    headers: { authorization: 'Bearer fco_invalid_token' },
+    params: {
+      arguments: { limit: 1, query: 'example domain' },
+      name: 'firecrawl_search',
+    },
+  });
+
+  assert.equal(response.status, 401);
+  assert.equal(response.headers.get('www-authenticate'), null);
+  const body = await response.json();
+  assert.equal(body.error, 'invalid_token');
+  assert.equal(body.code, 'OAUTH_CONNECTION_INVALID');
+  assert.equal(body.auth_mode, 'oauth');
+  assert.match(body.error_description, /account connection is no longer valid/);
+  assert.match(
+    body.error_description,
+    /Never ask for, accept, or put an API key in chat/
+  );
+  assert.equal(backend.requests.some((request) => request.url === '/v2/search'), false);
 });
 
 test('HTTP cloud transport accepts the x-firecrawl-api-key header', async (t) => {
@@ -1082,12 +1147,37 @@ test('HTTP cloud keyless continues with free-tier tools when an account-only too
       kind: 'continue_keyless',
       tools: ['firecrawl_scrape', 'firecrawl_search', 'firecrawl_parse'],
     },
+    {
+      kind: 'human_reconnect_account',
+      actor: 'human',
+      requires_user_consent: true,
+      existing_server_only: true,
+      server_url: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+      open_server_url_in_browser: false,
+      docs_url: 'https://docs.firecrawl.dev/mcp-server',
+    },
+    {
+      kind: 'operator_configure_api_key',
+      actor: 'human_or_operator',
+      requires_user_consent: true,
+      credential_delivery: 'outside_agent_chat',
+      signup_url: 'https://www.firecrawl.dev/app/api-keys',
+    },
   ]);
   assert.deepEqual(result.structuredContent.available_tools, [
     'firecrawl_scrape',
     'firecrawl_search',
     'firecrawl_parse',
   ]);
+  assert.match(result.content[0].text, /Search, Scrape, and Parse remain available/);
+  assert.match(result.content[0].text, /continue with those if they can complete the task/);
+  assert.match(result.content[0].text, /Only if this task specifically requires this tool/);
+  assert.match(result.content[0].text, /https:\/\/docs\.firecrawl\.dev\/mcp-server/);
+  assert.match(result.content[0].text, /Never ask for or accept an API key in chat/);
+  assert.match(result.content[0].text, /new client session and retry/);
+  assert.doesNotMatch(result.content[0].text, /mcp\.firecrawl\.dev\/v2\/mcp-oauth/);
+  assert.doesNotMatch(result.content[0].text, /no action is required/);
+  assert.doesNotMatch(result.content[0].text, /Authorization: Bearer/);
   assert.equal(backend.requests.some((r) => r.url === '/v2/crawl'), false);
 });
 
@@ -1126,8 +1216,40 @@ test('HTTP cloud keyless keeps 429 recovery structured during API deploy skew', 
     const result = parseSseJson(await response.text()).result;
     assert.equal(result.isError, true, label);
     assert.equal(result.structuredContent.code, expectedCode, label);
-    assert.equal(result.structuredContent.next_actions[0].kind, 'connect_oauth', label);
-    if (label === 'with-reason') assert.equal(result.structuredContent.retry_after_seconds, 42);
+    assert.deepEqual(result.structuredContent.next_actions, [
+      {
+        kind: 'human_reconnect_account',
+        actor: 'human',
+        requires_user_consent: true,
+        existing_server_only: true,
+        server_url: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+        open_server_url_in_browser: false,
+        docs_url:
+          'https://docs.firecrawl.dev/mcp-server',
+      },
+      {
+        kind: 'operator_configure_api_key',
+        actor: 'human_or_operator',
+        requires_user_consent: true,
+        credential_delivery: 'outside_agent_chat',
+        signup_url: 'https://www.firecrawl.dev/app/api-keys',
+      },
+    ], label);
+    assert.match(result.content[0].text, /Ask the human to choose/, label);
+    assert.match(result.content[0].text, /update or replace the existing Firecrawl server entry/, label);
+    assert.match(result.content[0].text, /client configuration value, not a page to open/, label);
+    assert.match(result.content[0].text, /outside this chat/, label);
+    assert.match(result.content[0].text, /new client session or run/, label);
+    // The OAuth endpoint must be present and explicitly framed as configuration.
+    // This is the inverse of the earlier no-endpoint recovery contract.
+    assert.match(result.content[0].text, /mcp\.firecrawl\.dev\/v2\/mcp-oauth/, label);
+    assert.match(result.content[0].text, /docs\.firecrawl\.dev\/mcp-server(?:\s|$)/, label);
+    assert.doesNotMatch(result.content[0].text, /Authorization: Bearer/, label);
+    assert.doesNotMatch(result.content[0].text, /claude mcp add/, label);
+    if (label === 'with-reason') {
+      assert.equal(result.structuredContent.retry_after_seconds, 42);
+      assert.match(result.content[0].text, /about 42 seconds/);
+    }
     await cleanup();
   }
 });
@@ -1290,7 +1412,8 @@ test('HTTP cloud keyless rejects multi-hop or malformed forwarded IP identity', 
     const result = parseSseJson(await response.text()).result;
     assert.equal(result.isError, true, xff);
     assert.equal(result.structuredContent.code, 'KEYLESS_ACCESS_NOT_AVAILABLE', xff);
-    assert.equal(result.structuredContent.next_actions[0].kind, 'connect_oauth', xff);
+    assert.equal(result.structuredContent.next_actions[0].kind, 'human_reconnect_account', xff);
+    assert.equal(result.structuredContent.next_actions[0].actor, 'human', xff);
     assert.equal(result.structuredContent.available_tools, undefined, xff);
   }
   assert.equal(backend.requests.length, 0, JSON.stringify(backend.requests));
@@ -1443,7 +1566,8 @@ test('HTTP cloud transport returns recovery when keyless identity has no client 
   const result = parseSseJson(await toolCall.text()).result;
   assert.equal(result.isError, true);
   assert.equal(result.structuredContent.code, 'KEYLESS_ACCESS_NOT_AVAILABLE');
-  assert.equal(result.structuredContent.next_actions[0].kind, 'connect_oauth');
+  assert.equal(result.structuredContent.next_actions[0].kind, 'human_reconnect_account');
+  assert.equal(result.structuredContent.next_actions[0].actor, 'human');
   assert.equal(result.structuredContent.available_tools, undefined);
   assertServerGeneratedRequestId(result.structuredContent, [
     'client-json-rpc-id',
@@ -1538,6 +1662,49 @@ test('account endpoint challenges anonymous clients and accepts API keys', async
   );
   assert.ok(names.includes('firecrawl_crawl'));
   assert.ok(names.length > 3);
+});
+
+test('account endpoint keeps OAuth discovery and gives safe re-auth guidance for inactive OAuth', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await httpToolCall(port, {
+    endpoint: '/v2/mcp-oauth',
+    headers: { authorization: 'Bearer fco_invalid_account_token' },
+    id: 'invalid-account-token',
+    params: {
+      arguments: { limit: 1, query: 'example domain' },
+      name: 'firecrawl_search',
+    },
+  });
+
+  assert.equal(response.status, 401);
+  const wwwAuthenticate = response.headers.get('www-authenticate') ?? '';
+  assert.match(wwwAuthenticate, /resource_metadata=/);
+  assert.match(wwwAuthenticate, /oauth-protected-resource\/v2\/mcp-oauth/);
+  const body = await response.json();
+  assert.equal(body.error, 'invalid_token');
+  assert.equal(body.code, 'OAUTH_CONNECTION_INVALID');
+  assert.equal(body.auth_mode, 'oauth');
+  assert.match(body.error_description, /sign in again through this MCP client's account-connection flow/);
+  assert.match(body.error_description, /start a new client session or run/);
+  assert.equal(body.next_actions[0].kind, 'human_reconnect_account');
+  assert.equal(body.next_actions[0].requires_user_consent, true);
+  assert.equal(body.next_actions[1].kind, 'operator_configure_api_key');
+  assert.equal(backend.requests.some((request) => request.url === '/v2/search'), false);
 });
 
 test('account readiness requires the managed OAuth delegation secret', async (t) => {
@@ -1914,6 +2081,24 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
   });
   assert.equal(replay.status, 401);
 
+  const invalidApiKeyRecovery = {
+    error: 'invalid_api_key',
+    error_description:
+      'The Firecrawl API key configured for this server is invalid or revoked. Ask a human or operator to replace it in this existing server configuration or secret manager outside this chat. Never ask for, accept, or put an API key in chat or in an MCP URL. After the human confirms the change, start a new client session or run and retry the original task.',
+    code: 'CREDENTIAL_INVALID',
+    auth_mode: 'api_key',
+    message:
+      'The Firecrawl API key configured for this server is invalid or revoked. Ask a human or operator to replace it in this existing server configuration or secret manager outside this chat. Never ask for, accept, or put an API key in chat or in an MCP URL. After the human confirms the change, start a new client session or run and retry the original task.',
+    docs_url: 'https://docs.firecrawl.dev/mcp-server',
+    next_actions: [{
+      kind: 'operator_configure_api_key',
+      actor: 'human_or_operator',
+      requires_user_consent: true,
+      credential_delivery: 'outside_agent_chat',
+      signup_url: 'https://www.firecrawl.dev/app/api-keys',
+    }],
+  };
+
   const invalidList = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({ id: 2, jsonrpc: '2.0', method: 'tools/list', params: {} }),
     headers: {
@@ -1925,11 +2110,7 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
   });
   assert.equal(invalidList.status, 401);
   assert.equal(invalidList.headers.has('www-authenticate'), false);
-  assert.deepEqual(await invalidList.json(), {
-    error: 'invalid_api_key',
-    error_description:
-      'The supplied Firecrawl credential is invalid or revoked. Replace it and retry.',
-  });
+  assert.deepEqual(await invalidList.json(), invalidApiKeyRecovery);
 
   const invalidCall = await httpToolCall(port, {
     headers: {
@@ -1941,11 +2122,7 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
   });
   assert.equal(invalidCall.status, 401);
   assert.equal(invalidCall.headers.has('www-authenticate'), false);
-  assert.deepEqual(await invalidCall.json(), {
-    error: 'invalid_api_key',
-    error_description:
-      'The supplied Firecrawl credential is invalid or revoked. Replace it and retry.',
-  });
+  assert.deepEqual(await invalidCall.json(), invalidApiKeyRecovery);
 
   const invalidLegacyPath = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({ id: 4, jsonrpc: '2.0', method: 'tools/list', params: {} }),
@@ -1959,11 +2136,7 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
   });
   assert.equal(invalidLegacyPath.status, 401);
   assert.equal(invalidLegacyPath.headers.has('www-authenticate'), false);
-  assert.deepEqual(await invalidLegacyPath.json(), {
-    error: 'invalid_api_key',
-    error_description:
-      'The supplied Firecrawl credential is invalid or revoked. Replace it and retry.',
-  });
+  assert.deepEqual(await invalidLegacyPath.json(), invalidApiKeyRecovery);
   await delay(25);
   const rejectedTelemetry = stdout
     .split(/\r?\n/)
