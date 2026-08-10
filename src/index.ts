@@ -1004,8 +1004,17 @@ const MCP_CONNECTION_GUIDE_URL =
 const MCP_OAUTH_SERVER_URL = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
 const API_KEY_SIGNUP_URL = 'https://www.firecrawl.dev/app/api-keys';
 
+// Shared security-boundary phrasing: the API key must never pass through
+// chat/MCP URLs, and any recovery only takes effect on the next session/run.
+// Keep these as the single source of truth so every recovery/guidance string
+// that needs them composes from here instead of re-typing the wording.
+const NEVER_SHARE_API_KEY_SENTENCE =
+  'Never ask for, accept, or put an API key in chat or in an MCP URL.';
+const RETRY_AFTER_CONFIRM_SUFFIX =
+  'start a new client session or run and retry the original task.';
+
 const HUMAN_CONNECTION_GUIDANCE =
-  `A human or operator must complete the connection because this session cannot reconnect Firecrawl itself. Ask the human to choose before changing anything: (1) in the MCP client's settings, update or replace the existing Firecrawl server entry so its URL is ${MCP_OAUTH_SERVER_URL}, then complete sign-in through the client. That URL is a client configuration value, not a page to open in a browser. Do not add a second Firecrawl server or change configuration without approval; or (2) have an operator create an API key at ${API_KEY_SIGNUP_URL} and configure it in the client or secret manager outside this chat. Never ask for, accept, or put an API key in chat or in an MCP URL. After the human confirms setup, start a new client session or run and retry the original task. Connection guide: ${MCP_CONNECTION_GUIDE_URL}`;
+  `A human or operator must complete the connection because this session cannot reconnect Firecrawl itself. Ask the human to choose before changing anything: (1) in the MCP client's settings, update or replace the existing Firecrawl server entry so its URL is ${MCP_OAUTH_SERVER_URL}, then complete sign-in through the client. That URL is a client configuration value, not a page to open in a browser. Do not add a second Firecrawl server or change configuration without approval; or (2) have an operator create an API key at ${API_KEY_SIGNUP_URL} and configure it in the client or secret manager outside this chat. ${NEVER_SHARE_API_KEY_SENTENCE} After the human confirms setup, ${RETRY_AFTER_CONFIRM_SUFFIX} Connection guide: ${MCP_CONNECTION_GUIDE_URL}`;
 
 const ACCOUNT_ONLY_TOOL_GUIDANCE =
   `This tool needs a connected Firecrawl account. Search, Scrape, and Parse remain available, so continue with those if they can complete the task. Only if this task specifically requires this tool, tell the user that a human must update the existing Firecrawl connection using ${MCP_CONNECTION_GUIDE_URL}. Never ask for or accept an API key in chat. After setup, start a new client session and retry.`;
@@ -1033,39 +1042,54 @@ const HUMAN_CONNECTION_ACTIONS = [
   OPERATOR_CONFIGURE_API_KEY_ACTION,
 ] as const;
 
-function invalidApiKeyRecoveryPayload(): Record<string, unknown> & { message: string } {
+// Shared shape for the two "existing connection is invalid" recovery
+// payloads below: same code/auth_mode/docs_url/next_actions fields, only the
+// message and next_actions ordering differ per credential type.
+function connectionRecoveryPayload(params: {
+  code: string;
+  authMode: string;
+  message: string;
+  nextActions: readonly unknown[];
+}): Record<string, unknown> & { message: string } {
   return {
-    code: 'CREDENTIAL_INVALID',
-    auth_mode: 'api_key',
-    message:
-      'The Firecrawl API key configured for this server is invalid or revoked. Ask a human or operator to replace it in this existing server configuration or secret manager outside this chat. Never ask for, accept, or put an API key in chat or in an MCP URL. After the human confirms the change, start a new client session or run and retry the original task.',
+    code: params.code,
+    auth_mode: params.authMode,
+    message: params.message,
     docs_url: MCP_CONNECTION_GUIDE_URL,
-    next_actions: [OPERATOR_CONFIGURE_API_KEY_ACTION],
+    next_actions: params.nextActions,
   };
+}
+
+function invalidApiKeyRecoveryPayload(): Record<string, unknown> & { message: string } {
+  return connectionRecoveryPayload({
+    code: 'CREDENTIAL_INVALID',
+    authMode: 'api_key',
+    message:
+      `The Firecrawl API key configured for this server is invalid or revoked. Ask a human or operator to replace it in this existing server configuration or secret manager outside this chat. ${NEVER_SHARE_API_KEY_SENTENCE} After the human confirms the change, ${RETRY_AFTER_CONFIRM_SUFFIX}`,
+    nextActions: [OPERATOR_CONFIGURE_API_KEY_ACTION],
+  });
 }
 
 function invalidOAuthRecoveryPayload(
   profile: ServerProfile
 ): Record<string, unknown> & { message: string } {
   if (profile.advertiseOAuth) {
-    return {
+    return connectionRecoveryPayload({
       code: 'OAUTH_CONNECTION_INVALID',
-      auth_mode: 'oauth',
+      authMode: 'oauth',
       message:
-        "This Firecrawl account connection is no longer valid. Ask the human to sign in again through this MCP client's account-connection flow. Do not add a second Firecrawl server or open the MCP server URL directly in a browser. After sign-in, start a new client session or run and retry the original task.",
-      docs_url: MCP_CONNECTION_GUIDE_URL,
-      next_actions: [HUMAN_RECONNECT_ACCOUNT_ACTION, OPERATOR_CONFIGURE_API_KEY_ACTION],
-    };
+        `This Firecrawl account connection is no longer valid. Ask the human to sign in again through this MCP client's account-connection flow. Do not add a second Firecrawl server or open the MCP server URL directly in a browser. After sign-in, ${RETRY_AFTER_CONFIRM_SUFFIX}`,
+      nextActions: [HUMAN_RECONNECT_ACCOUNT_ACTION, OPERATOR_CONFIGURE_API_KEY_ACTION],
+    });
   }
 
-  return {
+  return connectionRecoveryPayload({
     code: 'OAUTH_CONNECTION_INVALID',
-    auth_mode: 'oauth',
+    authMode: 'oauth',
     message:
-      `This Firecrawl account connection is no longer valid, and this server does not start account sign-in. Ask the human to choose before changing anything: (1) have an operator create a Firecrawl API key at ${API_KEY_SIGNUP_URL} and configure it on this existing server outside this chat; or (2) update this existing server's URL to ${MCP_OAUTH_SERVER_URL} and complete sign-in through the MCP client. That URL is a client configuration value, not a page to open in a browser. Never ask for, accept, or put an API key in chat or in an MCP URL. After the human confirms the change, start a new client session or run and retry the original task.`,
-    docs_url: MCP_CONNECTION_GUIDE_URL,
-    next_actions: [OPERATOR_CONFIGURE_API_KEY_ACTION, HUMAN_RECONNECT_ACCOUNT_ACTION],
-  };
+      `This Firecrawl account connection is no longer valid, and this server does not start account sign-in. Ask the human to choose before changing anything: (1) have an operator create a Firecrawl API key at ${API_KEY_SIGNUP_URL} and configure it on this existing server outside this chat; or (2) update this existing server's URL to ${MCP_OAUTH_SERVER_URL} and complete sign-in through the MCP client. That URL is a client configuration value, not a page to open in a browser. ${NEVER_SHARE_API_KEY_SENTENCE} After the human confirms the change, ${RETRY_AFTER_CONFIRM_SUFFIX}`,
+    nextActions: [OPERATOR_CONFIGURE_API_KEY_ACTION, HUMAN_RECONNECT_ACCOUNT_ACTION],
+  });
 }
 
 function recoveryPayload(
