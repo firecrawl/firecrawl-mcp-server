@@ -1073,7 +1073,10 @@ function invalidApiKeyRecoveryPayload(): Record<string, unknown> & { message: st
 function invalidOAuthRecoveryPayload(
   profile: ServerProfile
 ): Record<string, unknown> & { message: string } {
-  if (profile.advertiseOAuth) {
+  // The reconnect-through-this-client message is only true when OAuth is
+  // globally enabled AND this profile advertises it; otherwise fall through to
+  // the guidance for servers that do not start account sign-in.
+  if (isMcpOAuthEnabled() && profile.advertiseOAuth) {
     return connectionRecoveryPayload({
       code: 'OAUTH_CONNECTION_INVALID',
       authMode: 'oauth',
