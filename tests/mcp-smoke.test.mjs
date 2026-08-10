@@ -2081,24 +2081,11 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
   });
   assert.equal(replay.status, 401);
 
-  const invalidApiKeyRecovery = {
-    error: 'invalid_api_key',
-    error_description:
-      'The Firecrawl API key configured for this server is invalid or revoked. Ask a human or operator to replace it in this existing server configuration or secret manager outside this chat. Never ask for, accept, or put an API key in chat or in an MCP URL. After the human confirms the change, start a new client session or run and retry the original task.',
-    code: 'CREDENTIAL_INVALID',
-    auth_mode: 'api_key',
-    message:
-      'The Firecrawl API key configured for this server is invalid or revoked. Ask a human or operator to replace it in this existing server configuration or secret manager outside this chat. Never ask for, accept, or put an API key in chat or in an MCP URL. After the human confirms the change, start a new client session or run and retry the original task.',
-    docs_url: 'https://docs.firecrawl.dev/mcp-server',
-    next_actions: [{
-      kind: 'operator_configure_api_key',
-      actor: 'human_or_operator',
-      requires_user_consent: true,
-      credential_delivery: 'outside_agent_chat',
-      signup_url: 'https://www.firecrawl.dev/app/api-keys',
-    }],
-  };
-
+  // On the keyless+API-key endpoint an invalid key is now agent-legible: the
+  // session connects (200) and lists tools, so an MCP client (which commonly
+  // stops after a 401 at tools/list) proceeds; any tool call then returns the
+  // CREDENTIAL_INVALID recovery payload as a 200 isError result. A raw 401 with
+  // the payload in the body was unreachable to the model.
   const invalidList = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({ id: 2, jsonrpc: '2.0', method: 'tools/list', params: {} }),
     headers: {
@@ -2108,9 +2095,12 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
     },
     method: 'POST',
   });
-  assert.equal(invalidList.status, 401);
-  assert.equal(invalidList.headers.has('www-authenticate'), false);
-  assert.deepEqual(await invalidList.json(), invalidApiKeyRecovery);
+  assert.equal(invalidList.status, 200);
+  const invalidListJson = parseSseJson(await invalidList.text());
+  assert.ok(
+    (invalidListJson.result?.tools?.length ?? 0) > 0,
+    'invalid key still lists tools so the client proceeds to a callable tool'
+  );
 
   const invalidCall = await httpToolCall(port, {
     headers: {
@@ -2120,9 +2110,22 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
     id: 3,
     params: { arguments: { query: 'x' }, name: 'firecrawl_search' },
   });
-  assert.equal(invalidCall.status, 401);
-  assert.equal(invalidCall.headers.has('www-authenticate'), false);
-  assert.deepEqual(await invalidCall.json(), invalidApiKeyRecovery);
+  assert.equal(invalidCall.status, 200);
+  const invalidCallJson = parseSseJson(await invalidCall.text());
+  const invalidRecovery = invalidCallJson.result.structuredContent;
+  assert.equal(invalidCallJson.result.isError, true);
+  assert.equal(invalidRecovery.code, 'CREDENTIAL_INVALID');
+  assert.match(invalidRecovery.message, /invalid or revoked/);
+  // The consent-first boundary must survive: never route the key through chat.
+  assert.match(
+    invalidRecovery.message,
+    /Never ask for, accept, or put an API key in chat/
+  );
+  // Recovery offers a concrete next action the human/operator can take.
+  assert.ok(
+    Array.isArray(invalidRecovery.next_actions) && invalidRecovery.next_actions.length > 0,
+    'recovery payload carries at least one next_action'
+  );
 
   const invalidLegacyPath = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({ id: 4, jsonrpc: '2.0', method: 'tools/list', params: {} }),
@@ -2134,9 +2137,9 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
     },
     method: 'POST',
   });
-  assert.equal(invalidLegacyPath.status, 401);
-  assert.equal(invalidLegacyPath.headers.has('www-authenticate'), false);
-  assert.deepEqual(await invalidLegacyPath.json(), invalidApiKeyRecovery);
+  assert.equal(invalidLegacyPath.status, 200);
+  const invalidLegacyJson = parseSseJson(await invalidLegacyPath.text());
+  assert.ok((invalidLegacyJson.result?.tools?.length ?? 0) > 0);
   await delay(25);
   const rejectedTelemetry = stdout
     .split(/\r?\n/)

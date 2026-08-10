@@ -535,11 +535,25 @@ async function authenticateRequest(
   if (process.env.CLOUD_SERVICE === 'true') {
     if (!headerCred && !managedCred) {
       if (resolved?.invalid) {
-        // A supplied credential must never silently downgrade a hosted session
-        // to an empty tool list. MCP clients commonly stop after tools/list, so
-        // the old in-band recovery payload was unreachable for invalid header
-        // credentials. Keep unauthenticated requests on the keyless path; only
-        // reject requests that actually supplied an invalid credential.
+        // A supplied-but-invalid credential must reach the *agent*, not die as a
+        // transport 401. MCP clients treat a 401 at initialize/tools-list as
+        // "server unavailable" and never surface the response body to the model,
+        // so the recovery payload in that 401 was unreachable in a real session.
+        // On the keyless+API-key endpoint, admit the session flagged with
+        // credentialError: the connection succeeds, tools list, and every tool
+        // call returns the CREDENTIAL_INVALID recovery payload as a 200 isError
+        // result — the same agent-legible path keyless quota recovery uses. No
+        // credential is forwarded and no tool executes, so this grants zero
+        // functional access. OAuth-only surfaces (e.g. /v2/mcp-search) keep the
+        // hard 401 credential-rejection contract they already advertise.
+        if (profile.allowKeyless) {
+          return {
+            authType: 'api-key',
+            credentialError: 'CREDENTIAL_INVALID',
+            firecrawlApiKey: undefined,
+            keylessClientIp: extractClientIp(request),
+          };
+        }
         throw new InvalidFirecrawlCredentialError();
       }
       if (profile.allowKeyless) {
@@ -1232,8 +1246,14 @@ function guardHostedTool(
   return {
     ...tool,
     canList: (session: SessionData) =>
-      !session?.credentialError &&
-      (!isHostedKeylessSession(session) || keylessTool) &&
+      // A credentialError session lists the full tool surface it would have had
+      // with a valid key, so the client proceeds past tools/list and any tool the
+      // agent calls returns the CREDENTIAL_INVALID recovery payload (below). An
+      // empty list would leave MCP clients that stop after tools/list unable to
+      // ever surface the recovery guidance.
+      (session?.credentialError
+        ? true
+        : !isHostedKeylessSession(session) || keylessTool) &&
       (canList?.(session) ?? true),
     beforeValidate: async (args: unknown, session: SessionData) => {
       const code = session?.credentialError
