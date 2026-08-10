@@ -169,6 +169,20 @@ const DEFAULT_MCP_OAUTH_RESOURCE_URL = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
 const DEFAULT_MCP_SEARCH_RESOURCE_URL = 'https://mcp.firecrawl.dev/v2/mcp-search';
 const DEFAULT_MCP_SEARCH_ENDPOINT = '/v2/mcp-search';
 
+// Human-facing guidance values, co-located with the resource defaults above.
+// MCP_CONNECTION_GUIDE_URL stays a stable, neutral entry point even while the
+// docs routing evolves; do not bind recovery payloads to an auth-mode leaf
+// page. It is a human-facing guide, not an MCP endpoint.
+// MCP_OAUTH_SERVER_URL intentionally repeats the value of
+// DEFAULT_MCP_OAUTH_RESOURCE_URL without aliasing it: the resource constant is
+// protocol identity and can be overridden per deployment via
+// FIRECRAWL_MCP_RESOURCE_URL, while this one is the fixed value a human puts
+// in MCP client settings for the hosted service.
+const MCP_CONNECTION_GUIDE_URL =
+  'https://docs.firecrawl.dev/mcp-server';
+const MCP_OAUTH_SERVER_URL = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
+const API_KEY_SIGNUP_URL = 'https://www.firecrawl.dev/app/api-keys';
+
 function withoutTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
 }
@@ -994,15 +1008,6 @@ function isLocalKeylessStartup(): boolean {
     !normalizeHeader(process.env.FIRECRAWL_API_URL)
   );
 }
-
-// Keep this stable, neutral entry point even while the docs routing evolves;
-// do not bind recovery payloads to an auth-mode leaf page. This is a
-// human-facing guide, not an MCP endpoint. The OAuth endpoint below is named
-// separately and only as the value a human puts in MCP client settings.
-const MCP_CONNECTION_GUIDE_URL =
-  'https://docs.firecrawl.dev/mcp-server';
-const MCP_OAUTH_SERVER_URL = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
-const API_KEY_SIGNUP_URL = 'https://www.firecrawl.dev/app/api-keys';
 
 // Shared security-boundary phrasing: the API key must never pass through
 // chat/MCP URLs, and any recovery only takes effect on the next session/run.
