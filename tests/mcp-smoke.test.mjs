@@ -2126,6 +2126,14 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
     Array.isArray(invalidRecovery.next_actions) && invalidRecovery.next_actions.length > 0,
     'recovery payload carries at least one next_action'
   );
+  // No tool is actually callable in a credentialError session (the
+  // credentialError check gates execute() before the keyless branch), so the
+  // payload must not advertise keyless tools as available.
+  assert.equal(
+    invalidRecovery.available_tools,
+    undefined,
+    'CREDENTIAL_INVALID must not advertise tools the agent cannot call'
+  );
 
   const invalidLegacyPath = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({ id: 4, jsonrpc: '2.0', method: 'tools/list', params: {} }),

@@ -1142,7 +1142,12 @@ function recoveryPayload(
               : isKeylessEligibilityUnavailable
                 ? 'The anonymous keyless eligibility check is temporarily unavailable. Retry shortly.'
               : `This tool requires a Firecrawl account or API key. ${HUMAN_CONNECTION_GUIDANCE}`,
-    ...(isKeylessAccessUnavailable
+    // CREDENTIAL_INVALID sessions gate every tool call (including keyless
+    // tools) on the credentialError check before the keyless branch ever
+    // runs, so none of KEYLESS_TOOL_NAMES are actually callable here. Listing
+    // them as available_tools would send the agent into a retry loop against
+    // tools that will just return this same recovery payload.
+    ...(isKeylessAccessUnavailable || code === 'CREDENTIAL_INVALID'
       ? {}
       : { available_tools: [...KEYLESS_TOOL_NAMES] }),
     docs_url: MCP_CONNECTION_GUIDE_URL,
