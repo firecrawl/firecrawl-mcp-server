@@ -535,11 +535,25 @@ async function authenticateRequest(
   if (process.env.CLOUD_SERVICE === 'true') {
     if (!headerCred && !managedCred) {
       if (resolved?.invalid) {
-        // A supplied credential must never silently downgrade a hosted session
-        // to an empty tool list. MCP clients commonly stop after tools/list, so
-        // the old in-band recovery payload was unreachable for invalid header
-        // credentials. Keep unauthenticated requests on the keyless path; only
-        // reject requests that actually supplied an invalid credential.
+        // A supplied-but-invalid credential must reach the *agent*, not die as a
+        // transport 401. MCP clients treat a 401 at initialize/tools-list as
+        // "server unavailable" and never surface the response body to the model,
+        // so the recovery payload in that 401 was unreachable in a real session.
+        // On the keyless+API-key endpoint, admit the session flagged with
+        // credentialError: the connection succeeds, tools list, and every tool
+        // call returns the CREDENTIAL_INVALID recovery payload as a 200 isError
+        // result — the same agent-legible path keyless quota recovery uses. No
+        // credential is forwarded and no tool executes, so this grants zero
+        // functional access. OAuth-only surfaces (e.g. /v2/mcp-search) keep the
+        // hard 401 credential-rejection contract they already advertise.
+        if (profile.allowKeyless) {
+          return {
+            authType: 'api-key',
+            credentialError: 'CREDENTIAL_INVALID',
+            firecrawlApiKey: undefined,
+            keylessClientIp: extractClientIp(request),
+          };
+        }
         throw new InvalidFirecrawlCredentialError();
       }
       if (profile.allowKeyless) {
@@ -1128,7 +1142,12 @@ function recoveryPayload(
               : isKeylessEligibilityUnavailable
                 ? 'The anonymous keyless eligibility check is temporarily unavailable. Retry shortly.'
               : `This tool requires a Firecrawl account or API key. ${HUMAN_CONNECTION_GUIDANCE}`,
-    ...(isKeylessAccessUnavailable
+    // CREDENTIAL_INVALID sessions gate every tool call (including keyless
+    // tools) on the credentialError check before the keyless branch ever
+    // runs, so none of KEYLESS_TOOL_NAMES are actually callable here. Listing
+    // them as available_tools would send the agent into a retry loop against
+    // tools that will just return this same recovery payload.
+    ...(isKeylessAccessUnavailable || code === 'CREDENTIAL_INVALID'
       ? {}
       : { available_tools: [...KEYLESS_TOOL_NAMES] }),
     docs_url: MCP_CONNECTION_GUIDE_URL,
@@ -1232,8 +1251,16 @@ function guardHostedTool(
   return {
     ...tool,
     canList: (session: SessionData) =>
-      !session?.credentialError &&
-      (!isHostedKeylessSession(session) || keylessTool) &&
+      // A credentialError session lists the keyless tool surface (same as a
+      // real keyless session, not the full authenticated schema) so the
+      // client proceeds past tools/list and calling any listed tool returns
+      // the CREDENTIAL_INVALID recovery payload (below). An empty list would
+      // leave MCP clients that stop after tools/list unable to ever surface
+      // the recovery guidance; the full non-keyless schema would over-disclose
+      // to a request carrying an unrecognized or invalid credential.
+      (session?.credentialError || isHostedKeylessSession(session)
+        ? keylessTool
+        : true) &&
       (canList?.(session) ?? true),
     beforeValidate: async (args: unknown, session: SessionData) => {
       const code = session?.credentialError
