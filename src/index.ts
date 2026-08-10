@@ -1251,14 +1251,16 @@ function guardHostedTool(
   return {
     ...tool,
     canList: (session: SessionData) =>
-      // A credentialError session lists the full tool surface it would have had
-      // with a valid key, so the client proceeds past tools/list and any tool the
-      // agent calls returns the CREDENTIAL_INVALID recovery payload (below). An
-      // empty list would leave MCP clients that stop after tools/list unable to
-      // ever surface the recovery guidance.
-      (session?.credentialError
-        ? true
-        : !isHostedKeylessSession(session) || keylessTool) &&
+      // A credentialError session lists the keyless tool surface (same as a
+      // real keyless session, not the full authenticated schema) so the
+      // client proceeds past tools/list and calling any listed tool returns
+      // the CREDENTIAL_INVALID recovery payload (below). An empty list would
+      // leave MCP clients that stop after tools/list unable to ever surface
+      // the recovery guidance; the full non-keyless schema would over-disclose
+      // to a request carrying an unrecognized or invalid credential.
+      (session?.credentialError || isHostedKeylessSession(session)
+        ? keylessTool
+        : true) &&
       (canList?.(session) ?? true),
     beforeValidate: async (args: unknown, session: SessionData) => {
       const code = session?.credentialError

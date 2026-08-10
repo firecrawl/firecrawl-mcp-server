@@ -2121,11 +2121,14 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
     invalidRecovery.message,
     /Never ask for, accept, or put an API key in chat/
   );
-  // Recovery offers a concrete next action the human/operator can take.
-  assert.ok(
-    Array.isArray(invalidRecovery.next_actions) && invalidRecovery.next_actions.length > 0,
-    'recovery payload carries at least one next_action'
-  );
+  // Recovery pins the concrete next-action contract: reconnect (human) then
+  // operator-configure, each with its consent flag, not just a non-empty array.
+  assert.equal(invalidRecovery.next_actions[0].kind, 'human_reconnect_account');
+  assert.equal(invalidRecovery.next_actions[0].actor, 'human');
+  assert.equal(invalidRecovery.next_actions[0].requires_user_consent, true);
+  assert.equal(invalidRecovery.next_actions[1].kind, 'operator_configure_api_key');
+  assert.equal(invalidRecovery.next_actions[1].actor, 'human_or_operator');
+  assert.equal(invalidRecovery.next_actions[1].requires_user_consent, true);
   // No tool is actually callable in a credentialError session (the
   // credentialError check gates execute() before the keyless branch), so the
   // payload must not advertise keyless tools as available.
