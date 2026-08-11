@@ -44,8 +44,6 @@ const MAX_PASSAGE_CHARS = 1200;
 interface DeveloperHit {
   /** Stable result id, e.g. `issue:owner/repo#123` or `doc:<hash>`. */
   id?: string;
-  /** Result kind: `issue`, `pull_request`, `readme`, or `doc`. */
-  type?: string;
   url?: string;
   title?: string;
   /** Matched passages in markdown. */
@@ -53,16 +51,17 @@ interface DeveloperHit {
 }
 
 /**
- * Render developer hits as `## [id] (type) title` / url / passages blocks —
- * the same shape as the research formatters. Markdown passages keep their
- * newlines so tables and code survive.
+ * Render developer hits as `## [id] (kind) title` / url / passages blocks.
+ * The stable ID prefix supplies the kind. Markdown passages keep newlines.
  */
 function fmtDeveloper(results?: DeveloperHit[]): string {
   if (!results || results.length === 0) return '(no results)';
   return results
     .map((r) => {
-      const kind = r.type ? ` (${r.type})` : '';
-      const lines = [`## [${r.id ?? '?'}]${kind} ${r.title ?? '(untitled)'}`];
+      const id = r.id ?? '?';
+      const kind = r.id?.split(':', 1)[0];
+      const kindLabel = kind ? ` (${kind})` : '';
+      const lines = [`## [${id}]${kindLabel} ${r.title ?? '(untitled)'}`];
       if (r.url) lines.push(r.url);
       const body = (r.passages ?? [])
         .map((p) => p.text ?? '')

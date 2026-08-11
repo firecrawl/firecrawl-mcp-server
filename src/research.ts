@@ -176,7 +176,6 @@ function fmtPaperMetadata(paper?: PaperHit): string {
 const MAX_GITHUB_CONTENT_CHARS = 1200;
 
 interface GitHubItem {
-  resultType?: string;
   /** `owner/name`. */
   repo?: string;
   url?: string;
@@ -205,7 +204,7 @@ function fmtGithub(results?: GitHubItem[]): string {
   return results
     .map((r) => {
       const lines: string[] = [];
-      if (r.resultType === 'repo_readme') {
+      if (r.number == null && r.pageType == null) {
         lines.push(`[${r.repo ?? '?'}] README`);
       } else {
         const ref = r.number != null ? `#${r.number}` : '';
