@@ -2124,6 +2124,8 @@ Search web, news, or image sources and return ranked results. Operators include 
 
 For a programming question, add \`categories: ["developer"]\`. It searches an index of GitHub issues, merged pull requests, repository READMEs, and curated documentation sites, and returns the hits in \`data.developer\` beside the web results.
 
+\`categories: ["research"]\` restricts these web results to research-affiliated websites and returns page snippets. The \`firecrawl_research_*\` tools are a separate surface that searches paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature.
+
 \`scrapeOptions\` can attach extracted page content; pages fetched this way use a fixed reuse window and ignore \`maxAge\`, so use \`firecrawl_scrape\` when a live fetch is required. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
 `,
   parameters: z
