@@ -2808,7 +2808,7 @@ server.addTool({
 Deprecated compatibility entry point. Use firecrawl_scrape once per known URL with formats: ["json"] and jsonOptions containing the prompt and schema. Use firecrawl_search or firecrawl_agent before Scrape when URLs are not known.
 `,
   parameters: z.object({
-    urls: z.array(z.string()),
+    urls: z.array(z.string().url()),
     prompt: z.string().optional(),
     schema: z.record(z.string(), z.any()).optional(),
     allowExternalLinks: z.boolean().optional(),
