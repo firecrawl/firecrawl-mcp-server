@@ -291,6 +291,7 @@ Use this guide to select the right tool for your task:
 - **If you need to discover URLs on a site:** use **map**
 - **If you want to search the web for info:** use **search**
 - **If you have a programming question** (a library, an API contract, an error message, a known bug): use **developer search**
+- **If you need scientific papers** (biomedical, life-science, clinical, or arXiv literature): use **research tools** — they search paper abstracts and full text. `search` with `categories: ["research"]` is a different thing: a website filter over ordinary web results.
 - **If you need complex research across multiple unknown sources:** use **agent**
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
 - **If you need interactive browser automation** (click, type, navigate): use **interact** with a URL for a fresh page, or **scrape** + **interact** when you already scraped the page or need tighter scrape control
@@ -465,7 +466,7 @@ Search the web and optionally extract content from search results.
 {
   "name": "firecrawl_search",
   "arguments": {
-    "query": "latest AI research papers 2023",
+    "query": "remote work stipend policies at tech companies",
     "highlights": true,
     "limit": 5,
     "lang": "en",
@@ -481,13 +482,15 @@ Search the web and optionally extract content from search results.
 
 Set `highlights` to `true` to request query-relevant highlights or `false` to keep the original search snippets. Omit it to use the API's default behavior.
 
+For scientific papers, see [Research Tools](#12-research-tools-firecrawl_research_): they search paper abstracts and full text, while `categories: ["research"]` here filters ordinary web results to research-affiliated websites.
+
 **Returns:**
 
 - Array of search results (with optional scraped content), plus an `id` field. Pass that `id` to `firecrawl_search_feedback` after you've used the results to refund 1 credit (search costs 2) and improve search quality.
 
 **Prompt Example:**
 
-> "Find the latest research papers on AI published in 2023."
+> "Compare remote work stipend policies across tech companies."
 
 ### 3b. Search Feedback Tool (`firecrawl_search_feedback`)
 
@@ -829,15 +832,19 @@ Stop an interact session for a scraped page when you are done interacting.
 
 Search and inspect papers and GitHub repositories through the research MCP tools.
 
+**Covers:** paper abstracts and full text across biomedical, life-science, and clinical literature (PubMed, bioRxiv, medRxiv) alongside arXiv and other scientific sources.
+
 **Available research tools:**
 
-- `firecrawl_research_search_papers`: search research papers.
-- `firecrawl_research_inspect_paper`: inspect one paper.
-- `firecrawl_research_related_papers`: find related papers.
-- `firecrawl_research_read_paper`: read paper content.
-- `firecrawl_research_search_github`: search GitHub repositories.
+- `firecrawl_research_search_papers`: search paper metadata and abstracts with a natural-language query, with optional author, category, and date filters.
+- `firecrawl_research_inspect_paper`: retrieve canonical metadata for one paper ID (arXiv, PMC, PMID, or DOI).
+- `firecrawl_research_related_papers`: expand from one or more anchor papers through the citation graph.
+- `firecrawl_research_read_paper`: read full-text passages from a specific paper.
+- `firecrawl_research_search_github`: search indexed public GitHub issue, pull-request, and README content.
 
 **Best for:** Literature review, paper lookup, and repository discovery workflows where the agent needs a focused research surface instead of general web scraping.
+
+`firecrawl_search` with `categories: ["research"]` is a different surface: it filters ordinary web results to research-affiliated websites and returns page snippets, not paper records. Use these tools when the question is about the literature itself, and pass several distinct framings of the same question — they surface different papers than a single query does.
 
 ### 13. Monitor Tools (`firecrawl_monitor_*`)
 

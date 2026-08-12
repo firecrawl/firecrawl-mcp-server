@@ -675,9 +675,32 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     byName.get('firecrawl_search_feedback').description,
     /costs?\s+2\s+credits?/i
   );
+  // The paper index is ~90% biomedical. Naming that coverage is what keeps
+  // agents from routing biomedical questions to the `research` website filter.
   assert.match(
     byName.get('firecrawl_research_search_papers').description,
-    /topics represented in the indexed corpus/i
+    /indexed corpus.*biomedical.*PubMed.*bioRxiv.*medRxiv.*arXiv/is
+  );
+  // The two surfaces that both answer to "research" must stay distinguishable.
+  // This has to live in the tool description, not a parameter `.describe()`:
+  // no property description survives serialization into tools/list.
+  assert.match(
+    byName.get('firecrawl_search').description,
+    /categories: \["research"\].*research-affiliated websites.*`firecrawl_research_\*` tools are a separate surface.*PubMed, bioRxiv, medRxiv.*arXiv/is
+  );
+  // These instructions are also what a keyless session reads, and there
+  // tools/list is exactly KEYLESS_TOOL_NAMES (scrape/search/parse) while any
+  // firecrawl_research_* call is rejected. So the disambiguation has to name
+  // the categories filter as the surface that is already reachable, and the
+  // paper index as something authentication makes available -- never as a tool
+  // the client can call right now.
+  assert.match(
+    init.instructions,
+    /firecrawl_search with categories: \["research"\] filters ordinary web results to research-affiliated websites/i
+  );
+  assert.match(
+    init.instructions,
+    /firecrawl_research_\* tools search a separate paper index.*become available once an OAuth connection or Authorization bearer API key is present/is
   );
   assert.match(
     byName.get('firecrawl_research_related_papers').description,

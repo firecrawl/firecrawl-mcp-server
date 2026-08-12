@@ -241,7 +241,9 @@ export function registerResearchTools(
       destructiveHint: false, // Query-only; no writes to external sources or the research index.
     },
     description: `
-For topics represented in the indexed corpus, search paper metadata and abstracts with a natural-language query. Optional author, category, and date filters constrain results.
+Search paper metadata and abstracts with a natural-language query across the indexed corpus, which spans biomedical, life-science, and clinical literature (PubMed, bioRxiv, medRxiv) alongside arXiv and other scientific sources. Optional author, category, and date filters constrain results.
+
+Several distinct framings of the same question surface different papers than a single query does.
 
 Returns ranked papers with canonical IDs, titles, authors, and abstracts.
 `,
@@ -345,7 +347,7 @@ Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DO
   server.addTool({
     name: 'firecrawl_research_related_papers',
     annotations: {
-      title: 'Find related arXiv papers',
+      title: 'Find related papers via citation graph',
       readOnlyHint: true, // Finds related papers via citation graph expansion; returns candidates only.
       openWorldHint: true, // Traverses relationships across the public research paper corpus.
       destructiveHint: false, // Read-only graph query; no modifications.
