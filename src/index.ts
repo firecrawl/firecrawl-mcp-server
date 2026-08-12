@@ -650,18 +650,25 @@ function asText(data: unknown): string {
   return JSON.stringify(data, null, 2);
 }
 
-// Stamp each web search result with its 1-indexed `position` so the model can
-// reference results in `firecrawl_search_feedback.valuableResultPositions`
+const SEARCH_RESULT_SOURCES = ['web', 'images', 'news'] as const;
+
+// Stamp each search result with its `source` and 1-indexed `position` so the
+// model can copy both straight into `firecrawl_search_feedback.valuableResults`
 // without counting array elements (miscounts silently corrupt feedback data).
-// The API accepts positions as indexes into `data.web`, so the stamp must stay
-// derived from this array's order — never reorder or filter between here and
-// the returned envelope.
-function annotateWebResultPositions<T>(envelope: T): T {
-  const data = (envelope as { data?: { web?: unknown } } | null)?.data;
-  if (data && Array.isArray(data.web)) {
-    data.web = data.web.map((result, i) =>
+// Results come back grouped and each group is numbered from 1 independently, so
+// the position alone does not identify a result — always carry the source with
+// it. The stamps stay derived from each array's order, so never reorder or
+// filter between here and the returned envelope.
+function annotateResultPositions<T>(envelope: T): T {
+  const data = (envelope as { data?: Record<string, unknown> } | null)?.data;
+  if (!data) return envelope;
+
+  for (const source of SEARCH_RESULT_SOURCES) {
+    const results = data[source];
+    if (!Array.isArray(results)) continue;
+    data[source] = results.map((result, i) =>
       result && typeof result === 'object'
-        ? { position: i + 1, ...result }
+        ? { source, position: i + 1, ...result }
         : result
     );
   }
@@ -1498,7 +1505,7 @@ The query also supports search operators, that you can use if needed to refine t
   }
 }
 \`\`\`
-**Returns:** A JSON envelope of the form \`{ success, data: { web?, images?, news? }, id, creditsUsed }\`. Each result array contains the search results (with optional scraped content). Each \`data.web\` result carries a 1-indexed \`position\` field. Pass the top-level \`id\` to \`firecrawl_search_feedback\` after you've used the results, along with the \`position\` values of the web results that were useful.
+**Returns:** A JSON envelope of the form \`{ success, data: { web?, images?, news? }, id, creditsUsed }\`. Each result array contains the search results (with optional scraped content). Every result carries a \`source\` and a 1-indexed \`position\`; each group is numbered from 1 independently, so the two together identify a result. Pass the top-level \`id\` to \`firecrawl_search_feedback\` after you've used the results, along with the \`source\`/\`position\` pairs of the results that were useful.
 `,
   parameters: z
     .object({
@@ -1538,7 +1545,7 @@ The query also supports search operators, that you can use if needed to refine t
     };
     if (isKeylessMode(session)) {
       const json = await keylessPost('/v2/search', searchBody, session);
-      return asText(annotateWebResultPositions(json ?? {}));
+      return asText(annotateResultPositions(json ?? {}));
     }
     // Call /v2/search through the SDK's HTTP layer (auth + retries) instead
     // of `client.search()` so we preserve the full response envelope. The
@@ -1547,7 +1554,7 @@ The query also supports search operators, that you can use if needed to refine t
     // explicitly tells the LLM to use after every search.
     const client = getClient(session);
     const httpRes = await (client as any).http.post('/v2/search', searchBody);
-    return asText(annotateWebResultPositions(httpRes?.data ?? {}));
+    return asText(annotateResultPositions(httpRes?.data ?? {}));
   },
 });
 
@@ -1781,14 +1788,14 @@ Send structured feedback on a previous \`firecrawl_search\` result. **Call this 
 Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the response) and tell us:
 
 - **rating** — overall result quality: \`good\`, \`partial\`, or \`bad\`.
-- **valuableResultPositions** — the \`position\` values of **every** \`data.web\` result that was actually useful. Be exhaustive: results you do not list are treated as not useful, so a partial list corrupts the signal. Positions refer to \`data.web\` only (not news or images).
-- **valuableSources** — useful URLs that are NOT in the returned \`data.web\` array (e.g. news/image results, or pages you found by scraping beyond the results), with a short reason why. For web results, use \`valuableResultPositions\` instead — do not report the same result in both fields.
+- **valuableResults** — **every** returned result that was actually useful, as \`{"source": ..., "position": ...}\` copied straight off the result. Results are grouped (\`data.web\`, \`data.images\`, \`data.news\`) and each group is numbered from 1 independently, so the source is required: \`{"source":"web","position":1}\` and \`{"source":"news","position":1}\` are different results. Be exhaustive: results you do not list are treated as not useful, so a partial list corrupts the signal.
+- **valuableSources** — useful URLs that are NOT among the returned results (e.g. pages you found by scraping beyond the results), with a short reason why. For returned results, use \`valuableResults\` instead — do not report the same result in both fields.
 - **missingContent** — **the most important field.** An ARRAY of specific pieces of content you expected to find but didn't. One entry per missing piece, each with a short \`topic\` and an optional longer \`description\`. Examples: \`{"topic":"enterprise pricing","description":"no pricing tier table for the Enterprise plan was returned"}\`, \`{"topic":"API rate limits"}\`, \`{"topic":"comparison vs competitors"}\`. **Be specific** — these aggregate across teams and tell us what to index next. Do not pack multiple topics into one entry.
 - **querySuggestions** — how the query or response shape could be improved (e.g. "would have liked official docs first", "should boost github.com").
 
 **Substantive-feedback requirement** (zero-effort feedback is rejected with HTTP 400):
-- \`good\` — must include \`valuableResultPositions\` or at least one \`valuableSources\` entry
-- \`partial\` — must include \`valuableResultPositions\`, \`valuableSources\`, or at least one \`missingContent\` entry
+- \`good\` — must include \`valuableResults\` or at least one \`valuableSources\` entry
+- \`partial\` — must include \`valuableResults\`, \`valuableSources\`, or at least one \`missingContent\` entry
 - \`bad\` — must include at least one \`missingContent\` entry or \`querySuggestions\`
 
 **Time window:** Feedback must be submitted within ~2 minutes of the search. Beyond that, the call returns HTTP 409 with \`feedbackErrorCode: "FEEDBACK_WINDOW_EXPIRED"\` — do not retry, just move on. Same goes for any 4xx response: do not retry-loop.
@@ -1801,14 +1808,18 @@ Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the 
 
 **When to call:** Right after processing a search result. If the result didn't help, send rating \`bad\` with a clear \`missingContent\` — that is just as valuable as a \`good\` rating.
 
-**Usage Example (good rating: positions for useful web results, valuableSources only for a URL outside data.web):**
+**Usage Example (good rating: valuableResults for useful returned results, valuableSources only for a URL that was not returned):**
 \`\`\`json
 {
   "name": "firecrawl_search_feedback",
   "arguments": {
     "searchId": "0193f6c5-1234-7890-abcd-1234567890ab",
     "rating": "good",
-    "valuableResultPositions": [1, 3],
+    "valuableResults": [
+      { "source": "web", "position": 1 },
+      { "source": "web", "position": 3 },
+      { "source": "news", "position": 2, "reason": "Broke the pricing change." }
+    ],
     "valuableSources": [
       { "url": "https://docs.firecrawl.dev/pricing", "reason": "Not in the results; found by scraping a result's pricing link. Answered the question." }
     ],
@@ -1852,14 +1863,23 @@ Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the 
         )
         .max(50)
         .optional(),
-      valuableResultPositions: z
-        .array(z.number().int().positive())
+      valuableResults: z
+        .array(
+          z.object({
+            source: z.enum(SEARCH_RESULT_SOURCES),
+            position: z.number().int().positive(),
+            reason: z.string().max(1000).optional(),
+          })
+        )
         .max(50)
         .optional()
         .describe(
-          'The `position` values of every `data.web` result that was actually useful ' +
-            '(web results only). Be exhaustive — unlisted results are treated as not useful. ' +
-            'Do not also list the same results in valuableSources.'
+          'Every result that was actually useful, copied from the `source` and `position` ' +
+            'stamped on each result. Each group is numbered from 1 independently, so the ' +
+            'source is required — `{"source":"web","position":1}` and ' +
+            '`{"source":"news","position":1}` are different results. Be exhaustive — ' +
+            'unlisted results are treated as not useful. Do not also list the same results ' +
+            'in valuableSources.'
         ),
       missingContent: z
         .array(
@@ -1885,14 +1905,18 @@ Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the 
         searchId,
         rating,
         valuableSources,
-        valuableResultPositions,
+        valuableResults,
         missingContent,
         querySuggestions,
       } = args as {
         searchId: string;
         rating: 'good' | 'bad' | 'partial';
         valuableSources?: { url: string; reason?: string }[];
-        valuableResultPositions?: number[];
+        valuableResults?: {
+          source: (typeof SEARCH_RESULT_SOURCES)[number];
+          position: number;
+          reason?: string;
+        }[];
         missingContent?: { topic: string; description?: string }[];
         querySuggestions?: string;
       };
@@ -1909,8 +1933,8 @@ Pass the \`searchId\` returned by \`firecrawl_search\` (the \`id\` field on the 
       if (valuableSources && valuableSources.length > 0) {
         body.valuableSources = valuableSources;
       }
-      if (valuableResultPositions && valuableResultPositions.length > 0) {
-        body.valuableResultPositions = valuableResultPositions;
+      if (valuableResults && valuableResults.length > 0) {
+        body.valuableResults = valuableResults;
       }
       if (missingContent && missingContent.length > 0) {
         body.missingContent = missingContent;
@@ -2820,7 +2844,7 @@ The query supports search operators to refine results:
   }
 }
 \`\`\`
-**Returns:** A JSON envelope of the form \`{ success, data: { web?, images?, news? }, id, creditsUsed }\`. Each result array contains the ranked results for that source; each \`data.web\` result carries a 1-indexed \`position\` field.
+**Returns:** A JSON envelope of the form \`{ success, data: { web?, images?, news? }, id, creditsUsed }\`. Each result array contains the ranked results for that source; every result carries a \`source\` and a 1-indexed \`position\`, numbered from 1 within its own group.
 `,
     parameters: z
       .object({ ...searchToolBaseFields })
@@ -2882,7 +2906,7 @@ The query supports search operators to refine results:
       log.info('Searching', { query: searchQuery });
       const client = getClientFn(session);
       const httpRes = await (client as any).http.post('/v2/search', searchBody);
-      return asText(annotateWebResultPositions(httpRes?.data ?? {}));
+      return asText(annotateResultPositions(httpRes?.data ?? {}));
     },
   });
 }
