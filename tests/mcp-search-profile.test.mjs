@@ -35,6 +35,8 @@ const EXCLUDED_TOOLS = [
 
 const SEARCH_ENDPOINT = '/v2/mcp-search';
 const SEARCH_RESOURCE = 'https://mcp.firecrawl.dev/v2/mcp-search';
+const INVALID_API_KEY_MESSAGE =
+  'The Firecrawl API key is invalid or revoked.\nFix: Replace the key on the existing Firecrawl MCP server, then start a new session. Get an API key at https://www.firecrawl.dev/app/api-keys';
 
 async function getFreePort() {
   const server = net.createServer();
@@ -499,9 +501,11 @@ test('search surface rejects an invalid raw API credential during tools/list', a
   const body = await res.json();
   assert.equal(body.error, 'invalid_api_key');
   assert.equal(body.code, 'CREDENTIAL_INVALID');
-  assert.match(body.error_description, /outside this chat/);
-  assert.equal(body.next_actions[0].kind, 'operator_configure_api_key');
-  assert.equal(body.next_actions[0].requires_user_consent, true);
+  assert.equal(
+    body.error_description,
+    INVALID_API_KEY_MESSAGE
+  );
+  assert.equal(body.next_actions, undefined);
 });
 
 test('search surface rejects an invalid raw API credential before a tool call', async (t) => {
@@ -525,9 +529,11 @@ test('search surface rejects an invalid raw API credential before a tool call', 
   const body = await res.json();
   assert.equal(body.error, 'invalid_api_key');
   assert.equal(body.code, 'CREDENTIAL_INVALID');
-  assert.match(body.error_description, /outside this chat/);
-  assert.equal(body.next_actions[0].kind, 'operator_configure_api_key');
-  assert.equal(body.next_actions[0].requires_user_consent, true);
+  assert.equal(
+    body.error_description,
+    INVALID_API_KEY_MESSAGE
+  );
+  assert.equal(body.next_actions, undefined);
   assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
 });
 
