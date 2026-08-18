@@ -36,10 +36,8 @@ type GetClient = (session?: SessionData) => unknown;
 const BASE = '/v2/search/developer';
 const ORIGIN_HEADERS = { 'X-Origin': 'mcp-fastmcp' };
 
-// Cap the matched passages per result so a page of hits stays within the MCP
-// output-token limit. Sized like the research GitHub content cap: passages
-// carry the signal (repro steps, stack traces, API contracts) the agent needs.
-const MAX_PASSAGE_CHARS = 1200;
+const DEFAULT_PASSAGE_BUDGET = 4096;
+const LEGACY_MAX_PASSAGE_CHARS = 1200;
 
 interface DeveloperHit {
   /** Stable result id, e.g. `issue:owner/repo#123` or `doc:<hash>`. */
@@ -54,7 +52,10 @@ interface DeveloperHit {
  * Render developer hits as `## [id] (kind) title` / url / passages blocks.
  * The stable ID prefix supplies the kind. Markdown passages keep newlines.
  */
-function fmtDeveloper(results?: DeveloperHit[]): string {
+function fmtDeveloper(
+  results?: DeveloperHit[],
+  passageBudgetApplied?: number
+): string {
   if (!results || results.length === 0) return '(no results)';
   return results
     .map((r) => {
@@ -67,7 +68,13 @@ function fmtDeveloper(results?: DeveloperHit[]): string {
         .map((p) => p.text ?? '')
         .join('\n---\n')
         .trim();
-      lines.push(body ? body.slice(0, MAX_PASSAGE_CHARS) : '(no content)');
+      // TODO(search#843): Remove this fallback after server passage budgeting
+      // is fully enabled.
+      const renderedBody =
+        passageBudgetApplied == null
+          ? body.slice(0, LEGACY_MAX_PASSAGE_CHARS)
+          : body;
+      lines.push(renderedBody || '(no content)');
       return lines.join('\n');
     })
     .join('\n\n');
@@ -109,23 +116,37 @@ Returns ranked results with an ID, source type, URL, title, and the matched pass
         .enum(['only'])
         .optional()
         .describe('Set to "only" to search only agent-skill files.'),
+      passage_budget: z
+        .number()
+        .int()
+        .min(256)
+        .max(16384)
+        .default(DEFAULT_PASSAGE_BUDGET)
+        .describe(
+          'Approximate-token budget allocated by the search server across all returned passages (default 4096). The old 1200-character cap was about 300 tokens per result, or about 3000 tokens across 10 default results; 4096 preserves that intent with allocation headroom.'
+        ),
     }),
     execute: async (args: unknown, { session }): Promise<string> => {
-      const { query, k, skills } = args as {
+      const { query, k, skills, passage_budget } = args as {
         query: string;
         k?: number;
         skills?: 'only';
+        passage_budget?: number;
       };
       const params = new URLSearchParams();
       params.append('query', query);
       if (k != null) params.append('k', String(k));
       if (skills != null) params.append('skills', skills);
-      const client = getClient(session) as ClientLike;
-      const res = await client.http.get<{ results?: DeveloperHit[] }>(
-        `${BASE}?${params.toString()}`,
-        ORIGIN_HEADERS
+      params.append(
+        'passage_budget',
+        String(passage_budget ?? DEFAULT_PASSAGE_BUDGET)
       );
-      return fmtDeveloper(res.data?.results);
+      const client = getClient(session) as ClientLike;
+      const res = await client.http.get<{
+        results?: DeveloperHit[];
+        passage_budget_applied?: number;
+      }>(`${BASE}?${params.toString()}`, ORIGIN_HEADERS);
+      return fmtDeveloper(res.data?.results, res.data?.passage_budget_applied);
     },
   });
 }
