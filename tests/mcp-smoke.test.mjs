@@ -212,6 +212,66 @@ async function startFakeFirecrawlApi() {
   };
 }
 
+// A fake API that can emulate both server-budgeted and legacy developer
+// search responses.
+async function startFakeDeveloperApi() {
+  const requests = [];
+  const passage = 'x'.repeat(5000);
+  const server = createServer(async (req, res) => {
+    for await (const _chunk of req) {
+      // Drain the request before responding.
+    }
+    requests.push({
+      headers: req.headers,
+      method: req.method,
+      url: req.url,
+    });
+
+    const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    if (req.method === 'GET' && url.pathname === '/v2/search/developer') {
+      const passageBudget = url.searchParams.get('passage_budget');
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          ...(url.searchParams.get('query') === 'legacy server'
+            ? {}
+            : { passage_budget_applied: Number(passageBudget) }),
+          results: [
+            {
+              id: 'doc:fixture',
+              passages: [{ text: passage }],
+              title: 'Developer fixture',
+              url: 'https://example.com/developer',
+            },
+          ],
+          success: true,
+        })
+      );
+      return;
+    }
+
+    res.writeHead(404, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: `Unhandled ${req.method} ${req.url}` }));
+  });
+
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const address = server.address();
+  assert.equal(typeof address, 'object');
+
+  return {
+    passage,
+    requests,
+    url: `http://127.0.0.1:${address.port}`,
+    close: () =>
+      new Promise((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      }),
+  };
+}
+
 // A single fake origin that stands in for BOTH the Firecrawl OAuth issuer
 // (token introspection + keyless eligibility) AND the Firecrawl API. Every
 // request is recorded so tests can assert what the MCP server forwarded.
@@ -840,6 +900,56 @@ test('monitor create gives queries precedence over page targets', async (t) => {
   assert.deepEqual(monitorRequests[1].body.targets, [
     { type: 'scrape', urls: ['https://example.com/retained'] },
   ]);
+});
+
+test('developer search delegates passage cuts to the server with a legacy fallback', async (t) => {
+  const fakeApi = await startFakeDeveloperApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-developer-budget', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const serverBudgeted = await client.request('tools/call', {
+    arguments: { query: 'server budget' },
+    name: 'firecrawl_developer_search',
+  });
+  assert.notEqual(serverBudgeted.isError, true);
+  assert.ok(serverBudgeted.content[0].text.includes(fakeApi.passage));
+
+  const customBudget = await client.request('tools/call', {
+    arguments: { passage_budget: 768, query: 'custom budget' },
+    name: 'firecrawl_developer_search',
+  });
+  assert.notEqual(customBudget.isError, true);
+  assert.ok(customBudget.content[0].text.includes(fakeApi.passage));
+
+  const legacy = await client.request('tools/call', {
+    arguments: { query: 'legacy server' },
+    name: 'firecrawl_developer_search',
+  });
+  assert.notEqual(legacy.isError, true);
+  const legacyBody = legacy.content[0].text.split('\n').slice(2).join('\n');
+  assert.equal(legacyBody.length, 1200);
+
+  assert.deepEqual(
+    fakeApi.requests.map((request) => request.url),
+    [
+      '/v2/search/developer?query=server+budget&passage_budget=4096',
+      '/v2/search/developer?query=custom+budget&passage_budget=768',
+      '/v2/search/developer?query=legacy+server&passage_budget=4096',
+    ]
+  );
 });
 
 test('stdio transport calls Firecrawl API through a tool end to end', async (t) => {
