@@ -380,6 +380,10 @@ test('developer search forwards only its declared arguments', async (t) => {
       k: 10,
       query: 'how do I configure retries',
       skills: 'only',
+      // Real filters on the HTTP endpoint, and not tool arguments. A caller
+      // that sends one anyway must not reach the search server with it.
+      min_stars: 500,
+      types: ['issue'],
     },
     name: DEVELOPER_TOOL,
   });
