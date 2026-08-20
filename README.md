@@ -929,8 +929,7 @@ Search an index built for coding agents. The index covers GitHub issues, merged 
   "arguments": {
     "query": "how do I configure retries",
     "k": 10,
-    "skills": "only",
-    "passage_budget": 4096
+    "skills": "only"
   }
 }
 ```
@@ -938,9 +937,6 @@ Search an index built for coding agents. The index covers GitHub issues, merged 
 - `query` (required): the developer question or search phrase.
 - `k`: number of ranked results. The default is 10 and the maximum is 100.
 - `skills`: set to `"only"` to search agent-skill files alone.
-- `passage_budget`: approximate-token budget allocated by the search server across all returned passages. The default is 4096 and the accepted range is 256–16384.
-
-The 4096-token default preserves the intent of the previous MCP output cap: 1200 characters were roughly 300 tokens per result, or about 3000 passage tokens across the default 10 results, with additional allocation headroom.
 
 **Returns:** Ranked results. Each result carries an ID, a source type (`issue`, `pull_request`, `readme`, or `doc`), a URL, a title, and the matched passages in markdown.
 

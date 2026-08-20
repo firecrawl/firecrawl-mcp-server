@@ -36,7 +36,6 @@ type GetClient = (session?: SessionData) => unknown;
 const BASE = '/v2/search/developer';
 const ORIGIN_HEADERS = { 'X-Origin': 'mcp-fastmcp' };
 
-const DEFAULT_PASSAGE_BUDGET = 4096;
 const LEGACY_MAX_PASSAGE_CHARS = 1200;
 
 interface DeveloperHit {
@@ -116,31 +115,17 @@ Returns ranked results with an ID, source type, URL, title, and the matched pass
         .enum(['only'])
         .optional()
         .describe('Set to "only" to search only agent-skill files.'),
-      passage_budget: z
-        .number()
-        .int()
-        .min(256)
-        .max(16384)
-        .default(DEFAULT_PASSAGE_BUDGET)
-        .describe(
-          'Approximate-token budget allocated by the search server across all returned passages (default 4096). The old 1200-character cap was about 300 tokens per result, or about 3000 tokens across 10 default results; 4096 preserves that intent with allocation headroom.'
-        ),
     }),
     execute: async (args: unknown, { session }): Promise<string> => {
-      const { query, k, skills, passage_budget } = args as {
+      const { query, k, skills } = args as {
         query: string;
         k?: number;
         skills?: 'only';
-        passage_budget?: number;
       };
       const params = new URLSearchParams();
       params.append('query', query);
       if (k != null) params.append('k', String(k));
       if (skills != null) params.append('skills', skills);
-      params.append(
-        'passage_budget',
-        String(passage_budget ?? DEFAULT_PASSAGE_BUDGET)
-      );
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{
         results?: DeveloperHit[];
