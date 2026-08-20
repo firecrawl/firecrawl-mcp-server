@@ -971,9 +971,20 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     byName.get('firecrawl_research_search_papers').description,
     /indexed corpus.*biomedical.*PubMed.*bioRxiv.*medRxiv.*arXiv/is
   );
-  // The two surfaces that both answer to "research" must stay distinguishable.
-  // This has to live in the tool description, not a parameter `.describe()`:
-  // no property description survives serialization into tools/list.
+  // Property metadata must survive FastMCP/xsschema serialization. Keep this
+  // boundary visible in both the tool-level routing copy and parameter schema.
+  assert.match(
+    byName.get('firecrawl_search').inputSchema.properties.categories.description,
+    /research-affiliated websites.*separate from.*firecrawl_research_/is
+  );
+  assert.equal(
+    byName.get('firecrawl_search').inputSchema.additionalProperties,
+    false
+  );
+  assert.doesNotMatch(
+    JSON.stringify(tools.tools.map((tool) => tool.inputSchema)),
+    /"anyOf"/
+  );
   assert.match(
     byName.get('firecrawl_search').description,
     /categories: \["research"\].*research-affiliated websites.*`firecrawl_research_\*` tools are a separate surface.*PubMed, bioRxiv, medRxiv.*arXiv/is
