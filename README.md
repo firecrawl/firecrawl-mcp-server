@@ -67,7 +67,7 @@ A read-only, search-only surface is also hosted at:
 https://mcp.firecrawl.dev/v2/mcp-search
 ```
 
-It exposes a fixed set of six read-only tools: `firecrawl_search` and the five `firecrawl_research_*` tools. It performs no page-content fetching and has its own OAuth identity; the full endpoint above is unchanged. See [docs/search-profile.md](docs/search-profile.md) for the full contract.
+It exposes a fixed set of seven read-only tools: `firecrawl_search`, `firecrawl_developer_search`, and the five `firecrawl_research_*` tools. It performs no page-content fetching and has its own OAuth identity; the full endpoint above is unchanged. See [docs/search-profile.md](docs/search-profile.md) for the full contract.
 
 ### Running with npx
 
@@ -929,18 +929,33 @@ Search an index built for coding agents. The index covers GitHub issues, merged 
   "arguments": {
     "query": "how do I configure retries",
     "k": 10,
-    "skills": "only"
+    "passages": 3,
+    "types": ["issue", "pull_request", "readme"],
+    "repos": ["firecrawl/firecrawl"],
+    "language": "TypeScript",
+    "license": "MIT",
+    "min_stars": 100,
+    "archived": false
   }
 }
 ```
 
-- `query` (required): the developer question or search phrase.
-- `k`: number of ranked results. The default is 10 and the maximum is 100.
-- `skills`: set to `"only"` to search agent-skill files alone.
+- `query` (required): developer question or search phrase (nonblank, at most 4096 bytes).
+- `k`: total ranked results, 1–100 (default 10).
+- `passages`: passages per result, 1–5 (default 1).
+- `types`: any of `doc`, `issue`, `pull_request`, or `readme` (default all).
+- `repos`: up to 20 GitHub `owner/name` filters. Alone, scopes to GitHub-backed results.
+- `sources`: up to 20 developer documentation source IDs. Alone, scopes to docs. With `repos`, OR-combines both origins.
+- `language`: one case-insensitive GitHub Linguist primary language.
+- `topic`: up to 8 repository topics; all must match.
+- `license`: one case-insensitive SPDX identifier.
+- `min_stars` / `max_stars`: repository star bounds. Unscoped searches use star bands; repo-scoped searches use exact values.
+- `archived` / `fork`: filter repository-backed results by either boolean state.
+- `skills`: set to `"only"` for agent-skill evidence only; omit `types` or include `doc`.
 
-**Returns:** Ranked results. Each result carries an ID, a source type (`issue`, `pull_request`, `readme`, or `doc`), a URL, a title, and the matched passages in markdown.
+**Returns:** The complete JSON envelope. Result kind is inferred from each ID prefix; the API intentionally does not emit a `type` field. Results include all requested passages, optional citation URLs and license disclosures. Requests with `repos` or `sources` also return indexed-status echoes.
 
-`firecrawl_search` with `categories: ["developer"]` searches the same index beside the web results. Use this tool instead when you want the passages and no web results. The search-only endpoint does not expose this tool; it keeps its fixed set of six tools, and `firecrawl_search` reaches the developer index there.
+`firecrawl_search` with `categories: ["developer"]` searches the same index beside web results but returns only the reduced generic projection. Use `firecrawl_developer_search` for full filters and evidence; it is available on both the full and search-only endpoints.
 
 ## Logging System
 

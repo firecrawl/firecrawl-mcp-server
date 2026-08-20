@@ -10,6 +10,7 @@ import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs'
 // appear on its tools/list or be callable through it.
 const SEARCH_TOOLS = [
   'firecrawl_search',
+  'firecrawl_developer_search',
   'firecrawl_research_search_papers',
   'firecrawl_research_inspect_paper',
   'firecrawl_research_related_papers',
@@ -28,7 +29,6 @@ const EXCLUDED_TOOLS = [
   'firecrawl_interact',
   'firecrawl_parse',
   'firecrawl_monitor_create',
-  'firecrawl_developer_search',
   'firecrawl_search_feedback',
   'firecrawl_feedback',
 ];
@@ -318,7 +318,7 @@ async function listTools(port, endpoint, headers) {
   return tools.map((tool) => tool.name);
 }
 
-test('search surface lists exactly the six read-only tools', async (t) => {
+test('search surface lists exactly the seven read-only tools', async (t) => {
   const { searchPort, getStderr } = await startHostedServer(t);
 
   const names = await listTools(searchPort, SEARCH_ENDPOINT, {
@@ -644,7 +644,7 @@ test('full surface still exposes its complete tool set alongside the search surf
   assert.equal(prm.status, 404);
 });
 
-test('primary search profile is OAuth-only, six-tool frozen, and ready without keyless configuration', async (t) => {
+test('primary search profile is OAuth-only, seven-tool frozen, and ready without keyless configuration', async (t) => {
   const { port, issuerUrl } = await startPrimarySearchServer(t);
 
   const ready = await fetch(`http://127.0.0.1:${port}/ready`);

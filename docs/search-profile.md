@@ -10,11 +10,12 @@ identity, `User-Agent`, or `clientInfo`.
 
 ## Tool contract
 
-The search surface exposes exactly these six read-only tools and nothing else:
+The search surface exposes exactly these seven read-only tools and nothing else:
 
 | Tool | Purpose |
 | --- | --- |
 | `firecrawl_search` | Ranked web / index search results |
+| `firecrawl_developer_search` | Full developer-index filters, passages, citations, licenses, and index status |
 | `firecrawl_research_search_papers` | Semantic search over indexed research papers |
 | `firecrawl_research_inspect_paper` | Canonical metadata for one paper |
 | `firecrawl_research_related_papers` | Citation-graph expansion from anchor papers |
@@ -24,7 +25,7 @@ The search surface exposes exactly these six read-only tools and nothing else:
 Registration on this instance is filtered against that allowlist, so any tool
 outside the set, including scrape, map, crawl, extract, agent, interact, parse,
 monitor, and the feedback tools, is never registered. Both `tools/list` and
-`tools/call` reflect only the six tools; calling anything else returns an
+`tools/call` reflect only the seven tools; calling anything else returns an
 unknown-tool error.
 
 ## No page-content fetching
@@ -76,7 +77,7 @@ or the authorization server allowlist.
 
 ## Tests
 
-`tests/mcp-search-profile.test.mjs` asserts the six-tool contract, unknown-tool
+`tests/mcp-search-profile.test.mjs` asserts the seven-tool contract, unknown-tool
 rejection, `scrapeOptions` rejection, the clean outbound body, authenticated
 `tools/list`, the path-scoped metadata document, audience acceptance/rejection,
 and that the full surface is unaffected. It runs in CI via `pnpm test`.

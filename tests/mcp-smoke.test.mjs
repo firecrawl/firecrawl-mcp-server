@@ -212,37 +212,54 @@ async function startFakeFirecrawlApi() {
   };
 }
 
-// A fake API that can emulate both server-budgeted and legacy developer
-// search responses.
+// A fake API that returns the complete dedicated developer-search envelope.
 async function startFakeDeveloperApi() {
   const requests = [];
   const passage = 'x'.repeat(5000);
   const server = createServer(async (req, res) => {
-    for await (const _chunk of req) {
-      // Drain the request before responding.
-    }
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const body = chunks.length
+      ? JSON.parse(Buffer.concat(chunks).toString('utf8'))
+      : undefined;
     requests.push({
+      body,
       headers: req.headers,
       method: req.method,
       url: req.url,
     });
 
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
-    if (req.method === 'GET' && url.pathname === '/v2/search/developer') {
+    if (req.method === 'POST' && url.pathname === '/v2/search/developer') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify({
-          ...(url.searchParams.get('query') === 'legacy server'
-            ? {}
-            : { passage_budget_applied: 4096 }),
-          results: [
+          repos: [
             {
-              id: 'doc:fixture',
-              passages: [{ text: passage }],
-              title: 'Developer fixture',
-              url: 'https://example.com/developer',
+              repo: 'firecrawl/firecrawl',
+              indexed: true,
+              types: { issue: true, pullRequest: true, readme: true },
             },
           ],
+          results: [
+            {
+              id: 'issue:firecrawl/firecrawl#1',
+              license:
+                body.query === 'flattened license'
+                  ? 'MIT'
+                  : { state: 'licensed', spdx_id: 'MIT' },
+              passages: [
+                {
+                  text: passage,
+                  citation_url:
+                    'https://github.com/firecrawl/firecrawl/issues/1#issuecomment-1',
+                },
+              ],
+              title: 'Developer fixture',
+              url: 'https://github.com/firecrawl/firecrawl/issues/1',
+            },
+          ],
+          sources: [{ source: 'firecrawl', indexed: false }],
           success: true,
         })
       );
@@ -339,6 +356,23 @@ async function startFakeFirecrawlBackend(options = {}) {
       };
       res.writeHead(response.status, { 'content-type': 'application/json' });
       res.end(JSON.stringify(response.body));
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/search/developer') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          results: [
+            {
+              id: 'doc:keyless',
+              passages: [{ text: 'Keyless developer evidence' }],
+              url: 'https://example.com/developer',
+            },
+          ],
+          success: true,
+        })
+      );
       return;
     }
 
@@ -479,7 +513,12 @@ test('HTTP cloud keyless transport preserves app challenge without advertising O
   const anonymousTools = parseSseJson(await unauthenticated.text()).result.tools;
   assert.deepEqual(
     anonymousTools.map((tool) => tool.name).sort(),
-    ['firecrawl_parse', 'firecrawl_scrape', 'firecrawl_search']
+    [
+      'firecrawl_developer_search',
+      'firecrawl_parse',
+      'firecrawl_scrape',
+      'firecrawl_search',
+    ]
   );
   const anonymousParse = anonymousTools.find(
     (tool) => tool.name === 'firecrawl_parse'
@@ -901,7 +940,7 @@ test('monitor create gives queries precedence over page targets', async (t) => {
   ]);
 });
 
-test('developer search delegates passage cuts to the server with a legacy fallback', async (t) => {
+test('developer search exposes all filters and returns the full response', async (t) => {
   const fakeApi = await startFakeDeveloperApi();
   t.after(() => fakeApi.close());
 
@@ -914,7 +953,7 @@ test('developer search delegates passage cuts to the server with a legacy fallba
   const client = new StdioMcpClient(child);
   await client.request('initialize', {
     capabilities: {},
-    clientInfo: { name: 'firecrawl-developer-budget', version: '0.0.0' },
+    clientInfo: { name: 'firecrawl-developer-parity', version: '0.0.0' },
     protocolVersion: '2025-06-18',
   });
   client.notify('notifications/initialized');
@@ -924,30 +963,75 @@ test('developer search delegates passage cuts to the server with a legacy fallba
     (tool) => tool.name === 'firecrawl_developer_search'
   );
   assert.ok(developerTool);
+  assert.deepEqual(Object.keys(developerTool.inputSchema.properties).sort(), [
+    'archived',
+    'fork',
+    'k',
+    'language',
+    'license',
+    'max_stars',
+    'min_stars',
+    'passages',
+    'query',
+    'repos',
+    'skills',
+    'sources',
+    'topic',
+    'types',
+  ]);
   assert.equal('passage_budget' in developerTool.inputSchema.properties, false);
 
-  const serverBudgeted = await client.request('tools/call', {
-    arguments: { query: 'server budget' },
+  const result = await client.request('tools/call', {
+    arguments: {
+      archived: false,
+      fork: true,
+      k: 20,
+      language: 'TypeScript',
+      license: 'MIT',
+      max_stars: 50000,
+      min_stars: 100,
+      passages: 5,
+      query: 'full filters',
+      repos: ['firecrawl/firecrawl'],
+      sources: ['firecrawl'],
+      topic: ['web-scraping'],
+      types: ['doc', 'issue', 'pull_request', 'readme'],
+    },
     name: 'firecrawl_developer_search',
   });
-  assert.notEqual(serverBudgeted.isError, true);
-  assert.ok(serverBudgeted.content[0].text.includes(fakeApi.passage));
+  assert.notEqual(result.isError, true);
+  const response = JSON.parse(result.content[0].text);
+  assert.equal(response.results[0].passages[0].text, fakeApi.passage);
+  assert.equal(response.results[0].license.spdx_id, 'MIT');
+  assert.match(response.results[0].passages[0].citation_url, /issuecomment/);
+  assert.equal(response.repos[0].indexed, true);
+  assert.equal(response.sources[0].indexed, false);
 
-  const legacy = await client.request('tools/call', {
-    arguments: { query: 'legacy server' },
+  assert.equal(fakeApi.requests.length, 1);
+  assert.equal(fakeApi.requests[0].method, 'POST');
+  assert.equal(fakeApi.requests[0].url, '/v2/search/developer');
+  assert.deepEqual(fakeApi.requests[0].body, {
+    archived: false,
+    fork: true,
+    k: 20,
+    language: 'TypeScript',
+    license: 'MIT',
+    max_stars: 50000,
+    min_stars: 100,
+    origin: 'mcp-fastmcp',
+    passages: 5,
+    query: 'full filters',
+    repos: ['firecrawl/firecrawl'],
+    sources: ['firecrawl'],
+    topic: ['web-scraping'],
+    types: ['doc', 'issue', 'pull_request', 'readme'],
+  });
+
+  const flattened = await client.request('tools/call', {
+    arguments: { query: 'flattened license' },
     name: 'firecrawl_developer_search',
   });
-  assert.notEqual(legacy.isError, true);
-  const legacyBody = legacy.content[0].text.split('\n').slice(2).join('\n');
-  assert.equal(legacyBody.length, 1200);
-
-  assert.deepEqual(
-    fakeApi.requests.map((request) => request.url),
-    [
-      '/v2/search/developer?query=server+budget',
-      '/v2/search/developer?query=legacy+server',
-    ]
-  );
+  assert.equal(JSON.parse(flattened.content[0].text).results[0].license, 'MIT');
 });
 
 test('stdio transport calls Firecrawl API through a tool end to end', async (t) => {
@@ -1218,6 +1302,27 @@ test('HTTP cloud transport serves an eligible keyless client and forwards its IP
   assert.notEqual(message.result.isError, true);
   const keylessSearchPayload = JSON.parse(message.result.content[0].text);
   assert.equal('id' in keylessSearchPayload, false);
+
+  const developerCall = await httpToolCall(port, {
+    id: 14,
+    headers: { 'x-forwarded-for': '8.8.8.7' },
+    params: {
+      arguments: { passages: 2, query: 'keyless developer' },
+      name: 'firecrawl_developer_search',
+    },
+  });
+  assert.equal(developerCall.status, 200);
+  const developerMessage = parseSseJson(await developerCall.text());
+  assert.notEqual(developerMessage.result.isError, true);
+  assert.equal(
+    JSON.parse(developerMessage.result.content[0].text).results[0].id,
+    'doc:keyless'
+  );
+  const developerBackendCall = backend.requests.find(
+    (request) => request.url === '/v2/search/developer'
+  );
+  assert.equal(developerBackendCall.headers.authorization, undefined);
+  assert.equal(developerBackendCall.body.passages, 2);
 
   const eligibilityCalls = backend.requests.filter(
     (r) => r.url === '/v2/keyless/eligibility'
