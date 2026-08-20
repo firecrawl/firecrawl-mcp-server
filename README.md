@@ -927,35 +927,20 @@ Search an index built for coding agents. The index covers GitHub issues, merged 
 {
   "name": "firecrawl_developer_search",
   "arguments": {
-    "query": "how do I configure retries",
-    "k": 10,
-    "passages": 3,
-    "types": ["issue", "pull_request", "readme"],
-    "repos": ["firecrawl/firecrawl"],
-    "language": "TypeScript",
-    "license": "MIT",
-    "min_stars": 100,
-    "archived": false
+    "query": "retry configuration in firecrawl/firecrawl TypeScript issues and merged pull requests",
+    "k": 10
   }
 }
 ```
 
-- `query` (required): developer question or search phrase (nonblank, at most 4096 bytes).
+- `query` (required): developer question or search phrase (nonblank, at most 4096 bytes). Express repository, source, result-kind, language, topic, license, skill, and other scoping intent in the query text; semantic retrieval handles the scoping.
 - `k`: total ranked results, 1–100 (default 10).
-- `passages`: passages per result, 1–5 (default 1).
-- `types`: any of `doc`, `issue`, `pull_request`, or `readme` (default all).
-- `repos`: up to 20 GitHub `owner/name` filters. Alone, scopes to GitHub-backed results.
-- `sources`: up to 20 developer documentation source IDs. Alone, scopes to docs. With `repos`, OR-combines both origins.
-- `language`: one case-insensitive GitHub Linguist primary language.
-- `topic`: up to 8 repository topics; all must match.
-- `license`: one case-insensitive SPDX identifier.
-- `min_stars` / `max_stars`: repository star bounds. Unscoped searches use star bands; repo-scoped searches use exact values.
-- `archived` / `fork`: filter repository-backed results by either boolean state.
-- `skills`: set to `"only"` for agent-skill evidence only; omit `types` or include `doc`.
 
-**Returns:** The complete JSON envelope. Result kind is inferred from each ID prefix; the API intentionally does not emit a `type` field. Results include all requested passages, optional citation URLs and license disclosures. Requests with `repos` or `sources` also return indexed-status echoes.
+This agent-facing surface is intentionally limited to `query` and `k`. The full filter surface remains available on the [Developer Index REST API](https://docs.firecrawl.dev/features/developer) for advanced use.
 
-`firecrawl_search` with `categories: ["developer"]` searches the same index beside web results but returns only the reduced generic projection. Use `firecrawl_developer_search` for full filters and evidence; it is available on both the full and search-only endpoints.
+**Returns:** The complete JSON envelope unchanged. Result kind is inferred from each ID prefix; the API intentionally does not emit a `type` field. Results include server-selected passages, optional citation URLs and license disclosures, and any repository or source indexing status returned by the API.
+
+`firecrawl_search` with `categories: ["developer"]` searches the same index beside web results but returns only the reduced generic projection. Use `firecrawl_developer_search` for complete evidence; it is available on both the full and search-only endpoints.
 
 ## Logging System
 

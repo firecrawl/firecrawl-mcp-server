@@ -15,7 +15,7 @@ The search surface exposes exactly these seven read-only tools and nothing else:
 | Tool | Purpose |
 | --- | --- |
 | `firecrawl_search` | Ranked web / index search results |
-| `firecrawl_developer_search` | Full developer-index filters, passages, citations, licenses, and index status |
+| `firecrawl_developer_search` | Lean semantic developer search with complete evidence responses |
 | `firecrawl_research_search_papers` | Semantic search over indexed research papers |
 | `firecrawl_research_inspect_paper` | Canonical metadata for one paper |
 | `firecrawl_research_related_papers` | Citation-graph expansion from anchor papers |

@@ -940,7 +940,7 @@ test('monitor create gives queries precedence over page targets', async (t) => {
   ]);
 });
 
-test('developer search exposes all filters and returns the full response', async (t) => {
+test('developer search exposes only query and k while returning the full response', async (t) => {
   const fakeApi = await startFakeDeveloperApi();
   t.after(() => fakeApi.close());
 
@@ -964,27 +964,17 @@ test('developer search exposes all filters and returns the full response', async
   );
   assert.ok(developerTool);
   assert.deepEqual(Object.keys(developerTool.inputSchema.properties).sort(), [
-    'archived',
-    'fork',
     'k',
-    'language',
-    'license',
-    'max_stars',
-    'min_stars',
-    'passages',
     'query',
-    'repos',
-    'skills',
-    'sources',
-    'topic',
-    'types',
   ]);
-  assert.equal('passage_budget' in developerTool.inputSchema.properties, false);
+  const developerSchema = JSON.stringify(developerTool.inputSchema);
+  assert.match(developerSchema, /semantic retrieval handles the scoping/);
+  assert.match(developerSchema, /REST API/);
 
   for (const arguments_ of [
     { query: 'x'.repeat(4097) },
-    { max_stars: 100000, query: 'unscoped star ceiling' },
-    { min_stars: 10, max_stars: 9, query: 'reversed star bounds' },
+    { k: 101, query: 'too many results' },
+    { query: 'old filter', repos: ['firecrawl/firecrawl'] },
   ]) {
     await assert.rejects(
       client.request('tools/call', {
@@ -998,19 +988,9 @@ test('developer search exposes all filters and returns the full response', async
 
   const result = await client.request('tools/call', {
     arguments: {
-      archived: false,
-      fork: true,
       k: 20,
-      language: 'TypeScript',
-      license: 'MIT',
-      max_stars: 50000,
-      min_stars: 100,
-      passages: 5,
-      query: 'full filters',
-      repos: ['firecrawl/firecrawl'],
-      sources: ['firecrawl'],
-      topic: ['web-scraping'],
-      types: ['doc', 'issue', 'pull_request', 'readme'],
+      query:
+        'web scraping in firecrawl/firecrawl TypeScript issues and merged pull requests',
     },
     name: 'firecrawl_developer_search',
   });
@@ -1026,20 +1006,10 @@ test('developer search exposes all filters and returns the full response', async
   assert.equal(fakeApi.requests[0].method, 'POST');
   assert.equal(fakeApi.requests[0].url, '/v2/search/developer');
   assert.deepEqual(fakeApi.requests[0].body, {
-    archived: false,
-    fork: true,
     k: 20,
-    language: 'TypeScript',
-    license: 'MIT',
-    max_stars: 50000,
-    min_stars: 100,
     origin: 'mcp-fastmcp',
-    passages: 5,
-    query: 'full filters',
-    repos: ['firecrawl/firecrawl'],
-    sources: ['firecrawl'],
-    topic: ['web-scraping'],
-    types: ['doc', 'issue', 'pull_request', 'readme'],
+    query:
+      'web scraping in firecrawl/firecrawl TypeScript issues and merged pull requests',
   });
 
   const flattened = await client.request('tools/call', {
@@ -1322,7 +1292,7 @@ test('HTTP cloud transport serves an eligible keyless client and forwards its IP
     id: 14,
     headers: { 'x-forwarded-for': '8.8.8.7' },
     params: {
-      arguments: { passages: 2, query: 'keyless developer' },
+      arguments: { k: 2, query: 'keyless developer' },
       name: 'firecrawl_developer_search',
     },
   });
@@ -1337,7 +1307,7 @@ test('HTTP cloud transport serves an eligible keyless client and forwards its IP
     (request) => request.url === '/v2/search/developer'
   );
   assert.equal(developerBackendCall.headers.authorization, undefined);
-  assert.equal(developerBackendCall.body.passages, 2);
+  assert.equal(developerBackendCall.body.k, 2);
 
   const eligibilityCalls = backend.requests.filter(
     (r) => r.url === '/v2/keyless/eligibility'
