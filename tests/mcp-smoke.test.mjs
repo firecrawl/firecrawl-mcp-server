@@ -229,13 +229,12 @@ async function startFakeDeveloperApi() {
 
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     if (req.method === 'GET' && url.pathname === '/v2/search/developer') {
-      const passageBudget = url.searchParams.get('passage_budget');
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify({
           ...(url.searchParams.get('query') === 'legacy server'
             ? {}
-            : { passage_budget_applied: Number(passageBudget) }),
+            : { passage_budget_applied: 4096 }),
           results: [
             {
               id: 'doc:fixture',
@@ -920,19 +919,19 @@ test('developer search delegates passage cuts to the server with a legacy fallba
   });
   client.notify('notifications/initialized');
 
+  const tools = await client.request('tools/list');
+  const developerTool = tools.tools.find(
+    (tool) => tool.name === 'firecrawl_developer_search'
+  );
+  assert.ok(developerTool);
+  assert.equal('passage_budget' in developerTool.inputSchema.properties, false);
+
   const serverBudgeted = await client.request('tools/call', {
     arguments: { query: 'server budget' },
     name: 'firecrawl_developer_search',
   });
   assert.notEqual(serverBudgeted.isError, true);
   assert.ok(serverBudgeted.content[0].text.includes(fakeApi.passage));
-
-  const customBudget = await client.request('tools/call', {
-    arguments: { passage_budget: 768, query: 'custom budget' },
-    name: 'firecrawl_developer_search',
-  });
-  assert.notEqual(customBudget.isError, true);
-  assert.ok(customBudget.content[0].text.includes(fakeApi.passage));
 
   const legacy = await client.request('tools/call', {
     arguments: { query: 'legacy server' },
@@ -945,9 +944,8 @@ test('developer search delegates passage cuts to the server with a legacy fallba
   assert.deepEqual(
     fakeApi.requests.map((request) => request.url),
     [
-      '/v2/search/developer?query=server+budget&passage_budget=4096',
-      '/v2/search/developer?query=custom+budget&passage_budget=768',
-      '/v2/search/developer?query=legacy+server&passage_budget=4096',
+      '/v2/search/developer?query=server+budget',
+      '/v2/search/developer?query=legacy+server',
     ]
   );
 });
