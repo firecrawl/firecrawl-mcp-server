@@ -2,5 +2,8 @@ allowBuilds:
   esbuild: true
   tldjs: true
 
+overrides:
+  zod: 4.1.13
+
 patchedDependencies:
   fastmcp@4.3.2: patches/fastmcp@4.3.2.patch

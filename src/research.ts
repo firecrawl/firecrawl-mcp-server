@@ -56,7 +56,7 @@ function withQuery(path: string, params: URLSearchParams): string {
   return qs ? `${path}?${qs}` : path;
 }
 
-// --- result formatting (ported from research-index-front/src/agent_eval.ts) ---
+// --- result formatting ---
 
 // Max authors to print per paper (with affiliations); the rest collapse to a
 // "+N more" tail so a large collaboration doesn't flood the context.

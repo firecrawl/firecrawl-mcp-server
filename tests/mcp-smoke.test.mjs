@@ -514,6 +514,7 @@ test('parse, interact, and monitor failures use the shared structured boundary',
   const backend = await startFakeFirecrawlBackend({
     monitorResponse: { status: 503, body: { success: false, error: 'monitor unavailable' } },
     scrapeResponse: { status: 200, body: { success: true, data: { markdown: '# page' } } },
+    searchResponse: { status: 402, body: { error: 'This feature requires a paid plan.' } },
   });
   t.after(() => backend.close());
   const port = await getFreePort();
@@ -540,6 +541,7 @@ test('parse, interact, and monitor failures use the shared structured boundary',
       { page: 'https://example.com/', goal: 'Track title changes' },
       'UPSTREAM_REQUEST_FAILED',
     ],
+    ['firecrawl_search', { query: 'plan-gated feature' }, 'UPSTREAM_REQUEST_FAILED'],
   ]) {
     const response = await httpToolCall(port, {
       id: `structured-${name}`,
@@ -557,7 +559,14 @@ test('empty and likely-blocked results carry in-band Firecrawl notices', async (
   const backend = await startFakeFirecrawlBackend({
     scrapeResponse: {
       status: 200,
-      body: { success: true, data: { markdown: '', metadata: { statusCode: 403 } } },
+      body: {
+        success: true,
+        data: {
+          markdown: '',
+          metadata: { statusCode: 403 },
+          warning: `blocked ${'x'.repeat(20_000)}`,
+        },
+      },
     },
     searchResponse: { status: 200, body: { success: true, data: { web: [] } } },
   });
@@ -576,7 +585,11 @@ test('empty and likely-blocked results carry in-band Firecrawl notices', async (
   await waitForHealth(port, child);
 
   for (const [name, arguments_, expectedCode] of [
-    ['firecrawl_scrape', { url: 'https://example.com/' }, 'LIKELY_BLOCKED'],
+    [
+      'firecrawl_scrape',
+      { url: 'https://example.com/', response_format: 'concise' },
+      'LIKELY_BLOCKED',
+    ],
     ['firecrawl_search', { query: 'no matching result' }, 'EMPTY_RESULT'],
   ]) {
     const response = await httpToolCall(port, {
@@ -588,9 +601,54 @@ test('empty and likely-blocked results carry in-band Firecrawl notices', async (
     assert.notEqual(result.isError, true, name);
     const payload = JSON.parse(result.content[0].text);
     assert.equal(payload._firecrawl.code, expectedCode, name);
-    assert.match(payload._firecrawl.message, /empty|blocked/i, name);
     assert.ok(Array.isArray(payload._firecrawl.next_actions), name);
+    if (name === 'firecrawl_scrape') {
+      assert.equal(payload._firecrawl.truncated, true);
+    } else {
+      assert.match(payload._firecrawl.message, /empty/i, name);
+    }
   }
+});
+
+test('non-empty scrape content is not flagged as likely blocked', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    scrapeResponse: {
+      status: 200,
+      body: {
+        success: true,
+        data: {
+          markdown: `# Usable page\n\n${'content '.repeat(100)}`,
+          metadata: { statusCode: 403 },
+        },
+      },
+    },
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await httpToolCall(port, {
+    id: 'non-empty-block-signal',
+    headers: { 'x-api-key': 'fc-test' },
+    params: {
+      arguments: { url: 'https://example.com/' },
+      name: 'firecrawl_scrape',
+    },
+  });
+  const result = parseSseJson(await response.text()).result;
+  assert.notEqual(result.isError, true);
+  const payload = JSON.parse(result.content[0].text);
+  assert.equal(payload._firecrawl, undefined);
 });
 
 test('HTTP cloud keyless transport preserves app challenge without advertising OAuth', async (t) => {
@@ -1073,7 +1131,7 @@ test('payload-heavy responses are bounded with explicit retrieval guidance', asy
         data: {
           web: [
             {
-              title: 'Large result',
+              title: `${'a'.repeat(1_999)}😀 trailing`,
               url: 'https://example.com/large',
               markdown: largeMarkdown,
               html: `<main>${largeMarkdown}</main>`,
@@ -1141,6 +1199,8 @@ test('payload-heavy responses are bounded with explicit retrieval guidance', asy
   assert.match(concise._firecrawl.message, /response_format.*detailed/i);
   assert.equal(concise.data.web[0].rawHtml, undefined);
   assert.equal(concise.data.web[0].screenshot, undefined);
+  const titlePrefix = concise.data.web[0].title.split('\n[truncated')[0];
+  assert.equal(titlePrefix.endsWith('\ud83d'), false);
 
   const requests = backend.requests.filter(
     (request) => request.method === 'POST' && request.url === '/v2/search'
@@ -1148,6 +1208,47 @@ test('payload-heavy responses are bounded with explicit retrieval guidance', asy
   assert.equal(requests.length, 2);
   assert.equal(requests[0].body.response_format, undefined);
   assert.equal(requests[1].body.response_format, undefined);
+});
+
+test('many medium search results respect the total response cap', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    searchResponse: {
+      status: 200,
+      body: {
+        success: true,
+        data: {
+          web: Array.from({ length: 50 }, (_, index) => ({
+            title: `Result ${index}`,
+            url: `https://example.com/${index}`,
+            markdown: 'medium content '.repeat(700),
+          })),
+        },
+      },
+    },
+  });
+  t.after(() => backend.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: backend.url,
+  });
+  t.after(() => stopChild(child));
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-total-output-cap', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const result = await client.request('tools/call', {
+    arguments: { query: 'many medium results' },
+    name: 'firecrawl_search',
+  });
+  const text = result.content[0].text;
+  const payload = JSON.parse(text);
+  assert.ok(text.length <= 64_000, `detailed response was ${text.length} chars`);
+  assert.equal(payload._firecrawl.truncated, true);
 });
 
 test('crawl bounding preserves the upstream continuation and small responses', async (t) => {
@@ -1203,6 +1304,25 @@ test('crawl bounding preserves the upstream continuation and small responses', a
     ['/v2/crawl/job-1']
   );
 
+  for (const rejectedNext of [
+    'https://evil.example/v2/crawl/job-1?cursor=stolen',
+    '/v2/crawl/other-job?cursor=stolen',
+  ]) {
+    const rejectedResult = await client.request('tools/call', {
+      arguments: { id: 'job-1', next: rejectedNext },
+      name: 'firecrawl_check_crawl_status',
+    });
+    assert.equal(rejectedResult.isError, true);
+    assert.equal(rejectedResult.structuredContent.code, 'INVALID_REQUEST');
+  }
+
+  const emptyIdResult = await client.request('tools/call', {
+    arguments: { id: '', next: '/v2/crawl/?cursor=invalid' },
+    name: 'firecrawl_check_crawl_status',
+  });
+  assert.equal(emptyIdResult.isError, true);
+  assert.equal(emptyIdResult.structuredContent.code, 'INVALID_REQUEST');
+
   const continuationResult = await client.request('tools/call', {
     arguments: { id: 'job-1', next },
     name: 'firecrawl_check_crawl_status',
@@ -1223,6 +1343,46 @@ test('crawl bounding preserves the upstream continuation and small responses', a
     next: null,
     data: [{ url: 'https://example.com/small', markdown: 'small page' }],
   });
+});
+
+test('crawl continuation accepts a path-prefixed API base', async (t) => {
+  const next = '/firecrawl/v2/crawl/job-prefix?cursor=next-page';
+  const backend = await startFakeFirecrawlBackend({
+    crawlResponses: {
+      [next]: {
+        status: 'completed',
+        completed: 2,
+        total: 2,
+        next: null,
+        data: [{ url: 'https://example.com/2', markdown: 'second page' }],
+      },
+    },
+  });
+  t.after(() => backend.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: `${backend.url}/firecrawl`,
+  });
+  t.after(() => stopChild(child));
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-prefixed-continuation', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const result = await client.request('tools/call', {
+    arguments: { id: 'job-prefix', next },
+    name: 'firecrawl_check_crawl_status',
+  });
+  assert.notEqual(
+    result.isError,
+    true,
+    JSON.stringify({ result, requests: backend.requests })
+  );
+  assert.equal(JSON.parse(result.content[0].text).data[0].markdown, 'second page');
 });
 
 test('local keyless stdio lists exactly its callable tools', async (t) => {

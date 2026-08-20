@@ -1210,7 +1210,7 @@ function wrapToolError(error: unknown, requestId: string): UserError {
       true
     );
   }
-  if (/requires|must belong|provide (?:either|exactly)|missing/i.test(message)) {
+  if (/^Crawl continuation must belong to this crawl job\.$/.test(message)) {
     return agentLegibleError(
       'INVALID_REQUEST',
       error,
@@ -1258,7 +1258,7 @@ function emitActionLog(
   status: ActionStatus,
   session?: SessionData,
   error?: unknown,
-  requestId = randomUUID(),
+  requestId: string = randomUUID(),
   code?: string
 ): void {
   if (process.env.CLOUD_SERVICE !== 'true') return;
@@ -1354,18 +1354,27 @@ function guardHostedTool(
             ? payload.code
             : undefined;
         if (logActions && earlyResult.isError && recoveryCode) {
+          const recoveryRequestId =
+            payload &&
+            typeof payload === 'object' &&
+            'request_id' in payload &&
+            typeof payload.request_id === 'string'
+              ? payload.request_id
+              : randomUUID();
           emitActionLog(
             tool.name,
             'error',
             session,
             new UserError(`Tool validation failed: ${recoveryCode}`, payload),
-            randomUUID(),
+            recoveryRequestId,
             recoveryCode
           );
         }
         return earlyResult;
       }
 
+      // FastMCP validates again after this hook; validating here preserves
+      // structured issue details instead of its flattened validation error.
       const schema = tool.parameters as typeof tool.parameters & {
         safeParseAsync?: (value: unknown) => Promise<{
           success: boolean;
@@ -1609,8 +1618,11 @@ function compactResponseValue(
 ): unknown {
   if (typeof value === 'string') {
     if (value.length <= limits.stringChars) return value;
-    stats.characters += value.length - limits.stringChars;
-    return `${value.slice(0, limits.stringChars)}\n[truncated ${value.length - limits.stringChars} characters]`;
+    let retainedChars = limits.stringChars;
+    const lastCodeUnit = value.charCodeAt(retainedChars - 1);
+    if (lastCodeUnit >= 0xd800 && lastCodeUnit <= 0xdbff) retainedChars -= 1;
+    stats.characters += value.length - retainedChars;
+    return `${value.slice(0, retainedChars)}\n[truncated ${value.length - retainedChars} characters]`;
   }
   if (!value || typeof value !== 'object') return value;
   if (depth >= 12) {
@@ -1671,7 +1683,13 @@ function withTruncationMetadata(
   metadata: Record<string, unknown>
 ): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
-    ? { ...(value as Record<string, unknown>), _firecrawl: metadata }
+    ? {
+        ...(value as Record<string, unknown>),
+        _firecrawl: {
+          ...(resultRecord((value as Record<string, unknown>)._firecrawl) ?? {}),
+          ...metadata,
+        },
+      }
     : { result: value, _firecrawl: metadata };
 }
 
@@ -1691,18 +1709,23 @@ function withResultNotice(
   if (!root) return data;
   const body = resultRecord(root.data) ?? root;
   const statusCode = Number(body.metadata?.statusCode ?? root.statusCode);
-  const blocked =
-    kind === 'scrape' &&
-    ([401, 403, 429].includes(statusCode) ||
-      /blocked|captcha|access denied/i.test(
-        String(body.warning ?? body.error ?? root.warning ?? root.error ?? '')
-      ));
 
   let empty = false;
+  let blocked = false;
   if (kind === 'scrape') {
     const contentFields = ['markdown', 'html', 'rawHtml', 'json', 'summary'];
+    const contentLength = contentFields.reduce(
+      (length, field) => length + JSON.stringify(body[field] ?? '').length,
+      0
+    );
     empty = contentFields.some((field) => field in body) &&
       contentFields.every((field) => body[field] == null || body[field] === '');
+    const blockingSignal =
+      [401, 403, 429].includes(statusCode) ||
+      /blocked|captcha|access denied/i.test(
+        String(body.warning ?? body.error ?? root.warning ?? root.error ?? '')
+      );
+    blocked = blockingSignal && (empty || contentLength <= 200);
   } else if (kind === 'search') {
     const groups = Object.values(resultRecord(root.data) ?? {}).filter(Array.isArray);
     empty = groups.length > 0 && groups.every((group) => group.length === 0);
@@ -1778,14 +1801,18 @@ function formatToolResponse(
     );
     const hadOmissions =
       stats.arrayItems > 0 || stats.characters > 0 || stats.fields > 0;
-    if (!hadOmissions) return asText(compacted);
-    const output = asText(
-      withTruncationMetadata(
-        compacted,
-        truncationMetadata(format, stats, guidance)
-      )
-    );
-    if (output.length <= maxChars) return output;
+    if (!hadOmissions) {
+      const output = asText(compacted);
+      if (output.length <= maxChars) return output;
+    } else {
+      const output = asText(
+        withTruncationMetadata(
+          compacted,
+          truncationMetadata(format, stats, guidance)
+        )
+      );
+      if (output.length <= maxChars) return output;
+    }
     if (
       limits.arrayItems === 1 &&
       limits.objectFields === 1 &&
@@ -2828,11 +2855,12 @@ function crawlDataBytes(docs: unknown[]): number {
 function validatedCrawlContinuation(jobId: string, continuation: string): string {
   const apiBase = new URL(resolveApiBaseUrl());
   const url = new URL(continuation, apiBase);
-  const expectedPath = `/v2/crawl/${encodeURIComponent(jobId)}`;
+  const apiBasePath = apiBase.pathname.replace(/\/$/, '');
+  const expectedPath = `${apiBasePath}/v2/crawl/${encodeURIComponent(jobId)}`;
   if (url.origin !== apiBase.origin || url.pathname !== expectedPath) {
     throw new Error('Crawl continuation must belong to this crawl job.');
   }
-  return `${url.pathname}${url.search}`;
+  return `${url.pathname.slice(apiBasePath.length)}${url.search}`;
 }
 
 async function getCrawlStatusWithOrigin(
@@ -3437,7 +3465,7 @@ server.addTool({
 Retrieve status and available results for an existing crawl ID without starting or modifying it. Pass a returned \`next\` value with the same ID to retrieve later documents.
 `,
   parameters: z.object({
-    id: z.string().describe('Crawl job ID.'),
+    id: z.string().min(1).describe('Crawl job ID.'),
     next: z
       .string()
       .max(4_096)
