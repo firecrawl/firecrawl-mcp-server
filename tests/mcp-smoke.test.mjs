@@ -923,6 +923,37 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
 
   const byName = new Map(tools.tools.map((tool) => [tool.name, tool]));
+  const properties = tools.tools.flatMap((tool) =>
+    Object.values(tool.inputSchema.properties ?? {})
+  );
+  const describedProperties = properties.filter(
+    (property) => property.description?.trim().length > 0
+  );
+  assert.ok(properties.length >= 160, `expected full schema, got ${properties.length} properties`);
+  assert.ok(
+    describedProperties.length / properties.length >= 0.95,
+    `parameter-description coverage ${describedProperties.length}/${properties.length}`
+  );
+  assert.match(
+    byName.get('firecrawl_search').inputSchema.properties.scrapeOptions.description,
+    /each result.*response size.*credit use/is
+  );
+  assert.match(
+    byName.get('firecrawl_monitor_create').inputSchema.properties.body.description,
+    /advanced monitor request body.*replaces the simple-form fields/is
+  );
+  assert.match(
+    byName.get('firecrawl_parse').inputSchema.properties.filePath.description,
+    /local file to parse/is
+  );
+  assert.match(
+    byName.get('firecrawl_agent').inputSchema.properties.schema.description,
+    /final structured result.*reduce result size/is
+  );
+  assert.match(
+    byName.get('firecrawl_interact').inputSchema.properties.code.description,
+    /executable browser-session code/is
+  );
   assert.match(init.instructions, /firecrawl_scrape retrieves one supplied page/i);
   assert.match(init.instructions, /firecrawl_map enumerates URLs under a site/i);
   assert.match(

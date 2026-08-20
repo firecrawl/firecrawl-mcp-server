@@ -811,36 +811,53 @@ type ResponseFormat = 'concise' | 'detailed';
 
 const responseFormatSchema = z
   .enum(['concise', 'detailed'])
-  .default('detailed');
+  .default('detailed')
+  .describe('Response detail level; defaults to detailed.');
 
 // Parameter fields shared by both firecrawl_search surfaces. The full surface
 // adds `scrapeOptions` on top; the search surface uses these as-is (strict, no
 // scrapeOptions). Defining the field set once keeps the two surfaces from
 // drifting when a source type, category, or filter changes.
 const searchToolBaseFields = {
-  query: z.string().min(1),
+  query: z.string().min(1).describe('Search query, including supported search operators.'),
   highlights: z
     .boolean()
     .optional()
     .describe(
       'Return query-relevant highlights for each search result. Set to false to keep the original search snippets.'
     ),
-  limit: z.number().optional(),
-  tbs: z.string().optional(),
-  filter: z.string().optional(),
-  location: z.string().optional(),
-  includeDomains: z.array(searchDomainSchema).optional(),
-  excludeDomains: z.array(searchDomainSchema).optional(),
+  limit: z.number().optional().describe('Maximum number of results.'),
+  tbs: z.string().optional().describe('Google-style time-based search filter.'),
+  filter: z.string().optional().describe('Additional provider-specific result filter.'),
+  location: z.string().optional().describe('Geographic location for localized results.'),
+  includeDomains: z
+    .array(searchDomainSchema)
+    .optional()
+    .describe('Only return results from these hostnames.'),
+  excludeDomains: z
+    .array(searchDomainSchema)
+    .optional()
+    .describe('Exclude results from these hostnames.'),
   sources: z
-    .array(z.object({ type: z.enum(['web', 'images', 'news']) }))
-    .optional(),
+    .array(
+      z.object({
+        type: z
+          .enum(['web', 'images', 'news'])
+          .describe('Search source type.'),
+      })
+    )
+    .optional()
+    .describe('Source groups to search; defaults to web.'),
   categories: z
     .array(z.enum(['github', 'research', 'pdf', 'developer']))
     .optional()
     .describe(
       'Limit results to specific source types. `github` searches GitHub repositories, code, issues, and docs; `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. `developer` adds a `data.developer` group of `{ url, title, description }` results, where `description` holds the matched passage; the other categories filter `data.web`.'
     ),
-  enterprise: z.array(z.enum(['default', 'anon', 'zdr'])).optional(),
+  enterprise: z
+    .array(z.enum(['default', 'anon', 'zdr']))
+    .optional()
+    .describe('Enterprise search modes when enabled for the account.'),
   response_format: responseFormatSchema,
 };
 
@@ -1880,7 +1897,7 @@ function transformScrapeParams(
 }
 
 const scrapeParamsSchema = z.object({
-  url: z.string().url(),
+  url: z.string().url().describe('Page URL to scrape.'),
   formats: z
     .array(
       z.enum([
@@ -1897,75 +1914,146 @@ const scrapeParamsSchema = z.object({
         'audio',
       ])
     )
-    .optional(),
+    .optional()
+    .describe('Content formats to return.'),
   jsonOptions: z
     .object({
-      prompt: z.string().optional(),
-      schema: z.record(z.string(), z.any()).optional(),
+      prompt: z.string().optional().describe('Extraction instructions.'),
+      schema: z
+        .record(z.string(), z.any())
+        .optional()
+        .describe('JSON Schema-like object defining extracted fields.'),
     })
-    .optional(),
+    .optional()
+    .describe('Structured JSON extraction configuration.'),
   queryOptions: z
     .object({
-      prompt: z.string().max(10000),
-      mode: z.enum(['directQuote', 'freeform']).default('freeform'),
+      prompt: z.string().max(10000).describe('Question about the page.'),
+      mode: z
+        .enum(['directQuote', 'freeform'])
+        .default('freeform')
+        .describe('Answer mode; defaults to freeform.'),
     })
-    .optional(),
+    .optional()
+    .describe('Targeted page-question configuration.'),
   screenshotOptions: z
     .object({
-      fullPage: z.boolean().optional(),
-      quality: z.number().optional(),
-      viewport: z.object({ width: z.number(), height: z.number() }).optional(),
+      fullPage: z.boolean().optional().describe('Capture the full page.'),
+      quality: z.number().optional().describe('Screenshot image quality.'),
+      viewport: z
+        .object({
+          width: z.number().describe('Viewport width in pixels.'),
+          height: z.number().describe('Viewport height in pixels.'),
+        })
+        .optional()
+        .describe('Screenshot viewport dimensions.'),
     })
-    .optional(),
-  parsers: z.array(z.enum(['pdf'])).optional(),
+    .optional()
+    .describe('Screenshot capture configuration.'),
+  parsers: z
+    .array(z.enum(['pdf']))
+    .optional()
+    .describe('Document parsers to enable.'),
   pdfOptions: z
     .object({
-      maxPages: z.number().int().min(1).max(10000).optional(),
+      maxPages: z
+        .number()
+        .int()
+        .min(1)
+        .max(10000)
+        .optional()
+        .describe('Maximum PDF pages to parse.'),
     })
-    .optional(),
-  onlyMainContent: z.boolean().optional(),
-  redactPII: z.boolean().optional(),
-  includeTags: z.array(z.string()).optional(),
-  excludeTags: z.array(z.string()).optional(),
-  waitFor: z.number().optional(),
+    .optional()
+    .describe('PDF parsing configuration.'),
+  onlyMainContent: z
+    .boolean()
+    .optional()
+    .describe('Exclude navigation, headers, and footers.'),
+  redactPII: z.boolean().optional().describe('Redact detected personal information.'),
+  includeTags: z
+    .array(z.string())
+    .optional()
+    .describe('Only include these HTML tags.'),
+  excludeTags: z
+    .array(z.string())
+    .optional()
+    .describe('Exclude these HTML tags.'),
+  waitFor: z.number().optional().describe('Render delay in milliseconds.'),
   ...(SAFE_MODE
     ? {}
     : {
         actions: z
           .array(
             z.object({
-              type: z.enum(allowedActionTypes),
-              selector: z.string().optional(),
-              milliseconds: z.number().optional(),
-              text: z.string().optional(),
-              key: z.string().optional(),
-              direction: z.enum(['up', 'down']).optional(),
-              script: z.string().optional(),
-              fullPage: z.boolean().optional(),
+              type: z.enum(allowedActionTypes).describe('Browser action type.'),
+              selector: z.string().optional().describe('Target CSS selector.'),
+              milliseconds: z
+                .number()
+                .optional()
+                .describe('Wait duration in milliseconds.'),
+              text: z.string().optional().describe('Text to enter.'),
+              key: z.string().optional().describe('Keyboard key to press.'),
+              direction: z
+                .enum(['up', 'down'])
+                .optional()
+                .describe('Scroll direction.'),
+              script: z.string().optional().describe('JavaScript to execute.'),
+              fullPage: z
+                .boolean()
+                .optional()
+                .describe('Capture the full page for screenshot actions.'),
             })
           )
-          .optional(),
+          .optional()
+          .describe('Ordered browser actions to perform before extraction.'),
       }),
-  mobile: z.boolean().optional(),
-  skipTlsVerification: z.boolean().optional(),
-  removeBase64Images: z.boolean().optional(),
+  mobile: z.boolean().optional().describe('Use a mobile device viewport.'),
+  skipTlsVerification: z
+    .boolean()
+    .optional()
+    .describe('Allow pages with invalid TLS certificates.'),
+  removeBase64Images: z
+    .boolean()
+    .optional()
+    .describe('Remove inline base64 images from output.'),
   location: z
     .object({
-      country: z.string().optional(),
-      languages: z.array(z.string()).optional(),
+      country: z.string().optional().describe('ISO country code.'),
+      languages: z
+        .array(z.string())
+        .optional()
+        .describe('Preferred language codes.'),
     })
-    .optional(),
-  storeInCache: z.boolean().optional(),
-  zeroDataRetention: z.boolean().optional(),
-  maxAge: z.number().optional(),
-  lockdown: z.boolean().optional(),
-  proxy: z.enum(['basic', 'stealth', 'enhanced', 'auto']).optional(),
+    .optional()
+    .describe('Locale used when loading the page.'),
+  storeInCache: z.boolean().optional().describe('Permit storing fetched content in cache.'),
+  zeroDataRetention: z
+    .boolean()
+    .optional()
+    .describe('Prevent Firecrawl from retaining request content when supported.'),
+  maxAge: z
+    .number()
+    .optional()
+    .describe('Maximum cached-content age in milliseconds; 0 forces live fetch.'),
+  lockdown: z
+    .boolean()
+    .optional()
+    .describe('Use cached content only; fail instead of fetching live.'),
+  proxy: z
+    .enum(['basic', 'stealth', 'enhanced', 'auto'])
+    .optional()
+    .describe('Proxy mode; stronger modes may use more credits.'),
   profile: z
     .object({
-      name: z.string(),
-      saveChanges: z.boolean().optional(),
+      name: z.string().describe('Browser profile name.'),
+      saveChanges: z
+        .boolean()
+        .optional()
+        .describe('Persist profile changes after scraping.'),
     })
-    .optional(),
+    .optional()
+    .describe('Reusable browser profile configuration.'),
   response_format: responseFormatSchema,
 });
 
@@ -1982,38 +2070,81 @@ const parseOptionParamsSchema = z.object({
         'query',
       ])
     )
-    .optional(),
+    .optional()
+    .describe('Parsed content formats to return.'),
   jsonOptions: z
     .object({
-      prompt: z.string().optional(),
-      schema: z.record(z.string(), z.any()).optional(),
+      prompt: z.string().optional().describe('Extraction instructions.'),
+      schema: z
+        .record(z.string(), z.any())
+        .optional()
+        .describe('JSON Schema-like object defining extracted fields.'),
     })
-    .optional(),
+    .optional()
+    .describe('Structured JSON extraction configuration.'),
   queryOptions: z
     .object({
-      prompt: z.string().max(10000),
-      mode: z.enum(['directQuote', 'freeform']).default('freeform'),
+      prompt: z.string().max(10000).describe('Question about the document.'),
+      mode: z
+        .enum(['directQuote', 'freeform'])
+        .default('freeform')
+        .describe('Answer mode; defaults to freeform.'),
     })
-    .optional(),
-  parsers: z.array(z.enum(['pdf'])).optional(),
+    .optional()
+    .describe('Targeted document-question configuration.'),
+  parsers: z
+    .array(z.enum(['pdf']))
+    .optional()
+    .describe('Document parsers to enable.'),
   pdfOptions: z
     .object({
-      maxPages: z.number().int().min(1).max(10000).optional(),
+      maxPages: z
+        .number()
+        .int()
+        .min(1)
+        .max(10000)
+        .optional()
+        .describe('Maximum PDF pages to parse.'),
     })
-    .optional(),
-  onlyMainContent: z.boolean().optional(),
-  redactPII: z.boolean().optional(),
-  includeTags: z.array(z.string()).optional(),
-  excludeTags: z.array(z.string()).optional(),
-  removeBase64Images: z.boolean().optional(),
-  skipTlsVerification: z.boolean().optional(),
-  storeInCache: z.boolean().optional(),
-  zeroDataRetention: z.boolean().optional(),
+    .optional()
+    .describe('PDF parsing configuration.'),
+  onlyMainContent: z
+    .boolean()
+    .optional()
+    .describe('Exclude navigation, headers, and footers.'),
+  redactPII: z.boolean().optional().describe('Redact detected personal information.'),
+  includeTags: z
+    .array(z.string())
+    .optional()
+    .describe('Only include these HTML tags.'),
+  excludeTags: z
+    .array(z.string())
+    .optional()
+    .describe('Exclude these HTML tags.'),
+  removeBase64Images: z
+    .boolean()
+    .optional()
+    .describe('Remove inline base64 images from output.'),
+  skipTlsVerification: z
+    .boolean()
+    .optional()
+    .describe('Allow source URLs with invalid TLS certificates.'),
+  storeInCache: z
+    .boolean()
+    .optional()
+    .describe('Ignored: parse does not store indexed content.'),
+  zeroDataRetention: z
+    .boolean()
+    .optional()
+    .describe('Prevent Firecrawl from retaining document content when supported.'),
   maxAge: z
     .number()
     .optional()
     .describe('Ignored: parse never reuses or stores indexed content.'),
-  proxy: z.enum(['basic', 'auto']).optional(),
+  proxy: z
+    .enum(['basic', 'auto'])
+    .optional()
+    .describe('Proxy mode used for remote document URLs.'),
   response_format: responseFormatSchema,
 });
 
@@ -2442,12 +2573,21 @@ Enumerate URLs indexed under one website through Firecrawl without fetching each
 Returns matching URLs rather than page bodies. Retrieve one page with \`firecrawl_scrape\`; collect content across multiple pages with \`firecrawl_crawl\`.
 `,
   parameters: z.object({
-    url: z.string().url(),
-    search: z.string().optional(),
-    sitemap: z.enum(['include', 'skip', 'only']).optional(),
-    includeSubdomains: z.boolean().optional(),
-    limit: z.number().optional(),
-    ignoreQueryParameters: z.boolean().optional(),
+    url: z.string().url().describe('Website root URL to map.'),
+    search: z.string().optional().describe('Term used to rank matching URLs.'),
+    sitemap: z
+      .enum(['include', 'skip', 'only'])
+      .optional()
+      .describe('Whether sitemap URLs are included, skipped, or exclusive.'),
+    includeSubdomains: z
+      .boolean()
+      .optional()
+      .describe('Include URLs from subdomains.'),
+    limit: z.number().optional().describe('Maximum number of URLs returned.'),
+    ignoreQueryParameters: z
+      .boolean()
+      .optional()
+      .describe('Deduplicate URLs that differ only by query parameters.'),
   }),
   execute: async (args: unknown, { session, log }): Promise<string> => {
     const { url, ...options } = args as { url: string } & Record<
@@ -2492,7 +2632,10 @@ For a programming question, add \`categories: ["developer"]\`. It searches an in
       scrapeOptions: scrapeParamsSchema
         .omit({ url: true, response_format: true })
         .partial()
-        .optional(),
+        .optional()
+        .describe(
+          'Scrape configuration applied to each result. Fetching full page content increases response size and credit use.'
+        ),
     })
     .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE),
   execute: async (args: unknown, { session, log }): Promise<string> => {
@@ -2793,16 +2936,25 @@ const feedbackIssueSchema = z
   );
 
 const valuableSourceSchema = z.object({
-  url: z.string().url(),
-  reason: z.string().max(1000).optional(),
+  url: z.string().url().describe('Useful source URL.'),
+  reason: z
+    .string()
+    .max(1000)
+    .optional()
+    .describe('Why this source was useful.'),
 });
 
 const missingContentSchema = z.object({
   topic: z
     .string()
     .min(1, 'topic must not be empty')
-    .max(200, 'topic must be 200 characters or fewer'),
-  description: z.string().max(2000).optional(),
+    .max(200, 'topic must be 200 characters or fewer')
+    .describe('Short name for the missing topic.'),
+  description: z
+    .string()
+    .max(2000)
+    .optional()
+    .describe('Details about the expected missing content.'),
 });
 
 const FEEDBACK_DISABLED_VALUES = new Set(['1', 'true', 'yes', 'on']);
@@ -2846,25 +2998,38 @@ Eligibility is limited to successful searches within the feedback age window. Th
     parameters: z.object({
       searchId: z
         .string()
-        .uuid('searchId must be the UUID returned by firecrawl_search'),
-      rating: z.enum(['good', 'bad', 'partial']),
+        .uuid('searchId must be the UUID returned by firecrawl_search')
+        .describe('UUID returned by firecrawl_search.'),
+      rating: z
+        .enum(['good', 'bad', 'partial'])
+        .describe('Overall search-result quality rating.'),
       valuableSources: z
         .array(
           z.object({
-            url: z.string().url(),
-            reason: z.string().max(1000).optional(),
+            url: z.string().url().describe('Useful result URL.'),
+            reason: z
+              .string()
+              .max(1000)
+              .optional()
+              .describe('Why this source was useful.'),
           })
         )
         .max(50)
-        .optional(),
+        .optional()
+        .describe('Useful sources from the search; maximum 50.'),
       missingContent: z
         .array(
           z.object({
             topic: z
               .string()
               .min(1, 'topic must not be empty')
-              .max(200, 'topic must be 200 characters or fewer'),
-            description: z.string().max(2000).optional(),
+              .max(200, 'topic must be 200 characters or fewer')
+              .describe('Short name for the missing topic.'),
+            description: z
+              .string()
+              .max(2000)
+              .optional()
+              .describe('Details about the expected missing content.'),
           })
         )
         .max(20)
@@ -2874,7 +3039,11 @@ Eligibility is limited to successful searches within the feedback age window. Th
             'One entry per distinct topic. Each entry has a short `topic` and optional ' +
             'longer `description`.'
         ),
-      querySuggestions: z.string().max(2000).optional(),
+      querySuggestions: z
+        .string()
+        .max(2000)
+        .optional()
+        .describe('Suggested query improvements; maximum 2000 characters.'),
     }),
     execute: async (args: unknown, { session, log }): Promise<string> => {
       const {
@@ -2984,18 +3153,56 @@ Submit concise quality feedback for a completed search, scrape, parse, or map jo
 Returns submission status, feedback ID, and accounting fields.
 `,
     parameters: z.object({
-      endpoint: z.enum(['search', 'scrape', 'parse', 'map']),
-      jobId: z.string().uuid('jobId must be the UUID returned by Firecrawl'),
-      rating: z.enum(['good', 'bad', 'partial']),
-      issues: z.array(feedbackIssueSchema).max(20).optional(),
-      tags: z.array(feedbackIssueSchema).max(20).optional(),
-      note: z.string().max(4000).optional(),
-      valuableSources: z.array(valuableSourceSchema).max(50).optional(),
-      missingContent: z.array(missingContentSchema).max(50).optional(),
-      querySuggestions: z.string().max(2000).optional(),
-      url: z.string().url().optional(),
-      pageNumbers: z.array(z.number().int().positive()).max(100).optional(),
-      metadata: z.record(z.string(), z.unknown()).optional(),
+      endpoint: z
+        .enum(['search', 'scrape', 'parse', 'map'])
+        .describe('Firecrawl operation being rated.'),
+      jobId: z
+        .string()
+        .uuid('jobId must be the UUID returned by Firecrawl')
+        .describe('UUID returned by the rated Firecrawl operation.'),
+      rating: z
+        .enum(['good', 'bad', 'partial'])
+        .describe('Overall operation-result quality rating.'),
+      issues: z
+        .array(feedbackIssueSchema)
+        .max(20)
+        .optional()
+        .describe('Machine-readable issue codes; maximum 20.'),
+      tags: z
+        .array(feedbackIssueSchema)
+        .max(20)
+        .optional()
+        .describe('Additional classification tags; maximum 20.'),
+      note: z
+        .string()
+        .max(4000)
+        .optional()
+        .describe('Concise feedback note; maximum 4000 characters.'),
+      valuableSources: z
+        .array(valuableSourceSchema)
+        .max(50)
+        .optional()
+        .describe('Useful sources from the result; maximum 50.'),
+      missingContent: z
+        .array(missingContentSchema)
+        .max(50)
+        .optional()
+        .describe('Expected content absent from the result; maximum 50.'),
+      querySuggestions: z
+        .string()
+        .max(2000)
+        .optional()
+        .describe('Suggested query improvements; maximum 2000 characters.'),
+      url: z.string().url().optional().describe('Relevant source URL.'),
+      pageNumbers: z
+        .array(z.number().int().positive())
+        .max(100)
+        .optional()
+        .describe('Relevant one-based page numbers; maximum 100.'),
+      metadata: z
+        .record(z.string(), z.unknown())
+        .optional()
+        .describe('Small structured context for the feedback.'),
     }),
     execute: async (args: unknown, { session, log }): Promise<string> => {
       const {
@@ -3109,30 +3316,66 @@ Start a multi-page crawl at a website URL, poll it to a terminal state, and retu
 Crawl results can be large; use conservative limits when full-site coverage is unnecessary. Webhooks and interactive scrape actions are unavailable in safe mode. Returns the crawl ID, status, page data, and a \`next\` continuation when more pages remain. \`response_format\` defaults to \`detailed\`.
 `,
   parameters: z.object({
-    url: z.string(),
-    prompt: z.string().optional(),
-    excludePaths: z.array(z.string()).optional(),
-    includePaths: z.array(z.string()).optional(),
-    maxDiscoveryDepth: z.number().optional(),
-    sitemap: z.enum(['skip', 'include', 'only']).optional(),
-    limit: z.number().optional(),
-    allowExternalLinks: z.boolean().optional(),
-    allowSubdomains: z.boolean().optional(),
-    crawlEntireDomain: z.boolean().optional(),
-    delay: z.number().optional(),
-    maxConcurrency: z.number().optional(),
+    url: z.string().describe('Website URL where the crawl starts.'),
+    prompt: z.string().optional().describe('Natural-language crawl scope instructions.'),
+    excludePaths: z
+      .array(z.string())
+      .optional()
+      .describe('URL path patterns to exclude.'),
+    includePaths: z
+      .array(z.string())
+      .optional()
+      .describe('URL path patterns to include.'),
+    maxDiscoveryDepth: z
+      .number()
+      .optional()
+      .describe('Maximum link depth from the starting URL.'),
+    sitemap: z
+      .enum(['skip', 'include', 'only'])
+      .optional()
+      .describe('Whether sitemap URLs are skipped, included, or exclusive.'),
+    limit: z.number().optional().describe('Maximum pages to crawl.'),
+    allowExternalLinks: z
+      .boolean()
+      .optional()
+      .describe('Allow crawling links outside the starting domain.'),
+    allowSubdomains: z
+      .boolean()
+      .optional()
+      .describe('Allow crawling subdomains.'),
+    crawlEntireDomain: z
+      .boolean()
+      .optional()
+      .describe('Expand beyond the starting URL path.'),
+    delay: z.number().optional().describe('Delay between requests in seconds.'),
+    maxConcurrency: z
+      .number()
+      .optional()
+      .describe('Maximum concurrent crawl requests.'),
     ...(SAFE_MODE
       ? {}
       : {
-          webhook: z.string().optional(),
-          webhookHeaders: z.record(z.string(), z.string()).optional(),
+          webhook: z.string().optional().describe('Webhook URL for crawl events.'),
+          webhookHeaders: z
+            .record(z.string(), z.string())
+            .optional()
+            .describe('HTTP headers sent to the crawl webhook.'),
         }),
-    deduplicateSimilarURLs: z.boolean().optional(),
-    ignoreQueryParameters: z.boolean().optional(),
+    deduplicateSimilarURLs: z
+      .boolean()
+      .optional()
+      .describe('Remove URLs with substantially similar paths.'),
+    ignoreQueryParameters: z
+      .boolean()
+      .optional()
+      .describe('Deduplicate URLs that differ only by query parameters.'),
     scrapeOptions: scrapeParamsSchema
       .omit({ url: true, response_format: true })
       .partial()
-      .optional(),
+      .optional()
+      .describe(
+        'Scrape configuration applied to every crawled page. Rich formats increase response size and credit use.'
+      ),
     response_format: responseFormatSchema,
   }),
   execute: async (args, { session, log }) => {
@@ -3212,8 +3455,12 @@ server.addTool({
 Retrieve the current status, progress, and available results for an existing crawl ID. This only reads Firecrawl job state and does not start or modify the crawl. When \`next\` is returned, pass it with the same ID to retrieve later documents. \`response_format\` defaults to \`detailed\`.
 `,
   parameters: z.object({
-    id: z.string(),
-    next: z.string().max(4_096).optional(),
+    id: z.string().describe('Crawl job ID.'),
+    next: z
+      .string()
+      .max(4_096)
+      .optional()
+      .describe('Continuation URL returned by a previous status call.'),
     response_format: responseFormatSchema,
   }),
   execute: async (
@@ -3289,9 +3536,21 @@ Start an asynchronous web research job from a prompt, optional seed URLs, and an
 This call returns only a job ID, not the research result. Read the job with \`firecrawl_agent_status\` until it reaches \`completed\` or \`failed\`; research commonly takes several minutes. If the job cannot finish within the task's available time, \`firecrawl_search\` and \`firecrawl_scrape\` can gather evidence synchronously.
 `,
   parameters: z.object({
-    prompt: z.string().min(1).max(10000),
-    urls: z.array(z.string().url()).optional(),
-    schema: z.record(z.string(), z.any()).optional(),
+    prompt: z
+      .string()
+      .min(1)
+      .max(10000)
+      .describe('Research question and requested output.'),
+    urls: z
+      .array(z.string().url())
+      .optional()
+      .describe('Optional seed URLs for the research job.'),
+    schema: z
+      .record(z.string(), z.any())
+      .optional()
+      .describe(
+        'JSON Schema-like object defining the final structured result. Narrow schemas reduce result size.'
+      ),
   }),
   execute: async (args: unknown, { session, log }): Promise<string> => {
     const client = getClient(session);
@@ -3327,7 +3586,7 @@ Retrieve progress or final results for a \`firecrawl_agent\` job ID. A \`process
 Returns job status, progress information, and result data when completed. \`response_format\` defaults to \`detailed\`; \`concise\` removes bulky duplicate content and reports omissions.
 `,
   parameters: z.object({
-    id: z.string(),
+    id: z.string().describe('Agent job ID.'),
     response_format: responseFormatSchema,
   }),
   execute: async (args: unknown, { session, log }): Promise<string> => {
@@ -3365,16 +3624,45 @@ This acts on the live site, so actions such as form submission can create persis
 `,
   parameters: z
     .object({
-      scrapeId: z.string().trim().min(1).optional(),
-      url: z.string().trim().url().optional(),
-      prompt: z.string().trim().min(1).optional(),
-      code: z.string().trim().min(1).optional(),
-      language: z.enum(['bash', 'python', 'node']).optional(),
-      timeout: z.number().min(1).max(300).optional(),
+      scrapeId: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .describe('Existing scrape session ID; mutually exclusive with url.'),
+      url: z
+        .string()
+        .trim()
+        .url()
+        .optional()
+        .describe('Page URL to open; mutually exclusive with scrapeId.'),
+      prompt: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .describe('Natural-language browser interaction instructions.'),
+      code: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .describe('Executable browser-session code; may accompany prompt.'),
+      language: z
+        .enum(['bash', 'python', 'node'])
+        .optional()
+        .describe('Code runtime; used only with code.'),
+      timeout: z
+        .number()
+        .min(1)
+        .max(300)
+        .optional()
+        .describe('Execution timeout in seconds; maximum 300.'),
       scrapeOptions: scrapeParamsSchema
         .omit({ url: true, response_format: true })
         .partial()
-        .optional(),
+        .optional()
+        .describe('Scrape configuration used only when opening url.'),
       response_format: responseFormatSchema,
     })
     .refine((data) => Boolean(data.scrapeId) !== Boolean(data.url), {
@@ -3482,7 +3770,7 @@ server.addTool({
 Stop the live interact session associated with a \`scrapeId\` and release its resources. Returns a success confirmation.
 `,
   parameters: z.object({
-    scrapeId: z.string(),
+    scrapeId: z.string().describe('Interact session ID to stop.'),
   }),
   execute: async (args: unknown, { session, log }): Promise<string> => {
     const client = getClient(session);

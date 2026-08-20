@@ -229,21 +229,50 @@ Create a recurring scrape, crawl, or search monitor that compares each check wit
 In the simple form, a \`goal\` is required. If \`queries\` contains one or more non-empty values and is supplied with \`page\`/\`pages\`, \`queries\` create the search target and page targets are ignored. A monitor schedules future network checks and can send configured email or webhook notifications. Returns the created monitor.
 `,
     parameters: z.object({
-      body: z.record(z.string(), z.any()).optional(),
-      page: z.string().optional(),
-      pages: z.array(z.string()).optional(),
-      queries: z.array(z.string()).optional(),
-      searchWindow: z.enum(['5m', '15m', '1h', '6h', '24h', '7d']).optional(),
-      maxResults: z.number().int().min(1).max(50).optional(),
-      includeDomains: z.array(z.string()).optional(),
-      excludeDomains: z.array(z.string()).optional(),
-      goal: z.string().optional(),
-      name: z.string().optional(),
-      scheduleText: z.string().optional(),
-      timezone: z.string().optional(),
-      email: z.string().optional(),
-      includeDiffs: z.boolean().optional(),
-      webhookUrl: z.string().optional(),
+      body: z
+        .record(z.string(), z.any())
+        .optional()
+        .describe(
+          'Advanced monitor request body. When provided, it replaces the simple-form fields.'
+        ),
+      page: z.string().optional().describe('Single page URL to monitor.'),
+      pages: z.array(z.string()).optional().describe('Page URLs to monitor.'),
+      queries: z
+        .array(z.string())
+        .optional()
+        .describe('Search queries to monitor; these take precedence over pages.'),
+      searchWindow: z
+        .enum(['5m', '15m', '1h', '6h', '24h', '7d'])
+        .optional()
+        .describe('Lookback window for monitored search results.'),
+      maxResults: z
+        .number()
+        .int()
+        .min(1)
+        .max(50)
+        .optional()
+        .describe('Maximum search results per check; maximum 50.'),
+      includeDomains: z
+        .array(z.string())
+        .optional()
+        .describe('Only include search results from these domains.'),
+      excludeDomains: z
+        .array(z.string())
+        .optional()
+        .describe('Exclude search results from these domains.'),
+      goal: z.string().optional().describe('Change-detection goal; required in simple form.'),
+      name: z.string().optional().describe('Monitor display name.'),
+      scheduleText: z
+        .string()
+        .optional()
+        .describe('Plain-language schedule; defaults to every 30 minutes.'),
+      timezone: z.string().optional().describe('IANA timezone; defaults to UTC.'),
+      email: z.string().optional().describe('Notification email address.'),
+      includeDiffs: z
+        .boolean()
+        .optional()
+        .describe('Include content diffs in check results.'),
+      webhookUrl: z.string().optional().describe('Webhook URL for monitor events.'),
     }),
     execute: async (args: unknown, { session, log }): Promise<string> => {
       const body = buildMonitorCreateBody(args as Record<string, unknown>);
@@ -268,8 +297,18 @@ In the simple form, a \`goal\` is required. If \`queries\` contains one or more 
 List monitors for the authenticated account with optional pagination controls. Returns one page of monitor records and pagination metadata.
 `,
     parameters: z.object({
-      limit: z.number().int().positive().optional(),
-      offset: z.number().int().nonnegative().optional(),
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('Maximum monitors returned.'),
+      offset: z
+        .number()
+        .int()
+        .nonnegative()
+        .optional()
+        .describe('Zero-based pagination offset.'),
     }),
     execute: async (args: unknown, { session }): Promise<string> => {
       const { limit, offset } = args as { limit?: number; offset?: number };
@@ -291,7 +330,7 @@ List monitors for the authenticated account with optional pagination controls. R
     description: `
 Retrieve one monitor by ID, including its configuration and current state. This does not run or modify the monitor.
 `,
-    parameters: z.object({ id: z.string() }),
+    parameters: z.object({ id: z.string().describe('Monitor ID.') }),
     execute: async (args: unknown, { session }): Promise<string> => {
       const { id } = args as { id: string };
       const res = await monitorRequest(
@@ -316,8 +355,10 @@ Patch an existing monitor by ID. The body can change its name, active/paused sta
 Returns the updated monitor.
 `,
     parameters: z.object({
-      id: z.string(),
-      body: z.record(z.string(), z.any()),
+      id: z.string().describe('Monitor ID.'),
+      body: z
+        .record(z.string(), z.any())
+        .describe('Partial monitor fields to update.'),
     }),
     execute: async (args: unknown, { session }): Promise<string> => {
       const { id, body } = args as {
@@ -344,7 +385,7 @@ Returns the updated monitor.
     description: `
 Permanently delete a monitor by ID and stop its future schedule. This operation cannot be undone and returns deletion status.
 `,
-    parameters: z.object({ id: z.string() }),
+    parameters: z.object({ id: z.string().describe('Monitor ID.') }),
     execute: async (args: unknown, { session, log }): Promise<string> => {
       const { id } = args as { id: string };
       log.info('Deleting monitor', { id });
@@ -368,7 +409,7 @@ Permanently delete a monitor by ID and stop its future schedule. This operation 
     description: `
 Queue an immediate check for a monitor outside its normal schedule. This starts network work for the monitor's configured targets and returns the queued check.
 `,
-    parameters: z.object({ id: z.string() }),
+    parameters: z.object({ id: z.string().describe('Monitor ID.') }),
     execute: async (args: unknown, { session }): Promise<string> => {
       const { id } = args as { id: string };
       const res = await monitorRequest(
@@ -392,10 +433,20 @@ Queue an immediate check for a monitor outside its normal schedule. This starts 
 List historical checks for a monitor, optionally filtered by status and bounded by a result limit. Returns one page of check summaries and pagination metadata.
 `,
     parameters: z.object({
-      id: z.string(),
-      limit: z.number().int().positive().optional(),
-      offset: z.number().int().nonnegative().optional(),
-      status: checkStatusSchema.optional(),
+      id: z.string().describe('Monitor ID.'),
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('Maximum checks returned.'),
+      offset: z
+        .number()
+        .int()
+        .nonnegative()
+        .optional()
+        .describe('Zero-based pagination offset.'),
+      status: checkStatusSchema.optional().describe('Filter checks by status.'),
     }),
     execute: async (args: unknown, { session }): Promise<string> => {
       const { id, limit, offset, status } = args as {
@@ -427,11 +478,21 @@ Retrieve one monitor check and its page-level results, optionally filtered by pa
 Markdown tracking returns a unified text diff, JSON tracking returns field paths with previous/current values and a current snapshot, and mixed tracking returns both. Returns one page of results plus a \`next\` URL when more pages exist.
 `,
     parameters: z.object({
-      id: z.string(),
-      checkId: z.string(),
-      limit: z.number().int().positive().optional(),
-      skip: z.number().int().nonnegative().optional(),
-      pageStatus: pageStatusSchema.optional(),
+      id: z.string().describe('Monitor ID.'),
+      checkId: z.string().describe('Monitor check ID.'),
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('Maximum page results returned.'),
+      skip: z
+        .number()
+        .int()
+        .nonnegative()
+        .optional()
+        .describe('Number of page results to skip.'),
+      pageStatus: pageStatusSchema.optional().describe('Filter pages by status.'),
     }),
     execute: async (args: unknown, { session }): Promise<string> => {
       const { id, checkId, limit, skip, pageStatus } = args as {

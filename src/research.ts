@@ -358,10 +358,23 @@ Find citation-graph candidates from one to ten \`seed_ids\`; the first ID is the
 Returns ranked candidates and the evaluated pool size.
 `,
     parameters: z.object({
-      seed_ids: z.array(z.string()).min(1).max(10),
-      intent: z.string().min(1),
-      mode: z.enum(['similar', 'citers', 'references']).optional(),
-      k: z.number().int().min(1).max(500).optional(),
+      seed_ids: z
+        .array(z.string())
+        .min(1)
+        .max(10)
+        .describe('Paper IDs; first is primary and later IDs are anchors.'),
+      intent: z.string().min(1).describe('Question used to rank related papers.'),
+      mode: z
+        .enum(['similar', 'citers', 'references'])
+        .optional()
+        .describe('Citation relationship mode; defaults to similar.'),
+      k: z
+        .number()
+        .int()
+        .min(1)
+        .max(500)
+        .optional()
+        .describe('Number of ranked papers to return.'),
       rerank: z
         .boolean()
         .optional()
@@ -422,7 +435,7 @@ Returns matching passages or a notice when full text is unavailable.
         .describe(
           'Canonical paperId or primaryId such as `arxiv:1706.03762`, `pmcid:PMC12530322`, `pmid:40953549`, or `doi:10.1016/j.neunet.2025.108095`.'
         ),
-      question: z.string().min(1),
+      question: z.string().min(1).describe('Question used to select full-text passages.'),
       k: z
         .number()
         .int()
@@ -465,8 +478,14 @@ Returns matching passages or a notice when full text is unavailable.
 Search indexed public GitHub issue, pull-request, and README content. Returns ranked matches with repository, URL, snippet, and full matched markdown when available.
 `,
     parameters: z.object({
-      query: z.string().min(1),
-      k: z.number().int().min(1).max(100).optional(),
+      query: z.string().min(1).describe('GitHub issue, pull-request, or README search query.'),
+      k: z
+        .number()
+        .int()
+        .min(1)
+        .max(100)
+        .optional()
+        .describe('Number of ranked results to return.'),
     }),
     execute: async (args: unknown, { session }): Promise<string> => {
       const { query, k } = args as { query: string; k?: number };
