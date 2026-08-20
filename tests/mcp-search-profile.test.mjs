@@ -751,6 +751,49 @@ test('primary search profile agent language satisfies metadata policy gates', as
   );
 });
 
+test('keyless full-surface instructions satisfy the same metadata policy gates', async (t) => {
+  // FASTMCP_ENDPOINT '/v2/mcp' (not '/v2/mcp-oauth') makes this the keyless
+  // profile, whose instructions must stay descriptive rather than becoming an
+  // imperative routing playbook.
+  const { fullPort } = await startHostedServer(t);
+  const headers = { 'x-api-key': 'fc-keyless-metadata' };
+  const initialize = await initializeProfile(fullPort, '/v2/mcp', headers);
+  const tools = await listToolDefinitions(fullPort, '/v2/mcp', headers);
+
+  assertAgentMetadataPolicy(
+    [initialize.instructions, ...tools.map((tool) => tool.description ?? '')],
+    assert
+  );
+});
+
+test('account (mcp-oauth) full-surface instructions satisfy the same metadata policy gates', async (t) => {
+  const accountResource = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
+  const backend = await startFakeBackend({ introspectionAud: accountResource });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    HTTP_STREAMABLE_SERVER: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_MCP_RESOURCE_URL: accountResource,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const headers = { authorization: 'Bearer fco_account_metadata' };
+  const initialize = await initializeProfile(port, '/v2/mcp-oauth', headers);
+  const tools = await listToolDefinitions(port, '/v2/mcp-oauth', headers);
+
+  assertAgentMetadataPolicy(
+    [initialize.instructions, ...tools.map((tool) => tool.description ?? '')],
+    assert
+  );
+});
+
 test('primary search profile fails closed unless the canonical OAuth-only flag is enabled', async (t) => {
   const port = await getFreePort();
   const child = spawnServer({
