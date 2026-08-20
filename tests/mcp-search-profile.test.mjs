@@ -717,6 +717,9 @@ test('primary search profile uses the strict marketplace search tool, not the fu
   assert.ok(search, 'primary profile must register firecrawl_search');
   assert.doesNotMatch(JSON.stringify(search.inputSchema), /scrapeOptions/);
   assert.doesNotMatch(search.description ?? '', /search_feedback|refund/i);
+  assert.equal(search.inputSchema.properties.limit.type, 'integer');
+  assert.equal(search.inputSchema.properties.limit.minimum, 1);
+  assert.equal(search.inputSchema.properties.limit.maximum, 100);
 
   const response = await jsonRpc(port, SEARCH_ENDPOINT, {
     id: 13,

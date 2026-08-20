@@ -819,7 +819,7 @@ const searchToolBaseFields = {
     .describe(
       'Return query-relevant highlights for each search result. Set to false to keep the original search snippets.'
     ),
-  limit: z.number().optional(),
+  limit: z.number().int().min(1).max(100).optional(),
   tbs: z.string().optional(),
   filter: z.string().optional(),
   location: z.string().optional(),
