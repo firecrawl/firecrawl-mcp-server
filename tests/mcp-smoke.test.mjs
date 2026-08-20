@@ -981,6 +981,21 @@ test('developer search exposes all filters and returns the full response', async
   ]);
   assert.equal('passage_budget' in developerTool.inputSchema.properties, false);
 
+  for (const arguments_ of [
+    { query: 'x'.repeat(4097) },
+    { max_stars: 100000, query: 'unscoped star ceiling' },
+    { min_stars: 10, max_stars: 9, query: 'reversed star bounds' },
+  ]) {
+    await assert.rejects(
+      client.request('tools/call', {
+        arguments: arguments_,
+        name: 'firecrawl_developer_search',
+      }),
+      /parameter validation failed/
+    );
+  }
+  assert.equal(fakeApi.requests.length, 0);
+
   const result = await client.request('tools/call', {
     arguments: {
       archived: false,

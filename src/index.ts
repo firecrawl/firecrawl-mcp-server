@@ -586,13 +586,14 @@ async function authenticateRequest(
     !process.env.FIRECRAWL_API_KEY &&
     !process.env.FIRECRAWL_API_URL
   ) {
-    // No credential and no self-hosted URL: run in keyless mode. scrape and
-    // search work for free (rate-limited per IP) against the Firecrawl cloud;
-    // every other tool needs an API key and will return Unauthorized.
+    // No credential and no self-hosted URL: run in keyless mode. Scrape,
+    // search, developer search, and parse work for free (rate-limited per IP)
+    // against the Firecrawl cloud; every other tool needs an API key.
     console.error(
       'No FIRECRAWL_API_KEY or FIRECRAWL_API_URL set — running in keyless mode. ' +
-        'firecrawl_scrape and firecrawl_search are free (rate-limited per IP) against the Firecrawl cloud; ' +
-        'other tools require an API key (get one free at https://firecrawl.dev).'
+        'firecrawl_scrape, firecrawl_search, firecrawl_developer_search, and firecrawl_parse are free ' +
+        '(rate-limited per IP) against the Firecrawl cloud; other tools require an API key ' +
+        '(get one free at https://firecrawl.dev).'
     );
   }
 
