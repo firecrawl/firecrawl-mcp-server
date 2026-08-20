@@ -893,6 +893,10 @@ const openAiAppsChallengeToken = normalizeHeader(
 
 const FULL_PROFILE_INSTRUCTIONS = `Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and asynchronous research. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent starts multi-source research whose result is read with firecrawl_agent_status. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question — code behaviour, a library or framework, an API contract, an error message, or a known bug — firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of GitHub issues, merged pull requests, READMEs, and curated documentation sites. Provide only the required inputs and account for stated network or external side effects.`;
 const KEYLESS_PROFILE_INSTRUCTIONS = `Without authentication, this endpoint exposes Search, Scrape, and Parse with usage limits. An OAuth connection or Authorization bearer API key exposes account tools; unavailable tools return connection guidance. Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and asynchronous research. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent starts multi-source research whose result is read with firecrawl_agent_status. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites; the firecrawl_research_* tools search a separate paper index of abstracts and full text and become available once an OAuth connection or Authorization bearer API key is present. Provide only the required inputs.`;
+const LOCAL_KEYLESS_PROFILE_INSTRUCTIONS = KEYLESS_PROFILE_INSTRUCTIONS.replace(
+  'Search, Scrape, and Parse',
+  'Search and Scrape'
+);
 
 // The search surface exposes web/research search only. Its instructions and tool
 // copy describe just those tools and stay neutral about how a client uses them.
@@ -915,7 +919,11 @@ function makeFullProfile(): ServerProfile {
   return {
     id: account ? 'account' : 'full',
     resourceName: account ? 'Firecrawl MCP Account' : 'Firecrawl MCP',
-    instructions: account ? FULL_PROFILE_INSTRUCTIONS : KEYLESS_PROFILE_INSTRUCTIONS,
+    instructions: account
+      ? FULL_PROFILE_INSTRUCTIONS
+      : isLocalKeylessStartup()
+        ? LOCAL_KEYLESS_PROFILE_INSTRUCTIONS
+        : KEYLESS_PROFILE_INSTRUCTIONS,
     resourceUrl: account
       ? normalizeHeader(process.env.FIRECRAWL_MCP_RESOURCE_URL) ??
         DEFAULT_MCP_OAUTH_RESOURCE_URL
@@ -1001,9 +1009,12 @@ const primaryProfile = makePrimaryProfile();
 const server = createServer(primaryProfile);
 type RegisteredTool = Parameters<typeof server.addTool>[0];
 
-const KEYLESS_TOOL_NAMES = new Set([
+const LOCAL_KEYLESS_TOOL_NAMES = new Set([
   'firecrawl_scrape',
   'firecrawl_search',
+]);
+const KEYLESS_TOOL_NAMES = new Set([
+  ...LOCAL_KEYLESS_TOOL_NAMES,
   'firecrawl_parse',
 ]);
 
@@ -1015,8 +1026,17 @@ function isHostedKeylessSession(session?: SessionData): boolean {
   );
 }
 
+function isLocalKeylessSession(session?: SessionData): boolean {
+  return (
+    isLocalKeylessStartup() &&
+    session?.authType === 'none' &&
+    !session.firecrawlApiKey
+  );
+}
+
 // A stdio client without a cloud credential can use only the keyless tools.
-// Do this at registration time so unsupported feedback tools are not advertised.
+// Registration-time checks keep unavailable feedback tools out of this surface;
+// the shared canList boundary below filters the remaining account-only tools.
 function isLocalKeylessStartup(): boolean {
   return (
     process.env.CLOUD_SERVICE !== 'true' &&
@@ -1268,6 +1288,7 @@ function guardHostedTool(
   { logActions }: { logActions: boolean }
 ): RegisteredTool {
   const keylessTool = KEYLESS_TOOL_NAMES.has(tool.name);
+  const localKeylessTool = LOCAL_KEYLESS_TOOL_NAMES.has(tool.name);
   const execute = tool.execute;
   const canList = tool.canList;
   const beforeValidate = tool.beforeValidate;
@@ -1283,7 +1304,9 @@ function guardHostedTool(
       // to a request carrying an unrecognized or invalid credential.
       (session?.credentialError || isHostedKeylessSession(session)
         ? keylessTool
-        : true) &&
+        : isLocalKeylessSession(session)
+          ? localKeylessTool
+          : true) &&
       (canList?.(session) ?? true),
     beforeValidate: async (args: unknown, session: SessionData) => {
       const code = session?.credentialError

@@ -903,6 +903,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.ok(toolNames.includes('firecrawl_scrape'));
   assert.ok(toolNames.includes('firecrawl_search'));
   assert.ok(toolNames.includes('firecrawl_parse'));
+  assert.equal(toolNames.length, 26);
   assert.equal(toolNames.includes('firecrawl_extract'), false);
 
   const deprecatedExtract = await client.request('tools/call', {
@@ -1174,7 +1175,7 @@ test('crawl bounding preserves the upstream continuation and small responses', a
   });
 });
 
-test('local keyless stdio omits feedback tools and qualifies search-feedback IDs as authenticated-only', async (t) => {
+test('local keyless stdio lists exactly its callable tools', async (t) => {
   const child = spawnServer({
     FIRECRAWL_API_KEY: '',
     FIRECRAWL_API_URL: '',
@@ -1183,22 +1184,33 @@ test('local keyless stdio omits feedback tools and qualifies search-feedback IDs
   t.after(() => stopChild(child));
 
   const client = new StdioMcpClient(child);
-  await client.request('initialize', {
+  const init = await client.request('initialize', {
     capabilities: {},
     clientInfo: { name: 'firecrawl-local-keyless', version: '0.0.0' },
     protocolVersion: '2025-06-18',
   });
   client.notify('notifications/initialized');
   const tools = await client.request('tools/list');
-  const toolNames = tools.tools.map((tool) => tool.name);
-  assert.equal(toolNames.includes('firecrawl_search_feedback'), false);
-  assert.equal(toolNames.includes('firecrawl_feedback'), false);
+  assert.deepEqual(
+    tools.tools.map((tool) => tool.name).sort(),
+    ['firecrawl_scrape', 'firecrawl_search']
+  );
+  assert.match(init.instructions, /exposes Search and Scrape with usage limits/i);
+  assert.doesNotMatch(init.instructions, /exposes Search, Scrape, and Parse/i);
+
   const search = tools.tools.find((tool) => tool.name === 'firecrawl_search');
   assert.ok(search);
   assert.match(
     search.description,
     /authenticated responses can include an `id` for optional search feedback/i
   );
+
+  const hiddenMap = await client.request('tools/call', {
+    arguments: { url: 'https://example.com' },
+    name: 'firecrawl_map',
+  });
+  assert.equal(hiddenMap.isError, true);
+  assert.equal(hiddenMap.structuredContent.code, 'AUTH_REQUIRED');
 });
 
 test('monitor create gives queries precedence over page targets', async (t) => {
