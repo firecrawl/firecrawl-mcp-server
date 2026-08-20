@@ -2863,21 +2863,75 @@ function validatedCrawlContinuation(jobId: string, continuation: string): string
   return `${url.pathname.slice(apiBasePath.length)}${url.search}`;
 }
 
+function takeCrawlDocumentWindow(documents: unknown[], offset: number): unknown[] {
+  const window: unknown[] = [];
+  let bytes = 2;
+  for (const document of documents.slice(offset)) {
+    if (window.length >= CRAWL_MAX_DOCUMENTS) break;
+    const documentBytes = Buffer.byteLength(JSON.stringify(document));
+    if (window.length > 0 && bytes + documentBytes + 1 > CRAWL_MAX_BYTES) break;
+    window.push(document);
+    bytes += documentBytes + (window.length > 1 ? 1 : 0);
+  }
+  return window;
+}
+
+function crawlOffsetNotice(
+  jobId: string,
+  offset: number,
+  shown: number,
+  total: number | undefined,
+  hasMore: boolean
+): Record<string, unknown> {
+  const first = shown > 0 ? offset + 1 : offset;
+  const last = offset + shown;
+  const range = shown > 0 ? `${first}-${last}` : 'empty';
+  const totalText = total == null ? '' : ` of ${total}`;
+  const nextOffset = offset + shown;
+  return {
+    truncated: hasMore,
+    shown_range: { start: first, end: last, ...(total == null ? {} : { total }) },
+    ...(hasMore ? { next_offset: nextOffset } : {}),
+    message: hasMore
+      ? `Shown documents ${range}${totalText}. Call firecrawl_check_crawl_status with id: "${jobId}" and offset: ${nextOffset} to retrieve later documents.`
+      : `Shown documents ${range}${totalText}. All available documents have been returned.`,
+  };
+}
+
+function crawlCursorNotice(
+  jobId: string,
+  shown: number,
+  total: number | undefined,
+  next: string
+): Record<string, unknown> {
+  const totalText = total == null ? '' : ` of ${total} total`;
+  return {
+    truncated: true,
+    shown_range: { start: shown > 0 ? 1 : 0, end: shown, ...(total == null ? {} : { total }) },
+    message: `Shown documents ${shown > 0 ? `1-${shown}` : 'empty'} in this cursor window${totalText}. Call firecrawl_check_crawl_status with id: "${jobId}" and next: "${next}" to retrieve later documents.`,
+  };
+}
+
 async function getCrawlStatusWithOrigin(
   client: FirecrawlApp,
   jobId: string,
-  continuation?: string
+  continuation?: string,
+  offset = 0
 ): Promise<Record<string, unknown>> {
   const requestPath = continuation
     ? validatedCrawlContinuation(jobId, continuation)
     : `/v2/crawl/${encodeURIComponent(jobId)}`;
   const res = await (client as any).http.get(requestPath, ORIGIN_HEADERS);
   const body = (res?.data ?? {}) as any;
-  const docs = crawlPageData(body).slice();
+  const pageDocuments = crawlPageData(body);
   let current =
     body.next ??
     (Array.isArray(body.data) ? null : body.data?.next) ??
     null;
+  const usesOffsetWindow = !continuation && !current;
+  const docs = usesOffsetWindow
+    ? takeCrawlDocumentWindow(pageDocuments, offset)
+    : pageDocuments.slice();
   let bytes = crawlDataBytes(docs);
 
   while (
@@ -2906,7 +2960,7 @@ async function getCrawlStatusWithOrigin(
       null;
   }
 
-  return {
+  const result: Record<string, unknown> = {
     id: jobId,
     status: body.status,
     completed: body.completed ?? 0,
@@ -2916,6 +2970,39 @@ async function getCrawlStatusWithOrigin(
     next: current,
     data: docs,
   };
+  const total = Number.isFinite(Number(body.total))
+    ? Number(body.total)
+    : usesOffsetWindow
+      ? pageDocuments.length
+      : undefined;
+  if (usesOffsetWindow) {
+    const hasMore = offset + docs.length < pageDocuments.length;
+    if (offset > 0 || hasMore) {
+      result._firecrawl = crawlOffsetNotice(
+        jobId,
+        offset,
+        docs.length,
+        total,
+        hasMore
+      );
+    }
+  } else if (current) {
+    result._firecrawl = crawlCursorNotice(jobId, docs.length, total, String(current));
+  }
+  return result;
+}
+
+function crawlResponseGuidance(
+  response: Record<string, unknown>,
+  jobId: string,
+  fallback: string
+): string {
+  const windowMessage = resultRecord(response._firecrawl)?.message;
+  if (typeof windowMessage === 'string') return windowMessage;
+  if (response.next) {
+    return `Call firecrawl_check_crawl_status with id: "${jobId}" and next: "${String(response.next)}" to retrieve later documents; ${fallback}`;
+  }
+  return fallback;
 }
 
 async function waitForCrawlCompletionWithOrigin(
@@ -3323,7 +3410,7 @@ server.addTool({
     destructiveHint: false, // Reads pages from target sites; does not delete or alter external websites.
   },
   description: `
-Start a multi-page website crawl and wait for its terminal state. Use for page content across a site; \`firecrawl_map\` returns only URLs. A returned \`next\` value continues results through \`firecrawl_check_crawl_status\`.
+Start a multi-page website crawl and wait for its terminal state. Use for page content across a site; \`firecrawl_map\` returns only URLs. Truncated results name the exact \`firecrawl_check_crawl_status\` follow-up using an upstream \`next\` cursor or a document \`offset\`.
 `,
   parameters: z.object({
     url: z.string().describe('Website URL where the crawl starts.'),
@@ -3446,9 +3533,11 @@ Start a multi-page website crawl and wait for its terminal state. Use for page c
     return formatToolResponse(
       withResultNotice(res, 'crawl'),
       response_format,
-      res.next
-        ? `Call firecrawl_check_crawl_status with id: "${crawlId}" and next: "${String(res.next)}" to retrieve later documents; narrow scrapeOptions to retrieve omitted document fields.`
-        : 'Narrow scrapeOptions to retrieve omitted document fields.'
+      crawlResponseGuidance(
+        res,
+        crawlId,
+        'Narrow scrapeOptions to retrieve omitted document fields.'
+      )
     );
   },
 });
@@ -3462,7 +3551,7 @@ server.addTool({
     destructiveHint: false, // Status lookup only; no deletes or updates.
   },
   description: `
-Retrieve status and available results for an existing crawl ID without starting or modifying it. Pass a returned \`next\` value with the same ID to retrieve later documents.
+Retrieve status and available results for an existing crawl ID without starting or modifying it. Follow the returned guidance with either an upstream \`next\` cursor or a document \`offset\` to retrieve later documents.
 `,
   parameters: z.object({
     id: z.string().min(1).describe('Crawl job ID.'),
@@ -3470,7 +3559,17 @@ Retrieve status and available results for an existing crawl ID without starting 
       .string()
       .max(4_096)
       .optional()
-      .describe('Continuation URL returned by a previous status call.'),
+      .describe(
+        'Upstream continuation URL returned by a previous status call; takes precedence over offset when both are supplied.'
+      ),
+    offset: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe(
+        'Zero-based document offset returned in prior guidance for a single-page result. The next cursor takes precedence when both are supplied.'
+      ),
     response_format: responseFormatSchema,
   }),
   execute: async (
@@ -3481,19 +3580,23 @@ Retrieve status and available results for an existing crawl ID without starting 
     const {
       id,
       next,
+      offset = 0,
       response_format = 'detailed',
     } = args as {
       id: string;
       next?: string;
+      offset?: number;
       response_format?: ResponseFormat;
     };
-    const res = await getCrawlStatusWithOrigin(client, id, next);
+    const res = await getCrawlStatusWithOrigin(client, id, next, next ? 0 : offset);
     return formatToolResponse(
       withResultNotice(res, 'crawl'),
       response_format,
-      res.next
-        ? `Call firecrawl_check_crawl_status with id: "${id}" and next: "${String(res.next)}" to retrieve later documents; narrow the crawl request to retrieve omitted document fields.`
-        : 'Narrow the crawl request to retrieve omitted document fields.'
+      crawlResponseGuidance(
+        res,
+        id,
+        'Narrow the crawl request to retrieve omitted document fields.'
+      )
     );
   },
 });

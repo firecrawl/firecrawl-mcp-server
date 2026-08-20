@@ -1298,6 +1298,7 @@ test('crawl bounding preserves the upstream continuation and small responses', a
   const first = JSON.parse(firstResult.content[0].text);
   assert.equal(first.next, next);
   assert.equal(first._firecrawl.truncated, true);
+  assert.match(first._firecrawl.message, /shown documents 1-1.*3 total/i);
   assert.match(first._firecrawl.message, /firecrawl_check_crawl_status.*next/i);
   assert.deepEqual(
     backend.requests.filter((request) => request.method === 'GET').map((request) => request.url),
@@ -1343,6 +1344,72 @@ test('crawl bounding preserves the upstream continuation and small responses', a
     next: null,
     data: [{ url: 'https://example.com/small', markdown: 'small page' }],
   });
+});
+
+test('crawl bounding exposes offset continuation for a single upstream page', async (t) => {
+  const documents = Array.from({ length: 50 }, (_, index) => ({
+    url: `https://example.com/${index + 1}`,
+    markdown: `document ${index + 1}`,
+  }));
+  const backend = await startFakeFirecrawlBackend({
+    crawlResponses: {
+      '/v2/crawl/job-single-page': {
+        status: 'completed',
+        completed: 50,
+        total: 50,
+        next: null,
+        data: documents,
+      },
+    },
+  });
+  t.after(() => backend.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: backend.url,
+  });
+  t.after(() => stopChild(child));
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-crawl-offset', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const tools = await client.request('tools/list');
+  const statusTool = tools.tools.find(
+    (tool) => tool.name === 'firecrawl_check_crawl_status'
+  );
+  assert.match(statusTool.inputSchema.properties.offset.description, /next.*precedence/i);
+
+  const firstResult = await client.request('tools/call', {
+    arguments: { id: 'job-single-page' },
+    name: 'firecrawl_check_crawl_status',
+  });
+  const first = JSON.parse(firstResult.content[0].text);
+  assert.equal(first.data.length, 25);
+  assert.equal(first.data[0].markdown, 'document 1');
+  assert.equal(first.data[24].markdown, 'document 25');
+  assert.equal(first._firecrawl.truncated, true);
+  assert.equal(first._firecrawl.next_offset, 25);
+  assert.match(first._firecrawl.message, /shown documents 1-25 of 50/i);
+  assert.match(
+    first._firecrawl.message,
+    /firecrawl_check_crawl_status.*id: "job-single-page".*offset: 25/i
+  );
+
+  const secondResult = await client.request('tools/call', {
+    arguments: { id: 'job-single-page', offset: 25 },
+    name: 'firecrawl_check_crawl_status',
+  });
+  const second = JSON.parse(secondResult.content[0].text);
+  assert.equal(second.data.length, 25);
+  assert.equal(second.data[0].markdown, 'document 26');
+  assert.equal(second.data[24].markdown, 'document 50');
+  assert.equal(second._firecrawl.truncated, false);
+  assert.match(second._firecrawl.message, /shown documents 26-50 of 50/i);
+  assert.match(second._firecrawl.message, /all available documents have been returned/i);
 });
 
 test('crawl continuation accepts a path-prefixed API base', async (t) => {
