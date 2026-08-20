@@ -171,7 +171,7 @@ Returns the complete JSON response. Each result has an ID whose prefix identifie
           .nonnegative()
           .optional()
           .describe(
-            'Minimum repository stars. Unscoped searches use documented star bands; repo-scoped searches use exact repository profile values.'
+            'Minimum repository stars. Unscoped searches use documented star bands and accept at most 100000; repo-scoped searches use exact repository profile values.'
           ),
         max_stars: z
           .number()
