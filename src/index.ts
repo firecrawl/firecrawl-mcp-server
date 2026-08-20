@@ -807,6 +807,12 @@ function buildSearchQueryWithDomains(
   return query;
 }
 
+type ResponseFormat = 'concise' | 'detailed';
+
+const responseFormatSchema = z
+  .enum(['concise', 'detailed'])
+  .default('detailed');
+
 // Parameter fields shared by both firecrawl_search surfaces. The full surface
 // adds `scrapeOptions` on top; the search surface uses these as-is (strict, no
 // scrapeOptions). Defining the field set once keeps the two surfaces from
@@ -835,6 +841,7 @@ const searchToolBaseFields = {
       'Limit results to specific source types. `github` searches GitHub repositories, code, issues, and docs; `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. `developer` adds a `data.developer` group of `{ url, title, description }` results, where `description` holds the matched passage; the other categories filter `data.web`.'
     ),
   enterprise: z.array(z.enum(['default', 'anon', 'zdr'])).optional(),
+  response_format: responseFormatSchema,
 };
 
 // Both surfaces forbid specifying includeDomains and excludeDomains together.
@@ -1404,6 +1411,149 @@ function asText(data: unknown): string {
   return JSON.stringify(data, null, 2);
 }
 
+type TruncationStats = {
+  arrayItems: number;
+  characters: number;
+  fields: number;
+};
+
+// Detailed stays compatible for ordinary payloads; both ceilings prevent one
+// tool result from consuming an agent's context window (~3k/~16k tokens).
+const CONCISE_RESPONSE_MAX_CHARS = 12_000;
+const DETAILED_RESPONSE_MAX_CHARS = 64_000;
+const CRAWL_MAX_DOCUMENTS = 25;
+const CRAWL_MAX_BYTES = 48_000;
+
+const conciseOmittedFields = /(?:base64|screenshot)/i;
+
+function compactResponseValue(
+  value: unknown,
+  limits: { arrayItems: number; objectFields: number; stringChars: number },
+  stats: TruncationStats,
+  concise: boolean,
+  depth = 0
+): unknown {
+  if (typeof value === 'string') {
+    if (value.length <= limits.stringChars) return value;
+    stats.characters += value.length - limits.stringChars;
+    return `${value.slice(0, limits.stringChars)}\n[truncated ${value.length - limits.stringChars} characters]`;
+  }
+  if (!value || typeof value !== 'object') return value;
+  if (depth >= 12) {
+    stats.fields += 1;
+    return '[truncated nested value]';
+  }
+  if (Array.isArray(value)) {
+    const retained = value.slice(0, limits.arrayItems);
+    stats.arrayItems += value.length - retained.length;
+    return retained.map((item) =>
+      compactResponseValue(item, limits, stats, concise, depth + 1)
+    );
+  }
+
+  const record = value as Record<string, unknown>;
+  const hasMarkdown = typeof record.markdown === 'string' && record.markdown.length > 0;
+  const entries = Object.entries(record).filter(([key]) => {
+    const omit =
+      concise &&
+      (conciseOmittedFields.test(key) || (key === 'rawHtml' && hasMarkdown));
+    if (omit) stats.fields += 1;
+    return !omit;
+  });
+  const retained = entries.slice(0, limits.objectFields);
+  stats.fields += entries.length - retained.length;
+  return Object.fromEntries(
+    retained.map(([key, item]) => [
+      key,
+      compactResponseValue(item, limits, stats, concise, depth + 1),
+    ])
+  );
+}
+
+function truncationMetadata(
+  format: ResponseFormat,
+  stats: TruncationStats,
+  guidance: string
+): Record<string, unknown> {
+  const omitted = {
+    fields: stats.fields,
+    array_items: stats.arrayItems,
+    characters: stats.characters,
+  };
+  const detailGuidance =
+    format === 'concise'
+      ? 'Use response_format: "detailed" to include fields omitted by concise format. '
+      : '';
+  return {
+    truncated: true,
+    response_format: format,
+    omitted,
+    message: `Response truncated; omitted ${omitted.fields} fields, ${omitted.array_items} array items, and ${omitted.characters} characters. ${detailGuidance}${guidance.slice(0, 2_000)}`.trim(),
+  };
+}
+
+function withTruncationMetadata(
+  value: unknown,
+  metadata: Record<string, unknown>
+): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? { ...(value as Record<string, unknown>), _firecrawl: metadata }
+    : { result: value, _firecrawl: metadata };
+}
+
+function formatToolResponse(
+  data: unknown,
+  format: ResponseFormat,
+  guidance: string
+): string {
+  const maxChars =
+    format === 'concise'
+      ? CONCISE_RESPONSE_MAX_CHARS
+      : DETAILED_RESPONSE_MAX_CHARS;
+  if (format === 'detailed') {
+    const unchanged = asText(data);
+    if (unchanged.length <= maxChars) return unchanged;
+  }
+
+  let limits =
+    format === 'concise'
+      ? { arrayItems: 8, objectFields: 30, stringChars: 2_000 }
+      : { arrayItems: 50, objectFields: 100, stringChars: 12_000 };
+  for (;;) {
+    const stats: TruncationStats = { arrayItems: 0, characters: 0, fields: 0 };
+    const compacted = compactResponseValue(
+      data,
+      limits,
+      stats,
+      format === 'concise'
+    );
+    const hadOmissions =
+      stats.arrayItems > 0 || stats.characters > 0 || stats.fields > 0;
+    if (!hadOmissions) return asText(compacted);
+    const output = asText(
+      withTruncationMetadata(
+        compacted,
+        truncationMetadata(format, stats, guidance)
+      )
+    );
+    if (output.length <= maxChars) return output;
+    if (
+      limits.arrayItems === 1 &&
+      limits.objectFields === 1 &&
+      limits.stringChars === 128
+    ) {
+      return asText({
+        _firecrawl: truncationMetadata(format, stats, guidance),
+      });
+    }
+    limits = {
+      arrayItems: Math.max(1, Math.floor(limits.arrayItems / 2)),
+      objectFields: Math.max(1, Math.floor(limits.objectFields / 2)),
+      stringChars: Math.max(128, Math.floor(limits.stringChars / 2)),
+    };
+  }
+}
+
 // scrape tool (v2 semantics, minimal args)
 // Centralized scrape params (used by scrape, and referenced in search/crawl scrapeOptions)
 
@@ -1481,6 +1631,7 @@ function transformScrapeParams(
   args: Record<string, unknown>
 ): Record<string, unknown> {
   const out = { ...args };
+  delete out.response_format;
 
   const formats = buildFormatsArray(out);
   if (formats) out.formats = formats;
@@ -1583,6 +1734,7 @@ const scrapeParamsSchema = z.object({
       saveChanges: z.boolean().optional(),
     })
     .optional(),
+  response_format: responseFormatSchema,
 });
 
 const parseOptionParamsSchema = z.object({
@@ -1630,6 +1782,7 @@ const parseOptionParamsSchema = z.object({
     .optional()
     .describe('Ignored: parse never reuses or stores indexed content.'),
   proxy: z.enum(['basic', 'auto']).optional(),
+  response_format: responseFormatSchema,
 });
 
 const localParseParamsSchema = parseOptionParamsSchema.extend({
@@ -1730,6 +1883,7 @@ function extractParseOptions(args: ParseToolArgs): Record<string, unknown> {
   delete options.uploadRef;
   delete options.contentType;
   delete options.declaredSizeBytes;
+  delete options.response_format;
   return options;
 }
 
@@ -1743,11 +1897,13 @@ function buildParseOptionsPayload(
 
 function buildContinuationArguments(
   uploadRef: string,
-  options: Record<string, unknown>
+  options: Record<string, unknown>,
+  responseFormat: ResponseFormat
 ): Record<string, unknown> {
   return {
     uploadRef,
     ...(removeEmptyTopLevel(options) as Record<string, unknown>),
+    response_format: responseFormat,
   };
 }
 
@@ -1889,6 +2045,7 @@ async function executeHostedParse(
     throw new UserError(String(payload.message), payload);
   }
 
+  const responseFormat = (args.response_format ?? 'detailed') as ResponseFormat;
   const options = extractParseOptions(args);
 
   if (hasFilePath && args.filePath) {
@@ -1923,9 +2080,10 @@ async function executeHostedParse(
           : { 'Content-Type': contentType };
     const uploadForCommand = { ...upload, headers: uploadHeaders };
 
-    return asText({
-      success: true,
-      mode: 'hosted-upload-ref-awaiting-upload',
+    return formatToolResponse(
+      {
+        success: true,
+        mode: 'hosted-upload-ref-awaiting-upload',
       message:
         'Hosted MCP cannot read local files. Run the local upload command, then call firecrawl_parse again with uploadRef. No Firecrawl API key is included in this command.',
       upload: {
@@ -1940,14 +2098,21 @@ async function executeHostedParse(
       },
       nextToolCall: {
         name: 'firecrawl_parse',
-        arguments: buildContinuationArguments(upload.uploadRef, options),
+        arguments: buildContinuationArguments(
+          upload.uploadRef,
+          options,
+          responseFormat
+        ),
       },
-      notes: [
-        'Run the curl command on the machine that can read filePath.',
-        'After the PUT succeeds, use nextToolCall as the second MCP tool call.',
-        'Clients without a local upload mechanism cannot complete hosted parse for local files.',
-      ],
-    });
+        notes: [
+          'Run the curl command on the machine that can read filePath.',
+          'After the PUT succeeds, use nextToolCall as the second MCP tool call.',
+          'Clients without a local upload mechanism cannot complete hosted parse for local files.',
+        ],
+      },
+      responseFormat,
+      'Use a shorter file path and fewer parse options to retrieve omitted upload instructions.'
+    );
   }
 
   const parsePayload = {
@@ -1960,7 +2125,11 @@ async function executeHostedParse(
     parsePayload,
     session
   );
-  return asText(parseJson);
+  return formatToolResponse(
+    parseJson,
+    responseFormat,
+    'Parse fewer pages or request fewer output formats to retrieve the omitted content.'
+  );
 }
 
 server.addTool({
@@ -1978,14 +2147,14 @@ This tool operates on a known page. For a set of pages use \`firecrawl_crawl\`, 
 
 Firecrawl may reuse recently indexed content instead of refetching the page, and the reuse window varies by domain. Set \`maxAge: 0\` to force a live fetch, or a smaller \`maxAge\` to bound how stale reused content may be. A successful response does not by itself confirm that the state it describes is still current.
 
-Returns the selected content formats and page metadata.
+Returns the selected content formats and page metadata. \`response_format\` defaults to \`detailed\`; \`concise\` removes bulky duplicate formats, while both formats bound oversized responses and report omissions in-band.
 `,
   parameters: scrapeParamsSchema,
   execute: async (args: unknown, { session, log }): Promise<string> => {
-    const { url, ...options } = args as { url: string } & Record<
-      string,
-      unknown
-    >;
+    const { url, response_format = 'detailed', ...options } = args as {
+      url: string;
+      response_format?: ResponseFormat;
+    } & Record<string, unknown>;
     const transformed = transformScrapeParams(
       options as Record<string, unknown>
     );
@@ -2005,14 +2174,22 @@ Returns the selected content formats and page metadata.
         },
         session
       );
-      return asText(json?.data ?? json);
+      return formatToolResponse(
+        json?.data ?? json,
+        response_format,
+        'Request fewer formats or narrow the extraction to retrieve omitted page content.'
+      );
     }
     const client = getClient(session);
     const res = await client.scrape(String(url), {
       ...cleaned,
       origin: ORIGIN,
     } as any);
-    return asText(res);
+    return formatToolResponse(
+      res,
+      response_format,
+      'Request fewer formats or narrow the extraction to retrieve omitted page content.'
+    );
   },
 });
 
@@ -2049,7 +2226,11 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
       ...cleaned,
       origin: ORIGIN,
     } as any);
-    return asText(res);
+    return formatToolResponse(
+      res,
+      'detailed',
+      'Retry firecrawl_map with a lower limit or narrower search term to retrieve omitted URLs.'
+    );
   },
 });
 
@@ -2068,19 +2249,22 @@ For a programming question, add \`categories: ["developer"]\`. It searches an in
 
 \`categories: ["research"]\` restricts these web results to research-affiliated websites and returns page snippets. The \`firecrawl_research_*\` tools are a separate surface that searches paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature.
 
-\`scrapeOptions\` can attach extracted page content; pages fetched this way use a fixed reuse window and ignore \`maxAge\`, so use \`firecrawl_scrape\` when a live fetch is required. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
+\`scrapeOptions\` can attach extracted page content; pages fetched this way use a fixed reuse window and ignore \`maxAge\`, so use \`firecrawl_scrape\` when a live fetch is required. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback. \`response_format\` defaults to \`detailed\`; \`concise\` removes bulky duplicate content and reports omissions.
 `,
   parameters: z
     .object({
       ...searchToolBaseFields,
       scrapeOptions: scrapeParamsSchema
-        .omit({ url: true })
+        .omit({ url: true, response_format: true })
         .partial()
         .optional(),
     })
     .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE),
   execute: async (args: unknown, { session, log }): Promise<string> => {
-    const { query, ...opts } = args as Record<string, unknown>;
+    const { query, response_format = 'detailed', ...opts } = args as Record<
+      string,
+      unknown
+    > & { response_format?: ResponseFormat };
 
     const searchOpts = { ...opts } as Record<string, unknown>;
     const includeDomains = searchOpts.includeDomains as string[] | undefined;
@@ -2112,7 +2296,11 @@ For a programming question, add \`categories: ["developer"]\`. It searches an in
       // identifier to keyless clients, where it would invite an unusable call.
       const keylessResponse = { ...(json ?? {}) };
       delete keylessResponse.id;
-      return asText(keylessResponse);
+      return formatToolResponse(
+        keylessResponse,
+        response_format,
+        'Use a lower limit, narrower query, or fewer scrapeOptions formats to retrieve omitted results.'
+      );
     }
     // Call /v2/search through the SDK's HTTP layer (auth + retries) instead
     // of `client.search()` so we preserve the full response envelope. The
@@ -2120,7 +2308,11 @@ For a programming question, add \`categories: ["developer"]\`. It searches an in
     // supports the optional authenticated `firecrawl_search_feedback` workflow.
     const client = getClient(session);
     const httpRes = await (client as any).http.post('/v2/search', searchBody);
-    return asText(httpRes?.data ?? {});
+    return formatToolResponse(
+      httpRes?.data ?? {},
+      response_format,
+      'Use a lower limit, narrower query, or fewer scrapeOptions formats to retrieve omitted results.'
+    );
   },
 });
 
@@ -2259,41 +2451,61 @@ async function keylessPost(
   return json;
 }
 
+function crawlPageData(body: any): unknown[] {
+  return Array.isArray(body.data) ? body.data : body.data?.pages || [];
+}
+
+function crawlDataBytes(docs: unknown[]): number {
+  return Buffer.byteLength(JSON.stringify(docs));
+}
+
+function validatedCrawlContinuation(jobId: string, continuation: string): string {
+  const apiBase = new URL(resolveApiBaseUrl());
+  const url = new URL(continuation, apiBase);
+  const expectedPath = `/v2/crawl/${encodeURIComponent(jobId)}`;
+  if (url.origin !== apiBase.origin || url.pathname !== expectedPath) {
+    throw new Error('Crawl continuation must belong to this crawl job.');
+  }
+  return `${url.pathname}${url.search}`;
+}
+
 async function getCrawlStatusWithOrigin(
   client: FirecrawlApp,
-  jobId: string
+  jobId: string,
+  continuation?: string
 ): Promise<Record<string, unknown>> {
-  const res = await (client as any).http.get(
-    `/v2/crawl/${encodeURIComponent(jobId)}`,
-    ORIGIN_HEADERS
-  );
+  const requestPath = continuation
+    ? validatedCrawlContinuation(jobId, continuation)
+    : `/v2/crawl/${encodeURIComponent(jobId)}`;
+  const res = await (client as any).http.get(requestPath, ORIGIN_HEADERS);
   const body = (res?.data ?? {}) as any;
-  const initialDocs = Array.isArray(body.data) ? body.data : [];
+  const docs = crawlPageData(body).slice();
+  let current =
+    body.next ??
+    (Array.isArray(body.data) ? null : body.data?.next) ??
+    null;
+  let bytes = crawlDataBytes(docs);
 
-  if (!body.next) {
-    return {
-      id: jobId,
-      status: body.status,
-      completed: body.completed ?? 0,
-      total: body.total ?? 0,
-      creditsUsed: body.creditsUsed,
-      expiresAt: body.expiresAt,
-      next: body.next ?? null,
-      data: initialDocs,
-    };
-  }
-
-  const docs = initialDocs.slice();
-  let current = body.next as string | null;
-  while (current) {
+  while (
+    current &&
+    docs.length < CRAWL_MAX_DOCUMENTS &&
+    bytes < CRAWL_MAX_BYTES
+  ) {
     const pageRes = await (client as any).http.get(current, ORIGIN_HEADERS);
     const payload = (pageRes?.data ?? {}) as any;
     if (!payload.success) break;
 
-    const pageData = Array.isArray(payload.data)
-      ? payload.data
-      : payload.data?.pages || [];
+    const pageData = crawlPageData(payload);
+    const pageBytes = crawlDataBytes(pageData);
+    if (
+      docs.length > 0 &&
+      (docs.length + pageData.length > CRAWL_MAX_DOCUMENTS ||
+        bytes + pageBytes > CRAWL_MAX_BYTES)
+    ) {
+      break;
+    }
     docs.push(...pageData);
+    bytes += pageBytes;
     current =
       payload.next ??
       (Array.isArray(payload.data) ? null : payload.data?.next) ??
@@ -2307,7 +2519,7 @@ async function getCrawlStatusWithOrigin(
     total: body.total ?? 0,
     creditsUsed: body.creditsUsed,
     expiresAt: body.expiresAt,
-    next: null,
+    next: current,
     data: docs,
   };
 }
@@ -2645,7 +2857,7 @@ server.addTool({
   description: `
 Start a multi-page crawl at a website URL, poll it to a terminal state, and return the final status and collected data. Scope can be bounded with include/exclude paths, depth, page limit, subdomain/external-link controls, sitemap handling, delay, and scrape options.
 
-Crawl results can be large; use conservative limits when full-site coverage is unnecessary. Webhooks and interactive scrape actions are unavailable in safe mode. Returns the crawl ID, status, and page data.
+Crawl results can be large; use conservative limits when full-site coverage is unnecessary. Webhooks and interactive scrape actions are unavailable in safe mode. Returns the crawl ID, status, page data, and a \`next\` continuation when more pages remain. \`response_format\` defaults to \`detailed\`.
 `,
   parameters: z.object({
     url: z.string(),
@@ -2668,10 +2880,20 @@ Crawl results can be large; use conservative limits when full-site coverage is u
         }),
     deduplicateSimilarURLs: z.boolean().optional(),
     ignoreQueryParameters: z.boolean().optional(),
-    scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+    scrapeOptions: scrapeParamsSchema
+      .omit({ url: true, response_format: true })
+      .partial()
+      .optional(),
+    response_format: responseFormatSchema,
   }),
   execute: async (args, { session, log }) => {
-    const { url, ...options } = args as Record<string, unknown>;
+    const {
+      url,
+      response_format = 'detailed',
+      ...options
+    } = args as Record<string, unknown> & {
+      response_format?: ResponseFormat;
+    };
     const client = getClient(session);
 
     const opts = { ...options } as Record<string, unknown>;
@@ -2705,7 +2927,11 @@ Crawl results can be large; use conservative limits when full-site coverage is u
     });
     const crawlId = started?.data?.id;
     if (!crawlId) {
-      return asText(started?.data ?? {});
+      return formatToolResponse(
+        started?.data ?? {},
+        response_format,
+        'Use a narrower crawl request to retrieve omitted response fields.'
+      );
     }
     const res = await waitForCrawlCompletionWithOrigin(
       client,
@@ -2713,7 +2939,13 @@ Crawl results can be large; use conservative limits when full-site coverage is u
       pollInterval,
       timeout
     );
-    return asText(res);
+    return formatToolResponse(
+      res,
+      response_format,
+      res.next
+        ? `Call firecrawl_check_crawl_status with id: "${crawlId}" and next: "${String(res.next)}" to retrieve later documents; narrow scrapeOptions to retrieve omitted document fields.`
+        : 'Narrow scrapeOptions to retrieve omitted document fields.'
+    );
   },
 });
 
@@ -2726,17 +2958,35 @@ server.addTool({
     destructiveHint: false, // Status lookup only; no deletes or updates.
   },
   description: `
-Retrieve the current status, progress, and available results for an existing crawl ID. This only reads Firecrawl job state and does not start or modify the crawl.
+Retrieve the current status, progress, and available results for an existing crawl ID. This only reads Firecrawl job state and does not start or modify the crawl. When \`next\` is returned, pass it with the same ID to retrieve later documents. \`response_format\` defaults to \`detailed\`.
 `,
-  parameters: z.object({ id: z.string() }),
+  parameters: z.object({
+    id: z.string(),
+    next: z.string().max(4_096).optional(),
+    response_format: responseFormatSchema,
+  }),
   execute: async (
     args: unknown,
     { session }: { session?: SessionData }
   ): Promise<string> => {
     const client = getClient(session);
-    const id = (args as any).id as string;
-    const res = await getCrawlStatusWithOrigin(client, id);
-    return asText(res);
+    const {
+      id,
+      next,
+      response_format = 'detailed',
+    } = args as {
+      id: string;
+      next?: string;
+      response_format?: ResponseFormat;
+    };
+    const res = await getCrawlStatusWithOrigin(client, id, next);
+    return formatToolResponse(
+      res,
+      response_format,
+      res.next
+        ? `Call firecrawl_check_crawl_status with id: "${id}" and next: "${String(res.next)}" to retrieve later documents; narrow the crawl request to retrieve omitted document fields.`
+        : 'Narrow the crawl request to retrieve omitted document fields.'
+    );
   },
 });
 
@@ -2823,18 +3073,28 @@ server.addTool({
   description: `
 Retrieve progress or final results for a \`firecrawl_agent\` job ID. A \`processing\` response is non-terminal and does not contain the final research result. Check again after 15–30 seconds until the status is \`completed\` or \`failed\`; complex jobs can take several minutes. If the job cannot finish within the task's available time, use \`firecrawl_search\` and \`firecrawl_scrape\` to complete the requested output.
 
-Returns job status, progress information, and result data when completed.
+Returns job status, progress information, and result data when completed. \`response_format\` defaults to \`detailed\`; \`concise\` removes bulky duplicate content and reports omissions.
 `,
-  parameters: z.object({ id: z.string() }),
+  parameters: z.object({
+    id: z.string(),
+    response_format: responseFormatSchema,
+  }),
   execute: async (args: unknown, { session, log }): Promise<string> => {
     const client = getClient(session);
-    const { id } = args as { id: string };
+    const { id, response_format = 'detailed' } = args as {
+      id: string;
+      response_format?: ResponseFormat;
+    };
     log.info('Checking agent status', { id });
     const res = await (client as any).http.get(
       `/v2/agent/${encodeURIComponent(id)}`,
       ORIGIN_HEADERS
     );
-    return asText(res?.data ?? {});
+    return formatToolResponse(
+      res?.data ?? {},
+      response_format,
+      'Use a narrower agent prompt or schema to retrieve omitted result content.'
+    );
   },
 });
 
@@ -2850,7 +3110,7 @@ server.addTool({
   description: `
 Open or reuse a live browser session to navigate a page, click controls, fill fields, or run browser code. Provide either \`url\` or \`scrapeId\`, and either a natural-language \`prompt\` or executable \`code\`; code can run as Bash, Python, or Node with a bounded timeout.
 
-This acts on the live site, so actions such as form submission can create persistent external side effects. Returns execution output, stdout/stderr, exit status, and session viewing URLs.
+This acts on the live site, so actions such as form submission can create persistent external side effects. Returns execution output, stdout/stderr, exit status, and session viewing URLs. \`response_format\` defaults to \`detailed\`; \`concise\` removes bulky output and reports omissions.
 `,
   parameters: z
     .object({
@@ -2860,7 +3120,11 @@ This acts on the live site, so actions such as form submission can create persis
       code: z.string().trim().min(1).optional(),
       language: z.enum(['bash', 'python', 'node']).optional(),
       timeout: z.number().min(1).max(300).optional(),
-      scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+      scrapeOptions: scrapeParamsSchema
+        .omit({ url: true, response_format: true })
+        .partial()
+        .optional(),
+      response_format: responseFormatSchema,
     })
     .refine((data) => Boolean(data.scrapeId) !== Boolean(data.url), {
       message:
@@ -2882,6 +3146,7 @@ This acts on the live site, so actions such as form submission can create persis
       language,
       timeout,
       scrapeOptions,
+      response_format = 'detailed',
     } = args as {
       scrapeId?: string;
       url?: string;
@@ -2890,6 +3155,7 @@ This acts on the live site, so actions such as form submission can create persis
       language?: 'bash' | 'python' | 'node';
       timeout?: number;
       scrapeOptions?: Record<string, unknown>;
+      response_format?: ResponseFormat;
     };
     // No scrapeId means the caller passed a url: scrape it first to open the
     // session, then interact. One tool call instead of scrape + interact.
@@ -2904,18 +3170,26 @@ This acts on the live site, so actions such as form submission can create persis
       } as any);
       scrapeId = (scraped as any)?.metadata?.scrapeId;
       if (!scrapeId) {
-        return asText({
-          error:
-            'Could not open an interact session: the scrape did not return a scrapeId. Try firecrawl_scrape first, then pass its scrapeId.',
-          url,
-        });
+        return formatToolResponse(
+          {
+            error:
+              'Could not open an interact session: the scrape did not return a scrapeId. Try firecrawl_scrape first, then pass its scrapeId.',
+            url,
+          },
+          response_format,
+          'Use a shorter URL to retrieve the complete error response.'
+        );
       }
     }
     if (!scrapeId) {
-      return asText({
-        error: 'Could not open an interact session: missing scrapeId.',
-        url,
-      });
+      return formatToolResponse(
+        {
+          error: 'Could not open an interact session: missing scrapeId.',
+          url,
+        },
+        response_format,
+        'Use a shorter URL to retrieve the complete error response.'
+      );
     }
     const activeScrapeId = scrapeId;
     log.info('Interacting with page', { scrapeId: activeScrapeId });
@@ -2926,15 +3200,27 @@ This acts on the live site, so actions such as form submission can create persis
     if (timeout != null) interactArgs.timeout = timeout;
     const res = await client.interact(activeScrapeId, interactArgs as any);
     if (openedFromUrl && res && typeof res === 'object' && !Array.isArray(res)) {
-      return asText({
-        ...(res as unknown as Record<string, unknown>),
-        scrapeId: activeScrapeId,
-      });
+      return formatToolResponse(
+        {
+          ...(res as unknown as Record<string, unknown>),
+          scrapeId: activeScrapeId,
+        },
+        response_format,
+        'Use a narrower interaction prompt or code output to retrieve omitted content.'
+      );
     }
     if (openedFromUrl) {
-      return asText({ scrapeId: activeScrapeId, result: res });
+      return formatToolResponse(
+        { scrapeId: activeScrapeId, result: res },
+        response_format,
+        'Use a narrower interaction prompt or code output to retrieve omitted content.'
+      );
     }
-    return asText(res);
+    return formatToolResponse(
+      res,
+      response_format,
+      'Use a narrower interaction prompt or code output to retrieve omitted content.'
+    );
   },
 });
 
@@ -2979,7 +3265,7 @@ Parse one supported document into markdown, HTML, links, summary, targeted answe
 
 Local MCP reads \`filePath\` from the server filesystem. Hosted MCP uses two calls: first provide \`filePath\` to receive upload instructions, upload locally, then call again with the returned \`uploadRef\`; do not send both fields together. Remote web URLs belong in \`firecrawl_scrape\`.
 
-Set \`redactPII\` to request redaction of personally identifiable information in the returned content. \`zeroDataRetention\` requires an eligible authenticated account; omit it for anonymous keyless use. Returns upload instructions for hosted phase one or parsed document content for the final call.
+Set \`redactPII\` to request redaction of personally identifiable information in the returned content. \`zeroDataRetention\` requires an eligible authenticated account; omit it for anonymous keyless use. Returns upload instructions for hosted phase one or parsed document content for the final call. \`response_format\` defaults to \`detailed\`; \`concise\` removes bulky duplicate content and reports omissions.
 `,
   parameters: parseParamsSchema,
   execute: async (args: unknown, { session, log }): Promise<string> => {
@@ -2997,10 +3283,12 @@ Set \`redactPII\` to request redaction of personally identifiable information in
     const {
       filePath,
       contentType: overrideContentType,
+      response_format = 'detailed',
       ...options
     } = args as {
       filePath: string;
       contentType?: string;
+      response_format?: ResponseFormat;
     } & Record<string, unknown>;
 
     const absPath = path.resolve(filePath);
@@ -3049,9 +3337,23 @@ Set \`redactPII\` to request redaction of personally identifiable information in
     }
 
     try {
-      return asText(JSON.parse(responseText));
+      return formatToolResponse(
+        JSON.parse(responseText),
+        response_format,
+        'Parse fewer pages or request fewer output formats to retrieve omitted content.'
+      );
     } catch {
-      return responseText;
+      if (
+        response_format === 'detailed' &&
+        responseText.length <= DETAILED_RESPONSE_MAX_CHARS
+      ) {
+        return responseText;
+      }
+      return formatToolResponse(
+        responseText,
+        response_format,
+        'Parse fewer pages or request fewer output formats to retrieve omitted content.'
+      );
     }
   },
 });
@@ -3077,7 +3379,7 @@ Search web and specialized indexes, returning ranked results. Operators include 
 
 For a programming question, add \`categories: ["developer"]\`. It searches an index of GitHub issues, merged pull requests, repository READMEs, and curated documentation sites, and returns the hits in \`data.developer\` beside the web results.
 
-Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
+Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`. \`response_format\` defaults to \`detailed\`; \`concise\` removes bulky duplicate content and reports omissions.
 `,
     parameters: z
       .object({ ...searchToolBaseFields })
@@ -3099,6 +3401,7 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
         categories,
         highlights,
         enterprise,
+        response_format = 'detailed',
       } = args as {
         query: string;
         includeDomains?: string[];
@@ -3111,6 +3414,7 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
         categories?: string[];
         highlights?: boolean;
         enterprise?: string[];
+        response_format?: ResponseFormat;
       };
 
       const searchQuery = buildSearchQueryWithDomains(
@@ -3139,7 +3443,11 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
       log.info('Searching', { query: searchQuery });
       const client = getClientFn(session);
       const httpRes = await (client as any).http.post('/v2/search', searchBody);
-      return asText(httpRes?.data ?? {});
+      return formatToolResponse(
+        httpRes?.data ?? {},
+        response_format,
+        'Use a lower limit or narrower query to retrieve omitted results.'
+      );
     },
   });
 }

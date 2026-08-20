@@ -280,6 +280,7 @@ async function startFakeFirecrawlBackend(options = {}) {
     introspectionHandler,
     introspectionMetadata = {},
     keylessEligible = false,
+    crawlResponses = {},
     keylessEligibilityResponse,
     searchResponse,
   } = options;
@@ -357,6 +358,12 @@ async function startFakeFirecrawlBackend(options = {}) {
           success: true,
         })
       );
+      return;
+    }
+
+    if (req.method === 'GET' && crawlResponses[req.url]) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(crawlResponses[req.url]));
       return;
     }
 
@@ -821,6 +828,168 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   ].join('\n');
   assertAgentMetadataPolicy(renderedLanguage, assert);
   assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('payload-heavy responses are bounded with explicit retrieval guidance', async (t) => {
+  const largeMarkdown = 'content '.repeat(30_000);
+  const backend = await startFakeFirecrawlBackend({
+    searchResponse: {
+      status: 200,
+      body: {
+        success: true,
+        data: {
+          web: [
+            {
+              title: 'Large result',
+              url: 'https://example.com/large',
+              markdown: largeMarkdown,
+              html: `<main>${largeMarkdown}</main>`,
+              rawHtml: `<html>${largeMarkdown}</html>`,
+              screenshot: `data:image/png;base64,${'A'.repeat(20_000)}`,
+            },
+          ],
+        },
+      },
+    },
+  });
+  t.after(() => backend.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: backend.url,
+  });
+  t.after(() => stopChild(child));
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-output-bounds', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const tools = await client.request('tools/list');
+  for (const name of [
+    'firecrawl_scrape',
+    'firecrawl_search',
+    'firecrawl_crawl',
+    'firecrawl_check_crawl_status',
+    'firecrawl_parse',
+    'firecrawl_agent_status',
+    'firecrawl_interact',
+  ]) {
+    const tool = tools.tools.find((candidate) => candidate.name === name);
+    assert.ok(tool, `${name} must be listed`);
+    assert.deepEqual(tool.inputSchema.properties.response_format.enum, [
+      'concise',
+      'detailed',
+    ]);
+    assert.equal(tool.inputSchema.properties.response_format.default, 'detailed');
+  }
+
+  const detailedResult = await client.request('tools/call', {
+    arguments: { query: 'large result' },
+    name: 'firecrawl_search',
+  });
+  const detailedText = detailedResult.content[0].text;
+  const detailed = JSON.parse(detailedText);
+  assert.ok(detailedText.length <= 65_000, `detailed response was ${detailedText.length} chars`);
+  assert.equal(detailed._firecrawl.truncated, true);
+  assert.match(detailed._firecrawl.message, /narrower query|lower limit/i);
+
+  const conciseResult = await client.request('tools/call', {
+    arguments: { query: 'large result', response_format: 'concise' },
+    name: 'firecrawl_search',
+  });
+  const conciseText = conciseResult.content[0].text;
+  const concise = JSON.parse(conciseText);
+  assert.ok(conciseText.length <= 13_000, `concise response was ${conciseText.length} chars`);
+  assert.ok(conciseText.length < detailedText.length);
+  assert.equal(concise._firecrawl.truncated, true);
+  assert.match(concise._firecrawl.message, /response_format.*detailed/i);
+  assert.equal(concise.data.web[0].rawHtml, undefined);
+  assert.equal(concise.data.web[0].screenshot, undefined);
+
+  const requests = backend.requests.filter(
+    (request) => request.method === 'POST' && request.url === '/v2/search'
+  );
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].body.response_format, undefined);
+  assert.equal(requests[1].body.response_format, undefined);
+});
+
+test('crawl bounding preserves the upstream continuation and small responses', async (t) => {
+  const next = '/v2/crawl/job-1?cursor=next-page';
+  const backend = await startFakeFirecrawlBackend({
+    crawlResponses: {
+      '/v2/crawl/job-1': {
+        status: 'completed',
+        completed: 3,
+        total: 3,
+        next,
+        data: [{ url: 'https://example.com/1', markdown: 'x'.repeat(70_000) }],
+      },
+      [next]: {
+        success: true,
+        next: null,
+        data: [{ url: 'https://example.com/2', markdown: 'small page' }],
+      },
+      '/v2/crawl/job-small': {
+        status: 'completed',
+        completed: 1,
+        total: 1,
+        next: null,
+        data: [{ url: 'https://example.com/small', markdown: 'small page' }],
+      },
+    },
+  });
+  t.after(() => backend.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: backend.url,
+  });
+  t.after(() => stopChild(child));
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-crawl-bounds', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const firstResult = await client.request('tools/call', {
+    arguments: { id: 'job-1' },
+    name: 'firecrawl_check_crawl_status',
+  });
+  const first = JSON.parse(firstResult.content[0].text);
+  assert.equal(first.next, next);
+  assert.equal(first._firecrawl.truncated, true);
+  assert.match(first._firecrawl.message, /firecrawl_check_crawl_status.*next/i);
+  assert.deepEqual(
+    backend.requests.filter((request) => request.method === 'GET').map((request) => request.url),
+    ['/v2/crawl/job-1']
+  );
+
+  const continuationResult = await client.request('tools/call', {
+    arguments: { id: 'job-1', next },
+    name: 'firecrawl_check_crawl_status',
+  });
+  const continuation = JSON.parse(continuationResult.content[0].text);
+  assert.equal(continuation.data[0].markdown, 'small page');
+  assert.equal(continuation.next, null);
+
+  const smallResult = await client.request('tools/call', {
+    arguments: { id: 'job-small' },
+    name: 'firecrawl_check_crawl_status',
+  });
+  assert.deepEqual(JSON.parse(smallResult.content[0].text), {
+    id: 'job-small',
+    status: 'completed',
+    completed: 1,
+    total: 1,
+    next: null,
+    data: [{ url: 'https://example.com/small', markdown: 'small page' }],
+  });
 });
 
 test('local keyless stdio omits feedback tools and qualifies search-feedback IDs as authenticated-only', async (t) => {
