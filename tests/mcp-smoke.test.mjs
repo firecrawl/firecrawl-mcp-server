@@ -923,6 +923,14 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
 
   const byName = new Map(tools.tools.map((tool) => [tool.name, tool]));
+  const descriptionCharacters = tools.tools.reduce(
+    (total, tool) => total + (tool.description?.trim().length ?? 0),
+    0
+  );
+  assert.ok(
+    descriptionCharacters <= 6_000,
+    `tool descriptions exceed lean-copy budget: ${descriptionCharacters}`
+  );
   const properties = tools.tools.flatMap((tool) =>
     Object.values(tool.inputSchema.properties ?? {})
   );

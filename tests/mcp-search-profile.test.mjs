@@ -717,6 +717,10 @@ test('primary search profile uses the strict marketplace search tool, not the fu
   assert.ok(search, 'primary profile must register firecrawl_search');
   assert.doesNotMatch(JSON.stringify(search.inputSchema), /scrapeOptions/);
   assert.doesNotMatch(search.description ?? '', /search_feedback|refund/i);
+  assert.match(
+    search.description ?? '',
+    /categories: \["research"\].*research-affiliated websites.*`firecrawl_research_\*` tools are a separate surface.*PubMed, bioRxiv, medRxiv.*arXiv/is
+  );
 
   const response = await jsonRpc(port, SEARCH_ENDPOINT, {
     id: 13,

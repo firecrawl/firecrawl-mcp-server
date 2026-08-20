@@ -2507,13 +2507,7 @@ server.addTool({
     destructiveHint: false, // Does not modify, delete, or write to external websites.
   },
   description: `
-Retrieve and extract content from one supplied URL through Firecrawl. Use this when the request identifies a page and needs its content or defined fields. It can return markdown, HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema; JSON is useful when the requested result has defined fields, while markdown preserves readable page content.
-
-This tool operates on a known page. For a set of pages use \`firecrawl_crawl\`, and to discover page URLs use \`firecrawl_map\` or \`firecrawl_search\`. Options include JavaScript render delay, cache age, main-content filtering, PII redaction, and lockdown cache-only retrieval. Browser actions may change the live page when interactive actions are enabled.
-
-Firecrawl may reuse recently indexed content instead of refetching the page, and the reuse window varies by domain. Set \`maxAge: 0\` to force a live fetch, or a smaller \`maxAge\` to bound how stale reused content may be. A successful response does not by itself confirm that the state it describes is still current.
-
-Returns the selected content formats and page metadata. \`response_format\` defaults to \`detailed\`; \`concise\` removes bulky duplicate formats, while both formats bound oversized responses and report omissions in-band.
+Retrieve content or structured fields from one supplied URL. Use this when the request identifies a page and needs its content or defined fields. For multiple pages use \`firecrawl_crawl\`; to discover URLs use \`firecrawl_map\` or \`firecrawl_search\`.
 `,
   parameters: scrapeParamsSchema,
   execute: async (args: unknown, { session, log }): Promise<string> => {
@@ -2568,9 +2562,7 @@ server.addTool({
     destructiveHint: false, // Read-only discovery; no deletion or destructive updates.
   },
   description: `
-Enumerate URLs indexed under one website through Firecrawl without fetching each page's content. Use this when the request asks for a site's URL inventory, when several relevant pages must be located, or when the desired page URL is unknown. An optional \`search\` term narrows the URL list, while sitemap, subdomain, query-parameter, and result-limit options control coverage.
-
-Returns matching URLs rather than page bodies. Retrieve one page with \`firecrawl_scrape\`; collect content across multiple pages with \`firecrawl_crawl\`.
+Enumerate URLs under one website without fetching each page. Returns matching URLs rather than page bodies; retrieve one page with \`firecrawl_scrape\` or multiple pages with \`firecrawl_crawl\`.
 `,
   parameters: z.object({
     url: z.string().url().describe('Website root URL to map.'),
@@ -2618,13 +2610,9 @@ server.addTool({
     destructiveHint: false, // Query-only; no destructive side effects on external entities.
   },
   description: `
-Search web, news, or image sources and return ranked results. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit results to GitHub, research, PDF, or developer sources.
+Search web, news, image, and specialized sources. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. Use \`categories: ["developer"]\` for indexed GitHub and documentation results.
 
-For a programming question, add \`categories: ["developer"]\`. It searches an index of GitHub issues, merged pull requests, repository READMEs, and curated documentation sites, and returns the hits in \`data.developer\` beside the web results.
-
-\`categories: ["research"]\` restricts these web results to research-affiliated websites and returns page snippets. The \`firecrawl_research_*\` tools are a separate surface that searches paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature.
-
-\`scrapeOptions\` can attach extracted page content; pages fetched this way use a fixed reuse window and ignore \`maxAge\`, so use \`firecrawl_scrape\` when a live fetch is required. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback. \`response_format\` defaults to \`detailed\`; \`concise\` removes bulky duplicate content and reports omissions.
+\`categories: ["research"]\` restricts these web results to research-affiliated websites. The \`firecrawl_research_*\` tools are a separate surface for paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature. Authenticated responses can include an \`id\` for optional search feedback.
 `,
   parameters: z
     .object({
@@ -2991,9 +2979,7 @@ if (!SEARCH_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
       destructiveHint: false, // Additive only; records feedback and may refund credits, does not delete data.
     },
     description: `
-Records schema-validated quality feedback for a prior \`firecrawl_search\` UUID \`searchId\`. A \`good\` rating requires a valuable source, \`partial\` a valuable source or at least one \`missingContent\` entry, and \`bad\` at least one \`missingContent\` entry or a query suggestion; caps are 50 \`valuableSources\` and 20 \`missingContent\` entries.
-
-Eligibility is limited to successful searches within the feedback age window. The record is idempotent per search ID. Eligible first feedback for a search can refund 1 credit; refunds are subject to the team's daily cap. The response reports whether a refund was applied, along with submission and daily-cap status.
+Record quality feedback for a prior search ID. A \`good\` rating requires a valuable source, \`partial\` a valuable source or \`missingContent\`, and \`bad\` \`missingContent\` or a query suggestion. Caps are 50 \`valuableSources\` and 20 \`missingContent\` entries; eligible searches must be within the feedback age window, and records are idempotent per search ID. Eligible first feedback can refund 1 credit subject to the team's daily cap; the response reports whether a refund was applied and daily-cap status.
 `,
     parameters: z.object({
       searchId: z
@@ -3148,9 +3134,7 @@ if (!ENDPOINT_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
       destructiveHint: false, // Additive only; submits ratings and notes, does not delete jobs or external content.
     },
     description: `
-Submit concise quality feedback for a completed search, scrape, parse, or map job. Provide the endpoint, job ID, rating, and relevant issue codes or small contextual fields; omit large page contents and raw outputs.
-
-Returns submission status, feedback ID, and accounting fields.
+Record quality feedback for a completed search, scrape, parse, or map job. This creates feedback metadata but does not modify the original job or its result.
 `,
     parameters: z.object({
       endpoint: z
@@ -3311,9 +3295,7 @@ server.addTool({
     destructiveHint: false, // Reads pages from target sites; does not delete or alter external websites.
   },
   description: `
-Start a multi-page crawl at a website URL, poll it to a terminal state, and return the final status and collected data. Scope can be bounded with include/exclude paths, depth, page limit, subdomain/external-link controls, sitemap handling, delay, and scrape options.
-
-Crawl results can be large; use conservative limits when full-site coverage is unnecessary. Webhooks and interactive scrape actions are unavailable in safe mode. Returns the crawl ID, status, page data, and a \`next\` continuation when more pages remain. \`response_format\` defaults to \`detailed\`.
+Start a multi-page website crawl and wait for its terminal state. Use for page content across a site; \`firecrawl_map\` returns only URLs. A returned \`next\` value continues results through \`firecrawl_check_crawl_status\`.
 `,
   parameters: z.object({
     url: z.string().describe('Website URL where the crawl starts.'),
@@ -3452,7 +3434,7 @@ server.addTool({
     destructiveHint: false, // Status lookup only; no deletes or updates.
   },
   description: `
-Retrieve the current status, progress, and available results for an existing crawl ID. This only reads Firecrawl job state and does not start or modify the crawl. When \`next\` is returned, pass it with the same ID to retrieve later documents. \`response_format\` defaults to \`detailed\`.
+Retrieve status and available results for an existing crawl ID without starting or modifying it. Pass a returned \`next\` value with the same ID to retrieve later documents.
 `,
   parameters: z.object({
     id: z.string().describe('Crawl job ID.'),
@@ -3531,9 +3513,7 @@ server.addTool({
     destructiveHint: false, // Gathers information only; does not delete external data or user resources.
   },
   description: `
-Start an asynchronous web research job from a prompt, optional seed URLs, and an optional JSON schema. Use this for a requested synthesis across multiple sources when the task can wait for asynchronous completion. The agent can search, navigate, read pages, and assemble a structured result.
-
-This call returns only a job ID, not the research result. Read the job with \`firecrawl_agent_status\` until it reaches \`completed\` or \`failed\`; research commonly takes several minutes. If the job cannot finish within the task's available time, \`firecrawl_search\` and \`firecrawl_scrape\` can gather evidence synchronously.
+Start an asynchronous multi-source web research job. Use for synthesis that can wait for asynchronous completion; \`firecrawl_search\` and \`firecrawl_scrape\` return evidence synchronously. This call returns only a job ID, not the research result; read it with \`firecrawl_agent_status\`.
 `,
   parameters: z.object({
     prompt: z
@@ -3581,9 +3561,7 @@ server.addTool({
     destructiveHint: false, // Read-only status check.
   },
   description: `
-Retrieve progress or final results for a \`firecrawl_agent\` job ID. A \`processing\` response is non-terminal and does not contain the final research result. Check again after 15–30 seconds until the status is \`completed\` or \`failed\`; complex jobs can take several minutes. If the job cannot finish within the task's available time, use \`firecrawl_search\` and \`firecrawl_scrape\` to complete the requested output.
-
-Returns job status, progress information, and result data when completed. \`response_format\` defaults to \`detailed\`; \`concise\` removes bulky duplicate content and reports omissions.
+Retrieve progress or final results for a \`firecrawl_agent\` job ID. A \`processing\` response is non-terminal and does not contain the final research result; check again until \`completed\` or \`failed\`.
 `,
   parameters: z.object({
     id: z.string().describe('Agent job ID.'),
@@ -3618,9 +3596,7 @@ server.addTool({
     destructiveHint: false, // Transient page interactions only; does not delete monitors, jobs, or external sites.
   },
   description: `
-Open or reuse a live browser session to navigate a page, click controls, fill fields, or run browser code. Provide either \`url\` or \`scrapeId\`, and either a natural-language \`prompt\` or executable \`code\`; code can run as Bash, Python, or Node with a bounded timeout.
-
-This acts on the live site, so actions such as form submission can create persistent external side effects. Returns execution output, stdout/stderr, exit status, and session viewing URLs. \`response_format\` defaults to \`detailed\`; \`concise\` removes bulky output and reports omissions.
+Open or reuse a live browser session to interact with a page by prompt or code. This acts on the live site, so form submissions and similar actions can create persistent external side effects.
 `,
   parameters: z
     .object({
@@ -3767,7 +3743,7 @@ server.addTool({
     destructiveHint: true, // Terminates the live browser session; this end state cannot be resumed.
   },
   description: `
-Stop the live interact session associated with a \`scrapeId\` and release its resources. Returns a success confirmation.
+Stop a live interact session and release its resources. The stopped session cannot be resumed.
 `,
   parameters: z.object({
     scrapeId: z.string().describe('Interact session ID to stop.'),
@@ -3795,11 +3771,7 @@ server.addTool({
     destructiveHint: false, // Read-only parsing; no deletion or writes to the source file.
   },
   description: `
-Parse one supported document into markdown, HTML, links, summary, targeted answers, or JSON matching a schema. Supported inputs include common HTML, PDF, Word, RTF, OpenDocument, and spreadsheet files; PDF parsing can be bounded with \`pdfOptions.maxPages\`.
-
-Local MCP reads \`filePath\` from the server filesystem. Hosted MCP uses two calls: first provide \`filePath\` to receive upload instructions, upload locally, then call again with the returned \`uploadRef\`; do not send both fields together. Remote web URLs belong in \`firecrawl_scrape\`.
-
-Set \`redactPII\` to request redaction of personally identifiable information in the returned content. \`zeroDataRetention\` requires an eligible authenticated account; omit it for anonymous keyless use. Returns upload instructions for hosted phase one or parsed document content for the final call. \`response_format\` defaults to \`detailed\`; \`concise\` removes bulky duplicate content and reports omissions.
+Parse one local or uploaded document into text or structured data; remote web URLs belong in \`firecrawl_scrape\`. Local MCP reads \`filePath\`; hosted MCP first returns upload instructions, then parses the returned \`uploadRef\`. \`redactPII\` requests personal-data redaction; \`zeroDataRetention\` requires an eligible account, so omit it for anonymous keyless use.
 `,
   parameters: parseParamsSchema,
   execute: async (args: unknown, { session, log }): Promise<string> => {
@@ -3916,11 +3888,9 @@ function registerMarketplaceSearchTool(
       destructiveHint: false,
     },
     description: `
-Search web and specialized indexes, returning ranked results. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit result types to \`github\`, \`research\`, \`pdf\`, or \`developer\`.
+Search web and specialized indexes. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. Use \`categories: ["developer"]\` for indexed GitHub and documentation results.
 
-For a programming question, add \`categories: ["developer"]\`. It searches an index of GitHub issues, merged pull requests, repository READMEs, and curated documentation sites, and returns the hits in \`data.developer\` beside the web results.
-
-Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`. \`response_format\` defaults to \`detailed\`; \`concise\` removes bulky duplicate content and reports omissions.
+\`categories: ["research"]\` restricts these web results to research-affiliated websites. The \`firecrawl_research_*\` tools are a separate surface for paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature.
 `,
     parameters: z
       .object({ ...searchToolBaseFields })

@@ -241,11 +241,7 @@ export function registerResearchTools(
       destructiveHint: false, // Query-only; no writes to external sources or the research index.
     },
     description: `
-Search paper metadata and abstracts with a natural-language query across the indexed corpus, which spans biomedical, life-science, and clinical literature (PubMed, bioRxiv, medRxiv) alongside arXiv and other scientific sources. Optional author, category, and date filters constrain results.
-
-Several distinct framings of the same question surface different papers than a single query does.
-
-Returns ranked papers with canonical IDs, titles, authors, and abstracts.
+Search paper metadata and abstracts across an indexed corpus spanning biomedical literature (PubMed, bioRxiv, medRxiv) and arXiv. Use this for literature discovery; \`firecrawl_research_read_paper\` retrieves passages from a known paper.
 `,
     parameters: z.object({
       query: z
@@ -322,7 +318,7 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
       destructiveHint: false, // Read-only metadata lookup.
     },
     description: `
-Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DOI identifier. Returns the title, abstract, authors, categories, source IDs, and dates as markdown.
+Retrieve metadata and abstract for one known paper ID. This does not retrieve full-text passages; use \`firecrawl_research_read_paper\` for those.
 `,
     parameters: z.object({
       paperId: z
@@ -353,9 +349,7 @@ Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DO
       destructiveHint: false, // Read-only graph query; no modifications.
     },
     description: `
-Find citation-graph candidates from one to ten \`seed_ids\`; the first ID is the primary seed and later IDs are anchors. \`mode\` defaults to \`similar\` (co-citation/bibliographic coupling); \`citers\` returns papers citing a seed and \`references\` papers cited by a seed. \`intent\` ranks candidates.
-
-Returns ranked candidates and the evaluated pool size.
+Find citation-graph candidates from \`seed_ids\`; the first ID is the primary seed and later IDs are anchors. \`mode\` defaults to \`similar\`; \`citers\` finds citing papers and \`references\` finds cited papers.
 `,
     parameters: z.object({
       seed_ids: z
@@ -424,9 +418,7 @@ Returns ranked candidates and the evaluated pool size.
       destructiveHint: false, // Read-only passage retrieval.
     },
     description: `
-Retrieve in-body passages from one paper that are relevant to a specific question. Full text is available only for indexed papers; \`k\` controls the number of passages.
-
-Returns matching passages or a notice when full text is unavailable.
+Retrieve passages from one known paper that are relevant to a question. Full text is available only for indexed papers; use paper search to discover IDs.
 `,
     parameters: z.object({
       paperId: z
@@ -475,7 +467,7 @@ Returns matching passages or a notice when full text is unavailable.
       destructiveHint: false, // Query-only; does not create issues, PRs, or modify repositories.
     },
     description: `
-Search indexed public GitHub issue, pull-request, and README content. Returns ranked matches with repository, URL, snippet, and full matched markdown when available.
+Search indexed public GitHub issues, pull requests, and READMEs. Use for repository history or discussions rather than general web results.
 `,
     parameters: z.object({
       query: z.string().min(1).describe('GitHub issue, pull-request, or README search query.'),

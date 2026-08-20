@@ -224,9 +224,7 @@ export function registerMonitorTools(server: FastMCP<SessionData>): void {
       destructiveHint: false, // Additive; creates a new monitor without deleting existing monitors or external content.
     },
     description: `
-Create a recurring scrape, crawl, or search monitor that compares each check with its retained predecessor. The simple form accepts \`page\`/\`pages\` or \`queries\` plus a plain-language \`goal\`; the advanced \`body\` form controls targets, schedule, change-tracking formats, judging, retention, webhook, and notifications.
-
-In the simple form, a \`goal\` is required. If \`queries\` contains one or more non-empty values and is supplied with \`page\`/\`pages\`, \`queries\` create the search target and page targets are ignored. A monitor schedules future network checks and can send configured email or webhook notifications. Returns the created monitor.
+Create a recurring page, site, or search monitor that compares checks over time. In the simple form a \`goal\` is required; when \`queries\` and pages are both supplied, queries create the search target and page targets are ignored. Monitors schedule future network checks and may send configured notifications.
 `,
     parameters: z.object({
       body: z
@@ -294,7 +292,7 @@ In the simple form, a \`goal\` is required. If \`queries\` contains one or more 
       destructiveHint: false, // Read-only listing.
     },
     description: `
-List monitors for the authenticated account with optional pagination controls. Returns one page of monitor records and pagination metadata.
+List monitors for the authenticated account. This reads configurations without running or modifying them.
 `,
     parameters: z.object({
       limit: z
@@ -328,7 +326,7 @@ List monitors for the authenticated account with optional pagination controls. R
       destructiveHint: false, // Read-only retrieval.
     },
     description: `
-Retrieve one monitor by ID, including its configuration and current state. This does not run or modify the monitor.
+Retrieve one monitor's configuration and state by ID without running or modifying it.
 `,
     parameters: z.object({ id: z.string().describe('Monitor ID.') }),
     execute: async (args: unknown, { session }): Promise<string> => {
@@ -350,9 +348,7 @@ Retrieve one monitor by ID, including its configuration and current state. This 
       destructiveHint: true, // Can pause, replace, or remove monitor configuration; changes overwrite prior settings.
     },
     description: `
-Patch an existing monitor by ID. The body can change its name, active/paused status, schedule, targets, goal, judging, webhook, notifications, or retention; these changes affect future scheduled checks.
-
-Returns the updated monitor.
+Patch an existing monitor's configuration by ID. Changes affect future scheduled checks but do not run a check immediately.
 `,
     parameters: z.object({
       id: z.string().describe('Monitor ID.'),
@@ -383,7 +379,7 @@ Returns the updated monitor.
       destructiveHint: true, // Irreversibly removes the monitor and stops its schedule.
     },
     description: `
-Permanently delete a monitor by ID and stop its future schedule. This operation cannot be undone and returns deletion status.
+Permanently delete a monitor and stop its future schedule. This operation cannot be undone.
 `,
     parameters: z.object({ id: z.string().describe('Monitor ID.') }),
     execute: async (args: unknown, { session, log }): Promise<string> => {
@@ -407,7 +403,7 @@ Permanently delete a monitor by ID and stop its future schedule. This operation 
       destructiveHint: false, // Starts a read-only check job; does not delete the monitor or external sites.
     },
     description: `
-Queue an immediate check for a monitor outside its normal schedule. This starts network work for the monitor's configured targets and returns the queued check.
+Queue an immediate check for a monitor outside its schedule. This starts network work without changing the schedule.
 `,
     parameters: z.object({ id: z.string().describe('Monitor ID.') }),
     execute: async (args: unknown, { session }): Promise<string> => {
@@ -430,7 +426,7 @@ Queue an immediate check for a monitor outside its normal schedule. This starts 
       destructiveHint: false, // Read-only listing.
     },
     description: `
-List historical checks for a monitor, optionally filtered by status and bounded by a result limit. Returns one page of check summaries and pagination metadata.
+List historical checks for a monitor. This reads check summaries without running a new check.
 `,
     parameters: z.object({
       id: z.string().describe('Monitor ID.'),
@@ -473,9 +469,7 @@ List historical checks for a monitor, optionally filtered by status and bounded 
       destructiveHint: false, // Read-only retrieval of diff snapshots and judgments.
     },
     description: `
-Retrieve one monitor check and its page-level results, optionally filtered by page status. Pages report \`same\`, \`new\`, \`changed\`, \`removed\`, or \`error\`; configured goal judging can add a meaningful-change decision.
-
-Markdown tracking returns a unified text diff, JSON tracking returns field paths with previous/current values and a current snapshot, and mixed tracking returns both. Returns one page of results plus a \`next\` URL when more pages exist.
+Retrieve one monitor check and its page-level change results. Use this for stored diffs and judgments; it does not run or modify the monitor.
 `,
     parameters: z.object({
       id: z.string().describe('Monitor ID.'),
