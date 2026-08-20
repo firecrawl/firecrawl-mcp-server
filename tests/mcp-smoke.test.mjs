@@ -281,7 +281,11 @@ async function startFakeFirecrawlBackend(options = {}) {
     introspectionMetadata = {},
     keylessEligible = false,
     crawlResponses = {},
+    crawlStartResponse,
+    feedbackResponse,
     keylessEligibilityResponse,
+    monitorResponse,
+    scrapeResponse,
     searchResponse,
   } = options;
   const requests = [];
@@ -361,6 +365,30 @@ async function startFakeFirecrawlBackend(options = {}) {
       return;
     }
 
+    if (req.method === 'POST' && req.url === '/v2/scrape' && scrapeResponse) {
+      res.writeHead(scrapeResponse.status, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(scrapeResponse.body));
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/crawl' && crawlStartResponse) {
+      res.writeHead(crawlStartResponse.status, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(crawlStartResponse.body));
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/feedback' && feedbackResponse) {
+      res.writeHead(feedbackResponse.status, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(feedbackResponse.body));
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/monitor' && monitorResponse) {
+      res.writeHead(monitorResponse.status, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(monitorResponse.body));
+      return;
+    }
+
     if (req.method === 'GET' && crawlResponses[req.url]) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify(crawlResponses[req.url]));
@@ -434,6 +462,136 @@ async function httpToolCall(port, { endpoint = '/v2/mcp', id, headers, params })
     method: 'POST',
   });
 }
+
+test('tool failures carry structured codes instead of silent success', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    crawlStartResponse: { status: 200, body: { success: false, error: 'crawl rejected' } },
+    feedbackResponse: { status: 422, body: { error: 'feedback rejected', feedbackErrorCode: 'invalid_job' } },
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  for (const [name, arguments_, expectedCode] of [
+    ['firecrawl_crawl', { url: 'https://example.com/' }, 'CRAWL_START_FAILED'],
+    [
+      'firecrawl_feedback',
+      { endpoint: 'scrape', jobId: '00000000-0000-4000-8000-000000000000', rating: 'bad' },
+      'FEEDBACK_REJECTED',
+    ],
+    ['firecrawl_check_crawl_status', { id: 'bogus-job' }, 'UPSTREAM_REQUEST_FAILED'],
+    [
+      'firecrawl_search',
+      { query: 'firecrawl', includeDomains: ['example.com'], excludeDomains: ['example.com'] },
+      'INVALID_REQUEST',
+    ],
+  ]) {
+    const response = await httpToolCall(port, {
+      id: `structured-${name}`,
+      headers: { 'x-api-key': 'fc-test' },
+      params: { arguments: arguments_, name },
+    });
+    const result = parseSseJson(await response.text()).result;
+    assert.equal(result.isError, true, name);
+    assert.equal(result.structuredContent.code, expectedCode, name);
+    assert.equal(result.content[0].text, result.structuredContent.message, name);
+    assert.match(result.structuredContent.message, /retry|check|verify|use/i, name);
+    assert.equal(typeof result.structuredContent.original_error, 'string', name);
+  }
+});
+
+test('parse, interact, and monitor failures use the shared structured boundary', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    monitorResponse: { status: 503, body: { success: false, error: 'monitor unavailable' } },
+    scrapeResponse: { status: 200, body: { success: true, data: { markdown: '# page' } } },
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  for (const [name, arguments_, expectedCode] of [
+    [
+      'firecrawl_interact',
+      { url: 'https://example.com/', prompt: 'read the title' },
+      'INTERACT_SESSION_UNAVAILABLE',
+    ],
+    [
+      'firecrawl_monitor_create',
+      { page: 'https://example.com/', goal: 'Track title changes' },
+      'UPSTREAM_REQUEST_FAILED',
+    ],
+  ]) {
+    const response = await httpToolCall(port, {
+      id: `structured-${name}`,
+      headers: { 'x-api-key': 'fc-test' },
+      params: { arguments: arguments_, name },
+    });
+    const result = parseSseJson(await response.text()).result;
+    assert.equal(result.isError, true, name);
+    assert.equal(result.structuredContent.code, expectedCode, name);
+    assert.equal(typeof result.structuredContent.original_error, 'string', name);
+  }
+});
+
+test('empty and likely-blocked results carry in-band Firecrawl notices', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    scrapeResponse: {
+      status: 200,
+      body: { success: true, data: { markdown: '', metadata: { statusCode: 403 } } },
+    },
+    searchResponse: { status: 200, body: { success: true, data: { web: [] } } },
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  for (const [name, arguments_, expectedCode] of [
+    ['firecrawl_scrape', { url: 'https://example.com/' }, 'LIKELY_BLOCKED'],
+    ['firecrawl_search', { query: 'no matching result' }, 'EMPTY_RESULT'],
+  ]) {
+    const response = await httpToolCall(port, {
+      id: `empty-${name}`,
+      headers: { 'x-api-key': 'fc-test' },
+      params: { arguments: arguments_, name },
+    });
+    const result = parseSseJson(await response.text()).result;
+    assert.notEqual(result.isError, true, name);
+    const payload = JSON.parse(result.content[0].text);
+    assert.equal(payload._firecrawl.code, expectedCode, name);
+    assert.match(payload._firecrawl.message, /empty|blocked/i, name);
+    assert.ok(Array.isArray(payload._firecrawl.next_actions), name);
+  }
+});
 
 test('HTTP cloud keyless transport preserves app challenge without advertising OAuth', async (t) => {
   const backend = await startFakeFirecrawlBackend();
@@ -696,6 +854,30 @@ class StdioMcpClient {
     this.#child.stdin.write(`${JSON.stringify(message)}\n`);
   }
 }
+
+test('local parse missing files return FILE_NOT_FOUND recovery', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: backend.url,
+  });
+  t.after(() => stopChild(child));
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-smoke', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+  const result = await client.request('tools/call', {
+    arguments: { filePath: '/definitely/missing/firecrawl-cycle2.pdf' },
+    name: 'firecrawl_parse',
+  });
+  assert.equal(result.isError, true);
+  assert.equal(result.structuredContent.code, 'FILE_NOT_FOUND');
+  assert.match(result.structuredContent.message, /check.*filePath/i);
+});
 
 test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   const child = spawnServer({

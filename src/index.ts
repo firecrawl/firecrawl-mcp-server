@@ -1116,6 +1116,80 @@ function recoveryPayload(
   };
 }
 
+function errorText(error: unknown): string {
+  return (error instanceof Error ? error.message : String(error)).slice(0, 4_000);
+}
+
+function agentLegibleError(
+  code: string,
+  error: unknown,
+  guidance: string,
+  requestId: string = randomUUID(),
+  retryable = false
+): UserError {
+  const originalError = errorText(error);
+  const message = `${originalError}\nRecovery: ${guidance}`;
+  return new UserError(message, {
+    code,
+    message,
+    request_id: requestId,
+    original_error: originalError,
+    retryable,
+    next_actions: [
+      {
+        kind: retryable ? 'retry' : 'check_request',
+        instruction: guidance,
+      },
+    ],
+    docs_url: MCP_CONNECTION_GUIDE_URL,
+  });
+}
+
+function wrapToolError(error: unknown, requestId: string): UserError {
+  if (error instanceof UserError) return error;
+  const message = errorText(error);
+  if (/unauthori[sz]ed|api key|credentials? required/i.test(message)) {
+    return agentLegibleError(
+      'AUTH_REQUIRED',
+      error,
+      'Configure a Firecrawl API key, connect the existing Firecrawl MCP server, or set FIRECRAWL_API_URL for a self-hosted instance, then start a new session and retry.',
+      requestId
+    );
+  }
+  if (/ENOENT|no such file/i.test(message)) {
+    return agentLegibleError(
+      'FILE_NOT_FOUND',
+      error,
+      'Check that filePath exists on the machine running the local MCP server, then retry with the corrected path.',
+      requestId
+    );
+  }
+  if (/timed? out|timeout/i.test(message)) {
+    return agentLegibleError(
+      'UPSTREAM_TIMEOUT',
+      error,
+      'Retry once with a narrower request or a longer supported timeout; if the job ID is known, check its status instead of starting a duplicate job.',
+      requestId,
+      true
+    );
+  }
+  if (/requires|must belong|provide (?:either|exactly)|missing/i.test(message)) {
+    return agentLegibleError(
+      'INVALID_REQUEST',
+      error,
+      'Check the tool arguments against its input schema, correct the invalid or missing value, and retry.',
+      requestId
+    );
+  }
+  return agentLegibleError(
+    'UPSTREAM_REQUEST_FAILED',
+    error,
+    'Verify the request and Firecrawl service availability, then retry once if the operation is safe to repeat.',
+    requestId,
+    true
+  );
+}
+
 function deprecatedExtractPayload() {
   return {
     code: 'DEPRECATED_TOOL',
@@ -1230,25 +1304,71 @@ function guardHostedTool(
         };
       }
       const earlyResult = await beforeValidate?.(args, session);
-      const payload = earlyResult?.structuredContent;
-      const recoveryCode =
-        payload &&
-        typeof payload === 'object' &&
-        'code' in payload &&
-        typeof payload.code === 'string'
-          ? payload.code
-          : undefined;
-      if (logActions && earlyResult?.isError && recoveryCode) {
-        emitActionLog(
-          tool.name,
-          'error',
-          session,
-          new UserError(`Tool validation failed: ${recoveryCode}`, payload),
-          randomUUID(),
-          recoveryCode
-        );
+      if (earlyResult) {
+        const payload = earlyResult.structuredContent;
+        const recoveryCode =
+          payload &&
+          typeof payload === 'object' &&
+          'code' in payload &&
+          typeof payload.code === 'string'
+            ? payload.code
+            : undefined;
+        if (logActions && earlyResult.isError && recoveryCode) {
+          emitActionLog(
+            tool.name,
+            'error',
+            session,
+            new UserError(`Tool validation failed: ${recoveryCode}`, payload),
+            randomUUID(),
+            recoveryCode
+          );
+        }
+        return earlyResult;
       }
-      return earlyResult;
+
+      const schema = tool.parameters as typeof tool.parameters & {
+        safeParseAsync?: (value: unknown) => Promise<{
+          success: boolean;
+          error?: { issues?: Array<{ message?: string; path?: PropertyKey[] }> };
+        }>;
+      };
+      if (schema?.safeParseAsync) {
+        const validation = await schema.safeParseAsync(args);
+        if (!validation.success) {
+          const issueText = (validation.error?.issues ?? [])
+            .slice(0, 10)
+            .map((issue) => {
+              const location = issue.path?.length
+                ? `${issue.path.map(String).join('.')}: `
+                : '';
+              return `${location}${issue.message ?? 'Invalid value'}`;
+            })
+            .join('; ');
+          const requestId = randomUUID();
+          const error = agentLegibleError(
+            'INVALID_REQUEST',
+            issueText || 'Tool arguments failed validation.',
+            'Check the tool arguments against its input schema, correct the listed values, and retry.',
+            requestId
+          );
+          if (logActions) {
+            emitActionLog(
+              tool.name,
+              'error',
+              session,
+              error,
+              requestId,
+              'INVALID_REQUEST'
+            );
+          }
+          return {
+            content: [{ type: 'text' as const, text: error.message }],
+            isError: true,
+            structuredContent: error.extras,
+          };
+        }
+      }
+      return undefined;
     },
     execute: async (args, context) => {
       const requestId = randomUUID();
@@ -1274,16 +1394,30 @@ function guardHostedTool(
         if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
         throw new UserError(String(payload.message), payload);
       }
-      if (!logActions) return execute(args, invocationContext);
-
-      emitActionLog(tool.name, 'started', invocationSession, undefined, requestId);
+      if (logActions) {
+        emitActionLog(tool.name, 'started', invocationSession, undefined, requestId);
+      }
       try {
         const result = await execute(args, invocationContext);
-        emitActionLog(tool.name, 'success', invocationSession, undefined, requestId);
+        if (logActions) {
+          emitActionLog(tool.name, 'success', invocationSession, undefined, requestId);
+        }
         return result;
       } catch (error) {
-        emitActionLog(tool.name, 'error', invocationSession, error, requestId);
-        throw error;
+        const wrapped = wrapToolError(error, requestId);
+        if (logActions) {
+          emitActionLog(
+            tool.name,
+            'error',
+            invocationSession,
+            wrapped,
+            requestId,
+            typeof wrapped.extras?.code === 'string'
+              ? wrapped.extras.code
+              : undefined
+          );
+        }
+        throw wrapped;
       }
     },
   };
@@ -1499,6 +1633,81 @@ function withTruncationMetadata(
   return value && typeof value === 'object' && !Array.isArray(value)
     ? { ...(value as Record<string, unknown>), _firecrawl: metadata }
     : { result: value, _firecrawl: metadata };
+}
+
+type ResultNoticeKind = 'scrape' | 'search' | 'map' | 'crawl' | 'agent';
+
+function resultRecord(data: unknown): Record<string, any> | undefined {
+  return data && typeof data === 'object' && !Array.isArray(data)
+    ? (data as Record<string, any>)
+    : undefined;
+}
+
+function withResultNotice(
+  data: unknown,
+  kind: ResultNoticeKind
+): unknown {
+  const root = resultRecord(data);
+  if (!root) return data;
+  const body = resultRecord(root.data) ?? root;
+  const statusCode = Number(body.metadata?.statusCode ?? root.statusCode);
+  const blocked =
+    kind === 'scrape' &&
+    ([401, 403, 429].includes(statusCode) ||
+      /blocked|captcha|access denied/i.test(
+        String(body.warning ?? body.error ?? root.warning ?? root.error ?? '')
+      ));
+
+  let empty = false;
+  if (kind === 'scrape') {
+    const contentFields = ['markdown', 'html', 'rawHtml', 'json', 'summary'];
+    empty = contentFields.some((field) => field in body) &&
+      contentFields.every((field) => body[field] == null || body[field] === '');
+  } else if (kind === 'search') {
+    const groups = Object.values(resultRecord(root.data) ?? {}).filter(Array.isArray);
+    empty = groups.length > 0 && groups.every((group) => group.length === 0);
+  } else if (kind === 'map') {
+    empty = Array.isArray(body.links) && body.links.length === 0;
+  } else if (kind === 'crawl') {
+    empty = Array.isArray(root.data) && root.data.length === 0;
+  } else if (kind === 'agent') {
+    empty = Object.keys(body).length === 0;
+  }
+  if (!blocked && !empty) return data;
+
+  const notice = blocked
+    ? {
+        code: 'LIKELY_BLOCKED',
+        warning: true,
+        message:
+          'The response is empty or incomplete and carries a likely blocking signal from the target site.',
+        next_actions: [
+          {
+            kind: 'adjust_request',
+            instruction:
+              'Verify the URL and retry with a supported proxy or a narrower scrape request; do not treat this response as page content.',
+          },
+        ],
+      }
+    : {
+        code: 'EMPTY_RESULT',
+        warning: true,
+        message: 'Firecrawl returned an empty result for this request.',
+        next_actions: [
+          {
+            kind: 'adjust_request',
+            instruction:
+              'Verify the URL, query, filters, or job status and retry with corrected or broader inputs if appropriate.',
+          },
+        ],
+      };
+  return {
+    ...root,
+    _firecrawl: {
+      ...(resultRecord(root._firecrawl) ?? {}),
+      ...notice,
+    },
+  };
 }
 
 function formatToolResponse(
@@ -2021,18 +2230,21 @@ async function executeHostedParse(
   const hasUploadRef =
     typeof args.uploadRef === 'string' && args.uploadRef.length > 0;
   if (hasFilePath === hasUploadRef) {
-    throw new Error(
-      'Hosted firecrawl_parse requires exactly one of filePath or uploadRef.'
+    throw agentLegibleError(
+      'PARSE_INPUT_INVALID',
+      'Hosted firecrawl_parse requires exactly one of filePath or uploadRef.',
+      'Provide filePath for phase one or uploadRef for phase two, but not both, then retry.',
+      session?.requestId
     );
   }
 
   if (!hasCredential(session) && !isKeylessMode(session)) {
-    return asText({
-      success: false,
-      mode: 'hosted-upload-ref-auth-required',
-      message:
-        'Hosted firecrawl_parse requires an authenticated Firecrawl session or keyless eligibility before a local file upload URL can be minted. Connect a Firecrawl account, provide an API key, or use keyless hosted MCP while eligible, then call firecrawl_parse again.',
-    });
+    throw agentLegibleError(
+      'AUTH_REQUIRED',
+      'Hosted firecrawl_parse requires an authenticated Firecrawl session or keyless eligibility.',
+      'Connect the existing Firecrawl MCP server, configure an API key, or use eligible hosted keyless mode, then start a new session and retry.',
+      session?.requestId
+    );
   }
 
   if (isHostedKeylessSession(session) && args.zeroDataRetention === true) {
@@ -2175,7 +2387,7 @@ Returns the selected content formats and page metadata. \`response_format\` defa
         session
       );
       return formatToolResponse(
-        json?.data ?? json,
+        withResultNotice(json?.data ?? json, 'scrape'),
         response_format,
         'Request fewer formats or narrow the extraction to retrieve omitted page content.'
       );
@@ -2186,7 +2398,7 @@ Returns the selected content formats and page metadata. \`response_format\` defa
       origin: ORIGIN,
     } as any);
     return formatToolResponse(
-      res,
+      withResultNotice(res, 'scrape'),
       response_format,
       'Request fewer formats or narrow the extraction to retrieve omitted page content.'
     );
@@ -2227,7 +2439,7 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
       origin: ORIGIN,
     } as any);
     return formatToolResponse(
-      res,
+      withResultNotice(res, 'map'),
       'detailed',
       'Retry firecrawl_map with a lower limit or narrower search term to retrieve omitted URLs.'
     );
@@ -2297,7 +2509,7 @@ For a programming question, add \`categories: ["developer"]\`. It searches an in
       const keylessResponse = { ...(json ?? {}) };
       delete keylessResponse.id;
       return formatToolResponse(
-        keylessResponse,
+        withResultNotice(keylessResponse, 'search'),
         response_format,
         'Use a lower limit, narrower query, or fewer scrapeOptions formats to retrieve omitted results.'
       );
@@ -2309,7 +2521,7 @@ For a programming question, add \`categories: ["developer"]\`. It searches an in
     const client = getClient(session);
     const httpRes = await (client as any).http.post('/v2/search', searchBody);
     return formatToolResponse(
-      httpRes?.data ?? {},
+      withResultNotice(httpRes?.data ?? {}, 'search'),
       response_format,
       'Use a lower limit, narrower query, or fewer scrapeOptions formats to retrieve omitted results.'
     );
@@ -2681,7 +2893,12 @@ Eligibility is limited to successful searches within the feedback age window. Th
       if (credential) {
         headers['Authorization'] = `Bearer ${credential}`;
       } else if (process.env.CLOUD_SERVICE === 'true') {
-        throw new Error('Unauthorized: missing API key for search feedback.');
+        throw agentLegibleError(
+          'AUTH_REQUIRED',
+          'Search feedback requires an authenticated Firecrawl account.',
+          'Connect the existing Firecrawl MCP server or configure an API key, then start a new session and retry.',
+          session?.requestId
+        );
       }
 
       log.info('Submitting search feedback', { searchId, rating });
@@ -2707,13 +2924,15 @@ Eligibility is limited to successful searches within the feedback age window. Th
           status: response.status,
           feedbackErrorCode: parsed?.feedbackErrorCode,
         });
-        return asText({
-          success: false,
-          status: response.status,
-          feedbackErrorCode: parsed?.feedbackErrorCode,
-          error: parsed?.error ?? `HTTP ${response.status}`,
-          retryable: response.status >= 500,
-        });
+        throw agentLegibleError(
+          'FEEDBACK_REJECTED',
+          parsed?.error ?? `HTTP ${response.status}`,
+          response.status >= 500
+            ? 'Retry once later with the same substantive feedback.'
+            : 'Check the search ID, feedback fields, and submission window before retrying.',
+          session?.requestId,
+          response.status >= 500
+        );
       }
 
       return asText(parsed);
@@ -2793,7 +3012,12 @@ Returns submission status, feedback ID, and accounting fields.
       if (credential) {
         headers['Authorization'] = `Bearer ${credential}`;
       } else if (process.env.CLOUD_SERVICE === 'true') {
-        throw new Error('Unauthorized: missing API key for feedback.');
+        throw agentLegibleError(
+          'AUTH_REQUIRED',
+          'Endpoint feedback requires an authenticated Firecrawl account.',
+          'Connect the existing Firecrawl MCP server or configure an API key, then start a new session and retry.',
+          session?.requestId
+        );
       }
 
       const body = removeEmptyTopLevel({
@@ -2832,13 +3056,15 @@ Returns submission status, feedback ID, and accounting fields.
           status: response.status,
           feedbackErrorCode: parsed?.feedbackErrorCode,
         });
-        return asText({
-          success: false,
-          status: response.status,
-          feedbackErrorCode: parsed?.feedbackErrorCode,
-          error: parsed?.error ?? `HTTP ${response.status}`,
-          retryable: response.status >= 500,
-        });
+        throw agentLegibleError(
+          'FEEDBACK_REJECTED',
+          parsed?.error ?? `HTTP ${response.status}`,
+          response.status >= 500
+            ? 'Retry once later with the same substantive feedback.'
+            : 'Check the job ID, feedback fields, and submission window before retrying.',
+          session?.requestId,
+          response.status >= 500
+        );
       }
 
       return asText(parsed);
@@ -2927,10 +3153,12 @@ Crawl results can be large; use conservative limits when full-site coverage is u
     });
     const crawlId = started?.data?.id;
     if (!crawlId) {
-      return formatToolResponse(
-        started?.data ?? {},
-        response_format,
-        'Use a narrower crawl request to retrieve omitted response fields.'
+      throw agentLegibleError(
+        'CRAWL_START_FAILED',
+        started?.data?.error ?? 'Firecrawl did not return a crawl job ID.',
+        'Check the crawl URL and options, then retry once; do not report a crawl as started without a job ID.',
+        session?.requestId,
+        true
       );
     }
     const res = await waitForCrawlCompletionWithOrigin(
@@ -2940,7 +3168,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
       timeout
     );
     return formatToolResponse(
-      res,
+      withResultNotice(res, 'crawl'),
       response_format,
       res.next
         ? `Call firecrawl_check_crawl_status with id: "${crawlId}" and next: "${String(res.next)}" to retrieve later documents; narrow scrapeOptions to retrieve omitted document fields.`
@@ -2981,7 +3209,7 @@ Retrieve the current status, progress, and available results for an existing cra
     };
     const res = await getCrawlStatusWithOrigin(client, id, next);
     return formatToolResponse(
-      res,
+      withResultNotice(res, 'crawl'),
       response_format,
       res.next
         ? `Call firecrawl_check_crawl_status with id: "${id}" and next: "${String(res.next)}" to retrieve later documents; narrow the crawl request to retrieve omitted document fields.`
@@ -3091,7 +3319,7 @@ Returns job status, progress information, and result data when completed. \`resp
       ORIGIN_HEADERS
     );
     return formatToolResponse(
-      res?.data ?? {},
+      withResultNotice(res?.data ?? {}, 'agent'),
       response_format,
       'Use a narrower agent prompt or schema to retrieve omitted result content.'
     );
@@ -3170,25 +3398,20 @@ This acts on the live site, so actions such as form submission can create persis
       } as any);
       scrapeId = (scraped as any)?.metadata?.scrapeId;
       if (!scrapeId) {
-        return formatToolResponse(
-          {
-            error:
-              'Could not open an interact session: the scrape did not return a scrapeId. Try firecrawl_scrape first, then pass its scrapeId.',
-            url,
-          },
-          response_format,
-          'Use a shorter URL to retrieve the complete error response.'
+        throw agentLegibleError(
+          'INTERACT_SESSION_UNAVAILABLE',
+          'The scrape did not return a scrapeId.',
+          'Verify the URL, call firecrawl_scrape, and retry firecrawl_interact with the returned scrapeId.',
+          session?.requestId
         );
       }
     }
     if (!scrapeId) {
-      return formatToolResponse(
-        {
-          error: 'Could not open an interact session: missing scrapeId.',
-          url,
-        },
-        response_format,
-        'Use a shorter URL to retrieve the complete error response.'
+      throw agentLegibleError(
+        'INTERACT_SESSION_UNAVAILABLE',
+        'Could not open an interact session because scrapeId is missing.',
+        'Call firecrawl_scrape and retry firecrawl_interact with its scrapeId.',
+        session?.requestId
       );
     }
     const activeScrapeId = scrapeId;
@@ -3275,8 +3498,11 @@ Set \`redactPII\` to request redaction of personally identifiable information in
 
     const apiUrl = process.env.FIRECRAWL_API_URL;
     if (!apiUrl) {
-      throw new Error(
-        'firecrawl_parse requires FIRECRAWL_API_URL to be set to a self-hosted Firecrawl API instance.'
+      throw agentLegibleError(
+        'PARSE_CONFIG_REQUIRED',
+        'firecrawl_parse requires FIRECRAWL_API_URL to be set to a self-hosted Firecrawl API instance.',
+        'Set FIRECRAWL_API_URL on the local MCP server, start a new session, and retry.',
+        session?.requestId
       );
     }
 
@@ -3331,8 +3557,12 @@ Set \`redactPII\` to request redaction of personally identifiable information in
 
     const responseText = await response.text();
     if (!response.ok) {
-      throw new Error(
-        `Parse request failed with status ${response.status}: ${responseText}`
+      throw agentLegibleError(
+        'PARSE_REQUEST_FAILED',
+        `Parse request failed with status ${response.status}: ${responseText}`,
+        'Verify the file type and parse options, then retry once if the request is safe to repeat.',
+        session?.requestId,
+        response.status >= 500
       );
     }
 
@@ -3444,7 +3674,7 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`. 
       const client = getClientFn(session);
       const httpRes = await (client as any).http.post('/v2/search', searchBody);
       return formatToolResponse(
-        httpRes?.data ?? {},
+        withResultNotice(httpRes?.data ?? {}, 'search'),
         response_format,
         'Use a lower limit or narrower query to retrieve omitted results.'
       );
