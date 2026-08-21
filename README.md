@@ -1,3 +1,5 @@
+[![mcpindex](https://mcpindex.ai/api/v1/badge/io-github-firecrawl-firecrawl-mcp-server)](https://mcpindex.ai/server/io-github-firecrawl-firecrawl-mcp-server)
+
 <div align="center">
   <a name="readme-top"></a>
   <img
