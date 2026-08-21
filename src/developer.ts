@@ -36,7 +36,6 @@ type GetClient = (session?: SessionData) => unknown;
 const BASE = '/v2/search/developer';
 const ORIGIN_HEADERS = { 'X-Origin': 'mcp-fastmcp' };
 
-const LEGACY_MAX_PASSAGE_CHARS = 1200;
 
 interface DeveloperHit {
   /** Stable result id, e.g. `issue:owner/repo#123` or `doc:<hash>`. */
@@ -52,8 +51,7 @@ interface DeveloperHit {
  * The stable ID prefix supplies the kind. Markdown passages keep newlines.
  */
 function fmtDeveloper(
-  results?: DeveloperHit[],
-  passageBudgetApplied?: number
+  results?: DeveloperHit[]
 ): string {
   if (!results || results.length === 0) return '(no results)';
   return results
@@ -67,13 +65,9 @@ function fmtDeveloper(
         .map((p) => p.text ?? '')
         .join('\n---\n')
         .trim();
-      // TODO(search#843): Remove this fallback after server passage budgeting
-      // is fully enabled.
-      const renderedBody =
-        passageBudgetApplied == null
-          ? body.slice(0, LEGACY_MAX_PASSAGE_CHARS)
-          : body;
-      lines.push(renderedBody || '(no content)');
+      // Passages are server-shaped (search-side budget is always on); no
+      // client-side truncation.
+      lines.push(body || '(no content)');
       return lines.join('\n');
     })
     .join('\n\n');
@@ -129,9 +123,8 @@ Returns ranked results with an ID, source type, URL, title, and the matched pass
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{
         results?: DeveloperHit[];
-        passage_budget_applied?: number;
       }>(`${BASE}?${params.toString()}`, ORIGIN_HEADERS);
-      return fmtDeveloper(res.data?.results, res.data?.passage_budget_applied);
+      return fmtDeveloper(res.data?.results);
     },
   });
 }
