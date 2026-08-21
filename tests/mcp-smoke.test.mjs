@@ -467,6 +467,14 @@ test('tool failures carry structured codes instead of silent success', async (t)
   const backend = await startFakeFirecrawlBackend({
     crawlStartResponse: { status: 200, body: { success: false, error: 'crawl rejected' } },
     feedbackResponse: { status: 422, body: { error: 'feedback rejected', feedbackErrorCode: 'invalid_job' } },
+    scrapeResponse: {
+      status: 403,
+      body: {
+        success: false,
+        error:
+          'We apologize for the inconvenience but we do not support this site. If you are part of an enterprise and want to have a further conversation about this, please fill out our intake form here: https://example.com/intake',
+      },
+    },
   });
   t.after(() => backend.close());
   const port = await getFreePort();
@@ -490,6 +498,7 @@ test('tool failures carry structured codes instead of silent success', async (t)
       'FEEDBACK_REJECTED',
     ],
     ['firecrawl_check_crawl_status', { id: 'bogus-job' }, 'UPSTREAM_REQUEST_FAILED'],
+    ['firecrawl_scrape', { url: 'https://www.linkedin.com/feed/' }, 'UNSUPPORTED_SITE'],
     [
       'firecrawl_search',
       { query: 'firecrawl', includeDomains: ['example.com'], excludeDomains: ['example.com'] },
@@ -507,6 +516,11 @@ test('tool failures carry structured codes instead of silent success', async (t)
     assert.equal(result.content[0].text, result.structuredContent.message, name);
     assert.match(result.structuredContent.message, /retry|check|verify|use/i, name);
     assert.equal(typeof result.structuredContent.original_error, 'string', name);
+    if (expectedCode === 'UNSUPPORTED_SITE') {
+      // Domain-policy rejections are permanent; retrying the same URL cannot succeed.
+      assert.equal(result.structuredContent.retryable, false, name);
+      assert.doesNotMatch(result.structuredContent.message, /\bretry\b/i, name);
+    }
   }
 });
 

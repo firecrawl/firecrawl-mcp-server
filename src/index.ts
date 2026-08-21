@@ -1201,6 +1201,14 @@ function wrapToolError(error: unknown, requestId: string): UserError {
       requestId
     );
   }
+  if (/do not support this site/i.test(message)) {
+    return agentLegibleError(
+      'UNSUPPORTED_SITE',
+      error,
+      'Firecrawl declines this site by policy, so the same URL will always fail. Use a different source or tool for this content.',
+      requestId
+    );
+  }
   if (/timed? out|timeout/i.test(message)) {
     return agentLegibleError(
       'UPSTREAM_TIMEOUT',
