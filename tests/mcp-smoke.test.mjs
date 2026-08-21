@@ -901,7 +901,7 @@ test('monitor create gives queries precedence over page targets', async (t) => {
   ]);
 });
 
-test('developer search delegates passage cuts to the server with a legacy fallback', async (t) => {
+test('developer search serves server-shaped passages uncapped', async (t) => {
   const fakeApi = await startFakeDeveloperApi();
   t.after(() => fakeApi.close());
 
@@ -933,13 +933,14 @@ test('developer search delegates passage cuts to the server with a legacy fallba
   assert.notEqual(serverBudgeted.isError, true);
   assert.ok(serverBudgeted.content[0].text.includes(fakeApi.passage));
 
+  // No client-side cap in any case: even a response without
+  // passage_budget_applied (older server) serves the passage whole.
   const legacy = await client.request('tools/call', {
     arguments: { query: 'legacy server' },
     name: 'firecrawl_developer_search',
   });
   assert.notEqual(legacy.isError, true);
-  const legacyBody = legacy.content[0].text.split('\n').slice(2).join('\n');
-  assert.equal(legacyBody.length, 1200);
+  assert.ok(legacy.content[0].text.includes(fakeApi.passage));
 
   assert.deepEqual(
     fakeApi.requests.map((request) => request.url),
