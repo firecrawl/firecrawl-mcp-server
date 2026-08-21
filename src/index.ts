@@ -2889,19 +2889,21 @@ function crawlOffsetNotice(
   offset: number,
   shown: number,
   total: number | undefined,
-  hasMore: boolean
+  hasMore: boolean,
+  next?: string
 ): Record<string, unknown> {
   const first = shown > 0 ? offset + 1 : offset;
   const last = offset + shown;
   const range = shown > 0 ? `${first}-${last}` : 'empty';
   const totalText = total == null ? '' : ` of ${total}`;
   const nextOffset = offset + shown;
+  const nextArg = next == null ? '' : `, next: "${next}"`;
   return {
     truncated: hasMore,
     shown_range: { start: first, end: last, ...(total == null ? {} : { total }) },
-    ...(hasMore ? { next_offset: nextOffset } : {}),
+    ...(hasMore ? { next_offset: nextOffset, ...(next == null ? {} : { next }) } : {}),
     message: hasMore
-      ? `Shown documents ${range}${totalText}. Call firecrawl_check_crawl_status with id: "${jobId}" and offset: ${nextOffset} to retrieve later documents.`
+      ? `Shown documents ${range}${totalText}. Call firecrawl_check_crawl_status with id: "${jobId}"${nextArg} and offset: ${nextOffset} to retrieve later documents.`
       : `Shown documents ${range}${totalText}. All available documents have been returned.`,
   };
 }
@@ -2937,12 +2939,15 @@ async function getCrawlStatusWithOrigin(
     (Array.isArray(body.data) ? null : body.data?.next) ??
     null;
   const usesOffsetWindow = !continuation && !current;
-  const docs = usesOffsetWindow
-    ? takeCrawlDocumentWindow(pageDocuments, offset)
-    : pageDocuments.slice();
+  // Every page is bounded through the same window; a partially shown page is
+  // resumed with the same cursor plus an offset instead of being dropped.
+  const docs = takeCrawlDocumentWindow(pageDocuments, offset);
   let bytes = crawlDataBytes(docs);
+  let pageHasMore = offset + docs.length < pageDocuments.length;
+  let partialCursor: string | null = continuation ?? null;
 
   while (
+    !pageHasMore &&
     current &&
     docs.length < CRAWL_MAX_DOCUMENTS &&
     bytes < CRAWL_MAX_BYTES
@@ -2954,10 +2959,24 @@ async function getCrawlStatusWithOrigin(
     const pageData = crawlPageData(payload);
     const pageBytes = crawlDataBytes(pageData);
     if (
-      docs.length > 0 &&
-      (docs.length + pageData.length > CRAWL_MAX_DOCUMENTS ||
-        bytes + pageBytes > CRAWL_MAX_BYTES)
+      docs.length + pageData.length > CRAWL_MAX_DOCUMENTS ||
+      bytes + pageBytes > CRAWL_MAX_BYTES
     ) {
+      if (docs.length > 0) break;
+      // Nothing shown yet: take what fits from this page so the call returns
+      // progress instead of an empty result.
+      const window = takeCrawlDocumentWindow(pageData, 0);
+      docs.push(...window);
+      bytes += crawlDataBytes(window);
+      if (window.length < pageData.length) {
+        pageHasMore = true;
+        partialCursor = String(current);
+      } else {
+        current =
+          payload.next ??
+          (Array.isArray(payload.data) ? null : payload.data?.next) ??
+          null;
+      }
       break;
     }
     docs.push(...pageData);
@@ -2975,7 +2994,7 @@ async function getCrawlStatusWithOrigin(
     total: body.total ?? 0,
     creditsUsed: body.creditsUsed,
     expiresAt: body.expiresAt,
-    next: current,
+    next: pageHasMore ? partialCursor : current,
     data: docs,
   };
   const total = Number.isFinite(Number(body.total))
@@ -2983,17 +3002,17 @@ async function getCrawlStatusWithOrigin(
     : usesOffsetWindow
       ? pageDocuments.length
       : undefined;
-  if (usesOffsetWindow) {
-    const hasMore = offset + docs.length < pageDocuments.length;
-    if (offset > 0 || hasMore) {
-      result._firecrawl = crawlOffsetNotice(
-        jobId,
-        offset,
-        docs.length,
-        total,
-        hasMore
-      );
-    }
+  if (pageHasMore) {
+    result._firecrawl = crawlOffsetNotice(
+      jobId,
+      offset,
+      docs.length,
+      total,
+      true,
+      partialCursor ?? undefined
+    );
+  } else if (usesOffsetWindow && offset > 0) {
+    result._firecrawl = crawlOffsetNotice(jobId, offset, docs.length, total, false);
   } else if (current) {
     result._firecrawl = crawlCursorNotice(jobId, docs.length, total, String(current));
   }
@@ -3568,7 +3587,7 @@ Retrieve status and available results for an existing crawl ID without starting 
       .max(4_096)
       .optional()
       .describe(
-        'Upstream continuation URL returned by a previous status call; takes precedence over offset when both are supplied.'
+        'Upstream continuation URL returned by a previous status call; combine with offset when prior guidance shows a partially returned page.'
       ),
     offset: z
       .number()
@@ -3576,7 +3595,7 @@ Retrieve status and available results for an existing crawl ID without starting 
       .nonnegative()
       .optional()
       .describe(
-        'Zero-based document offset returned in prior guidance for a single-page result. The next cursor takes precedence when both are supplied.'
+        'Zero-based document offset returned in prior guidance, applied within the page being retrieved.'
       ),
     response_format: responseFormatSchema,
   }),
@@ -3596,7 +3615,7 @@ Retrieve status and available results for an existing crawl ID without starting 
       offset?: number;
       response_format?: ResponseFormat;
     };
-    const res = await getCrawlStatusWithOrigin(client, id, next, next ? 0 : offset);
+    const res = await getCrawlStatusWithOrigin(client, id, next, offset);
     return formatToolResponse(
       withResultNotice(res, 'crawl'),
       response_format,

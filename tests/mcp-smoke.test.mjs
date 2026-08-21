@@ -1360,6 +1360,63 @@ test('crawl bounding preserves the upstream continuation and small responses', a
   });
 });
 
+test('crawl continuation pages are bounded and resumable mid-page', async (t) => {
+  const next = '/v2/crawl/job-big?cursor=page-2';
+  const pageDocuments = Array.from({ length: 30 }, (_, index) => ({
+    url: `https://example.com/page2/${index + 1}`,
+    markdown: `page2 document ${index + 1}`,
+  }));
+  const backend = await startFakeFirecrawlBackend({
+    crawlResponses: {
+      '/v2/crawl/job-big': {
+        status: 'completed',
+        completed: 31,
+        total: 31,
+        next,
+        data: [{ url: 'https://example.com/1', markdown: 'first page document' }],
+      },
+      [next]: { success: true, next: null, data: pageDocuments },
+    },
+  });
+  t.after(() => backend.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: backend.url,
+  });
+  t.after(() => stopChild(child));
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-crawl-page-bounds', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const firstResult = await client.request('tools/call', {
+    arguments: { id: 'job-big', next },
+    name: 'firecrawl_check_crawl_status',
+  });
+  const first = JSON.parse(firstResult.content[0].text);
+  assert.equal(first.data.length, 25);
+  assert.equal(first._firecrawl.truncated, true);
+  assert.equal(first._firecrawl.next_offset, 25);
+  assert.equal(first._firecrawl.next, next);
+  assert.match(
+    first._firecrawl.message,
+    /firecrawl_check_crawl_status.*id: "job-big".*next:.*offset: 25/is
+  );
+
+  const secondResult = await client.request('tools/call', {
+    arguments: { id: 'job-big', next, offset: 25 },
+    name: 'firecrawl_check_crawl_status',
+  });
+  const second = JSON.parse(secondResult.content[0].text);
+  assert.equal(second.data.length, 5);
+  assert.equal(second.data[0].markdown, 'page2 document 26');
+  assert.notEqual(second._firecrawl?.truncated, true);
+});
+
 test('crawl bounding exposes offset continuation for a single upstream page', async (t) => {
   const documents = Array.from({ length: 50 }, (_, index) => ({
     url: `https://example.com/${index + 1}`,
@@ -1395,7 +1452,7 @@ test('crawl bounding exposes offset continuation for a single upstream page', as
   const statusTool = tools.tools.find(
     (tool) => tool.name === 'firecrawl_check_crawl_status'
   );
-  assert.match(statusTool.inputSchema.properties.offset.description, /next.*precedence/i);
+  assert.match(statusTool.inputSchema.properties.offset.description, /offset.*prior guidance/i);
 
   const firstResult = await client.request('tools/call', {
     arguments: { id: 'job-single-page' },
