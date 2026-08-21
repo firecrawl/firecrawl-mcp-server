@@ -274,7 +274,7 @@ function createOAuthChallengeResponse(
 }
 
 function createInvalidCredentialResponse(_error: InvalidFirecrawlCredentialError): Response {
-  const recovery = invalidApiKeyRecoveryPayload();
+  const recovery = INVALID_API_KEY_RECOVERY_PAYLOAD;
   return new Response(
     JSON.stringify({
       error: 'invalid_api_key',
@@ -364,10 +364,9 @@ class InvalidOAuthCredentialError extends Error {
 const MCP_GLOBAL_SCOPE = 'firecrawl:global';
 
 function values(value: string | string[] | undefined): string[] {
-  if (typeof value === 'string') return value.split(/\s+/).filter(Boolean);
-  return Array.isArray(value)
-    ? value.flatMap((item) => item.split(/\s+/).filter(Boolean))
-    : [];
+  return (Array.isArray(value) ? value : value ? [value] : [])
+    .flatMap((item) => item.split(/\s+/))
+    .filter(Boolean);
 }
 
 function audienceMatchesResource(
@@ -718,7 +717,7 @@ function makeAuthenticate(profile: ServerProfile) {
           throw createInvalidCredentialResponse(error);
         }
         if (error instanceof InvalidOAuthCredentialError) {
-          const recovery = invalidOAuthRecoveryPayload();
+          const recovery = INVALID_OAUTH_RECOVERY_PAYLOAD;
           const oauthChallenge = createOAuthChallengeResponse(
             new Error(recovery.message),
             profile,
@@ -877,31 +876,22 @@ class ConsoleLogger implements Logger {
     process.env.SSE_LOCAL === 'true' ||
     process.env.HTTP_STREAMABLE_SERVER === 'true';
 
-  debug(...args: unknown[]): void {
-    if (this.shouldLog) {
-      console.debug('[DEBUG]', new Date().toISOString(), ...args);
-    }
+  private gatedLogger(
+    method: 'debug' | 'error' | 'log' | 'warn',
+    level: string
+  ): (...args: unknown[]) => void {
+    return (...args) => {
+      if (this.shouldLog) {
+        console[method](`[${level}]`, new Date().toISOString(), ...args);
+      }
+    };
   }
-  error(...args: unknown[]): void {
-    if (this.shouldLog) {
-      console.error('[ERROR]', new Date().toISOString(), ...args);
-    }
-  }
-  info(...args: unknown[]): void {
-    if (this.shouldLog) {
-      console.log('[INFO]', new Date().toISOString(), ...args);
-    }
-  }
-  log(...args: unknown[]): void {
-    if (this.shouldLog) {
-      console.log('[LOG]', new Date().toISOString(), ...args);
-    }
-  }
-  warn(...args: unknown[]): void {
-    if (this.shouldLog) {
-      console.warn('[WARN]', new Date().toISOString(), ...args);
-    }
-  }
+
+  debug = this.gatedLogger('debug', 'DEBUG');
+  error = this.gatedLogger('error', 'ERROR');
+  info = this.gatedLogger('log', 'INFO');
+  log = this.gatedLogger('log', 'LOG');
+  warn = this.gatedLogger('warn', 'WARN');
 }
 
 const openAiAppsChallengeToken = normalizeHeader(
@@ -1076,34 +1066,39 @@ const INVALID_API_KEY_MESSAGE =
 const INVALID_OAUTH_MESSAGE =
   'This Firecrawl account connection is no longer valid.\nFix: Reconnect the existing Firecrawl server in the client, or set that existing server URL to https://mcp.firecrawl.dev/v2/mcp-oauth, then start a new session.';
 
-function connectionRecoveryPayload(params: {
-  code: string;
-  authMode: string;
+const INVALID_API_KEY_RECOVERY_PAYLOAD: Record<string, unknown> & {
   message: string;
-}): Record<string, unknown> & { message: string } {
-  return {
-    code: params.code,
-    auth_mode: params.authMode,
-    message: params.message,
-    docs_url: MCP_CONNECTION_GUIDE_URL,
-  };
-}
+} = {
+  code: 'CREDENTIAL_INVALID',
+  auth_mode: 'api_key',
+  message: INVALID_API_KEY_MESSAGE,
+  docs_url: MCP_CONNECTION_GUIDE_URL,
+};
 
-function invalidApiKeyRecoveryPayload(): Record<string, unknown> & { message: string } {
-  return connectionRecoveryPayload({
-    code: 'CREDENTIAL_INVALID',
-    authMode: 'api_key',
-    message: INVALID_API_KEY_MESSAGE,
-  });
-}
+const INVALID_OAUTH_RECOVERY_PAYLOAD: Record<string, unknown> & {
+  message: string;
+} = {
+  code: 'OAUTH_CONNECTION_INVALID',
+  auth_mode: 'oauth',
+  message: INVALID_OAUTH_MESSAGE,
+  docs_url: MCP_CONNECTION_GUIDE_URL,
+};
 
-function invalidOAuthRecoveryPayload(): Record<string, unknown> & { message: string } {
-  return connectionRecoveryPayload({
-    code: 'OAUTH_CONNECTION_INVALID',
-    authMode: 'oauth',
-    message: INVALID_OAUTH_MESSAGE,
-  });
-}
+const RECOVERY_MESSAGES: Record<string, string> = {
+  CREDENTIAL_INVALID: INVALID_API_KEY_MESSAGE,
+  KEYLESS_QUOTA_EXHAUSTED: KEYLESS_QUOTA_MESSAGE,
+  KEYLESS_LIMIT_REACHED: KEYLESS_QUOTA_MESSAGE,
+  KEYLESS_TOOL_NOT_AVAILABLE: KEYLESS_TOOL_MESSAGE,
+  KEYLESS_ACCESS_NOT_AVAILABLE: KEYLESS_ACCESS_MESSAGE,
+  KEYLESS_ELIGIBILITY_UNAVAILABLE:
+    'The anonymous keyless eligibility check is temporarily unavailable. Retry shortly.',
+};
+const KEYLESS_CONVERSION_CODES = new Set([
+  'KEYLESS_QUOTA_EXHAUSTED',
+  'KEYLESS_LIMIT_REACHED',
+  'KEYLESS_TOOL_NOT_AVAILABLE',
+  'KEYLESS_ACCESS_NOT_AVAILABLE',
+]);
 
 function recoveryPayload(
   code: string,
@@ -1111,30 +1106,16 @@ function recoveryPayload(
   options: { retryAfterSeconds?: number } = {}
 ): Record<string, unknown> {
   const retryAfterSeconds = options.retryAfterSeconds;
-  const isQuotaExhausted =
-    code === 'KEYLESS_QUOTA_EXHAUSTED' || code === 'KEYLESS_LIMIT_REACHED';
-  const isToolUnavailable = code === 'KEYLESS_TOOL_NOT_AVAILABLE';
-  const isKeylessAccessUnavailable = code === 'KEYLESS_ACCESS_NOT_AVAILABLE';
   const isKeylessEligibilityUnavailable =
     code === 'KEYLESS_ELIGIBILITY_UNAVAILABLE';
-  const isKeylessConversion =
-    isQuotaExhausted || isToolUnavailable || isKeylessAccessUnavailable;
+  const isKeylessConversion = KEYLESS_CONVERSION_CODES.has(code);
   return {
     code,
     request_id: requestId,
     auth_mode: code === 'CREDENTIAL_INVALID' ? 'credential_error' : 'keyless',
     message:
-      code === 'CREDENTIAL_INVALID'
-        ? INVALID_API_KEY_MESSAGE
-        : isQuotaExhausted
-          ? KEYLESS_QUOTA_MESSAGE
-          : isToolUnavailable
-            ? KEYLESS_TOOL_MESSAGE
-            : isKeylessAccessUnavailable
-              ? KEYLESS_ACCESS_MESSAGE
-              : isKeylessEligibilityUnavailable
-                ? 'The anonymous keyless eligibility check is temporarily unavailable. Retry shortly.'
-                : 'This tool requires a Firecrawl account or API key.',
+      RECOVERY_MESSAGES[code] ??
+      'This tool requires a Firecrawl account or API key.',
     // CREDENTIAL_INVALID sessions gate every tool call (including keyless
     // tools) on the credentialError check before the keyless branch ever
     // runs, so none of KEYLESS_TOOL_NAMES are actually callable here. Listing
@@ -1157,8 +1138,22 @@ function errorText(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).slice(0, 4_000);
 }
 
+type ToolErrorCode =
+  | 'AUTH_REQUIRED'
+  | 'FILE_NOT_FOUND'
+  | 'UNSUPPORTED_SITE'
+  | 'UPSTREAM_TIMEOUT'
+  | 'INVALID_REQUEST'
+  | 'UPSTREAM_REQUEST_FAILED'
+  | 'CRAWL_START_FAILED'
+  | 'PARSE_INPUT_INVALID'
+  | 'PARSE_CONFIG_REQUIRED'
+  | 'PARSE_REQUEST_FAILED'
+  | 'INTERACT_SESSION_UNAVAILABLE'
+  | 'FEEDBACK_REJECTED';
+
 function agentLegibleError(
-  code: string,
+  code: ToolErrorCode,
   error: unknown,
   guidance: string,
   requestId: string = randomUUID(),
@@ -1180,6 +1175,13 @@ function agentLegibleError(
     ],
     docs_url: MCP_CONNECTION_GUIDE_URL,
   });
+}
+
+class InvalidCrawlContinuationError extends Error {
+  constructor() {
+    super('Crawl continuation must belong to this crawl job.');
+    this.name = 'InvalidCrawlContinuationError';
+  }
 }
 
 function wrapToolError(error: unknown, requestId: string): UserError {
@@ -1218,7 +1220,7 @@ function wrapToolError(error: unknown, requestId: string): UserError {
       true
     );
   }
-  if (/^Crawl continuation must belong to this crawl job\.$/.test(message)) {
+  if (error instanceof InvalidCrawlContinuationError) {
     return agentLegibleError(
       'INVALID_REQUEST',
       error,
@@ -1703,9 +1705,9 @@ function withTruncationMetadata(
 
 type ResultNoticeKind = 'scrape' | 'search' | 'map' | 'crawl' | 'agent';
 
-function resultRecord(data: unknown): Record<string, any> | undefined {
+function resultRecord(data: unknown): Record<string, unknown> | undefined {
   return data && typeof data === 'object' && !Array.isArray(data)
-    ? (data as Record<string, any>)
+    ? (data as Record<string, unknown>)
     : undefined;
 }
 
@@ -1716,33 +1718,51 @@ function withResultNotice(
   const root = resultRecord(data);
   if (!root) return data;
   const body = resultRecord(root.data) ?? root;
-  const statusCode = Number(body.metadata?.statusCode ?? root.statusCode);
+  const metadata = resultRecord(body.metadata);
+  const statusCode = Number(metadata?.statusCode ?? root.statusCode);
 
   let empty = false;
   let blocked = false;
-  if (kind === 'scrape') {
-    const contentFields = ['markdown', 'html', 'rawHtml', 'json', 'summary'];
-    const contentLength = contentFields.reduce(
-      (length, field) => length + JSON.stringify(body[field] ?? '').length,
-      0
-    );
-    empty = contentFields.some((field) => field in body) &&
-      contentFields.every((field) => body[field] == null || body[field] === '');
-    const blockingSignal =
-      [401, 403, 429].includes(statusCode) ||
-      /blocked|captcha|access denied/i.test(
-        String(body.warning ?? body.error ?? root.warning ?? root.error ?? '')
+  switch (kind) {
+    case 'scrape': {
+      const contentFields = ['markdown', 'html', 'rawHtml', 'json', 'summary'];
+      const contentLength = contentFields.reduce(
+        (length, field) => length + JSON.stringify(body[field] ?? '').length,
+        0
       );
-    blocked = blockingSignal && (empty || contentLength <= 200);
-  } else if (kind === 'search') {
-    const groups = Object.values(resultRecord(root.data) ?? {}).filter(Array.isArray);
-    empty = groups.length > 0 && groups.every((group) => group.length === 0);
-  } else if (kind === 'map') {
-    empty = Array.isArray(body.links) && body.links.length === 0;
-  } else if (kind === 'crawl') {
-    empty = Array.isArray(root.data) && root.data.length === 0;
-  } else if (kind === 'agent') {
-    empty = Object.keys(body).length === 0;
+      empty =
+        contentFields.some((field) => field in body) &&
+        contentFields.every(
+          (field) => body[field] == null || body[field] === ''
+        );
+      const blockingSignal =
+        [401, 403, 429].includes(statusCode) ||
+        /blocked|captcha|access denied/i.test(
+          String(body.warning ?? body.error ?? root.warning ?? root.error ?? '')
+        );
+      blocked = blockingSignal && (empty || contentLength <= 200);
+      break;
+    }
+    case 'search': {
+      const groups = Object.values(resultRecord(root.data) ?? {}).filter(
+        Array.isArray
+      );
+      empty = groups.length > 0 && groups.every((group) => group.length === 0);
+      break;
+    }
+    case 'map':
+      empty = Array.isArray(body.links) && body.links.length === 0;
+      break;
+    case 'crawl':
+      empty = Array.isArray(root.data) && root.data.length === 0;
+      break;
+    case 'agent':
+      empty = Object.keys(body).length === 0;
+      break;
+    default: {
+      const _exhaustive: never = kind;
+      return _exhaustive;
+    }
   }
   if (!blocked && !empty) return data;
 
@@ -2268,12 +2288,12 @@ function inferContentType(filename: string): string {
   return EXTENSION_CONTENT_TYPES[ext] ?? 'application/octet-stream';
 }
 
-type ParseToolArgs = {
-  filePath?: string;
-  uploadRef?: string;
-  contentType?: string;
-  declaredSizeBytes?: number;
-} & Record<string, unknown>;
+type HostedParseToolArgs = z.infer<typeof hostedParseParamsSchema>;
+type ParseToolArgs = Omit<HostedParseToolArgs, 'filePath' | 'uploadRef'> &
+  (
+    | { filePath: string; uploadRef?: never }
+    | { filePath?: never; uploadRef: string }
+  );
 
 function extractParseOptions(args: ParseToolArgs): Record<string, unknown> {
   const options = { ...args };
@@ -2291,18 +2311,6 @@ function buildParseOptionsPayload(
   const transformed = transformScrapeParams(options);
   const cleaned = removeEmptyTopLevel(transformed) as Record<string, unknown>;
   return { origin: ORIGIN, ...cleaned };
-}
-
-function buildContinuationArguments(
-  uploadRef: string,
-  options: Record<string, unknown>,
-  responseFormat: ResponseFormat
-): Record<string, unknown> {
-  return {
-    uploadRef,
-    ...(removeEmptyTopLevel(options) as Record<string, unknown>),
-    response_format: responseFormat,
-  };
 }
 
 function shellQuote(value: string): string {
@@ -2414,19 +2422,6 @@ async function executeHostedParse(
   session: SessionData | undefined,
   log: ToolLogger
 ): Promise<string> {
-  const hasFilePath =
-    typeof args.filePath === 'string' && args.filePath.length > 0;
-  const hasUploadRef =
-    typeof args.uploadRef === 'string' && args.uploadRef.length > 0;
-  if (hasFilePath === hasUploadRef) {
-    throw agentLegibleError(
-      'PARSE_INPUT_INVALID',
-      'Hosted firecrawl_parse requires exactly one of filePath or uploadRef.',
-      'Provide filePath for phase one or uploadRef for phase two, but not both, then retry.',
-      session?.requestId
-    );
-  }
-
   if (!hasCredential(session) && !isKeylessMode(session)) {
     throw agentLegibleError(
       'AUTH_REQUIRED',
@@ -2446,10 +2441,10 @@ async function executeHostedParse(
     throw new UserError(String(payload.message), payload);
   }
 
-  const responseFormat = (args.response_format ?? 'detailed') as ResponseFormat;
+  const responseFormat = args.response_format ?? 'detailed';
   const options = extractParseOptions(args);
 
-  if (hasFilePath && args.filePath) {
+  if (args.filePath) {
     const filename = path.basename(args.filePath);
     const contentType =
       typeof args.contentType === 'string' && args.contentType.length > 0
@@ -2499,11 +2494,11 @@ async function executeHostedParse(
       },
       nextToolCall: {
         name: 'firecrawl_parse',
-        arguments: buildContinuationArguments(
-          upload.uploadRef,
-          options,
-          responseFormat
-        ),
+        arguments: {
+          uploadRef: upload.uploadRef,
+          ...(removeEmptyTopLevel(options) as Record<string, unknown>),
+          response_format: responseFormat,
+        },
       },
         notes: [
           'Run the curl command on the machine that can read filePath.',
@@ -2517,7 +2512,7 @@ async function executeHostedParse(
   }
 
   const parsePayload = {
-    uploadRef: args.uploadRef as string,
+    uploadRef: args.uploadRef,
     ...buildParseOptionsPayload(options),
   };
   log.info('Parsing hosted upload reference');
@@ -2546,13 +2541,10 @@ Retrieve content or structured fields from one supplied URL. Use this when the r
 `,
   parameters: scrapeParamsSchema,
   execute: async (args: unknown, { session, log }): Promise<string> => {
-    const { url, response_format = 'detailed', ...options } = args as {
-      url: string;
-      response_format?: ResponseFormat;
-    } & Record<string, unknown>;
-    const transformed = transformScrapeParams(
-      options as Record<string, unknown>
-    );
+    const { url, response_format = 'detailed', ...options } = args as z.infer<
+      typeof scrapeParamsSchema
+    >;
+    const transformed = transformScrapeParams(options);
     const cleaned = removeEmptyTopLevel(transformed);
     if (cleaned.lockdown) {
       log.info('Scraping URL (lockdown)');
@@ -2852,8 +2844,28 @@ async function keylessPost(
   return json;
 }
 
-function crawlPageData(body: any): unknown[] {
-  return Array.isArray(body.data) ? body.data : body.data?.pages || [];
+type CrawlClientLike = {
+  http: {
+    get: <T = unknown>(
+      endpoint: string,
+      headers?: Record<string, string>
+    ) => Promise<{ data: T; status: number }>;
+  };
+};
+
+function crawlPageData(body: unknown): unknown[] {
+  const data = resultRecord(body)?.data;
+  if (Array.isArray(data)) return data;
+  const pages = resultRecord(data)?.pages;
+  return Array.isArray(pages) ? pages : [];
+}
+
+function crawlNext(body: Record<string, unknown>): string | null {
+  if ('next' in body && typeof body.next === 'string') return body.next;
+  const data = Array.isArray(body.data) ? undefined : resultRecord(body.data);
+  return data && 'next' in data && typeof data.next === 'string'
+    ? data.next
+    : null;
 }
 
 function crawlDataBytes(docs: unknown[]): number {
@@ -2866,7 +2878,7 @@ function validatedCrawlContinuation(jobId: string, continuation: string): string
   const apiBasePath = apiBase.pathname.replace(/\/$/, '');
   const expectedPath = `${apiBasePath}/v2/crawl/${encodeURIComponent(jobId)}`;
   if (url.origin !== apiBase.origin || url.pathname !== expectedPath) {
-    throw new Error('Crawl continuation must belong to this crawl job.');
+    throw new InvalidCrawlContinuationError();
   }
   return `${url.pathname.slice(apiBasePath.length)}${url.search}`;
 }
@@ -2884,46 +2896,54 @@ function takeCrawlDocumentWindow(documents: unknown[], offset: number): unknown[
   return window;
 }
 
-function crawlOffsetNotice(
-  jobId: string,
-  offset: number,
-  shown: number,
-  total: number | undefined,
-  hasMore: boolean,
-  next?: string
-): Record<string, unknown> {
-  const first = shown > 0 ? offset + 1 : offset;
-  const last = offset + shown;
-  const range = shown > 0 ? `${first}-${last}` : 'empty';
-  const totalText = total == null ? '' : ` of ${total}`;
-  const nextOffset = offset + shown;
-  const nextArg = next == null ? '' : `, next: "${next}"`;
-  return {
-    truncated: hasMore,
-    shown_range: { start: first, end: last, ...(total == null ? {} : { total }) },
-    ...(hasMore ? { next_offset: nextOffset, ...(next == null ? {} : { next }) } : {}),
-    message: hasMore
-      ? `Shown documents ${range}${totalText}. Call firecrawl_check_crawl_status with id: "${jobId}"${nextArg} and offset: ${nextOffset} to retrieve later documents.`
-      : `Shown documents ${range}${totalText}. All available documents have been returned.`,
-  };
-}
+type CrawlNoticeContinuation =
+  | { offset: number; hasMore: boolean; next?: string }
+  | { next: string };
 
-function crawlCursorNotice(
+function crawlWindowNotice(
   jobId: string,
   shown: number,
   total: number | undefined,
-  next: string
+  continuation: CrawlNoticeContinuation
 ): Record<string, unknown> {
+  if ('offset' in continuation) {
+    const { offset, hasMore, next } = continuation;
+    const first = shown > 0 ? offset + 1 : offset;
+    const last = offset + shown;
+    const range = shown > 0 ? `${first}-${last}` : 'empty';
+    const totalText = total == null ? '' : ` of ${total}`;
+    const nextOffset = offset + shown;
+    const nextArg = next == null ? '' : `, next: "${next}"`;
+    return {
+      truncated: hasMore,
+      shown_range: {
+        start: first,
+        end: last,
+        ...(total == null ? {} : { total }),
+      },
+      ...(hasMore
+        ? { next_offset: nextOffset, ...(next == null ? {} : { next }) }
+        : {}),
+      message: hasMore
+        ? `Shown documents ${range}${totalText}. Call firecrawl_check_crawl_status with id: "${jobId}"${nextArg} and offset: ${nextOffset} to retrieve later documents.`
+        : `Shown documents ${range}${totalText}. All available documents have been returned.`,
+    };
+  }
+
   const totalText = total == null ? '' : ` of ${total} total`;
   return {
     truncated: true,
-    shown_range: { start: shown > 0 ? 1 : 0, end: shown, ...(total == null ? {} : { total }) },
-    message: `Shown documents ${shown > 0 ? `1-${shown}` : 'empty'} in this cursor window${totalText}. Call firecrawl_check_crawl_status with id: "${jobId}" and next: "${next}" to retrieve later documents.`,
+    shown_range: {
+      start: shown > 0 ? 1 : 0,
+      end: shown,
+      ...(total == null ? {} : { total }),
+    },
+    message: `Shown documents ${shown > 0 ? `1-${shown}` : 'empty'} in this cursor window${totalText}. Call firecrawl_check_crawl_status with id: "${jobId}" and next: "${continuation.next}" to retrieve later documents.`,
   };
 }
 
 async function getCrawlStatusWithOrigin(
-  client: FirecrawlApp,
+  client: unknown,
   jobId: string,
   continuation?: string,
   offset = 0
@@ -2931,13 +2951,11 @@ async function getCrawlStatusWithOrigin(
   const requestPath = continuation
     ? validatedCrawlContinuation(jobId, continuation)
     : `/v2/crawl/${encodeURIComponent(jobId)}`;
-  const res = await (client as any).http.get(requestPath, ORIGIN_HEADERS);
-  const body = (res?.data ?? {}) as any;
+  const http = (client as CrawlClientLike).http;
+  const res = await http.get(requestPath, ORIGIN_HEADERS);
+  const body = resultRecord(res.data) ?? {};
   const pageDocuments = crawlPageData(body);
-  let current =
-    body.next ??
-    (Array.isArray(body.data) ? null : body.data?.next) ??
-    null;
+  let current = crawlNext(body);
   const usesOffsetWindow = !continuation && !current;
   // Every page is bounded through the same window; a partially shown page is
   // resumed with the same cursor plus an offset instead of being dropped.
@@ -2952,8 +2970,8 @@ async function getCrawlStatusWithOrigin(
     docs.length < CRAWL_MAX_DOCUMENTS &&
     bytes < CRAWL_MAX_BYTES
   ) {
-    const pageRes = await (client as any).http.get(current, ORIGIN_HEADERS);
-    const payload = (pageRes?.data ?? {}) as any;
+    const pageRes = await http.get(current, ORIGIN_HEADERS);
+    const payload = resultRecord(pageRes.data) ?? {};
     if (!payload.success) break;
 
     const pageData = crawlPageData(payload);
@@ -2972,19 +2990,13 @@ async function getCrawlStatusWithOrigin(
         pageHasMore = true;
         partialCursor = String(current);
       } else {
-        current =
-          payload.next ??
-          (Array.isArray(payload.data) ? null : payload.data?.next) ??
-          null;
+        current = crawlNext(payload);
       }
       break;
     }
     docs.push(...pageData);
     bytes += pageBytes;
-    current =
-      payload.next ??
-      (Array.isArray(payload.data) ? null : payload.data?.next) ??
-      null;
+    current = crawlNext(payload);
   }
 
   const result: Record<string, unknown> = {
@@ -3003,18 +3015,20 @@ async function getCrawlStatusWithOrigin(
       ? pageDocuments.length
       : undefined;
   if (pageHasMore) {
-    result._firecrawl = crawlOffsetNotice(
-      jobId,
+    result._firecrawl = crawlWindowNotice(jobId, docs.length, total, {
       offset,
-      docs.length,
-      total,
-      true,
-      partialCursor ?? undefined
-    );
+      hasMore: true,
+      next: partialCursor ?? undefined,
+    });
   } else if (usesOffsetWindow && offset > 0) {
-    result._firecrawl = crawlOffsetNotice(jobId, offset, docs.length, total, false);
+    result._firecrawl = crawlWindowNotice(jobId, docs.length, total, {
+      offset,
+      hasMore: false,
+    });
   } else if (current) {
-    result._firecrawl = crawlCursorNotice(jobId, docs.length, total, String(current));
+    result._firecrawl = crawlWindowNotice(jobId, docs.length, total, {
+      next: current,
+    });
   }
   return result;
 }
@@ -3146,20 +3160,7 @@ Record quality feedback for a prior search ID. A \`good\` rating requires a valu
         .optional()
         .describe('Useful sources from the search; maximum 50.'),
       missingContent: z
-        .array(
-          z.object({
-            topic: z
-              .string()
-              .min(1, 'topic must not be empty')
-              .max(200, 'topic must be 200 characters or fewer')
-              .describe('Short name for the missing topic.'),
-            description: z
-              .string()
-              .max(2000)
-              .optional()
-              .describe('Details about the expected missing content.'),
-          })
-        )
+        .array(missingContentSchema)
         .max(20)
         .optional()
         .describe(
@@ -3851,14 +3852,6 @@ Open or reuse a live browser session to interact with a page by prompt or code. 
         );
       }
     }
-    if (!scrapeId) {
-      throw agentLegibleError(
-        'INTERACT_SESSION_UNAVAILABLE',
-        'Could not open an interact session because scrapeId is missing.',
-        'Call firecrawl_scrape and retry firecrawl_interact with its scrapeId.',
-        session?.requestId
-      );
-    }
     const activeScrapeId = scrapeId;
     log.info('Interacting with page', { scrapeId: activeScrapeId });
     const interactArgs: Record<string, unknown> = { origin: ORIGIN };
@@ -3867,25 +3860,14 @@ Open or reuse a live browser session to interact with a page by prompt or code. 
     if (language) interactArgs.language = language;
     if (timeout != null) interactArgs.timeout = timeout;
     const res = await client.interact(activeScrapeId, interactArgs as any);
-    if (openedFromUrl && res && typeof res === 'object' && !Array.isArray(res)) {
-      return formatToolResponse(
-        {
-          ...(res as unknown as Record<string, unknown>),
-          scrapeId: activeScrapeId,
-        },
-        response_format,
-        'Use a narrower interaction prompt or code output to retrieve omitted content.'
-      );
-    }
-    if (openedFromUrl) {
-      return formatToolResponse(
-        { scrapeId: activeScrapeId, result: res },
-        response_format,
-        'Use a narrower interaction prompt or code output to retrieve omitted content.'
-      );
-    }
+    const result =
+      openedFromUrl && res && typeof res === 'object' && !Array.isArray(res)
+        ? { ...(res as unknown as Record<string, unknown>), scrapeId: activeScrapeId }
+        : openedFromUrl
+          ? { scrapeId: activeScrapeId, result: res }
+          : res;
     return formatToolResponse(
-      res,
+      result,
       response_format,
       'Use a narrower interaction prompt or code output to retrieve omitted content.'
     );
@@ -3952,11 +3934,7 @@ Parse one local or uploaded document into text or structured data; remote web UR
       contentType: overrideContentType,
       response_format = 'detailed',
       ...options
-    } = args as {
-      filePath: string;
-      contentType?: string;
-      response_format?: ResponseFormat;
-    } & Record<string, unknown>;
+    } = args as z.infer<typeof localParseParamsSchema>;
 
     const absPath = path.resolve(filePath);
     const buffer = await readFile(absPath);
