@@ -60,7 +60,7 @@ async function monitorRequest(
   if (init.query) {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(init.query)) {
-      if (v !== undefined && v !== null && v !== '') qs.set(k, String(v));
+      if (v !== undefined && v !== '') qs.set(k, String(v));
     }
     const s = qs.toString();
     if (s) url += `?${s}`;
@@ -109,6 +109,12 @@ function splitPages(page?: string, pages?: string[]): string[] {
     .filter(Boolean);
 }
 
+function stringArray(value: unknown): string[] | undefined {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : undefined;
+}
+
 function buildMonitorCreateBody(
   args: Record<string, unknown>
 ): Record<string, unknown> {
@@ -144,16 +150,8 @@ function buildMonitorCreateBody(
   // Build the target: search when `queries` are given, otherwise a scrape.
   let target: Record<string, unknown>;
   if (isSearch) {
-    const includeDomains = Array.isArray(args.includeDomains)
-      ? (args.includeDomains as unknown[]).filter(
-          (d): d is string => typeof d === 'string'
-        )
-      : undefined;
-    const excludeDomains = Array.isArray(args.excludeDomains)
-      ? (args.excludeDomains as unknown[]).filter(
-          (d): d is string => typeof d === 'string'
-        )
-      : undefined;
+    const includeDomains = stringArray(args.includeDomains);
+    const excludeDomains = stringArray(args.excludeDomains);
     target = {
       type: 'search',
       queries,

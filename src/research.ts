@@ -19,7 +19,7 @@ interface SessionData {
 }
 
 /** Whatever `getClient` returns — we only touch its `http.get`. */
-type ClientLike = {
+export type ClientLike = {
   http: {
     get: <T = unknown>(
       endpoint: string,
@@ -30,10 +30,10 @@ type ClientLike = {
 
 // `getClient` returns a FirecrawlApp whose `http` member is private, so we type
 // the callback loosely and narrow to `ClientLike` at each call site.
-type GetClient = (session?: SessionData) => unknown;
+export type GetClient = (session?: SessionData) => unknown;
 
 const BASE = '/v2/search/research';
-const ORIGIN_HEADERS = { 'X-Origin': 'mcp-fastmcp' };
+export const ORIGIN_HEADERS = { 'X-Origin': 'mcp-fastmcp' };
 
 /** Append a value (or repeated array values) to a URLSearchParams instance. */
 function appendParam(
@@ -389,7 +389,7 @@ Find citation-graph candidates from \`seed_ids\`; the first ID is the primary se
       appendParam(params, 'intent', intent);
       appendParam(params, 'mode', mode);
       appendParam(params, 'k', k);
-      if (rerank != null) appendParam(params, 'rerank', rerank);
+      appendParam(params, 'rerank', rerank);
       appendParam(params, 'anchor', anchors);
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{

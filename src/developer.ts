@@ -12,30 +12,19 @@
 
 import { z } from 'zod';
 import type { FastMCP } from 'fastmcp';
+import {
+  type ClientLike,
+  type GetClient,
+  ORIGIN_HEADERS,
+} from './research';
 
 interface SessionData {
   firecrawlApiKey?: string;
   [key: string]: unknown;
 }
 
-/** Whatever `getClient` returns — we only touch its `http.get`. */
-type ClientLike = {
-  http: {
-    get: <T = unknown>(
-      endpoint: string,
-      headers?: Record<string, string>
-    ) => Promise<{ data: T; status: number }>;
-  };
-};
-
-// `getClient` returns a FirecrawlApp whose `http` member is private, so we type
-// the callback loosely and narrow to `ClientLike` at each call site.
-type GetClient = (session?: SessionData) => unknown;
-
 // The other mount, /v2/developer/search, may be withdrawn.
 const BASE = '/v2/search/developer';
-const ORIGIN_HEADERS = { 'X-Origin': 'mcp-fastmcp' };
-
 
 interface DeveloperHit {
   /** Stable result id, e.g. `issue:owner/repo#123` or `doc:<hash>`. */
