@@ -2296,7 +2296,7 @@ type ParseToolArgs = Omit<HostedParseToolArgs, 'filePath' | 'uploadRef'> &
   );
 
 function extractParseOptions(args: ParseToolArgs): Record<string, unknown> {
-  const options = { ...args };
+  const options: Record<string, unknown> = { ...args };
   delete options.filePath;
   delete options.uploadRef;
   delete options.contentType;
@@ -3835,7 +3835,7 @@ Open or reuse a live browser session to interact with a page by prompt or code. 
     // session, then interact. One tool call instead of scrape + interact.
     let scrapeId = providedScrapeId;
     const openedFromUrl = !scrapeId;
-    if (openedFromUrl) {
+    if (!scrapeId) {
       log.info('Opening interact session from url', { url });
       const cleanedScrapeOptions = removeEmptyTopLevel(scrapeOptions ?? {});
       const scraped = await client.scrape(String(url), {
