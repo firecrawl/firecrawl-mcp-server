@@ -844,6 +844,11 @@ test('local keyless stdio omits feedback tools and qualifies search-feedback IDs
   assert.equal(toolNames.includes('firecrawl_feedback'), false);
   const search = tools.tools.find((tool) => tool.name === 'firecrawl_search');
   assert.ok(search);
+  assert.equal(
+    search.annotations?.readOnlyHint,
+    false,
+    'firecrawl_search accepts scrapeOptions.actions and must not claim readOnlyHint'
+  );
   assert.match(
     search.description,
     /authenticated responses can include an `id` for optional search feedback/i
