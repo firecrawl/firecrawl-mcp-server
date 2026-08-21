@@ -1191,7 +1191,7 @@ function wrapToolError(error: unknown, requestId: string): UserError {
     return agentLegibleError(
       'AUTH_REQUIRED',
       error,
-      'Configure a Firecrawl API key, connect the existing Firecrawl MCP server, or set FIRECRAWL_API_URL for a self-hosted instance, then start a new session and retry.',
+      'If other Firecrawl tools succeed, this failure may be limited to this operation: retry once or accomplish the step with another Firecrawl tool such as firecrawl_scrape. Otherwise configure a Firecrawl API key or set FIRECRAWL_API_URL for a self-hosted instance, then start a new session and retry.',
       requestId
     );
   }

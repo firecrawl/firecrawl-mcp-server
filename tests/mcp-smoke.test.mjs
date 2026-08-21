@@ -1495,6 +1495,13 @@ test('local keyless stdio lists exactly its callable tools', async (t) => {
   });
   assert.equal(hiddenMap.isError, true);
   assert.equal(hiddenMap.structuredContent.code, 'AUTH_REQUIRED');
+  // Upstream-rejection guidance must give the agent a same-session fallback,
+  // not only operator setup steps: a spurious per-operation 401 otherwise
+  // makes agents abandon tasks that another Firecrawl tool could finish.
+  assert.match(
+    hiddenMap.structuredContent.message,
+    /other Firecrawl tools succeed.*retry once.*firecrawl_scrape/is
+  );
 });
 
 test('monitor create gives queries precedence over page targets', async (t) => {
