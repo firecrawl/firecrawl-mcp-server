@@ -514,7 +514,7 @@ test('empty and likely-blocked results carry in-band Firecrawl notices', async (
         data: {
           markdown: '',
           metadata: { statusCode: 403 },
-          warning: `blocked ${'x'.repeat(20_000)}`,
+          warning: `blocked ${'x'.repeat(70_000)}`,
         },
       },
     },
@@ -535,11 +535,7 @@ test('empty and likely-blocked results carry in-band Firecrawl notices', async (
   await waitForHealth(port, child);
 
   for (const [name, arguments_, expectedCode] of [
-    [
-      'firecrawl_scrape',
-      { url: 'https://example.com/', response_format: 'concise' },
-      'LIKELY_BLOCKED',
-    ],
+    ['firecrawl_scrape', { url: 'https://example.com/' }, 'LIKELY_BLOCKED'],
     ['firecrawl_search', { query: 'no matching result' }, 'EMPTY_RESULT'],
   ]) {
     const response = await httpToolCall(port, {
@@ -945,7 +941,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   const describedProperties = properties.filter(
     (property) => property.description?.trim().length > 0
   );
-  assert.ok(properties.length >= 160, `expected full schema, got ${properties.length} properties`);
+  assert.ok(properties.length >= 150, `expected full schema, got ${properties.length} properties`);
   assert.ok(
     describedProperties.length / properties.length >= 0.95,
     `parameter-description coverage ${describedProperties.length}/${properties.length}`
@@ -1108,56 +1104,22 @@ test('payload-heavy responses are bounded with explicit retrieval guidance', asy
   });
   client.notify('notifications/initialized');
 
-  const tools = await client.request('tools/list');
-  for (const name of [
-    'firecrawl_scrape',
-    'firecrawl_search',
-    'firecrawl_crawl',
-    'firecrawl_check_crawl_status',
-    'firecrawl_parse',
-    'firecrawl_agent_status',
-    'firecrawl_interact',
-  ]) {
-    const tool = tools.tools.find((candidate) => candidate.name === name);
-    assert.ok(tool, `${name} must be listed`);
-    assert.deepEqual(tool.inputSchema.properties.response_format.enum, [
-      'concise',
-      'detailed',
-    ]);
-    assert.equal(tool.inputSchema.properties.response_format.default, 'detailed');
-  }
-
-  const detailedResult = await client.request('tools/call', {
+  const result = await client.request('tools/call', {
     arguments: { query: 'large result' },
     name: 'firecrawl_search',
   });
-  const detailedText = detailedResult.content[0].text;
-  const detailed = JSON.parse(detailedText);
-  assert.ok(detailedText.length <= 65_000, `detailed response was ${detailedText.length} chars`);
-  assert.equal(detailed._firecrawl.truncated, true);
-  assert.match(detailed._firecrawl.message, /narrower query|lower limit/i);
-
-  const conciseResult = await client.request('tools/call', {
-    arguments: { query: 'large result', response_format: 'concise' },
-    name: 'firecrawl_search',
-  });
-  const conciseText = conciseResult.content[0].text;
-  const concise = JSON.parse(conciseText);
-  assert.ok(conciseText.length <= 13_000, `concise response was ${conciseText.length} chars`);
-  assert.ok(conciseText.length < detailedText.length);
-  assert.equal(concise._firecrawl.truncated, true);
-  assert.match(concise._firecrawl.message, /response_format.*detailed/i);
-  assert.equal(concise.data.web[0].rawHtml, undefined);
-  assert.equal(concise.data.web[0].screenshot, undefined);
-  const titlePrefix = concise.data.web[0].title.split('\n[truncated')[0];
+  const text = result.content[0].text;
+  const payload = JSON.parse(text);
+  assert.ok(text.length <= 65_000, `bounded response was ${text.length} chars`);
+  assert.equal(payload._firecrawl.truncated, true);
+  assert.match(payload._firecrawl.message, /narrower query|lower limit/i);
+  const titlePrefix = payload.data.web[0].title.split('\n[truncated')[0];
   assert.equal(titlePrefix.endsWith('\ud83d'), false);
 
   const requests = backend.requests.filter(
     (request) => request.method === 'POST' && request.url === '/v2/search'
   );
-  assert.equal(requests.length, 2);
-  assert.equal(requests[0].body.response_format, undefined);
-  assert.equal(requests[1].body.response_format, undefined);
+  assert.equal(requests.length, 1);
 });
 
 test('many medium search results respect the total response cap', async (t) => {

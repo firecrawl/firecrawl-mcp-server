@@ -806,13 +806,6 @@ function buildSearchQueryWithDomains(
   return query;
 }
 
-type ResponseFormat = 'concise' | 'detailed';
-
-const responseFormatSchema = z
-  .enum(['concise', 'detailed'])
-  .default('detailed')
-  .describe('Response detail level; defaults to detailed.');
-
 // Parameter fields shared by both firecrawl_search surfaces. The full surface
 // adds `scrapeOptions` on top; the search surface uses these as-is (strict, no
 // scrapeOptions). Defining the field set once keeps the two surfaces from
@@ -857,7 +850,6 @@ const searchToolBaseFields = {
     .array(z.enum(['default', 'anon', 'zdr']))
     .optional()
     .describe('Enterprise search modes when enabled for the account.'),
-  response_format: responseFormatSchema,
 };
 
 // Both surfaces forbid specifying includeDomains and excludeDomains together.
@@ -1610,20 +1602,16 @@ type TruncationStats = {
   fields: number;
 };
 
-// Detailed stays compatible for ordinary payloads; both ceilings prevent one
-// tool result from consuming an agent's context window (~3k/~16k tokens).
-const CONCISE_RESPONSE_MAX_CHARS = 12_000;
-const DETAILED_RESPONSE_MAX_CHARS = 64_000;
+// Ordinary payloads stay unchanged; the ceiling prevents one tool result from
+// consuming an agent's context window (~16k tokens).
+const RESPONSE_MAX_CHARS = 64_000;
 const CRAWL_MAX_DOCUMENTS = 25;
 const CRAWL_MAX_BYTES = 48_000;
-
-const conciseOmittedFields = /(?:base64|screenshot)/i;
 
 function compactResponseValue(
   value: unknown,
   limits: { arrayItems: number; objectFields: number; stringChars: number },
   stats: TruncationStats,
-  concise: boolean,
   depth = 0
 ): unknown {
   if (typeof value === 'string') {
@@ -1643,31 +1631,22 @@ function compactResponseValue(
     const retained = value.slice(0, limits.arrayItems);
     stats.arrayItems += value.length - retained.length;
     return retained.map((item) =>
-      compactResponseValue(item, limits, stats, concise, depth + 1)
+      compactResponseValue(item, limits, stats, depth + 1)
     );
   }
 
-  const record = value as Record<string, unknown>;
-  const hasMarkdown = typeof record.markdown === 'string' && record.markdown.length > 0;
-  const entries = Object.entries(record).filter(([key]) => {
-    const omit =
-      concise &&
-      (conciseOmittedFields.test(key) || (key === 'rawHtml' && hasMarkdown));
-    if (omit) stats.fields += 1;
-    return !omit;
-  });
+  const entries = Object.entries(value as Record<string, unknown>);
   const retained = entries.slice(0, limits.objectFields);
   stats.fields += entries.length - retained.length;
   return Object.fromEntries(
     retained.map(([key, item]) => [
       key,
-      compactResponseValue(item, limits, stats, concise, depth + 1),
+      compactResponseValue(item, limits, stats, depth + 1),
     ])
   );
 }
 
 function truncationMetadata(
-  format: ResponseFormat,
   stats: TruncationStats,
   guidance: string
 ): Record<string, unknown> {
@@ -1676,15 +1655,10 @@ function truncationMetadata(
     array_items: stats.arrayItems,
     characters: stats.characters,
   };
-  const detailGuidance =
-    format === 'concise'
-      ? 'Use response_format: "detailed" to include fields omitted by concise format. '
-      : '';
   return {
     truncated: true,
-    response_format: format,
     omitted,
-    message: `Response truncated; omitted ${omitted.fields} fields, ${omitted.array_items} array items, and ${omitted.characters} characters. ${detailGuidance}${guidance.slice(0, 2_000)}`.trim(),
+    message: `Response truncated; omitted ${omitted.fields} fields, ${omitted.array_items} array items, and ${omitted.characters} characters. ${guidance.slice(0, 2_000)}`.trim(),
   };
 }
 
@@ -1801,45 +1775,24 @@ function withResultNotice(
   };
 }
 
-function formatToolResponse(
-  data: unknown,
-  format: ResponseFormat,
-  guidance: string
-): string {
-  const maxChars =
-    format === 'concise'
-      ? CONCISE_RESPONSE_MAX_CHARS
-      : DETAILED_RESPONSE_MAX_CHARS;
-  if (format === 'detailed') {
-    const unchanged = asText(data);
-    if (unchanged.length <= maxChars) return unchanged;
-  }
+function formatToolResponse(data: unknown, guidance: string): string {
+  const unchanged = asText(data);
+  if (unchanged.length <= RESPONSE_MAX_CHARS) return unchanged;
 
-  let limits =
-    format === 'concise'
-      ? { arrayItems: 8, objectFields: 30, stringChars: 2_000 }
-      : { arrayItems: 50, objectFields: 100, stringChars: 12_000 };
+  let limits = { arrayItems: 50, objectFields: 100, stringChars: 12_000 };
   for (;;) {
     const stats: TruncationStats = { arrayItems: 0, characters: 0, fields: 0 };
-    const compacted = compactResponseValue(
-      data,
-      limits,
-      stats,
-      format === 'concise'
-    );
+    const compacted = compactResponseValue(data, limits, stats);
     const hadOmissions =
       stats.arrayItems > 0 || stats.characters > 0 || stats.fields > 0;
     if (!hadOmissions) {
       const output = asText(compacted);
-      if (output.length <= maxChars) return output;
+      if (output.length <= RESPONSE_MAX_CHARS) return output;
     } else {
       const output = asText(
-        withTruncationMetadata(
-          compacted,
-          truncationMetadata(format, stats, guidance)
-        )
+        withTruncationMetadata(compacted, truncationMetadata(stats, guidance))
       );
-      if (output.length <= maxChars) return output;
+      if (output.length <= RESPONSE_MAX_CHARS) return output;
     }
     if (
       limits.arrayItems === 1 &&
@@ -1847,7 +1800,7 @@ function formatToolResponse(
       limits.stringChars === 128
     ) {
       return asText({
-        _firecrawl: truncationMetadata(format, stats, guidance),
+        _firecrawl: truncationMetadata(stats, guidance),
       });
     }
     limits = {
@@ -1935,8 +1888,6 @@ function transformScrapeParams(
   args: Record<string, unknown>
 ): Record<string, unknown> {
   const out = { ...args };
-  delete out.response_format;
-
   const formats = buildFormatsArray(out);
   if (formats) out.formats = formats;
 
@@ -2109,7 +2060,6 @@ const scrapeParamsSchema = z.object({
     })
     .optional()
     .describe('Reusable browser profile configuration.'),
-  response_format: responseFormatSchema,
 });
 
 const parseOptionParamsSchema = z.object({
@@ -2200,7 +2150,6 @@ const parseOptionParamsSchema = z.object({
     .enum(['basic', 'auto'])
     .optional()
     .describe('Proxy mode used for remote document URLs.'),
-  response_format: responseFormatSchema,
 });
 
 const localParseParamsSchema = parseOptionParamsSchema.extend({
@@ -2301,7 +2250,6 @@ function extractParseOptions(args: ParseToolArgs): Record<string, unknown> {
   delete options.uploadRef;
   delete options.contentType;
   delete options.declaredSizeBytes;
-  delete options.response_format;
   return options;
 }
 
@@ -2441,7 +2389,6 @@ async function executeHostedParse(
     throw new UserError(String(payload.message), payload);
   }
 
-  const responseFormat = args.response_format ?? 'detailed';
   const options = extractParseOptions(args);
 
   if (args.filePath) {
@@ -2497,7 +2444,6 @@ async function executeHostedParse(
         arguments: {
           uploadRef: upload.uploadRef,
           ...(removeEmptyTopLevel(options) as Record<string, unknown>),
-          response_format: responseFormat,
         },
       },
         notes: [
@@ -2506,7 +2452,6 @@ async function executeHostedParse(
           'Clients without a local upload mechanism cannot complete hosted parse for local files.',
         ],
       },
-      responseFormat,
       'Use a shorter file path and fewer parse options to retrieve omitted upload instructions.'
     );
   }
@@ -2523,7 +2468,6 @@ async function executeHostedParse(
   );
   return formatToolResponse(
     parseJson,
-    responseFormat,
     'Parse fewer pages or request fewer output formats to retrieve the omitted content.'
   );
 }
@@ -2541,9 +2485,7 @@ Retrieve content or structured fields from one supplied URL. Use this when the r
 `,
   parameters: scrapeParamsSchema,
   execute: async (args: unknown, { session, log }): Promise<string> => {
-    const { url, response_format = 'detailed', ...options } = args as z.infer<
-      typeof scrapeParamsSchema
-    >;
+    const { url, ...options } = args as z.infer<typeof scrapeParamsSchema>;
     const transformed = transformScrapeParams(options);
     const cleaned = removeEmptyTopLevel(transformed);
     if (cleaned.lockdown) {
@@ -2563,7 +2505,6 @@ Retrieve content or structured fields from one supplied URL. Use this when the r
       );
       return formatToolResponse(
         withResultNotice(json?.data ?? json, 'scrape'),
-        response_format,
         'Request fewer formats or narrow the extraction to retrieve omitted page content.'
       );
     }
@@ -2574,7 +2515,6 @@ Retrieve content or structured fields from one supplied URL. Use this when the r
     } as any);
     return formatToolResponse(
       withResultNotice(res, 'scrape'),
-      response_format,
       'Request fewer formats or narrow the extraction to retrieve omitted page content.'
     );
   },
@@ -2622,7 +2562,6 @@ Enumerate URLs under one website without fetching each page. Returns matching UR
     } as any);
     return formatToolResponse(
       withResultNotice(res, 'map'),
-      'detailed',
       'Retry firecrawl_map with a lower limit or narrower search term to retrieve omitted URLs.'
     );
   },
@@ -2645,7 +2584,7 @@ Search web, news, image, and specialized sources. Operators include quoted phras
     .object({
       ...searchToolBaseFields,
       scrapeOptions: scrapeParamsSchema
-        .omit({ url: true, response_format: true })
+        .omit({ url: true })
         .partial()
         .optional()
         .describe(
@@ -2654,10 +2593,7 @@ Search web, news, image, and specialized sources. Operators include quoted phras
     })
     .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE),
   execute: async (args: unknown, { session, log }): Promise<string> => {
-    const { query, response_format = 'detailed', ...opts } = args as Record<
-      string,
-      unknown
-    > & { response_format?: ResponseFormat };
+    const { query, ...opts } = args as Record<string, unknown>;
 
     const searchOpts = { ...opts } as Record<string, unknown>;
     const includeDomains = searchOpts.includeDomains as string[] | undefined;
@@ -2691,7 +2627,6 @@ Search web, news, image, and specialized sources. Operators include quoted phras
       delete keylessResponse.id;
       return formatToolResponse(
         withResultNotice(keylessResponse, 'search'),
-        response_format,
         'Use a lower limit, narrower query, or fewer scrapeOptions formats to retrieve omitted results.'
       );
     }
@@ -2703,7 +2638,6 @@ Search web, news, image, and specialized sources. Operators include quoted phras
     const httpRes = await (client as any).http.post('/v2/search', searchBody);
     return formatToolResponse(
       withResultNotice(httpRes?.data ?? {}, 'search'),
-      response_format,
       'Use a lower limit, narrower query, or fewer scrapeOptions formats to retrieve omitted results.'
     );
   },
@@ -3495,22 +3429,15 @@ Start a multi-page website crawl and wait for its terminal state. Use for page c
       .optional()
       .describe('Deduplicate URLs that differ only by query parameters.'),
     scrapeOptions: scrapeParamsSchema
-      .omit({ url: true, response_format: true })
+      .omit({ url: true })
       .partial()
       .optional()
       .describe(
         'Scrape configuration applied to every crawled page. Rich formats increase response size and credit use.'
       ),
-    response_format: responseFormatSchema,
   }),
   execute: async (args, { session, log }) => {
-    const {
-      url,
-      response_format = 'detailed',
-      ...options
-    } = args as Record<string, unknown> & {
-      response_format?: ResponseFormat;
-    };
+    const { url, ...options } = args as Record<string, unknown>;
     const client = getClient(session);
 
     const opts = { ...options } as Record<string, unknown>;
@@ -3560,7 +3487,6 @@ Start a multi-page website crawl and wait for its terminal state. Use for page c
     );
     return formatToolResponse(
       withResultNotice(res, 'crawl'),
-      response_format,
       crawlResponseGuidance(
         res,
         crawlId,
@@ -3598,28 +3524,20 @@ Retrieve status and available results for an existing crawl ID without starting 
       .describe(
         'Zero-based document offset returned in prior guidance, applied within the page being retrieved.'
       ),
-    response_format: responseFormatSchema,
   }),
   execute: async (
     args: unknown,
     { session }: { session?: SessionData }
   ): Promise<string> => {
     const client = getClient(session);
-    const {
-      id,
-      next,
-      offset = 0,
-      response_format = 'detailed',
-    } = args as {
+    const { id, next, offset = 0 } = args as {
       id: string;
       next?: string;
       offset?: number;
-      response_format?: ResponseFormat;
     };
     const res = await getCrawlStatusWithOrigin(client, id, next, offset);
     return formatToolResponse(
       withResultNotice(res, 'crawl'),
-      response_format,
       crawlResponseGuidance(
         res,
         id,
@@ -3724,14 +3642,10 @@ Retrieve progress or final results for a \`firecrawl_agent\` job ID. A \`process
 `,
   parameters: z.object({
     id: z.string().describe('Agent job ID.'),
-    response_format: responseFormatSchema,
   }),
   execute: async (args: unknown, { session, log }): Promise<string> => {
     const client = getClient(session);
-    const { id, response_format = 'detailed' } = args as {
-      id: string;
-      response_format?: ResponseFormat;
-    };
+    const { id } = args as { id: string };
     log.info('Checking agent status', { id });
     const res = await (client as any).http.get(
       `/v2/agent/${encodeURIComponent(id)}`,
@@ -3739,7 +3653,6 @@ Retrieve progress or final results for a \`firecrawl_agent\` job ID. A \`process
     );
     return formatToolResponse(
       withResultNotice(res?.data ?? {}, 'agent'),
-      response_format,
       'Use a narrower agent prompt or schema to retrieve omitted result content.'
     );
   },
@@ -3794,11 +3707,10 @@ Open or reuse a live browser session to interact with a page by prompt or code. 
         .optional()
         .describe('Execution timeout in seconds; maximum 300.'),
       scrapeOptions: scrapeParamsSchema
-        .omit({ url: true, response_format: true })
+        .omit({ url: true })
         .partial()
         .optional()
         .describe('Scrape configuration used only when opening url.'),
-      response_format: responseFormatSchema,
     })
     .refine((data) => Boolean(data.scrapeId) !== Boolean(data.url), {
       message:
@@ -3820,7 +3732,6 @@ Open or reuse a live browser session to interact with a page by prompt or code. 
       language,
       timeout,
       scrapeOptions,
-      response_format = 'detailed',
     } = args as {
       scrapeId?: string;
       url?: string;
@@ -3829,7 +3740,6 @@ Open or reuse a live browser session to interact with a page by prompt or code. 
       language?: 'bash' | 'python' | 'node';
       timeout?: number;
       scrapeOptions?: Record<string, unknown>;
-      response_format?: ResponseFormat;
     };
     // No scrapeId means the caller passed a url: scrape it first to open the
     // session, then interact. One tool call instead of scrape + interact.
@@ -3868,7 +3778,6 @@ Open or reuse a live browser session to interact with a page by prompt or code. 
           : res;
     return formatToolResponse(
       result,
-      response_format,
       'Use a narrower interaction prompt or code output to retrieve omitted content.'
     );
   },
@@ -3932,7 +3841,6 @@ Parse one local or uploaded document into text or structured data; remote web UR
     const {
       filePath,
       contentType: overrideContentType,
-      response_format = 'detailed',
       ...options
     } = args as z.infer<typeof localParseParamsSchema>;
 
@@ -3988,19 +3896,12 @@ Parse one local or uploaded document into text or structured data; remote web UR
     try {
       return formatToolResponse(
         JSON.parse(responseText),
-        response_format,
         'Parse fewer pages or request fewer output formats to retrieve omitted content.'
       );
     } catch {
-      if (
-        response_format === 'detailed' &&
-        responseText.length <= DETAILED_RESPONSE_MAX_CHARS
-      ) {
-        return responseText;
-      }
+      if (responseText.length <= RESPONSE_MAX_CHARS) return responseText;
       return formatToolResponse(
         responseText,
-        response_format,
         'Parse fewer pages or request fewer output formats to retrieve omitted content.'
       );
     }
@@ -4048,7 +3949,6 @@ Search web and specialized indexes. Operators include quoted phrases, \`-term\`,
         categories,
         highlights,
         enterprise,
-        response_format = 'detailed',
       } = args as {
         query: string;
         includeDomains?: string[];
@@ -4061,7 +3961,6 @@ Search web and specialized indexes. Operators include quoted phrases, \`-term\`,
         categories?: string[];
         highlights?: boolean;
         enterprise?: string[];
-        response_format?: ResponseFormat;
       };
 
       const searchQuery = buildSearchQueryWithDomains(
@@ -4092,7 +3991,6 @@ Search web and specialized indexes. Operators include quoted phrases, \`-term\`,
       const httpRes = await (client as any).http.post('/v2/search', searchBody);
       return formatToolResponse(
         withResultNotice(httpRes?.data ?? {}, 'search'),
-        response_format,
         'Use a lower limit or narrower query to retrieve omitted results.'
       );
     },
