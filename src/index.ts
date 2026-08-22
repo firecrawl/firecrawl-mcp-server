@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { registerDeveloperTools } from './developer';
 import { extractSingleTrustedClientIp } from './keyless-client-ip';
 import { registerMonitorTools } from './monitor';
-import { registerResearchTools } from './research';
+import { type ClientLike, registerResearchTools } from './research';
 import { escapeWWWAuthenticateValue } from './www-authenticate';
 import {
   credentialForOutboundRequest,
@@ -1729,7 +1729,7 @@ function truncationMetadata(
   return {
     truncated: true,
     omitted,
-    message: `Response truncated; omitted ${omitted.fields} fields, ${omitted.array_items} array items, and ${omitted.characters} characters. ${guidance.slice(0, 2_000)}`.trim(),
+    message: `Response truncated; omitted ${omitted.fields} fields, ${omitted.array_items} array items, and ${omitted.characters} characters. ${guidance}`.trim(),
   };
 }
 
@@ -1804,10 +1804,6 @@ function withResultNotice(
     case 'agent':
       empty = Object.keys(body).length === 0;
       break;
-    default: {
-      const _exhaustive: never = kind;
-      return _exhaustive;
-    }
   }
   if (!blocked && !empty) return data;
 
@@ -2849,15 +2845,6 @@ async function keylessPost(
   return json;
 }
 
-type CrawlClientLike = {
-  http: {
-    get: <T = unknown>(
-      endpoint: string,
-      headers?: Record<string, string>
-    ) => Promise<{ data: T; status: number }>;
-  };
-};
-
 function crawlPageData(body: unknown): unknown[] {
   const data = resultRecord(body)?.data;
   if (Array.isArray(data)) return data;
@@ -2890,13 +2877,13 @@ function validatedCrawlContinuation(jobId: string, continuation: string): string
 
 function takeCrawlDocumentWindow(documents: unknown[], offset: number): unknown[] {
   const window: unknown[] = [];
-  let bytes = 2;
+  let bytes = 0;
   for (const document of documents.slice(offset)) {
     if (window.length >= CRAWL_MAX_DOCUMENTS) break;
     const documentBytes = Buffer.byteLength(JSON.stringify(document));
-    if (window.length > 0 && bytes + documentBytes + 1 > CRAWL_MAX_BYTES) break;
+    if (window.length > 0 && bytes + documentBytes > CRAWL_MAX_BYTES) break;
     window.push(document);
-    bytes += documentBytes + (window.length > 1 ? 1 : 0);
+    bytes += documentBytes;
   }
   return window;
 }
@@ -2963,7 +2950,7 @@ async function getCrawlStatusWithOrigin(
   const requestPath = continuation
     ? validatedCrawlContinuation(jobId, continuation)
     : `/v2/crawl/${encodeURIComponent(jobId)}`;
-  const http = (client as CrawlClientLike).http;
+  const http = (client as ClientLike).http;
   const res = await http.get(requestPath, ORIGIN_HEADERS);
   const body = resultRecord(res.data) ?? {};
   const pageDocuments = crawlPageData(body);

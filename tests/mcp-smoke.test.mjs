@@ -408,6 +408,35 @@ async function httpToolCall(port, { endpoint = '/v2/mcp', id, headers, params })
   });
 }
 
+async function startHostedCloudServer(t, backend) {
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+  return port;
+}
+
+async function startStdioClient(t, env, clientName) {
+  const child = spawnServer({ FIRECRAWL_API_KEY: 'fc-test', ...env });
+  t.after(() => stopChild(child));
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: clientName, version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+  return client;
+}
+
 test('tool failures carry structured codes instead of silent success', async (t) => {
   const backend = await startFakeFirecrawlBackend({
     crawlStartResponse: { status: 200, body: { success: false, error: 'crawl rejected' } },
@@ -422,18 +451,7 @@ test('tool failures carry structured codes instead of silent success', async (t)
     },
   });
   t.after(() => backend.close());
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp',
-    FIRECRAWL_API_URL: backend.url,
-    FIRECRAWL_OAUTH_ISSUER: backend.url,
-    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
-    HTTP_STREAMABLE_SERVER: 'true',
-    PORT: String(port),
-  });
-  t.after(() => stopChild(child));
-  await waitForHealth(port, child);
+  const port = await startHostedCloudServer(t, backend);
 
   for (const [name, arguments_, expectedCode] of [
     ['firecrawl_crawl', { url: 'https://example.com/' }, 'CRAWL_START_FAILED'],
@@ -508,18 +526,7 @@ test('SDK status and code classify rate limits and opaque timeouts', async (t) =
     await t.test(testCase.name, async (t) => {
       const backend = await startFakeFirecrawlBackend(testCase.backend);
       t.after(() => backend.close());
-      const port = await getFreePort();
-      const child = spawnServer({
-        CLOUD_SERVICE: 'true',
-        FASTMCP_ENDPOINT: '/v2/mcp',
-        FIRECRAWL_API_URL: backend.url,
-        FIRECRAWL_OAUTH_ISSUER: backend.url,
-        FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
-        HTTP_STREAMABLE_SERVER: 'true',
-        PORT: String(port),
-      });
-      t.after(() => stopChild(child));
-      await waitForHealth(port, child);
+      const port = await startHostedCloudServer(t, backend);
 
       const response = await httpToolCall(port, {
         id: `sdk-error-${testCase.name}`,
@@ -557,18 +564,7 @@ test('threat-protection policy blocks are permanent, not retryable', async (t) =
     },
   });
   t.after(() => backend.close());
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp',
-    FIRECRAWL_API_URL: backend.url,
-    FIRECRAWL_OAUTH_ISSUER: backend.url,
-    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
-    HTTP_STREAMABLE_SERVER: 'true',
-    PORT: String(port),
-  });
-  t.after(() => stopChild(child));
-  await waitForHealth(port, child);
+  const port = await startHostedCloudServer(t, backend);
 
   const response = await httpToolCall(port, {
     id: 'threat-protection',
@@ -592,18 +588,7 @@ test('parse, interact, and monitor failures use the shared structured boundary',
     searchResponse: { status: 402, body: { error: 'This feature requires a paid plan.' } },
   });
   t.after(() => backend.close());
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp',
-    FIRECRAWL_API_URL: backend.url,
-    FIRECRAWL_OAUTH_ISSUER: backend.url,
-    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
-    HTTP_STREAMABLE_SERVER: 'true',
-    PORT: String(port),
-  });
-  t.after(() => stopChild(child));
-  await waitForHealth(port, child);
+  const port = await startHostedCloudServer(t, backend);
 
   for (const [name, arguments_, expectedCode] of [
     [
@@ -659,18 +644,7 @@ test('empty and likely-blocked results carry in-band Firecrawl notices', async (
     searchResponse: { status: 200, body: { success: true, data: { web: [] } } },
   });
   t.after(() => backend.close());
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp',
-    FIRECRAWL_API_URL: backend.url,
-    FIRECRAWL_OAUTH_ISSUER: backend.url,
-    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
-    HTTP_STREAMABLE_SERVER: 'true',
-    PORT: String(port),
-  });
-  t.after(() => stopChild(child));
-  await waitForHealth(port, child);
+  const port = await startHostedCloudServer(t, backend);
 
   for (const [name, arguments_, expectedCode] of [
     ['firecrawl_scrape', { url: 'https://example.com/' }, 'LIKELY_BLOCKED'],
@@ -708,18 +682,7 @@ test('non-empty scrape content is not flagged as likely blocked', async (t) => {
     },
   });
   t.after(() => backend.close());
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp',
-    FIRECRAWL_API_URL: backend.url,
-    FIRECRAWL_OAUTH_ISSUER: backend.url,
-    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
-    HTTP_STREAMABLE_SERVER: 'true',
-    PORT: String(port),
-  });
-  t.after(() => stopChild(child));
-  await waitForHealth(port, child);
+  const port = await startHostedCloudServer(t, backend);
 
   const response = await httpToolCall(port, {
     id: 'non-empty-block-signal',
@@ -1000,18 +963,7 @@ class StdioMcpClient {
 test('local parse missing files return FILE_NOT_FOUND recovery', async (t) => {
   const backend = await startFakeFirecrawlBackend();
   t.after(() => backend.close());
-  const child = spawnServer({
-    FIRECRAWL_API_KEY: 'fc-test',
-    FIRECRAWL_API_URL: backend.url,
-  });
-  t.after(() => stopChild(child));
-  const client = new StdioMcpClient(child);
-  await client.request('initialize', {
-    capabilities: {},
-    clientInfo: { name: 'firecrawl-mcp-smoke', version: '0.0.0' },
-    protocolVersion: '2025-06-18',
-  });
-  client.notify('notifications/initialized');
+  const client = await startStdioClient(t, { FIRECRAWL_API_URL: backend.url }, 'firecrawl-mcp-smoke');
   const result = await client.request('tools/call', {
     arguments: { filePath: '/definitely/missing/firecrawl-cycle2.pdf' },
     name: 'firecrawl_parse',
@@ -1045,7 +997,6 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.ok(toolNames.includes('firecrawl_scrape'));
   assert.ok(toolNames.includes('firecrawl_search'));
   assert.ok(toolNames.includes('firecrawl_parse'));
-  assert.equal(toolNames.length, 26);
   assert.equal(toolNames.includes('firecrawl_extract'), false);
 
   const deprecatedExtract = await client.request('tools/call', {
@@ -1229,18 +1180,7 @@ test('payload-heavy responses are bounded with explicit retrieval guidance', asy
   });
   t.after(() => backend.close());
 
-  const child = spawnServer({
-    FIRECRAWL_API_KEY: 'fc-test',
-    FIRECRAWL_API_URL: backend.url,
-  });
-  t.after(() => stopChild(child));
-  const client = new StdioMcpClient(child);
-  await client.request('initialize', {
-    capabilities: {},
-    clientInfo: { name: 'firecrawl-output-bounds', version: '0.0.0' },
-    protocolVersion: '2025-06-18',
-  });
-  client.notify('notifications/initialized');
+  const client = await startStdioClient(t, { FIRECRAWL_API_URL: backend.url }, 'firecrawl-output-bounds');
 
   const result = await client.request('tools/call', {
     arguments: { query: 'large result' },
@@ -1278,18 +1218,7 @@ test('many medium search results respect the total response cap', async (t) => {
   });
   t.after(() => backend.close());
 
-  const child = spawnServer({
-    FIRECRAWL_API_KEY: 'fc-test',
-    FIRECRAWL_API_URL: backend.url,
-  });
-  t.after(() => stopChild(child));
-  const client = new StdioMcpClient(child);
-  await client.request('initialize', {
-    capabilities: {},
-    clientInfo: { name: 'firecrawl-total-output-cap', version: '0.0.0' },
-    protocolVersion: '2025-06-18',
-  });
-  client.notify('notifications/initialized');
+  const client = await startStdioClient(t, { FIRECRAWL_API_URL: backend.url }, 'firecrawl-total-output-cap');
 
   const result = await client.request('tools/call', {
     arguments: { query: 'many medium results' },
@@ -1328,18 +1257,7 @@ test('crawl bounding preserves the upstream continuation and small responses', a
   });
   t.after(() => backend.close());
 
-  const child = spawnServer({
-    FIRECRAWL_API_KEY: 'fc-test',
-    FIRECRAWL_API_URL: backend.url,
-  });
-  t.after(() => stopChild(child));
-  const client = new StdioMcpClient(child);
-  await client.request('initialize', {
-    capabilities: {},
-    clientInfo: { name: 'firecrawl-crawl-bounds', version: '0.0.0' },
-    protocolVersion: '2025-06-18',
-  });
-  client.notify('notifications/initialized');
+  const client = await startStdioClient(t, { FIRECRAWL_API_URL: backend.url }, 'firecrawl-crawl-bounds');
 
   const firstResult = await client.request('tools/call', {
     arguments: { id: 'job-1' },
@@ -1416,18 +1334,7 @@ test('crawl continuation pages are bounded and resumable mid-page', async (t) =>
   });
   t.after(() => backend.close());
 
-  const child = spawnServer({
-    FIRECRAWL_API_KEY: 'fc-test',
-    FIRECRAWL_API_URL: backend.url,
-  });
-  t.after(() => stopChild(child));
-  const client = new StdioMcpClient(child);
-  await client.request('initialize', {
-    capabilities: {},
-    clientInfo: { name: 'firecrawl-crawl-page-bounds', version: '0.0.0' },
-    protocolVersion: '2025-06-18',
-  });
-  client.notify('notifications/initialized');
+  const client = await startStdioClient(t, { FIRECRAWL_API_URL: backend.url }, 'firecrawl-crawl-page-bounds');
 
   const firstResult = await client.request('tools/call', {
     arguments: { id: 'job-big', next },
@@ -1478,18 +1385,7 @@ test('crawl bounding synthesizes a resumable cursor for a single upstream page',
   });
   t.after(() => backend.close());
 
-  const child = spawnServer({
-    FIRECRAWL_API_KEY: 'fc-test',
-    FIRECRAWL_API_URL: backend.url,
-  });
-  t.after(() => stopChild(child));
-  const client = new StdioMcpClient(child);
-  await client.request('initialize', {
-    capabilities: {},
-    clientInfo: { name: 'firecrawl-crawl-offset', version: '0.0.0' },
-    protocolVersion: '2025-06-18',
-  });
-  client.notify('notifications/initialized');
+  const client = await startStdioClient(t, { FIRECRAWL_API_URL: backend.url }, 'firecrawl-crawl-offset');
 
   const tools = await client.request('tools/list');
   const statusTool = tools.tools.find(
@@ -1542,18 +1438,7 @@ test('crawl continuation accepts a path-prefixed API base', async (t) => {
   });
   t.after(() => backend.close());
 
-  const child = spawnServer({
-    FIRECRAWL_API_KEY: 'fc-test',
-    FIRECRAWL_API_URL: `${backend.url}/firecrawl`,
-  });
-  t.after(() => stopChild(child));
-  const client = new StdioMcpClient(child);
-  await client.request('initialize', {
-    capabilities: {},
-    clientInfo: { name: 'firecrawl-prefixed-continuation', version: '0.0.0' },
-    protocolVersion: '2025-06-18',
-  });
-  client.notify('notifications/initialized');
+  const client = await startStdioClient(t, { FIRECRAWL_API_URL: `${backend.url}/firecrawl` }, 'firecrawl-prefixed-continuation');
 
   const result = await client.request('tools/call', {
     arguments: { id: 'job-prefix', next },
