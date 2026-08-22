@@ -1180,9 +1180,13 @@ class InvalidCrawlContinuationError extends Error {
 // Tools whose failed calls may already have produced external side effects (a
 // submitted form, a created monitor). Unclassified failures on these must not
 // advertise retryable: an obedient agent would repeat the side effect.
+// Update/delete are excluded: repeating them converges on the same target
+// state. Run and feedback POSTs create a new run / a new record each time.
 const NON_IDEMPOTENT_TOOLS = new Set([
   'firecrawl_interact',
   'firecrawl_monitor_create',
+  'firecrawl_monitor_run',
+  'firecrawl_feedback',
 ]);
 
 function wrapToolError(
@@ -1207,6 +1211,13 @@ function wrapToolError(
       'If other Firecrawl tools succeed, this failure may be limited to this operation: retry once or accomplish the step with another Firecrawl tool such as firecrawl_scrape. Otherwise configure a Firecrawl API key or set FIRECRAWL_API_URL for a self-hosted instance, then start a new session and retry.',
       requestId
     );
+  const unsupportedSiteError = () =>
+    agentLegibleError(
+      'UNSUPPORTED_SITE',
+      error,
+      'Firecrawl declines this site by policy, so the same URL will always fail. Use a different source or tool for this content.',
+      requestId
+    );
   const upstreamTimeoutError = () =>
     agentLegibleError(
       'UPSTREAM_TIMEOUT',
@@ -1223,6 +1234,12 @@ function wrapToolError(
   if (status === 401) return authRequiredError();
   if (status === 408 || code === 'SCRAPE_TIMEOUT') {
     return upstreamTimeoutError();
+  }
+  // Threat-protection blocks have a stable API code (apps/api keeps
+  // "unsafe_domain_blocked" for API stability); the message text can be
+  // reworded, so prefer the code over the regex below.
+  if (code === 'unsafe_domain_blocked') {
+    return unsupportedSiteError();
   }
   if (status === 429) {
     const details = resultRecord(sdkError?.details);
@@ -1259,12 +1276,7 @@ function wrapToolError(
   // Two permanent domain-policy rejections exist in apps/api: the global
   // blocklist ("we do not support this site") and org-level threat protection.
   if (/do not support this site|threat protection policy/i.test(message)) {
-    return agentLegibleError(
-      'UNSUPPORTED_SITE',
-      error,
-      'Firecrawl declines this site by policy, so the same URL will always fail. Use a different source or tool for this content.',
-      requestId
-    );
+    return unsupportedSiteError();
   }
   if (/timed? out|timeout/i.test(message)) {
     return upstreamTimeoutError();

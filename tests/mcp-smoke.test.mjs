@@ -319,6 +319,15 @@ async function startFakeFirecrawlBackend(options = {}) {
       return;
     }
 
+    if (
+      req.method === 'POST' &&
+      req.url === '/v2/monitor/mon-1/run' &&
+      monitorResponse
+    ) {
+      res.writeHead(monitorResponse.status, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(monitorResponse.body));
+      return;
+    }
     if (req.method === 'POST' && req.url === '/v2/monitor' && monitorResponse) {
       res.writeHead(monitorResponse.status, { 'content-type': 'application/json' });
       res.end(JSON.stringify(monitorResponse.body));
@@ -532,16 +541,18 @@ test('SDK status and code classify rate limits and opaque timeouts', async (t) =
 });
 
 test('threat-protection policy blocks are permanent, not retryable', async (t) => {
-  // apps/api emits a second domain-policy 403 besides the blocklist message:
-  // "blocked by your organization's threat protection policy". It is just as
-  // permanent, so it must not be classified as a retryable upstream failure.
+  // apps/api emits a second domain-policy 403 besides the blocklist message.
+  // Its stable API contract is code: "unsafe_domain_blocked" (the message text
+  // can be reworded), so the body here deliberately uses phrasing the message
+  // regex would NOT match - classification must come from the code.
   const backend = await startFakeFirecrawlBackend({
     scrapeResponse: {
       status: 403,
       body: {
         success: false,
+        code: 'unsafe_domain_blocked',
         error:
-          "This URL (https://example.com/) is blocked by your organization's threat protection policy (rule: deny-example). If you believe this is a mistake, contact your organization administrator to adjust the policy (e.g. whitelist the domain).",
+          'Domain example.com is denied by org policy rule deny-example. Contact your administrator.',
       },
     },
   });
@@ -605,11 +616,17 @@ test('parse, interact, and monitor failures use the shared structured boundary',
       { page: 'https://example.com/', goal: 'Track title changes' },
       'UPSTREAM_REQUEST_FAILED',
     ],
+    [
+      'firecrawl_monitor_run',
+      { id: 'mon-1' },
+      'UPSTREAM_REQUEST_FAILED',
+    ],
     ['firecrawl_search', { query: 'plan-gated feature' }, 'UPSTREAM_REQUEST_FAILED'],
   ]) {
     // Non-idempotent tools must not advertise retryable on unclassified
     // upstream failures: the action may already have taken effect (a created
-    // monitor, a submitted form) and an obedient agent would repeat it.
+    // monitor, a queued run, a submitted form) and an obedient agent would
+    // repeat it.
     const expectedRetryable = name === 'firecrawl_search';
     const response = await httpToolCall(port, {
       id: `structured-${name}`,
