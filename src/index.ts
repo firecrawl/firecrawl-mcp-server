@@ -1208,7 +1208,9 @@ function wrapToolError(
       requestId
     );
   }
-  if (/do not support this site/i.test(message)) {
+  // Two permanent domain-policy rejections exist in apps/api: the global
+  // blocklist ("we do not support this site") and org-level threat protection.
+  if (/do not support this site|threat protection policy/i.test(message)) {
     return agentLegibleError(
       'UNSUPPORTED_SITE',
       error,

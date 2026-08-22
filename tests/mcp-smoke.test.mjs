@@ -464,6 +464,49 @@ test('tool failures carry structured codes instead of silent success', async (t)
   }
 });
 
+test('threat-protection policy blocks are permanent, not retryable', async (t) => {
+  // apps/api emits a second domain-policy 403 besides the blocklist message:
+  // "blocked by your organization's threat protection policy". It is just as
+  // permanent, so it must not be classified as a retryable upstream failure.
+  const backend = await startFakeFirecrawlBackend({
+    scrapeResponse: {
+      status: 403,
+      body: {
+        success: false,
+        error:
+          "This URL (https://example.com/) is blocked by your organization's threat protection policy (rule: deny-example). If you believe this is a mistake, contact your organization administrator to adjust the policy (e.g. whitelist the domain).",
+      },
+    },
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await httpToolCall(port, {
+    id: 'threat-protection',
+    headers: { 'x-api-key': 'fc-test' },
+    params: {
+      arguments: { url: 'https://example.com/' },
+      name: 'firecrawl_scrape',
+    },
+  });
+  const result = parseSseJson(await response.text()).result;
+  assert.equal(result.isError, true);
+  assert.equal(result.structuredContent.code, 'UNSUPPORTED_SITE');
+  assert.equal(result.structuredContent.retryable, false);
+  assert.doesNotMatch(result.structuredContent.message, /\bretry\b/i);
+});
+
 test('parse, interact, and monitor failures use the shared structured boundary', async (t) => {
   const backend = await startFakeFirecrawlBackend({
     monitorResponse: { status: 503, body: { success: false, error: 'monitor unavailable' } },
