@@ -464,6 +464,73 @@ test('tool failures carry structured codes instead of silent success', async (t)
   }
 });
 
+test('SDK status and code classify rate limits and opaque timeouts', async (t) => {
+  for (const testCase of [
+    {
+      name: 'firecrawl_search',
+      arguments: { query: 'rate-limited search' },
+      backend: {
+        searchResponse: {
+          status: 429,
+          body: {
+            success: false,
+            error:
+              'Rate limit exceeded. Consumed (req/min): 5, Remaining (req/min): 0. Upgrade your plan at https://firecrawl.dev/pricing for increased rate limits or please retry after 42s, resets at 2030-01-01T00:00:00.000Z',
+          },
+        },
+      },
+      expectedCode: 'RATE_LIMITED',
+      expectedRetryable: true,
+      expectedMessage: /42/,
+    },
+    {
+      name: 'firecrawl_scrape',
+      arguments: { url: 'https://example.com/' },
+      backend: {
+        scrapeResponse: {
+          status: 408,
+          body: { success: false, code: 'SCRAPE_TIMEOUT', error: 'heartbeat_failed' },
+        },
+      },
+      expectedCode: 'UPSTREAM_TIMEOUT',
+      expectedRetryable: true,
+    },
+  ]) {
+    await t.test(testCase.name, async (t) => {
+      const backend = await startFakeFirecrawlBackend(testCase.backend);
+      t.after(() => backend.close());
+      const port = await getFreePort();
+      const child = spawnServer({
+        CLOUD_SERVICE: 'true',
+        FASTMCP_ENDPOINT: '/v2/mcp',
+        FIRECRAWL_API_URL: backend.url,
+        FIRECRAWL_OAUTH_ISSUER: backend.url,
+        FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+        HTTP_STREAMABLE_SERVER: 'true',
+        PORT: String(port),
+      });
+      t.after(() => stopChild(child));
+      await waitForHealth(port, child);
+
+      const response = await httpToolCall(port, {
+        id: `sdk-error-${testCase.name}`,
+        headers: { 'x-api-key': 'fc-test' },
+        params: { arguments: testCase.arguments, name: testCase.name },
+      });
+      const result = parseSseJson(await response.text()).result;
+      assert.equal(result.isError, true);
+      assert.equal(result.structuredContent.code, testCase.expectedCode);
+      assert.equal(
+        result.structuredContent.retryable,
+        testCase.expectedRetryable
+      );
+      if (testCase.expectedMessage) {
+        assert.match(result.structuredContent.message, testCase.expectedMessage);
+      }
+    });
+  }
+});
+
 test('threat-protection policy blocks are permanent, not retryable', async (t) => {
   // apps/api emits a second domain-policy 403 besides the blocklist message:
   // "blocked by your organization's threat protection policy". It is just as
@@ -1369,7 +1436,7 @@ test('crawl continuation pages are bounded and resumable mid-page', async (t) =>
   assert.notEqual(second._firecrawl?.truncated, true);
 });
 
-test('crawl bounding exposes offset continuation for a single upstream page', async (t) => {
+test('crawl bounding synthesizes a resumable cursor for a single upstream page', async (t) => {
   const documents = Array.from({ length: 50 }, (_, index) => ({
     url: `https://example.com/${index + 1}`,
     markdown: `document ${index + 1}`,
@@ -1382,6 +1449,13 @@ test('crawl bounding exposes offset continuation for a single upstream page', as
         total: 50,
         next: null,
         data: documents,
+      },
+      '/v2/crawl/job-single-page?skip=25': {
+        status: 'completed',
+        completed: 50,
+        total: 50,
+        next: null,
+        data: documents.slice(25),
       },
     },
   });
@@ -1415,24 +1489,25 @@ test('crawl bounding exposes offset continuation for a single upstream page', as
   assert.equal(first.data[0].markdown, 'document 1');
   assert.equal(first.data[24].markdown, 'document 25');
   assert.equal(first._firecrawl.truncated, true);
-  assert.equal(first._firecrawl.next_offset, 25);
-  assert.match(first._firecrawl.message, /shown documents 1-25 of 50/i);
+  assert.equal(typeof first.next, 'string');
+  assert.match(first.next, /\/v2\/crawl\/job-single-page\?skip=25$/);
+  assert.equal(first._firecrawl.next, first.next);
+  assert.match(first._firecrawl.message, /shown documents 1-25.*50 total/i);
   assert.match(
     first._firecrawl.message,
-    /firecrawl_check_crawl_status.*id: "job-single-page".*offset: 25/i
+    /firecrawl_check_crawl_status.*id: "job-single-page".*next:/i
   );
 
   const secondResult = await client.request('tools/call', {
-    arguments: { id: 'job-single-page', offset: 25 },
+    arguments: { id: 'job-single-page', next: first.next },
     name: 'firecrawl_check_crawl_status',
   });
   const second = JSON.parse(secondResult.content[0].text);
   assert.equal(second.data.length, 25);
   assert.equal(second.data[0].markdown, 'document 26');
   assert.equal(second.data[24].markdown, 'document 50');
-  assert.equal(second._firecrawl.truncated, false);
-  assert.match(second._firecrawl.message, /shown documents 26-50 of 50/i);
-  assert.match(second._firecrawl.message, /all available documents have been returned/i);
+  assert.equal(second.next, null);
+  assert.notEqual(second._firecrawl?.truncated, true);
 });
 
 test('crawl continuation accepts a path-prefixed API base', async (t) => {

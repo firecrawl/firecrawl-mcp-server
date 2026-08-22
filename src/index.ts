@@ -1135,6 +1135,7 @@ type ToolErrorCode =
   | 'FILE_NOT_FOUND'
   | 'UNSUPPORTED_SITE'
   | 'UPSTREAM_TIMEOUT'
+  | 'RATE_LIMITED'
   | 'INVALID_REQUEST'
   | 'UPSTREAM_REQUEST_FAILED'
   | 'CRAWL_START_FAILED'
@@ -1192,13 +1193,60 @@ function wrapToolError(
   const safeToRepeat = !NON_IDEMPOTENT_TOOLS.has(toolName ?? '');
   if (error instanceof UserError) return error;
   const message = errorText(error);
-  if (/unauthori[sz]ed|api key|credentials? required/i.test(message)) {
-    return agentLegibleError(
+  const sdkError =
+    typeof error === 'object' && error !== null
+      ? (error as { code?: unknown; details?: unknown; status?: unknown })
+      : undefined;
+  const status =
+    typeof sdkError?.status === 'number' ? sdkError.status : undefined;
+  const code = typeof sdkError?.code === 'string' ? sdkError.code : undefined;
+  const authRequiredError = () =>
+    agentLegibleError(
       'AUTH_REQUIRED',
       error,
       'If other Firecrawl tools succeed, this failure may be limited to this operation: retry once or accomplish the step with another Firecrawl tool such as firecrawl_scrape. Otherwise configure a Firecrawl API key or set FIRECRAWL_API_URL for a self-hosted instance, then start a new session and retry.',
       requestId
     );
+  const upstreamTimeoutError = () =>
+    agentLegibleError(
+      'UPSTREAM_TIMEOUT',
+      error,
+      safeToRepeat
+        ? 'Retry once with a narrower request or a longer supported timeout; if the job ID is known, check its status instead of starting a duplicate job.'
+        : 'The action may have taken effect despite the timeout. Verify the current state (re-check the page or list existing monitors) before repeating it.',
+      requestId,
+      safeToRepeat
+    );
+
+  // SDK errors carry stable transport metadata; classify it before falling
+  // back to message text for raw fetch paths and locally-thrown errors.
+  if (status === 401) return authRequiredError();
+  if (status === 408 || code === 'SCRAPE_TIMEOUT') {
+    return upstreamTimeoutError();
+  }
+  if (status === 429) {
+    const details = resultRecord(sdkError?.details);
+    const detailSeconds = Number(details?.retry_after_seconds);
+    const messageSeconds = /retry after\s+(\d+)\s*s/i.exec(message)?.[1];
+    const retryAfterSeconds =
+      Number.isFinite(detailSeconds) && detailSeconds > 0
+        ? detailSeconds
+        : messageSeconds
+          ? Number(messageSeconds)
+          : undefined;
+    // A 429 is rejected before tool execution, so retryability is safe even
+    // for tools whose successful calls may have external side effects.
+    return agentLegibleError(
+      'RATE_LIMITED',
+      error,
+      `${retryAfterSeconds ? `Wait ${retryAfterSeconds} seconds` : 'Wait'} before retrying, and avoid parallel Firecrawl calls to reduce repeated rate-limit failures.`,
+      requestId,
+      true
+    );
+  }
+
+  if (/unauthori[sz]ed|api key|credentials? required/i.test(message)) {
+    return authRequiredError();
   }
   if (/ENOENT|no such file/i.test(message)) {
     return agentLegibleError(
@@ -1219,15 +1267,7 @@ function wrapToolError(
     );
   }
   if (/timed? out|timeout/i.test(message)) {
-    return agentLegibleError(
-      'UPSTREAM_TIMEOUT',
-      error,
-      safeToRepeat
-        ? 'Retry once with a narrower request or a longer supported timeout; if the job ID is known, check its status instead of starting a duplicate job.'
-        : 'The action may have taken effect despite the timeout. Verify the current state (re-check the page or list existing monitors) before repeating it.',
-      requestId,
-      safeToRepeat
-    );
+    return upstreamTimeoutError();
   }
   if (error instanceof InvalidCrawlContinuationError) {
     return agentLegibleError(
@@ -2851,7 +2891,7 @@ function takeCrawlDocumentWindow(documents: unknown[], offset: number): unknown[
 
 type CrawlNoticeContinuation =
   | { offset: number; hasMore: boolean; next?: string }
-  | { next: string };
+  | { next: string; shownFrom?: number };
 
 function crawlWindowNotice(
   jobId: string,
@@ -2884,14 +2924,21 @@ function crawlWindowNotice(
   }
 
   const totalText = total == null ? '' : ` of ${total} total`;
+  // A manual offset shifts the absolute position of the shown documents even
+  // when the resume path is a cursor; the displayed range must reflect it.
+  const base = continuation.shownFrom ?? 0;
+  const first = base + (shown > 0 ? 1 : 0);
+  const last = base + shown;
+  const range = shown > 0 ? `${first}-${last}` : 'empty';
   return {
     truncated: true,
     shown_range: {
-      start: shown > 0 ? 1 : 0,
-      end: shown,
+      start: first,
+      end: last,
       ...(total == null ? {} : { total }),
     },
-    message: `Shown documents ${shown > 0 ? `1-${shown}` : 'empty'} in this cursor window${totalText}. Call firecrawl_check_crawl_status with id: "${jobId}" and next: "${continuation.next}" to retrieve later documents.`,
+    next: continuation.next,
+    message: `Shown documents ${range} in this cursor window${totalText}. Call firecrawl_check_crawl_status with id: "${jobId}" and next: "${continuation.next}" to retrieve later documents.`,
   };
 }
 
@@ -2952,6 +2999,12 @@ async function getCrawlStatusWithOrigin(
     current = crawlNext(payload);
   }
 
+  const synthesizedCursor =
+    pageHasMore && partialCursor === null
+      ? `${resolveApiBaseUrl()}/v2/crawl/${encodeURIComponent(jobId)}?skip=${offset + docs.length}`
+      : undefined;
+  if (synthesizedCursor) partialCursor = synthesizedCursor;
+
   const result: Record<string, unknown> = {
     id: jobId,
     status: body.status,
@@ -2968,11 +3021,16 @@ async function getCrawlStatusWithOrigin(
       ? pageDocuments.length
       : undefined;
   if (pageHasMore) {
-    result._firecrawl = crawlWindowNotice(jobId, docs.length, total, {
-      offset,
-      hasMore: true,
-      next: partialCursor ?? undefined,
-    });
+    result._firecrawl = synthesizedCursor
+      ? crawlWindowNotice(jobId, docs.length, total, {
+          next: synthesizedCursor,
+          shownFrom: offset,
+        })
+      : crawlWindowNotice(jobId, docs.length, total, {
+          offset,
+          hasMore: true,
+          next: partialCursor ?? undefined,
+        });
   } else if (usesOffsetWindow && offset > 0) {
     result._firecrawl = crawlWindowNotice(jobId, docs.length, total, {
       offset,
