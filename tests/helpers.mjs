@@ -62,11 +62,11 @@ export function spawnServer(env) {
 
 export async function stopChild(child) {
   if (child.exitCode !== null) return;
+  const exited = new Promise((resolve) => child.once('exit', resolve));
   child.kill('SIGTERM');
-  await Promise.race([
-    new Promise((resolve) => child.once('exit', resolve)),
-    delay(2_000).then(() => {
-      if (child.exitCode === null) child.kill('SIGKILL');
-    }),
-  ]);
+  await Promise.race([exited, delay(2_000)]);
+  if (child.exitCode === null) {
+    child.kill('SIGKILL');
+    await exited;
+  }
 }

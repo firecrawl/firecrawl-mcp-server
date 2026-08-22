@@ -222,7 +222,7 @@ export function registerMonitorTools(server: FastMCP<SessionData>): void {
       destructiveHint: false, // Additive; creates a new monitor without deleting existing monitors or external content.
     },
     description: `
-Create a recurring page, site, or search monitor that compares checks over time. In the simple form a \`goal\` is required; when \`queries\` and pages are both supplied, queries create the search target and page targets are ignored. Monitors schedule future network checks and may send configured notifications.
+Create a recurring page, site, or search monitor that compares checks over time. In the simple form a \`goal\` is required; when \`queries\` (one or more non-empty values) and pages are both supplied, queries create the search target and page targets are ignored. Monitors schedule future network checks and may send configured notifications.
 `,
     parameters: z.object({
       body: z
@@ -236,7 +236,9 @@ Create a recurring page, site, or search monitor that compares checks over time.
       queries: z
         .array(z.string())
         .optional()
-        .describe('Search queries to monitor; these take precedence over pages.'),
+        .describe(
+          'Search queries to monitor; non-empty queries take precedence over pages.'
+        ),
       searchWindow: z
         .enum(['5m', '15m', '1h', '6h', '24h', '7d'])
         .optional()
