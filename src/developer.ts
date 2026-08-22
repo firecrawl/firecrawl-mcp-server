@@ -12,30 +12,19 @@
 
 import { z } from 'zod';
 import type { FastMCP } from 'fastmcp';
+import {
+  type ClientLike,
+  type GetClient,
+  ORIGIN_HEADERS,
+} from './research';
 
 interface SessionData {
   firecrawlApiKey?: string;
   [key: string]: unknown;
 }
 
-/** Whatever `getClient` returns — we only touch its `http.get`. */
-type ClientLike = {
-  http: {
-    get: <T = unknown>(
-      endpoint: string,
-      headers?: Record<string, string>
-    ) => Promise<{ data: T; status: number }>;
-  };
-};
-
-// `getClient` returns a FirecrawlApp whose `http` member is private, so we type
-// the callback loosely and narrow to `ClientLike` at each call site.
-type GetClient = (session?: SessionData) => unknown;
-
 // The other mount, /v2/developer/search, may be withdrawn.
 const BASE = '/v2/search/developer';
-const ORIGIN_HEADERS = { 'X-Origin': 'mcp-fastmcp' };
-
 
 interface DeveloperHit {
   /** Stable result id, e.g. `issue:owner/repo#123` or `doc:<hash>`. */
@@ -87,9 +76,7 @@ export function registerDeveloperTools(
       destructiveHint: false, // Query-only; no writes to external sources or the developer index.
     },
     description: `
-For a developer question — code behaviour, a library or framework, an API contract, an error message, or a known bug — search an index built for coding agents. The index covers GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. Set skills to "only" to limit the search to agent-skill files.
-
-Returns ranked results with an ID, source type, URL, title, and the matched passages in markdown.
+Search indexed GitHub issues, merged pull requests, READMEs, and documentation for a developer question. Use this for code behavior, API contracts, errors, or known bugs rather than general web results.
 `,
     parameters: z.object({
       query: z

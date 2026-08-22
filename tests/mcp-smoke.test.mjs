@@ -1,53 +1,15 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import net from 'node:net';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
-
-async function getFreePort() {
-  const server = net.createServer();
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
-  });
-  const address = server.address();
-  assert.equal(typeof address, 'object');
-  const port = address.port;
-  await new Promise((resolve, reject) => {
-    server.close((error) => (error ? reject(error) : resolve()));
-  });
-  return port;
-}
-
-async function waitForHealth(port, child) {
-  const url = `http://127.0.0.1:${port}/health`;
-  let lastError;
-  for (let i = 0; i < 60; i += 1) {
-    if (child.exitCode !== null) {
-      throw new Error(`server exited early with code ${child.exitCode}`);
-    }
-    try {
-      const response = await fetch(url);
-      if (response.ok) return response;
-      lastError = new Error(`health returned ${response.status}`);
-    } catch (error) {
-      lastError = error;
-    }
-    await delay(100);
-  }
-  throw lastError ?? new Error('server did not become healthy');
-}
-
-
-function parseSseJson(body) {
-  const dataLine = body
-    .split(/\r?\n/)
-    .find((line) => line.startsWith('data: '));
-  assert.ok(dataLine, `Missing SSE data line in body: ${body}`);
-  return JSON.parse(dataLine.slice('data: '.length));
-}
+import {
+  getFreePort,
+  parseSseJson,
+  spawnServer,
+  stopChild,
+  waitForHealth,
+} from './helpers.mjs';
 
 function assertServerGeneratedRequestId(payload, untrustedValues = []) {
   assert.match(
@@ -99,32 +61,6 @@ function assertKeylessAccountRecovery(
     result.structuredContent,
     untrustedRequestIds
   );
-}
-
-function spawnServer(env) {
-  const child = spawn(process.execPath, ['dist/index.js'], {
-    env: {
-      ...process.env,
-      MCP_DELEGATED_CREDENTIAL_SECRET:
-        'test-mcp-delegated-credential-secret-32',
-      ...env,
-    },
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
-  child.stderr.setEncoding('utf8');
-  child.stdout.setEncoding('utf8');
-  return child;
-}
-
-async function stopChild(child) {
-  if (child.exitCode !== null) return;
-  child.kill('SIGTERM');
-  await Promise.race([
-    new Promise((resolve) => child.once('exit', resolve)),
-    delay(2_000).then(() => {
-      if (child.exitCode === null) child.kill('SIGKILL');
-    }),
-  ]);
 }
 
 async function startFakeFirecrawlApi() {
@@ -280,7 +216,12 @@ async function startFakeFirecrawlBackend(options = {}) {
     introspectionHandler,
     introspectionMetadata = {},
     keylessEligible = false,
+    crawlResponses = {},
+    crawlStartResponse,
+    feedbackResponse,
     keylessEligibilityResponse,
+    monitorResponse,
+    scrapeResponse,
     searchResponse,
   } = options;
   const requests = [];
@@ -360,6 +301,45 @@ async function startFakeFirecrawlBackend(options = {}) {
       return;
     }
 
+    if (req.method === 'POST' && req.url === '/v2/scrape' && scrapeResponse) {
+      res.writeHead(scrapeResponse.status, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(scrapeResponse.body));
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/crawl' && crawlStartResponse) {
+      res.writeHead(crawlStartResponse.status, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(crawlStartResponse.body));
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/feedback' && feedbackResponse) {
+      res.writeHead(feedbackResponse.status, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(feedbackResponse.body));
+      return;
+    }
+
+    if (
+      req.method === 'POST' &&
+      req.url === '/v2/monitor/mon-1/run' &&
+      monitorResponse
+    ) {
+      res.writeHead(monitorResponse.status, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(monitorResponse.body));
+      return;
+    }
+    if (req.method === 'POST' && req.url === '/v2/monitor' && monitorResponse) {
+      res.writeHead(monitorResponse.status, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(monitorResponse.body));
+      return;
+    }
+
+    if (req.method === 'GET' && crawlResponses[req.url]) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(crawlResponses[req.url]));
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/v2/parse/upload-url') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
@@ -427,6 +407,296 @@ async function httpToolCall(port, { endpoint = '/v2/mcp', id, headers, params })
     method: 'POST',
   });
 }
+
+async function startHostedCloudServer(t, backend) {
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+  return port;
+}
+
+async function startStdioClient(t, env, clientName) {
+  const child = spawnServer({ FIRECRAWL_API_KEY: 'fc-test', ...env });
+  t.after(() => stopChild(child));
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: clientName, version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+  return client;
+}
+
+test('tool failures carry structured codes instead of silent success', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    crawlStartResponse: { status: 200, body: { success: false, error: 'crawl rejected' } },
+    feedbackResponse: { status: 422, body: { error: 'feedback rejected', feedbackErrorCode: 'invalid_job' } },
+    scrapeResponse: {
+      status: 403,
+      body: {
+        success: false,
+        error:
+          'We apologize for the inconvenience but we do not support this site. If you are part of an enterprise and want to have a further conversation about this, please fill out our intake form here: https://example.com/intake',
+      },
+    },
+  });
+  t.after(() => backend.close());
+  const port = await startHostedCloudServer(t, backend);
+
+  for (const [name, arguments_, expectedCode] of [
+    ['firecrawl_crawl', { url: 'https://example.com/' }, 'CRAWL_START_FAILED'],
+    [
+      'firecrawl_feedback',
+      { endpoint: 'scrape', jobId: '00000000-0000-4000-8000-000000000000', rating: 'bad' },
+      'FEEDBACK_REJECTED',
+    ],
+    ['firecrawl_check_crawl_status', { id: 'bogus-job' }, 'UPSTREAM_REQUEST_FAILED'],
+    ['firecrawl_scrape', { url: 'https://www.linkedin.com/feed/' }, 'UNSUPPORTED_SITE'],
+    [
+      'firecrawl_search',
+      { query: 'firecrawl', includeDomains: ['example.com'], excludeDomains: ['example.com'] },
+      'INVALID_REQUEST',
+    ],
+  ]) {
+    const response = await httpToolCall(port, {
+      id: `structured-${name}`,
+      headers: { 'x-api-key': 'fc-test' },
+      params: { arguments: arguments_, name },
+    });
+    const result = parseSseJson(await response.text()).result;
+    assert.equal(result.isError, true, name);
+    assert.equal(result.structuredContent.code, expectedCode, name);
+    assert.equal(result.content[0].text, result.structuredContent.message, name);
+    assert.match(result.structuredContent.message, /retry|check|verify|use/i, name);
+    assert.equal(typeof result.structuredContent.original_error, 'string', name);
+    if (expectedCode === 'UNSUPPORTED_SITE') {
+      // Domain-policy rejections are permanent; retrying the same URL cannot succeed.
+      assert.equal(result.structuredContent.retryable, false, name);
+      assert.doesNotMatch(result.structuredContent.message, /\bretry\b/i, name);
+    }
+    if (expectedCode === 'UPSTREAM_REQUEST_FAILED') {
+      // Status checks are read-only; unclassified failures stay retryable.
+      assert.equal(result.structuredContent.retryable, true, name);
+    }
+  }
+});
+
+test('SDK status and code classify rate limits and opaque timeouts', async (t) => {
+  for (const testCase of [
+    {
+      name: 'firecrawl_search',
+      arguments: { query: 'rate-limited search' },
+      backend: {
+        searchResponse: {
+          status: 429,
+          body: {
+            success: false,
+            error:
+              'Rate limit exceeded. Consumed (req/min): 5, Remaining (req/min): 0. Upgrade your plan at https://firecrawl.dev/pricing for increased rate limits or please retry after 42s, resets at 2030-01-01T00:00:00.000Z',
+          },
+        },
+      },
+      expectedCode: 'RATE_LIMITED',
+      expectedRetryable: true,
+      expectedMessage: /42/,
+    },
+    {
+      name: 'firecrawl_scrape',
+      arguments: { url: 'https://example.com/' },
+      backend: {
+        scrapeResponse: {
+          status: 408,
+          body: { success: false, code: 'SCRAPE_TIMEOUT', error: 'heartbeat_failed' },
+        },
+      },
+      expectedCode: 'UPSTREAM_TIMEOUT',
+      expectedRetryable: true,
+    },
+  ]) {
+    await t.test(testCase.name, async (t) => {
+      const backend = await startFakeFirecrawlBackend(testCase.backend);
+      t.after(() => backend.close());
+      const port = await startHostedCloudServer(t, backend);
+
+      const response = await httpToolCall(port, {
+        id: `sdk-error-${testCase.name}`,
+        headers: { 'x-api-key': 'fc-test' },
+        params: { arguments: testCase.arguments, name: testCase.name },
+      });
+      const result = parseSseJson(await response.text()).result;
+      assert.equal(result.isError, true);
+      assert.equal(result.structuredContent.code, testCase.expectedCode);
+      assert.equal(
+        result.structuredContent.retryable,
+        testCase.expectedRetryable
+      );
+      if (testCase.expectedMessage) {
+        assert.match(result.structuredContent.message, testCase.expectedMessage);
+      }
+    });
+  }
+});
+
+test('threat-protection policy blocks are permanent, not retryable', async (t) => {
+  // apps/api emits a second domain-policy 403 besides the blocklist message.
+  // Its stable API contract is code: "unsafe_domain_blocked" (the message text
+  // can be reworded), so the body here deliberately uses phrasing the message
+  // regex would NOT match - classification must come from the code.
+  const backend = await startFakeFirecrawlBackend({
+    scrapeResponse: {
+      status: 403,
+      body: {
+        success: false,
+        code: 'unsafe_domain_blocked',
+        error:
+          'Domain example.com is denied by org policy rule deny-example. Contact your administrator.',
+      },
+    },
+  });
+  t.after(() => backend.close());
+  const port = await startHostedCloudServer(t, backend);
+
+  const response = await httpToolCall(port, {
+    id: 'threat-protection',
+    headers: { 'x-api-key': 'fc-test' },
+    params: {
+      arguments: { url: 'https://example.com/' },
+      name: 'firecrawl_scrape',
+    },
+  });
+  const result = parseSseJson(await response.text()).result;
+  assert.equal(result.isError, true);
+  assert.equal(result.structuredContent.code, 'UNSUPPORTED_SITE');
+  assert.equal(result.structuredContent.retryable, false);
+  assert.doesNotMatch(result.structuredContent.message, /\bretry\b/i);
+});
+
+test('parse, interact, and monitor failures use the shared structured boundary', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    monitorResponse: { status: 503, body: { success: false, error: 'monitor unavailable' } },
+    scrapeResponse: { status: 200, body: { success: true, data: { markdown: '# page' } } },
+    searchResponse: { status: 402, body: { error: 'This feature requires a paid plan.' } },
+  });
+  t.after(() => backend.close());
+  const port = await startHostedCloudServer(t, backend);
+
+  for (const [name, arguments_, expectedCode] of [
+    [
+      'firecrawl_interact',
+      { url: 'https://example.com/', prompt: 'read the title' },
+      'INTERACT_SESSION_UNAVAILABLE',
+    ],
+    [
+      'firecrawl_monitor_create',
+      { page: 'https://example.com/', goal: 'Track title changes' },
+      'UPSTREAM_REQUEST_FAILED',
+    ],
+    [
+      'firecrawl_monitor_run',
+      { id: 'mon-1' },
+      'UPSTREAM_REQUEST_FAILED',
+    ],
+    ['firecrawl_search', { query: 'plan-gated feature' }, 'UPSTREAM_REQUEST_FAILED'],
+  ]) {
+    // Non-idempotent tools must not advertise retryable on unclassified
+    // upstream failures: the action may already have taken effect (a created
+    // monitor, a queued run, a submitted form) and an obedient agent would
+    // repeat it.
+    const expectedRetryable = name === 'firecrawl_search';
+    const response = await httpToolCall(port, {
+      id: `structured-${name}`,
+      headers: { 'x-api-key': 'fc-test' },
+      params: { arguments: arguments_, name },
+    });
+    const result = parseSseJson(await response.text()).result;
+    assert.equal(result.isError, true, name);
+    assert.equal(result.structuredContent.code, expectedCode, name);
+    assert.equal(typeof result.structuredContent.original_error, 'string', name);
+    if (expectedCode === 'UPSTREAM_REQUEST_FAILED') {
+      assert.equal(result.structuredContent.retryable, expectedRetryable, name);
+    }
+  }
+});
+
+test('empty and likely-blocked results carry in-band Firecrawl notices', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    scrapeResponse: {
+      status: 200,
+      body: {
+        success: true,
+        data: {
+          markdown: '',
+          metadata: { statusCode: 403 },
+          warning: `blocked ${'x'.repeat(70_000)}`,
+        },
+      },
+    },
+    searchResponse: { status: 200, body: { success: true, data: { web: [] } } },
+  });
+  t.after(() => backend.close());
+  const port = await startHostedCloudServer(t, backend);
+
+  for (const [name, arguments_, expectedCode] of [
+    ['firecrawl_scrape', { url: 'https://example.com/' }, 'LIKELY_BLOCKED'],
+    ['firecrawl_search', { query: 'no matching result' }, 'EMPTY_RESULT'],
+  ]) {
+    const response = await httpToolCall(port, {
+      id: `empty-${name}`,
+      headers: { 'x-api-key': 'fc-test' },
+      params: { arguments: arguments_, name },
+    });
+    const result = parseSseJson(await response.text()).result;
+    assert.notEqual(result.isError, true, name);
+    const payload = JSON.parse(result.content[0].text);
+    assert.equal(payload._firecrawl.code, expectedCode, name);
+    assert.ok(Array.isArray(payload._firecrawl.next_actions), name);
+    if (name === 'firecrawl_scrape') {
+      assert.equal(payload._firecrawl.truncated, true);
+    } else {
+      assert.match(payload._firecrawl.message, /empty/i, name);
+    }
+  }
+});
+
+test('non-empty scrape content is not flagged as likely blocked', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    scrapeResponse: {
+      status: 200,
+      body: {
+        success: true,
+        data: {
+          markdown: `# Usable page\n\n${'content '.repeat(100)}`,
+          metadata: { statusCode: 403 },
+        },
+      },
+    },
+  });
+  t.after(() => backend.close());
+  const port = await startHostedCloudServer(t, backend);
+
+  const response = await httpToolCall(port, {
+    id: 'non-empty-block-signal',
+    headers: { 'x-api-key': 'fc-test' },
+    params: {
+      arguments: { url: 'https://example.com/' },
+      name: 'firecrawl_scrape',
+    },
+  });
+  const result = parseSseJson(await response.text()).result;
+  assert.notEqual(result.isError, true);
+  const payload = JSON.parse(result.content[0].text);
+  assert.equal(payload._firecrawl, undefined);
+});
 
 test('HTTP cloud keyless transport preserves app challenge without advertising OAuth', async (t) => {
   const backend = await startFakeFirecrawlBackend();
@@ -690,6 +960,19 @@ class StdioMcpClient {
   }
 }
 
+test('local parse missing files return FILE_NOT_FOUND recovery', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const client = await startStdioClient(t, { FIRECRAWL_API_URL: backend.url }, 'firecrawl-mcp-smoke');
+  const result = await client.request('tools/call', {
+    arguments: { filePath: '/definitely/missing/firecrawl-cycle2.pdf' },
+    name: 'firecrawl_parse',
+  });
+  assert.equal(result.isError, true);
+  assert.equal(result.structuredContent.code, 'FILE_NOT_FOUND');
+  assert.match(result.structuredContent.message, /check.*filePath/i);
+});
+
 test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   const child = spawnServer({
     FIRECRAWL_API_KEY: 'fc-test',
@@ -733,6 +1016,45 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
 
   const byName = new Map(tools.tools.map((tool) => [tool.name, tool]));
+  const descriptionCharacters = tools.tools.reduce(
+    (total, tool) => total + (tool.description?.trim().length ?? 0),
+    0
+  );
+  assert.ok(
+    descriptionCharacters <= 6_000,
+    `tool descriptions exceed lean-copy budget: ${descriptionCharacters}`
+  );
+  const properties = tools.tools.flatMap((tool) =>
+    Object.values(tool.inputSchema.properties ?? {})
+  );
+  const describedProperties = properties.filter(
+    (property) => property.description?.trim().length > 0
+  );
+  assert.ok(properties.length >= 150, `expected full schema, got ${properties.length} properties`);
+  assert.ok(
+    describedProperties.length / properties.length >= 0.95,
+    `parameter-description coverage ${describedProperties.length}/${properties.length}`
+  );
+  assert.match(
+    byName.get('firecrawl_search').inputSchema.properties.scrapeOptions.description,
+    /each result.*response size.*credit use/is
+  );
+  assert.match(
+    byName.get('firecrawl_monitor_create').inputSchema.properties.body.description,
+    /advanced monitor request body.*replaces the simple-form fields/is
+  );
+  assert.match(
+    byName.get('firecrawl_parse').inputSchema.properties.filePath.description,
+    /local file to parse/is
+  );
+  assert.match(
+    byName.get('firecrawl_agent').inputSchema.properties.schema.description,
+    /final structured result.*reduce result size/is
+  );
+  assert.match(
+    byName.get('firecrawl_interact').inputSchema.properties.code.description,
+    /executable browser-session code/is
+  );
   assert.match(init.instructions, /firecrawl_scrape retrieves one supplied page/i);
   assert.match(init.instructions, /firecrawl_map enumerates URLs under a site/i);
   assert.match(
@@ -781,9 +1103,20 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     byName.get('firecrawl_research_search_papers').description,
     /indexed corpus.*biomedical.*PubMed.*bioRxiv.*medRxiv.*arXiv/is
   );
-  // The two surfaces that both answer to "research" must stay distinguishable.
-  // This has to live in the tool description, not a parameter `.describe()`:
-  // no property description survives serialization into tools/list.
+  // Property metadata must survive FastMCP/xsschema serialization. Keep this
+  // boundary visible in both the tool-level routing copy and parameter schema.
+  assert.match(
+    byName.get('firecrawl_search').inputSchema.properties.categories.description,
+    /research-affiliated websites.*separate from.*firecrawl_research_/is
+  );
+  assert.equal(
+    byName.get('firecrawl_search').inputSchema.additionalProperties,
+    false
+  );
+  assert.doesNotMatch(
+    JSON.stringify(tools.tools.map((tool) => tool.inputSchema)),
+    /"anyOf"/
+  );
   assert.match(
     byName.get('firecrawl_search').description,
     /categories: \["research"\].*research-affiliated websites.*`firecrawl_research_\*` tools are a separate surface.*PubMed, bioRxiv, medRxiv.*arXiv/is
@@ -823,7 +1156,303 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
-test('local keyless stdio omits feedback tools and qualifies search-feedback IDs as authenticated-only', async (t) => {
+test('payload-heavy responses are bounded with explicit retrieval guidance', async (t) => {
+  const largeMarkdown = 'content '.repeat(30_000);
+  const backend = await startFakeFirecrawlBackend({
+    searchResponse: {
+      status: 200,
+      body: {
+        success: true,
+        data: {
+          web: [
+            {
+              title: `${'a'.repeat(1_999)}😀 trailing`,
+              url: 'https://example.com/large',
+              markdown: largeMarkdown,
+              html: `<main>${largeMarkdown}</main>`,
+              rawHtml: `<html>${largeMarkdown}</html>`,
+              screenshot: `data:image/png;base64,${'A'.repeat(20_000)}`,
+            },
+          ],
+        },
+      },
+    },
+  });
+  t.after(() => backend.close());
+
+  const client = await startStdioClient(t, { FIRECRAWL_API_URL: backend.url }, 'firecrawl-output-bounds');
+
+  const result = await client.request('tools/call', {
+    arguments: { query: 'large result' },
+    name: 'firecrawl_search',
+  });
+  const text = result.content[0].text;
+  const payload = JSON.parse(text);
+  assert.ok(text.length <= 65_000, `bounded response was ${text.length} chars`);
+  assert.equal(payload._firecrawl.truncated, true);
+  assert.match(payload._firecrawl.message, /narrower query|lower limit/i);
+  const titlePrefix = payload.data.web[0].title.split('\n[truncated')[0];
+  assert.equal(titlePrefix.endsWith('\ud83d'), false);
+
+  const requests = backend.requests.filter(
+    (request) => request.method === 'POST' && request.url === '/v2/search'
+  );
+  assert.equal(requests.length, 1);
+});
+
+test('many medium search results respect the total response cap', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    searchResponse: {
+      status: 200,
+      body: {
+        success: true,
+        data: {
+          web: Array.from({ length: 50 }, (_, index) => ({
+            title: `Result ${index}`,
+            url: `https://example.com/${index}`,
+            markdown: 'medium content '.repeat(700),
+          })),
+        },
+      },
+    },
+  });
+  t.after(() => backend.close());
+
+  const client = await startStdioClient(t, { FIRECRAWL_API_URL: backend.url }, 'firecrawl-total-output-cap');
+
+  const result = await client.request('tools/call', {
+    arguments: { query: 'many medium results' },
+    name: 'firecrawl_search',
+  });
+  const text = result.content[0].text;
+  const payload = JSON.parse(text);
+  assert.ok(text.length <= 64_000, `detailed response was ${text.length} chars`);
+  assert.equal(payload._firecrawl.truncated, true);
+});
+
+test('crawl bounding preserves the upstream continuation and small responses', async (t) => {
+  const next = '/v2/crawl/job-1?cursor=next-page';
+  const backend = await startFakeFirecrawlBackend({
+    crawlResponses: {
+      '/v2/crawl/job-1': {
+        status: 'completed',
+        completed: 3,
+        total: 3,
+        next,
+        data: [{ url: 'https://example.com/1', markdown: 'x'.repeat(70_000) }],
+      },
+      [next]: {
+        success: true,
+        next: null,
+        data: [{ url: 'https://example.com/2', markdown: 'small page' }],
+      },
+      '/v2/crawl/job-small': {
+        status: 'completed',
+        completed: 1,
+        total: 1,
+        next: null,
+        data: [{ url: 'https://example.com/small', markdown: 'small page' }],
+      },
+    },
+  });
+  t.after(() => backend.close());
+
+  const client = await startStdioClient(t, { FIRECRAWL_API_URL: backend.url }, 'firecrawl-crawl-bounds');
+
+  const firstResult = await client.request('tools/call', {
+    arguments: { id: 'job-1' },
+    name: 'firecrawl_check_crawl_status',
+  });
+  const first = JSON.parse(firstResult.content[0].text);
+  assert.equal(first.next, next);
+  assert.equal(first._firecrawl.truncated, true);
+  assert.match(first._firecrawl.message, /shown documents 1-1.*3 total/i);
+  assert.match(first._firecrawl.message, /firecrawl_check_crawl_status.*next/i);
+  assert.deepEqual(
+    backend.requests.filter((request) => request.method === 'GET').map((request) => request.url),
+    ['/v2/crawl/job-1']
+  );
+
+  for (const rejectedNext of [
+    'https://evil.example/v2/crawl/job-1?cursor=stolen',
+    '/v2/crawl/other-job?cursor=stolen',
+  ]) {
+    const rejectedResult = await client.request('tools/call', {
+      arguments: { id: 'job-1', next: rejectedNext },
+      name: 'firecrawl_check_crawl_status',
+    });
+    assert.equal(rejectedResult.isError, true);
+    assert.equal(rejectedResult.structuredContent.code, 'INVALID_REQUEST');
+  }
+
+  const emptyIdResult = await client.request('tools/call', {
+    arguments: { id: '', next: '/v2/crawl/?cursor=invalid' },
+    name: 'firecrawl_check_crawl_status',
+  });
+  assert.equal(emptyIdResult.isError, true);
+  assert.equal(emptyIdResult.structuredContent.code, 'INVALID_REQUEST');
+
+  const continuationResult = await client.request('tools/call', {
+    arguments: { id: 'job-1', next },
+    name: 'firecrawl_check_crawl_status',
+  });
+  const continuation = JSON.parse(continuationResult.content[0].text);
+  assert.equal(continuation.data[0].markdown, 'small page');
+  assert.equal(continuation.next, null);
+
+  const smallResult = await client.request('tools/call', {
+    arguments: { id: 'job-small' },
+    name: 'firecrawl_check_crawl_status',
+  });
+  assert.deepEqual(JSON.parse(smallResult.content[0].text), {
+    id: 'job-small',
+    status: 'completed',
+    completed: 1,
+    total: 1,
+    next: null,
+    data: [{ url: 'https://example.com/small', markdown: 'small page' }],
+  });
+});
+
+test('crawl continuation pages are bounded and resumable mid-page', async (t) => {
+  const next = '/v2/crawl/job-big?cursor=page-2';
+  const pageDocuments = Array.from({ length: 30 }, (_, index) => ({
+    url: `https://example.com/page2/${index + 1}`,
+    markdown: `page2 document ${index + 1}`,
+  }));
+  const backend = await startFakeFirecrawlBackend({
+    crawlResponses: {
+      '/v2/crawl/job-big': {
+        status: 'completed',
+        completed: 31,
+        total: 31,
+        next,
+        data: [{ url: 'https://example.com/1', markdown: 'first page document' }],
+      },
+      [next]: { success: true, next: null, data: pageDocuments },
+    },
+  });
+  t.after(() => backend.close());
+
+  const client = await startStdioClient(t, { FIRECRAWL_API_URL: backend.url }, 'firecrawl-crawl-page-bounds');
+
+  const firstResult = await client.request('tools/call', {
+    arguments: { id: 'job-big', next },
+    name: 'firecrawl_check_crawl_status',
+  });
+  const first = JSON.parse(firstResult.content[0].text);
+  assert.equal(first.data.length, 25);
+  assert.equal(first._firecrawl.truncated, true);
+  assert.equal(first._firecrawl.next_offset, 25);
+  assert.equal(first._firecrawl.next, next);
+  assert.match(
+    first._firecrawl.message,
+    /firecrawl_check_crawl_status.*id: "job-big".*next:.*offset: 25/is
+  );
+
+  const secondResult = await client.request('tools/call', {
+    arguments: { id: 'job-big', next, offset: 25 },
+    name: 'firecrawl_check_crawl_status',
+  });
+  const second = JSON.parse(secondResult.content[0].text);
+  assert.equal(second.data.length, 5);
+  assert.equal(second.data[0].markdown, 'page2 document 26');
+  assert.notEqual(second._firecrawl?.truncated, true);
+});
+
+test('crawl bounding synthesizes a resumable cursor for a single upstream page', async (t) => {
+  const documents = Array.from({ length: 50 }, (_, index) => ({
+    url: `https://example.com/${index + 1}`,
+    markdown: `document ${index + 1}`,
+  }));
+  const backend = await startFakeFirecrawlBackend({
+    crawlResponses: {
+      '/v2/crawl/job-single-page': {
+        status: 'completed',
+        completed: 50,
+        total: 50,
+        next: null,
+        data: documents,
+      },
+      '/v2/crawl/job-single-page?skip=25': {
+        status: 'completed',
+        completed: 50,
+        total: 50,
+        next: null,
+        data: documents.slice(25),
+      },
+    },
+  });
+  t.after(() => backend.close());
+
+  const client = await startStdioClient(t, { FIRECRAWL_API_URL: backend.url }, 'firecrawl-crawl-offset');
+
+  const tools = await client.request('tools/list');
+  const statusTool = tools.tools.find(
+    (tool) => tool.name === 'firecrawl_check_crawl_status'
+  );
+  assert.match(statusTool.inputSchema.properties.offset.description, /offset.*prior guidance/i);
+
+  const firstResult = await client.request('tools/call', {
+    arguments: { id: 'job-single-page' },
+    name: 'firecrawl_check_crawl_status',
+  });
+  const first = JSON.parse(firstResult.content[0].text);
+  assert.equal(first.data.length, 25);
+  assert.equal(first.data[0].markdown, 'document 1');
+  assert.equal(first.data[24].markdown, 'document 25');
+  assert.equal(first._firecrawl.truncated, true);
+  assert.equal(typeof first.next, 'string');
+  assert.match(first.next, /\/v2\/crawl\/job-single-page\?skip=25$/);
+  assert.equal(first._firecrawl.next, first.next);
+  assert.match(first._firecrawl.message, /shown documents 1-25.*50 total/i);
+  assert.match(
+    first._firecrawl.message,
+    /firecrawl_check_crawl_status.*id: "job-single-page".*next:/i
+  );
+
+  const secondResult = await client.request('tools/call', {
+    arguments: { id: 'job-single-page', next: first.next },
+    name: 'firecrawl_check_crawl_status',
+  });
+  const second = JSON.parse(secondResult.content[0].text);
+  assert.equal(second.data.length, 25);
+  assert.equal(second.data[0].markdown, 'document 26');
+  assert.equal(second.data[24].markdown, 'document 50');
+  assert.equal(second.next, null);
+  assert.notEqual(second._firecrawl?.truncated, true);
+});
+
+test('crawl continuation accepts a path-prefixed API base', async (t) => {
+  const next = '/firecrawl/v2/crawl/job-prefix?cursor=next-page';
+  const backend = await startFakeFirecrawlBackend({
+    crawlResponses: {
+      [next]: {
+        status: 'completed',
+        completed: 2,
+        total: 2,
+        next: null,
+        data: [{ url: 'https://example.com/2', markdown: 'second page' }],
+      },
+    },
+  });
+  t.after(() => backend.close());
+
+  const client = await startStdioClient(t, { FIRECRAWL_API_URL: `${backend.url}/firecrawl` }, 'firecrawl-prefixed-continuation');
+
+  const result = await client.request('tools/call', {
+    arguments: { id: 'job-prefix', next },
+    name: 'firecrawl_check_crawl_status',
+  });
+  assert.notEqual(
+    result.isError,
+    true,
+    JSON.stringify({ result, requests: backend.requests })
+  );
+  assert.equal(JSON.parse(result.content[0].text).data[0].markdown, 'second page');
+});
+
+test('local keyless stdio lists exactly its callable tools', async (t) => {
   const child = spawnServer({
     FIRECRAWL_API_KEY: '',
     FIRECRAWL_API_URL: '',
@@ -832,21 +1461,39 @@ test('local keyless stdio omits feedback tools and qualifies search-feedback IDs
   t.after(() => stopChild(child));
 
   const client = new StdioMcpClient(child);
-  await client.request('initialize', {
+  const init = await client.request('initialize', {
     capabilities: {},
     clientInfo: { name: 'firecrawl-local-keyless', version: '0.0.0' },
     protocolVersion: '2025-06-18',
   });
   client.notify('notifications/initialized');
   const tools = await client.request('tools/list');
-  const toolNames = tools.tools.map((tool) => tool.name);
-  assert.equal(toolNames.includes('firecrawl_search_feedback'), false);
-  assert.equal(toolNames.includes('firecrawl_feedback'), false);
+  assert.deepEqual(
+    tools.tools.map((tool) => tool.name).sort(),
+    ['firecrawl_scrape', 'firecrawl_search']
+  );
+  assert.match(init.instructions, /exposes Search and Scrape with usage limits/i);
+  assert.doesNotMatch(init.instructions, /exposes Search, Scrape, and Parse/i);
+
   const search = tools.tools.find((tool) => tool.name === 'firecrawl_search');
   assert.ok(search);
   assert.match(
     search.description,
     /authenticated responses can include an `id` for optional search feedback/i
+  );
+
+  const hiddenMap = await client.request('tools/call', {
+    arguments: { url: 'https://example.com' },
+    name: 'firecrawl_map',
+  });
+  assert.equal(hiddenMap.isError, true);
+  assert.equal(hiddenMap.structuredContent.code, 'AUTH_REQUIRED');
+  // Upstream-rejection guidance must give the agent a same-session fallback,
+  // not only operator setup steps: a spurious per-operation 401 otherwise
+  // makes agents abandon tasks that another Firecrawl tool could finish.
+  assert.match(
+    hiddenMap.structuredContent.message,
+    /other Firecrawl tools succeed.*retry once.*firecrawl_scrape/is
   );
 });
 

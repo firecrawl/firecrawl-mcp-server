@@ -19,7 +19,7 @@ interface SessionData {
 }
 
 /** Whatever `getClient` returns — we only touch its `http.get`. */
-type ClientLike = {
+export type ClientLike = {
   http: {
     get: <T = unknown>(
       endpoint: string,
@@ -30,10 +30,10 @@ type ClientLike = {
 
 // `getClient` returns a FirecrawlApp whose `http` member is private, so we type
 // the callback loosely and narrow to `ClientLike` at each call site.
-type GetClient = (session?: SessionData) => unknown;
+export type GetClient = (session?: SessionData) => unknown;
 
 const BASE = '/v2/search/research';
-const ORIGIN_HEADERS = { 'X-Origin': 'mcp-fastmcp' };
+export const ORIGIN_HEADERS = { 'X-Origin': 'mcp-fastmcp' };
 
 /** Append a value (or repeated array values) to a URLSearchParams instance. */
 function appendParam(
@@ -56,7 +56,7 @@ function withQuery(path: string, params: URLSearchParams): string {
   return qs ? `${path}?${qs}` : path;
 }
 
-// --- result formatting (ported from research-index-front/src/agent_eval.ts) ---
+// --- result formatting ---
 
 // Max authors to print per paper (with affiliations); the rest collapse to a
 // "+N more" tail so a large collaboration doesn't flood the context.
@@ -241,11 +241,7 @@ export function registerResearchTools(
       destructiveHint: false, // Query-only; no writes to external sources or the research index.
     },
     description: `
-Search paper metadata and abstracts with a natural-language query across the indexed corpus, which spans biomedical, life-science, and clinical literature (PubMed, bioRxiv, medRxiv) alongside arXiv and other scientific sources. Optional author, category, and date filters constrain results.
-
-Several distinct framings of the same question surface different papers than a single query does.
-
-Returns ranked papers with canonical IDs, titles, authors, and abstracts.
+Search paper metadata and abstracts across an indexed corpus spanning biomedical literature (PubMed, bioRxiv, medRxiv) and arXiv. Use this for literature discovery; \`firecrawl_research_read_paper\` retrieves passages from a known paper.
 `,
     parameters: z.object({
       query: z
@@ -322,7 +318,7 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
       destructiveHint: false, // Read-only metadata lookup.
     },
     description: `
-Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DOI identifier. Returns the title, abstract, authors, categories, source IDs, and dates as markdown.
+Retrieve metadata and abstract for one known paper ID. This does not retrieve full-text passages; use \`firecrawl_research_read_paper\` for those.
 `,
     parameters: z.object({
       paperId: z
@@ -353,15 +349,26 @@ Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DO
       destructiveHint: false, // Read-only graph query; no modifications.
     },
     description: `
-Find citation-graph candidates from one to ten \`seed_ids\`; the first ID is the primary seed and later IDs are anchors. \`mode\` defaults to \`similar\` (co-citation/bibliographic coupling); \`citers\` returns papers citing a seed and \`references\` papers cited by a seed. \`intent\` ranks candidates.
-
-Returns ranked candidates and the evaluated pool size.
+Find citation-graph candidates from \`seed_ids\`; the first ID is the primary seed and later IDs are anchors. \`mode\` defaults to \`similar\`; \`citers\` finds citing papers and \`references\` finds cited papers.
 `,
     parameters: z.object({
-      seed_ids: z.array(z.string()).min(1).max(10),
-      intent: z.string().min(1),
-      mode: z.enum(['similar', 'citers', 'references']).optional(),
-      k: z.number().int().min(1).max(500).optional(),
+      seed_ids: z
+        .array(z.string())
+        .min(1)
+        .max(10)
+        .describe('Paper IDs; first is primary and later IDs are anchors.'),
+      intent: z.string().min(1).describe('Question used to rank related papers.'),
+      mode: z
+        .enum(['similar', 'citers', 'references'])
+        .optional()
+        .describe('Citation relationship mode; defaults to similar.'),
+      k: z
+        .number()
+        .int()
+        .min(1)
+        .max(500)
+        .optional()
+        .describe('Number of ranked papers to return.'),
       rerank: z
         .boolean()
         .optional()
@@ -382,7 +389,7 @@ Returns ranked candidates and the evaluated pool size.
       appendParam(params, 'intent', intent);
       appendParam(params, 'mode', mode);
       appendParam(params, 'k', k);
-      if (rerank != null) appendParam(params, 'rerank', rerank);
+      appendParam(params, 'rerank', rerank);
       appendParam(params, 'anchor', anchors);
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{
@@ -411,9 +418,7 @@ Returns ranked candidates and the evaluated pool size.
       destructiveHint: false, // Read-only passage retrieval.
     },
     description: `
-Retrieve in-body passages from one paper that are relevant to a specific question. Full text is available only for indexed papers; \`k\` controls the number of passages.
-
-Returns matching passages or a notice when full text is unavailable.
+Retrieve passages from one known paper that are relevant to a question. Full text is available only for indexed papers; use paper search to discover IDs.
 `,
     parameters: z.object({
       paperId: z
@@ -422,7 +427,7 @@ Returns matching passages or a notice when full text is unavailable.
         .describe(
           'Canonical paperId or primaryId such as `arxiv:1706.03762`, `pmcid:PMC12530322`, `pmid:40953549`, or `doi:10.1016/j.neunet.2025.108095`.'
         ),
-      question: z.string().min(1),
+      question: z.string().min(1).describe('Question used to select full-text passages.'),
       k: z
         .number()
         .int()
@@ -462,11 +467,17 @@ Returns matching passages or a notice when full text is unavailable.
       destructiveHint: false, // Query-only; does not create issues, PRs, or modify repositories.
     },
     description: `
-Search indexed public GitHub issue, pull-request, and README content. Returns ranked matches with repository, URL, snippet, and full matched markdown when available.
+Search indexed public GitHub issues, pull requests, and READMEs. Use for repository history or discussions rather than general web results.
 `,
     parameters: z.object({
-      query: z.string().min(1),
-      k: z.number().int().min(1).max(100).optional(),
+      query: z.string().min(1).describe('GitHub issue, pull-request, or README search query.'),
+      k: z
+        .number()
+        .int()
+        .min(1)
+        .max(100)
+        .optional()
+        .describe('Number of ranked results to return.'),
     }),
     execute: async (args: unknown, { session }): Promise<string> => {
       const { query, k } = args as { query: string; k?: number };

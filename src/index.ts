@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { registerDeveloperTools } from './developer';
 import { extractSingleTrustedClientIp } from './keyless-client-ip';
 import { registerMonitorTools } from './monitor';
-import { registerResearchTools } from './research';
+import { type ClientLike, registerResearchTools } from './research';
 import { escapeWWWAuthenticateValue } from './www-authenticate';
 import {
   credentialForOutboundRequest,
@@ -274,7 +274,7 @@ function createOAuthChallengeResponse(
 }
 
 function createInvalidCredentialResponse(_error: InvalidFirecrawlCredentialError): Response {
-  const recovery = invalidApiKeyRecoveryPayload();
+  const recovery = INVALID_API_KEY_RECOVERY_PAYLOAD;
   return new Response(
     JSON.stringify({
       error: 'invalid_api_key',
@@ -364,10 +364,9 @@ class InvalidOAuthCredentialError extends Error {
 const MCP_GLOBAL_SCOPE = 'firecrawl:global';
 
 function values(value: string | string[] | undefined): string[] {
-  if (typeof value === 'string') return value.split(/\s+/).filter(Boolean);
-  return Array.isArray(value)
-    ? value.flatMap((item) => item.split(/\s+/).filter(Boolean))
-    : [];
+  return (Array.isArray(value) ? value : value ? [value] : [])
+    .flatMap((item) => item.split(/\s+/))
+    .filter(Boolean);
 }
 
 function audienceMatchesResource(
@@ -718,7 +717,7 @@ function makeAuthenticate(profile: ServerProfile) {
           throw createInvalidCredentialResponse(error);
         }
         if (error instanceof InvalidOAuthCredentialError) {
-          const recovery = invalidOAuthRecoveryPayload();
+          const recovery = INVALID_OAUTH_RECOVERY_PAYLOAD;
           const oauthChallenge = createOAuthChallengeResponse(
             new Error(recovery.message),
             profile,
@@ -812,29 +811,45 @@ function buildSearchQueryWithDomains(
 // scrapeOptions). Defining the field set once keeps the two surfaces from
 // drifting when a source type, category, or filter changes.
 const searchToolBaseFields = {
-  query: z.string().min(1),
+  query: z.string().min(1).describe('Search query, including supported search operators.'),
   highlights: z
     .boolean()
     .optional()
     .describe(
       'Return query-relevant highlights for each search result. Set to false to keep the original search snippets.'
     ),
-  limit: z.number().optional(),
-  tbs: z.string().optional(),
-  filter: z.string().optional(),
-  location: z.string().optional(),
-  includeDomains: z.array(searchDomainSchema).optional(),
-  excludeDomains: z.array(searchDomainSchema).optional(),
+  limit: z.number().optional().describe('Maximum number of results.'),
+  tbs: z.string().optional().describe('Google-style time-based search filter.'),
+  filter: z.string().optional().describe('Additional provider-specific result filter.'),
+  location: z.string().optional().describe('Geographic location for localized results.'),
+  includeDomains: z
+    .array(searchDomainSchema)
+    .optional()
+    .describe('Only return results from these hostnames.'),
+  excludeDomains: z
+    .array(searchDomainSchema)
+    .optional()
+    .describe('Exclude results from these hostnames.'),
   sources: z
-    .array(z.object({ type: z.enum(['web', 'images', 'news']) }))
-    .optional(),
+    .array(
+      z.object({
+        type: z
+          .enum(['web', 'images', 'news'])
+          .describe('Search source type.'),
+      })
+    )
+    .optional()
+    .describe('Source groups to search; defaults to web.'),
   categories: z
     .array(z.enum(['github', 'research', 'pdf', 'developer']))
     .optional()
     .describe(
       'Limit results to specific source types. `github` searches GitHub repositories, code, issues, and docs; `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. `developer` adds a `data.developer` group of `{ url, title, description }` results, where `description` holds the matched passage; the other categories filter `data.web`.'
     ),
-  enterprise: z.array(z.enum(['default', 'anon', 'zdr'])).optional(),
+  enterprise: z
+    .array(z.enum(['default', 'anon', 'zdr']))
+    .optional()
+    .describe('Enterprise search modes when enabled for the account.'),
 };
 
 // Both surfaces forbid specifying includeDomains and excludeDomains together.
@@ -853,31 +868,22 @@ class ConsoleLogger implements Logger {
     process.env.SSE_LOCAL === 'true' ||
     process.env.HTTP_STREAMABLE_SERVER === 'true';
 
-  debug(...args: unknown[]): void {
-    if (this.shouldLog) {
-      console.debug('[DEBUG]', new Date().toISOString(), ...args);
-    }
+  private gatedLogger(
+    method: 'debug' | 'error' | 'log' | 'warn',
+    level: string
+  ): (...args: unknown[]) => void {
+    return (...args) => {
+      if (this.shouldLog) {
+        console[method](`[${level}]`, new Date().toISOString(), ...args);
+      }
+    };
   }
-  error(...args: unknown[]): void {
-    if (this.shouldLog) {
-      console.error('[ERROR]', new Date().toISOString(), ...args);
-    }
-  }
-  info(...args: unknown[]): void {
-    if (this.shouldLog) {
-      console.log('[INFO]', new Date().toISOString(), ...args);
-    }
-  }
-  log(...args: unknown[]): void {
-    if (this.shouldLog) {
-      console.log('[LOG]', new Date().toISOString(), ...args);
-    }
-  }
-  warn(...args: unknown[]): void {
-    if (this.shouldLog) {
-      console.warn('[WARN]', new Date().toISOString(), ...args);
-    }
-  }
+
+  debug = this.gatedLogger('debug', 'DEBUG');
+  error = this.gatedLogger('error', 'ERROR');
+  info = this.gatedLogger('log', 'INFO');
+  log = this.gatedLogger('log', 'LOG');
+  warn = this.gatedLogger('warn', 'WARN');
 }
 
 const openAiAppsChallengeToken = normalizeHeader(
@@ -886,6 +892,10 @@ const openAiAppsChallengeToken = normalizeHeader(
 
 const FULL_PROFILE_INSTRUCTIONS = `Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and asynchronous research. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent starts multi-source research whose result is read with firecrawl_agent_status. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question — code behaviour, a library or framework, an API contract, an error message, or a known bug — firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of GitHub issues, merged pull requests, READMEs, and curated documentation sites. Provide only the required inputs and account for stated network or external side effects.`;
 const KEYLESS_PROFILE_INSTRUCTIONS = `Without authentication, this endpoint exposes Search, Scrape, and Parse with usage limits. An OAuth connection or Authorization bearer API key exposes account tools; unavailable tools return connection guidance. Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and asynchronous research. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent starts multi-source research whose result is read with firecrawl_agent_status. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites; the firecrawl_research_* tools search a separate paper index of abstracts and full text and become available once an OAuth connection or Authorization bearer API key is present. Provide only the required inputs.`;
+const LOCAL_KEYLESS_PROFILE_INSTRUCTIONS = KEYLESS_PROFILE_INSTRUCTIONS.replace(
+  'Search, Scrape, and Parse',
+  'Search and Scrape'
+);
 
 // The search surface exposes web/research search only. Its instructions and tool
 // copy describe just those tools and stay neutral about how a client uses them.
@@ -908,7 +918,11 @@ function makeFullProfile(): ServerProfile {
   return {
     id: account ? 'account' : 'full',
     resourceName: account ? 'Firecrawl MCP Account' : 'Firecrawl MCP',
-    instructions: account ? FULL_PROFILE_INSTRUCTIONS : KEYLESS_PROFILE_INSTRUCTIONS,
+    instructions: account
+      ? FULL_PROFILE_INSTRUCTIONS
+      : isLocalKeylessStartup()
+        ? LOCAL_KEYLESS_PROFILE_INSTRUCTIONS
+        : KEYLESS_PROFILE_INSTRUCTIONS,
     resourceUrl: account
       ? normalizeHeader(process.env.FIRECRAWL_MCP_RESOURCE_URL) ??
         DEFAULT_MCP_OAUTH_RESOURCE_URL
@@ -994,9 +1008,12 @@ const primaryProfile = makePrimaryProfile();
 const server = createServer(primaryProfile);
 type RegisteredTool = Parameters<typeof server.addTool>[0];
 
-const KEYLESS_TOOL_NAMES = new Set([
+const LOCAL_KEYLESS_TOOL_NAMES = new Set([
   'firecrawl_scrape',
   'firecrawl_search',
+]);
+const KEYLESS_TOOL_NAMES = new Set([
+  ...LOCAL_KEYLESS_TOOL_NAMES,
   'firecrawl_parse',
 ]);
 
@@ -1008,8 +1025,17 @@ function isHostedKeylessSession(session?: SessionData): boolean {
   );
 }
 
+function isLocalKeylessSession(session?: SessionData): boolean {
+  return (
+    isLocalKeylessStartup() &&
+    session?.authType === 'none' &&
+    !session.firecrawlApiKey
+  );
+}
+
 // A stdio client without a cloud credential can use only the keyless tools.
-// Do this at registration time so unsupported feedback tools are not advertised.
+// Registration-time checks keep unavailable feedback tools out of this surface;
+// the shared canList boundary below filters the remaining account-only tools.
 function isLocalKeylessStartup(): boolean {
   return (
     process.env.CLOUD_SERVICE !== 'true' &&
@@ -1032,34 +1058,39 @@ const INVALID_API_KEY_MESSAGE =
 const INVALID_OAUTH_MESSAGE =
   'This Firecrawl account connection is no longer valid.\nFix: Reconnect the existing Firecrawl server in the client, or set that existing server URL to https://mcp.firecrawl.dev/v2/mcp-oauth, then start a new session.';
 
-function connectionRecoveryPayload(params: {
-  code: string;
-  authMode: string;
+const INVALID_API_KEY_RECOVERY_PAYLOAD: Record<string, unknown> & {
   message: string;
-}): Record<string, unknown> & { message: string } {
-  return {
-    code: params.code,
-    auth_mode: params.authMode,
-    message: params.message,
-    docs_url: MCP_CONNECTION_GUIDE_URL,
-  };
-}
+} = {
+  code: 'CREDENTIAL_INVALID',
+  auth_mode: 'api_key',
+  message: INVALID_API_KEY_MESSAGE,
+  docs_url: MCP_CONNECTION_GUIDE_URL,
+};
 
-function invalidApiKeyRecoveryPayload(): Record<string, unknown> & { message: string } {
-  return connectionRecoveryPayload({
-    code: 'CREDENTIAL_INVALID',
-    authMode: 'api_key',
-    message: INVALID_API_KEY_MESSAGE,
-  });
-}
+const INVALID_OAUTH_RECOVERY_PAYLOAD: Record<string, unknown> & {
+  message: string;
+} = {
+  code: 'OAUTH_CONNECTION_INVALID',
+  auth_mode: 'oauth',
+  message: INVALID_OAUTH_MESSAGE,
+  docs_url: MCP_CONNECTION_GUIDE_URL,
+};
 
-function invalidOAuthRecoveryPayload(): Record<string, unknown> & { message: string } {
-  return connectionRecoveryPayload({
-    code: 'OAUTH_CONNECTION_INVALID',
-    authMode: 'oauth',
-    message: INVALID_OAUTH_MESSAGE,
-  });
-}
+const RECOVERY_MESSAGES: Record<string, string> = {
+  CREDENTIAL_INVALID: INVALID_API_KEY_MESSAGE,
+  KEYLESS_QUOTA_EXHAUSTED: KEYLESS_QUOTA_MESSAGE,
+  KEYLESS_LIMIT_REACHED: KEYLESS_QUOTA_MESSAGE,
+  KEYLESS_TOOL_NOT_AVAILABLE: KEYLESS_TOOL_MESSAGE,
+  KEYLESS_ACCESS_NOT_AVAILABLE: KEYLESS_ACCESS_MESSAGE,
+  KEYLESS_ELIGIBILITY_UNAVAILABLE:
+    'The anonymous keyless eligibility check is temporarily unavailable. Retry shortly.',
+};
+const KEYLESS_CONVERSION_CODES = new Set([
+  'KEYLESS_QUOTA_EXHAUSTED',
+  'KEYLESS_LIMIT_REACHED',
+  'KEYLESS_TOOL_NOT_AVAILABLE',
+  'KEYLESS_ACCESS_NOT_AVAILABLE',
+]);
 
 function recoveryPayload(
   code: string,
@@ -1067,30 +1098,16 @@ function recoveryPayload(
   options: { retryAfterSeconds?: number } = {}
 ): Record<string, unknown> {
   const retryAfterSeconds = options.retryAfterSeconds;
-  const isQuotaExhausted =
-    code === 'KEYLESS_QUOTA_EXHAUSTED' || code === 'KEYLESS_LIMIT_REACHED';
-  const isToolUnavailable = code === 'KEYLESS_TOOL_NOT_AVAILABLE';
-  const isKeylessAccessUnavailable = code === 'KEYLESS_ACCESS_NOT_AVAILABLE';
   const isKeylessEligibilityUnavailable =
     code === 'KEYLESS_ELIGIBILITY_UNAVAILABLE';
-  const isKeylessConversion =
-    isQuotaExhausted || isToolUnavailable || isKeylessAccessUnavailable;
+  const isKeylessConversion = KEYLESS_CONVERSION_CODES.has(code);
   return {
     code,
     request_id: requestId,
     auth_mode: code === 'CREDENTIAL_INVALID' ? 'credential_error' : 'keyless',
     message:
-      code === 'CREDENTIAL_INVALID'
-        ? INVALID_API_KEY_MESSAGE
-        : isQuotaExhausted
-          ? KEYLESS_QUOTA_MESSAGE
-          : isToolUnavailable
-            ? KEYLESS_TOOL_MESSAGE
-            : isKeylessAccessUnavailable
-              ? KEYLESS_ACCESS_MESSAGE
-              : isKeylessEligibilityUnavailable
-                ? 'The anonymous keyless eligibility check is temporarily unavailable. Retry shortly.'
-                : 'This tool requires a Firecrawl account or API key.',
+      RECOVERY_MESSAGES[code] ??
+      'This tool requires a Firecrawl account or API key.',
     // CREDENTIAL_INVALID sessions gate every tool call (including keyless
     // tools) on the credentialError check before the keyless branch ever
     // runs, so none of KEYLESS_TOOL_NAMES are actually callable here. Listing
@@ -1107,6 +1124,180 @@ function recoveryPayload(
       ? { next_actions: [{ kind: 'retry_later', after_seconds: 30 }] }
       : {}),
   };
+}
+
+function errorText(error: unknown): string {
+  return (error instanceof Error ? error.message : String(error)).slice(0, 4_000);
+}
+
+type ToolErrorCode =
+  | 'AUTH_REQUIRED'
+  | 'FILE_NOT_FOUND'
+  | 'UNSUPPORTED_SITE'
+  | 'UPSTREAM_TIMEOUT'
+  | 'RATE_LIMITED'
+  | 'INVALID_REQUEST'
+  | 'UPSTREAM_REQUEST_FAILED'
+  | 'CRAWL_START_FAILED'
+  | 'PARSE_INPUT_INVALID'
+  | 'PARSE_CONFIG_REQUIRED'
+  | 'PARSE_REQUEST_FAILED'
+  | 'INTERACT_SESSION_UNAVAILABLE'
+  | 'FEEDBACK_REJECTED';
+
+function agentLegibleError(
+  code: ToolErrorCode,
+  error: unknown,
+  guidance: string,
+  requestId: string = randomUUID(),
+  retryable = false
+): UserError {
+  const originalError = errorText(error);
+  const message = `${originalError}\nRecovery: ${guidance}`;
+  return new UserError(message, {
+    code,
+    message,
+    request_id: requestId,
+    original_error: originalError,
+    retryable,
+    next_actions: [
+      {
+        kind: retryable ? 'retry' : 'check_request',
+        instruction: guidance,
+      },
+    ],
+    docs_url: MCP_CONNECTION_GUIDE_URL,
+  });
+}
+
+class InvalidCrawlContinuationError extends Error {
+  constructor() {
+    super('Crawl continuation must belong to this crawl job.');
+    this.name = 'InvalidCrawlContinuationError';
+  }
+}
+
+// Tools whose failed calls may already have produced external side effects (a
+// submitted form, a created monitor). Unclassified failures on these must not
+// advertise retryable: an obedient agent would repeat the side effect.
+// Update/delete are excluded: repeating them converges on the same target
+// state. Run and feedback POSTs create a new run / a new record each time.
+const NON_IDEMPOTENT_TOOLS = new Set([
+  'firecrawl_interact',
+  'firecrawl_monitor_create',
+  'firecrawl_monitor_run',
+  'firecrawl_feedback',
+]);
+
+function wrapToolError(
+  error: unknown,
+  requestId: string,
+  toolName?: string
+): UserError {
+  const safeToRepeat = !NON_IDEMPOTENT_TOOLS.has(toolName ?? '');
+  if (error instanceof UserError) return error;
+  const message = errorText(error);
+  const sdkError =
+    typeof error === 'object' && error !== null
+      ? (error as { code?: unknown; details?: unknown; status?: unknown })
+      : undefined;
+  const status =
+    typeof sdkError?.status === 'number' ? sdkError.status : undefined;
+  const code = typeof sdkError?.code === 'string' ? sdkError.code : undefined;
+  const authRequiredError = () =>
+    agentLegibleError(
+      'AUTH_REQUIRED',
+      error,
+      'If other Firecrawl tools succeed, this failure may be limited to this operation: retry once or accomplish the step with another Firecrawl tool such as firecrawl_scrape. Otherwise configure a Firecrawl API key or set FIRECRAWL_API_URL for a self-hosted instance, then start a new session and retry.',
+      requestId
+    );
+  const unsupportedSiteError = () =>
+    agentLegibleError(
+      'UNSUPPORTED_SITE',
+      error,
+      'Firecrawl declines this site by policy, so the same URL will always fail. Use a different source or tool for this content.',
+      requestId
+    );
+  const upstreamTimeoutError = () =>
+    agentLegibleError(
+      'UPSTREAM_TIMEOUT',
+      error,
+      safeToRepeat
+        ? 'Retry once with a narrower request or a longer supported timeout; if the job ID is known, check its status instead of starting a duplicate job.'
+        : 'The action may have taken effect despite the timeout. Verify the current state (re-check the page or list existing monitors) before repeating it.',
+      requestId,
+      safeToRepeat
+    );
+
+  // SDK errors carry stable transport metadata; classify it before falling
+  // back to message text for raw fetch paths and locally-thrown errors.
+  if (status === 401) return authRequiredError();
+  if (status === 408 || code === 'SCRAPE_TIMEOUT') {
+    return upstreamTimeoutError();
+  }
+  // Threat-protection blocks have a stable API code (apps/api keeps
+  // "unsafe_domain_blocked" for API stability); the message text can be
+  // reworded, so prefer the code over the regex below.
+  if (code === 'unsafe_domain_blocked') {
+    return unsupportedSiteError();
+  }
+  if (status === 429) {
+    const details = resultRecord(sdkError?.details);
+    const detailSeconds = Number(details?.retry_after_seconds);
+    const messageSeconds = /retry after\s+(\d+)\s*s/i.exec(message)?.[1];
+    const retryAfterSeconds =
+      Number.isFinite(detailSeconds) && detailSeconds > 0
+        ? detailSeconds
+        : messageSeconds
+          ? Number(messageSeconds)
+          : undefined;
+    // A 429 is rejected before tool execution, so retryability is safe even
+    // for tools whose successful calls may have external side effects.
+    return agentLegibleError(
+      'RATE_LIMITED',
+      error,
+      `${retryAfterSeconds ? `Wait ${retryAfterSeconds} seconds` : 'Wait'} before retrying, and avoid parallel Firecrawl calls to reduce repeated rate-limit failures.`,
+      requestId,
+      true
+    );
+  }
+
+  if (/unauthori[sz]ed|api key|credentials? required/i.test(message)) {
+    return authRequiredError();
+  }
+  if (/ENOENT|no such file/i.test(message)) {
+    return agentLegibleError(
+      'FILE_NOT_FOUND',
+      error,
+      'Check that filePath exists on the machine running the local MCP server, then retry with the corrected path.',
+      requestId
+    );
+  }
+  // Two permanent domain-policy rejections exist in apps/api: the global
+  // blocklist ("we do not support this site") and org-level threat protection.
+  if (/do not support this site|threat protection policy/i.test(message)) {
+    return unsupportedSiteError();
+  }
+  if (/timed? out|timeout/i.test(message)) {
+    return upstreamTimeoutError();
+  }
+  if (error instanceof InvalidCrawlContinuationError) {
+    return agentLegibleError(
+      'INVALID_REQUEST',
+      error,
+      'Check the tool arguments against its input schema, correct the invalid or missing value, and retry.',
+      requestId
+    );
+  }
+  return agentLegibleError(
+    'UPSTREAM_REQUEST_FAILED',
+    error,
+    safeToRepeat
+      ? 'Verify the request and Firecrawl service availability, then retry once if the operation is safe to repeat.'
+      : 'The action may have taken effect despite the error. Verify the current state (re-check the page or list existing monitors) before repeating it.',
+    requestId,
+    safeToRepeat
+  );
 }
 
 function deprecatedExtractPayload() {
@@ -1140,7 +1331,7 @@ function emitActionLog(
   status: ActionStatus,
   session?: SessionData,
   error?: unknown,
-  requestId = randomUUID(),
+  requestId: string = randomUUID(),
   code?: string
 ): void {
   if (process.env.CLOUD_SERVICE !== 'true') return;
@@ -1187,6 +1378,7 @@ function guardHostedTool(
   { logActions }: { logActions: boolean }
 ): RegisteredTool {
   const keylessTool = KEYLESS_TOOL_NAMES.has(tool.name);
+  const localKeylessTool = LOCAL_KEYLESS_TOOL_NAMES.has(tool.name);
   const execute = tool.execute;
   const canList = tool.canList;
   const beforeValidate = tool.beforeValidate;
@@ -1202,7 +1394,9 @@ function guardHostedTool(
       // to a request carrying an unrecognized or invalid credential.
       (session?.credentialError || isHostedKeylessSession(session)
         ? keylessTool
-        : true) &&
+        : isLocalKeylessSession(session)
+          ? localKeylessTool
+          : true) &&
       (canList?.(session) ?? true),
     beforeValidate: async (args: unknown, session: SessionData) => {
       const code = session?.credentialError
@@ -1223,25 +1417,80 @@ function guardHostedTool(
         };
       }
       const earlyResult = await beforeValidate?.(args, session);
-      const payload = earlyResult?.structuredContent;
-      const recoveryCode =
-        payload &&
-        typeof payload === 'object' &&
-        'code' in payload &&
-        typeof payload.code === 'string'
-          ? payload.code
-          : undefined;
-      if (logActions && earlyResult?.isError && recoveryCode) {
-        emitActionLog(
-          tool.name,
-          'error',
-          session,
-          new UserError(`Tool validation failed: ${recoveryCode}`, payload),
-          randomUUID(),
-          recoveryCode
-        );
+      if (earlyResult) {
+        const payload = earlyResult.structuredContent;
+        const recoveryCode =
+          payload &&
+          typeof payload === 'object' &&
+          'code' in payload &&
+          typeof payload.code === 'string'
+            ? payload.code
+            : undefined;
+        if (logActions && earlyResult.isError && recoveryCode) {
+          const recoveryRequestId =
+            payload &&
+            typeof payload === 'object' &&
+            'request_id' in payload &&
+            typeof payload.request_id === 'string'
+              ? payload.request_id
+              : randomUUID();
+          emitActionLog(
+            tool.name,
+            'error',
+            session,
+            new UserError(`Tool validation failed: ${recoveryCode}`, payload),
+            recoveryRequestId,
+            recoveryCode
+          );
+        }
+        return earlyResult;
       }
-      return earlyResult;
+
+      // FastMCP validates again after this hook; validating here preserves
+      // structured issue details instead of its flattened validation error.
+      const schema = tool.parameters as typeof tool.parameters & {
+        safeParseAsync?: (value: unknown) => Promise<{
+          success: boolean;
+          error?: { issues?: Array<{ message?: string; path?: PropertyKey[] }> };
+        }>;
+      };
+      if (schema?.safeParseAsync) {
+        const validation = await schema.safeParseAsync(args);
+        if (!validation.success) {
+          const issueText = (validation.error?.issues ?? [])
+            .slice(0, 10)
+            .map((issue) => {
+              const location = issue.path?.length
+                ? `${issue.path.map(String).join('.')}: `
+                : '';
+              return `${location}${issue.message ?? 'Invalid value'}`;
+            })
+            .join('; ');
+          const requestId = randomUUID();
+          const error = agentLegibleError(
+            'INVALID_REQUEST',
+            issueText || 'Tool arguments failed validation.',
+            'Check the tool arguments against its input schema, correct the listed values, and retry.',
+            requestId
+          );
+          if (logActions) {
+            emitActionLog(
+              tool.name,
+              'error',
+              session,
+              error,
+              requestId,
+              'INVALID_REQUEST'
+            );
+          }
+          return {
+            content: [{ type: 'text' as const, text: error.message }],
+            isError: true,
+            structuredContent: error.extras,
+          };
+        }
+      }
+      return undefined;
     },
     execute: async (args, context) => {
       const requestId = randomUUID();
@@ -1267,16 +1516,30 @@ function guardHostedTool(
         if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
         throw new UserError(String(payload.message), payload);
       }
-      if (!logActions) return execute(args, invocationContext);
-
-      emitActionLog(tool.name, 'started', invocationSession, undefined, requestId);
+      if (logActions) {
+        emitActionLog(tool.name, 'started', invocationSession, undefined, requestId);
+      }
       try {
         const result = await execute(args, invocationContext);
-        emitActionLog(tool.name, 'success', invocationSession, undefined, requestId);
+        if (logActions) {
+          emitActionLog(tool.name, 'success', invocationSession, undefined, requestId);
+        }
         return result;
       } catch (error) {
-        emitActionLog(tool.name, 'error', invocationSession, error, requestId);
-        throw error;
+        const wrapped = wrapToolError(error, requestId, tool.name);
+        if (logActions) {
+          emitActionLog(
+            tool.name,
+            'error',
+            invocationSession,
+            wrapped,
+            requestId,
+            typeof wrapped.extras?.code === 'string'
+              ? wrapped.extras.code
+              : undefined
+          );
+        }
+        throw wrapped;
       }
     },
   };
@@ -1404,6 +1667,217 @@ function asText(data: unknown): string {
   return JSON.stringify(data, null, 2);
 }
 
+type TruncationStats = {
+  arrayItems: number;
+  characters: number;
+  fields: number;
+};
+
+// Ordinary payloads stay unchanged; the ceiling prevents one tool result from
+// consuming an agent's context window (~16k tokens).
+const RESPONSE_MAX_CHARS = 64_000;
+const CRAWL_MAX_DOCUMENTS = 25;
+const CRAWL_MAX_BYTES = 48_000;
+
+function compactResponseValue(
+  value: unknown,
+  limits: { arrayItems: number; objectFields: number; stringChars: number },
+  stats: TruncationStats,
+  depth = 0
+): unknown {
+  if (typeof value === 'string') {
+    if (value.length <= limits.stringChars) return value;
+    let retainedChars = limits.stringChars;
+    const lastCodeUnit = value.charCodeAt(retainedChars - 1);
+    if (lastCodeUnit >= 0xd800 && lastCodeUnit <= 0xdbff) retainedChars -= 1;
+    stats.characters += value.length - retainedChars;
+    return `${value.slice(0, retainedChars)}\n[truncated ${value.length - retainedChars} characters]`;
+  }
+  if (!value || typeof value !== 'object') return value;
+  if (depth >= 12) {
+    stats.fields += 1;
+    return '[truncated nested value]';
+  }
+  if (Array.isArray(value)) {
+    const retained = value.slice(0, limits.arrayItems);
+    stats.arrayItems += value.length - retained.length;
+    return retained.map((item) =>
+      compactResponseValue(item, limits, stats, depth + 1)
+    );
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>);
+  const retained = entries.slice(0, limits.objectFields);
+  stats.fields += entries.length - retained.length;
+  return Object.fromEntries(
+    retained.map(([key, item]) => [
+      key,
+      compactResponseValue(item, limits, stats, depth + 1),
+    ])
+  );
+}
+
+function truncationMetadata(
+  stats: TruncationStats,
+  guidance: string
+): Record<string, unknown> {
+  const omitted = {
+    fields: stats.fields,
+    array_items: stats.arrayItems,
+    characters: stats.characters,
+  };
+  return {
+    truncated: true,
+    omitted,
+    message: `Response truncated; omitted ${omitted.fields} fields, ${omitted.array_items} array items, and ${omitted.characters} characters. ${guidance}`.trim(),
+  };
+}
+
+function withTruncationMetadata(
+  value: unknown,
+  metadata: Record<string, unknown>
+): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? {
+        ...(value as Record<string, unknown>),
+        _firecrawl: {
+          ...(resultRecord((value as Record<string, unknown>)._firecrawl) ?? {}),
+          ...metadata,
+        },
+      }
+    : { result: value, _firecrawl: metadata };
+}
+
+type ResultNoticeKind = 'scrape' | 'search' | 'map' | 'crawl' | 'agent';
+
+function resultRecord(data: unknown): Record<string, unknown> | undefined {
+  return data && typeof data === 'object' && !Array.isArray(data)
+    ? (data as Record<string, unknown>)
+    : undefined;
+}
+
+function withResultNotice(
+  data: unknown,
+  kind: ResultNoticeKind
+): unknown {
+  const root = resultRecord(data);
+  if (!root) return data;
+  const body = resultRecord(root.data) ?? root;
+  const metadata = resultRecord(body.metadata);
+  const statusCode = Number(metadata?.statusCode ?? root.statusCode);
+
+  let empty = false;
+  let blocked = false;
+  switch (kind) {
+    case 'scrape': {
+      const contentFields = ['markdown', 'html', 'rawHtml', 'json', 'summary'];
+      const contentLength = contentFields.reduce(
+        (length, field) => length + JSON.stringify(body[field] ?? '').length,
+        0
+      );
+      empty =
+        contentFields.some((field) => field in body) &&
+        contentFields.every(
+          (field) => body[field] == null || body[field] === ''
+        );
+      const blockingSignal =
+        [401, 403, 429].includes(statusCode) ||
+        /blocked|captcha|access denied/i.test(
+          String(body.warning ?? body.error ?? root.warning ?? root.error ?? '')
+        );
+      blocked = blockingSignal && (empty || contentLength <= 200);
+      break;
+    }
+    case 'search': {
+      const groups = Object.values(resultRecord(root.data) ?? {}).filter(
+        Array.isArray
+      );
+      empty = groups.length > 0 && groups.every((group) => group.length === 0);
+      break;
+    }
+    case 'map':
+      empty = Array.isArray(body.links) && body.links.length === 0;
+      break;
+    case 'crawl':
+      empty = Array.isArray(root.data) && root.data.length === 0;
+      break;
+    case 'agent':
+      empty = Object.keys(body).length === 0;
+      break;
+  }
+  if (!blocked && !empty) return data;
+
+  const notice = blocked
+    ? {
+        code: 'LIKELY_BLOCKED',
+        warning: true,
+        message:
+          'The response is empty or incomplete and carries a likely blocking signal from the target site.',
+        next_actions: [
+          {
+            kind: 'adjust_request',
+            instruction:
+              'Verify the URL and retry with a supported proxy or a narrower scrape request; do not treat this response as page content.',
+          },
+        ],
+      }
+    : {
+        code: 'EMPTY_RESULT',
+        warning: true,
+        message: 'Firecrawl returned an empty result for this request.',
+        next_actions: [
+          {
+            kind: 'adjust_request',
+            instruction:
+              'Verify the URL, query, filters, or job status and retry with corrected or broader inputs if appropriate.',
+          },
+        ],
+      };
+  return {
+    ...root,
+    _firecrawl: {
+      ...(resultRecord(root._firecrawl) ?? {}),
+      ...notice,
+    },
+  };
+}
+
+function formatToolResponse(data: unknown, guidance: string): string {
+  const unchanged = asText(data);
+  if (unchanged.length <= RESPONSE_MAX_CHARS) return unchanged;
+
+  let limits = { arrayItems: 50, objectFields: 100, stringChars: 12_000 };
+  for (;;) {
+    const stats: TruncationStats = { arrayItems: 0, characters: 0, fields: 0 };
+    const compacted = compactResponseValue(data, limits, stats);
+    const hadOmissions =
+      stats.arrayItems > 0 || stats.characters > 0 || stats.fields > 0;
+    if (!hadOmissions) {
+      const output = asText(compacted);
+      if (output.length <= RESPONSE_MAX_CHARS) return output;
+    } else {
+      const output = asText(
+        withTruncationMetadata(compacted, truncationMetadata(stats, guidance))
+      );
+      if (output.length <= RESPONSE_MAX_CHARS) return output;
+    }
+    if (
+      limits.arrayItems === 1 &&
+      limits.objectFields === 1 &&
+      limits.stringChars === 128
+    ) {
+      return asText({
+        _firecrawl: truncationMetadata(stats, guidance),
+      });
+    }
+    limits = {
+      arrayItems: Math.max(1, Math.floor(limits.arrayItems / 2)),
+      objectFields: Math.max(1, Math.floor(limits.objectFields / 2)),
+      stringChars: Math.max(128, Math.floor(limits.stringChars / 2)),
+    };
+  }
+}
+
 // scrape tool (v2 semantics, minimal args)
 // Centralized scrape params (used by scrape, and referenced in search/crawl scrapeOptions)
 
@@ -1481,7 +1955,6 @@ function transformScrapeParams(
   args: Record<string, unknown>
 ): Record<string, unknown> {
   const out = { ...args };
-
   const formats = buildFormatsArray(out);
   if (formats) out.formats = formats;
 
@@ -1497,7 +1970,7 @@ function transformScrapeParams(
 }
 
 const scrapeParamsSchema = z.object({
-  url: z.string().url(),
+  url: z.string().url().describe('Page URL to scrape.'),
   formats: z
     .array(
       z.enum([
@@ -1514,75 +1987,146 @@ const scrapeParamsSchema = z.object({
         'audio',
       ])
     )
-    .optional(),
+    .optional()
+    .describe('Content formats to return.'),
   jsonOptions: z
     .object({
-      prompt: z.string().optional(),
-      schema: z.record(z.string(), z.any()).optional(),
+      prompt: z.string().optional().describe('Extraction instructions.'),
+      schema: z
+        .record(z.string(), z.any())
+        .optional()
+        .describe('JSON Schema-like object defining extracted fields.'),
     })
-    .optional(),
+    .optional()
+    .describe('Structured JSON extraction configuration.'),
   queryOptions: z
     .object({
-      prompt: z.string().max(10000),
-      mode: z.enum(['directQuote', 'freeform']).default('freeform'),
+      prompt: z.string().max(10000).describe('Question about the page.'),
+      mode: z
+        .enum(['directQuote', 'freeform'])
+        .default('freeform')
+        .describe('Answer mode; defaults to freeform.'),
     })
-    .optional(),
+    .optional()
+    .describe('Targeted page-question configuration.'),
   screenshotOptions: z
     .object({
-      fullPage: z.boolean().optional(),
-      quality: z.number().optional(),
-      viewport: z.object({ width: z.number(), height: z.number() }).optional(),
+      fullPage: z.boolean().optional().describe('Capture the full page.'),
+      quality: z.number().optional().describe('Screenshot image quality.'),
+      viewport: z
+        .object({
+          width: z.number().describe('Viewport width in pixels.'),
+          height: z.number().describe('Viewport height in pixels.'),
+        })
+        .optional()
+        .describe('Screenshot viewport dimensions.'),
     })
-    .optional(),
-  parsers: z.array(z.enum(['pdf'])).optional(),
+    .optional()
+    .describe('Screenshot capture configuration.'),
+  parsers: z
+    .array(z.enum(['pdf']))
+    .optional()
+    .describe('Document parsers to enable.'),
   pdfOptions: z
     .object({
-      maxPages: z.number().int().min(1).max(10000).optional(),
+      maxPages: z
+        .number()
+        .int()
+        .min(1)
+        .max(10000)
+        .optional()
+        .describe('Maximum PDF pages to parse.'),
     })
-    .optional(),
-  onlyMainContent: z.boolean().optional(),
-  redactPII: z.boolean().optional(),
-  includeTags: z.array(z.string()).optional(),
-  excludeTags: z.array(z.string()).optional(),
-  waitFor: z.number().optional(),
+    .optional()
+    .describe('PDF parsing configuration.'),
+  onlyMainContent: z
+    .boolean()
+    .optional()
+    .describe('Exclude navigation, headers, and footers.'),
+  redactPII: z.boolean().optional().describe('Redact detected personal information.'),
+  includeTags: z
+    .array(z.string())
+    .optional()
+    .describe('Only include these HTML tags.'),
+  excludeTags: z
+    .array(z.string())
+    .optional()
+    .describe('Exclude these HTML tags.'),
+  waitFor: z.number().optional().describe('Render delay in milliseconds.'),
   ...(SAFE_MODE
     ? {}
     : {
         actions: z
           .array(
             z.object({
-              type: z.enum(allowedActionTypes),
-              selector: z.string().optional(),
-              milliseconds: z.number().optional(),
-              text: z.string().optional(),
-              key: z.string().optional(),
-              direction: z.enum(['up', 'down']).optional(),
-              script: z.string().optional(),
-              fullPage: z.boolean().optional(),
+              type: z.enum(allowedActionTypes).describe('Browser action type.'),
+              selector: z.string().optional().describe('Target CSS selector.'),
+              milliseconds: z
+                .number()
+                .optional()
+                .describe('Wait duration in milliseconds.'),
+              text: z.string().optional().describe('Text to enter.'),
+              key: z.string().optional().describe('Keyboard key to press.'),
+              direction: z
+                .enum(['up', 'down'])
+                .optional()
+                .describe('Scroll direction.'),
+              script: z.string().optional().describe('JavaScript to execute.'),
+              fullPage: z
+                .boolean()
+                .optional()
+                .describe('Capture the full page for screenshot actions.'),
             })
           )
-          .optional(),
+          .optional()
+          .describe('Ordered browser actions to perform before extraction.'),
       }),
-  mobile: z.boolean().optional(),
-  skipTlsVerification: z.boolean().optional(),
-  removeBase64Images: z.boolean().optional(),
+  mobile: z.boolean().optional().describe('Use a mobile device viewport.'),
+  skipTlsVerification: z
+    .boolean()
+    .optional()
+    .describe('Allow pages with invalid TLS certificates.'),
+  removeBase64Images: z
+    .boolean()
+    .optional()
+    .describe('Remove inline base64 images from output.'),
   location: z
     .object({
-      country: z.string().optional(),
-      languages: z.array(z.string()).optional(),
+      country: z.string().optional().describe('ISO country code.'),
+      languages: z
+        .array(z.string())
+        .optional()
+        .describe('Preferred language codes.'),
     })
-    .optional(),
-  storeInCache: z.boolean().optional(),
-  zeroDataRetention: z.boolean().optional(),
-  maxAge: z.number().optional(),
-  lockdown: z.boolean().optional(),
-  proxy: z.enum(['basic', 'stealth', 'enhanced', 'auto']).optional(),
+    .optional()
+    .describe('Locale used when loading the page.'),
+  storeInCache: z.boolean().optional().describe('Permit storing fetched content in cache.'),
+  zeroDataRetention: z
+    .boolean()
+    .optional()
+    .describe('Prevent Firecrawl from retaining request content when supported.'),
+  maxAge: z
+    .number()
+    .optional()
+    .describe('Maximum cached-content age in milliseconds; 0 forces live fetch.'),
+  lockdown: z
+    .boolean()
+    .optional()
+    .describe('Use cached content only; fail instead of fetching live.'),
+  proxy: z
+    .enum(['basic', 'stealth', 'enhanced', 'auto'])
+    .optional()
+    .describe('Proxy mode; stronger modes may use more credits.'),
   profile: z
     .object({
-      name: z.string(),
-      saveChanges: z.boolean().optional(),
+      name: z.string().describe('Browser profile name.'),
+      saveChanges: z
+        .boolean()
+        .optional()
+        .describe('Persist profile changes after scraping.'),
     })
-    .optional(),
+    .optional()
+    .describe('Reusable browser profile configuration.'),
 });
 
 const parseOptionParamsSchema = z.object({
@@ -1598,38 +2142,81 @@ const parseOptionParamsSchema = z.object({
         'query',
       ])
     )
-    .optional(),
+    .optional()
+    .describe('Parsed content formats to return.'),
   jsonOptions: z
     .object({
-      prompt: z.string().optional(),
-      schema: z.record(z.string(), z.any()).optional(),
+      prompt: z.string().optional().describe('Extraction instructions.'),
+      schema: z
+        .record(z.string(), z.any())
+        .optional()
+        .describe('JSON Schema-like object defining extracted fields.'),
     })
-    .optional(),
+    .optional()
+    .describe('Structured JSON extraction configuration.'),
   queryOptions: z
     .object({
-      prompt: z.string().max(10000),
-      mode: z.enum(['directQuote', 'freeform']).default('freeform'),
+      prompt: z.string().max(10000).describe('Question about the document.'),
+      mode: z
+        .enum(['directQuote', 'freeform'])
+        .default('freeform')
+        .describe('Answer mode; defaults to freeform.'),
     })
-    .optional(),
-  parsers: z.array(z.enum(['pdf'])).optional(),
+    .optional()
+    .describe('Targeted document-question configuration.'),
+  parsers: z
+    .array(z.enum(['pdf']))
+    .optional()
+    .describe('Document parsers to enable.'),
   pdfOptions: z
     .object({
-      maxPages: z.number().int().min(1).max(10000).optional(),
+      maxPages: z
+        .number()
+        .int()
+        .min(1)
+        .max(10000)
+        .optional()
+        .describe('Maximum PDF pages to parse.'),
     })
-    .optional(),
-  onlyMainContent: z.boolean().optional(),
-  redactPII: z.boolean().optional(),
-  includeTags: z.array(z.string()).optional(),
-  excludeTags: z.array(z.string()).optional(),
-  removeBase64Images: z.boolean().optional(),
-  skipTlsVerification: z.boolean().optional(),
-  storeInCache: z.boolean().optional(),
-  zeroDataRetention: z.boolean().optional(),
+    .optional()
+    .describe('PDF parsing configuration.'),
+  onlyMainContent: z
+    .boolean()
+    .optional()
+    .describe('Exclude navigation, headers, and footers.'),
+  redactPII: z.boolean().optional().describe('Redact detected personal information.'),
+  includeTags: z
+    .array(z.string())
+    .optional()
+    .describe('Only include these HTML tags.'),
+  excludeTags: z
+    .array(z.string())
+    .optional()
+    .describe('Exclude these HTML tags.'),
+  removeBase64Images: z
+    .boolean()
+    .optional()
+    .describe('Remove inline base64 images from output.'),
+  skipTlsVerification: z
+    .boolean()
+    .optional()
+    .describe('Allow source URLs with invalid TLS certificates.'),
+  storeInCache: z
+    .boolean()
+    .optional()
+    .describe('Ignored: parse does not store indexed content.'),
+  zeroDataRetention: z
+    .boolean()
+    .optional()
+    .describe('Prevent Firecrawl from retaining document content when supported.'),
   maxAge: z
     .number()
     .optional()
     .describe('Ignored: parse never reuses or stores indexed content.'),
-  proxy: z.enum(['basic', 'auto']).optional(),
+  proxy: z
+    .enum(['basic', 'auto'])
+    .optional()
+    .describe('Proxy mode used for remote document URLs.'),
 });
 
 const localParseParamsSchema = parseOptionParamsSchema.extend({
@@ -1717,15 +2304,15 @@ function inferContentType(filename: string): string {
   return EXTENSION_CONTENT_TYPES[ext] ?? 'application/octet-stream';
 }
 
-type ParseToolArgs = {
-  filePath?: string;
-  uploadRef?: string;
-  contentType?: string;
-  declaredSizeBytes?: number;
-} & Record<string, unknown>;
+type HostedParseToolArgs = z.infer<typeof hostedParseParamsSchema>;
+type ParseToolArgs = Omit<HostedParseToolArgs, 'filePath' | 'uploadRef'> &
+  (
+    | { filePath: string; uploadRef?: never }
+    | { filePath?: never; uploadRef: string }
+  );
 
 function extractParseOptions(args: ParseToolArgs): Record<string, unknown> {
-  const options = { ...args };
+  const options: Record<string, unknown> = { ...args };
   delete options.filePath;
   delete options.uploadRef;
   delete options.contentType;
@@ -1739,16 +2326,6 @@ function buildParseOptionsPayload(
   const transformed = transformScrapeParams(options);
   const cleaned = removeEmptyTopLevel(transformed) as Record<string, unknown>;
   return { origin: ORIGIN, ...cleaned };
-}
-
-function buildContinuationArguments(
-  uploadRef: string,
-  options: Record<string, unknown>
-): Record<string, unknown> {
-  return {
-    uploadRef,
-    ...(removeEmptyTopLevel(options) as Record<string, unknown>),
-  };
 }
 
 function shellQuote(value: string): string {
@@ -1860,23 +2437,13 @@ async function executeHostedParse(
   session: SessionData | undefined,
   log: ToolLogger
 ): Promise<string> {
-  const hasFilePath =
-    typeof args.filePath === 'string' && args.filePath.length > 0;
-  const hasUploadRef =
-    typeof args.uploadRef === 'string' && args.uploadRef.length > 0;
-  if (hasFilePath === hasUploadRef) {
-    throw new Error(
-      'Hosted firecrawl_parse requires exactly one of filePath or uploadRef.'
-    );
-  }
-
   if (!hasCredential(session) && !isKeylessMode(session)) {
-    return asText({
-      success: false,
-      mode: 'hosted-upload-ref-auth-required',
-      message:
-        'Hosted firecrawl_parse requires an authenticated Firecrawl session or keyless eligibility before a local file upload URL can be minted. Connect a Firecrawl account, provide an API key, or use keyless hosted MCP while eligible, then call firecrawl_parse again.',
-    });
+    throw agentLegibleError(
+      'AUTH_REQUIRED',
+      'Hosted firecrawl_parse requires an authenticated Firecrawl session or keyless eligibility.',
+      'Connect the existing Firecrawl MCP server, configure an API key, or use eligible hosted keyless mode, then start a new session and retry.',
+      session?.requestId
+    );
   }
 
   if (isHostedKeylessSession(session) && args.zeroDataRetention === true) {
@@ -1891,7 +2458,7 @@ async function executeHostedParse(
 
   const options = extractParseOptions(args);
 
-  if (hasFilePath && args.filePath) {
+  if (args.filePath) {
     const filename = path.basename(args.filePath);
     const contentType =
       typeof args.contentType === 'string' && args.contentType.length > 0
@@ -1923,9 +2490,10 @@ async function executeHostedParse(
           : { 'Content-Type': contentType };
     const uploadForCommand = { ...upload, headers: uploadHeaders };
 
-    return asText({
-      success: true,
-      mode: 'hosted-upload-ref-awaiting-upload',
+    return formatToolResponse(
+      {
+        success: true,
+        mode: 'hosted-upload-ref-awaiting-upload',
       message:
         'Hosted MCP cannot read local files. Run the local upload command, then call firecrawl_parse again with uploadRef. No Firecrawl API key is included in this command.',
       upload: {
@@ -1940,18 +2508,23 @@ async function executeHostedParse(
       },
       nextToolCall: {
         name: 'firecrawl_parse',
-        arguments: buildContinuationArguments(upload.uploadRef, options),
+        arguments: {
+          uploadRef: upload.uploadRef,
+          ...(removeEmptyTopLevel(options) as Record<string, unknown>),
+        },
       },
-      notes: [
-        'Run the curl command on the machine that can read filePath.',
-        'After the PUT succeeds, use nextToolCall as the second MCP tool call.',
-        'Clients without a local upload mechanism cannot complete hosted parse for local files.',
-      ],
-    });
+        notes: [
+          'Run the curl command on the machine that can read filePath.',
+          'After the PUT succeeds, use nextToolCall as the second MCP tool call.',
+          'Clients without a local upload mechanism cannot complete hosted parse for local files.',
+        ],
+      },
+      'Use a shorter file path and fewer parse options to retrieve omitted upload instructions.'
+    );
   }
 
   const parsePayload = {
-    uploadRef: args.uploadRef as string,
+    uploadRef: args.uploadRef,
     ...buildParseOptionsPayload(options),
   };
   log.info('Parsing hosted upload reference');
@@ -1960,7 +2533,10 @@ async function executeHostedParse(
     parsePayload,
     session
   );
-  return asText(parseJson);
+  return formatToolResponse(
+    parseJson,
+    'Parse fewer pages or request fewer output formats to retrieve the omitted content.'
+  );
 }
 
 server.addTool({
@@ -1972,23 +2548,12 @@ server.addTool({
     destructiveHint: false, // Does not modify, delete, or write to external websites.
   },
   description: `
-Retrieve and extract content from one supplied URL through Firecrawl. Use this when the request identifies a page and needs its content or defined fields. It can return markdown, HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema; JSON is useful when the requested result has defined fields, while markdown preserves readable page content.
-
-This tool operates on a known page. For a set of pages use \`firecrawl_crawl\`, and to discover page URLs use \`firecrawl_map\` or \`firecrawl_search\`. Options include JavaScript render delay, cache age, main-content filtering, PII redaction, and lockdown cache-only retrieval. Browser actions may change the live page when interactive actions are enabled.
-
-Firecrawl may reuse recently indexed content instead of refetching the page, and the reuse window varies by domain. Set \`maxAge: 0\` to force a live fetch, or a smaller \`maxAge\` to bound how stale reused content may be. A successful response does not by itself confirm that the state it describes is still current.
-
-Returns the selected content formats and page metadata.
+Retrieve content or structured fields from one supplied URL. Use this when the request identifies a page and needs its content or defined fields. For multiple pages use \`firecrawl_crawl\`; to discover URLs use \`firecrawl_map\` or \`firecrawl_search\`.
 `,
   parameters: scrapeParamsSchema,
   execute: async (args: unknown, { session, log }): Promise<string> => {
-    const { url, ...options } = args as { url: string } & Record<
-      string,
-      unknown
-    >;
-    const transformed = transformScrapeParams(
-      options as Record<string, unknown>
-    );
+    const { url, ...options } = args as z.infer<typeof scrapeParamsSchema>;
+    const transformed = transformScrapeParams(options);
     const cleaned = removeEmptyTopLevel(transformed);
     if (cleaned.lockdown) {
       log.info('Scraping URL (lockdown)');
@@ -2005,14 +2570,20 @@ Returns the selected content formats and page metadata.
         },
         session
       );
-      return asText(json?.data ?? json);
+      return formatToolResponse(
+        withResultNotice(json?.data ?? json, 'scrape'),
+        'Request fewer formats or narrow the extraction to retrieve omitted page content.'
+      );
     }
     const client = getClient(session);
     const res = await client.scrape(String(url), {
       ...cleaned,
       origin: ORIGIN,
     } as any);
-    return asText(res);
+    return formatToolResponse(
+      withResultNotice(res, 'scrape'),
+      'Request fewer formats or narrow the extraction to retrieve omitted page content.'
+    );
   },
 });
 
@@ -2025,17 +2596,24 @@ server.addTool({
     destructiveHint: false, // Read-only discovery; no deletion or destructive updates.
   },
   description: `
-Enumerate URLs indexed under one website through Firecrawl without fetching each page's content. Use this when the request asks for a site's URL inventory, when several relevant pages must be located, or when the desired page URL is unknown. An optional \`search\` term narrows the URL list, while sitemap, subdomain, query-parameter, and result-limit options control coverage.
-
-Returns matching URLs rather than page bodies. Retrieve one page with \`firecrawl_scrape\`; collect content across multiple pages with \`firecrawl_crawl\`.
+Enumerate URLs under one website without fetching each page. Returns matching URLs rather than page bodies; retrieve one page with \`firecrawl_scrape\` or multiple pages with \`firecrawl_crawl\`.
 `,
   parameters: z.object({
-    url: z.string().url(),
-    search: z.string().optional(),
-    sitemap: z.enum(['include', 'skip', 'only']).optional(),
-    includeSubdomains: z.boolean().optional(),
-    limit: z.number().optional(),
-    ignoreQueryParameters: z.boolean().optional(),
+    url: z.string().url().describe('Website root URL to map.'),
+    search: z.string().optional().describe('Term used to rank matching URLs.'),
+    sitemap: z
+      .enum(['include', 'skip', 'only'])
+      .optional()
+      .describe('Whether sitemap URLs are included, skipped, or exclusive.'),
+    includeSubdomains: z
+      .boolean()
+      .optional()
+      .describe('Include URLs from subdomains.'),
+    limit: z.number().optional().describe('Maximum number of URLs returned.'),
+    ignoreQueryParameters: z
+      .boolean()
+      .optional()
+      .describe('Deduplicate URLs that differ only by query parameters.'),
   }),
   execute: async (args: unknown, { session, log }): Promise<string> => {
     const { url, ...options } = args as { url: string } & Record<
@@ -2049,7 +2627,10 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
       ...cleaned,
       origin: ORIGIN,
     } as any);
-    return asText(res);
+    return formatToolResponse(
+      withResultNotice(res, 'map'),
+      'Retry firecrawl_map with a lower limit or narrower search term to retrieve omitted URLs.'
+    );
   },
 });
 
@@ -2062,13 +2643,9 @@ server.addTool({
     destructiveHint: false, // Query-only; no destructive side effects on external entities.
   },
   description: `
-Search web, news, or image sources and return ranked results. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit results to GitHub, research, PDF, or developer sources.
+Search web, news, image, and specialized sources. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. Use \`categories: ["developer"]\` for indexed GitHub and documentation results.
 
-For a programming question, add \`categories: ["developer"]\`. It searches an index of GitHub issues, merged pull requests, repository READMEs, and curated documentation sites, and returns the hits in \`data.developer\` beside the web results.
-
-\`categories: ["research"]\` restricts these web results to research-affiliated websites and returns page snippets. The \`firecrawl_research_*\` tools are a separate surface that searches paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature.
-
-\`scrapeOptions\` can attach extracted page content; pages fetched this way use a fixed reuse window and ignore \`maxAge\`, so use \`firecrawl_scrape\` when a live fetch is required. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
+\`categories: ["research"]\` restricts these web results to research-affiliated websites. The \`firecrawl_research_*\` tools are a separate surface for paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature. Authenticated responses can include an \`id\` for optional search feedback.
 `,
   parameters: z
     .object({
@@ -2076,7 +2653,10 @@ For a programming question, add \`categories: ["developer"]\`. It searches an in
       scrapeOptions: scrapeParamsSchema
         .omit({ url: true })
         .partial()
-        .optional(),
+        .optional()
+        .describe(
+          'Scrape configuration applied to each result. Fetching full page content increases response size and credit use.'
+        ),
     })
     .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE),
   execute: async (args: unknown, { session, log }): Promise<string> => {
@@ -2112,7 +2692,10 @@ For a programming question, add \`categories: ["developer"]\`. It searches an in
       // identifier to keyless clients, where it would invite an unusable call.
       const keylessResponse = { ...(json ?? {}) };
       delete keylessResponse.id;
-      return asText(keylessResponse);
+      return formatToolResponse(
+        withResultNotice(keylessResponse, 'search'),
+        'Use a lower limit, narrower query, or fewer scrapeOptions formats to retrieve omitted results.'
+      );
     }
     // Call /v2/search through the SDK's HTTP layer (auth + retries) instead
     // of `client.search()` so we preserve the full response envelope. The
@@ -2120,7 +2703,10 @@ For a programming question, add \`categories: ["developer"]\`. It searches an in
     // supports the optional authenticated `firecrawl_search_feedback` workflow.
     const client = getClient(session);
     const httpRes = await (client as any).http.post('/v2/search', searchBody);
-    return asText(httpRes?.data ?? {});
+    return formatToolResponse(
+      withResultNotice(httpRes?.data ?? {}, 'search'),
+      'Use a lower limit, narrower query, or fewer scrapeOptions formats to retrieve omitted results.'
+    );
   },
 });
 
@@ -2259,57 +2845,215 @@ async function keylessPost(
   return json;
 }
 
-async function getCrawlStatusWithOrigin(
-  client: FirecrawlApp,
-  jobId: string
-): Promise<Record<string, unknown>> {
-  const res = await (client as any).http.get(
-    `/v2/crawl/${encodeURIComponent(jobId)}`,
-    ORIGIN_HEADERS
-  );
-  const body = (res?.data ?? {}) as any;
-  const initialDocs = Array.isArray(body.data) ? body.data : [];
+function crawlPageData(body: unknown): unknown[] {
+  const data = resultRecord(body)?.data;
+  if (Array.isArray(data)) return data;
+  const pages = resultRecord(data)?.pages;
+  return Array.isArray(pages) ? pages : [];
+}
 
-  if (!body.next) {
+function crawlNext(body: Record<string, unknown>): string | null {
+  if ('next' in body && typeof body.next === 'string') return body.next;
+  const data = Array.isArray(body.data) ? undefined : resultRecord(body.data);
+  return data && 'next' in data && typeof data.next === 'string'
+    ? data.next
+    : null;
+}
+
+function crawlDataBytes(docs: unknown[]): number {
+  return Buffer.byteLength(JSON.stringify(docs));
+}
+
+function validatedCrawlContinuation(jobId: string, continuation: string): string {
+  const apiBase = new URL(resolveApiBaseUrl());
+  const url = new URL(continuation, apiBase);
+  const apiBasePath = apiBase.pathname.replace(/\/$/, '');
+  const expectedPath = `${apiBasePath}/v2/crawl/${encodeURIComponent(jobId)}`;
+  if (url.origin !== apiBase.origin || url.pathname !== expectedPath) {
+    throw new InvalidCrawlContinuationError();
+  }
+  return `${url.pathname.slice(apiBasePath.length)}${url.search}`;
+}
+
+function takeCrawlDocumentWindow(documents: unknown[], offset: number): unknown[] {
+  const window: unknown[] = [];
+  let bytes = 0;
+  for (const document of documents.slice(offset)) {
+    if (window.length >= CRAWL_MAX_DOCUMENTS) break;
+    const documentBytes = Buffer.byteLength(JSON.stringify(document));
+    if (window.length > 0 && bytes + documentBytes > CRAWL_MAX_BYTES) break;
+    window.push(document);
+    bytes += documentBytes;
+  }
+  return window;
+}
+
+type CrawlNoticeContinuation =
+  | { offset: number; hasMore: boolean; next?: string }
+  | { next: string; shownFrom?: number };
+
+function crawlWindowNotice(
+  jobId: string,
+  shown: number,
+  total: number | undefined,
+  continuation: CrawlNoticeContinuation
+): Record<string, unknown> {
+  if ('offset' in continuation) {
+    const { offset, hasMore, next } = continuation;
+    const first = shown > 0 ? offset + 1 : offset;
+    const last = offset + shown;
+    const range = shown > 0 ? `${first}-${last}` : 'empty';
+    const totalText = total == null ? '' : ` of ${total}`;
+    const nextOffset = offset + shown;
+    const nextArg = next == null ? '' : `, next: "${next}"`;
     return {
-      id: jobId,
-      status: body.status,
-      completed: body.completed ?? 0,
-      total: body.total ?? 0,
-      creditsUsed: body.creditsUsed,
-      expiresAt: body.expiresAt,
-      next: body.next ?? null,
-      data: initialDocs,
+      truncated: hasMore,
+      shown_range: {
+        start: first,
+        end: last,
+        ...(total == null ? {} : { total }),
+      },
+      ...(hasMore
+        ? { next_offset: nextOffset, ...(next == null ? {} : { next }) }
+        : {}),
+      message: hasMore
+        ? `Shown documents ${range}${totalText}. Call firecrawl_check_crawl_status with id: "${jobId}"${nextArg} and offset: ${nextOffset} to retrieve later documents.`
+        : `Shown documents ${range}${totalText}. All available documents have been returned.`,
     };
   }
 
-  const docs = initialDocs.slice();
-  let current = body.next as string | null;
-  while (current) {
-    const pageRes = await (client as any).http.get(current, ORIGIN_HEADERS);
-    const payload = (pageRes?.data ?? {}) as any;
+  const totalText = total == null ? '' : ` of ${total} total`;
+  // A manual offset shifts the absolute position of the shown documents even
+  // when the resume path is a cursor; the displayed range must reflect it.
+  const base = continuation.shownFrom ?? 0;
+  const first = base + (shown > 0 ? 1 : 0);
+  const last = base + shown;
+  const range = shown > 0 ? `${first}-${last}` : 'empty';
+  return {
+    truncated: true,
+    shown_range: {
+      start: first,
+      end: last,
+      ...(total == null ? {} : { total }),
+    },
+    next: continuation.next,
+    message: `Shown documents ${range} in this cursor window${totalText}. Call firecrawl_check_crawl_status with id: "${jobId}" and next: "${continuation.next}" to retrieve later documents.`,
+  };
+}
+
+async function getCrawlStatusWithOrigin(
+  client: unknown,
+  jobId: string,
+  continuation?: string,
+  offset = 0
+): Promise<Record<string, unknown>> {
+  const requestPath = continuation
+    ? validatedCrawlContinuation(jobId, continuation)
+    : `/v2/crawl/${encodeURIComponent(jobId)}`;
+  const http = (client as ClientLike).http;
+  const res = await http.get(requestPath, ORIGIN_HEADERS);
+  const body = resultRecord(res.data) ?? {};
+  const pageDocuments = crawlPageData(body);
+  let current = crawlNext(body);
+  const usesOffsetWindow = !continuation && !current;
+  // Every page is bounded through the same window; a partially shown page is
+  // resumed with the same cursor plus an offset instead of being dropped.
+  const docs = takeCrawlDocumentWindow(pageDocuments, offset);
+  let bytes = crawlDataBytes(docs);
+  let pageHasMore = offset + docs.length < pageDocuments.length;
+  let partialCursor: string | null = continuation ?? null;
+
+  while (
+    !pageHasMore &&
+    current &&
+    docs.length < CRAWL_MAX_DOCUMENTS &&
+    bytes < CRAWL_MAX_BYTES
+  ) {
+    const pageRes = await http.get(current, ORIGIN_HEADERS);
+    const payload = resultRecord(pageRes.data) ?? {};
     if (!payload.success) break;
 
-    const pageData = Array.isArray(payload.data)
-      ? payload.data
-      : payload.data?.pages || [];
+    const pageData = crawlPageData(payload);
+    const pageBytes = crawlDataBytes(pageData);
+    if (
+      docs.length + pageData.length > CRAWL_MAX_DOCUMENTS ||
+      bytes + pageBytes > CRAWL_MAX_BYTES
+    ) {
+      if (docs.length > 0) break;
+      // Nothing shown yet: take what fits from this page so the call returns
+      // progress instead of an empty result.
+      const window = takeCrawlDocumentWindow(pageData, 0);
+      docs.push(...window);
+      bytes += crawlDataBytes(window);
+      if (window.length < pageData.length) {
+        pageHasMore = true;
+        partialCursor = String(current);
+      } else {
+        current = crawlNext(payload);
+      }
+      break;
+    }
     docs.push(...pageData);
-    current =
-      payload.next ??
-      (Array.isArray(payload.data) ? null : payload.data?.next) ??
-      null;
+    bytes += pageBytes;
+    current = crawlNext(payload);
   }
 
-  return {
+  const synthesizedCursor =
+    pageHasMore && partialCursor === null
+      ? `${resolveApiBaseUrl()}/v2/crawl/${encodeURIComponent(jobId)}?skip=${offset + docs.length}`
+      : undefined;
+  if (synthesizedCursor) partialCursor = synthesizedCursor;
+
+  const result: Record<string, unknown> = {
     id: jobId,
     status: body.status,
     completed: body.completed ?? 0,
     total: body.total ?? 0,
     creditsUsed: body.creditsUsed,
     expiresAt: body.expiresAt,
-    next: null,
+    next: pageHasMore ? partialCursor : current,
     data: docs,
   };
+  const total = Number.isFinite(Number(body.total))
+    ? Number(body.total)
+    : usesOffsetWindow
+      ? pageDocuments.length
+      : undefined;
+  if (pageHasMore) {
+    result._firecrawl = synthesizedCursor
+      ? crawlWindowNotice(jobId, docs.length, total, {
+          next: synthesizedCursor,
+          shownFrom: offset,
+        })
+      : crawlWindowNotice(jobId, docs.length, total, {
+          offset,
+          hasMore: true,
+          next: partialCursor ?? undefined,
+        });
+  } else if (usesOffsetWindow && offset > 0) {
+    result._firecrawl = crawlWindowNotice(jobId, docs.length, total, {
+      offset,
+      hasMore: false,
+    });
+  } else if (current) {
+    result._firecrawl = crawlWindowNotice(jobId, docs.length, total, {
+      next: current,
+    });
+  }
+  return result;
+}
+
+function crawlResponseGuidance(
+  response: Record<string, unknown>,
+  jobId: string,
+  fallback: string
+): string {
+  const windowMessage = resultRecord(response._firecrawl)?.message;
+  if (typeof windowMessage === 'string') return windowMessage;
+  if (response.next) {
+    return `Call firecrawl_check_crawl_status with id: "${jobId}" and next: "${String(response.next)}" to retrieve later documents; ${fallback}`;
+  }
+  return fallback;
 }
 
 async function waitForCrawlCompletionWithOrigin(
@@ -2346,16 +3090,25 @@ const feedbackIssueSchema = z
   );
 
 const valuableSourceSchema = z.object({
-  url: z.string().url(),
-  reason: z.string().max(1000).optional(),
+  url: z.string().url().describe('Useful source URL.'),
+  reason: z
+    .string()
+    .max(1000)
+    .optional()
+    .describe('Why this source was useful.'),
 });
 
 const missingContentSchema = z.object({
   topic: z
     .string()
     .min(1, 'topic must not be empty')
-    .max(200, 'topic must be 200 characters or fewer'),
-  description: z.string().max(2000).optional(),
+    .max(200, 'topic must be 200 characters or fewer')
+    .describe('Short name for the missing topic.'),
+  description: z
+    .string()
+    .max(2000)
+    .optional()
+    .describe('Details about the expected missing content.'),
 });
 
 const FEEDBACK_DISABLED_VALUES = new Set(['1', 'true', 'yes', 'on']);
@@ -2392,34 +3145,32 @@ if (!SEARCH_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
       destructiveHint: false, // Additive only; records feedback and may refund credits, does not delete data.
     },
     description: `
-Records schema-validated quality feedback for a prior \`firecrawl_search\` UUID \`searchId\`. A \`good\` rating requires a valuable source, \`partial\` a valuable source or at least one \`missingContent\` entry, and \`bad\` at least one \`missingContent\` entry or a query suggestion; caps are 50 \`valuableSources\` and 20 \`missingContent\` entries.
-
-Eligibility is limited to successful searches within the feedback age window. The record is idempotent per search ID. Eligible first feedback for a search can refund 1 credit; refunds are subject to the team's daily cap. The response reports whether a refund was applied, along with submission and daily-cap status.
+Record quality feedback for a prior search ID. A \`good\` rating requires a valuable source, \`partial\` a valuable source or \`missingContent\`, and \`bad\` \`missingContent\` or a query suggestion. Caps are 50 \`valuableSources\` and 20 \`missingContent\` entries; eligible searches must be within the feedback age window, and records are idempotent per search ID. Eligible first feedback can refund 1 credit subject to the team's daily cap; the response reports whether a refund was applied and daily-cap status.
 `,
     parameters: z.object({
       searchId: z
         .string()
-        .uuid('searchId must be the UUID returned by firecrawl_search'),
-      rating: z.enum(['good', 'bad', 'partial']),
+        .uuid('searchId must be the UUID returned by firecrawl_search')
+        .describe('UUID returned by firecrawl_search.'),
+      rating: z
+        .enum(['good', 'bad', 'partial'])
+        .describe('Overall search-result quality rating.'),
       valuableSources: z
         .array(
           z.object({
-            url: z.string().url(),
-            reason: z.string().max(1000).optional(),
+            url: z.string().url().describe('Useful result URL.'),
+            reason: z
+              .string()
+              .max(1000)
+              .optional()
+              .describe('Why this source was useful.'),
           })
         )
         .max(50)
-        .optional(),
+        .optional()
+        .describe('Useful sources from the search; maximum 50.'),
       missingContent: z
-        .array(
-          z.object({
-            topic: z
-              .string()
-              .min(1, 'topic must not be empty')
-              .max(200, 'topic must be 200 characters or fewer'),
-            description: z.string().max(2000).optional(),
-          })
-        )
+        .array(missingContentSchema)
         .max(20)
         .optional()
         .describe(
@@ -2427,7 +3178,11 @@ Eligibility is limited to successful searches within the feedback age window. Th
             'One entry per distinct topic. Each entry has a short `topic` and optional ' +
             'longer `description`.'
         ),
-      querySuggestions: z.string().max(2000).optional(),
+      querySuggestions: z
+        .string()
+        .max(2000)
+        .optional()
+        .describe('Suggested query improvements; maximum 2000 characters.'),
     }),
     execute: async (args: unknown, { session, log }): Promise<string> => {
       const {
@@ -2469,7 +3224,12 @@ Eligibility is limited to successful searches within the feedback age window. Th
       if (credential) {
         headers['Authorization'] = `Bearer ${credential}`;
       } else if (process.env.CLOUD_SERVICE === 'true') {
-        throw new Error('Unauthorized: missing API key for search feedback.');
+        throw agentLegibleError(
+          'AUTH_REQUIRED',
+          'Search feedback requires an authenticated Firecrawl account.',
+          'Connect the existing Firecrawl MCP server or configure an API key, then start a new session and retry.',
+          session?.requestId
+        );
       }
 
       log.info('Submitting search feedback', { searchId, rating });
@@ -2495,13 +3255,15 @@ Eligibility is limited to successful searches within the feedback age window. Th
           status: response.status,
           feedbackErrorCode: parsed?.feedbackErrorCode,
         });
-        return asText({
-          success: false,
-          status: response.status,
-          feedbackErrorCode: parsed?.feedbackErrorCode,
-          error: parsed?.error ?? `HTTP ${response.status}`,
-          retryable: response.status >= 500,
-        });
+        throw agentLegibleError(
+          'FEEDBACK_REJECTED',
+          parsed?.error ?? `HTTP ${response.status}`,
+          response.status >= 500
+            ? 'Retry once later with the same substantive feedback.'
+            : 'Check the search ID, feedback fields, and submission window before retrying.',
+          session?.requestId,
+          response.status >= 500
+        );
       }
 
       return asText(parsed);
@@ -2525,23 +3287,59 @@ if (!ENDPOINT_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
       destructiveHint: false, // Additive only; submits ratings and notes, does not delete jobs or external content.
     },
     description: `
-Submit concise quality feedback for a completed search, scrape, parse, or map job. Provide the endpoint, job ID, rating, and relevant issue codes or small contextual fields; omit large page contents and raw outputs.
-
-Returns submission status, feedback ID, and accounting fields.
+Record quality feedback for a completed search, scrape, parse, or map job. This creates feedback metadata but does not modify the original job or its result.
 `,
     parameters: z.object({
-      endpoint: z.enum(['search', 'scrape', 'parse', 'map']),
-      jobId: z.string().uuid('jobId must be the UUID returned by Firecrawl'),
-      rating: z.enum(['good', 'bad', 'partial']),
-      issues: z.array(feedbackIssueSchema).max(20).optional(),
-      tags: z.array(feedbackIssueSchema).max(20).optional(),
-      note: z.string().max(4000).optional(),
-      valuableSources: z.array(valuableSourceSchema).max(50).optional(),
-      missingContent: z.array(missingContentSchema).max(50).optional(),
-      querySuggestions: z.string().max(2000).optional(),
-      url: z.string().url().optional(),
-      pageNumbers: z.array(z.number().int().positive()).max(100).optional(),
-      metadata: z.record(z.string(), z.unknown()).optional(),
+      endpoint: z
+        .enum(['search', 'scrape', 'parse', 'map'])
+        .describe('Firecrawl operation being rated.'),
+      jobId: z
+        .string()
+        .uuid('jobId must be the UUID returned by Firecrawl')
+        .describe('UUID returned by the rated Firecrawl operation.'),
+      rating: z
+        .enum(['good', 'bad', 'partial'])
+        .describe('Overall operation-result quality rating.'),
+      issues: z
+        .array(feedbackIssueSchema)
+        .max(20)
+        .optional()
+        .describe('Machine-readable issue codes; maximum 20.'),
+      tags: z
+        .array(feedbackIssueSchema)
+        .max(20)
+        .optional()
+        .describe('Additional classification tags; maximum 20.'),
+      note: z
+        .string()
+        .max(4000)
+        .optional()
+        .describe('Concise feedback note; maximum 4000 characters.'),
+      valuableSources: z
+        .array(valuableSourceSchema)
+        .max(50)
+        .optional()
+        .describe('Useful sources from the result; maximum 50.'),
+      missingContent: z
+        .array(missingContentSchema)
+        .max(50)
+        .optional()
+        .describe('Expected content absent from the result; maximum 50.'),
+      querySuggestions: z
+        .string()
+        .max(2000)
+        .optional()
+        .describe('Suggested query improvements; maximum 2000 characters.'),
+      url: z.string().url().optional().describe('Relevant source URL.'),
+      pageNumbers: z
+        .array(z.number().int().positive())
+        .max(100)
+        .optional()
+        .describe('Relevant one-based page numbers; maximum 100.'),
+      metadata: z
+        .record(z.string(), z.unknown())
+        .optional()
+        .describe('Small structured context for the feedback.'),
     }),
     execute: async (args: unknown, { session, log }): Promise<string> => {
       const {
@@ -2581,7 +3379,12 @@ Returns submission status, feedback ID, and accounting fields.
       if (credential) {
         headers['Authorization'] = `Bearer ${credential}`;
       } else if (process.env.CLOUD_SERVICE === 'true') {
-        throw new Error('Unauthorized: missing API key for feedback.');
+        throw agentLegibleError(
+          'AUTH_REQUIRED',
+          'Endpoint feedback requires an authenticated Firecrawl account.',
+          'Connect the existing Firecrawl MCP server or configure an API key, then start a new session and retry.',
+          session?.requestId
+        );
       }
 
       const body = removeEmptyTopLevel({
@@ -2620,13 +3423,15 @@ Returns submission status, feedback ID, and accounting fields.
           status: response.status,
           feedbackErrorCode: parsed?.feedbackErrorCode,
         });
-        return asText({
-          success: false,
-          status: response.status,
-          feedbackErrorCode: parsed?.feedbackErrorCode,
-          error: parsed?.error ?? `HTTP ${response.status}`,
-          retryable: response.status >= 500,
-        });
+        throw agentLegibleError(
+          'FEEDBACK_REJECTED',
+          parsed?.error ?? `HTTP ${response.status}`,
+          response.status >= 500
+            ? 'Retry once later with the same substantive feedback.'
+            : 'Check the job ID, feedback fields, and submission window before retrying.',
+          session?.requestId,
+          response.status >= 500
+        );
       }
 
       return asText(parsed);
@@ -2643,32 +3448,69 @@ server.addTool({
     destructiveHint: false, // Reads pages from target sites; does not delete or alter external websites.
   },
   description: `
-Start a multi-page crawl at a website URL, poll it to a terminal state, and return the final status and collected data. Scope can be bounded with include/exclude paths, depth, page limit, subdomain/external-link controls, sitemap handling, delay, and scrape options.
-
-Crawl results can be large; use conservative limits when full-site coverage is unnecessary. Webhooks and interactive scrape actions are unavailable in safe mode. Returns the crawl ID, status, and page data.
+Start a multi-page website crawl and wait for its terminal state. Use for page content across a site; \`firecrawl_map\` returns only URLs. Truncated results name the exact \`firecrawl_check_crawl_status\` follow-up using an upstream \`next\` cursor or a document \`offset\`.
 `,
   parameters: z.object({
-    url: z.string(),
-    prompt: z.string().optional(),
-    excludePaths: z.array(z.string()).optional(),
-    includePaths: z.array(z.string()).optional(),
-    maxDiscoveryDepth: z.number().optional(),
-    sitemap: z.enum(['skip', 'include', 'only']).optional(),
-    limit: z.number().optional(),
-    allowExternalLinks: z.boolean().optional(),
-    allowSubdomains: z.boolean().optional(),
-    crawlEntireDomain: z.boolean().optional(),
-    delay: z.number().optional(),
-    maxConcurrency: z.number().optional(),
+    url: z.string().describe('Website URL where the crawl starts.'),
+    prompt: z.string().optional().describe('Natural-language crawl scope instructions.'),
+    excludePaths: z
+      .array(z.string())
+      .optional()
+      .describe('URL path patterns to exclude.'),
+    includePaths: z
+      .array(z.string())
+      .optional()
+      .describe('URL path patterns to include.'),
+    maxDiscoveryDepth: z
+      .number()
+      .optional()
+      .describe('Maximum link depth from the starting URL.'),
+    sitemap: z
+      .enum(['skip', 'include', 'only'])
+      .optional()
+      .describe('Whether sitemap URLs are skipped, included, or exclusive.'),
+    limit: z.number().optional().describe('Maximum pages to crawl.'),
+    allowExternalLinks: z
+      .boolean()
+      .optional()
+      .describe('Allow crawling links outside the starting domain.'),
+    allowSubdomains: z
+      .boolean()
+      .optional()
+      .describe('Allow crawling subdomains.'),
+    crawlEntireDomain: z
+      .boolean()
+      .optional()
+      .describe('Expand beyond the starting URL path.'),
+    delay: z.number().optional().describe('Delay between requests in seconds.'),
+    maxConcurrency: z
+      .number()
+      .optional()
+      .describe('Maximum concurrent crawl requests.'),
     ...(SAFE_MODE
       ? {}
       : {
-          webhook: z.string().optional(),
-          webhookHeaders: z.record(z.string(), z.string()).optional(),
+          webhook: z.string().optional().describe('Webhook URL for crawl events.'),
+          webhookHeaders: z
+            .record(z.string(), z.string())
+            .optional()
+            .describe('HTTP headers sent to the crawl webhook.'),
         }),
-    deduplicateSimilarURLs: z.boolean().optional(),
-    ignoreQueryParameters: z.boolean().optional(),
-    scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+    deduplicateSimilarURLs: z
+      .boolean()
+      .optional()
+      .describe('Remove URLs with substantially similar paths.'),
+    ignoreQueryParameters: z
+      .boolean()
+      .optional()
+      .describe('Deduplicate URLs that differ only by query parameters.'),
+    scrapeOptions: scrapeParamsSchema
+      .omit({ url: true })
+      .partial()
+      .optional()
+      .describe(
+        'Scrape configuration applied to every crawled page. Rich formats increase response size and credit use.'
+      ),
   }),
   execute: async (args, { session, log }) => {
     const { url, ...options } = args as Record<string, unknown>;
@@ -2705,7 +3547,13 @@ Crawl results can be large; use conservative limits when full-site coverage is u
     });
     const crawlId = started?.data?.id;
     if (!crawlId) {
-      return asText(started?.data ?? {});
+      throw agentLegibleError(
+        'CRAWL_START_FAILED',
+        started?.data?.error ?? 'Firecrawl did not return a crawl job ID.',
+        'Check the crawl URL and options, then retry once; do not report a crawl as started without a job ID.',
+        session?.requestId,
+        true
+      );
     }
     const res = await waitForCrawlCompletionWithOrigin(
       client,
@@ -2713,7 +3561,14 @@ Crawl results can be large; use conservative limits when full-site coverage is u
       pollInterval,
       timeout
     );
-    return asText(res);
+    return formatToolResponse(
+      withResultNotice(res, 'crawl'),
+      crawlResponseGuidance(
+        res,
+        crawlId,
+        'Narrow scrapeOptions to retrieve omitted document fields.'
+      )
+    );
   },
 });
 
@@ -2726,17 +3581,45 @@ server.addTool({
     destructiveHint: false, // Status lookup only; no deletes or updates.
   },
   description: `
-Retrieve the current status, progress, and available results for an existing crawl ID. This only reads Firecrawl job state and does not start or modify the crawl.
+Retrieve status and available results for an existing crawl ID without starting or modifying it. Follow the returned guidance with either an upstream \`next\` cursor or a document \`offset\` to retrieve later documents.
 `,
-  parameters: z.object({ id: z.string() }),
+  parameters: z.object({
+    id: z.string().min(1).describe('Crawl job ID.'),
+    next: z
+      .string()
+      .max(4_096)
+      .optional()
+      .describe(
+        'Upstream continuation URL returned by a previous status call; combine with offset when prior guidance shows a partially returned page.'
+      ),
+    offset: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe(
+        'Zero-based document offset returned in prior guidance, applied within the page being retrieved.'
+      ),
+  }),
   execute: async (
     args: unknown,
     { session }: { session?: SessionData }
   ): Promise<string> => {
     const client = getClient(session);
-    const id = (args as any).id as string;
-    const res = await getCrawlStatusWithOrigin(client, id);
-    return asText(res);
+    const { id, next, offset = 0 } = args as {
+      id: string;
+      next?: string;
+      offset?: number;
+    };
+    const res = await getCrawlStatusWithOrigin(client, id, next, offset);
+    return formatToolResponse(
+      withResultNotice(res, 'crawl'),
+      crawlResponseGuidance(
+        res,
+        id,
+        'Narrow the crawl request to retrieve omitted document fields.'
+      )
+    );
   },
 });
 
@@ -2783,14 +3666,24 @@ server.addTool({
     destructiveHint: false, // Gathers information only; does not delete external data or user resources.
   },
   description: `
-Start an asynchronous web research job from a prompt, optional seed URLs, and an optional JSON schema. Use this for a requested synthesis across multiple sources when the task can wait for asynchronous completion. The agent can search, navigate, read pages, and assemble a structured result.
-
-This call returns only a job ID, not the research result. Read the job with \`firecrawl_agent_status\` until it reaches \`completed\` or \`failed\`; research commonly takes several minutes. If the job cannot finish within the task's available time, \`firecrawl_search\` and \`firecrawl_scrape\` can gather evidence synchronously.
+Start an asynchronous multi-source web research job. Use for synthesis that can wait for asynchronous completion; \`firecrawl_search\` and \`firecrawl_scrape\` return evidence synchronously. This call returns only a job ID, not the research result; read it with \`firecrawl_agent_status\`.
 `,
   parameters: z.object({
-    prompt: z.string().min(1).max(10000),
-    urls: z.array(z.string().url()).optional(),
-    schema: z.record(z.string(), z.any()).optional(),
+    prompt: z
+      .string()
+      .min(1)
+      .max(10000)
+      .describe('Research question and requested output.'),
+    urls: z
+      .array(z.string().url())
+      .optional()
+      .describe('Optional seed URLs for the research job.'),
+    schema: z
+      .record(z.string(), z.any())
+      .optional()
+      .describe(
+        'JSON Schema-like object defining the final structured result. Narrow schemas reduce result size.'
+      ),
   }),
   execute: async (args: unknown, { session, log }): Promise<string> => {
     const client = getClient(session);
@@ -2821,11 +3714,11 @@ server.addTool({
     destructiveHint: false, // Read-only status check.
   },
   description: `
-Retrieve progress or final results for a \`firecrawl_agent\` job ID. A \`processing\` response is non-terminal and does not contain the final research result. Check again after 15–30 seconds until the status is \`completed\` or \`failed\`; complex jobs can take several minutes. If the job cannot finish within the task's available time, use \`firecrawl_search\` and \`firecrawl_scrape\` to complete the requested output.
-
-Returns job status, progress information, and result data when completed.
+Retrieve progress or final results for a \`firecrawl_agent\` job ID. A \`processing\` response is non-terminal and does not contain the final research result; check again until \`completed\` or \`failed\`.
 `,
-  parameters: z.object({ id: z.string() }),
+  parameters: z.object({
+    id: z.string().describe('Agent job ID.'),
+  }),
   execute: async (args: unknown, { session, log }): Promise<string> => {
     const client = getClient(session);
     const { id } = args as { id: string };
@@ -2834,7 +3727,10 @@ Returns job status, progress information, and result data when completed.
       `/v2/agent/${encodeURIComponent(id)}`,
       ORIGIN_HEADERS
     );
-    return asText(res?.data ?? {});
+    return formatToolResponse(
+      withResultNotice(res?.data ?? {}, 'agent'),
+      'Use a narrower agent prompt or schema to retrieve omitted result content.'
+    );
   },
 });
 
@@ -2848,19 +3744,49 @@ server.addTool({
     destructiveHint: false, // Transient page interactions only; does not delete monitors, jobs, or external sites.
   },
   description: `
-Open or reuse a live browser session to navigate a page, click controls, fill fields, or run browser code. Provide either \`url\` or \`scrapeId\`, and either a natural-language \`prompt\` or executable \`code\`; code can run as Bash, Python, or Node with a bounded timeout.
-
-This acts on the live site, so actions such as form submission can create persistent external side effects. Returns execution output, stdout/stderr, exit status, and session viewing URLs.
+Open or reuse a live browser session to interact with a page by prompt or code. This acts on the live site, so form submissions and similar actions can create persistent external side effects.
 `,
   parameters: z
     .object({
-      scrapeId: z.string().trim().min(1).optional(),
-      url: z.string().trim().url().optional(),
-      prompt: z.string().trim().min(1).optional(),
-      code: z.string().trim().min(1).optional(),
-      language: z.enum(['bash', 'python', 'node']).optional(),
-      timeout: z.number().min(1).max(300).optional(),
-      scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+      scrapeId: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .describe('Existing scrape session ID; mutually exclusive with url.'),
+      url: z
+        .string()
+        .trim()
+        .url()
+        .optional()
+        .describe('Page URL to open; mutually exclusive with scrapeId.'),
+      prompt: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .describe('Natural-language browser interaction instructions.'),
+      code: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .describe('Executable browser-session code; may accompany prompt.'),
+      language: z
+        .enum(['bash', 'python', 'node'])
+        .optional()
+        .describe('Code runtime; used only with code.'),
+      timeout: z
+        .number()
+        .min(1)
+        .max(300)
+        .optional()
+        .describe('Execution timeout in seconds; maximum 300.'),
+      scrapeOptions: scrapeParamsSchema
+        .omit({ url: true })
+        .partial()
+        .optional()
+        .describe('Scrape configuration used only when opening url.'),
     })
     .refine((data) => Boolean(data.scrapeId) !== Boolean(data.url), {
       message:
@@ -2895,7 +3821,7 @@ This acts on the live site, so actions such as form submission can create persis
     // session, then interact. One tool call instead of scrape + interact.
     let scrapeId = providedScrapeId;
     const openedFromUrl = !scrapeId;
-    if (openedFromUrl) {
+    if (!scrapeId) {
       log.info('Opening interact session from url', { url });
       const cleanedScrapeOptions = removeEmptyTopLevel(scrapeOptions ?? {});
       const scraped = await client.scrape(String(url), {
@@ -2904,18 +3830,13 @@ This acts on the live site, so actions such as form submission can create persis
       } as any);
       scrapeId = (scraped as any)?.metadata?.scrapeId;
       if (!scrapeId) {
-        return asText({
-          error:
-            'Could not open an interact session: the scrape did not return a scrapeId. Try firecrawl_scrape first, then pass its scrapeId.',
-          url,
-        });
+        throw agentLegibleError(
+          'INTERACT_SESSION_UNAVAILABLE',
+          'The scrape did not return a scrapeId.',
+          'Verify the URL, call firecrawl_scrape, and retry firecrawl_interact with the returned scrapeId.',
+          session?.requestId
+        );
       }
-    }
-    if (!scrapeId) {
-      return asText({
-        error: 'Could not open an interact session: missing scrapeId.',
-        url,
-      });
     }
     const activeScrapeId = scrapeId;
     log.info('Interacting with page', { scrapeId: activeScrapeId });
@@ -2925,16 +3846,16 @@ This acts on the live site, so actions such as form submission can create persis
     if (language) interactArgs.language = language;
     if (timeout != null) interactArgs.timeout = timeout;
     const res = await client.interact(activeScrapeId, interactArgs as any);
-    if (openedFromUrl && res && typeof res === 'object' && !Array.isArray(res)) {
-      return asText({
-        ...(res as unknown as Record<string, unknown>),
-        scrapeId: activeScrapeId,
-      });
-    }
-    if (openedFromUrl) {
-      return asText({ scrapeId: activeScrapeId, result: res });
-    }
-    return asText(res);
+    const result =
+      openedFromUrl && res && typeof res === 'object' && !Array.isArray(res)
+        ? { ...(res as unknown as Record<string, unknown>), scrapeId: activeScrapeId }
+        : openedFromUrl
+          ? { scrapeId: activeScrapeId, result: res }
+          : res;
+    return formatToolResponse(
+      result,
+      'Use a narrower interaction prompt or code output to retrieve omitted content.'
+    );
   },
 });
 
@@ -2947,10 +3868,10 @@ server.addTool({
     destructiveHint: true, // Terminates the live browser session; this end state cannot be resumed.
   },
   description: `
-Stop the live interact session associated with a \`scrapeId\` and release its resources. Returns a success confirmation.
+Stop a live interact session and release its resources. The stopped session cannot be resumed.
 `,
   parameters: z.object({
-    scrapeId: z.string(),
+    scrapeId: z.string().describe('Interact session ID to stop.'),
   }),
   execute: async (args: unknown, { session, log }): Promise<string> => {
     const client = getClient(session);
@@ -2975,11 +3896,7 @@ server.addTool({
     destructiveHint: false, // Read-only parsing; no deletion or writes to the source file.
   },
   description: `
-Parse one supported document into markdown, HTML, links, summary, targeted answers, or JSON matching a schema. Supported inputs include common HTML, PDF, Word, RTF, OpenDocument, and spreadsheet files; PDF parsing can be bounded with \`pdfOptions.maxPages\`.
-
-Local MCP reads \`filePath\` from the server filesystem. Hosted MCP uses two calls: first provide \`filePath\` to receive upload instructions, upload locally, then call again with the returned \`uploadRef\`; do not send both fields together. Remote web URLs belong in \`firecrawl_scrape\`.
-
-Set \`redactPII\` to request redaction of personally identifiable information in the returned content. \`zeroDataRetention\` requires an eligible authenticated account; omit it for anonymous keyless use. Returns upload instructions for hosted phase one or parsed document content for the final call.
+Parse one local or uploaded document into text or structured data; remote web URLs belong in \`firecrawl_scrape\`. Local MCP reads \`filePath\`; hosted MCP first returns upload instructions, then parses the returned \`uploadRef\`. \`redactPII\` requests personal-data redaction; \`zeroDataRetention\` requires an eligible account, so omit it for anonymous keyless use.
 `,
   parameters: parseParamsSchema,
   execute: async (args: unknown, { session, log }): Promise<string> => {
@@ -2989,8 +3906,11 @@ Set \`redactPII\` to request redaction of personally identifiable information in
 
     const apiUrl = process.env.FIRECRAWL_API_URL;
     if (!apiUrl) {
-      throw new Error(
-        'firecrawl_parse requires FIRECRAWL_API_URL to be set to a self-hosted Firecrawl API instance.'
+      throw agentLegibleError(
+        'PARSE_CONFIG_REQUIRED',
+        'firecrawl_parse requires FIRECRAWL_API_URL to be set to a self-hosted Firecrawl API instance.',
+        'Set FIRECRAWL_API_URL on the local MCP server, start a new session, and retry.',
+        session?.requestId
       );
     }
 
@@ -2998,10 +3918,7 @@ Set \`redactPII\` to request redaction of personally identifiable information in
       filePath,
       contentType: overrideContentType,
       ...options
-    } = args as {
-      filePath: string;
-      contentType?: string;
-    } & Record<string, unknown>;
+    } = args as z.infer<typeof localParseParamsSchema>;
 
     const absPath = path.resolve(filePath);
     const buffer = await readFile(absPath);
@@ -3043,15 +3960,26 @@ Set \`redactPII\` to request redaction of personally identifiable information in
 
     const responseText = await response.text();
     if (!response.ok) {
-      throw new Error(
-        `Parse request failed with status ${response.status}: ${responseText}`
+      throw agentLegibleError(
+        'PARSE_REQUEST_FAILED',
+        `Parse request failed with status ${response.status}: ${responseText}`,
+        'Verify the file type and parse options, then retry once if the request is safe to repeat.',
+        session?.requestId,
+        response.status >= 500
       );
     }
 
     try {
-      return asText(JSON.parse(responseText));
+      return formatToolResponse(
+        JSON.parse(responseText),
+        'Parse fewer pages or request fewer output formats to retrieve omitted content.'
+      );
     } catch {
-      return responseText;
+      if (responseText.length <= RESPONSE_MAX_CHARS) return responseText;
+      return formatToolResponse(
+        responseText,
+        'Parse fewer pages or request fewer output formats to retrieve omitted content.'
+      );
     }
   },
 });
@@ -3073,11 +4001,9 @@ function registerMarketplaceSearchTool(
       destructiveHint: false,
     },
     description: `
-Search web and specialized indexes, returning ranked results. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit result types to \`github\`, \`research\`, \`pdf\`, or \`developer\`.
+Search web and specialized indexes. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. Use \`categories: ["developer"]\` for indexed GitHub and documentation results.
 
-For a programming question, add \`categories: ["developer"]\`. It searches an index of GitHub issues, merged pull requests, repository READMEs, and curated documentation sites, and returns the hits in \`data.developer\` beside the web results.
-
-Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
+\`categories: ["research"]\` restricts these web results to research-affiliated websites. The \`firecrawl_research_*\` tools are a separate surface for paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature.
 `,
     parameters: z
       .object({ ...searchToolBaseFields })
@@ -3139,7 +4065,10 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
       log.info('Searching', { query: searchQuery });
       const client = getClientFn(session);
       const httpRes = await (client as any).http.post('/v2/search', searchBody);
-      return asText(httpRes?.data ?? {});
+      return formatToolResponse(
+        withResultNotice(httpRes?.data ?? {}, 'search'),
+        'Use a lower limit or narrower query to retrieve omitted results.'
+      );
     },
   });
 }

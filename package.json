@@ -30,7 +30,7 @@
     "@mendable/firecrawl-js": "4.25.2",
     "dotenv": "^17.2.2",
     "fastmcp": "4.3.2",
-    "zod": "^4.1.5"
+    "zod": "4.1.13"
   },
   "engines": {
     "node": ">=22.0.0"
