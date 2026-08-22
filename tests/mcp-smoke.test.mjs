@@ -457,6 +457,10 @@ test('tool failures carry structured codes instead of silent success', async (t)
       assert.equal(result.structuredContent.retryable, false, name);
       assert.doesNotMatch(result.structuredContent.message, /\bretry\b/i, name);
     }
+    if (expectedCode === 'UPSTREAM_REQUEST_FAILED') {
+      // Status checks are read-only; unclassified failures stay retryable.
+      assert.equal(result.structuredContent.retryable, true, name);
+    }
   }
 });
 
@@ -493,6 +497,10 @@ test('parse, interact, and monitor failures use the shared structured boundary',
     ],
     ['firecrawl_search', { query: 'plan-gated feature' }, 'UPSTREAM_REQUEST_FAILED'],
   ]) {
+    // Non-idempotent tools must not advertise retryable on unclassified
+    // upstream failures: the action may already have taken effect (a created
+    // monitor, a submitted form) and an obedient agent would repeat it.
+    const expectedRetryable = name === 'firecrawl_search';
     const response = await httpToolCall(port, {
       id: `structured-${name}`,
       headers: { 'x-api-key': 'fc-test' },
@@ -502,6 +510,9 @@ test('parse, interact, and monitor failures use the shared structured boundary',
     assert.equal(result.isError, true, name);
     assert.equal(result.structuredContent.code, expectedCode, name);
     assert.equal(typeof result.structuredContent.original_error, 'string', name);
+    if (expectedCode === 'UPSTREAM_REQUEST_FAILED') {
+      assert.equal(result.structuredContent.retryable, expectedRetryable, name);
+    }
   }
 });
 

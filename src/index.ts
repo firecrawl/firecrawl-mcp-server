@@ -1176,7 +1176,20 @@ class InvalidCrawlContinuationError extends Error {
   }
 }
 
-function wrapToolError(error: unknown, requestId: string): UserError {
+// Tools whose failed calls may already have produced external side effects (a
+// submitted form, a created monitor). Unclassified failures on these must not
+// advertise retryable: an obedient agent would repeat the side effect.
+const NON_IDEMPOTENT_TOOLS = new Set([
+  'firecrawl_interact',
+  'firecrawl_monitor_create',
+]);
+
+function wrapToolError(
+  error: unknown,
+  requestId: string,
+  toolName?: string
+): UserError {
+  const safeToRepeat = !NON_IDEMPOTENT_TOOLS.has(toolName ?? '');
   if (error instanceof UserError) return error;
   const message = errorText(error);
   if (/unauthori[sz]ed|api key|credentials? required/i.test(message)) {
@@ -1207,9 +1220,11 @@ function wrapToolError(error: unknown, requestId: string): UserError {
     return agentLegibleError(
       'UPSTREAM_TIMEOUT',
       error,
-      'Retry once with a narrower request or a longer supported timeout; if the job ID is known, check its status instead of starting a duplicate job.',
+      safeToRepeat
+        ? 'Retry once with a narrower request or a longer supported timeout; if the job ID is known, check its status instead of starting a duplicate job.'
+        : 'The action may have taken effect despite the timeout. Verify the current state (re-check the page or list existing monitors) before repeating it.',
       requestId,
-      true
+      safeToRepeat
     );
   }
   if (error instanceof InvalidCrawlContinuationError) {
@@ -1223,9 +1238,11 @@ function wrapToolError(error: unknown, requestId: string): UserError {
   return agentLegibleError(
     'UPSTREAM_REQUEST_FAILED',
     error,
-    'Verify the request and Firecrawl service availability, then retry once if the operation is safe to repeat.',
+    safeToRepeat
+      ? 'Verify the request and Firecrawl service availability, then retry once if the operation is safe to repeat.'
+      : 'The action may have taken effect despite the error. Verify the current state (re-check the page or list existing monitors) before repeating it.',
     requestId,
-    true
+    safeToRepeat
   );
 }
 
@@ -1455,7 +1472,7 @@ function guardHostedTool(
         }
         return result;
       } catch (error) {
-        const wrapped = wrapToolError(error, requestId);
+        const wrapped = wrapToolError(error, requestId, tool.name);
         if (logActions) {
           emitActionLog(
             tool.name,
