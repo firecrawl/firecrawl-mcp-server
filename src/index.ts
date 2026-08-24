@@ -16,6 +16,7 @@ import { escapeWWWAuthenticateValue } from './www-authenticate';
 import {
   credentialForOutboundRequest,
   copyManagedOAuthApiKey,
+  credentialValidationUnavailable,
   CredentialValidationUnavailableError,
   hasCredential,
   hasManagedOAuthCredential,
@@ -394,10 +395,16 @@ async function introspectToken(
   expectedResource: string
 ): Promise<OAuthIntrospectionResponse> {
   const introspectionSecret = getOAuthIntrospectionSecret();
-  if (!introspectionSecret) throw new CredentialValidationUnavailableError();
+  if (!introspectionSecret)
+    throw credentialValidationUnavailable('introspect_secret_missing');
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 1500);
+  let aborted = false;
+  const timeout = setTimeout(() => {
+    aborted = true;
+    controller.abort();
+  }, 1500);
+  const startedAt = Date.now();
   let response: Response;
   try {
     response = await fetch(getOAuthIntrospectionEndpoint(), {
@@ -414,18 +421,38 @@ async function introspectToken(
       signal: controller.signal,
     });
   } catch {
-    throw new CredentialValidationUnavailableError();
+    throw credentialValidationUnavailable('introspect_fetch_failed', {
+      aborted,
+      elapsedMs: Date.now() - startedAt,
+      resource: expectedResource,
+    });
   } finally {
     clearTimeout(timeout);
   }
-  if (!response.ok) throw new CredentialValidationUnavailableError();
+  const elapsedMs = Date.now() - startedAt;
+  if (!response.ok) {
+    throw credentialValidationUnavailable('introspect_non_2xx', {
+      status: response.status,
+      elapsedMs,
+      resource: expectedResource,
+    });
+  }
   const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
   if (!contentType.includes('application/json')) {
-    throw new CredentialValidationUnavailableError();
+    throw credentialValidationUnavailable('introspect_non_json', {
+      status: response.status,
+      elapsedMs,
+      contentType,
+      resource: expectedResource,
+    });
   }
   const data = (await response.json()) as OAuthIntrospectionResponse;
   if (typeof data.active !== 'boolean') {
-    throw new CredentialValidationUnavailableError();
+    throw credentialValidationUnavailable('introspect_active_not_boolean', {
+      status: response.status,
+      elapsedMs,
+      resource: expectedResource,
+    });
   }
   if (
     data.active &&
@@ -433,7 +460,11 @@ async function introspectToken(
       !isOAuthCredentialPurpose(data.credential_purpose) ||
       !values(data.scope).includes(MCP_GLOBAL_SCOPE))
   ) {
-    throw new CredentialValidationUnavailableError();
+    throw credentialValidationUnavailable('introspect_payload_invalid', {
+      status: response.status,
+      elapsedMs,
+      resource: expectedResource,
+    });
   }
   return data;
 }
@@ -1386,11 +1417,12 @@ function getClient(session?: SessionData): FirecrawlApp {
   const client = createClient('request-scoped-hosted-oauth');
   const axiosInstance = (client as any).http?.instance;
   if (!axiosInstance?.interceptors?.request?.use) {
-    throw new CredentialValidationUnavailableError();
+    throw credentialValidationUnavailable('outbound_interceptor_unavailable');
   }
   axiosInstance.interceptors.request.use((config: any) => {
     const credential = credentialForOutboundRequest(session);
-    if (!credential) throw new CredentialValidationUnavailableError();
+    if (!credential)
+      throw credentialValidationUnavailable('outbound_credential_missing');
     config.headers = {
       ...(config.headers ?? {}),
       Authorization: `Bearer ${credential}`,

@@ -1891,6 +1891,58 @@ test('credential validation outages do not misdirect clients into OAuth', async 
   }
 });
 
+test('credential validation outages name the failing dependency in logs', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const unavailableIssuerPort = await getFreePort();
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+    FIRECRAWL_OAUTH_ISSUER: `http://127.0.0.1:${unavailableIssuerPort}`,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  await waitForHealth(port, child);
+
+  const response = await fetch(`http://127.0.0.1:${port}/v2/mcp-oauth`, {
+    body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'tools/list', params: {} }),
+    headers: {
+      accept: 'application/json, text/event-stream',
+      authorization: 'Bearer fco_account_token',
+      'content-type': 'application/json',
+    },
+    method: 'POST',
+  });
+  assert.equal(response.status, 503);
+
+  const records = stderr
+    .split('\n')
+    .filter((line) => line.includes('[MCP_CREDENTIAL_UNAVAILABLE]'))
+    .map((line) =>
+      JSON.parse(line.slice(line.indexOf('[MCP_CREDENTIAL_UNAVAILABLE]') + 28))
+    );
+  assert.ok(records.length > 0, `no credential telemetry emitted: ${stderr}`);
+
+  // An unreachable issuer is a dependency outage, not a deploy fault. Operators
+  // must be able to tell those apart without reproducing the failure.
+  const record = records[0];
+  assert.equal(record.reason, 'introspect_fetch_failed');
+  assert.equal(typeof record.elapsedMs, 'number');
+  assert.equal(record.resource, 'https://mcp.firecrawl.dev/v2/mcp-oauth');
+
+  // The record explains the outage without carrying the credential that caused it.
+  assert.equal(stderr.includes('fco_account_token'), false, stderr);
+});
+
 test('active introspection with an unknown credential purpose fails closed', async (t) => {
   const accountResource = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
   const backend = await startFakeFirecrawlBackend({
