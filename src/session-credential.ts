@@ -13,10 +13,44 @@ export interface CredentialSession {
   [managedOAuthApiKey]?: string;
 }
 
+/**
+ * Names the validation step that failed. Deliberately low cardinality and
+ * server-side only: these tags are for operators triaging a credential
+ * validation outage, and they never carry credential material.
+ */
+export type CredentialValidationReason =
+  | 'introspect_secret_missing'
+  | 'introspect_transport_error'
+  | 'introspect_http_status'
+  | 'introspect_content_type'
+  | 'introspect_malformed_body'
+  | 'introspect_unusable_credential'
+  | 'delegated_signing_secret_missing'
+  | 'delegated_credential_unavailable'
+  | 'outbound_client_uninstrumented';
+
+export type CredentialValidationDiagnostics = {
+  reason: CredentialValidationReason;
+  /** Introspection response status, when a response was actually received. */
+  status?: number;
+  /** Wall time spent on the introspection attempt, in milliseconds. */
+  elapsedMs?: number;
+  /** True when the introspection request was cut short by its own budget. */
+  aborted?: boolean;
+};
+
+/**
+ * Every failed credential check funnels through this one error, so the client
+ * sees a single stable sentence. The diagnostics ride along for the server log
+ * and are never rendered into the response.
+ */
 export class CredentialValidationUnavailableError extends Error {
-  constructor() {
+  readonly diagnostics: CredentialValidationDiagnostics;
+
+  constructor(diagnostics: CredentialValidationDiagnostics) {
     super('Firecrawl credential validation is temporarily unavailable');
     this.name = 'CredentialValidationUnavailableError';
+    this.diagnostics = diagnostics;
   }
 }
 
@@ -31,7 +65,11 @@ type McpDelegatedCredentialPayload = {
 
 function delegationSecret(): string {
   const secret = process.env.MCP_DELEGATED_CREDENTIAL_SECRET?.trim();
-  if (!secret) throw new CredentialValidationUnavailableError();
+  if (!secret) {
+    throw new CredentialValidationUnavailableError({
+      reason: 'delegated_signing_secret_missing',
+    });
+  }
   return secret;
 }
 

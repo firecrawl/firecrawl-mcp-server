@@ -304,6 +304,34 @@ function createInvalidOAuthRecoveryResponse(
   );
 }
 
+/**
+ * Seconds advertised to the client after a failed credential check. Short
+ * enough that a working session recovers on the next attempt, long enough that
+ * a client retrying immediately does not amplify an upstream outage.
+ */
+const CREDENTIAL_VALIDATION_RETRY_AFTER_SECONDS = 5;
+
+/**
+ * A failed credential check is a temporary server-side condition, not a verdict
+ * on the client's credential, so this stays a 503 (RFC 9110 15.6.4) and carries
+ * `Retry-After` to name a concrete wait. Two things are deliberately absent:
+ * `WWW-Authenticate`, which would push a still-valid session into a needless
+ * reauthorization, and an OAuth `error` code, which RFC 6749 reserves for 400
+ * and 401 responses and which clients surface as an authentication verdict. The
+ * body is the sentence alone; the reason for the failure goes to the server log.
+ */
+function createCredentialValidationUnavailableResponse(
+  error: CredentialValidationUnavailableError
+): Response {
+  return new Response(error.message, {
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Retry-After': String(CREDENTIAL_VALIDATION_RETRY_AFTER_SECONDS),
+    },
+    status: 503,
+  });
+}
+
 function getOAuthIntrospectionEndpoint(): string {
   return `${getOAuthIssuer()}/api/oauth/introspect`;
 }
@@ -394,10 +422,16 @@ async function introspectToken(
   expectedResource: string
 ): Promise<OAuthIntrospectionResponse> {
   const introspectionSecret = getOAuthIntrospectionSecret();
-  if (!introspectionSecret) throw new CredentialValidationUnavailableError();
+  if (!introspectionSecret) {
+    throw new CredentialValidationUnavailableError({
+      reason: 'introspect_secret_missing',
+    });
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 1500);
+  const startedAt = Date.now();
+  const elapsedMs = () => Date.now() - startedAt;
   let response: Response;
   try {
     response = await fetch(getOAuthIntrospectionEndpoint(), {
@@ -414,18 +448,38 @@ async function introspectToken(
       signal: controller.signal,
     });
   } catch {
-    throw new CredentialValidationUnavailableError();
+    // Separating the budget abort from a genuine transport fault is the whole
+    // point of recording `aborted`: they need different operational responses.
+    throw new CredentialValidationUnavailableError({
+      aborted: controller.signal.aborted,
+      elapsedMs: elapsedMs(),
+      reason: 'introspect_transport_error',
+    });
   } finally {
     clearTimeout(timeout);
   }
-  if (!response.ok) throw new CredentialValidationUnavailableError();
+  if (!response.ok) {
+    throw new CredentialValidationUnavailableError({
+      elapsedMs: elapsedMs(),
+      reason: 'introspect_http_status',
+      status: response.status,
+    });
+  }
   const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
   if (!contentType.includes('application/json')) {
-    throw new CredentialValidationUnavailableError();
+    throw new CredentialValidationUnavailableError({
+      elapsedMs: elapsedMs(),
+      reason: 'introspect_content_type',
+      status: response.status,
+    });
   }
   const data = (await response.json()) as OAuthIntrospectionResponse;
   if (typeof data.active !== 'boolean') {
-    throw new CredentialValidationUnavailableError();
+    throw new CredentialValidationUnavailableError({
+      elapsedMs: elapsedMs(),
+      reason: 'introspect_malformed_body',
+      status: response.status,
+    });
   }
   if (
     data.active &&
@@ -433,7 +487,13 @@ async function introspectToken(
       !isOAuthCredentialPurpose(data.credential_purpose) ||
       !values(data.scope).includes(MCP_GLOBAL_SCOPE))
   ) {
-    throw new CredentialValidationUnavailableError();
+    // Introspection answered cleanly; the credential it described cannot be
+    // used here. Tagged apart from an outage so the two are never conflated.
+    throw new CredentialValidationUnavailableError({
+      elapsedMs: elapsedMs(),
+      reason: 'introspect_unusable_credential',
+      status: response.status,
+    });
   }
   return data;
 }
@@ -683,6 +743,32 @@ function emitLegacyKeyPathTelemetry(
 }
 
 /**
+ * Records which credential check failed, for operators only. The client body is
+ * one fixed sentence for every one of these, so without this line an upstream
+ * introspection outage, a missing secret, and a credential that introspected
+ * cleanly but cannot be used here are indistinguishable after the fact.
+ *
+ * Intentionally low cardinality. Never add the token, the resolved API key, the
+ * upstream response body, request URLs, user agents, or hashes of any of them.
+ */
+function emitCredentialValidationFailure(
+  profile: ServerProfile,
+  error: CredentialValidationUnavailableError
+): void {
+  const { aborted, elapsedMs, reason, status } = error.diagnostics;
+  console.error(
+    '[MCP_CREDENTIAL_VALIDATION]',
+    JSON.stringify({
+      aborted: aborted ?? null,
+      elapsed_ms: elapsedMs ?? null,
+      introspect_status: status ?? null,
+      profile: profile.id,
+      reason,
+    })
+  );
+}
+
+/**
  * Builds the `authenticate` hook for one profile. FastMCP runs it on every
  * request (including `tools/list`), so a rejection here yields a 401 with the
  * profile's own OAuth challenge and no request reaches an unauthenticated tool.
@@ -727,16 +813,8 @@ function makeAuthenticate(profile: ServerProfile) {
           throw oauthChallenge ?? createInvalidOAuthRecoveryResponse(recovery);
         }
         if (error instanceof CredentialValidationUnavailableError) {
-          throw new Response(
-            JSON.stringify({
-              error: 'temporarily_unavailable',
-              error_description: error.message,
-            }),
-            {
-              headers: { 'Content-Type': 'application/json' },
-              status: 503,
-            }
-          );
+          emitCredentialValidationFailure(profile, error);
+          throw createCredentialValidationUnavailableResponse(error);
         }
         const shouldChallenge = requestShouldReceiveOAuthChallenge(request, profile);
         const oauthChallenge = shouldChallenge
@@ -1386,11 +1464,17 @@ function getClient(session?: SessionData): FirecrawlApp {
   const client = createClient('request-scoped-hosted-oauth');
   const axiosInstance = (client as any).http?.instance;
   if (!axiosInstance?.interceptors?.request?.use) {
-    throw new CredentialValidationUnavailableError();
+    throw new CredentialValidationUnavailableError({
+      reason: 'outbound_client_uninstrumented',
+    });
   }
   axiosInstance.interceptors.request.use((config: any) => {
     const credential = credentialForOutboundRequest(session);
-    if (!credential) throw new CredentialValidationUnavailableError();
+    if (!credential) {
+      throw new CredentialValidationUnavailableError({
+        reason: 'delegated_credential_unavailable',
+      });
+    }
     config.headers = {
       ...(config.headers ?? {}),
       Authorization: `Bearer ${credential}`,

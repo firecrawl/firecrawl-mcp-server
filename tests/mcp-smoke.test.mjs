@@ -70,6 +70,35 @@ const INVALID_API_KEY_MESSAGE =
 const INVALID_OAUTH_MESSAGE =
   'This Firecrawl account connection is no longer valid.\nFix: Reconnect the existing Firecrawl server in the client, or set that existing server URL to https://mcp.firecrawl.dev/v2/mcp-oauth, then start a new session.';
 
+const CREDENTIAL_VALIDATION_MESSAGE =
+  'Firecrawl credential validation is temporarily unavailable';
+const CREDENTIAL_VALIDATION_LOG_PREFIX = '[MCP_CREDENTIAL_VALIDATION] ';
+
+async function assertCredentialValidationUnavailable(response, label) {
+  assert.equal(response.status, 503, label);
+  // A challenge here would send a still-valid session into reauthorization.
+  assert.equal(response.headers.has('www-authenticate'), false, label);
+  assert.equal(response.headers.get('retry-after'), '5', label);
+  const body = await response.text();
+  assert.equal(body, CREDENTIAL_VALIDATION_MESSAGE, label);
+  // OAuth error codes belong on 400 and 401 responses; clients read them as an
+  // authentication verdict, which this is not.
+  assert.doesNotMatch(body, /temporarily_unavailable/, label);
+}
+
+async function waitForCredentialValidationLog(readStderr) {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const line = readStderr()
+      .split('\n')
+      .find((entry) => entry.startsWith(CREDENTIAL_VALIDATION_LOG_PREFIX));
+    if (line) {
+      return JSON.parse(line.slice(CREDENTIAL_VALIDATION_LOG_PREFIX.length));
+    }
+    await delay(25);
+  }
+  return undefined;
+}
+
 function assertKeylessAccountRecovery(
   result,
   { code, message, retryAfterSeconds, untrustedRequestIds = [] }
@@ -1873,9 +1902,14 @@ test('credential validation outages do not misdirect clients into OAuth', async 
     PORT: String(port),
   });
   t.after(() => stopChild(child));
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
   await waitForHealth(port, child);
 
   for (const token of ['fc-account-key', 'fco_account_token']) {
+    stderr = '';
     const response = await fetch(`http://127.0.0.1:${port}/v2/mcp-oauth`, {
       body: JSON.stringify({ id: token, jsonrpc: '2.0', method: 'tools/list', params: {} }),
       headers: {
@@ -1885,9 +1919,17 @@ test('credential validation outages do not misdirect clients into OAuth', async 
       },
       method: 'POST',
     });
-    assert.equal(response.status, 503, token);
-    assert.equal(response.headers.has('www-authenticate'), false, token);
-    assert.equal((await response.json()).error, 'temporarily_unavailable', token);
+    await assertCredentialValidationUnavailable(response, token);
+
+    // An unreachable issuer is a transport fault, not the abort budget firing.
+    const record = await waitForCredentialValidationLog(() => stderr);
+    assert.ok(record, `${token}: missing validation log in ${stderr}`);
+    assert.equal(record.reason, 'introspect_transport_error', token);
+    assert.equal(record.introspect_status, null, token);
+    assert.equal(record.aborted, false, token);
+    assert.equal(record.profile, 'account', token);
+    assert.equal(typeof record.elapsed_ms, 'number', token);
+    assert.doesNotMatch(stderr, new RegExp(token), token);
   }
 });
 
@@ -1927,9 +1969,119 @@ test('active introspection with an unknown credential purpose fails closed', asy
     },
     method: 'POST',
   });
-  assert.equal(response.status, 503);
-  assert.equal(response.headers.has('www-authenticate'), false);
-  assert.equal((await response.json()).error, 'temporarily_unavailable');
+  await assertCredentialValidationUnavailable(response, 'unknown purpose');
+});
+
+test('each credential validation failure logs its own reason and status', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+
+  // Introspection responses are swapped per case so one server exercises every
+  // way the check can come back unusable.
+  let respond = () => ({ body: '{}', status: 500 });
+  const issuerPort = await getFreePort();
+  const issuer = createServer(async (req, res) => {
+    req.setEncoding('utf8');
+    for await (const chunk of req) void chunk;
+    if (req.method === 'POST' && req.url === '/api/oauth/introspect') {
+      const { body, contentType = 'application/json', status } = respond();
+      res.writeHead(status, { 'content-type': contentType });
+      res.end(body);
+      return;
+    }
+    res.writeHead(404, { 'content-type': 'application/json' });
+    res.end('{}');
+  });
+  await new Promise((resolve) => issuer.listen(issuerPort, '127.0.0.1', resolve));
+  t.after(() => issuer.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+    FIRECRAWL_OAUTH_ISSUER: `http://127.0.0.1:${issuerPort}`,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret-value',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  await waitForHealth(port, child);
+
+  const clientToken = 'fco_client_access_token_value';
+  const resolvedApiKey = 'fc-resolved-api-key-value';
+  const cases = [
+    {
+      // What an introspection endpoint returns when it rejects this server's
+      // own shared secret: a clean, fast answer that is still not a 2xx.
+      expectedStatus: 401,
+      reason: 'introspect_http_status',
+      respond: () => ({ body: JSON.stringify({ active: false }), status: 401 }),
+    },
+    {
+      expectedStatus: 200,
+      reason: 'introspect_content_type',
+      respond: () => ({
+        body: '<html>gateway</html>',
+        contentType: 'text/html',
+        status: 200,
+      }),
+    },
+    {
+      expectedStatus: 200,
+      reason: 'introspect_malformed_body',
+      respond: () => ({ body: JSON.stringify({ active: 'yes' }), status: 200 }),
+    },
+    {
+      // Introspection answered cleanly and the credential it described cannot
+      // be used on this resource. Tagged apart from an outage.
+      expectedStatus: 200,
+      reason: 'introspect_unusable_credential',
+      respond: () => ({
+        body: JSON.stringify({
+          active: true,
+          api_key: resolvedApiKey,
+          credential_purpose: 'general',
+          scope: '',
+        }),
+        status: 200,
+      }),
+    },
+  ];
+
+  for (const testCase of cases) {
+    respond = testCase.respond;
+    stderr = '';
+    const response = await fetch(`http://127.0.0.1:${port}/v2/mcp-oauth`, {
+      body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'tools/list', params: {} }),
+      headers: {
+        accept: 'application/json, text/event-stream',
+        authorization: `Bearer ${clientToken}`,
+        'content-type': 'application/json',
+      },
+      method: 'POST',
+    });
+    await assertCredentialValidationUnavailable(response, testCase.reason);
+
+    const record = await waitForCredentialValidationLog(() => stderr);
+    assert.ok(record, `${testCase.reason}: missing validation log in ${stderr}`);
+    assert.equal(record.reason, testCase.reason);
+    assert.equal(record.introspect_status, testCase.expectedStatus, testCase.reason);
+    assert.equal(record.profile, 'account', testCase.reason);
+    assert.equal(record.aborted, null, testCase.reason);
+    assert.equal(typeof record.elapsed_ms, 'number', testCase.reason);
+    assert.ok(record.elapsed_ms >= 0, testCase.reason);
+
+    // The log exists for operators. It must never carry credential material.
+    for (const secret of [clientToken, resolvedApiKey, 'introspect-secret-value']) {
+      assert.doesNotMatch(stderr, new RegExp(secret), `${testCase.reason}: ${secret}`);
+    }
+  }
 });
 
 test('account endpoint accepts legacy OAuth one way and delegates managed keys', async (t) => {
