@@ -2038,6 +2038,19 @@ test('each credential validation failure logs its own reason and status', async 
       respond: () => ({ body: JSON.stringify({ active: 'yes' }), status: 200 }),
     },
     {
+      // A JSON null would throw on the `active` read and escape as an OAuth
+      // challenge carrying the raw parser message.
+      expectedStatus: 200,
+      reason: 'introspect_malformed_body',
+      respond: () => ({ body: 'null', status: 200 }),
+    },
+    {
+      // Truncated body under a JSON content type: same escape route.
+      expectedStatus: 200,
+      reason: 'introspect_malformed_body',
+      respond: () => ({ body: '{"active":true', status: 200 }),
+    },
+    {
       // Introspection answered cleanly and the credential it described cannot
       // be used on this resource. Tagged apart from an outage.
       expectedStatus: 200,

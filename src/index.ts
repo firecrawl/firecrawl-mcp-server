@@ -473,8 +473,14 @@ async function introspectToken(
       status: response.status,
     });
   }
-  const data = (await response.json()) as OAuthIntrospectionResponse;
-  if (typeof data.active !== 'boolean') {
+  // A body that fails to parse, or that parses to something without a boolean
+  // `active`, is an unusable answer rather than a verdict on the credential.
+  // Reading `active` off `null` would throw past every tagged error here and
+  // reach the client as an OAuth challenge carrying raw parser text.
+  const data = (await response.json().catch(() => null)) as
+    | OAuthIntrospectionResponse
+    | null;
+  if (!data || typeof data.active !== 'boolean') {
     throw new CredentialValidationUnavailableError({
       elapsedMs: elapsedMs(),
       reason: 'introspect_malformed_body',
@@ -747,6 +753,10 @@ function emitLegacyKeyPathTelemetry(
  * one fixed sentence for every one of these, so without this line an upstream
  * introspection outage, a missing secret, and a credential that introspected
  * cleanly but cannot be used here are indistinguishable after the fact.
+ *
+ * Scope is rejections raised while authenticating a request. The outbound client
+ * tags are raised during tool execution and surface as tool errors, so they do
+ * not reach this hook.
  *
  * Intentionally low cardinality. Never add the token, the resolved API key, the
  * upstream response body, request URLs, user agents, or hashes of any of them.
