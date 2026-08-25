@@ -372,6 +372,14 @@ async function startFakeFirecrawlBackend(options = {}) {
       return;
     }
 
+    // Core is the authority on a forwarded API key, so the suite's invalid keys
+    // are rejected here rather than at introspection.
+    if ((req.headers.authorization ?? '').includes('invalid')) {
+      res.writeHead(401, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Unauthorized: Invalid token', success: false }));
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/v2/search') {
       if (searchResponse) {
         res.writeHead(searchResponse.status, { 'content-type': 'application/json' });
@@ -1909,9 +1917,8 @@ test('credential validation outages do not misdirect clients into OAuth', async 
   });
   await waitForHealth(port, child);
 
-  for (const token of ['fc-account-key', 'fco_account_token']) {
-    stderr = '';
-    const response = await fetch(`http://127.0.0.1:${port}/v2/mcp-oauth`, {
+  const listTools = (token) =>
+    fetch(`http://127.0.0.1:${port}/v2/mcp-oauth`, {
       body: JSON.stringify({ id: token, jsonrpc: '2.0', method: 'tools/list', params: {} }),
       headers: {
         accept: 'application/json, text/event-stream',
@@ -1920,18 +1927,30 @@ test('credential validation outages do not misdirect clients into OAuth', async 
       },
       method: 'POST',
     });
-    await assertCredentialValidationUnavailable(response, token);
 
-    // An unreachable issuer is a transport fault, not the abort budget firing.
-    const record = await waitForCredentialValidationLog(() => stderr);
-    assert.ok(record, `${token}: missing validation log in ${stderr}`);
-    assert.equal(record.reason, 'introspect_transport_error', token);
-    assert.equal(record.introspect_status, null, token);
-    assert.equal(record.aborted, false, token);
-    assert.equal(record.resource, ACCOUNT_RESOURCE, token);
-    assert.equal(typeof record.elapsed_ms, 'number', token);
-    assert.doesNotMatch(stderr, new RegExp(token), token);
-  }
+  // An OAuth access token cannot be resolved without the issuer, so it still
+  // fails closed.
+  stderr = '';
+  const oauth = await listTools('fco_account_token');
+  await assertCredentialValidationUnavailable(oauth, 'fco_account_token');
+
+  // An unreachable issuer is a transport fault, not the abort budget firing.
+  const record = await waitForCredentialValidationLog(() => stderr);
+  assert.ok(record, `missing validation log in ${stderr}`);
+  assert.equal(record.reason, 'introspect_transport_error');
+  assert.equal(record.introspect_status, null);
+  assert.equal(record.aborted, false);
+  assert.equal(record.resource, ACCOUNT_RESOURCE);
+  assert.equal(typeof record.elapsed_ms, 'number');
+  assert.doesNotMatch(stderr, /fco_account_token/);
+
+  // An API key never needed the issuer, so the same outage does not reach it.
+  stderr = '';
+  const apiKey = await listTools('fc-account-key');
+  assert.equal(apiKey.status, 200);
+  assert.match(await apiKey.text(), /firecrawl_scrape/);
+  await delay(150);
+  assert.doesNotMatch(stderr, /\[MCP_CREDENTIAL_VALIDATION\]/);
 });
 
 test('active introspection with an unknown credential purpose fails closed', async (t) => {
@@ -2489,10 +2508,14 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
   const invalidLegacyJson = parseSseJson(await invalidLegacyPath.text());
   assert.ok((invalidLegacyJson.result?.tools?.length ?? 0) > 0);
   await delay(25);
-  const rejectedTelemetry = stdout
+  // A well-formed API key is admitted at connect time now that Core owns the
+  // verdict, so the legacy-path record reports accepted and the correction is
+  // delivered by the tool call above. The record must still name no credential.
+  const legacyTelemetry = stdout
     .split(/\r?\n/)
-    .find((line) => line.includes('[MCP_LEGACY_KEY_PATH]') && line.includes('\"outcome\":\"rejected\"'));
-  assert.ok(rejectedTelemetry, stdout);
-  assert.doesNotMatch(rejectedTelemetry, /\bfc-[^\s"]+/);
-  assert.doesNotMatch(rejectedTelemetry, /(?:\d{1,3}\.){3}\d{1,3}|::1/);
+    .find((line) => line.includes('[MCP_LEGACY_KEY_PATH]'));
+  assert.ok(legacyTelemetry, stdout);
+  assert.match(legacyTelemetry, /"outcome":"accepted"/);
+  assert.doesNotMatch(legacyTelemetry, /\bfc-[^\s"]+/);
+  assert.doesNotMatch(legacyTelemetry, /(?:\d{1,3}\.){3}\d{1,3}|::1/);
 });

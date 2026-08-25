@@ -530,6 +530,16 @@ async function resolveCredentialFromHeaders(
     return { invalid: true };
   }
 
+  // An API key is already the credential Core authenticates, so introspection
+  // resolved it to itself. That round trip bought no authorization decision
+  // Core does not make on every call, while putting each request behind a third
+  // service. Forward it and let Core be the authority; a rejection comes back as
+  // the CREDENTIAL_INVALID recovery at the tool boundary. OAuth access tokens
+  // still require introspection, because Core cannot resolve one on its own.
+  if (isFirecrawlApiKey(token)) {
+    return { credential: token, source: 'api-key' };
+  }
+
   let data = await introspectToken(token, profile.resourceUrl);
   if (
     isFirecrawlOAuthAccessToken(token) &&
@@ -539,20 +549,7 @@ async function resolveCredentialFromHeaders(
     data = await introspectToken(token, DEFAULT_MCP_RESOURCE_URL);
   }
   if (!data.active || !data.api_key) {
-    if (isFirecrawlOAuthAccessToken(token)) {
-      throw new InvalidOAuthCredentialError();
-    }
-    return { invalid: true };
-  }
-
-  if (isFirecrawlApiKey(token)) {
-    return data.credential_purpose === 'general'
-      ? {
-          credential: data.api_key,
-          source: 'api-key',
-          metadata: credentialMetadata(data),
-        }
-      : { invalid: true };
+    throw new InvalidOAuthCredentialError();
   }
   const expectedAudience =
     profile.acceptLegacyAudience &&
@@ -1127,6 +1124,46 @@ function invalidOAuthRecoveryPayload(): Record<string, unknown> & { message: str
   });
 }
 
+/**
+ * Core rejected the credential this session forwarded. Tools reach Core two
+ * ways: the SDK helpers raise FirecrawlSdkError, while firecrawl_search posts
+ * through the SDK's axios layer to keep the full response envelope. Both carry
+ * the upstream status. Only 401 is matched, because that is a verdict on the
+ * credential; a 403 can mean an entitlement the key legitimately lacks.
+ */
+function isCoreCredentialRejection(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const candidate = error as {
+    isAxiosError?: unknown;
+    name?: string;
+    response?: { status?: unknown };
+    status?: unknown;
+  };
+  if (candidate.name !== 'FirecrawlSdkError' && candidate.isAxiosError !== true) {
+    return false;
+  }
+  return candidate.status === 401 || candidate.response?.status === 401;
+}
+
+/**
+ * API keys reach Core unresolved, so an invalid one is discovered when a tool
+ * runs rather than at connect time. Translate that rejection into the same
+ * CREDENTIAL_INVALID recovery the agent already knows how to act on, so the
+ * guidance does not depend on having introspected the key first.
+ */
+async function runWithCredentialRecovery<T>(
+  run: () => T | Promise<T>,
+  requestId: string
+): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (!isCoreCredentialRejection(error)) throw error;
+    const payload = recoveryPayload('CREDENTIAL_INVALID', requestId);
+    throw new UserError(String(payload.message), payload);
+  }
+}
+
 function recoveryPayload(
   code: string,
   requestId: string = randomUUID(),
@@ -1333,11 +1370,16 @@ function guardHostedTool(
         if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
         throw new UserError(String(payload.message), payload);
       }
-      if (!logActions) return execute(args, invocationContext);
+      const runTool = () =>
+        runWithCredentialRecovery(
+          () => execute(args, invocationContext),
+          requestId
+        );
+      if (!logActions) return runTool();
 
       emitActionLog(tool.name, 'started', invocationSession, undefined, requestId);
       try {
-        const result = await execute(args, invocationContext);
+        const result = await runTool();
         emitActionLog(tool.name, 'success', invocationSession, undefined, requestId);
         return result;
       } catch (error) {
