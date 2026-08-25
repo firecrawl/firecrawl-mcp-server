@@ -16,6 +16,7 @@ import { escapeWWWAuthenticateValue } from './www-authenticate';
 import {
   credentialForOutboundRequest,
   copyManagedOAuthApiKey,
+  credentialValidationUnavailable,
   CredentialValidationUnavailableError,
   hasCredential,
   hasManagedOAuthCredential,
@@ -423,8 +424,9 @@ async function introspectToken(
 ): Promise<OAuthIntrospectionResponse> {
   const introspectionSecret = getOAuthIntrospectionSecret();
   if (!introspectionSecret) {
-    throw new CredentialValidationUnavailableError({
+    throw credentialValidationUnavailable({
       reason: 'introspect_secret_missing',
+      resource: expectedResource,
     });
   }
 
@@ -450,26 +452,29 @@ async function introspectToken(
   } catch {
     // Separating the budget abort from a genuine transport fault is the whole
     // point of recording `aborted`: they need different operational responses.
-    throw new CredentialValidationUnavailableError({
+    throw credentialValidationUnavailable({
       aborted: controller.signal.aborted,
       elapsedMs: elapsedMs(),
       reason: 'introspect_transport_error',
+      resource: expectedResource,
     });
   } finally {
     clearTimeout(timeout);
   }
   if (!response.ok) {
-    throw new CredentialValidationUnavailableError({
+    throw credentialValidationUnavailable({
       elapsedMs: elapsedMs(),
       reason: 'introspect_http_status',
+      resource: expectedResource,
       status: response.status,
     });
   }
   const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
   if (!contentType.includes('application/json')) {
-    throw new CredentialValidationUnavailableError({
+    throw credentialValidationUnavailable({
       elapsedMs: elapsedMs(),
       reason: 'introspect_content_type',
+      resource: expectedResource,
       status: response.status,
     });
   }
@@ -481,9 +486,10 @@ async function introspectToken(
     | OAuthIntrospectionResponse
     | null;
   if (!data || typeof data.active !== 'boolean') {
-    throw new CredentialValidationUnavailableError({
+    throw credentialValidationUnavailable({
       elapsedMs: elapsedMs(),
       reason: 'introspect_malformed_body',
+      resource: expectedResource,
       status: response.status,
     });
   }
@@ -495,9 +501,10 @@ async function introspectToken(
   ) {
     // Introspection answered cleanly; the credential it described cannot be
     // used here. Tagged apart from an outage so the two are never conflated.
-    throw new CredentialValidationUnavailableError({
+    throw credentialValidationUnavailable({
       elapsedMs: elapsedMs(),
       reason: 'introspect_unusable_credential',
+      resource: expectedResource,
       status: response.status,
     });
   }
@@ -749,36 +756,6 @@ function emitLegacyKeyPathTelemetry(
 }
 
 /**
- * Records which credential check failed, for operators only. The client body is
- * one fixed sentence for every one of these, so without this line an upstream
- * introspection outage, a missing secret, and a credential that introspected
- * cleanly but cannot be used here are indistinguishable after the fact.
- *
- * Scope is rejections raised while authenticating a request. The outbound client
- * tags are raised during tool execution and surface as tool errors, so they do
- * not reach this hook.
- *
- * Intentionally low cardinality. Never add the token, the resolved API key, the
- * upstream response body, request URLs, user agents, or hashes of any of them.
- */
-function emitCredentialValidationFailure(
-  profile: ServerProfile,
-  error: CredentialValidationUnavailableError
-): void {
-  const { aborted, elapsedMs, reason, status } = error.diagnostics;
-  console.error(
-    '[MCP_CREDENTIAL_VALIDATION]',
-    JSON.stringify({
-      aborted: aborted ?? null,
-      elapsed_ms: elapsedMs ?? null,
-      introspect_status: status ?? null,
-      profile: profile.id,
-      reason,
-    })
-  );
-}
-
-/**
  * Builds the `authenticate` hook for one profile. FastMCP runs it on every
  * request (including `tools/list`), so a rejection here yields a 401 with the
  * profile's own OAuth challenge and no request reaches an unauthenticated tool.
@@ -823,7 +800,6 @@ function makeAuthenticate(profile: ServerProfile) {
           throw oauthChallenge ?? createInvalidOAuthRecoveryResponse(recovery);
         }
         if (error instanceof CredentialValidationUnavailableError) {
-          emitCredentialValidationFailure(profile, error);
           throw createCredentialValidationUnavailableResponse(error);
         }
         const shouldChallenge = requestShouldReceiveOAuthChallenge(request, profile);
@@ -1474,14 +1450,18 @@ function getClient(session?: SessionData): FirecrawlApp {
   const client = createClient('request-scoped-hosted-oauth');
   const axiosInstance = (client as any).http?.instance;
   if (!axiosInstance?.interceptors?.request?.use) {
-    throw new CredentialValidationUnavailableError({
+    throw credentialValidationUnavailable({
       reason: 'outbound_client_uninstrumented',
     });
   }
   axiosInstance.interceptors.request.use((config: any) => {
     const credential = credentialForOutboundRequest(session);
+    // Unreachable in practice: this interceptor is installed only for a session
+    // holding a managed key, and that always signs to a non-empty credential or
+    // throws while signing. Kept because the signature is `string | undefined`,
+    // so removing it would mean asserting instead of checking.
     if (!credential) {
-      throw new CredentialValidationUnavailableError({
+      throw credentialValidationUnavailable({
         reason: 'delegated_credential_unavailable',
       });
     }

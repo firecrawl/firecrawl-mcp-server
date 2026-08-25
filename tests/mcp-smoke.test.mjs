@@ -73,6 +73,7 @@ const INVALID_OAUTH_MESSAGE =
 const CREDENTIAL_VALIDATION_MESSAGE =
   'Firecrawl credential validation is temporarily unavailable';
 const CREDENTIAL_VALIDATION_LOG_PREFIX = '[MCP_CREDENTIAL_VALIDATION] ';
+const ACCOUNT_RESOURCE = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
 
 async function assertCredentialValidationUnavailable(response, label) {
   assert.equal(response.status, 503, label);
@@ -1927,7 +1928,7 @@ test('credential validation outages do not misdirect clients into OAuth', async 
     assert.equal(record.reason, 'introspect_transport_error', token);
     assert.equal(record.introspect_status, null, token);
     assert.equal(record.aborted, false, token);
-    assert.equal(record.profile, 'account', token);
+    assert.equal(record.resource, ACCOUNT_RESOURCE, token);
     assert.equal(typeof record.elapsed_ms, 'number', token);
     assert.doesNotMatch(stderr, new RegExp(token), token);
   }
@@ -2085,7 +2086,7 @@ test('each credential validation failure logs its own reason and status', async 
     assert.ok(record, `${testCase.reason}: missing validation log in ${stderr}`);
     assert.equal(record.reason, testCase.reason);
     assert.equal(record.introspect_status, testCase.expectedStatus, testCase.reason);
-    assert.equal(record.profile, 'account', testCase.reason);
+    assert.equal(record.resource, ACCOUNT_RESOURCE, testCase.reason);
     assert.equal(record.aborted, null, testCase.reason);
     assert.equal(typeof record.elapsed_ms, 'number', testCase.reason);
     assert.ok(record.elapsed_ms >= 0, testCase.reason);

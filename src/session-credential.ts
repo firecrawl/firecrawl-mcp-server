@@ -37,6 +37,8 @@ export type CredentialValidationDiagnostics = {
   elapsedMs?: number;
   /** True when the introspection request was cut short by its own budget. */
   aborted?: boolean;
+  /** MCP resource the credential was being validated against. */
+  resource?: string;
 };
 
 /**
@@ -54,6 +56,35 @@ export class CredentialValidationUnavailableError extends Error {
   }
 }
 
+/**
+ * Builds the error and emits exactly one record for it, for operators only.
+ *
+ * The record is written here rather than wherever the error is caught, because
+ * these are raised from two different call stacks: request authentication, and
+ * outbound client setup during tool execution. Logging at a single catch site
+ * covers only the first, and silently drops any throw site added later.
+ *
+ * Intentionally low cardinality. `resource` is one of a handful of server-owned
+ * URLs. Never add the token, the resolved API key, the upstream response body
+ * or its headers, request URLs, user agents, or hashes of any of them.
+ */
+export function credentialValidationUnavailable(
+  diagnostics: CredentialValidationDiagnostics
+): CredentialValidationUnavailableError {
+  const { aborted, elapsedMs, reason, resource, status } = diagnostics;
+  console.error(
+    '[MCP_CREDENTIAL_VALIDATION]',
+    JSON.stringify({
+      aborted: aborted ?? null,
+      elapsed_ms: elapsedMs ?? null,
+      introspect_status: status ?? null,
+      reason,
+      resource: resource ?? null,
+    })
+  );
+  return new CredentialValidationUnavailableError(diagnostics);
+}
+
 type McpDelegatedCredentialPayload = {
   v: 1;
   aud: 'firecrawl-core';
@@ -66,7 +97,7 @@ type McpDelegatedCredentialPayload = {
 function delegationSecret(): string {
   const secret = process.env.MCP_DELEGATED_CREDENTIAL_SECRET?.trim();
   if (!secret) {
-    throw new CredentialValidationUnavailableError({
+    throw credentialValidationUnavailable({
       reason: 'delegated_signing_secret_missing',
     });
   }
