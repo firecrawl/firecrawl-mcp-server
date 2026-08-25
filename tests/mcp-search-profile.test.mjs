@@ -911,7 +911,7 @@ test('companion emits sanitized auth-mode telemetry without credential material'
   assert.doesNotMatch(logs, /authorization/i);
 });
 
-test('companion telemetry follows credential precedence and rejects invalid credentials', async (t) => {
+test('companion telemetry follows credential precedence for admitted API keys', async (t) => {
   const { searchPort, getStdout } = await startHostedServer(t);
 
   await listTools(searchPort, SEARCH_ENDPOINT, {
