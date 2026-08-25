@@ -418,6 +418,19 @@ function credentialMetadata(data: OAuthIntrospectionResponse): CredentialMetadat
   };
 }
 
+/**
+ * The authorization server gave us no usable answer, so there is nothing to
+ * enrich a session with. `introspect_unusable_credential` is deliberately not
+ * included: that one means it did answer, and an answer we cannot use should
+ * still fail closed rather than be treated as an absent one.
+ */
+function isIntrospectionUnavailable(error: unknown): boolean {
+  return (
+    error instanceof CredentialValidationUnavailableError &&
+    error.diagnostics.reason !== 'introspect_unusable_credential'
+  );
+}
+
 async function introspectToken(
   token: string,
   expectedResource: string
@@ -530,14 +543,32 @@ async function resolveCredentialFromHeaders(
     return { invalid: true };
   }
 
-  // An API key is already the credential Core authenticates, so introspection
-  // resolved it to itself. That round trip bought no authorization decision
-  // Core does not make on every call, while putting each request behind a third
-  // service. Forward it and let Core be the authority; a rejection comes back as
-  // the CREDENTIAL_INVALID recovery at the tool boundary. OAuth access tokens
-  // still require introspection, because Core cannot resolve one on its own.
+  // Core authenticates an API key on every call, so introspecting one resolves
+  // it to itself. What the round trip adds is enrichment, the credential_purpose
+  // check and the account attribution the action log records, not an
+  // authorization decision Core does not already make. Treat an authorization
+  // server that cannot answer as missing enrichment rather than a failed
+  // request, and let Core be the authority on the key. An answer we did get is
+  // still honoured, so behaviour is unchanged whenever introspection works.
+  //
+  // OAuth access tokens keep the strict path below: Core cannot resolve one on
+  // its own, so there is nothing to fall back to.
   if (isFirecrawlApiKey(token)) {
-    return { credential: token, source: 'api-key' };
+    const enrichment = await introspectToken(token, profile.resourceUrl).catch(
+      (error: unknown) => {
+        if (isIntrospectionUnavailable(error)) return null;
+        throw error;
+      }
+    );
+    if (!enrichment) return { credential: token, source: 'api-key' };
+    if (!enrichment.active || !enrichment.api_key) return { invalid: true };
+    return enrichment.credential_purpose === 'general'
+      ? {
+          credential: enrichment.api_key,
+          metadata: credentialMetadata(enrichment),
+          source: 'api-key',
+        }
+      : { invalid: true };
   }
 
   let data = await introspectToken(token, profile.resourceUrl);

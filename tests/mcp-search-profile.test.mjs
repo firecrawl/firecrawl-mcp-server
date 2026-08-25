@@ -151,14 +151,6 @@ async function startFakeBackend(options = {}) {
       return;
     }
 
-    // Core is the authority on a forwarded API key, so the suite's invalid keys
-    // are rejected here rather than at introspection.
-    if ((req.headers.authorization ?? '').includes('invalid')) {
-      res.writeHead(401, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Unauthorized: Invalid token', success: false }));
-      return;
-    }
-
     if (req.method === 'POST' && req.url === '/v2/search') {
       // The developer category is an extra arm: the API returns its hits in a
       // `data.developer` group beside the web results.
@@ -496,22 +488,27 @@ test('search surface requires authentication for tools/list', async (t) => {
   assert.match(wwwAuthenticate, /error="invalid_token"/);
 });
 
-test('search surface admits a well-formed API key without resolving it first', async (t) => {
+test('search surface rejects an invalid raw API credential during tools/list', async (t) => {
   const { searchPort } = await startHostedServer(t);
 
-  // Core authenticates the key on every call, so listing tools no longer waits
-  // on the authorization server. The verdict arrives when a tool runs.
   const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
     id: 8,
     method: 'tools/list',
     headers: { 'x-api-key': 'fc-invalid' },
   });
-  assert.equal(res.status, 200);
-  const message = parseSseJson(await res.text());
-  assert.ok((message.result?.tools?.length ?? 0) > 0);
+  assert.equal(res.status, 401);
+  assert.equal(res.headers.has('www-authenticate'), false);
+  const body = await res.json();
+  assert.equal(body.error, 'invalid_api_key');
+  assert.equal(body.code, 'CREDENTIAL_INVALID');
+  assert.equal(
+    body.error_description,
+    INVALID_API_KEY_MESSAGE
+  );
+  assert.equal(body.next_actions, undefined);
 });
 
-test('search surface turns a Core credential rejection into agent-legible recovery', async (t) => {
+test('search surface rejects an invalid raw API credential before a tool call', async (t) => {
   const backend = await startFakeBackend();
   t.after(() => backend.close());
   const { searchPort } = await startHostedServer(t, {
@@ -527,17 +524,17 @@ test('search surface turns a Core credential rejection into agent-legible recove
     },
     headers: { 'x-api-key': 'fc-invalid' },
   });
-  // A 200 isError result reaches the model; a transport 401 would not.
-  assert.equal(res.status, 200);
+  assert.equal(res.status, 401);
   assert.equal(res.headers.has('www-authenticate'), false);
-  const result = parseSseJson(await res.text()).result;
-  assert.equal(result.isError, true);
-  assert.equal(result.content[0].text, INVALID_API_KEY_MESSAGE);
-  assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID');
-  assert.equal(result.structuredContent.message, INVALID_API_KEY_MESSAGE);
-  assert.equal(result.structuredContent.next_actions, undefined);
-  // The key reached Core, which is what produced the verdict.
-  assert.equal(backend.requests.some((r) => r.url === '/v2/search'), true);
+  const body = await res.json();
+  assert.equal(body.error, 'invalid_api_key');
+  assert.equal(body.code, 'CREDENTIAL_INVALID');
+  assert.equal(
+    body.error_description,
+    INVALID_API_KEY_MESSAGE
+  );
+  assert.equal(body.next_actions, undefined);
+  assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
 });
 
 test('search surface serves path-scoped protected-resource metadata', async (t) => {
@@ -911,22 +908,19 @@ test('companion emits sanitized auth-mode telemetry without credential material'
   assert.doesNotMatch(logs, /authorization/i);
 });
 
-test('companion telemetry follows credential precedence for admitted API keys', async (t) => {
+test('companion telemetry follows credential precedence and rejects invalid credentials', async (t) => {
   const { searchPort, getStdout } = await startHostedServer(t);
 
   await listTools(searchPort, SEARCH_ENDPOINT, {
     authorization: 'Bearer fco_secondary-credential',
     'x-api-key': 'fc-primary-credential',
   });
-  // A well-formed key is admitted here and judged by Core, so the connect-time
-  // outcome is accepted for both. Precedence and sanitization are what this
-  // record exists to prove.
   const invalid = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
     id: 12,
     method: 'tools/list',
     headers: { authorization: 'Bearer fc-invalid-credential' },
   });
-  assert.equal(invalid.status, 200);
+  assert.equal(invalid.status, 401);
   await delay(25);
 
   const events = getStdout()
@@ -937,7 +931,7 @@ test('companion telemetry follows credential precedence for admitted API keys', 
     events.map(({ auth_mode, outcome }) => ({ auth_mode, outcome })),
     [
       { auth_mode: 'api-key', outcome: 'accepted' },
-      { auth_mode: 'api-key', outcome: 'accepted' },
+      { auth_mode: 'api-key', outcome: 'rejected' },
     ]
   );
   assert.doesNotMatch(getStdout(), /fc-primary-credential|fco_secondary-credential/);

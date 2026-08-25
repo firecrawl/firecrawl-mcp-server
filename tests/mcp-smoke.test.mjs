@@ -372,8 +372,8 @@ async function startFakeFirecrawlBackend(options = {}) {
       return;
     }
 
-    // Core is the authority on a forwarded API key, so the suite's invalid keys
-    // are rejected here rather than at introspection.
+    // Core is the authority on a forwarded API key, so a key the suite marks
+    // invalid is rejected here rather than at introspection.
     if ((req.headers.authorization ?? '').includes('invalid')) {
       res.writeHead(401, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ error: 'Unauthorized: Invalid token', success: false }));
@@ -1928,29 +1928,65 @@ test('credential validation outages do not misdirect clients into OAuth', async 
       method: 'POST',
     });
 
-  // An OAuth access token cannot be resolved without the issuer, so it still
-  // fails closed.
+  // An OAuth access token has nothing to fall back to, so it still fails closed.
   stderr = '';
   const oauth = await listTools('fco_account_token');
   await assertCredentialValidationUnavailable(oauth, 'fco_account_token');
 
   // An unreachable issuer is a transport fault, not the abort budget firing.
-  const record = await waitForCredentialValidationLog(() => stderr);
-  assert.ok(record, `missing validation log in ${stderr}`);
-  assert.equal(record.reason, 'introspect_transport_error');
-  assert.equal(record.introspect_status, null);
-  assert.equal(record.aborted, false);
-  assert.equal(record.resource, ACCOUNT_RESOURCE);
-  assert.equal(typeof record.elapsed_ms, 'number');
+  const oauthRecord = await waitForCredentialValidationLog(() => stderr);
+  assert.ok(oauthRecord, `missing validation log in ${stderr}`);
+  assert.equal(oauthRecord.reason, 'introspect_transport_error');
+  assert.equal(oauthRecord.introspect_status, null);
+  assert.equal(oauthRecord.aborted, false);
+  assert.equal(oauthRecord.resource, ACCOUNT_RESOURCE);
+  assert.equal(typeof oauthRecord.elapsed_ms, 'number');
   assert.doesNotMatch(stderr, /fco_account_token/);
 
-  // An API key never needed the issuer, so the same outage does not reach it.
+  // An API key is enriched by introspection, not authorized by it, so the same
+  // outage costs it the enrichment and nothing else. The record is still
+  // emitted, so a failing dependency stays visible while users are unaffected.
   stderr = '';
   const apiKey = await listTools('fc-account-key');
   assert.equal(apiKey.status, 200);
   assert.match(await apiKey.text(), /firecrawl_scrape/);
-  await delay(150);
-  assert.doesNotMatch(stderr, /\[MCP_CREDENTIAL_VALIDATION\]/);
+  const keyRecord = await waitForCredentialValidationLog(() => stderr);
+  assert.ok(keyRecord, `missing validation log in ${stderr}`);
+  assert.equal(keyRecord.reason, 'introspect_transport_error');
+  assert.doesNotMatch(stderr, /fc-account-key/);
+});
+
+test('an unusable key still gets recovery when introspection cannot answer', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const unreachableIssuerPort = await getFreePort();
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_ISSUER: `http://127.0.0.1:${unreachableIssuerPort}`,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  // Introspection is unreachable, so the key reaches Core unresolved and Core
+  // supplies the verdict. The agent must still receive guidance it can act on
+  // rather than a raw upstream error.
+  const call = await httpToolCall(port, {
+    headers: { authorization: 'Bearer fc-invalid' },
+    id: 1,
+    params: { arguments: { query: 'x' }, name: 'firecrawl_search' },
+  });
+  assert.equal(call.status, 200);
+  const result = parseSseJson(await call.text()).result;
+  assert.equal(result.isError, true);
+  assert.equal(result.content[0].text, INVALID_API_KEY_MESSAGE);
+  assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID');
+  assert.equal(result.structuredContent.message, INVALID_API_KEY_MESSAGE);
 });
 
 test('active introspection with an unknown credential purpose fails closed', async (t) => {
@@ -2508,14 +2544,10 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
   const invalidLegacyJson = parseSseJson(await invalidLegacyPath.text());
   assert.ok((invalidLegacyJson.result?.tools?.length ?? 0) > 0);
   await delay(25);
-  // A well-formed API key is admitted at connect time now that Core owns the
-  // verdict, so the legacy-path record reports accepted and the correction is
-  // delivered by the tool call above. The record must still name no credential.
-  const legacyTelemetry = stdout
+  const rejectedTelemetry = stdout
     .split(/\r?\n/)
-    .find((line) => line.includes('[MCP_LEGACY_KEY_PATH]'));
-  assert.ok(legacyTelemetry, stdout);
-  assert.match(legacyTelemetry, /"outcome":"accepted"/);
-  assert.doesNotMatch(legacyTelemetry, /\bfc-[^\s"]+/);
-  assert.doesNotMatch(legacyTelemetry, /(?:\d{1,3}\.){3}\d{1,3}|::1/);
+    .find((line) => line.includes('[MCP_LEGACY_KEY_PATH]') && line.includes('\"outcome\":\"rejected\"'));
+  assert.ok(rejectedTelemetry, stdout);
+  assert.doesNotMatch(rejectedTelemetry, /\bfc-[^\s"]+/);
+  assert.doesNotMatch(rejectedTelemetry, /(?:\d{1,3}\.){3}\d{1,3}|::1/);
 });
