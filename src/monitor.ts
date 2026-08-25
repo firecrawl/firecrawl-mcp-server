@@ -12,6 +12,7 @@
 import { z } from 'zod';
 import type { FastMCP } from 'fastmcp';
 import {
+  CoreHttpError,
   credentialForOutboundRequest,
   type CredentialSession,
 } from './session-credential';
@@ -82,7 +83,7 @@ async function monitorRequest(
     const message =
       payload?.error ||
       `HTTP ${response.status}: ${response.statusText || 'Request failed'}`;
-    throw new Error(message);
+    throw new CoreHttpError(message, response.status);
   }
 
   return payload;

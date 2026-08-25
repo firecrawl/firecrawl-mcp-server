@@ -16,6 +16,7 @@ import { escapeWWWAuthenticateValue } from './www-authenticate';
 import {
   credentialForOutboundRequest,
   copyManagedOAuthApiKey,
+  CoreHttpError,
   credentialValidationUnavailable,
   CredentialValidationUnavailableError,
   hasCredential,
@@ -543,12 +544,8 @@ async function resolveCredentialFromHeaders(
   if (isFirecrawlApiKey(token)) {
     const enrichment = await introspectToken(token, profile.resourceUrl).catch(
       (error: unknown) => {
-        // Every way introspection can fail to produce usable enrichment is the
-        // same thing here, including a well-formed `active` answer whose payload
-        // we cannot use. None of them is a verdict on the key, so none should
-        // deny a credential Core can validate on its own. A verdict does arrive
-        // as a value, not a throw: `active: false` and a non-general purpose are
-        // both handled below.
+        // A verdict arrives as a value, not a throw, so every throw here is a
+        // failure to enrich rather than a judgement on the key.
         if (error instanceof CredentialValidationUnavailableError) return null;
         throw error;
       }
@@ -558,8 +555,8 @@ async function resolveCredentialFromHeaders(
     return enrichment.credential_purpose === 'general'
       ? {
           credential: enrichment.api_key,
-          metadata: credentialMetadata(enrichment),
           source: 'api-key',
+          metadata: credentialMetadata(enrichment),
         }
       : { invalid: true };
   }
@@ -1149,23 +1146,19 @@ function invalidOAuthRecoveryPayload(): Record<string, unknown> & { message: str
 }
 
 /**
- * Core rejected the credential this session forwarded. Tools reach Core two
- * ways: the SDK helpers raise FirecrawlSdkError, while firecrawl_search posts
- * through the SDK's axios layer to keep the full response envelope. Both carry
- * the upstream status. Only 401 is matched, because that is a verdict on the
- * credential; a 403 can mean an entitlement the key legitimately lacks.
+ * Core rejected the credential this session forwarded. Tools reach Core by
+ * several routes, the SDK helpers, the SDK's HTTP layer, and plain fetch, so
+ * this reads the status rather than the error's type: every route reports one,
+ * and inside a tool a 401 can only have come from Core. Only 401 is matched,
+ * because that is a verdict on the credential; a 403 can mean an entitlement
+ * the key legitimately lacks.
  */
 function isCoreCredentialRejection(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const candidate = error as {
-    isAxiosError?: unknown;
-    name?: string;
     response?: { status?: unknown };
     status?: unknown;
   };
-  if (candidate.name !== 'FirecrawlSdkError' && candidate.isAxiosError !== true) {
-    return false;
-  }
   return candidate.status === 401 || candidate.response?.status === 401;
 }
 
@@ -1177,12 +1170,19 @@ function isCoreCredentialRejection(error: unknown): boolean {
  */
 async function runWithCredentialRecovery<T>(
   run: () => T | Promise<T>,
-  requestId: string
+  requestId: string,
+  session?: SessionData
 ): Promise<T> {
   try {
     return await run();
   } catch (error) {
-    if (!isCoreCredentialRejection(error)) throw error;
+    // Only an API-key session hands Core a credential nothing resolved first.
+    // An OAuth session was validated at connect time, so a rejection there is a
+    // different fault and keeps its own reconnect guidance; a keyless session
+    // never sent an account credential at all.
+    if (session?.authType !== 'api-key' || !isCoreCredentialRejection(error)) {
+      throw error;
+    }
     const payload = recoveryPayload('CREDENTIAL_INVALID', requestId);
     throw new UserError(String(payload.message), payload);
   }
@@ -1397,7 +1397,8 @@ function guardHostedTool(
       const runTool = () =>
         runWithCredentialRecovery(
           () => execute(args, invocationContext),
-          requestId
+          requestId,
+          invocationSession
         );
       if (!logActions) return runTool();
 
@@ -1933,10 +1934,11 @@ async function apiPostJson(
     parsed = { raw: responseText };
   }
   if (!response.ok) {
-    throw new Error(
+    throw new CoreHttpError(
       parsed?.error ||
         parsed?.message ||
-        `Firecrawl request failed (HTTP ${response.status})`
+        `Firecrawl request failed (HTTP ${response.status})`,
+      response.status
     );
   }
   return parsed;
