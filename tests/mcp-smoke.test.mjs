@@ -242,6 +242,23 @@ async function startFakeDeveloperApi() {
               title: 'Developer fixture',
               url: 'https://example.com/developer',
             },
+            {
+              id: 'web:https://example.com/answer',
+              passages: [
+                { text: '' },
+                { text: ' ' },
+                { text: 'The answer.' },
+                {},
+              ],
+              title: 'Developer answer',
+              url: 'https://example.com/answer',
+            },
+            {
+              id: 'web:https://example.com/base/child',
+              passages: [{ text: 'The base answer.' }],
+              title: 'Developer base answer',
+              url: 'https://example.com/base',
+            },
           ],
           success: true,
         })
@@ -932,6 +949,18 @@ test('developer search serves server-shaped passages uncapped', async (t) => {
   });
   assert.notEqual(serverBudgeted.isError, true);
   assert.ok(serverBudgeted.content[0].text.includes(fakeApi.passage));
+  assert.equal(
+    serverBudgeted.content[0].text.match(/https:\/\/example\.com\/answer/g)
+      ?.length,
+    1
+  );
+  assert.ok(serverBudgeted.content[0].text.includes('\nThe answer.'));
+  assert.equal(serverBudgeted.content[0].text.includes('\n---\n'), false);
+  assert.ok(
+    serverBudgeted.content[0].text.includes(
+      '## [web:https://example.com/base/child] (web) Developer base answer\nhttps://example.com/base\n'
+    )
+  );
 
   // No client-side cap in any case: even a response without
   // passage_budget_applied (older server) serves the passage whole.

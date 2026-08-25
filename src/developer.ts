@@ -60,9 +60,10 @@ function fmtDeveloper(
       const kind = r.id?.split(':', 1)[0];
       const kindLabel = kind ? ` (${kind})` : '';
       const lines = [`## [${id}]${kindLabel} ${r.title ?? '(untitled)'}`];
-      if (r.url) lines.push(r.url);
+      if (r.url && !id.endsWith(`:${r.url}`) && id !== r.url) lines.push(r.url);
       const body = (r.passages ?? [])
         .map((p) => p.text ?? '')
+        .filter((passage) => passage.trim().length > 0)
         .join('\n---\n')
         .trim();
       // Passages are server-shaped (search-side budget is always on); no
