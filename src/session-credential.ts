@@ -45,6 +45,9 @@ export type CredentialValidationDiagnostics = {
  * Every failed credential check funnels through this one error, so the client
  * sees a single stable sentence. The diagnostics ride along for the server log
  * and are never rendered into the response.
+ *
+ * Raise it with `credentialValidationUnavailable` below. Constructing it
+ * directly skips the record and puts the failure back in the dark.
  */
 export class CredentialValidationUnavailableError extends Error {
   readonly diagnostics: CredentialValidationDiagnostics;
