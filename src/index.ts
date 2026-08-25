@@ -418,19 +418,6 @@ function credentialMetadata(data: OAuthIntrospectionResponse): CredentialMetadat
   };
 }
 
-/**
- * The authorization server gave us no usable answer, so there is nothing to
- * enrich a session with. `introspect_unusable_credential` is deliberately not
- * included: that one means it did answer, and an answer we cannot use should
- * still fail closed rather than be treated as an absent one.
- */
-function isIntrospectionUnavailable(error: unknown): boolean {
-  return (
-    error instanceof CredentialValidationUnavailableError &&
-    error.diagnostics.reason !== 'introspect_unusable_credential'
-  );
-}
-
 async function introspectToken(
   token: string,
   expectedResource: string
@@ -556,7 +543,13 @@ async function resolveCredentialFromHeaders(
   if (isFirecrawlApiKey(token)) {
     const enrichment = await introspectToken(token, profile.resourceUrl).catch(
       (error: unknown) => {
-        if (isIntrospectionUnavailable(error)) return null;
+        // Every way introspection can fail to produce usable enrichment is the
+        // same thing here, including a well-formed `active` answer whose payload
+        // we cannot use. None of them is a verdict on the key, so none should
+        // deny a credential Core can validate on its own. A verdict does arrive
+        // as a value, not a throw: `active: false` and a non-general purpose are
+        // both handled below.
+        if (error instanceof CredentialValidationUnavailableError) return null;
         throw error;
       }
     );

@@ -1989,6 +1989,45 @@ test('an unusable key still gets recovery when introspection cannot answer', asy
   assert.equal(result.structuredContent.message, INVALID_API_KEY_MESSAGE);
 });
 
+test('an API key survives an active introspection answer it cannot use', async (t) => {
+  // The answer is well formed enough to parse but carries no usable scope, so
+  // introspectToken raises introspect_unusable_credential. That is a statement
+  // about the answer, not about the key, so Core still gets to decide.
+  const backend = await startFakeFirecrawlBackend({
+    introspectionHandler: () => ({
+      active: true,
+      api_key: 'fc-account-key',
+      credential_purpose: 'general',
+      scope: '',
+    }),
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
+    body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'tools/list', params: {} }),
+    headers: {
+      accept: 'application/json, text/event-stream',
+      authorization: 'Bearer fc-account-key',
+      'content-type': 'application/json',
+    },
+    method: 'POST',
+  });
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /firecrawl_scrape/);
+});
+
 test('active introspection with an unknown credential purpose fails closed', async (t) => {
   const accountResource = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
   const backend = await startFakeFirecrawlBackend({
