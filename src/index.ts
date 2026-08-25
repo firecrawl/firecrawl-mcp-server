@@ -569,7 +569,9 @@ async function resolveCredentialFromHeaders(
     throw new Error('OAuth token is not a managed Firecrawl MCP credential');
   }
   if (data.credential_purpose === 'hosted_mcp_oauth') {
-    requireDelegatedCredentialSigning();
+    // expectedAudience, not profile.resourceUrl: it is the resource the token
+    // was actually validated against once the legacy fallback is applied.
+    requireDelegatedCredentialSigning(expectedAudience);
     return {
       managedOAuthApiKey: data.api_key,
       source: 'oauth',

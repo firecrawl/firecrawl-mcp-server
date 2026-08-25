@@ -94,18 +94,23 @@ type McpDelegatedCredentialPayload = {
   exp: number;
 };
 
-function delegationSecret(): string {
+function delegationSecret(resource?: string): string {
   const secret = process.env.MCP_DELEGATED_CREDENTIAL_SECRET?.trim();
   if (!secret) {
     throw credentialValidationUnavailable({
       reason: 'delegated_signing_secret_missing',
+      resource,
     });
   }
   return secret;
 }
 
-export function requireDelegatedCredentialSigning(): void {
-  delegationSecret();
+/**
+ * `resource` is only for the failure record. Outbound signing has no resource in
+ * scope, so it is optional rather than threaded through every caller.
+ */
+export function requireDelegatedCredentialSigning(resource?: string): void {
+  delegationSecret(resource);
 }
 
 export function setManagedOAuthApiKey<T extends CredentialSession>(

@@ -1973,6 +1973,60 @@ test('active introspection with an unknown credential purpose fails closed', asy
   await assertCredentialValidationUnavailable(response, 'unknown purpose');
 });
 
+test('a missing delegated signing secret names the resource it failed on', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    introspectionHandler: () => ({
+      active: true,
+      api_key: 'fc-managed-secret',
+      api_key_id: '42',
+      aud: ACCOUNT_RESOURCE,
+      client_id: 'https://example.test/client',
+      credential_purpose: 'hosted_mcp_oauth',
+      scope: 'firecrawl:global',
+      sub: '00000000-0000-4000-8000-000000000001',
+      team_id: '00000000-0000-4000-8000-000000000002',
+    }),
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_MCP_RESOURCE_URL: ACCOUNT_RESOURCE,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    MCP_DELEGATED_CREDENTIAL_SECRET: '',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  await waitForHealth(port, child);
+
+  const response = await fetch(`http://127.0.0.1:${port}/v2/mcp-oauth`, {
+    body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'tools/list', params: {} }),
+    headers: {
+      accept: 'application/json, text/event-stream',
+      authorization: 'Bearer fco_managed_token',
+      'content-type': 'application/json',
+    },
+    method: 'POST',
+  });
+  await assertCredentialValidationUnavailable(response, 'missing delegation secret');
+
+  // Introspection succeeded here, so the record has no status or timing. The
+  // resource is the only context distinguishing which surface was affected.
+  const record = await waitForCredentialValidationLog(() => stderr);
+  assert.ok(record, `missing validation log in ${stderr}`);
+  assert.equal(record.reason, 'delegated_signing_secret_missing');
+  assert.equal(record.resource, ACCOUNT_RESOURCE);
+  assert.equal(record.introspect_status, null);
+});
+
 test('each credential validation failure logs its own reason and status', async (t) => {
   const backend = await startFakeFirecrawlBackend();
   t.after(() => backend.close());
