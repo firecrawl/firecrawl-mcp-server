@@ -531,34 +531,12 @@ async function resolveCredentialFromHeaders(
     return { invalid: true };
   }
 
-  // Core authenticates an API key on every call, so introspecting one resolves
-  // it to itself. What the round trip adds is enrichment, the credential_purpose
-  // check and the account attribution the action log records, not an
-  // authorization decision Core does not already make. Treat an authorization
-  // server that cannot answer as missing enrichment rather than a failed
-  // request, and let Core be the authority on the key. An answer we did get is
-  // still honoured, so behaviour is unchanged whenever introspection works.
-  //
-  // OAuth access tokens keep the strict path below: Core cannot resolve one on
-  // its own, so there is nothing to fall back to.
+  // An API key is already the credential Core authenticates, so introspection
+  // resolves it to itself. Forward it unchanged and let Core be the authority;
+  // a 401 becomes CREDENTIAL_INVALID at the tool boundary. OAuth access tokens
+  // keep the strict path below because Core cannot resolve them on its own.
   if (isFirecrawlApiKey(token)) {
-    const enrichment = await introspectToken(token, profile.resourceUrl).catch(
-      (error: unknown) => {
-        // A verdict arrives as a value, not a throw, so every throw here is a
-        // failure to enrich rather than a judgement on the key.
-        if (error instanceof CredentialValidationUnavailableError) return null;
-        throw error;
-      }
-    );
-    if (!enrichment) return { credential: token, source: 'api-key' };
-    if (!enrichment.active || !enrichment.api_key) return { invalid: true };
-    return enrichment.credential_purpose === 'general'
-      ? {
-          credential: enrichment.api_key,
-          source: 'api-key',
-          metadata: credentialMetadata(enrichment),
-        }
-      : { invalid: true };
+    return { credential: token, source: 'api-key' };
   }
 
   let data = await introspectToken(token, profile.resourceUrl);
@@ -2631,9 +2609,18 @@ Eligibility is limited to successful searches within the feedback age window. Th
         parsed = { raw: responseText };
       }
 
-      // 4xx is terminal; surface a structured payload (with retryable=false)
-      // so agents do not retry-loop on substantive-feedback rejections,
-      // expired windows, etc.
+      // A 401 is Core's verdict on the forwarded API key, so let the shared
+      // credential-recovery boundary turn it into CREDENTIAL_INVALID.
+      if (session?.authType === 'api-key' && response.status === 401) {
+        throw new CoreHttpError(
+          parsed?.error ?? 'Unauthorized: invalid Firecrawl API key',
+          response.status
+        );
+      }
+
+      // Other 4xx responses are terminal; surface a structured payload (with
+      // retryable=false) so agents do not retry-loop on substantive-feedback
+      // rejections, expired windows, etc.
       if (!response.ok) {
         log.warn('Search feedback rejected', {
           status: response.status,
@@ -2757,6 +2744,15 @@ Returns submission status, feedback ID, and accounting fields.
         parsed = JSON.parse(responseText);
       } catch {
         parsed = { raw: responseText };
+      }
+
+      // A 401 is Core's verdict on the forwarded API key, so let the shared
+      // credential-recovery boundary turn it into CREDENTIAL_INVALID.
+      if (session?.authType === 'api-key' && response.status === 401) {
+        throw new CoreHttpError(
+          parsed?.error ?? 'Unauthorized: invalid Firecrawl API key',
+          response.status
+        );
       }
 
       if (!response.ok) {
