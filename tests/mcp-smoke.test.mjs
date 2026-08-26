@@ -1206,6 +1206,77 @@ test('HTTP transport returns invalid OAuth recovery without an OAuth challenge w
   assert.equal(backend.requests.some((request) => request.url === '/v2/search'), false);
 });
 
+test('local HTTP header API keys receive Core credential recovery', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'false',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_KEY: '',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_TOKEN: '',
+    HOST: '127.0.0.1',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await httpToolCall(port, {
+    headers: { 'x-firecrawl-api-key': 'fc-invalid' },
+    id: 'local-http-invalid-header-key',
+    params: {
+      arguments: { limit: 1, query: 'example domain' },
+      name: 'firecrawl_search',
+    },
+  });
+  assert.equal(response.status, 200);
+  const result = parseSseJson(await response.text()).result;
+  assert.equal(result.isError, true);
+  assert.equal(result.content[0].text, INVALID_API_KEY_MESSAGE);
+  assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID');
+  assert.equal(backend.requests.some((request) => request.url === '/v2/search'), true);
+  assert.equal(
+    backend.requests.filter((request) => request.url === '/api/oauth/introspect').length,
+    0
+  );
+});
+
+test('local HTTP environment credentials keep self-hosted Core errors', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'false',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_KEY: 'fc-invalid',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_TOKEN: '',
+    HOST: '127.0.0.1',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await httpToolCall(port, {
+    id: 'local-http-invalid-env-key',
+    params: {
+      arguments: { limit: 1, query: 'example domain' },
+      name: 'firecrawl_search',
+    },
+  });
+  assert.equal(response.status, 200);
+  const result = parseSseJson(await response.text()).result;
+  assert.equal(result.isError, true);
+  assert.notEqual(result.content[0].text, INVALID_API_KEY_MESSAGE);
+  assert.notEqual(result.structuredContent?.code, 'CREDENTIAL_INVALID');
+  assert.equal(backend.requests.some((request) => request.url === '/v2/search'), true);
+});
+
 test('HTTP cloud transport accepts the x-firecrawl-api-key header', async (t) => {
   const backend = await startFakeFirecrawlBackend();
   t.after(() => backend.close());

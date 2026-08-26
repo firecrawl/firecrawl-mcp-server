@@ -675,7 +675,14 @@ async function authenticateRequest(
   }
 
   const session: SessionData = {
-    authType: resolved?.source === 'oauth' ? 'oauth' : credential ? 'env' : 'none',
+    authType:
+      resolved?.source === 'oauth'
+        ? 'oauth'
+        : resolved?.source === 'api-key'
+          ? 'api-key'
+          : credential
+            ? 'env'
+            : 'none',
     firecrawlApiKey: headerCred ?? envCred,
     ...resolved?.metadata,
   };
