@@ -16,6 +16,7 @@ import { escapeWWWAuthenticateValue } from './www-authenticate';
 import {
   credentialForOutboundRequest,
   copyManagedOAuthApiKey,
+  CoreHttpError,
   credentialValidationUnavailable,
   CredentialValidationUnavailableError,
   hasCredential,
@@ -530,6 +531,14 @@ async function resolveCredentialFromHeaders(
     return { invalid: true };
   }
 
+  // An API key is already the credential Core authenticates, so introspection
+  // resolves it to itself. Forward it unchanged and let Core be the authority;
+  // a 401 becomes CREDENTIAL_INVALID at the tool boundary. OAuth access tokens
+  // keep the strict path below because Core cannot resolve them on its own.
+  if (isFirecrawlApiKey(token)) {
+    return { credential: token, source: 'api-key' };
+  }
+
   let data = await introspectToken(token, profile.resourceUrl);
   if (
     isFirecrawlOAuthAccessToken(token) &&
@@ -539,20 +548,7 @@ async function resolveCredentialFromHeaders(
     data = await introspectToken(token, DEFAULT_MCP_RESOURCE_URL);
   }
   if (!data.active || !data.api_key) {
-    if (isFirecrawlOAuthAccessToken(token)) {
-      throw new InvalidOAuthCredentialError();
-    }
-    return { invalid: true };
-  }
-
-  if (isFirecrawlApiKey(token)) {
-    return data.credential_purpose === 'general'
-      ? {
-          credential: data.api_key,
-          source: 'api-key',
-          metadata: credentialMetadata(data),
-        }
-      : { invalid: true };
+    throw new InvalidOAuthCredentialError();
   }
   const expectedAudience =
     profile.acceptLegacyAudience &&
@@ -679,7 +675,14 @@ async function authenticateRequest(
   }
 
   const session: SessionData = {
-    authType: resolved?.source === 'oauth' ? 'oauth' : credential ? 'env' : 'none',
+    authType:
+      resolved?.source === 'oauth'
+        ? 'oauth'
+        : resolved?.source === 'api-key'
+          ? 'api-key'
+          : credential
+            ? 'env'
+            : 'none',
     firecrawlApiKey: headerCred ?? envCred,
     ...resolved?.metadata,
   };
@@ -1127,6 +1130,49 @@ function invalidOAuthRecoveryPayload(): Record<string, unknown> & { message: str
   });
 }
 
+/**
+ * Core rejected the credential this session forwarded. Tools reach Core by
+ * several routes, the SDK helpers, the SDK's HTTP layer, and plain fetch, so
+ * this reads the status rather than the error's type: every route reports one,
+ * and inside a tool a 401 can only have come from Core. Only 401 is matched,
+ * because that is a verdict on the credential; a 403 can mean an entitlement
+ * the key legitimately lacks.
+ */
+function isCoreCredentialRejection(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const candidate = error as {
+    response?: { status?: unknown };
+    status?: unknown;
+  };
+  return candidate.status === 401 || candidate.response?.status === 401;
+}
+
+/**
+ * API keys reach Core unresolved, so an invalid one is discovered when a tool
+ * runs rather than at connect time. Translate that rejection into the same
+ * CREDENTIAL_INVALID recovery the agent already knows how to act on, so the
+ * guidance does not depend on having introspected the key first.
+ */
+async function runWithCredentialRecovery<T>(
+  run: () => T | Promise<T>,
+  requestId: string,
+  session?: SessionData
+): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    // Only an API-key session hands Core a credential nothing resolved first.
+    // An OAuth session was validated at connect time, so a rejection there is a
+    // different fault and keeps its own reconnect guidance; a keyless session
+    // never sent an account credential at all.
+    if (session?.authType !== 'api-key' || !isCoreCredentialRejection(error)) {
+      throw error;
+    }
+    const payload = recoveryPayload('CREDENTIAL_INVALID', requestId);
+    throw new UserError(String(payload.message), payload);
+  }
+}
+
 function recoveryPayload(
   code: string,
   requestId: string = randomUUID(),
@@ -1333,11 +1379,17 @@ function guardHostedTool(
         if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
         throw new UserError(String(payload.message), payload);
       }
-      if (!logActions) return execute(args, invocationContext);
+      const runTool = () =>
+        runWithCredentialRecovery(
+          () => execute(args, invocationContext),
+          requestId,
+          invocationSession
+        );
+      if (!logActions) return runTool();
 
       emitActionLog(tool.name, 'started', invocationSession, undefined, requestId);
       try {
-        const result = await execute(args, invocationContext);
+        const result = await runTool();
         emitActionLog(tool.name, 'success', invocationSession, undefined, requestId);
         return result;
       } catch (error) {
@@ -1867,10 +1919,11 @@ async function apiPostJson(
     parsed = { raw: responseText };
   }
   if (!response.ok) {
-    throw new Error(
+    throw new CoreHttpError(
       parsed?.error ||
         parsed?.message ||
-        `Firecrawl request failed (HTTP ${response.status})`
+        `Firecrawl request failed (HTTP ${response.status})`,
+      response.status
     );
   }
   return parsed;
@@ -2563,9 +2616,18 @@ Eligibility is limited to successful searches within the feedback age window. Th
         parsed = { raw: responseText };
       }
 
-      // 4xx is terminal; surface a structured payload (with retryable=false)
-      // so agents do not retry-loop on substantive-feedback rejections,
-      // expired windows, etc.
+      // A 401 is Core's verdict on the forwarded API key, so let the shared
+      // credential-recovery boundary turn it into CREDENTIAL_INVALID.
+      if (session?.authType === 'api-key' && response.status === 401) {
+        throw new CoreHttpError(
+          parsed?.error ?? 'Unauthorized: invalid Firecrawl API key',
+          response.status
+        );
+      }
+
+      // Other 4xx responses are terminal; surface a structured payload (with
+      // retryable=false) so agents do not retry-loop on substantive-feedback
+      // rejections, expired windows, etc.
       if (!response.ok) {
         log.warn('Search feedback rejected', {
           status: response.status,
@@ -2689,6 +2751,15 @@ Returns submission status, feedback ID, and accounting fields.
         parsed = JSON.parse(responseText);
       } catch {
         parsed = { raw: responseText };
+      }
+
+      // A 401 is Core's verdict on the forwarded API key, so let the shared
+      // credential-recovery boundary turn it into CREDENTIAL_INVALID.
+      if (session?.authType === 'api-key' && response.status === 401) {
+        throw new CoreHttpError(
+          parsed?.error ?? 'Unauthorized: invalid Firecrawl API key',
+          response.status
+        );
       }
 
       if (!response.ok) {

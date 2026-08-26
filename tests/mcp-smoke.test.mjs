@@ -389,6 +389,21 @@ async function startFakeFirecrawlBackend(options = {}) {
       return;
     }
 
+    // Core is the authority on a forwarded API key, so a key the suite marks
+    // invalid is rejected here rather than at introspection. Scoped to fc-
+    // credentials: an fco_ token never reaches Core, and matching it here would
+    // silently change unrelated tests.
+    if (/Bearer fc-\S*invalid/.test(req.headers.authorization ?? '')) {
+      res.writeHead(401, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Unauthorized: Invalid token', success: false }));
+      return;
+    }
+    if (/Bearer fc-forbidden/.test(req.headers.authorization ?? '')) {
+      res.writeHead(403, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Forbidden', success: false }));
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/v2/search') {
       if (searchResponse) {
         res.writeHead(searchResponse.status, { 'content-type': 'application/json' });
@@ -597,6 +612,11 @@ test('HTTP cloud keyless transport preserves app challenge without advertising O
   assert.equal(searchTool.inputSchema.properties.highlights.type, 'boolean');
   assert.equal('default' in searchTool.inputSchema.properties.highlights, false);
 
+  assert.equal(
+    backend.requests.filter((request) => request.url === '/api/oauth/introspect').length,
+    0,
+    'raw API keys must not be introspected during initialize, tools/list, or tools/call'
+  );
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
@@ -669,6 +689,11 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
     origin: 'mcp-fastmcp',
     query: 'example domain',
   });
+  assert.equal(
+    fakeApi.requests.filter((request) => request.url === '/api/oauth/introspect').length,
+    0,
+    'raw API keys must reach Core without introspection'
+  );
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
@@ -1210,6 +1235,77 @@ test('HTTP transport returns invalid OAuth recovery without an OAuth challenge w
   assert.equal(backend.requests.some((request) => request.url === '/v2/search'), false);
 });
 
+test('local HTTP header API keys receive Core credential recovery', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'false',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_KEY: '',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_TOKEN: '',
+    HOST: '127.0.0.1',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await httpToolCall(port, {
+    headers: { 'x-firecrawl-api-key': 'fc-invalid' },
+    id: 'local-http-invalid-header-key',
+    params: {
+      arguments: { limit: 1, query: 'example domain' },
+      name: 'firecrawl_search',
+    },
+  });
+  assert.equal(response.status, 200);
+  const result = parseSseJson(await response.text()).result;
+  assert.equal(result.isError, true);
+  assert.equal(result.content[0].text, INVALID_API_KEY_MESSAGE);
+  assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID');
+  assert.equal(backend.requests.some((request) => request.url === '/v2/search'), true);
+  assert.equal(
+    backend.requests.filter((request) => request.url === '/api/oauth/introspect').length,
+    0
+  );
+});
+
+test('local HTTP environment credentials keep self-hosted Core errors', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'false',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_KEY: 'fc-invalid',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_TOKEN: '',
+    HOST: '127.0.0.1',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const response = await httpToolCall(port, {
+    id: 'local-http-invalid-env-key',
+    params: {
+      arguments: { limit: 1, query: 'example domain' },
+      name: 'firecrawl_search',
+    },
+  });
+  assert.equal(response.status, 200);
+  const result = parseSseJson(await response.text()).result;
+  assert.equal(result.isError, true);
+  assert.notEqual(result.content[0].text, INVALID_API_KEY_MESSAGE);
+  assert.notEqual(result.structuredContent?.code, 'CREDENTIAL_INVALID');
+  assert.equal(backend.requests.some((request) => request.url === '/v2/search'), true);
+});
+
 test('HTTP cloud transport accepts the x-firecrawl-api-key header', async (t) => {
   const backend = await startFakeFirecrawlBackend();
   t.after(() => backend.close());
@@ -1244,6 +1340,11 @@ test('HTTP cloud transport accepts the x-firecrawl-api-key header', async (t) =>
   const searchCalls = backend.requests.filter((r) => r.url === '/v2/search');
   assert.equal(searchCalls.length, 1);
   assert.equal(searchCalls[0].headers.authorization, 'Bearer fc-header-key');
+  assert.equal(
+    backend.requests.filter((request) => request.url === '/api/oauth/introspect').length,
+    0,
+    'x-firecrawl-api-key must bypass introspection'
+  );
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
@@ -1703,8 +1804,16 @@ test('HTTP cloud authenticated Parse forwards ZDR for API-key and managed OAuth 
 
   const uploads = backend.requests.filter((r) => r.url === '/v2/parse/upload-url');
   const parses = backend.requests.filter((r) => r.url === '/v2/parse');
+  const introspectedTokens = backend.requests
+    .filter((request) => request.url === '/api/oauth/introspect')
+    .map((request) => request.body.token);
   assert.equal(uploads.length, 2);
   assert.equal(parses.length, 2);
+  assert.deepEqual(
+    introspectedTokens,
+    ['fco_parse', 'fco_parse'],
+    'only OAuth access tokens may be introspected on the account route'
+  );
   assert.equal(uploads[0].headers.authorization, 'Bearer fc-parse-api-key');
   assert.equal(parses[0].headers.authorization, 'Bearer fc-parse-api-key');
   for (const request of [uploads[1], parses[1]]) {
@@ -1844,6 +1953,11 @@ test('account endpoint challenges anonymous clients and accepts API keys', async
   );
   assert.ok(names.includes('firecrawl_crawl'));
   assert.ok(names.length > 3);
+  assert.equal(
+    backend.requests.filter((request) => request.url === '/api/oauth/introspect').length,
+    0,
+    'the account route must not introspect raw API keys'
+  );
 });
 
 test('account endpoint keeps OAuth discovery and gives safe re-auth guidance for inactive OAuth', async (t) => {
@@ -1919,14 +2033,38 @@ test('account readiness requires the managed OAuth delegation secret', async (t)
 test('credential validation outages do not misdirect clients into OAuth', async (t) => {
   const backend = await startFakeFirecrawlBackend();
   t.after(() => backend.close());
-  const unavailableIssuerPort = await getFreePort();
+
+  let introspectionCalls = 0;
+  const issuer = createServer((request, response) => {
+    if (request.method === 'POST' && request.url === '/api/oauth/introspect') {
+      introspectionCalls += 1;
+      response.destroy();
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
+  await new Promise((resolve, reject) => {
+    issuer.once('error', reject);
+    issuer.listen(0, '127.0.0.1', resolve);
+  });
+  t.after(
+    () =>
+      new Promise((resolve, reject) => {
+        issuer.close((error) => (error ? reject(error) : resolve()));
+      })
+  );
+  const issuerAddress = issuer.address();
+  assert.equal(typeof issuerAddress, 'object');
+  const issuerUrl = `http://127.0.0.1:${issuerAddress.port}`;
+
   const port = await getFreePort();
   const child = spawnServer({
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp-oauth',
     FIRECRAWL_API_URL: backend.url,
     FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
-    FIRECRAWL_OAUTH_ISSUER: `http://127.0.0.1:${unavailableIssuerPort}`,
+    FIRECRAWL_OAUTH_ISSUER: issuerUrl,
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
     HTTP_STREAMABLE_SERVER: 'true',
     PORT: String(port),
@@ -1938,9 +2076,8 @@ test('credential validation outages do not misdirect clients into OAuth', async 
   });
   await waitForHealth(port, child);
 
-  for (const token of ['fc-account-key', 'fco_account_token']) {
-    stderr = '';
-    const response = await fetch(`http://127.0.0.1:${port}/v2/mcp-oauth`, {
+  const listTools = (token) =>
+    fetch(`http://127.0.0.1:${port}/v2/mcp-oauth`, {
       body: JSON.stringify({ id: token, jsonrpc: '2.0', method: 'tools/list', params: {} }),
       headers: {
         accept: 'application/json, text/event-stream',
@@ -1949,18 +2086,251 @@ test('credential validation outages do not misdirect clients into OAuth', async 
       },
       method: 'POST',
     });
-    await assertCredentialValidationUnavailable(response, token);
 
-    // An unreachable issuer is a transport fault, not the abort budget firing.
-    const record = await waitForCredentialValidationLog(() => stderr);
-    assert.ok(record, `${token}: missing validation log in ${stderr}`);
-    assert.equal(record.reason, 'introspect_transport_error', token);
-    assert.equal(record.introspect_status, null, token);
-    assert.equal(record.aborted, false, token);
-    assert.equal(record.resource, ACCOUNT_RESOURCE, token);
-    assert.equal(typeof record.elapsed_ms, 'number', token);
-    assert.doesNotMatch(stderr, new RegExp(token), token);
+  // An OAuth access token has nothing to fall back to, so it still fails closed.
+  stderr = '';
+  const oauth = await listTools('fco_account_token');
+  await assertCredentialValidationUnavailable(oauth, 'fco_account_token');
+
+  // An unreachable issuer is a transport fault, not the abort budget firing.
+  const oauthRecord = await waitForCredentialValidationLog(() => stderr);
+  assert.ok(oauthRecord, `missing validation log in ${stderr}`);
+  assert.equal(oauthRecord.reason, 'introspect_transport_error');
+  assert.equal(oauthRecord.introspect_status, null);
+  assert.equal(oauthRecord.aborted, false);
+  assert.equal(oauthRecord.resource, ACCOUNT_RESOURCE);
+  assert.equal(typeof oauthRecord.elapsed_ms, 'number');
+  assert.doesNotMatch(stderr, /fco_account_token/);
+  assert.equal(introspectionCalls, 1);
+
+  // An API key never needs the issuer, so the same outage does not reach it.
+  stderr = '';
+  const apiKey = await listTools('fc-account-key');
+  assert.equal(apiKey.status, 200);
+  assert.match(await apiKey.text(), /firecrawl_scrape/);
+  assert.equal(
+    introspectionCalls,
+    1,
+    'the API-key request must not make another introspection call'
+  );
+  assert.doesNotMatch(stderr, /\[MCP_CREDENTIAL_VALIDATION\]/);
+});
+
+test('an invalid API key gets recovery from Core without introspection', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const call = await httpToolCall(port, {
+    headers: { authorization: 'Bearer fc-invalid' },
+    id: 1,
+    params: { arguments: { query: 'x' }, name: 'firecrawl_search' },
+  });
+  assert.equal(call.status, 200);
+  const result = parseSseJson(await call.text()).result;
+  assert.equal(result.isError, true);
+  assert.equal(result.content[0].text, INVALID_API_KEY_MESSAGE);
+  assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID');
+  assert.equal(result.structuredContent.message, INVALID_API_KEY_MESSAGE);
+  assert.equal(
+    backend.requests.filter((request) => request.url === '/api/oauth/introspect').length,
+    0,
+    'Core, not introspection, must decide whether a raw API key is valid'
+  );
+  assert.equal(backend.requests.some((request) => request.url === '/v2/search'), true);
+
+  const forbiddenCall = await httpToolCall(port, {
+    headers: { authorization: 'Bearer fc-forbidden' },
+    id: 2,
+    params: { arguments: { query: 'x' }, name: 'firecrawl_search' },
+  });
+  assert.equal(forbiddenCall.status, 200);
+  const forbiddenResult = parseSseJson(await forbiddenCall.text()).result;
+  assert.equal(forbiddenResult.isError, true);
+  assert.notEqual(forbiddenResult.content[0].text, INVALID_API_KEY_MESSAGE);
+  assert.notEqual(forbiddenResult.structuredContent?.code, 'CREDENTIAL_INVALID');
+});
+
+test('feedback tools map a Core 401 to API-key recovery without introspection', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const cases = [
+    {
+      arguments: {
+        querySuggestions: 'Use a narrower query',
+        rating: 'bad',
+        searchId: '00000000-0000-4000-8000-000000000001',
+      },
+      name: 'firecrawl_search_feedback',
+      path: '/v2/search/00000000-0000-4000-8000-000000000001/feedback',
+    },
+    {
+      arguments: {
+        endpoint: 'search',
+        jobId: '00000000-0000-4000-8000-000000000002',
+        rating: 'bad',
+      },
+      name: 'firecrawl_feedback',
+      path: '/v2/feedback',
+    },
+  ];
+
+  for (const testCase of cases) {
+    const call = await httpToolCall(port, {
+      headers: { authorization: 'Bearer fc-invalid' },
+      id: testCase.name,
+      params: { arguments: testCase.arguments, name: testCase.name },
+    });
+    assert.equal(call.status, 200, testCase.name);
+    const result = parseSseJson(await call.text()).result;
+    assert.equal(result.isError, true, testCase.name);
+    assert.equal(result.content[0].text, INVALID_API_KEY_MESSAGE, testCase.name);
+    assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID', testCase.name);
+    assert.equal(
+      backend.requests.some((request) => request.url === testCase.path),
+      true,
+      testCase.name
+    );
   }
+
+  assert.equal(
+    backend.requests.filter((request) => request.url === '/api/oauth/introspect').length,
+    0
+  );
+});
+
+test('fetch-based tools map a Core rejection to recovery like SDK tools do', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const cases = [
+    {
+      arguments: {
+        contentType: 'application/pdf',
+        filePath: '/not-read-by-hosted-mcp/document.pdf',
+        formats: ['markdown'],
+        parsers: ['pdf'],
+      },
+      name: 'firecrawl_parse',
+    },
+    { arguments: {}, name: 'firecrawl_monitor_list' },
+  ];
+
+  for (const testCase of cases) {
+    const call = await httpToolCall(port, {
+      headers: { authorization: 'Bearer fc-invalid' },
+      id: testCase.name,
+      params: { arguments: testCase.arguments, name: testCase.name },
+    });
+    assert.equal(call.status, 200, testCase.name);
+    const result = parseSseJson(await call.text()).result;
+    assert.equal(result.isError, true, testCase.name);
+    assert.equal(result.content[0].text, INVALID_API_KEY_MESSAGE, testCase.name);
+    assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID', testCase.name);
+  }
+
+  assert.equal(
+    backend.requests.filter((request) => request.url === '/api/oauth/introspect').length,
+    0
+  );
+});
+
+test('an OAuth session keeps its existing Core 401 behavior', async (t) => {
+  // The API-key recovery says to replace a key on this server, which is the
+  // wrong instruction for a session that authenticated by connecting an
+  // account. Only a session that forwarded an unresolved key should get it.
+  const backend = await startFakeFirecrawlBackend({
+    introspectionHandler: () => ({
+      active: true,
+      api_key: 'fc-invalid-resolved',
+      aud: 'https://mcp.firecrawl.dev/v2/mcp',
+      credential_purpose: 'general',
+      scope: 'firecrawl:global',
+    }),
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const call = await httpToolCall(port, {
+    headers: { authorization: 'Bearer fco_resolved_token' },
+    id: 1,
+    params: { arguments: { query: 'x' }, name: 'firecrawl_search' },
+  });
+  const result = parseSseJson(await call.text()).result;
+  assert.equal(result.isError, true);
+  assert.notEqual(result.content[0].text, INVALID_API_KEY_MESSAGE);
+  assert.notEqual(result.structuredContent?.code, 'CREDENTIAL_INVALID');
+
+  // Feedback tools intentionally return non-API-key 4xx responses as data so
+  // agents do not retry terminal feedback rejections.
+  const feedbackCall = await httpToolCall(port, {
+    headers: { authorization: 'Bearer fco_resolved_token' },
+    id: 2,
+    params: {
+      arguments: {
+        endpoint: 'search',
+        jobId: '00000000-0000-4000-8000-000000000003',
+        rating: 'bad',
+      },
+      name: 'firecrawl_feedback',
+    },
+  });
+  assert.equal(feedbackCall.status, 200);
+  const feedbackResult = parseSseJson(await feedbackCall.text()).result;
+  assert.notEqual(feedbackResult.isError, true);
+  assert.deepEqual(JSON.parse(feedbackResult.content[0].text), {
+    error: 'Unauthorized: Invalid token',
+    retryable: false,
+    status: 401,
+    success: false,
+  });
 });
 
 test('active introspection with an unknown credential purpose fails closed', async (t) => {
@@ -2453,11 +2823,9 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
   });
   assert.equal(replay.status, 401);
 
-  // On the keyless+API-key endpoint an invalid key is now agent-legible: the
-  // session connects (200) and lists tools, so an MCP client (which commonly
-  // stops after a 401 at tools/list) proceeds; any tool call then returns the
-  // CREDENTIAL_INVALID recovery payload as a 200 isError result. A raw 401 with
-  // the payload in the body was unreachable to the model.
+  // A well-formed API key is admitted because only Core can decide whether it
+  // is valid. The session lists tools, then a Core 401 becomes an agent-legible
+  // CREDENTIAL_INVALID result instead of an unreachable transport 401.
   const invalidList = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({ id: 2, jsonrpc: '2.0', method: 'tools/list', params: {} }),
     headers: {
@@ -2495,9 +2863,8 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
   assert.doesNotMatch(invalidRecovery.message, /never ask/i);
   assert.doesNotMatch(invalidRecovery.message, /outside this chat/i);
   assert.doesNotMatch(invalidRecovery.message, /Authorization: Bearer/);
-  // No tool is actually callable in a credentialError session (the
-  // credentialError check gates execute() before the keyless branch), so the
-  // payload must not advertise keyless tools as available.
+  // The rejected credential cannot call any tool, so the recovery payload must
+  // not advertise keyless tools as available.
   assert.equal(
     invalidRecovery.available_tools,
     undefined,
@@ -2518,10 +2885,17 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
   const invalidLegacyJson = parseSseJson(await invalidLegacyPath.text());
   assert.ok((invalidLegacyJson.result?.tools?.length ?? 0) > 0);
   await delay(25);
-  const rejectedTelemetry = stdout
+  // A well-formed API key is admitted at connect time because Core owns the
+  // verdict. The legacy-path record must still contain no credential material.
+  const legacyTelemetry = stdout
     .split(/\r?\n/)
-    .find((line) => line.includes('[MCP_LEGACY_KEY_PATH]') && line.includes('\"outcome\":\"rejected\"'));
-  assert.ok(rejectedTelemetry, stdout);
-  assert.doesNotMatch(rejectedTelemetry, /\bfc-[^\s"]+/);
-  assert.doesNotMatch(rejectedTelemetry, /(?:\d{1,3}\.){3}\d{1,3}|::1/);
+    .find((line) => line.includes('[MCP_LEGACY_KEY_PATH]'));
+  assert.ok(legacyTelemetry, stdout);
+  assert.match(legacyTelemetry, /"outcome":"accepted"/);
+  assert.doesNotMatch(legacyTelemetry, /\bfc-[^\s"]+/);
+  assert.doesNotMatch(legacyTelemetry, /(?:\d{1,3}\.){3}\d{1,3}|::1/);
+  const introspectedTokens = backend.requests
+    .filter((request) => request.url === '/api/oauth/introspect')
+    .map((request) => request.body.token);
+  assert.deepEqual(introspectedTokens, ['fco_account']);
 });

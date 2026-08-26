@@ -151,6 +151,13 @@ async function startFakeBackend(options = {}) {
       return;
     }
 
+    // Core, not introspection, decides whether a forwarded API key is valid.
+    if (/Bearer fc-\S*invalid/.test(req.headers.authorization ?? '')) {
+      res.writeHead(401, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Unauthorized: Invalid token', success: false }));
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/v2/search') {
       // The developer category is an extra arm: the API returns its hits in a
       // `data.developer` group beside the web results.
@@ -233,6 +240,7 @@ async function startHostedServer(t, extraEnv = {}) {
   t.after(() => stopChild(child));
   await waitForHealth(searchPort, child);
   return {
+    backendRequests: defaultBackend.requests,
     child,
     fullPort,
     searchPort,
@@ -268,6 +276,7 @@ async function startPrimarySearchServer(t, extraEnv = {}) {
   t.after(() => stopChild(child));
   await waitForHealth(port, child);
   return {
+    backendRequests: defaultBackend.requests,
     child,
     getStderr: () => stderr,
     issuerUrl: extraEnv.FIRECRAWL_OAUTH_ISSUER ?? defaultBackend.url,
@@ -488,31 +497,31 @@ test('search surface requires authentication for tools/list', async (t) => {
   assert.match(wwwAuthenticate, /error="invalid_token"/);
 });
 
-test('search surface rejects an invalid raw API credential during tools/list', async (t) => {
-  const { searchPort } = await startHostedServer(t);
+test('search companion admits a well-formed API key without introspection', async (t) => {
+  const { backendRequests, searchPort } = await startHostedServer(t);
 
+  // Core authenticates the key when a tool runs. tools/list must not depend on
+  // the OAuth issuer or claim to know whether the raw key is valid.
   const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
     id: 8,
     method: 'tools/list',
     headers: { 'x-api-key': 'fc-invalid' },
   });
-  assert.equal(res.status, 401);
-  assert.equal(res.headers.has('www-authenticate'), false);
-  const body = await res.json();
-  assert.equal(body.error, 'invalid_api_key');
-  assert.equal(body.code, 'CREDENTIAL_INVALID');
+  assert.equal(res.status, 200);
+  const message = parseSseJson(await res.text());
+  assert.ok((message.result?.tools?.length ?? 0) > 0);
   assert.equal(
-    body.error_description,
-    INVALID_API_KEY_MESSAGE
+    backendRequests.filter((request) => request.url === '/api/oauth/introspect').length,
+    0
   );
-  assert.equal(body.next_actions, undefined);
 });
 
-test('search surface rejects an invalid raw API credential before a tool call', async (t) => {
+test('search companion turns a Core credential rejection into recovery', async (t) => {
   const backend = await startFakeBackend();
   t.after(() => backend.close());
   const { searchPort } = await startHostedServer(t, {
     FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
   });
 
   const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
@@ -524,17 +533,19 @@ test('search surface rejects an invalid raw API credential before a tool call', 
     },
     headers: { 'x-api-key': 'fc-invalid' },
   });
-  assert.equal(res.status, 401);
+  assert.equal(res.status, 200);
   assert.equal(res.headers.has('www-authenticate'), false);
-  const body = await res.json();
-  assert.equal(body.error, 'invalid_api_key');
-  assert.equal(body.code, 'CREDENTIAL_INVALID');
+  const result = parseSseJson(await res.text()).result;
+  assert.equal(result.isError, true);
+  assert.equal(result.content[0].text, INVALID_API_KEY_MESSAGE);
+  assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID');
+  assert.equal(result.structuredContent.message, INVALID_API_KEY_MESSAGE);
+  assert.equal(result.structuredContent.next_actions, undefined);
+  assert.equal(backend.requests.some((request) => request.url === '/v2/search'), true);
   assert.equal(
-    body.error_description,
-    INVALID_API_KEY_MESSAGE
+    backend.requests.filter((request) => request.url === '/api/oauth/introspect').length,
+    0
   );
-  assert.equal(body.next_actions, undefined);
-  assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
 });
 
 test('search surface serves path-scoped protected-resource metadata', async (t) => {
@@ -626,7 +637,7 @@ test('search surface accepts a token minted for its own resource', async (t) => 
 });
 
 test('full surface still exposes its complete tool set alongside the search surface', async (t) => {
-  const { fullPort } = await startHostedServer(t);
+  const { backendRequests, fullPort } = await startHostedServer(t);
 
   // Full surface is reachable on its own port with all tools intact.
   const names = await listTools(fullPort, '/v2/mcp', { 'x-api-key': 'fc-test' });
@@ -635,6 +646,11 @@ test('full surface still exposes its complete tool set alongside the search surf
   assert.ok(names.includes('firecrawl_developer_search'));
   assert.ok(names.includes('firecrawl_parse'));
   assert.ok(names.length > SEARCH_TOOLS.length);
+  assert.equal(
+    backendRequests.filter((request) => request.url === '/api/oauth/introspect').length,
+    0,
+    'the full route must not introspect raw API keys'
+  );
 
   // The anonymous full surface accepts credentials but does not advertise
   // OAuth, so clients do not start login while configuring keyless MCP.
@@ -645,7 +661,7 @@ test('full surface still exposes its complete tool set alongside the search surf
 });
 
 test('primary search profile is OAuth-only, six-tool frozen, and ready without keyless configuration', async (t) => {
-  const { port, issuerUrl } = await startPrimarySearchServer(t);
+  const { backendRequests, port, issuerUrl } = await startPrimarySearchServer(t);
 
   const ready = await fetch(`http://127.0.0.1:${port}/ready`);
   assert.equal(ready.status, 200);
@@ -677,6 +693,11 @@ test('primary search profile is OAuth-only, six-tool frozen, and ready without k
     assert.equal(response.status, 401, JSON.stringify(headers));
     assert.match(response.headers.get('www-authenticate') ?? '', /Bearer /);
   }
+  assert.equal(
+    backendRequests.filter((request) => request.url === '/api/oauth/introspect').length,
+    0,
+    'the OAuth-only route must reject raw API keys without introspection'
+  );
 
   const prm = await fetch(
     `http://127.0.0.1:${port}/.well-known/oauth-protected-resource${SEARCH_ENDPOINT}`
@@ -908,19 +929,19 @@ test('companion emits sanitized auth-mode telemetry without credential material'
   assert.doesNotMatch(logs, /authorization/i);
 });
 
-test('companion telemetry follows credential precedence and rejects invalid credentials', async (t) => {
+test('companion telemetry follows credential precedence without resolving API keys', async (t) => {
   const { searchPort, getStdout } = await startHostedServer(t);
 
   await listTools(searchPort, SEARCH_ENDPOINT, {
     authorization: 'Bearer fco_secondary-credential',
     'x-api-key': 'fc-primary-credential',
   });
-  const invalid = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+  const unresolved = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
     id: 12,
     method: 'tools/list',
     headers: { authorization: 'Bearer fc-invalid-credential' },
   });
-  assert.equal(invalid.status, 401);
+  assert.equal(unresolved.status, 200);
   await delay(25);
 
   const events = getStdout()
@@ -931,7 +952,7 @@ test('companion telemetry follows credential precedence and rejects invalid cred
     events.map(({ auth_mode, outcome }) => ({ auth_mode, outcome })),
     [
       { auth_mode: 'api-key', outcome: 'accepted' },
-      { auth_mode: 'api-key', outcome: 'rejected' },
+      { auth_mode: 'api-key', outcome: 'accepted' },
     ]
   );
   assert.doesNotMatch(getStdout(), /fc-primary-credential|fco_secondary-credential/);
