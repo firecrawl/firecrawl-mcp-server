@@ -1933,14 +1933,38 @@ test('account readiness requires the managed OAuth delegation secret', async (t)
 test('credential validation outages do not misdirect clients into OAuth', async (t) => {
   const backend = await startFakeFirecrawlBackend();
   t.after(() => backend.close());
-  const unavailableIssuerPort = await getFreePort();
+
+  let introspectionCalls = 0;
+  const issuer = createServer((request, response) => {
+    if (request.method === 'POST' && request.url === '/api/oauth/introspect') {
+      introspectionCalls += 1;
+      response.destroy();
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
+  await new Promise((resolve, reject) => {
+    issuer.once('error', reject);
+    issuer.listen(0, '127.0.0.1', resolve);
+  });
+  t.after(
+    () =>
+      new Promise((resolve, reject) => {
+        issuer.close((error) => (error ? reject(error) : resolve()));
+      })
+  );
+  const issuerAddress = issuer.address();
+  assert.equal(typeof issuerAddress, 'object');
+  const issuerUrl = `http://127.0.0.1:${issuerAddress.port}`;
+
   const port = await getFreePort();
   const child = spawnServer({
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp-oauth',
     FIRECRAWL_API_URL: backend.url,
     FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
-    FIRECRAWL_OAUTH_ISSUER: `http://127.0.0.1:${unavailableIssuerPort}`,
+    FIRECRAWL_OAUTH_ISSUER: issuerUrl,
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
     HTTP_STREAMABLE_SERVER: 'true',
     PORT: String(port),
@@ -1977,13 +2001,18 @@ test('credential validation outages do not misdirect clients into OAuth', async 
   assert.equal(oauthRecord.resource, ACCOUNT_RESOURCE);
   assert.equal(typeof oauthRecord.elapsed_ms, 'number');
   assert.doesNotMatch(stderr, /fco_account_token/);
+  assert.equal(introspectionCalls, 1);
 
   // An API key never needs the issuer, so the same outage does not reach it.
   stderr = '';
   const apiKey = await listTools('fc-account-key');
   assert.equal(apiKey.status, 200);
   assert.match(await apiKey.text(), /firecrawl_scrape/);
-  await delay(150);
+  assert.equal(
+    introspectionCalls,
+    1,
+    'the API-key request must not make another introspection call'
+  );
   assert.doesNotMatch(stderr, /\[MCP_CREDENTIAL_VALIDATION\]/);
 });
 
