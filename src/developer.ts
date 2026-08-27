@@ -88,7 +88,7 @@ export function registerDeveloperTools(
       destructiveHint: false, // Query-only; no writes to external sources or the developer index.
     },
     description: `
-For a developer question — code behaviour, a library or framework, an API contract, an error message, or a known bug — search an index built for coding agents. The index covers GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. Set skills to "only" to limit the search to agent-skill files.
+For a developer question — code behaviour, a library or framework, an API contract, an error message, or a known bug — search an index built for coding agents. The index covers repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. Set skills to "only" to limit the search to agent-skill files.
 
 Returns ranked results with an ID, source type, URL, title, and the matched passages in markdown.
 `,
