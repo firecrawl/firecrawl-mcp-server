@@ -338,6 +338,10 @@ test('search surface lists exactly the six read-only tools', async (t) => {
     search.description,
     /categories: \["developer"\].*data\.web.*category.*developer/is
   );
+  assert.match(
+    search.description,
+    /each web result is a title, URL, and description, not the page/i
+  );
   assert.doesNotMatch(search.description, /data\.developer/i);
 
   assert.deepEqual([...names].sort(), [...SEARCH_TOOLS].sort());

@@ -61,7 +61,7 @@ function assertServerGeneratedRequestId(payload, untrustedValues = []) {
 }
 
 const KEYLESS_ACCOUNT_FIX =
-  'Fix: Create an API key at https://www.firecrawl.dev/app/api-keys , then:\n- Set the header: Authorization: Bearer YOUR_API_KEY on https://mcp.firecrawl.dev/v2/mcp\nThen start a new session.';
+  'Fix: Create an API key at https://www.firecrawl.dev/app/api-keys, then:\n- Set the header: Authorization: Bearer YOUR_API_KEY on https://mcp.firecrawl.dev/v2/mcp\nThen start a new session.';
 const KEYLESS_QUOTA_MESSAGE = `You've hit Firecrawl's free MCP rate limit. To continue using without limits, create a Firecrawl API key.\n\n${KEYLESS_ACCOUNT_FIX}`;
 const KEYLESS_TOOL_MESSAGE = `This tool needs a Firecrawl account.\n\n${KEYLESS_ACCOUNT_FIX}`;
 const KEYLESS_ACCESS_MESSAGE = `Anonymous keyless access is unavailable for this request.\n\n${KEYLESS_ACCOUNT_FIX}`;
@@ -853,6 +853,10 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.match(
     byName.get('firecrawl_search').description,
     /operators include.*related:host.*non-exhaustive/is
+  );
+  assert.match(
+    byName.get('firecrawl_search').description,
+    /each web result is a title, URL, and description, not the page.*scrapeOptions.*ignore `maxAge`.*firecrawl_scrape/is
   );
   assert.match(
     byName.get('firecrawl_search_feedback').description,
