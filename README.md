@@ -67,7 +67,7 @@ A read-only, search-only surface is also hosted at:
 https://mcp.firecrawl.dev/v2/mcp-search
 ```
 
-It exposes a fixed set of six read-only tools: `firecrawl_search` and the five `firecrawl_research_*` tools. It performs no page-content fetching and has its own OAuth identity; the full endpoint above is unchanged. See [docs/search-profile.md](docs/search-profile.md) for the full contract.
+It exposes a fixed set of seven read-only tools: `firecrawl_search`, `firecrawl_developer_search`, and the five `firecrawl_research_*` tools. It performs no page-content fetching and has its own OAuth identity; the full endpoint above is unchanged. See [docs/search-profile.md](docs/search-profile.md) for the full contract.
 
 ### Running with npx
 
@@ -940,7 +940,7 @@ Search an index built for coding agents. The index covers GitHub issues, merged 
 
 **Returns:** Ranked results. Each result carries an ID, a source type (`issue`, `pull_request`, `readme`, or `doc`), a URL, a title, and the matched passages in markdown.
 
-`firecrawl_search` with `categories: ["developer"]` searches the same index beside the web results. Use this tool instead when you want the passages and no web results. The search-only endpoint does not expose this tool; it keeps its fixed set of six tools, and `firecrawl_search` reaches the developer index there.
+`firecrawl_search` with `categories: ["developer"]` searches the same index beside the web results. Use this tool instead when you want the passages and no web results. The search-only endpoint exposes both.
 
 ## Logging System
 

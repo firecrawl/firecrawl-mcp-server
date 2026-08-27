@@ -1,0 +1,392 @@
+{
+  "$schema": "https://developers.openai.com/apps-sdk/schemas/chatgpt-app-submission.v1.json",
+  "schema_version": 1,
+  "app_info": {
+    "display_name": "Firecrawl",
+    "subtitle": "Search and scrape the web",
+    "description": "Firecrawl helps users search the web, retrieve clean page content, crawl sites, parse documents, run web research jobs, search scientific and developer indexes, and manage recurring page monitors through ChatGPT.",
+    "category": "DEVELOPER_TOOLS"
+  },
+  "tools": {
+    "firecrawl_scrape": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "In hosted safe mode, retrieves selected content from one URL without enabling interactive browser actions.",
+        "open_world_justification": "Fetches content from user-supplied public web URLs.",
+        "destructive_justification": "Does not delete, overwrite, revoke access, or intentionally alter external websites."
+      }
+    },
+    "firecrawl_map": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Discovers indexed URLs under a website and returns them without modifying the site.",
+        "open_world_justification": "Operates on user-supplied public web domains.",
+        "destructive_justification": "Only returns URL discovery results and performs no destructive action."
+      }
+    },
+    "firecrawl_search": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Runs a search query and returns ranked results without modifying external sites.",
+        "open_world_justification": "Searches public web, news, image, developer, PDF, or research-oriented sources.",
+        "destructive_justification": "Query execution does not delete, overwrite, revoke access, or perform irreversible actions."
+      }
+    },
+    "firecrawl_search_feedback": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a feedback record for a prior authenticated search result.",
+        "open_world_justification": "Submits feedback about results and URLs to Firecrawl's external service.",
+        "destructive_justification": "Adds quality feedback only and does not delete or overwrite jobs, searches, or external content."
+      }
+    },
+    "firecrawl_feedback": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a feedback record for a completed Firecrawl endpoint job.",
+        "open_world_justification": "Submits feedback tied to jobs that processed web pages or documents through Firecrawl.",
+        "destructive_justification": "Adds rating and issue metadata only and does not delete jobs or external content."
+      }
+    },
+    "firecrawl_crawl": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Starts a server-side crawl job and polls it until completion.",
+        "open_world_justification": "Crawls user-supplied public websites and may fetch many pages.",
+        "destructive_justification": "Reads pages and creates a Firecrawl job but does not delete or alter target websites."
+      }
+    },
+    "firecrawl_check_crawl_status": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves status and results for an existing crawl job without changing it.",
+        "open_world_justification": "Reads only Firecrawl job state for a supplied crawl ID.",
+        "destructive_justification": "Does not stop, delete, overwrite, or modify the crawl job."
+      }
+    },
+    "firecrawl_agent": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Starts an asynchronous Firecrawl research agent job.",
+        "open_world_justification": "The research agent can search, navigate, and read public web sources.",
+        "destructive_justification": "Gathers information and creates a job record but does not delete external data or user resources."
+      }
+    },
+    "firecrawl_agent_status": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Polls an existing agent job for progress and results without modifying it.",
+        "open_world_justification": "Reads only Firecrawl job state for a supplied agent job ID.",
+        "destructive_justification": "Does not cancel, delete, overwrite, or otherwise modify the agent job."
+      }
+    },
+    "firecrawl_interact": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Opens or reuses a live browser session and executes page interactions.",
+        "open_world_justification": "Interacts with user-supplied public web pages through Firecrawl.",
+        "destructive_justification": "Does not delete Firecrawl jobs or external resources, though user-directed page actions can have site-specific side effects."
+      }
+    },
+    "firecrawl_interact_stop": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Stops and tears down an active Firecrawl interact session.",
+        "open_world_justification": "Operates only on a known Firecrawl scrape or interact session ID.",
+        "destructive_justification": "Terminates the live browser session, which cannot be resumed after it is stopped."
+      }
+    },
+    "firecrawl_parse": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads a local file or hosted upload reference and returns parsed document content.",
+        "open_world_justification": "Operates on a file path or upload reference rather than arbitrary public web URLs.",
+        "destructive_justification": "Does not delete, overwrite, or modify the source file or uploaded document."
+      }
+    },
+    "firecrawl_monitor_create": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a recurring monitor configuration in the user's Firecrawl account.",
+        "open_world_justification": "Configures scheduled checks against user-supplied web pages or search queries.",
+        "destructive_justification": "Adds a monitor without deleting or overwriting existing monitors or external content."
+      }
+    },
+    "firecrawl_monitor_list": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists monitor records for the authenticated account without modifying them.",
+        "open_world_justification": "Returns only private Firecrawl monitor records.",
+        "destructive_justification": "Does not delete, overwrite, or change monitor configuration."
+      }
+    },
+    "firecrawl_monitor_get": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves one monitor by ID without changing it.",
+        "open_world_justification": "Reads only a Firecrawl monitor record in the user's account.",
+        "destructive_justification": "Does not delete, overwrite, pause, or run the monitor."
+      }
+    },
+    "firecrawl_monitor_update": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Patches an existing monitor's configuration in the user's Firecrawl account.",
+        "open_world_justification": "Can change which public URLs are monitored and how scheduled web checks run.",
+        "destructive_justification": "Can overwrite monitor settings, pause checks, remove targets, or replace notification configuration."
+      }
+    },
+    "firecrawl_monitor_delete": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes a monitor record from the user's Firecrawl account.",
+        "open_world_justification": "Removes a monitor that was configured to track public web targets.",
+        "destructive_justification": "Permanently removes the monitor and stops its future schedule."
+      }
+    },
+    "firecrawl_monitor_run": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Queues an immediate monitor check outside the normal schedule.",
+        "open_world_justification": "Runs configured monitor checks against public web targets or search queries.",
+        "destructive_justification": "Starts a check job but does not delete the monitor or alter target websites."
+      }
+    },
+    "firecrawl_monitor_checks": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists historical check runs for a monitor without modifying them.",
+        "open_world_justification": "Reads only Firecrawl check history for a known monitor.",
+        "destructive_justification": "Does not delete, rerun, or change monitor checks."
+      }
+    },
+    "firecrawl_monitor_check": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves one monitor check and its page-level results without changing them.",
+        "open_world_justification": "Reads only stored Firecrawl check results for known monitor and check IDs.",
+        "destructive_justification": "Does not delete, overwrite, or rerun the monitor check."
+      }
+    },
+    "firecrawl_research_search_papers": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Searches indexed paper metadata and abstracts and returns ranked results.",
+        "open_world_justification": "Queries a public research paper corpus spanning scientific literature sources.",
+        "destructive_justification": "Does not write to, delete from, or modify the research index or source papers."
+      }
+    },
+    "firecrawl_research_inspect_paper": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Fetches canonical metadata for one paper ID without modifying it.",
+        "open_world_justification": "Retrieves metadata for papers from public indexes such as arXiv, PMC, PMID, or DOI sources.",
+        "destructive_justification": "Does not delete, overwrite, or alter paper records."
+      }
+    },
+    "firecrawl_research_related_papers": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Finds citation-graph candidates from seed paper IDs without modifying data.",
+        "open_world_justification": "Traverses relationships in a public research paper corpus.",
+        "destructive_justification": "Does not write to, delete from, or modify citation or paper records."
+      }
+    },
+    "firecrawl_research_read_paper": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves relevant full-text passages for one paper question without changing the paper.",
+        "open_world_justification": "Reads passages from publicly indexed paper full text when available.",
+        "destructive_justification": "Does not delete, overwrite, or modify paper content."
+      }
+    },
+    "firecrawl_research_search_github": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Searches indexed public GitHub issues, pull requests, and README content and returns matches.",
+        "open_world_justification": "Queries public GitHub-derived content.",
+        "destructive_justification": "Does not create issues, create pull requests, push code, or modify repositories."
+      }
+    },
+    "firecrawl_developer_search": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Searches an indexed developer corpus and returns ranked passages without modifying sources.",
+        "open_world_justification": "Queries public GitHub history, repository README content, and documentation sources.",
+        "destructive_justification": "Does not create issues, alter repositories, publish content, or modify documentation."
+      }
+    }
+  },
+  "test_cases": [
+    {
+      "description": "Search the web, choose a relevant source, and retrieve page content.",
+      "user_prompt": "Find the official Firecrawl MCP server setup instructions and summarize the hosted endpoint options.",
+      "file_attachment_urls": null,
+      "tools_triggered": "firecrawl_search, firecrawl_scrape",
+      "expected_output": "Returns relevant setup sources, retrieves the selected page, and summarizes the hosted MCP options with source context.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Discover pages on a site before retrieving selected documentation.",
+      "user_prompt": "Map the Firecrawl documentation site and find pages about document parsing and crawl status.",
+      "file_attachment_urls": null,
+      "tools_triggered": "firecrawl_map, firecrawl_scrape",
+      "expected_output": "Returns matching documentation URLs and content from the selected pages.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Run a bounded crawl and inspect its completion state.",
+      "user_prompt": "Crawl the Firecrawl docs starting at the MCP server page with a small page limit, then tell me whether the crawl completed.",
+      "file_attachment_urls": null,
+      "tools_triggered": "firecrawl_crawl, firecrawl_check_crawl_status",
+      "expected_output": "Starts a limited crawl, reports final or current status, and summarizes the retrieved page data.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Search research literature and inspect a paper.",
+      "user_prompt": "Find recent arXiv papers about retrieval-augmented generation evaluation and inspect the most relevant one.",
+      "file_attachment_urls": null,
+      "tools_triggered": "firecrawl_research_search_papers, firecrawl_research_inspect_paper",
+      "expected_output": "Returns ranked paper results and metadata for a selected paper, including title, authors, abstract, and identifiers.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Create and review a recurring monitor.",
+      "user_prompt": "Create a monitor for https://example.com that checks every day for pricing page changes, then list my monitors.",
+      "file_attachment_urls": null,
+      "tools_triggered": "firecrawl_monitor_create, firecrawl_monitor_list",
+      "expected_output": "Creates a monitor with the requested target and schedule, then returns the user's monitor list.",
+      "expected_output_url": null
+    }
+  ],
+  "negative_test_cases": [
+    {
+      "description": "Do not trigger for unrelated calendar management.",
+      "user_prompt": "Move my 3 PM meeting tomorrow to Friday morning.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should not be invoked because it does not manage calendars or meetings.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not trigger for sending messages or email.",
+      "user_prompt": "Email the sales team a summary of our Q3 plan.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should not be invoked because it does not send email or messages.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not trigger for repository write operations.",
+      "user_prompt": "Create a GitHub issue in my repository and assign it to Alex.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The app should not be invoked because it can search developer sources but cannot create or update repository issues.",
+      "expected_output_url": null
+    }
+  ]
+}
