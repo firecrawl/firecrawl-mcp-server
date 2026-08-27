@@ -61,7 +61,7 @@ function assertServerGeneratedRequestId(payload, untrustedValues = []) {
 }
 
 const KEYLESS_ACCOUNT_FIX =
-  'Fix: Create an API key at https://www.firecrawl.dev/signin , then either:\n- Set the header: Authorization: Bearer YOUR_API_KEY on https://mcp.firecrawl.dev/v2/mcp\n- Or use the URL: https://mcp.firecrawl.dev/v2/mcp-oauth\nThen start a new session.';
+  'Fix: Create an API key at https://www.firecrawl.dev/app/api-keys , then:\n- Set the header: Authorization: Bearer YOUR_API_KEY on https://mcp.firecrawl.dev/v2/mcp\nThen start a new session.';
 const KEYLESS_QUOTA_MESSAGE = `You've hit Firecrawl's free MCP rate limit. To continue using without limits, create a Firecrawl API key.\n\n${KEYLESS_ACCOUNT_FIX}`;
 const KEYLESS_TOOL_MESSAGE = `This tool needs a Firecrawl account.\n\n${KEYLESS_ACCOUNT_FIX}`;
 const KEYLESS_ACCESS_MESSAGE = `Anonymous keyless access is unavailable for this request.\n\n${KEYLESS_ACCOUNT_FIX}`;
@@ -124,6 +124,8 @@ function assertKeylessAccountRecovery(
   assert.doesNotMatch(result.content[0].text, /try again in about/);
   assert.doesNotMatch(result.content[0].text, /remain available/);
   assert.doesNotMatch(result.content[0].text, /continue with those/);
+  assert.doesNotMatch(result.content[0].text, /\bOAuth\b/i);
+  assert.doesNotMatch(result.content[0].text, /mcp-oauth/i);
   assert.equal(result.structuredContent.retry_after_seconds, retryAfterSeconds);
   assertServerGeneratedRequestId(
     result.structuredContent,
@@ -550,6 +552,19 @@ test('HTTP cloud keyless transport preserves app challenge without advertising O
   assert.match(anonymousParse.description, /redactPII/i);
   assert.match(anonymousParse.description, /omit it for anonymous keyless/i);
   assert.doesNotMatch(anonymousParse.description, /"zeroDataRetention"\s*:\s*true/);
+  const anonymousSearch = anonymousTools.find(
+    (tool) => tool.name === 'firecrawl_search'
+  );
+  assert.ok(anonymousSearch);
+  assert.match(
+    anonymousSearch.description,
+    /categories: \["developer"\].*data\.web.*category.*developer/is
+  );
+  assert.match(
+    anonymousSearch.description,
+    /categories: \["research"\].*research-affiliated websites.*`firecrawl_research_\*` tools are a separate surface.*PubMed, bioRxiv, medRxiv.*arXiv/is
+  );
+  assert.doesNotMatch(anonymousSearch.description, /data\.developer/i);
 
   const initialize = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({
@@ -573,6 +588,11 @@ test('HTTP cloud keyless transport preserves app challenge without advertising O
   assert.match(initialize.headers.get('content-type') ?? '', /text\/event-stream/);
   const initializeMessage = parseSseJson(await initialize.text());
   assert.equal(initializeMessage.result.serverInfo.name, 'firecrawl-fastmcp');
+  assert.match(
+    initializeMessage.result.instructions,
+    /An Authorization bearer API key can provide higher usage limits and expose additional tools/i
+  );
+  assert.doesNotMatch(initializeMessage.result.instructions, /\bOAuth\b/i);
 
   const toolsList = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({
@@ -806,10 +826,13 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
 
   const byName = new Map(tools.tools.map((tool) => [tool.name, tool]));
   assert.match(init.instructions, /firecrawl_scrape retrieves one supplied page/i);
-  assert.match(init.instructions, /firecrawl_map enumerates URLs under a site/i);
   assert.match(
     init.instructions,
-    /firecrawl_agent starts multi-source research whose result is read with firecrawl_agent_status/i
+    /Authorization bearer API key.*including firecrawl_map for site URL discovery/is
+  );
+  assert.match(
+    init.instructions,
+    /Authorization bearer API key.*firecrawl_agent and firecrawl_agent_status for asynchronous multi-source research/is
   );
   assert.match(
     byName.get('firecrawl_scrape').description,
@@ -860,19 +883,21 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     byName.get('firecrawl_search').description,
     /categories: \["research"\].*research-affiliated websites.*`firecrawl_research_\*` tools are a separate surface.*PubMed, bioRxiv, medRxiv.*arXiv/is
   );
-  // These instructions are also what a keyless session reads, and there
-  // tools/list is exactly KEYLESS_TOOL_NAMES (scrape/search/parse) while any
-  // firecrawl_research_* call is rejected. So the disambiguation has to name
-  // the categories filter as the surface that is already reachable, and the
-  // paper index as something authentication makes available -- never as a tool
-  // the client can call right now.
+  assert.match(
+    byName.get('firecrawl_search').description,
+    /categories: \["developer"\].*data\.web.*category.*developer/is
+  );
+  assert.doesNotMatch(
+    byName.get('firecrawl_search').description,
+    /data\.developer/i
+  );
   assert.match(
     init.instructions,
     /firecrawl_search with categories: \["research"\] filters ordinary web results to research-affiliated websites/i
   );
   assert.match(
     init.instructions,
-    /firecrawl_research_\* tools search a separate paper index.*become available once an OAuth connection or Authorization bearer API key is present/is
+    /Authorization bearer API key.*firecrawl_research_\* for paper-index and repository research/is
   );
   assert.match(
     byName.get('firecrawl_research_related_papers').description,
@@ -895,7 +920,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
-test('local keyless stdio omits feedback tools and qualifies search-feedback IDs as authenticated-only', async (t) => {
+test('local keyless stdio keeps profile guidance keyless-scoped and omits feedback tools', async (t) => {
   const child = spawnServer({
     FIRECRAWL_API_KEY: '',
     FIRECRAWL_API_URL: '',
@@ -904,11 +929,47 @@ test('local keyless stdio omits feedback tools and qualifies search-feedback IDs
   t.after(() => stopChild(child));
 
   const client = new StdioMcpClient(child);
-  await client.request('initialize', {
+  const init = await client.request('initialize', {
     capabilities: {},
     clientInfo: { name: 'firecrawl-local-keyless', version: '0.0.0' },
     protocolVersion: '2025-06-18',
   });
+  const apiKeyBoundary = 'An Authorization bearer API key';
+  const apiKeyBoundaryIndex = init.instructions.indexOf(apiKeyBoundary);
+  assert.notEqual(apiKeyBoundaryIndex, -1);
+  const keylessGuidance = init.instructions.slice(0, apiKeyBoundaryIndex);
+  const apiKeyGuidance = init.instructions.slice(apiKeyBoundaryIndex);
+  assert.match(
+    keylessGuidance,
+    /Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits/i
+  );
+  assert.match(
+    keylessGuidance,
+    /firecrawl_search with categories: \["developer"\].*curated documentation sites/i
+  );
+  assert.match(
+    keylessGuidance,
+    /firecrawl_search with categories: \["research"\].*research-affiliated websites/i
+  );
+  assert.match(keylessGuidance, /firecrawl_scrape retrieves one supplied page/i);
+  assert.match(keylessGuidance, /firecrawl_parse processes supported local files/i);
+  assert.doesNotMatch(
+    keylessGuidance,
+    /firecrawl_(?:map|agent|agent_status|research_)/i
+  );
+  assert.doesNotMatch(init.instructions, /\bOAuth\b/i);
+  assert.match(
+    apiKeyGuidance,
+    /higher usage limits.*additional tools.*subject to plan, deployment, and team policy/is
+  );
+  for (const name of [
+    'firecrawl_map',
+    'firecrawl_agent',
+    'firecrawl_agent_status',
+    'firecrawl_research_*',
+  ]) {
+    assert.ok(apiKeyGuidance.includes(name), `${name} must be API-key qualified`);
+  }
   client.notify('notifications/initialized');
   const tools = await client.request('tools/list');
   const toolNames = tools.tools.map((tool) => tool.name);
@@ -1646,6 +1707,7 @@ test('HTTP cloud keyless Parse rejects zeroDataRetention before any backend call
     assert.equal(result.structuredContent.code, 'KEYLESS_OPTION_NOT_AVAILABLE');
     assert.equal(result.structuredContent.option, 'zeroDataRetention');
     assert.match(result.structuredContent.message, /omit zeroDataRetention/i);
+    assert.doesNotMatch(result.structuredContent.message, /connect an account/i);
     requestIds.push(
       assertServerGeneratedRequestId(result.structuredContent, [
         clientRequestId,
