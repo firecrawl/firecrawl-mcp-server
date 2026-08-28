@@ -536,12 +536,41 @@ test('search firecrawl_developer_search queries the developer index and returns 
   const query = new URL(developerCalls[0].url, 'http://localhost').searchParams;
   assert.equal(query.get('query'), 'retry loop backoff');
   assert.equal(query.get('k'), '1');
+  assert.equal(query.has('skills'), false);
 
   const text = message.result.content[0].text;
   assert.match(text, /issue:firecrawl\/firecrawl#1/);
   assert.match(text, /The matched passage\./);
   // The developer tool must not reach the web search endpoint.
   assert.equal(backend.requests.some((request) => request.url === '/v2/search'), false);
+
+  // skills is the one filter categories: ["developer"] cannot reach, so assert
+  // it is forwarded rather than dropped.
+  const skillsRes = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 43,
+    method: 'tools/call',
+    params: {
+      arguments: { query: 'retry loop backoff', skills: 'only' },
+      name: 'firecrawl_developer_search',
+    },
+    headers: { 'x-api-key': 'fc-search-key' },
+  });
+  assert.equal(skillsRes.status, 200);
+  const skillsMessage = parseSseJson(await skillsRes.text());
+  assert.notEqual(
+    skillsMessage.result?.isError,
+    true,
+    JSON.stringify(skillsMessage)
+  );
+
+  const skillsCalls = backend.requests.filter((request) =>
+    request.url?.startsWith('/v2/search/developer')
+  );
+  assert.equal(skillsCalls.length, 2);
+  const skillsQuery = new URL(skillsCalls[1].url, 'http://localhost')
+    .searchParams;
+  assert.equal(skillsQuery.get('skills'), 'only');
+  assert.equal(skillsQuery.get('query'), 'retry loop backoff');
 });
 
 test('search surface requires authentication for tools/list', async (t) => {

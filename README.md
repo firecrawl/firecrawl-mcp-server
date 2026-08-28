@@ -940,7 +940,7 @@ Search an index built for coding agents. The index covers GitHub issues, merged 
 
 **Returns:** Ranked results. Each result carries an ID, a source type (`issue`, `pull_request`, `readme`, or `doc`), a URL, a title, and the matched passages in markdown.
 
-`firecrawl_search` with `categories: ["developer"]` searches the same index beside the web results. Use this tool instead when you want the passages and no web results. The search-only endpoint exposes both.
+`firecrawl_search` with `categories: ["developer"]` searches the same index beside the web results. Use this tool instead when you want the matched passages, the `skills` filter, or no web results in the response. The search-only endpoint exposes both tools, and the same choice applies there.
 
 ## Logging System
 
