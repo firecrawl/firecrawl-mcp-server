@@ -10,6 +10,7 @@ import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs'
 // appear on its tools/list or be callable through it.
 const SEARCH_TOOLS = [
   'firecrawl_search',
+  'firecrawl_developer_search',
   'firecrawl_research_search_papers',
   'firecrawl_research_inspect_paper',
   'firecrawl_research_related_papers',
@@ -28,7 +29,6 @@ const EXCLUDED_TOOLS = [
   'firecrawl_interact',
   'firecrawl_parse',
   'firecrawl_monitor_create',
-  'firecrawl_developer_search',
   'firecrawl_search_feedback',
   'firecrawl_feedback',
 ];
@@ -155,6 +155,23 @@ async function startFakeBackend(options = {}) {
     if (/Bearer fc-\S*invalid/.test(req.headers.authorization ?? '')) {
       res.writeHead(401, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ error: 'Unauthorized: Invalid token', success: false }));
+      return;
+    }
+
+    if (req.method === 'GET' && req.url?.startsWith('/v2/search/developer')) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          results: [
+            {
+              id: 'issue:firecrawl/firecrawl#1',
+              passages: [{ text: 'The matched passage.' }],
+              title: 'Fix the retry loop',
+              url: 'https://github.com/firecrawl/firecrawl/issues/1',
+            },
+          ],
+        })
+      );
       return;
     }
 
@@ -325,7 +342,7 @@ async function listTools(port, endpoint, headers) {
   return tools.map((tool) => tool.name);
 }
 
-test('search surface lists exactly the six read-only tools', async (t) => {
+test('search surface lists exactly the seven read-only tools', async (t) => {
   const { searchPort, getStderr } = await startHostedServer(t);
 
   const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, {
@@ -490,6 +507,70 @@ test('search firecrawl_search forwards the developer category in the web group',
     },
   ]);
   assert.equal('developer' in envelope.data, false);
+});
+
+test('search firecrawl_developer_search queries the developer index and returns its passages', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+  });
+
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 42,
+    method: 'tools/call',
+    params: {
+      arguments: { query: 'retry loop backoff', k: 1 },
+      name: 'firecrawl_developer_search',
+    },
+    headers: { 'x-api-key': 'fc-search-key' },
+  });
+  assert.equal(res.status, 200);
+  const message = parseSseJson(await res.text());
+  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+
+  const developerCalls = backend.requests.filter((request) =>
+    request.url?.startsWith('/v2/search/developer')
+  );
+  assert.equal(developerCalls.length, 1);
+  const query = new URL(developerCalls[0].url, 'http://localhost').searchParams;
+  assert.equal(query.get('query'), 'retry loop backoff');
+  assert.equal(query.get('k'), '1');
+  assert.equal(query.has('skills'), false);
+
+  const text = message.result.content[0].text;
+  assert.match(text, /issue:firecrawl\/firecrawl#1/);
+  assert.match(text, /The matched passage\./);
+  // The developer tool must not reach the web search endpoint.
+  assert.equal(backend.requests.some((request) => request.url === '/v2/search'), false);
+
+  // skills is the one filter categories: ["developer"] cannot reach, so assert
+  // it is forwarded rather than dropped.
+  const skillsRes = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 43,
+    method: 'tools/call',
+    params: {
+      arguments: { query: 'retry loop backoff', skills: 'only' },
+      name: 'firecrawl_developer_search',
+    },
+    headers: { 'x-api-key': 'fc-search-key' },
+  });
+  assert.equal(skillsRes.status, 200);
+  const skillsMessage = parseSseJson(await skillsRes.text());
+  assert.notEqual(
+    skillsMessage.result?.isError,
+    true,
+    JSON.stringify(skillsMessage)
+  );
+
+  const skillsCalls = backend.requests.filter((request) =>
+    request.url?.startsWith('/v2/search/developer')
+  );
+  assert.equal(skillsCalls.length, 2);
+  const skillsQuery = new URL(skillsCalls[1].url, 'http://localhost')
+    .searchParams;
+  assert.equal(skillsQuery.get('skills'), 'only');
+  assert.equal(skillsQuery.get('query'), 'retry loop backoff');
 });
 
 test('search surface requires authentication for tools/list', async (t) => {
@@ -672,7 +753,7 @@ test('full surface still exposes its complete tool set alongside the search surf
   assert.equal(prm.status, 404);
 });
 
-test('primary search profile is OAuth-only, six-tool frozen, and ready without keyless configuration', async (t) => {
+test('primary search profile is OAuth-only, seven-tool frozen, and ready without keyless configuration', async (t) => {
   const { backendRequests, port, issuerUrl } = await startPrimarySearchServer(t);
 
   const ready = await fetch(`http://127.0.0.1:${port}/ready`);

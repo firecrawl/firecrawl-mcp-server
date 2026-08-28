@@ -956,15 +956,17 @@ const openAiAppsChallengeToken = normalizeHeader(
 const FULL_PROFILE_INSTRUCTIONS = `Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and asynchronous research. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent starts multi-source research whose result is read with firecrawl_agent_status. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question — code behaviour, a library or framework, an API contract, an error message, or a known bug — firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of repositories, GitHub issues, merged pull requests, READMEs, and curated documentation sites. Provide only the required inputs and account for stated network or external side effects.`;
 const KEYLESS_PROFILE_INSTRUCTIONS = `Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for asynchronous multi-source research, and firecrawl_research_* for paper-index and repository research.`;
 
-// The search surface exposes web/research search only. Its instructions and tool
-// copy describe just those tools and stay neutral about how a client uses them.
-const SEARCH_PROFILE_INSTRUCTIONS = `Firecrawl provides web, developer, and research search. Use firecrawl_search to find relevant results across the web and specialized indexes. For a programming question, use firecrawl_search with categories: ["developer"] to search indexed repositories, GitHub issues, merged pull requests, READMEs, and documentation. For a biomedical, life-science, clinical, or arXiv literature question, the firecrawl_research_* tools search the paper index, while categories: ["research"] on firecrawl_search filters ordinary web results to research-affiliated websites. Use the firecrawl_research_* tools to search academic and research literature, expand from anchor papers via the citation graph, read full-text passages from a specific paper, and search public code repositories. All tools are read-only and return ranked results.`;
+// The search surface exposes web/developer/research search only. Its instructions
+// and tool copy describe just those tools and stay neutral about how a client
+// uses them.
+const SEARCH_PROFILE_INSTRUCTIONS = `Firecrawl provides web, developer, and research search. Use firecrawl_search to find relevant results across the web and specialized indexes. For a programming question, firecrawl_developer_search searches indexed repositories, GitHub issues, merged pull requests, READMEs, and curated documentation sites and returns the matched passages, and skills: "only" narrows it to agent-skill files; firecrawl_search with categories: ["developer"] reaches the same index beside ordinary web results, returning the hits in the web group rather than as passages and offering no skills filter. For a biomedical, life-science, clinical, or arXiv literature question, the firecrawl_research_* tools search the paper index, while categories: ["research"] on firecrawl_search filters ordinary web results to research-affiliated websites. Use the firecrawl_research_* tools to search academic and research literature, expand from anchor papers via the citation graph, and read full-text passages from a specific paper; firecrawl_research_search_github searches the research index's GitHub slice alongside that literature work, so a general programming question belongs in firecrawl_developer_search. All tools are read-only and return ranked results.`;
 
 // The exact set of tools the search surface exposes. Registration is filtered
 // against this set, so anything not listed here can never appear on that
 // instance's tools/list or be called through it.
 const SEARCH_PROFILE_TOOLS = new Set<string>([
   'firecrawl_search',
+  'firecrawl_developer_search',
   'firecrawl_research_search_papers',
   'firecrawl_research_inspect_paper',
   'firecrawl_research_related_papers',
@@ -1415,7 +1417,7 @@ server.addTool = ((tool: RegisteredTool) => {
   // search profile must instead receive the strict marketplace variant below:
   // it has no scrapeOptions and no instructions referring to the excluded
   // feedback tool. Keep the name filter here so the full registration cannot
-  // leak into the frozen six-tool surface.
+  // leak into the frozen search surface.
   if (primaryProfile.id === 'search' && tool.name === 'firecrawl_search') {
     return;
   }
@@ -3374,6 +3376,7 @@ if (searchProfileEnabled) {
   };
 
   registerResearchTools(searchRegistrar, getClient);
+  registerDeveloperTools(searchRegistrar, getClient);
   registerMarketplaceSearchTool(searchRegistrar, getClient);
 
   // Isolate the search instance from the already-serving full instance: if it
