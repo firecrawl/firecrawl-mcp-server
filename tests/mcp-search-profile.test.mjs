@@ -176,8 +176,8 @@ async function startFakeBackend(options = {}) {
     }
 
     if (req.method === 'POST' && req.url === '/v2/search') {
-      // The developer category is an extra arm: the API returns its hits in a
-      // `data.developer` group beside the web results.
+      // The developer category returns developer-tagged hits in the standard
+      // web group, matching the live Search response shape.
       const wantsDeveloper = (body?.categories ?? []).some((category) =>
         typeof category === 'string'
           ? category === 'developer'
@@ -188,18 +188,16 @@ async function startFakeBackend(options = {}) {
         JSON.stringify({
           creditsUsed: 1,
           data: {
-            web: [{ title: 'Example Domain', url: 'https://example.com/' }],
-            ...(wantsDeveloper
-              ? {
-                  developer: [
-                    {
-                      description: 'The matched passage.',
-                      title: 'Fix the retry loop',
-                      url: 'https://github.com/firecrawl/firecrawl/issues/1',
-                    },
-                  ],
-                }
-              : {}),
+            web: wantsDeveloper
+              ? [
+                  {
+                    category: 'developer',
+                    description: 'The matched passage.',
+                    title: 'Fix the retry loop',
+                    url: 'https://github.com/firecrawl/firecrawl/issues/1',
+                  },
+                ]
+              : [{ title: 'Example Domain', url: 'https://example.com/' }],
           },
           id: '00000000-0000-4000-8000-000000000000',
           success: true,
@@ -347,9 +345,21 @@ async function listTools(port, endpoint, headers) {
 test('search surface lists exactly the seven read-only tools', async (t) => {
   const { searchPort, getStderr } = await startHostedServer(t);
 
-  const names = await listTools(searchPort, SEARCH_ENDPOINT, {
+  const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, {
     'x-api-key': 'fc-test',
   });
+  const names = tools.map((tool) => tool.name);
+  const search = tools.find((tool) => tool.name === 'firecrawl_search');
+  assert.ok(search);
+  assert.match(
+    search.description,
+    /categories: \["developer"\].*data\.web.*category.*developer/is
+  );
+  assert.match(
+    search.description,
+    /each web result is a title, URL, and description, not the page/i
+  );
+  assert.doesNotMatch(search.description, /data\.developer/i);
 
   assert.deepEqual([...names].sort(), [...SEARCH_TOOLS].sort());
   for (const excluded of EXCLUDED_TOOLS) {
@@ -457,7 +467,7 @@ test('search firecrawl_search sends a clean body built from allowed fields only'
   });
 });
 
-test('search firecrawl_search forwards the developer category and returns its group', async (t) => {
+test('search firecrawl_search forwards the developer category in the web group', async (t) => {
   const backend = await startFakeBackend();
   t.after(() => backend.close());
   const { searchPort } = await startHostedServer(t, {
@@ -485,16 +495,18 @@ test('search firecrawl_search forwards the developer category and returns its gr
   assert.equal(searchCalls.length, 1);
   assert.deepEqual(searchCalls[0].body.categories, ['developer']);
 
-  // The tool returns the API envelope unchanged, so the developer group must
-  // survive into the tool result.
+  // The tool returns the API envelope unchanged, so the developer-tagged web
+  // result must survive into the tool result without a legacy developer group.
   const envelope = JSON.parse(message.result.content[0].text);
-  assert.deepEqual(envelope.data.developer, [
+  assert.deepEqual(envelope.data.web, [
     {
+      category: 'developer',
       description: 'The matched passage.',
       title: 'Fix the retry loop',
       url: 'https://github.com/firecrawl/firecrawl/issues/1',
     },
   ]);
+  assert.equal('developer' in envelope.data, false);
 });
 
 test('search firecrawl_developer_search queries the developer index and returns its passages', async (t) => {
