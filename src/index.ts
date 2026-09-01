@@ -3027,9 +3027,7 @@ The response also carries a \`threadId\`. Save it: passing it back on a later ca
           enabled: z
             .boolean()
             .optional()
-            .describe(
-              'Enable Firecrawl Exchange data providers for this run.'
-            ),
+            .describe('Enable Firecrawl Exchange data providers for this run.'),
           toolkits: z
             .array(z.string())
             .max(5)

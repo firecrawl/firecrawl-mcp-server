@@ -357,7 +357,10 @@ test('an API without threads is reported as such, and other rejections still err
   const client = await startClient(t, fakeApi);
 
   const unsupported = await client.request('tools/call', {
-    arguments: { prompt: 'Which tier includes SSO?', threadId: LEGACY_THREAD_ID },
+    arguments: {
+      prompt: 'Which tier includes SSO?',
+      threadId: LEGACY_THREAD_ID,
+    },
     name: 'firecrawl_agent',
   });
   const payload = toolPayload(unsupported);
