@@ -2923,6 +2923,71 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
   },
 });
 
+// Fixed replies the server sends when the host resolves a pending approval, so
+// the host does not have to phrase them itself.
+const AGENT_APPROVE_PROMPT = 'Approved. Make that call, and nothing else.';
+const AGENT_DECLINE_PROMPT =
+  'Do not make that call. Answer from what you already have, or tell me what you would need.';
+
+// Thread arguments an API predating threads rejects by name, and which decide
+// whether a run has to go out as a follow-up rather than a fresh job.
+const AGENT_THREAD_KEYS = ['threadId', 'mode', 'effort', 'exchange'] as const;
+
+/**
+ * Thread and Exchange rejections a host can act on by itself. Returned as text
+ * rather than thrown so the model recovers inside the conversation; every other
+ * failure keeps propagating, notably a 401 that the credential-recovery
+ * boundary turns into CREDENTIAL_INVALID.
+ */
+const AGENT_THREAD_RECOVERY: Record<
+  string,
+  (body: Record<string, any>) => string
+> = {
+  thread_not_found: () =>
+    'That thread is not available for this API key. Call firecrawl_agent without threadId to start a new thread.',
+  thread_busy: (body) =>
+    `That thread already has a run in progress${
+      body.runId ? ` (runId ${body.runId})` : ''
+    }. Call firecrawl_agent_status on it or wait for it to finish, then send the follow-up.`,
+  thread_expired: () =>
+    'That thread has expired. Call firecrawl_agent without threadId to start a new thread.',
+  threads_disabled: () =>
+    'This Firecrawl deployment does not support agent threads. Call firecrawl_agent without threadId.',
+  exchange_not_enabled: () =>
+    'This API key cannot enable Firecrawl Exchange data providers. Retry without the exchange argument.',
+};
+
+function agentThreadRecovery(
+  error: unknown,
+  { sentThreadKeys }: { sentThreadKeys: boolean }
+): string | undefined {
+  const status = (error as any)?.response?.status as number | undefined;
+  const body = ((error as any)?.response?.data ?? {}) as Record<string, any>;
+  const code = typeof body.code === 'string' ? body.code : undefined;
+  const message = code ? AGENT_THREAD_RECOVERY[code]?.(body) : undefined;
+  if (message) {
+    return asText({ success: false, status, code, error: body.error, message });
+  }
+  // An API predating threads rejects the new keys by name, because its request
+  // schema is strict. Say so instead of surfacing a bare validation error.
+  const rejectedKey =
+    sentThreadKeys &&
+    status === 400 &&
+    AGENT_THREAD_KEYS.some((key) =>
+      new RegExp(`\\b${key}\\b`).test(String(body.error ?? ''))
+    );
+  if (rejectedKey) {
+    return asText({
+      success: false,
+      status,
+      error: body.error,
+      message:
+        'This Firecrawl API does not support agent threads yet. Retry without threadId, mode, effort, exchange, approve, or decline.',
+    });
+  }
+  return undefined;
+}
+
 server.addTool({
   name: 'firecrawl_agent',
   annotations: {
@@ -2935,29 +3000,110 @@ server.addTool({
 Start an asynchronous web research job from a prompt, optional seed URLs, and an optional JSON schema. Use this for a requested synthesis across multiple sources when the task can wait for asynchronous completion. The agent can search, navigate, read pages, and assemble a structured result.
 
 This call returns only a job ID, not the research result. Read the job with \`firecrawl_agent_status\` until it reaches \`completed\` or \`failed\`; research commonly takes several minutes. If the job cannot finish within the task's available time, \`firecrawl_search\` and \`firecrawl_scrape\` can gather evidence synchronously.
+
+The response also carries a \`threadId\`. Save it: passing it back on a later call continues the same thread, and the agent still has everything from the earlier turns, so send just the new question and leave out context it already saw.
 `,
-  parameters: z.object({
-    prompt: z.string().min(1).max(10000),
-    urls: z.array(z.string().url()).optional(),
-    schema: z.record(z.string(), z.any()).optional(),
-  }),
+  parameters: z
+    .object({
+      prompt: z.string().min(1).max(10000),
+      urls: z.array(z.string().url()).optional(),
+      schema: z.record(z.string(), z.any()).optional(),
+      threadId: z
+        .string()
+        .uuid()
+        .optional()
+        .describe(
+          'Continue an earlier agent run. Pass the threadId returned by a previous firecrawl_agent call; the agent remembers everything from that thread.'
+        ),
+      mode: z
+        .enum(['extract', 'chat'])
+        .optional()
+        .describe(
+          'chat lets the agent answer in prose, explain, or ask a clarifying question; extract (default) always returns JSON.'
+        ),
+      effort: z.enum(['low', 'medium', 'high']).optional(),
+      exchange: z
+        .object({
+          enabled: z
+            .boolean()
+            .optional()
+            .describe(
+              'Enable Firecrawl Exchange data providers for this run.'
+            ),
+          toolkits: z
+            .array(z.string())
+            .max(5)
+            .optional()
+            .describe('Pin specific providers.'),
+          maxCalls: z.number().int().min(1).max(30).optional(),
+          requireApproval: z.boolean().optional(),
+        })
+        .optional(),
+      approve: z
+        .object({
+          approvalId: z.string().uuid(),
+          callIds: z.array(z.string()).optional(),
+          always: z.boolean().optional(),
+        })
+        .optional()
+        .describe(
+          'Approve a pendingApproval reported by firecrawl_agent_status. Requires threadId; the server sends the reply text.'
+        ),
+      decline: z
+        .object({ approvalId: z.string().uuid() })
+        .optional()
+        .describe(
+          'Decline a pendingApproval reported by firecrawl_agent_status. Requires threadId; the server sends the reply text.'
+        ),
+    })
+    .refine((data) => !(data.approve && data.decline), {
+      message: "Provide either 'approve' or 'decline', not both.",
+    }),
   execute: async (args: unknown, { session, log }): Promise<string> => {
     const client = getClient(session);
     const a = args as Record<string, unknown>;
+    const approve = a.approve as Record<string, unknown> | undefined;
+    const decline = a.decline as Record<string, unknown> | undefined;
     log.info('Starting agent', {
       prompt: (a.prompt as string).substring(0, 100),
       urlCount: Array.isArray(a.urls) ? a.urls.length : 0,
+      threadId: a.threadId as string | undefined,
+    });
+    const exchange = removeEmptyTopLevel({
+      ...((a.exchange as Record<string, unknown>) ?? {}),
+      approve,
+      decline,
     });
     const agentBody = removeEmptyTopLevel({
-      prompt: a.prompt as string,
+      prompt: approve
+        ? AGENT_APPROVE_PROMPT
+        : decline
+          ? AGENT_DECLINE_PROMPT
+          : (a.prompt as string),
       urls: a.urls as string[] | undefined,
       schema: (a.schema as Record<string, unknown>) || undefined,
+      threadId: a.threadId as string | undefined,
+      mode: a.mode as string | undefined,
+      effort: a.effort as string | undefined,
+      exchange,
     });
-    const res = await (client as any).startAgent({
-      ...agentBody,
-      origin: ORIGIN,
-    });
-    return asText(res);
+    // The pinned SDK's startAgent builds its payload from a fixed key list, so
+    // it would drop threadId/mode/effort/exchange silently. Post the body
+    // directly until the SDK carries them (@mendable/firecrawl-js > 4.25.2),
+    // after which this can go back to client.startAgent.
+    try {
+      const res = await (client as any).http.post('/v2/agent', {
+        ...agentBody,
+        origin: ORIGIN,
+      });
+      return asText(res?.data ?? {});
+    } catch (error) {
+      const recovery = agentThreadRecovery(error, {
+        sentThreadKeys: AGENT_THREAD_KEYS.some((key) => key in agentBody),
+      });
+      if (recovery) return recovery;
+      throw error;
+    }
   },
 });
 
@@ -2972,7 +3118,7 @@ server.addTool({
   description: `
 Retrieve progress or final results for a \`firecrawl_agent\` job ID. A \`processing\` response is non-terminal and does not contain the final research result. Check again after 15–30 seconds until the status is \`completed\` or \`failed\`; complex jobs can take several minutes. If the job cannot finish within the task's available time, use \`firecrawl_search\` and \`firecrawl_scrape\` to complete the requested output.
 
-Returns job status, progress information, and result data when completed.
+Returns job status, progress information, and result data when completed. When the response carries \`message\`, that text is the agent's own answer; show it to the user as the answer. When it carries \`pendingApproval\`, ask the user whether to allow the described call, then send their decision with \`firecrawl_agent\` using the same \`threadId\` and either \`approve\` or \`decline\`.
 `,
   parameters: z.object({ id: z.string() }),
   execute: async (args: unknown, { session, log }): Promise<string> => {
@@ -2984,6 +3130,46 @@ Returns job status, progress information, and result data when completed.
       ORIGIN_HEADERS
     );
     return asText(res?.data ?? {});
+  },
+});
+
+server.addTool({
+  name: 'firecrawl_agent_thread',
+  annotations: {
+    title: 'Get an agent thread',
+    readOnlyHint: true, // Reads one stored agent thread by ID; no mutations.
+    openWorldHint: false, // Queries only Firecrawl thread state within the user's account.
+    destructiveHint: false, // Read-only lookup.
+  },
+  description: `
+Retrieve the whole conversation behind a \`firecrawl_agent\` thread: every turn in order, with its prompt, status, credits, and reply. Use this to reload or summarize a thread whose \`threadId\` is known, for example when the earlier turns are no longer in context.
+
+Returns the thread and its runs; \`includeData: true\` also inlines the structured result of each completed run.
+`,
+  parameters: z.object({
+    threadId: z.string().uuid(),
+    includeData: z.boolean().optional(),
+  }),
+  execute: async (args: unknown, { session, log }): Promise<string> => {
+    const client = getClient(session);
+    const { threadId, includeData } = args as {
+      threadId: string;
+      includeData?: boolean;
+    };
+    log.info('Fetching agent thread', { threadId });
+    try {
+      const res = await (client as any).http.get(
+        `/v2/agent/threads/${encodeURIComponent(threadId)}${
+          includeData ? '?includeData=true' : ''
+        }`,
+        ORIGIN_HEADERS
+      );
+      return asText(res?.data ?? {});
+    } catch (error) {
+      const recovery = agentThreadRecovery(error, { sentThreadKeys: true });
+      if (recovery) return recovery;
+      throw error;
+    }
   },
 });
 
