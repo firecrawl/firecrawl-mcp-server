@@ -718,6 +718,11 @@ The agent performs web searches, follows links, reads pages, and gathers data au
 - `prompt`: Natural language description of the data you want (required, max 10,000 characters)
 - `urls`: Optional array of URLs to focus the agent on specific pages
 - `schema`: Optional JSON schema for structured output
+- `threadId`: Optional thread to continue (see below)
+- `mode`: Optional `extract` (default, always returns JSON) or `chat` (lets the agent answer in prose or ask a clarifying question)
+- `effort`: Optional `low`, `medium`, or `high`
+- `exchange`: Optional Firecrawl Exchange data provider options (`enabled`, `toolkits`, `maxCalls`, `requireApproval`)
+- `approve` / `decline`: Optional reply to a `pendingApproval` reported by `firecrawl_agent_status`; requires `threadId`
 
 **Prompt Example:**
 
@@ -766,7 +771,21 @@ Then poll with `firecrawl_agent_status` using the returned job ID.
 
 **Returns:**
 
-- Job ID for status checking. Use `firecrawl_agent_status` to poll for results.
+- Job ID for status checking, plus the `threadId` of the conversation the job belongs to. Use `firecrawl_agent_status` to poll for results.
+
+**Follow-up turns:**
+
+Every response carries a `threadId`. Pass it back on a later call to continue the same conversation: the agent still has the earlier turns, so send only the new question.
+
+```json
+{
+  "name": "firecrawl_agent",
+  "arguments": {
+    "threadId": "018f0000-0000-4000-8000-000000000000",
+    "prompt": "Which tier includes SSO?"
+  }
+}
+```
 
 ### 9. Check Agent Status (`firecrawl_agent_status`)
 
@@ -789,7 +808,25 @@ Check the status of an agent job and retrieve results when complete. Use this to
 - `completed`: Research finished - response includes the extracted data
 - `failed`: An error occurred
 
-### 10. Interact Tool (`firecrawl_interact`)
+A completed response can also carry `message` (the agent's own answer, in chat mode) and `pendingApproval` (a call awaiting a decision). Reply to a pending approval by calling `firecrawl_agent` with the same `threadId` and either `approve` or `decline`.
+
+### 10. Agent Thread (`firecrawl_agent_thread`)
+
+Read a whole agent conversation: every turn in order, with its prompt, status, and reply. Useful for reloading or summarizing a thread whose earlier turns are no longer at hand.
+
+```json
+{
+  "name": "firecrawl_agent_thread",
+  "arguments": {
+    "threadId": "018f0000-0000-4000-8000-000000000000",
+    "includeData": true
+  }
+}
+```
+
+`includeData: true` also inlines the structured result of each completed run.
+
+### 11. Interact Tool (`firecrawl_interact`)
 
 Interact with a fresh URL or with a page that was already opened by `firecrawl_scrape`.
 
@@ -815,7 +852,7 @@ Interact with a fresh URL or with a page that was already opened by `firecrawl_s
 
 **Returns:** Interaction result and, for URL mode, the derived `scrapeId` for follow-up or cleanup.
 
-### 11. Stop Interact Tool (`firecrawl_interact_stop`)
+### 12. Stop Interact Tool (`firecrawl_interact_stop`)
 
 Stop an interact session for a scraped page when you are done interacting.
 
@@ -828,7 +865,7 @@ Stop an interact session for a scraped page when you are done interacting.
 }
 ```
 
-### 12. Research Tools (`firecrawl_research_*`)
+### 13. Research Tools (`firecrawl_research_*`)
 
 Search and inspect papers and GitHub repositories through the research MCP tools.
 
@@ -846,7 +883,7 @@ Search and inspect papers and GitHub repositories through the research MCP tools
 
 `firecrawl_search` with `categories: ["research"]` is a different surface: it filters ordinary web results to research-affiliated websites and returns page snippets, not paper records. Use these tools when the question is about the literature itself, and pass several distinct framings of the same question — they surface different papers than a single query does.
 
-### 13. Monitor Tools (`firecrawl_monitor_*`)
+### 14. Monitor Tools (`firecrawl_monitor_*`)
 
 Create and manage recurring page monitors. Monitors run scheduled scrapes or crawls, diff each result against the last retained snapshot, and can notify by webhook or email.
 
@@ -915,7 +952,7 @@ Pass `body` when you need crawl targets, JSON change tracking, custom retention,
 - `firecrawl_monitor_checks`: list checks, optionally filtered by status.
 - `firecrawl_monitor_check`: get page-level results, including `diff`, `snapshot`, `judgment.meaningful`, and `judgment.meaningfulChanges`.
 
-### 14. Developer Search Tool (`firecrawl_developer_search`)
+### 15. Developer Search Tool (`firecrawl_developer_search`)
 
 Search an index built for coding agents. The index covers GitHub issues, merged pull requests, repository READMEs, and curated documentation sites.
 
