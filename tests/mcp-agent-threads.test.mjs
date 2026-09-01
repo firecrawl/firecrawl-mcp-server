@@ -293,6 +293,52 @@ test('firecrawl_agent sends the fixed reply and exchange.approve when a host app
   });
 });
 
+test('a follow-up can clear the urls and schema it inherited', async (t) => {
+  const fakeApi = await startFakeAgentApi();
+  t.after(() => fakeApi.close());
+  const client = await startClient(t, fakeApi);
+
+  const result = await client.request('tools/call', {
+    arguments: {
+      prompt: 'Forget the pricing page and answer from the docs',
+      threadId: THREAD_ID,
+      urls: [],
+      schema: null,
+    },
+    name: 'firecrawl_agent',
+  });
+  toolPayload(result);
+
+  assert.deepEqual(fakeApi.requests[0].body, {
+    prompt: 'Forget the pricing page and answer from the docs',
+    threadId: THREAD_ID,
+    urls: [],
+    schema: null,
+    origin: 'mcp-fastmcp',
+  });
+});
+
+test('the clearing values are dropped when there is no thread to clear them on', async (t) => {
+  const fakeApi = await startFakeAgentApi();
+  t.after(() => fakeApi.close());
+  const client = await startClient(t, fakeApi);
+
+  const result = await client.request('tools/call', {
+    arguments: {
+      prompt: 'Find the top AI startups founded in 2024',
+      urls: [],
+      schema: null,
+    },
+    name: 'firecrawl_agent',
+  });
+  toolPayload(result);
+
+  assert.deepEqual(fakeApi.requests[0].body, {
+    prompt: 'Find the top AI startups founded in 2024',
+    origin: 'mcp-fastmcp',
+  });
+});
+
 test('firecrawl_agent without thread arguments sends the same body as before', async (t) => {
   const fakeApi = await startFakeAgentApi();
   t.after(() => fakeApi.close());

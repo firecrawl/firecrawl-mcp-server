@@ -3002,12 +3002,25 @@ Start an asynchronous web research job from a prompt, optional seed URLs, and an
 This call returns only a job ID, not the research result. Read the job with \`firecrawl_agent_status\` until it reaches \`completed\` or \`failed\`; research commonly takes several minutes. If the job cannot finish within the task's available time, \`firecrawl_search\` and \`firecrawl_scrape\` can gather evidence synchronously.
 
 The response also carries a \`threadId\`. Save it: passing it back on a later call continues the same thread, and the agent still has everything from the earlier turns, so send just the new question and leave out context it already saw.
+
+A follow-up keeps the previous turn's \`urls\`, \`schema\` and \`effort\` unless it sends its own. To drop one instead of replacing it, send \`urls: []\` or \`schema: null\` alongside the \`threadId\`.
 `,
   parameters: z
     .object({
       prompt: z.string().min(1).max(10000),
-      urls: z.array(z.string().url()).optional(),
-      schema: z.record(z.string(), z.any()).optional(),
+      urls: z
+        .array(z.string().url())
+        .optional()
+        .describe(
+          'Seed URLs for this turn. On a follow-up, an empty array drops the URLs the thread inherited.'
+        ),
+      schema: z
+        .record(z.string(), z.any())
+        .nullable()
+        .optional()
+        .describe(
+          'JSON schema for structured output. On a follow-up, null drops the schema the thread inherited.'
+        ),
       threadId: z
         .string()
         .uuid()
@@ -3072,7 +3085,7 @@ The response also carries a \`threadId\`. Save it: passing it back on a later ca
       approve,
       decline,
     });
-    const agentBody = removeEmptyTopLevel({
+    const agentBody: Record<string, unknown> = removeEmptyTopLevel({
       prompt: approve
         ? AGENT_APPROVE_PROMPT
         : decline
@@ -3085,6 +3098,14 @@ The response also carries a \`threadId\`. Save it: passing it back on a later ca
       effort: a.effort as string | undefined,
       exchange,
     });
+    // A follow-up keeps the previous turn's urls and schema, so an empty array
+    // and a null are how a host drops them. Both read as empty above, so put
+    // them back, and only on a follow-up: without a threadId there is nothing
+    // to inherit and the body stays exactly what it has always been.
+    if (a.threadId) {
+      if (Array.isArray(a.urls) && a.urls.length === 0) agentBody.urls = [];
+      if (a.schema === null) agentBody.schema = null;
+    }
     // The pinned SDK's startAgent builds its payload from a fixed key list, so
     // it would drop threadId/mode/effort/exchange silently. Post the body
     // directly until the SDK carries them (@mendable/firecrawl-js > 4.25.2),
