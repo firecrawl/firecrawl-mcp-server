@@ -892,6 +892,24 @@ const searchToolBaseFields = {
   tbs: z.string().optional(),
   filter: z.string().optional(),
   location: z.string().optional(),
+  country: z
+    .string()
+    .optional()
+    .describe(
+      'ISO country code for geo-targeting search results (for example, `US` or `DE`). For best results, set `location` as well.'
+    ),
+  timeout: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('Server-side search timeout in milliseconds.'),
+  ignoreInvalidURLs: z
+    .boolean()
+    .optional()
+    .describe(
+      'Exclude URLs that are invalid for other Firecrawl endpoints, which is useful when feeding search results into another tool.'
+    ),
   includeDomains: z.array(searchDomainSchema).optional(),
   excludeDomains: z.array(searchDomainSchema).optional(),
   sources: z
@@ -3244,6 +3262,9 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
         tbs,
         filter,
         location,
+        country,
+        timeout,
+        ignoreInvalidURLs,
         sources,
         categories,
         highlights,
@@ -3256,6 +3277,9 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
         tbs?: string;
         filter?: string;
         location?: string;
+        country?: string;
+        timeout?: number;
+        ignoreInvalidURLs?: boolean;
         sources?: Array<{ type: string }>;
         categories?: string[];
         highlights?: boolean;
@@ -3277,6 +3301,9 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
           tbs,
           filter,
           location,
+          country,
+          timeout,
+          ignoreInvalidURLs,
           sources,
           categories,
           highlights,
