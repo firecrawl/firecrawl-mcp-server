@@ -12,6 +12,7 @@ import { registerDeveloperTools } from './developer';
 import { extractSingleTrustedClientIp } from './keyless-client-ip';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
+import { searchHttpOptions } from './search-http-options';
 import { escapeWWWAuthenticateValue } from './www-authenticate';
 import {
   credentialForOutboundRequest,
@@ -2268,7 +2269,11 @@ Each web result is a title, URL, and description, not the page. Add \`scrapeOpti
     // high-level `search()` helper strips `id` and `creditsUsed`, which
     // supports the optional authenticated `firecrawl_search_feedback` workflow.
     const client = getClient(session);
-    const httpRes = await (client as any).http.post('/v2/search', searchBody);
+    const httpRes = await (client as any).http.post(
+      '/v2/search',
+      searchBody,
+      searchHttpOptions(searchOpts.timeout as number | undefined)
+    );
     return asText(httpRes?.data ?? {});
   },
 });
@@ -3314,7 +3319,11 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
 
       log.info('Searching', { query: searchQuery });
       const client = getClientFn(session);
-      const httpRes = await (client as any).http.post('/v2/search', searchBody);
+      const httpRes = await (client as any).http.post(
+        '/v2/search',
+        searchBody,
+        searchHttpOptions(timeout)
+      );
       return asText(httpRes?.data ?? {});
     },
   });
