@@ -3043,9 +3043,8 @@ A follow-up keeps the previous turn's \`urls\`, \`schema\` and \`effort\` unless
             .describe('Enable Firecrawl Exchange data providers for this run.'),
           toolkits: z
             .array(z.string())
-            .max(5)
             .optional()
-            .describe('Pin specific providers.'),
+            .describe('Pin specific providers. Omit to use all of them.'),
           maxCalls: z.number().int().min(1).max(30).optional(),
           requireApproval: z.boolean().optional(),
         })
