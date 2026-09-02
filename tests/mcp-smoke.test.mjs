@@ -631,6 +631,9 @@ test('HTTP cloud keyless transport preserves app challenge without advertising O
   );
   assert.equal(searchTool.inputSchema.properties.highlights.type, 'boolean');
   assert.equal('default' in searchTool.inputSchema.properties.highlights, false);
+  assert.equal(searchTool.inputSchema.properties.limit.type, 'integer');
+  assert.equal(searchTool.inputSchema.properties.limit.minimum, 1);
+  assert.equal(searchTool.inputSchema.properties.limit.maximum, 100);
 
   assert.equal(
     backend.requests.filter((request) => request.url === '/api/oauth/introspect').length,
@@ -715,6 +718,49 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
     'raw API keys must reach Core without introspection'
   );
   assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('HTTP cloud transport rejects invalid search limits before calling Firecrawl', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: fakeApi.url,
+    FIRECRAWL_OAUTH_ISSUER: fakeApi.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const searchRequestsBefore = fakeApi.requests.filter(
+    (request) => request.url === '/v2/search'
+  ).length;
+  for (const [index, limit] of [0, 1.5, 101].entries()) {
+    const response = await httpToolCall(port, {
+      id: 400 + index,
+      headers: { 'x-api-key': 'fc-test' },
+      params: {
+        arguments: { limit, query: 'invalid search limit' },
+        name: 'firecrawl_search',
+      },
+    });
+    assert.equal(response.status, 200);
+    const message = parseSseJson(await response.text());
+    assert.equal(
+      Boolean(message.error) || message.result?.isError === true,
+      true,
+      JSON.stringify(message)
+    );
+  }
+  const searchRequestsAfter = fakeApi.requests.filter(
+    (request) => request.url === '/v2/search'
+  ).length;
+  assert.equal(searchRequestsAfter, searchRequestsBefore);
 });
 
 class StdioMcpClient {
