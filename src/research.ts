@@ -452,17 +452,25 @@ Returns matching passages or a notice when full text is unavailable.
     },
   });
 
-  // --- search_github ---
+  // --- search_github (deprecated, sunset 2026-11-03) ---
+  // Still registered because MCP clients cache tools/list and do not re-fetch.
+  // The blunt description, not removal, is what moves models off it.
   server.addTool({
     name: 'firecrawl_research_search_github',
     annotations: {
-      title: 'Search GitHub history',
+      title: 'Search GitHub history (deprecated)',
       readOnlyHint: true, // Searches indexed GitHub issue/PR history and READMEs; returns matches only.
       openWorldHint: true, // Searches public GitHub content.
       destructiveHint: false, // Query-only; does not create issues, PRs, or modify repositories.
     },
+    // MCP has no deprecated field on Tool, so the flag goes in _meta.
+    _meta: {
+      deprecated: true,
+      replacement: 'firecrawl_developer_search',
+      sunset: '2026-11-03',
+    },
     description: `
-Search indexed public GitHub issue, pull-request, and README content. Returns ranked matches with repository, URL, snippet, and full matched markdown when available.
+DEPRECATED. Stops working after 2026-11-03. firecrawl_developer_search covers this ground: GitHub issues, pull requests, and READMEs, plus curated documentation sites, returned as matched passages. It does not carry over this tool's score breakdown or its web fallback results.
 `,
     parameters: z.object({
       query: z.string().min(1),

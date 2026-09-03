@@ -368,6 +368,32 @@ test('search surface lists exactly the seven read-only tools', async (t) => {
   assert.equal(getStderr().includes('TypeError'), false, getStderr());
 });
 
+test('the deprecated github tool stays callable and advertises its sunset', async (t) => {
+  const { searchPort } = await startHostedServer(t);
+
+  const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, {
+    'x-api-key': 'fc-test',
+  });
+  const github = tools.find(
+    (tool) => tool.name === 'firecrawl_research_search_github'
+  );
+
+  // Still listed: MCP clients cache tools/list, so removing it reads as breakage.
+  assert.ok(github, 'the deprecated tool must stay on tools/list until sunset');
+
+  assert.equal(github._meta?.deprecated, true);
+  assert.equal(github._meta?.replacement, 'firecrawl_developer_search');
+  assert.equal(github._meta?.sunset, '2026-11-03');
+
+  assert.match(github.description, /^\s*DEPRECATED\./);
+  assert.match(github.description, /firecrawl_developer_search/);
+  assert.match(github.description, /2026-11-03/);
+  assert.ok(
+    SEARCH_TOOLS.includes('firecrawl_developer_search'),
+    'the replacement named in the notice must be on the same surface'
+  );
+});
+
 test('search surface does not expose an excluded tool', async (t) => {
   const backend = await startFakeBackend();
   t.after(() => backend.close());
