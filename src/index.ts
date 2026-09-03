@@ -971,6 +971,9 @@ const SEARCH_PROFILE_TOOLS = new Set<string>([
   'firecrawl_research_inspect_paper',
   'firecrawl_research_related_papers',
   'firecrawl_research_read_paper',
+  // Registered so cached sessions get a DEPRECATED_TOOL payload, hidden from
+  // tools/list via canList. See registerResearchTools.
+  'firecrawl_research_search_github',
 ]);
 
 function makeFullProfile(): ServerProfile {

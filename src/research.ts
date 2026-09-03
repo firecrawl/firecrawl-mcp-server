@@ -10,7 +10,7 @@
  */
 
 import { z } from 'zod';
-import type { FastMCP } from 'fastmcp';
+import { type FastMCP, UserError } from 'fastmcp';
 
 interface SessionData {
   firecrawlApiKey?: string;
@@ -172,6 +172,23 @@ function fmtPaperMetadata(paper?: PaperHit): string {
 // Cap GitHub matched content so a page of results stays within the MCP
 // output-token limit. Higher than abstracts since issue/PR threads carry the
 // signal (repro steps, stack traces) the agent actually needs to verify.
+function deprecatedGithubPayload() {
+  return {
+    code: 'DEPRECATED_TOOL',
+    message:
+      "firecrawl_research_search_github is deprecated and unavailable through MCP. Use firecrawl_developer_search, which searches GitHub issues, pull requests, and READMEs plus curated documentation sites and returns matched passages. It does not carry over this tool's score breakdown or its web fallback results.",
+    replacement: {
+      name: 'firecrawl_developer_search',
+      instructions:
+        'Pass the same natural-language query. Optionally set types to narrow to issue, pull_request, readme, or doc, and repos to scope to specific repositories.',
+      example_arguments: {
+        query: 'pysam VCF parsing memory leak',
+      },
+    },
+    docs_url: 'https://docs.firecrawl.dev/features/developer',
+  };
+}
+
 export function registerResearchTools(
   server: Pick<FastMCP<SessionData>, 'addTool'>,
   getClient: GetClient
@@ -394,6 +411,40 @@ Returns matching passages or a notice when full text is unavailable.
       return passages.length
         ? passages.map((p) => p.text).join('\n---\n')
         : '(no full-text passages available for this paper)';
+    },
+  });
+
+  // --- search_github: deprecated compatibility entry point ---
+  // Hidden from tools/list so new sessions never see it, still callable so a
+  // session holding a cached tool list gets a pointer to the replacement
+  // instead of an unknown-tool error. Same shape as firecrawl_extract.
+  server.addTool({
+    name: 'firecrawl_research_search_github',
+    annotations: {
+      title: 'Search GitHub history',
+      readOnlyHint: true,
+      openWorldHint: true,
+      destructiveHint: false,
+    },
+    description: `
+Deprecated compatibility entry point. Use firecrawl_developer_search for GitHub issues, pull requests, and READMEs, plus curated documentation sites, returned as matched passages.
+`,
+    parameters: z.object({
+      query: z.string().min(1),
+      k: z.number().int().min(1).max(100).optional(),
+    }),
+    canList: () => false,
+    beforeValidate: () => {
+      const payload = deprecatedGithubPayload();
+      return {
+        content: [{ type: 'text' as const, text: payload.message }],
+        isError: true,
+        structuredContent: payload,
+      };
+    },
+    execute: async (): Promise<string> => {
+      const payload = deprecatedGithubPayload();
+      throw new UserError(payload.message, payload);
     },
   });
 }
