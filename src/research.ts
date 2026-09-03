@@ -169,9 +169,6 @@ function fmtPaperMetadata(paper?: PaperHit): string {
   return lines.join('\n');
 }
 
-// Cap GitHub matched content so a page of results stays within the MCP
-// output-token limit. Higher than abstracts since issue/PR threads carry the
-// signal (repro steps, stack traces) the agent actually needs to verify.
 function deprecatedGithubPayload() {
   return {
     code: 'DEPRECATED_TOOL',
@@ -180,7 +177,7 @@ function deprecatedGithubPayload() {
     replacement: {
       name: 'firecrawl_developer_search',
       instructions:
-        'Pass the same natural-language query. Optionally set types to narrow to issue, pull_request, readme, or doc, and repos to scope to specific repositories.',
+        'Pass the same natural-language query. Optionally set k to control the number of results, or set skills to "only" to search only agent-skill files.',
       example_arguments: {
         query: 'pysam VCF parsing memory leak',
       },
