@@ -1,8 +1,7 @@
 /**
  * Firecrawl Research tools (experimental).
  *
- * Thin MCP wrappers over the `/v2/search/research/*` endpoints (research papers +
- * GitHub history/readmes).
+ * Thin MCP wrappers over the `/v2/search/research/*` paper endpoints.
  *
  * The installed `@mendable/firecrawl-js` predates the SDK's `research` client,
  * so we call the endpoints directly through the SDK's HTTP layer (auth +
@@ -173,60 +172,6 @@ function fmtPaperMetadata(paper?: PaperHit): string {
 // Cap GitHub matched content so a page of results stays within the MCP
 // output-token limit. Higher than abstracts since issue/PR threads carry the
 // signal (repro steps, stack traces) the agent actually needs to verify.
-const MAX_GITHUB_CONTENT_CHARS = 1200;
-
-interface GitHubItem {
-  /** `owner/name`. */
-  repo?: string;
-  url?: string;
-  /** History page type (e.g. `issue`, `pull`). Omitted for readmes. */
-  pageType?: string;
-  /** Issue/PR number. Omitted for readmes. */
-  number?: number;
-  /** Number of matched segments/chunks. */
-  segmentCount?: number;
-  /** Readme URL (readme results). */
-  readmeUrl?: string;
-  /** Short matched excerpt. */
-  snippet?: string;
-  /** Full matched content in markdown. */
-  contentMd?: string;
-}
-
-/**
- * Render GitHub history/readme hits as `[repo#number] (kind)` / url / body
- * blocks — the same shape as `fmtHits`, but tuned for issues/PRs and readmes.
- * Markdown content keeps its newlines (so tables/code survive); only readmes and
- * snippets fall back when full content is absent.
- */
-function fmtGithub(results?: GitHubItem[]): string {
-  if (!results || results.length === 0) return '(no results)';
-  return results
-    .map((r) => {
-      const lines: string[] = [];
-      if (r.number == null && r.pageType == null) {
-        lines.push(`[${r.repo ?? '?'}] README`);
-      } else {
-        const ref = r.number != null ? `#${r.number}` : '';
-        const meta = [
-          r.pageType,
-          r.segmentCount ? `${r.segmentCount} segments` : '',
-        ]
-          .filter(Boolean)
-          .join(', ');
-        lines.push(`[${r.repo ?? '?'}${ref}]${meta ? ` (${meta})` : ''}`);
-      }
-      const url = r.readmeUrl ?? r.url;
-      if (url) lines.push(url);
-      const body = (r.contentMd || r.snippet || '').trim();
-      lines.push(
-        body ? body.slice(0, MAX_GITHUB_CONTENT_CHARS) : '(no content)'
-      );
-      return lines.join('\n');
-    })
-    .join('\n\n');
-}
-
 export function registerResearchTools(
   server: Pick<FastMCP<SessionData>, 'addTool'>,
   getClient: GetClient
@@ -449,44 +394,6 @@ Returns matching passages or a notice when full text is unavailable.
       return passages.length
         ? passages.map((p) => p.text).join('\n---\n')
         : '(no full-text passages available for this paper)';
-    },
-  });
-
-  // --- search_github (deprecated, sunset 2026-11-03) ---
-  // Still registered because MCP clients cache tools/list and do not re-fetch.
-  // The blunt description, not removal, is what moves models off it.
-  server.addTool({
-    name: 'firecrawl_research_search_github',
-    annotations: {
-      title: 'Search GitHub history (deprecated)',
-      readOnlyHint: true, // Searches indexed GitHub issue/PR history and READMEs; returns matches only.
-      openWorldHint: true, // Searches public GitHub content.
-      destructiveHint: false, // Query-only; does not create issues, PRs, or modify repositories.
-    },
-    // MCP has no deprecated field on Tool, so the flag goes in _meta.
-    _meta: {
-      deprecated: true,
-      replacement: 'firecrawl_developer_search',
-      sunset: '2026-11-03',
-    },
-    description: `
-DEPRECATED. Stops working after 2026-11-03. firecrawl_developer_search covers this ground: GitHub issues, pull requests, and READMEs, plus curated documentation sites, returned as matched passages. It does not carry over this tool's score breakdown or its web fallback results.
-`,
-    parameters: z.object({
-      query: z.string().min(1),
-      k: z.number().int().min(1).max(100).optional(),
-    }),
-    execute: async (args: unknown, { session }): Promise<string> => {
-      const { query, k } = args as { query: string; k?: number };
-      const params = new URLSearchParams();
-      appendParam(params, 'query', query);
-      appendParam(params, 'k', k);
-      const client = getClient(session) as ClientLike;
-      const res = await client.http.get<{ results?: GitHubItem[] }>(
-        withQuery(`${BASE}/github`, params),
-        ORIGIN_HEADERS
-      );
-      return fmtGithub(res.data?.results);
     },
   });
 }

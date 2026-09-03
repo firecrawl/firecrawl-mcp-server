@@ -20,7 +20,6 @@ The search surface exposes exactly these seven read-only tools and nothing else:
 | `firecrawl_research_inspect_paper` | Canonical metadata for one paper |
 | `firecrawl_research_related_papers` | Citation-graph expansion from anchor papers |
 | `firecrawl_research_read_paper` | Full-text passages from one paper |
-| `firecrawl_research_search_github` | Deprecated, sunset 2026-11-03. Use `firecrawl_developer_search`. |
 
 Registration on this instance is filtered against that allowlist, so any tool
 outside the set, including scrape, map, crawl, extract, agent, interact, parse,

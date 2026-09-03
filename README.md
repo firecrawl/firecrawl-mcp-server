@@ -840,7 +840,6 @@ Search and inspect papers and GitHub repositories through the research MCP tools
 - `firecrawl_research_inspect_paper`: retrieve canonical metadata for one paper ID (arXiv, PMC, PMID, or DOI).
 - `firecrawl_research_related_papers`: expand from one or more anchor papers through the citation graph.
 - `firecrawl_research_read_paper`: read full-text passages from a specific paper.
-- `firecrawl_research_search_github`: **deprecated, stops working after 2026-11-03.** Use `firecrawl_developer_search`, which searches the same GitHub issues, pull requests and READMEs plus curated documentation sites and returns matched passages. It does not carry over this tool's score breakdown or its web fallback results.
 
 **Best for:** Literature review, paper lookup, and repository discovery workflows where the agent needs a focused research surface instead of general web scraping.
 

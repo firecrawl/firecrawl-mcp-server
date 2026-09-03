@@ -15,7 +15,6 @@ const SEARCH_TOOLS = [
   'firecrawl_research_inspect_paper',
   'firecrawl_research_related_papers',
   'firecrawl_research_read_paper',
-  'firecrawl_research_search_github',
 ];
 
 // A representative sample of the full-surface tools that must NOT leak here.
@@ -31,6 +30,7 @@ const EXCLUDED_TOOLS = [
   'firecrawl_monitor_create',
   'firecrawl_search_feedback',
   'firecrawl_feedback',
+  'firecrawl_research_search_github',
 ];
 
 const SEARCH_ENDPOINT = '/v2/mcp-search';
@@ -342,7 +342,7 @@ async function listTools(port, endpoint, headers) {
   return tools.map((tool) => tool.name);
 }
 
-test('search surface lists exactly the seven read-only tools', async (t) => {
+test('search surface lists exactly the six read-only tools', async (t) => {
   const { searchPort, getStderr } = await startHostedServer(t);
 
   const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, {
@@ -366,32 +366,6 @@ test('search surface lists exactly the seven read-only tools', async (t) => {
     assert.equal(names.includes(excluded), false, `${excluded} must not appear`);
   }
   assert.equal(getStderr().includes('TypeError'), false, getStderr());
-});
-
-test('the deprecated github tool stays callable and advertises its sunset', async (t) => {
-  const { searchPort } = await startHostedServer(t);
-
-  const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, {
-    'x-api-key': 'fc-test',
-  });
-  const github = tools.find(
-    (tool) => tool.name === 'firecrawl_research_search_github'
-  );
-
-  // Still listed: MCP clients cache tools/list, so removing it reads as breakage.
-  assert.ok(github, 'the deprecated tool must stay on tools/list until sunset');
-
-  assert.equal(github._meta?.deprecated, true);
-  assert.equal(github._meta?.replacement, 'firecrawl_developer_search');
-  assert.equal(github._meta?.sunset, '2026-11-03');
-
-  assert.match(github.description, /^\s*DEPRECATED\./);
-  assert.match(github.description, /firecrawl_developer_search/);
-  assert.match(github.description, /2026-11-03/);
-  assert.ok(
-    SEARCH_TOOLS.includes('firecrawl_developer_search'),
-    'the replacement named in the notice must be on the same surface'
-  );
 });
 
 test('search surface does not expose an excluded tool', async (t) => {
@@ -779,7 +753,7 @@ test('full surface still exposes its complete tool set alongside the search surf
   assert.equal(prm.status, 404);
 });
 
-test('primary search profile is OAuth-only, seven-tool frozen, and ready without keyless configuration', async (t) => {
+test('primary search profile is OAuth-only, six-tool frozen, and ready without keyless configuration', async (t) => {
   const { backendRequests, port, issuerUrl } = await startPrimarySearchServer(t);
 
   const ready = await fetch(`http://127.0.0.1:${port}/ready`);
