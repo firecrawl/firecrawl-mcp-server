@@ -23,9 +23,15 @@ The search surface exposes exactly these six read-only tools and nothing else:
 
 Registration on this instance is filtered against that allowlist, so any tool
 outside the set, including scrape, map, crawl, extract, agent, interact, parse,
-monitor, and the feedback tools, is never registered. Both `tools/list` and
-`tools/call` reflect only the six tools; calling anything else returns an
-unknown-tool error.
+monitor, and the feedback tools, is never registered. `tools/list` reflects
+only these six tools.
+
+One additional name, the deprecated `firecrawl_research_search_github`, is
+also registered on this instance but hidden from `tools/list`; a `tools/call`
+for it returns a `DEPRECATED_TOOL` payload pointing callers at
+`firecrawl_developer_search`, so cached sessions that predate its removal
+still get a meaningful response instead of an unknown-tool error. Calling any
+other name not in the six-tool set returns an unknown-tool error.
 
 `firecrawl_developer_search` queries `/v2/search/developer` and returns the
 matched passages; `firecrawl_search` with `categories: ["developer"]` reaches the
