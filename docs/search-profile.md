@@ -23,8 +23,9 @@ The search surface exposes exactly these six read-only tools and nothing else:
 
 Registration on this instance is filtered against that allowlist, so any tool
 outside the set, including scrape, map, crawl, extract, agent, interact, parse,
-monitor, and the feedback tools, is never registered. `tools/list` reflects
-only these six tools.
+monitor, and the feedback tools, is never registered, except for one
+deprecated name kept for backward compatibility and described below.
+`tools/list` reflects only these six tools.
 
 One additional name, the deprecated `firecrawl_research_search_github`, is
 also registered on this instance but hidden from `tools/list`; a `tools/call`
