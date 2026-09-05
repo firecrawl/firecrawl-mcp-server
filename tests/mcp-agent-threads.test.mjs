@@ -8,7 +8,6 @@ const THREAD_ID = '018f0000-0000-4000-8000-000000000000';
 const BUSY_THREAD_ID = '018f0000-0000-4000-8000-0000000000b0';
 const MISSING_THREAD_ID = '018f0000-0000-4000-8000-000000000404';
 const LEGACY_THREAD_ID = '018f0000-0000-4000-8000-000000000400';
-const APPROVAL_ID = '018f0000-0000-4000-8000-0000000000a1';
 const ACTIVE_RUN_ID = '018f0000-0000-4000-8000-0000000000c1';
 
 function spawnServer(env) {
@@ -220,7 +219,7 @@ function toolPayload(result) {
   return JSON.parse(result.content[0].text);
 }
 
-test('firecrawl_agent forwards thread and exchange arguments and returns the thread id', async (t) => {
+test('firecrawl_agent forwards thread arguments and returns the thread id', async (t) => {
   const fakeApi = await startFakeAgentApi();
   t.after(() => fakeApi.close());
   const client = await startClient(t, fakeApi);
@@ -231,7 +230,6 @@ test('firecrawl_agent forwards thread and exchange arguments and returns the thr
       threadId: THREAD_ID,
       mode: 'chat',
       effort: 'high',
-      exchange: { enabled: true, maxCalls: 3, requireApproval: true },
     },
     name: 'firecrawl_agent',
   });
@@ -241,7 +239,6 @@ test('firecrawl_agent forwards thread and exchange arguments and returns the thr
     threadId: THREAD_ID,
     mode: 'chat',
     effort: 'high',
-    exchange: { enabled: true, maxCalls: 3, requireApproval: true },
     origin: 'mcp-fastmcp',
   });
   assert.deepEqual(toolPayload(result), {
@@ -249,47 +246,6 @@ test('firecrawl_agent forwards thread and exchange arguments and returns the thr
     id: '018f0000-0000-4000-8000-0000000000b2',
     threadId: THREAD_ID,
     threadTurn: 2,
-  });
-});
-
-test('firecrawl_agent sends the fixed reply and exchange.approve when a host approves', async (t) => {
-  const fakeApi = await startFakeAgentApi();
-  t.after(() => fakeApi.close());
-  const client = await startClient(t, fakeApi);
-
-  const approved = await client.request('tools/call', {
-    arguments: {
-      prompt: 'yes',
-      threadId: THREAD_ID,
-      approve: { approvalId: APPROVAL_ID, always: true },
-    },
-    name: 'firecrawl_agent',
-  });
-  toolPayload(approved);
-
-  assert.deepEqual(fakeApi.requests[0].body, {
-    prompt: 'Approved. Make that call, and nothing else.',
-    threadId: THREAD_ID,
-    exchange: { approve: { approvalId: APPROVAL_ID, always: true } },
-    origin: 'mcp-fastmcp',
-  });
-
-  const declined = await client.request('tools/call', {
-    arguments: {
-      prompt: 'no',
-      threadId: THREAD_ID,
-      decline: { approvalId: APPROVAL_ID },
-    },
-    name: 'firecrawl_agent',
-  });
-  toolPayload(declined);
-
-  assert.deepEqual(fakeApi.requests[1].body, {
-    prompt:
-      'Do not make that call. Answer from what you already have, or tell me what you would need.',
-    threadId: THREAD_ID,
-    exchange: { decline: { approvalId: APPROVAL_ID } },
-    origin: 'mcp-fastmcp',
   });
 });
 
@@ -413,7 +369,7 @@ test('an API without threads is reported as such, and other rejections still err
   assert.equal(payload.success, false);
   assert.match(payload.message, /does not support agent threads yet/);
 
-  // Only thread and exchange rejections are answered in text; everything else
+  // Only thread rejections are answered in text; everything else
   // keeps reaching the host as a tool error.
   const rejected = await client.request('tools/call', {
     arguments: { prompt: 'reject me' },

@@ -2923,18 +2923,12 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
   },
 });
 
-// Fixed replies the server sends when the host resolves a pending approval, so
-// the host does not have to phrase them itself.
-const AGENT_APPROVE_PROMPT = 'Approved. Make that call, and nothing else.';
-const AGENT_DECLINE_PROMPT =
-  'Do not make that call. Answer from what you already have, or tell me what you would need.';
-
 // Thread arguments an API predating threads rejects by name, and which decide
 // whether a run has to go out as a follow-up rather than a fresh job.
-const AGENT_THREAD_KEYS = ['threadId', 'mode', 'effort', 'exchange'] as const;
+const AGENT_THREAD_KEYS = ['threadId', 'mode', 'effort'] as const;
 
 /**
- * Thread and Exchange rejections a host can act on by itself. Returned as text
+ * Thread rejections a host can act on by itself. Returned as text
  * rather than thrown so the model recovers inside the conversation; every other
  * failure keeps propagating, notably a 401 that the credential-recovery
  * boundary turns into CREDENTIAL_INVALID.
@@ -2953,8 +2947,6 @@ const AGENT_THREAD_RECOVERY: Record<
     'That thread has expired. Call firecrawl_agent without threadId to start a new thread.',
   threads_disabled: () =>
     'This Firecrawl deployment does not support agent threads. Call firecrawl_agent without threadId.',
-  exchange_not_enabled: () =>
-    'This API key cannot enable Firecrawl Exchange data providers. Retry without the exchange argument.',
 };
 
 function agentThreadRecovery(
@@ -2982,7 +2974,7 @@ function agentThreadRecovery(
       status,
       error: body.error,
       message:
-        'This Firecrawl API does not support agent threads yet. Retry without threadId, mode, effort, exchange, approve, or decline.',
+        'This Firecrawl API does not support agent threads yet. Retry without threadId, mode, or effort.',
     });
   }
   return undefined;
@@ -3035,67 +3027,22 @@ A follow-up keeps the previous turn's \`urls\`, \`schema\` and \`effort\` unless
           'chat lets the agent answer in prose, explain, or ask a clarifying question; extract (default) always returns JSON.'
         ),
       effort: z.enum(['low', 'medium', 'high']).optional(),
-      exchange: z
-        .object({
-          enabled: z
-            .boolean()
-            .optional()
-            .describe('Enable Firecrawl Exchange data providers for this run.'),
-          toolkits: z
-            .array(z.string())
-            .optional()
-            .describe('Pin specific providers. Omit to use all of them.'),
-          maxCalls: z.number().int().min(1).max(30).optional(),
-          requireApproval: z.boolean().optional(),
-        })
-        .optional(),
-      approve: z
-        .object({
-          approvalId: z.string().uuid(),
-          callIds: z.array(z.string()).optional(),
-          always: z.boolean().optional(),
-        })
-        .optional()
-        .describe(
-          'Approve a pendingApproval reported by firecrawl_agent_status. Requires threadId; the server sends the reply text.'
-        ),
-      decline: z
-        .object({ approvalId: z.string().uuid() })
-        .optional()
-        .describe(
-          'Decline a pendingApproval reported by firecrawl_agent_status. Requires threadId; the server sends the reply text.'
-        ),
-    })
-    .refine((data) => !(data.approve && data.decline), {
-      message: "Provide either 'approve' or 'decline', not both.",
     }),
   execute: async (args: unknown, { session, log }): Promise<string> => {
     const client = getClient(session);
     const a = args as Record<string, unknown>;
-    const approve = a.approve as Record<string, unknown> | undefined;
-    const decline = a.decline as Record<string, unknown> | undefined;
     log.info('Starting agent', {
       prompt: (a.prompt as string).substring(0, 100),
       urlCount: Array.isArray(a.urls) ? a.urls.length : 0,
       threadId: a.threadId as string | undefined,
     });
-    const exchange = removeEmptyTopLevel({
-      ...((a.exchange as Record<string, unknown>) ?? {}),
-      approve,
-      decline,
-    });
     const agentBody: Record<string, unknown> = removeEmptyTopLevel({
-      prompt: approve
-        ? AGENT_APPROVE_PROMPT
-        : decline
-          ? AGENT_DECLINE_PROMPT
-          : (a.prompt as string),
+      prompt: a.prompt as string,
       urls: a.urls as string[] | undefined,
       schema: (a.schema as Record<string, unknown>) || undefined,
       threadId: a.threadId as string | undefined,
       mode: a.mode as string | undefined,
       effort: a.effort as string | undefined,
-      exchange,
     });
     // A follow-up keeps the previous turn's urls and schema, so an empty array
     // and a null are how a host drops them. Both read as empty above, so put
@@ -3106,7 +3053,7 @@ A follow-up keeps the previous turn's \`urls\`, \`schema\` and \`effort\` unless
       if (a.schema === null) agentBody.schema = null;
     }
     // The pinned SDK's startAgent builds its payload from a fixed key list, so
-    // it would drop threadId/mode/effort/exchange silently. Post the body
+    // it would drop threadId/mode/effort silently. Post the body
     // directly until the SDK carries them (@mendable/firecrawl-js > 4.25.2),
     // after which this can go back to client.startAgent.
     try {
@@ -3136,7 +3083,7 @@ server.addTool({
   description: `
 Retrieve progress or final results for a \`firecrawl_agent\` job ID. A \`processing\` response is non-terminal and does not contain the final research result. Check again after 15–30 seconds until the status is \`completed\` or \`failed\`; complex jobs can take several minutes. If the job cannot finish within the task's available time, use \`firecrawl_search\` and \`firecrawl_scrape\` to complete the requested output.
 
-Returns job status, progress information, and result data when completed. When the response carries \`message\`, that text is the agent's own answer; show it to the user as the answer. When it carries \`pendingApproval\`, ask the user whether to allow the described call, then send their decision with \`firecrawl_agent\` using the same \`threadId\` and either \`approve\` or \`decline\`.
+Returns job status, progress information, and result data when completed. When the response carries \`message\`, that text is the agent's own answer; show it to the user as the answer.
 `,
   parameters: z.object({ id: z.string() }),
   execute: async (args: unknown, { session, log }): Promise<string> => {

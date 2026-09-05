@@ -721,8 +721,6 @@ The agent performs web searches, follows links, reads pages, and gathers data au
 - `threadId`: Optional thread to continue (see below)
 - `mode`: Optional `extract` (default, always returns JSON) or `chat` (lets the agent answer in prose or ask a clarifying question)
 - `effort`: Optional `low`, `medium`, or `high`
-- `exchange`: Optional Firecrawl Exchange data provider options (`enabled`, `toolkits`, `maxCalls`, `requireApproval`)
-- `approve` / `decline`: Optional reply to a `pendingApproval` reported by `firecrawl_agent_status`; requires `threadId`
 
 **Prompt Example:**
 
@@ -808,7 +806,7 @@ Check the status of an agent job and retrieve results when complete. Use this to
 - `completed`: Research finished - response includes the extracted data
 - `failed`: An error occurred
 
-A completed response can also carry `message` (the agent's own answer, in chat mode) and `pendingApproval` (a call awaiting a decision). Reply to a pending approval by calling `firecrawl_agent` with the same `threadId` and either `approve` or `decline`.
+A completed response can also carry `message` (the agent's own answer, in chat mode).
 
 ### 10. Agent Thread (`firecrawl_agent_thread`)
 
