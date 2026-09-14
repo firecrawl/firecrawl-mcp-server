@@ -3095,11 +3095,14 @@ test('hosted keyless feedback bypasses exhausted operation allowance and preserv
             assessment: 'The reference explains supported retry intervals.',
             observations: [
               {
-                kind: 'useful',
+                kind: 'irrelevant',
+                reason: 'aggregator_over_official',
+                knownSources: ['https://example.com/official'],
                 source: 'web',
                 position: 1,
                 basis: 'output',
-                detail: 'The reference answered the retry question.',
+                detail:
+                  'The official reference should rank before this aggregator.',
               },
             ],
           },
@@ -3128,6 +3131,9 @@ test('hosted keyless feedback bypasses exhausted operation allowance and preserv
         'feedback-test-secret'
       );
       assert.equal(submission.body.observations[0].position, 1);
+      assert.deepEqual(submission.body.observations[0].knownSources, [
+        'https://example.com/official',
+      ]);
       if (status === 200) {
         for (const endpoint of ['scrape', 'parse']) {
           const args = {
