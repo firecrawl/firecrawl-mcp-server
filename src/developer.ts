@@ -12,6 +12,7 @@
 
 import { z } from 'zod';
 import type { FastMCP } from 'fastmcp';
+import { formatApiResult, type ApiToolResult } from './agent-hints';
 
 interface SessionData {
   firecrawlApiKey?: string;
@@ -111,7 +112,7 @@ Returns ranked results with an ID, source type, URL, title, and the matched pass
         .optional()
         .describe('Set to "only" to search only agent-skill files.'),
     }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (args: unknown, { session }): Promise<ApiToolResult> => {
       const { query, k, skills } = args as {
         query: string;
         k?: number;
@@ -125,7 +126,7 @@ Returns ranked results with an ID, source type, URL, title, and the matched pass
       const res = await client.http.get<{
         results?: DeveloperHit[];
       }>(`${BASE}?${params.toString()}`, ORIGIN_HEADERS);
-      return fmtDeveloper(res.data?.results);
+      return formatApiResult(res.data, fmtDeveloper(res.data?.results));
     },
   });
 }

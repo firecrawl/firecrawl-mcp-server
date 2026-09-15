@@ -12,6 +12,11 @@
 import { z } from 'zod';
 import type { FastMCP } from 'fastmcp';
 import {
+  formatApiResult,
+  readAgentHints,
+  type ApiToolResult,
+} from './agent-hints';
+import {
   CoreHttpError,
   credentialForOutboundRequest,
   type CredentialSession,
@@ -83,14 +88,14 @@ async function monitorRequest(
     const message =
       payload?.error ||
       `HTTP ${response.status}: ${response.statusText || 'Request failed'}`;
-    throw new CoreHttpError(message, response.status);
+    throw new CoreHttpError(message, response.status, readAgentHints(payload));
   }
 
   return payload;
 }
 
-function asText(data: unknown): string {
-  return JSON.stringify(data, null, 2);
+function asText(data: unknown): ApiToolResult {
+  return formatApiResult(data);
 }
 
 const pageStatusSchema = z.enum(['same', 'new', 'changed', 'removed', 'error']);
@@ -246,7 +251,7 @@ In the simple form, a \`goal\` is required. If \`queries\` contains one or more 
       includeDiffs: z.boolean().optional(),
       webhookUrl: z.string().optional(),
     }),
-    execute: async (args: unknown, { session, log }): Promise<string> => {
+    execute: async (args: unknown, { session, log }): Promise<ApiToolResult> => {
       const body = buildMonitorCreateBody(args as Record<string, unknown>);
       log.info('Creating monitor', { name: String(body.name) });
       const res = await monitorRequest(session, '/monitor', {
@@ -272,7 +277,7 @@ List monitors for the authenticated account with optional pagination controls. R
       limit: z.number().int().positive().optional(),
       offset: z.number().int().nonnegative().optional(),
     }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (args: unknown, { session }): Promise<ApiToolResult> => {
       const { limit, offset } = args as { limit?: number; offset?: number };
       const res = await monitorRequest(session, '/monitor', {
         query: { limit, offset },
@@ -293,7 +298,7 @@ List monitors for the authenticated account with optional pagination controls. R
 Retrieve one monitor by ID, including its configuration and current state. This does not run or modify the monitor.
 `,
     parameters: z.object({ id: z.string() }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (args: unknown, { session }): Promise<ApiToolResult> => {
       const { id } = args as { id: string };
       const res = await monitorRequest(
         session,
@@ -320,7 +325,7 @@ Returns the updated monitor.
       id: z.string(),
       body: z.record(z.string(), z.any()),
     }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (args: unknown, { session }): Promise<ApiToolResult> => {
       const { id, body } = args as {
         id: string;
         body: Record<string, unknown>;
@@ -346,7 +351,7 @@ Returns the updated monitor.
 Permanently delete a monitor by ID and stop its future schedule. This operation cannot be undone and returns deletion status.
 `,
     parameters: z.object({ id: z.string() }),
-    execute: async (args: unknown, { session, log }): Promise<string> => {
+    execute: async (args: unknown, { session, log }): Promise<ApiToolResult> => {
       const { id } = args as { id: string };
       log.info('Deleting monitor', { id });
       const res = await monitorRequest(
@@ -370,7 +375,7 @@ Permanently delete a monitor by ID and stop its future schedule. This operation 
 Queue an immediate check for a monitor outside its normal schedule. This starts network work for the monitor's configured targets and returns the queued check.
 `,
     parameters: z.object({ id: z.string() }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (args: unknown, { session }): Promise<ApiToolResult> => {
       const { id } = args as { id: string };
       const res = await monitorRequest(
         session,
@@ -398,7 +403,7 @@ List historical checks for a monitor, optionally filtered by status and bounded 
       offset: z.number().int().nonnegative().optional(),
       status: checkStatusSchema.optional(),
     }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (args: unknown, { session }): Promise<ApiToolResult> => {
       const { id, limit, offset, status } = args as {
         id: string;
         limit?: number;
@@ -434,7 +439,7 @@ Markdown tracking returns a unified text diff, JSON tracking returns field paths
       skip: z.number().int().nonnegative().optional(),
       pageStatus: pageStatusSchema.optional(),
     }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (args: unknown, { session }): Promise<ApiToolResult> => {
       const { id, checkId, limit, skip, pageStatus } = args as {
         id: string;
         checkId: string;

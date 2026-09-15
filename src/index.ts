@@ -8,6 +8,14 @@ import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { z } from 'zod';
+import {
+  agentHintsText,
+  formatApiResult,
+  preserveAgentHints,
+  readAgentHints,
+  readErrorAgentHints,
+  type ApiToolResult,
+} from './agent-hints';
 import { registerDeveloperTools } from './developer';
 import { extractSingleTrustedClientIp } from './keyless-client-ip';
 import { registerMonitorTools } from './monitor';
@@ -1170,6 +1178,14 @@ async function runWithCredentialRecovery<T>(
     // different fault and keeps its own reconnect guidance; a keyless session
     // never sent an account credential at all.
     if (session?.authType !== 'api-key' || !isCoreCredentialRejection(error)) {
+      const hints = readErrorAgentHints(error);
+      if (hints) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new UserError(
+          hints.length ? `${message}\n\n${agentHintsText(hints)}` : message,
+          { error: message, agent_hints: hints }
+        );
+      }
       throw error;
     }
     const payload = recoveryPayload('CREDENTIAL_INVALID', requestId);
@@ -1532,8 +1548,8 @@ function getClient(session?: SessionData): FirecrawlApp {
   return client;
 }
 
-function asText(data: unknown): string {
-  return JSON.stringify(data, null, 2);
+function asText(data: unknown): ApiToolResult {
+  return formatApiResult(data);
 }
 
 // scrape tool (v2 semantics, minimal args)
@@ -1927,7 +1943,8 @@ async function apiPostJson(
       parsed?.error ||
         parsed?.message ||
         `Firecrawl request failed (HTTP ${response.status})`,
-      response.status
+      response.status,
+      readAgentHints(parsed)
     );
   }
   return parsed;
@@ -1992,7 +2009,7 @@ async function executeHostedParse(
   args: ParseToolArgs,
   session: SessionData | undefined,
   log: ToolLogger
-): Promise<string> {
+): Promise<ApiToolResult> {
   const hasFilePath =
     typeof args.filePath === 'string' && args.filePath.length > 0;
   const hasUploadRef =
@@ -2114,7 +2131,7 @@ Firecrawl may reuse recently indexed content instead of refetching the page, and
 Returns the selected content formats and page metadata.
 `,
   parameters: scrapeParamsSchema,
-  execute: async (args: unknown, { session, log }): Promise<string> => {
+  execute: async (args: unknown, { session, log }): Promise<ApiToolResult> => {
     const { url, ...options } = args as { url: string } & Record<
       string,
       unknown
@@ -2138,7 +2155,7 @@ Returns the selected content formats and page metadata.
         },
         session
       );
-      return asText(json?.data ?? json);
+      return asText(preserveAgentHints(json?.data ?? json, json));
     }
     const client = getClient(session);
     const res = await client.scrape(String(url), {
@@ -2170,7 +2187,7 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
     limit: z.number().optional(),
     ignoreQueryParameters: z.boolean().optional(),
   }),
-  execute: async (args: unknown, { session, log }): Promise<string> => {
+  execute: async (args: unknown, { session, log }): Promise<ApiToolResult> => {
     const { url, ...options } = args as { url: string } & Record<
       string,
       unknown
@@ -2212,7 +2229,7 @@ Each web result is a title, URL, and description, not the page. Add \`scrapeOpti
         .optional(),
     })
     .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE),
-  execute: async (args: unknown, { session, log }): Promise<string> => {
+  execute: async (args: unknown, { session, log }): Promise<ApiToolResult> => {
     const { query, ...opts } = args as Record<string, unknown>;
 
     const searchOpts = { ...opts } as Record<string, unknown>;
@@ -2385,8 +2402,10 @@ async function keylessPost(
       });
       throw new UserError(String(payload.message), payload);
     }
-    throw new Error(
-      json?.error || `Firecrawl request failed (HTTP ${response.status})`
+    throw new CoreHttpError(
+      json?.error || `Firecrawl request failed (HTTP ${response.status})`,
+      response.status,
+      readAgentHints(json)
     );
   }
   return json;
@@ -2413,6 +2432,7 @@ async function getCrawlStatusWithOrigin(
       expiresAt: body.expiresAt,
       next: body.next ?? null,
       data: initialDocs,
+      ...(readAgentHints(body) ? { agent_hints: readAgentHints(body) } : {}),
     };
   }
 
@@ -2442,6 +2462,7 @@ async function getCrawlStatusWithOrigin(
     expiresAt: body.expiresAt,
     next: null,
     data: docs,
+    ...(readAgentHints(body) ? { agent_hints: readAgentHints(body) } : {}),
   };
 }
 
@@ -2562,7 +2583,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
         ),
       querySuggestions: z.string().max(2000).optional(),
     }),
-    execute: async (args: unknown, { session, log }): Promise<string> => {
+    execute: async (args: unknown, { session, log }): Promise<ApiToolResult> => {
       const {
         searchId,
         rating,
@@ -2643,6 +2664,9 @@ Eligibility is limited to successful searches within the feedback age window. Th
           feedbackErrorCode: parsed?.feedbackErrorCode,
           error: parsed?.error ?? `HTTP ${response.status}`,
           retryable: response.status >= 500,
+          ...(readAgentHints(parsed)
+            ? { agent_hints: readAgentHints(parsed) }
+            : {}),
         });
       }
 
@@ -2685,7 +2709,7 @@ Returns submission status, feedback ID, and accounting fields.
       pageNumbers: z.array(z.number().int().positive()).max(100).optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
     }),
-    execute: async (args: unknown, { session, log }): Promise<string> => {
+    execute: async (args: unknown, { session, log }): Promise<ApiToolResult> => {
       const {
         endpoint,
         jobId,
@@ -2777,6 +2801,9 @@ Returns submission status, feedback ID, and accounting fields.
           feedbackErrorCode: parsed?.feedbackErrorCode,
           error: parsed?.error ?? `HTTP ${response.status}`,
           retryable: response.status >= 500,
+          ...(readAgentHints(parsed)
+            ? { agent_hints: readAgentHints(parsed) }
+            : {}),
         });
       }
 
@@ -2883,7 +2910,7 @@ Retrieve the current status, progress, and available results for an existing cra
   execute: async (
     args: unknown,
     { session }: { session?: SessionData }
-  ): Promise<string> => {
+  ): Promise<ApiToolResult> => {
     const client = getClient(session);
     const id = (args as any).id as string;
     const res = await getCrawlStatusWithOrigin(client, id);
@@ -2919,7 +2946,7 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
       structuredContent: payload,
     };
   },
-  execute: async (): Promise<string> => {
+  execute: async (): Promise<ApiToolResult> => {
     const payload = deprecatedExtractPayload();
     throw new UserError(payload.message, payload);
   },
@@ -2943,7 +2970,7 @@ This call returns only a job ID, not the research result. Read the job with \`fi
     urls: z.array(z.string().url()).optional(),
     schema: z.record(z.string(), z.any()).optional(),
   }),
-  execute: async (args: unknown, { session, log }): Promise<string> => {
+  execute: async (args: unknown, { session, log }): Promise<ApiToolResult> => {
     const client = getClient(session);
     const a = args as Record<string, unknown>;
     log.info('Starting agent', {
@@ -2977,7 +3004,7 @@ Retrieve progress or final results for a \`firecrawl_agent\` job ID. A \`process
 Returns job status, progress information, and result data when completed.
 `,
   parameters: z.object({ id: z.string() }),
-  execute: async (args: unknown, { session, log }): Promise<string> => {
+  execute: async (args: unknown, { session, log }): Promise<ApiToolResult> => {
     const client = getClient(session);
     const { id } = args as { id: string };
     log.info('Checking agent status', { id });
@@ -3023,7 +3050,7 @@ This acts on the live site, so actions such as form submission can create persis
     .refine((data) => data.code || data.prompt, {
       message: "Either 'code' or 'prompt' must be provided.",
     }),
-  execute: async (args: unknown, { session, log }): Promise<string> => {
+  execute: async (args: unknown, { session, log }): Promise<ApiToolResult> => {
     const client = getClient(session);
     const {
       scrapeId: providedScrapeId,
@@ -3103,7 +3130,7 @@ Stop the live interact session associated with a \`scrapeId\` and release its re
   parameters: z.object({
     scrapeId: z.string(),
   }),
-  execute: async (args: unknown, { session, log }): Promise<string> => {
+  execute: async (args: unknown, { session, log }): Promise<ApiToolResult> => {
     const client = getClient(session);
     const { scrapeId } = args as { scrapeId: string };
     log.info('Stopping interact session', { scrapeId });
@@ -3133,7 +3160,7 @@ Local MCP reads \`filePath\` from the server filesystem. Hosted MCP uses two cal
 Set \`redactPII\` to request redaction of personally identifiable information in the returned content. \`zeroDataRetention\` requires an eligible authenticated account; omit it for anonymous keyless use. Returns upload instructions for hosted phase one or parsed document content for the final call.
 `,
   parameters: parseParamsSchema,
-  execute: async (args: unknown, { session, log }): Promise<string> => {
+  execute: async (args: unknown, { session, log }): Promise<ApiToolResult> => {
     if (process.env.CLOUD_SERVICE === 'true') {
       return executeHostedParse(args as ParseToolArgs, session, log);
     }
@@ -3193,17 +3220,22 @@ Set \`redactPII\` to request redaction of personally identifiable information in
     });
 
     const responseText = await response.text();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch {
+      // Preserve non-JSON responses as text, as before.
+    }
     if (!response.ok) {
-      throw new Error(
-        `Parse request failed with status ${response.status}: ${responseText}`
+      const error = (parsed as { error?: unknown })?.error;
+      throw new CoreHttpError(
+        `Parse request failed with status ${response.status}: ${typeof error === 'string' ? error : responseText}`,
+        response.status,
+        readAgentHints(parsed)
       );
     }
 
-    try {
-      return asText(JSON.parse(responseText));
-    } catch {
-      return responseText;
-    }
+    return parsed !== undefined ? asText(parsed) : responseText;
   },
 });
 
@@ -3237,7 +3269,7 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
       // error rather than being silently dropped.
       .strict()
       .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE),
-    execute: async (args: unknown, { session, log }): Promise<string> => {
+    execute: async (args: unknown, { session, log }): Promise<ApiToolResult> => {
       const {
         query,
         includeDomains,
