@@ -2894,7 +2894,7 @@ Retrieve the current status, progress, and available results for an existing cra
 server.addTool({
   name: 'firecrawl_extract',
   annotations: {
-    title: 'Firecrawl extract (deprecated: use Scrape JSON)',
+    title: 'Firecrawl extract (deprecated: use scrape JSON)',
     readOnlyHint: true,
     openWorldHint: true,
     destructiveHint: false,
