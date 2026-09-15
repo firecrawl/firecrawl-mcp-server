@@ -2099,7 +2099,7 @@ async function executeHostedParse(
 server.addTool({
   name: 'firecrawl_scrape',
   annotations: {
-    title: 'Scrape a URL',
+    title: 'Firecrawl scrape',
     readOnlyHint: SAFE_MODE, // Fetches page content only; in cloud/safe mode interactive browser actions are disabled.
     openWorldHint: true, // Accepts any user-supplied URL on the public web.
     destructiveHint: false, // Does not modify, delete, or write to external websites.
@@ -2152,7 +2152,7 @@ Returns the selected content formats and page metadata.
 server.addTool({
   name: 'firecrawl_map',
   annotations: {
-    title: 'Map a website',
+    title: 'Firecrawl website map',
     readOnlyHint: true, // Discovers and returns indexed URLs; does not modify the target site.
     openWorldHint: true, // Operates against arbitrary user-supplied web domains.
     destructiveHint: false, // Read-only discovery; no deletion or destructive updates.
@@ -2189,7 +2189,7 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
 server.addTool({
   name: 'firecrawl_search',
   annotations: {
-    title: 'Search the web',
+    title: 'Firecrawl web search',
     readOnlyHint: true, // Runs a web search and returns results; does not modify external sites.
     openWorldHint: true, // Searches the open web across arbitrary domains and sources.
     destructiveHint: false, // Query-only; no destructive side effects on external entities.
@@ -2519,7 +2519,7 @@ if (!SEARCH_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
   server.addTool({
     name: 'firecrawl_search_feedback',
     annotations: {
-      title: 'Send feedback on a search result',
+      title: 'Firecrawl search feedback',
       readOnlyHint: false, // POSTs structured feedback to the API, creating a server-side record.
       openWorldHint: true, // Feedback references open-web search results and external URLs.
       destructiveHint: false, // Additive only; records feedback and may refund credits, does not delete data.
@@ -2661,7 +2661,7 @@ if (!ENDPOINT_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
   server.addTool({
     name: 'firecrawl_feedback',
     annotations: {
-      title: 'Send feedback on a Firecrawl job',
+      title: 'Firecrawl job feedback',
       readOnlyHint: false, // POSTs structured feedback for a completed job to /v2/feedback.
       openWorldHint: true, // Feedback is tied to jobs that processed open-web URLs.
       destructiveHint: false, // Additive only; submits ratings and notes, does not delete jobs or external content.
@@ -2788,7 +2788,7 @@ Returns submission status, feedback ID, and accounting fields.
 server.addTool({
   name: 'firecrawl_crawl',
   annotations: {
-    title: 'Run a site crawl',
+    title: 'Firecrawl site crawl',
     readOnlyHint: false, // Starts a server-side crawl job and polls until the job reaches a terminal state.
     openWorldHint: true, // Crawls user-specified URLs across the public web.
     destructiveHint: false, // Reads pages from target sites; does not delete or alter external websites.
@@ -2871,7 +2871,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
 server.addTool({
   name: 'firecrawl_check_crawl_status',
   annotations: {
-    title: 'Get crawl status',
+    title: 'Firecrawl crawl status',
     readOnlyHint: true, // Retrieves status and results for an existing crawl job by ID; no mutations.
     openWorldHint: false, // Queries only Firecrawl job state within the authenticated account.
     destructiveHint: false, // Status lookup only; no deletes or updates.
@@ -2894,7 +2894,7 @@ Retrieve the current status, progress, and available results for an existing cra
 server.addTool({
   name: 'firecrawl_extract',
   annotations: {
-    title: 'Deprecated: use Scrape JSON',
+    title: 'Firecrawl extract (deprecated: use scrape JSON)',
     readOnlyHint: true,
     openWorldHint: true,
     destructiveHint: false,
@@ -2928,7 +2928,7 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
 server.addTool({
   name: 'firecrawl_agent',
   annotations: {
-    title: 'Start a research agent',
+    title: 'Firecrawl research agent',
     readOnlyHint: false, // Starts an autonomous research agent job on the Firecrawl API.
     openWorldHint: true, // The agent browses and searches the open web to fulfill the prompt.
     destructiveHint: false, // Gathers information only; does not delete external data or user resources.
@@ -2966,7 +2966,7 @@ This call returns only a job ID, not the research result. Read the job with \`fi
 server.addTool({
   name: 'firecrawl_agent_status',
   annotations: {
-    title: 'Get agent job status',
+    title: 'Firecrawl research agent status',
     readOnlyHint: true, // Polls an existing agent job by ID for progress and results; no mutations.
     openWorldHint: false, // Queries only Firecrawl job state by job ID within the user's account.
     destructiveHint: false, // Read-only status check.
@@ -2993,7 +2993,7 @@ Returns job status, progress information, and result data when completed.
 server.addTool({
   name: 'firecrawl_interact',
   annotations: {
-    title: 'Interact with a scraped page',
+    title: 'Firecrawl page interaction',
     readOnlyHint: false, // Executes browser interactions (clicks, form input, scripts) in a live session.
     openWorldHint: true, // Interacts with pages on the public web via the scraped session.
     destructiveHint: false, // Transient page interactions only; does not delete monitors, jobs, or external sites.
@@ -3092,7 +3092,7 @@ This acts on the live site, so actions such as form submission can create persis
 server.addTool({
   name: 'firecrawl_interact_stop',
   annotations: {
-    title: 'Stop interact session',
+    title: 'Firecrawl stop interaction session',
     readOnlyHint: false, // Calls the API to stop and tear down an active interact session.
     openWorldHint: false, // Operates only on a known Firecrawl scrape/interact session ID.
     destructiveHint: true, // Terminates the live browser session; this end state cannot be resumed.
@@ -3120,7 +3120,7 @@ Stop the live interact session associated with a \`scrapeId\` and release its re
 server.addTool({
   name: 'firecrawl_parse',
   annotations: {
-    title: 'Parse a local file',
+    title: 'Firecrawl file parsing',
     readOnlyHint: true, // Local mode reads a file; hosted mode only returns upload instructions or parses an uploadRef.
     openWorldHint: false, // Operates on a local filesystem path/upload reference, not an arbitrary web URL.
     destructiveHint: false, // Read-only parsing; no deletion or writes to the source file.
@@ -3218,7 +3218,7 @@ function registerMarketplaceSearchTool(
   registrar.addTool({
     name: 'firecrawl_search',
     annotations: {
-      title: 'Search the web',
+      title: 'Firecrawl web search',
       readOnlyHint: true,
       openWorldHint: true,
       destructiveHint: false,
