@@ -219,7 +219,7 @@ export function registerMonitorTools(server: FastMCP<SessionData>): void {
   server.addTool({
     name: 'firecrawl_monitor_create',
     annotations: {
-      title: 'Create monitor',
+      title: 'Firecrawl create monitor',
       readOnlyHint: false, // Creates a new recurring monitor configuration on the Firecrawl API.
       openWorldHint: true, // Monitors user-specified URLs on the public web on a recurring schedule.
       destructiveHint: false, // Additive; creates a new monitor without deleting existing monitors or external content.
@@ -260,7 +260,7 @@ In the simple form, a \`goal\` is required. If \`queries\` contains one or more 
   server.addTool({
     name: 'firecrawl_monitor_list',
     annotations: {
-      title: 'List monitors',
+      title: 'Firecrawl list monitors',
       readOnlyHint: true, // Lists monitors for the authenticated account; no mutations.
       openWorldHint: false, // Returns only the user's Firecrawl monitor records, not arbitrary web content.
       destructiveHint: false, // Read-only listing.
@@ -284,7 +284,7 @@ List monitors for the authenticated account with optional pagination controls. R
   server.addTool({
     name: 'firecrawl_monitor_get',
     annotations: {
-      title: 'Get monitor',
+      title: 'Firecrawl get monitor',
       readOnlyHint: true, // Fetches a single monitor by ID; no mutations.
       openWorldHint: false, // Reads a specific monitor resource in the user's Firecrawl account.
       destructiveHint: false, // Read-only retrieval.
@@ -306,7 +306,7 @@ Retrieve one monitor by ID, including its configuration and current state. This 
   server.addTool({
     name: 'firecrawl_monitor_update',
     annotations: {
-      title: 'Update monitor',
+      title: 'Firecrawl update monitor',
       readOnlyHint: false, // PATCHes an existing monitor (status, schedule, targets, webhooks, etc.).
       openWorldHint: true, // Can change which external URLs are monitored and how recurring scrapes run.
       destructiveHint: true, // Can pause, replace, or remove monitor configuration; changes overwrite prior settings.
@@ -337,7 +337,7 @@ Returns the updated monitor.
   server.addTool({
     name: 'firecrawl_monitor_delete',
     annotations: {
-      title: 'Delete monitor',
+      title: 'Firecrawl delete monitor',
       readOnlyHint: false, // Permanently deletes a monitor via DELETE on the API.
       openWorldHint: true, // Deletes a monitor that tracked open-web URLs.
       destructiveHint: true, // Irreversibly removes the monitor and stops its schedule.
@@ -361,7 +361,7 @@ Permanently delete a monitor by ID and stop its future schedule. This operation 
   server.addTool({
     name: 'firecrawl_monitor_run',
     annotations: {
-      title: 'Run monitor now',
+      title: 'Firecrawl run monitor now',
       readOnlyHint: false, // Triggers an immediate monitor check, queueing a new scrape/diff run.
       openWorldHint: true, // The triggered check scrapes external URLs configured on the monitor.
       destructiveHint: false, // Starts a read-only check job; does not delete the monitor or external sites.
@@ -384,7 +384,7 @@ Queue an immediate check for a monitor outside its normal schedule. This starts 
   server.addTool({
     name: 'firecrawl_monitor_checks',
     annotations: {
-      title: 'List monitor checks',
+      title: 'Firecrawl list monitor checks',
       readOnlyHint: true, // Lists historical check runs for a monitor; no mutations.
       openWorldHint: false, // Returns check history for a known monitor ID within the user's account.
       destructiveHint: false, // Read-only listing.
@@ -417,7 +417,7 @@ List historical checks for a monitor, optionally filtered by status and bounded 
   server.addTool({
     name: 'firecrawl_monitor_check',
     annotations: {
-      title: 'Get monitor check',
+      title: 'Firecrawl get monitor check',
       readOnlyHint: true, // Retrieves a single check run with page-level diff results; no mutations.
       openWorldHint: false, // Reads stored check results for a known monitor/check ID in the user's account.
       destructiveHint: false, // Read-only retrieval of diff snapshots and judgments.
