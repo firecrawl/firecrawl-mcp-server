@@ -2928,7 +2928,7 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
 server.addTool({
   name: 'firecrawl_agent',
   annotations: {
-    title: 'Firecrawl research agent',
+    title: 'Firecrawl agent',
     readOnlyHint: false, // Starts an autonomous research agent job on the Firecrawl API.
     openWorldHint: true, // The agent browses and searches the open web to fulfill the prompt.
     destructiveHint: false, // Gathers information only; does not delete external data or user resources.
@@ -2966,7 +2966,7 @@ This call returns only a job ID, not the research result. Read the job with \`fi
 server.addTool({
   name: 'firecrawl_agent_status',
   annotations: {
-    title: 'Firecrawl research agent status',
+    title: 'Firecrawl agent status',
     readOnlyHint: true, // Polls an existing agent job by ID for progress and results; no mutations.
     openWorldHint: false, // Queries only Firecrawl job state by job ID within the user's account.
     destructiveHint: false, // Read-only status check.
@@ -2993,7 +2993,7 @@ Returns job status, progress information, and result data when completed.
 server.addTool({
   name: 'firecrawl_interact',
   annotations: {
-    title: 'Firecrawl page interaction',
+    title: 'Firecrawl interact',
     readOnlyHint: false, // Executes browser interactions (clicks, form input, scripts) in a live session.
     openWorldHint: true, // Interacts with pages on the public web via the scraped session.
     destructiveHint: false, // Transient page interactions only; does not delete monitors, jobs, or external sites.
@@ -3092,7 +3092,7 @@ This acts on the live site, so actions such as form submission can create persis
 server.addTool({
   name: 'firecrawl_interact_stop',
   annotations: {
-    title: 'Firecrawl stop interaction session',
+    title: 'Stop Firecrawl interact session',
     readOnlyHint: false, // Calls the API to stop and tear down an active interact session.
     openWorldHint: false, // Operates only on a known Firecrawl scrape/interact session ID.
     destructiveHint: true, // Terminates the live browser session; this end state cannot be resumed.
