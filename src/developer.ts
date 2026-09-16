@@ -82,7 +82,7 @@ export function registerDeveloperTools(
   server.addTool({
     name: 'firecrawl_developer_search',
     annotations: {
-      title: 'Search developer sources',
+      title: 'Firecrawl developer search',
       readOnlyHint: true, // Semantic search over an indexed developer corpus; returns ranked results only.
       openWorldHint: true, // Searches the Firecrawl developer index of public GitHub and documentation content.
       destructiveHint: false, // Query-only; no writes to external sources or the developer index.

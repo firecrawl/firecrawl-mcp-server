@@ -194,7 +194,7 @@ export function registerResearchTools(
   server.addTool({
     name: 'firecrawl_research_search_papers',
     annotations: {
-      title: 'Search research papers',
+      title: 'Firecrawl research paper search',
       readOnlyHint: true, // Semantic search over indexed paper metadata; returns ranked results only.
       openWorldHint: true, // Searches the Firecrawl research paper index.
       destructiveHint: false, // Query-only; no writes to external sources or the research index.
@@ -275,7 +275,7 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
   server.addTool({
     name: 'firecrawl_research_inspect_paper',
     annotations: {
-      title: 'Inspect a paper',
+      title: 'Firecrawl inspect research paper',
       readOnlyHint: true, // Fetches canonical metadata (title, abstract, authors) for one paper by ID.
       openWorldHint: true, // Retrieves metadata for papers in public indexes (arXiv, PMC, DOI, etc.).
       destructiveHint: false, // Read-only metadata lookup.
@@ -306,7 +306,7 @@ Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DO
   server.addTool({
     name: 'firecrawl_research_related_papers',
     annotations: {
-      title: 'Find related papers via citation graph',
+      title: 'Firecrawl related research papers',
       readOnlyHint: true, // Finds related papers via citation graph expansion; returns candidates only.
       openWorldHint: true, // Traverses relationships across the public research paper corpus.
       destructiveHint: false, // Read-only graph query; no modifications.
@@ -364,7 +364,7 @@ Returns ranked candidates and the evaluated pool size.
   server.addTool({
     name: 'firecrawl_research_read_paper',
     annotations: {
-      title: 'Read a paper',
+      title: 'Firecrawl read research paper',
       readOnlyHint: true, // Retrieves relevant full-text passages from a paper; does not modify the paper.
       openWorldHint: true, // Reads from publicly indexed paper full text when available.
       destructiveHint: false, // Read-only passage retrieval.
@@ -418,7 +418,7 @@ Returns matching passages or a notice when full text is unavailable.
   server.addTool({
     name: 'firecrawl_research_search_github',
     annotations: {
-      title: 'Search GitHub history',
+      title: 'Firecrawl GitHub history search',
       readOnlyHint: true,
       openWorldHint: true,
       destructiveHint: false,
