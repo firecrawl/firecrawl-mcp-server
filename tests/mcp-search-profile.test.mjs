@@ -499,7 +499,7 @@ test('search firecrawl_search sends a clean body built from allowed fields only'
   });
 });
 
-test('search firecrawl_search forwards bare-string sources, including exchange, verbatim', async (t) => {
+test('search firecrawl_search normalizes the legacy exchange source to alexandria', async (t) => {
   const backend = await startFakeBackend();
   t.after(() => backend.close());
   const { searchPort } = await startHostedServer(t, {
@@ -1125,7 +1125,7 @@ test('search-only surface rejects catalogue browsing and preserves semantic plus
   t.after(() => backend.close());
   const { searchPort } = await startHostedServer(t, {FIRECRAWL_API_URL: backend.url});
   const call = arguments_ => jsonRpc(searchPort, SEARCH_ENDPOINT, {id:77,method:'tools/call', params:{name:'firecrawl_search',arguments:arguments_},headers:{'x-api-key':'fc-search-key'}});
-  const invalid = parseSseJson(await (await call({sources:[{type:'alexandria',mode:'browse'}]})).text());
+  const invalid = parseSseJson(await (await call({query:'podcast episodes',sources:[{type:'alexandria',mode:'browse'}]})).text());
   assert.ok(invalid.error || invalid.result?.isError);
   assert.equal(backend.requests.filter(r=>r.url==='/v2/search').length, 0);
   const valid = parseSseJson(await (await call({query:'podcast episodes',sources:['alexandria'],domainTools:true})).text());

@@ -4,7 +4,10 @@
 
 ### Added
 
-- Firecrawl Exchange on the v2 shapes. `firecrawl_search` accepts `sources: ["exchange"]` or `sources: [{ "type": "exchange" }]` (both profiles, forwarded verbatim) and passes `data.exchange[]` capability hits and `creditsUsed` through untouched. `firecrawl_scrape` accepts `exchange: [{ provider, capability, options }]` (1-10 items, exactly one of `url` or `exchange`) and posts `POST /v2/scrape` returning `{ success, scrape_id, data: { exchange, creditsCost } }`. New `firecrawl_exchange_discover` tool walks `GET /exchange/discover[/cohort[/provider[/capability]]]` and searches the index route with `q`/`limit`. Exchange error bodies (403 without the team flag, 501 without a semantic index, and the reserved 402/409 billing statuses) are relayed in-band with their `code` (and `chargeId` when present). `firecrawl_exchange_discover` refuses `.`/`..` path segments and `expand` off the cohort route before any request. Keyless and unauthenticated sessions get `Exchange requires an API key on a team with Exchange access` instead of an opaque upstream error, and `firecrawl_exchange_discover` is not advertised to hosted keyless sessions.
+- Alexandria discovery through `firecrawl_search` with `sources: ["alexandria"]` or `sources: [{ "type": "alexandria" }]`. Both profiles normalize the legacy `exchange` source to `alexandria` and return tool contracts in `data.tools` with `creditsUsed` preserved.
+- `firecrawl_find_tools` on the full surface provides category browsing, compact provider tools, selected full contracts, URL lookup and `nextTool` navigation. `firecrawl_exchange_discover` also supports catalogue walks and semantic lookup through `/exchange/discover`.
+- `firecrawl_scrape` executes one or up to ten calls using `alexandria: [{ provider, capability, options }]` instead of `url`. Results are returned as `{ success, scrape_id, requestId, data: { alexandria, creditsCost } }`. Errors preserve their code and available charge ID. Keyless sessions receive `Alexandria requires an API key on a team with Alexandria access`.
+- `firecrawl_terms_show` reads provider agreements; `firecrawl_terms_accept` requires the reviewed version and digest plus explicit user authorization and `confirmed: true`.
 
 ## [3.21.4] - 2026-06-23
 

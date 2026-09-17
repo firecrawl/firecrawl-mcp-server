@@ -134,6 +134,10 @@ async function startFakeExchangeApi(options = {}) {
       return json(200, { eligible: keylessEligible });
     }
 
+    if (req.method === 'GET' && url.pathname === '/exchange/provider-terms' && options.termsRaw401) {
+      res.writeHead(401, { 'content-type': 'text/plain' });
+      return res.end(options.termsRaw401 === 'empty' ? '' : 'Unauthorized');
+    }
     if (req.method === 'GET' && url.pathname === '/exchange/provider-terms')
       return json(options.termsStatus ?? 200, options.termsCatalog ?? { providers: [{ provider: 'benzinga', name: 'Benzinga', required: true, terms: { version: 'v1', digest: 'a'.repeat(64), document: 'Review this agreement.' } }] });
     if (req.method === 'POST' && url.pathname === '/exchange/provider-terms/accept') {
@@ -626,6 +630,9 @@ test('terms reads explain eligibility failures and reject empty or malformed cat
     assert.equal(error.isError, true);
     assert.doesNotMatch(JSON.stringify(error), /fc-exchange-test/);
     assert.equal(api.requests.length, 1);
+    if (!options.termsStatus) {
+      assert.match(error.content[0].text, options.termsCatalog.providers ? /Provider not found/ : /invalid catalog/);
+    }
     if (options.termsStatus === 403) {
       assert.equal(error.structuredContent.code, 'team_disabled');
       assert.match(error.structuredContent.guidance, /https:\/\/www.firecrawl.dev\/app\/settings\?tab=data-sources/);
@@ -703,6 +710,9 @@ test('plain-URL firecrawl_scrape relays the same Alexandria terms handoff from t
     TERMS_REQUIRED_BODY.requiresAction
   );
   assert.equal(result.structuredContent.next_actions[1].tool, 'firecrawl_scrape');
+  assert.equal(result.structuredContent.requestId, undefined);
+  assert.equal(result.structuredContent.next_actions[1].requestId, undefined);
+  assert.doesNotMatch(result.content[0].text, /and requestId/);
 });
 
 test('firecrawl_scrape relays a reserved 409 billing error with its code and chargeId', async (t) => {
@@ -916,6 +926,8 @@ test('hosted keyless sessions never reach the Exchange; an API key header does',
   const port = await getFreePort();
   const child = spawnServer({
     CLOUD_SERVICE: 'true',
+    FIRECRAWL_API_KEY: '',
+    FIRECRAWL_OAUTH_TOKEN: '',
     FIRECRAWL_MCP_SEARCH_PORT: String(await getFreePort()),
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: backend.url,
@@ -1070,4 +1082,47 @@ test('Find Tools infers compact provider tools and full selected contracts while
   const before=api.requests.length;
   await callExpectingError(client,{name:'firecrawl_find_tools',arguments:{level:'categories',providers:['particle']}});
   assert.equal(api.requests.length,before);
+});
+
+test('terms 401 responses recover credentials even without a JSON body', async (t) => {
+  for (const termsRaw401 of ['empty', 'text']) {
+    const api = await startFakeExchangeApi({ termsRaw401 });
+    t.after(() => api.close());
+    const port = await getFreePort();
+    const child = spawnServer({
+      CLOUD_SERVICE: 'false', FASTMCP_ENDPOINT: '/v2/mcp',
+      FIRECRAWL_API_KEY: '', FIRECRAWL_OAUTH_TOKEN: '',
+      FIRECRAWL_API_URL: api.url, HOST: '127.0.0.1',
+      HTTP_STREAMABLE_SERVER: 'true', PORT: String(port),
+    });
+    t.after(() => stopChild(child));
+    await waitForHealth(port, child);
+    const response = await httpToolCall(port, {
+      headers: { 'x-firecrawl-api-key': 'fc-invalid' },
+      id: `terms-${termsRaw401}`,
+      params: { name: 'firecrawl_terms_show', arguments: { provider: 'benzinga' } },
+    });
+    assert.equal(response.status, 200);
+    const error = parseSseJson(await response.text()).result;
+    assert.equal(error.isError, true);
+    assert.equal(error.structuredContent.code, 'CREDENTIAL_INVALID');
+    assert.doesNotMatch(JSON.stringify(error), /invalid_terms_response/);
+    assert.equal(api.requests.length, 1);
+  }
+});
+
+test('Alexandria forwards execution timeout and rejects invalid timeout or empty URL discovery', async (t) => {
+  const { client, api } = await startStdioWithApi(t);
+  await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { alexandria: [EXCHANGE_CALL], timeout: 12000 } });
+  assert.equal(api.requests[0].body.timeout, 12000);
+  for (const timeout of [0, -1, 1.5])
+    await callExpectingError(client, { name: 'firecrawl_scrape', arguments: { alexandria: [EXCHANGE_CALL], timeout } });
+  await callExpectingError(client, { name: 'firecrawl_find_tools', arguments: { urls: [] } });
+  assert.equal(api.requests.length, 1);
+});
+
+test('OAuth-only local sessions advertise authenticated tool guidance', async (t) => {
+  const { init } = await startStdio(t, { FIRECRAWL_API_KEY: '', FIRECRAWL_OAUTH_TOKEN: 'fco_test-only', CLOUD_SERVICE: '', HTTP_STREAMABLE_SERVER: '' });
+  assert.match(init.instructions, /firecrawl_find_tools/);
+  assert.doesNotMatch(init.instructions, /Hosted keyless sessions expose/);
 });

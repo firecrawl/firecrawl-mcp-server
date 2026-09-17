@@ -40,6 +40,7 @@ export const findToolsSchema = z
           .url()
           .regex(/^https?:\/\//)
       )
+      .min(1)
       .max(100)
       .optional(),
     providers: z.array(z.string().min(1)).min(1).max(50).optional().describe('Provider IDs returned by category browsing. Lists compact tools by default.'),

@@ -1102,15 +1102,16 @@ function termsRequiredError(
   action: TermsRequiredAction,
   context: ExchangeErrorContext
 ): UserError {
-  const requestId = context.requestId ?? randomUUID();
+  const requestId = context.requestId;
+  const retryIdentity = requestId ? ` and requestId ${requestId}` : '';
   const message = `Alexandria provider terms required. An organization admin must accept the ${action.terms} provider's terms (version ${action.version}) before this request can run.`;
   return new UserError(
-    `${message}\n\n1. Read the agreement with firecrawl_terms_show for provider ${action.terms} and present it to the user. Only after explicit authorization to accept that exact version and digest, use firecrawl_terms_accept with confirmed:true. If authority or eligibility requires a dashboard action, ask an organization admin to visit ${action.url} or https://www.firecrawl.dev/app/settings?tab=data-sources if that page is unavailable. Never infer acceptance from a data request.\n2. After they confirm, call ${context.tool} again with the identical payload and requestId ${requestId}. If the same terms error persists, stop and ask an organization admin to check access at https://www.firecrawl.dev/app/settings?tab=data-sources.\n\nNo credits were charged. Do not retry until acceptance is confirmed.`,
+    `${message}\n\n1. Read the agreement with firecrawl_terms_show for provider ${action.terms} and present it to the user. Only after explicit authorization to accept that exact version and digest, use firecrawl_terms_accept with confirmed:true. If authority or eligibility requires a dashboard action, ask an organization admin to visit ${action.url} or https://www.firecrawl.dev/app/settings?tab=data-sources if that page is unavailable. Never infer acceptance from a data request.\n2. After they confirm, call ${context.tool} again with the identical payload${retryIdentity}. If the same terms error persists, stop and ask an organization admin to check access at https://www.firecrawl.dev/app/settings?tab=data-sources.\n\nNo credits were charged. Do not retry until acceptance is confirmed.`,
     {
       code: TERMS_REQUIRED_CODE,
       status: 403,
       message,
-      requestId,
+      ...(requestId ? { requestId } : {}),
       requiresAction: action,
       next_actions: [
         {
@@ -1124,7 +1125,7 @@ function termsRequiredError(
         {
           kind: 'retry_same_request',
           tool: context.tool,
-          requestId,
+          ...(requestId ? { requestId } : {}),
           after: 'human_action_required',
         },
       ],
@@ -1255,12 +1256,12 @@ const SEARCH_PROFILE_TOOLS = new Set<string>([
 
 function makeFullProfile(): ServerProfile {
   const account = getPrimaryEndpoint() === '/v2/mcp-oauth';
-  const hasApiKey = Boolean(process.env.FIRECRAWL_API_KEY);
+  const hasCredential = Boolean(resolveCredentialFromEnv());
   return {
     id: account ? 'account' : 'full',
     resourceName: account ? 'Firecrawl MCP Account' : 'Firecrawl MCP',
     instructions:
-      account || hasApiKey ? FULL_PROFILE_INSTRUCTIONS : KEYLESS_PROFILE_INSTRUCTIONS,
+      account || hasCredential ? FULL_PROFILE_INSTRUCTIONS : KEYLESS_PROFILE_INSTRUCTIONS,
     resourceUrl: account
       ? (normalizeHeader(process.env.FIRECRAWL_MCP_RESOURCE_URL) ??
         DEFAULT_MCP_OAUTH_RESOURCE_URL)
@@ -2007,6 +2008,7 @@ const scrapeParamsSchema = z.object({
 const scrapeToolParamsSchema = scrapeParamsSchema
   .extend({
     url: z.string().url().optional(),
+    timeout: z.number().int().positive().optional().describe("Execution timeout in milliseconds."),
     requestId: z
       .string()
       .regex(/^[A-Za-z0-9._:-]{1,128}$/)
@@ -2493,7 +2495,7 @@ Alexandria execution errors relay a \`code\` and \`chargeId\`: \`request_in_flig
           ...cleaned,
           origin: ORIGIN,
         } as any),
-      { tool: 'firecrawl_scrape', requestId: session?.requestId }
+      { tool: 'firecrawl_scrape' }
     );
     return asText(res);
   },
@@ -2616,7 +2618,7 @@ ${ALEXANDRIA_INSTRUCTIONS}
     const client = getClient(session);
     const postSearch = () =>
       (client as any).http.post('/v2/search', searchBody);
-    const context = { tool: 'firecrawl_search', requestId: session?.requestId };
+    const context = { tool: 'firecrawl_search' };
     const httpRes = exchangeSource
       ? await relayExchangeError(postSearch, context)
       : await relayTermsRequired(postSearch, context);
@@ -2700,6 +2702,8 @@ async function requestProviderTerms(
     );
   });
   const body = (await response.json().catch(() => null)) as any;
+  if (response.status === 401)
+    throw new CoreHttpError(typeof body?.error === 'string' ? body.error : 'Invalid or expired credentials.', 401);
   if (!body || typeof body !== 'object' || Array.isArray(body))
     throw new UserError(
       'Terms endpoint returned an invalid response. Check acceptance status before retrying.',
@@ -2710,7 +2714,6 @@ async function requestProviderTerms(
       typeof body.error === 'string'
         ? body.error
         : `Terms request failed (HTTP ${response.status}).`;
-    if (response.status === 401) throw new CoreHttpError(message, 401);
     throw new UserError(message, {
       ...body,
       status: response.status,
@@ -3971,7 +3974,7 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
       const client = getClientFn(session);
       const postSearch = () =>
         (client as any).http.post('/v2/search', searchBody);
-      const context = { tool: 'firecrawl_search', requestId: session?.requestId };
+      const context = { tool: 'firecrawl_search' };
       const httpRes = exchangeSource
         ? await relayExchangeError(postSearch, context)
         : await relayTermsRequired(postSearch, context);

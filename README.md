@@ -319,7 +319,7 @@ Use this guide to select the right tool for your task:
 | crawl     | Multi-page extraction (with limits)            | final crawl status/data after internal polling   |
 | parse     | Files and hosted upload refs                   | markdown, JSON, or document output               |
 | search    | Web search for info                            | results[]                                        |
-| exchange  | Catalogued data providers (Firecrawl Exchange) | capability hits, contracts, and executed results |
+| find_tools | Alexandria catalogue browsing and URL lookup | providers, tool contracts and nextTool navigation |
 | developer | Programming questions over developer sources   | results[] with passages                          |
 | agent     | Multi-source research, unknown or many sites   | JSON (structured data)                           |
 | monitor   | Recurring page checks                          | monitor/check metadata and diffs                 |
@@ -972,7 +972,7 @@ entries use the linked build. Start a new MCP session to load updated tools.
 
 ### 15. Exchange Tools
 
-Firecrawl Alexandria is a catalogue of data providers reachable through the Firecrawl API with a Firecrawl API key on a team with Alexandria access. Keyless sessions (hosted or local) get `Exchange requires an API key on a team with Exchange access`; `firecrawl_exchange_discover` is not listed for hosted keyless sessions.
+Firecrawl Alexandria is a catalogue of data providers reachable through the Firecrawl API with a Firecrawl API key on a team with Alexandria access. Keyless sessions (hosted or local) get `Alexandria requires an API key on a team with Alexandria access`; `firecrawl_exchange_discover` is not listed for hosted keyless sessions.
 
 **Semantic discovery (`firecrawl_search`):**
 
@@ -1165,8 +1165,3 @@ Thanks to MCP.so and Klavis AI for hosting and [@gstarwd](https://github.com/gst
 ## License
 
 MIT License - see LICENSE file for details
-
-Execution generates one request ID when omitted, sends `x-request-id`, and returns
-`requestId` on success or failure. Reuse it for retries of the identical payload;
-never replace it to bypass a pending or uncertain 409. The API reserves credits
-before execution and rejects insufficient credits before contacting the provider.
