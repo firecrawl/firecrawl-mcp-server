@@ -1108,7 +1108,7 @@ function termsRequiredError(
   const retryIdentity = requestId ? ` and requestId ${requestId}` : '';
   const message = `Alexandria provider terms required. An organization admin must accept the ${action.terms} provider's terms (version ${action.version}) before this request can run.`;
   return new UserError(
-    `${message}\n\n1. Read the agreement with firecrawl_terms_show for provider ${action.terms} and present it to the user. Only after explicit authorization to accept that exact version and digest, use firecrawl_terms_accept with confirmed:true. If authority or eligibility requires a dashboard action, ask an organization admin to visit ${action.url} or https://www.firecrawl.dev/app/settings?tab=data-sources if that page is unavailable. Never infer acceptance from a data request.\n2. After they confirm, call ${context.tool} again with the identical payload${retryIdentity}. If the same terms error persists, stop and ask an organization admin to check access at https://www.firecrawl.dev/app/settings?tab=data-sources.\n\nNo credits were charged. Do not retry until acceptance is confirmed.`,
+    `${message}\n\n1. Read the agreement with firecrawl_terms_show for provider ${action.terms} and present it to the user. Only after explicit authorization to accept that exact version and digest, use firecrawl_terms_accept with confirmed:true. If authority or eligibility requires a dashboard action, ask an organization admin to visit ${action.url} or https://www.firecrawl.dev/app/settings?tab=data-sources if that page is unavailable. Never infer acceptance from a data request.\n2. After they confirm, call ${context.tool} again with the identical payload${retryIdentity}. If the same terms error persists, stop and ask an organization admin to check access at https://www.firecrawl.dev/app/settings?tab=data-sources.\n\nDo not retry until acceptance is confirmed.`,
     {
       code: TERMS_REQUIRED_CODE,
       status: 403,
@@ -1231,7 +1231,7 @@ const openAiAppsChallengeToken = normalizeHeader(
 
 const FULL_PROFILE_INSTRUCTIONS =
   ALEXANDRIA_INSTRUCTIONS +
-  ` firecrawl_skills_resolve matches query mentions and page URLs, and firecrawl_skill reads a Markdown contract. Execution with firecrawl_scrape alexandria uses requestId; reuse the returned ID for retries of the same payload, never a new ID to bypass a pending or uncertain 409. Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question — code behaviour, a library or framework, an API contract, an error message, or a known bug — firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of repositories, GitHub issues, merged pull requests, READMEs, and curated documentation sites. Alexandria is a catalogue of data providers: firecrawl_search with sources: [{type: "alexandria"}] returns complete tool contracts in data.tools, firecrawl_find_tools starts with categories, lists providers, then compact tools, and expands the selected full contract, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities and reports data.creditsCost. Alexandria access needs an API key on a team with it enabled. A terms-gated Alexandria provider fails with code THIRD_PARTY_DATA_TERMS_REQUIRED and a requiresAction.url. Read terms with firecrawl_terms_show; firecrawl_terms_accept requires explicit user authorization for the reviewed version and digest and confirmed:true. Otherwise direct an organization admin to the dashboard URL. Provide only the required inputs and account for stated network or external side effects.`;
+  ` firecrawl_skills_resolve matches query mentions and page URLs, and firecrawl_skill reads a Markdown contract. Execution with firecrawl_scrape alexandria uses requestId; reuse the returned ID for retries of the same payload, never a new ID to bypass a pending or uncertain 409. Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question — code behaviour, a library or framework, an API contract, an error message, or a known bug — firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of repositories, GitHub issues, merged pull requests, READMEs, and curated documentation sites. Alexandria is a catalogue of data providers: firecrawl_search with sources: [{type: "alexandria"}] returns complete tool contracts in data.tools, firecrawl_find_tools starts with categories, lists providers, then compact tools, and expands the selected full contract, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities and returns their results. Alexandria access needs an API key on a team with it enabled. A terms-gated Alexandria provider fails with code THIRD_PARTY_DATA_TERMS_REQUIRED and a requiresAction.url. Read terms with firecrawl_terms_show; firecrawl_terms_accept requires explicit user authorization for the reviewed version and digest and confirmed:true. Otherwise direct an organization admin to the dashboard URL. Provide only the required inputs and account for stated network or external side effects.`;
 const KEYLESS_PROFILE_INSTRUCTIONS = `Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index and repository research, and firecrawl_exchange_discover as the Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.`;
 
 // The search surface exposes web/developer/research search only. Its instructions
@@ -2444,7 +2444,7 @@ Firecrawl may reuse recently indexed content instead of refetching the page, and
 
 Returns the selected content formats and page metadata.
 
-Alexandria mode: pass \`alexandria\` (one \`{provider, capability, options}\` object or an array of 1-10) instead of \`url\` to execute catalogued Alexandria capabilities found through \`firecrawl_search\` sources \`alexandria\` or \`firecrawl_exchange_discover\`. The optional requestId identifies one logical execution: reuse the returned ID for retries of the identical payload, never a new ID to bypass pending or uncertain execution. Only timeout also applies in this mode. Returns \`{ success, scrape_id, data: { alexandria: [...], creditsCost } }\` where each item is a per-capability result (\`data\`, \`records\`, \`creditsCost\`) or an \`error\` with a code; \`data.creditsCost\` is the sum of the successful items. Alexandria needs an API key on a team with Alexandria enabled.
+Alexandria mode: pass \`alexandria\` (one \`{provider, capability, options}\` object or an array of 1-10) instead of \`url\` to execute catalogued Alexandria capabilities found through \`firecrawl_search\` sources \`alexandria\` or \`firecrawl_exchange_discover\`. The optional requestId identifies one logical execution: reuse the returned ID for retries of the identical payload, never a new ID to bypass pending or uncertain execution. Only timeout also applies in this mode. Returns per-capability results in \`data.alexandria\`, including \`data\`, \`records\`, or an \`error\` with a code. Alexandria needs an API key on a team with Alexandria enabled.
 
 URL mode only: set \`domainTools: true\` to also return domain-matched Alexandria tools for the page in \`tools\` on the returned document.
 
@@ -2747,7 +2747,7 @@ server.addTool({
     idempotentHint: true,
   },
   description:
-    'Read a provider agreement, current version, digest and acceptance requirements. Free authenticated catalogue read. Present the agreement to the user before asking for explicit authorization; this tool never accepts terms.',
+    'Read a provider agreement, current version, digest and acceptance requirements. Authenticated catalogue read. Present the agreement to the user before asking for explicit authorization; this tool never accepts terms.',
   parameters: z.object({ provider: termsProviderSchema }),
   execute: async ({ provider }, { session }) => {
     const body = await requestProviderTerms(session);
@@ -2795,7 +2795,7 @@ server.addTool({
     idempotentHint: true,
   },
   description:
-    'Free Alexandria catalogue browsing. Call with no arguments for categories; categories lists providers; providers lists compact tools; providers plus capabilities returns complete selected contracts. No intermediate group step is required. Explicit level and expand override these defaults; expand:[] keeps results compact. URL lookup lists matching tools. Results are in data.alexandria[0].data. Use item.nextTool.name and item.nextTool.arguments for the next discovery call; page.nextTool paginates with filters preserved. Original next Alexandria requests remain valid through firecrawl_scrape. Discovery never executes a provider. Execute only after reading the contract with firecrawl_scrape alexandria. Use firecrawl_search sources ["alexandria"] for natural-language search.',
+    'Alexandria catalogue browsing. Call with no arguments for categories; categories lists providers; providers lists compact tools; providers plus capabilities returns complete selected contracts. No intermediate group step is required. Explicit level and expand override these defaults; expand:[] keeps results compact. URL lookup lists matching tools. Results are in data.alexandria[0].data. Use item.nextTool.name and item.nextTool.arguments for the next discovery call; page.nextTool paginates with filters preserved. Original next Alexandria requests remain valid through firecrawl_scrape. Discovery never executes a provider. Execute only after reading the contract with firecrawl_scrape alexandria. Use firecrawl_search sources ["alexandria"] for natural-language search.',
   parameters: findToolsSchema,
   execute: async (args, { session }) => {
     let options;
@@ -2834,9 +2834,9 @@ server.addTool({
     destructiveHint: false, // Catalogue read only.
   },
   description: `
-Browse the Firecrawl Exchange catalogue of data providers and read capability contracts. Two modes: walk the catalogue by omitting \`q\` (no arguments lists cohorts; \`cohort\` lists its providers, with \`expand: "all"\` inlining their capabilities; \`cohort\` + \`provider\` lists that provider; \`cohort\` + \`provider\` + \`capability\` returns the full contract with \`options\`, \`returns\`, \`creditsCost\`, \`executable\`, and \`exampleQueries\`), or search semantically with \`q\` and optional \`limit\` on the index route, which returns \`capabilities\` (address, provider, cohorts, concept, creditsCost, similarity) without their contracts.
+Browse the Firecrawl Exchange catalogue of data providers and read capability contracts. Two modes: walk the catalogue by omitting \`q\` (no arguments lists cohorts; \`cohort\` lists its providers, with \`expand: "all"\` inlining their capabilities; \`cohort\` + \`provider\` lists that provider; \`cohort\` + \`provider\` + \`capability\` returns the full contract with \`options\`, \`returns\`, \`executable\`, and \`exampleQueries\`), or search semantically with \`q\` and optional \`limit\` on the index route, which returns \`capabilities\` (address, provider, cohorts, concept, similarity) without their contracts.
 
-Legacy semantic hits carry no option schema, so walk to the capability address before executing it with \`firecrawl_scrape\` \`alexandria\`. Discovery costs nothing. Exchange needs an API key on a team with Exchange access; a 501 semantic_not_configured means the deployment has no semantic index.
+Legacy semantic hits carry no option schema, so walk to the capability address before executing it with \`firecrawl_scrape\` \`alexandria\`. Exchange needs an API key on a team with Exchange access; a 501 semantic_not_configured means the deployment has no semantic index.
 `,
   parameters: exchangeDiscoverParamsSchema,
   execute: async (args: unknown, { session, log }): Promise<string> => {
@@ -2861,7 +2861,7 @@ server.addTool({
     destructiveHint: false,
   },
   description:
-    'Find accessible tools mapped to query mentions or URLs from search and scrape. Uses provider-configured mappings, including podcast providers. Returns skill IDs; read their contracts with firecrawl_skill. Free catalogue lookup; executes no provider.',
+    'Find accessible tools mapped to query mentions or URLs from search and scrape. Uses provider-configured mappings, including podcast providers. Returns skill IDs; read their contracts with firecrawl_skill. Catalogue lookup; executes no provider.',
   parameters: z
     .object({
       urls: z.array(z.string().url()).max(100).default([]),
@@ -2899,7 +2899,7 @@ server.addTool({
     destructiveHint: false,
   },
   description:
-    'Read the Markdown contract for a skill ID returned by firecrawl_skills_resolve or search skills. Free catalogue lookup; executes no provider.',
+    'Read the Markdown contract for a skill ID returned by firecrawl_skills_resolve or search skills. Catalogue lookup; executes no provider.',
   parameters: z.object({
     id: z
       .string()
@@ -3906,7 +3906,7 @@ For a programming question, add \`categories: ["developer"]\`. It searches an in
 
 \`sources: ["alexandria"]\` returns complete tool contracts in \`data.tools\`. \`domainTools: true\` adds domain-matched contracts to that array. Read warning when discovery is unavailable.
 
-Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
+Returns result groups in \`data\` and an operation \`id\`.
 `,
     parameters: z
       .object({ ...searchToolBaseFields })

@@ -407,9 +407,10 @@ test('exchange tool metadata: discover is listed, scrape url is optional, langua
     scrape.description,
     /request identifies a page and needs its content or defined fields/i
   );
-  assert.match(scrape.description, /Alexandria mode.*data\.creditsCost/is);
+  assert.match(scrape.description, /Alexandria mode.*data\.alexandria/is);
 
   const search = byName.get('firecrawl_search');
+  assert.doesNotMatch([init.instructions, scrape.description, search.description].join("\n"), /creditsCost|creditsUsed|costs? \d+ credits|Discovery is free/i);
   const sourceForms = search.inputSchema.properties.sources.items.anyOf;
   assert.ok(
     sourceForms

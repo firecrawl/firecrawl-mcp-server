@@ -56,7 +56,7 @@ export const findToolsSchema = z
 
 export const ALEXANDRIA_INSTRUCTIONS =
   'Authenticated firecrawl_search defaults to web results plus semantic Alexandria tools and domain-matched tools. Use sources: ["web"] for web-only search, or domainTools: false to disable domain matches. ' +
-  'Use firecrawl_search with a query and sources ["alexandria"] to find relevant tool contracts, or mix with web/news/images. Contracts are in data.tools, including inputs, response fields, examples, creditsCost, matchedBy and matchedUrls. domainTools:true adds domain-matched tools to the same array. Search always requires a query. Use Find Tools for contextual lookup and progressive disclosure by URL, provider, category, group or capability. Discovery is free; web search and provider execution have their own charges. Access follows the authenticated team policy.';
+  'Use firecrawl_search with a query and sources ["alexandria"] to find relevant tool contracts, or mix with web/news/images. Contracts are in data.tools, including inputs, response fields, examples, matchedBy and matchedUrls. domainTools:true adds domain-matched tools to the same array. Search always requires a query. Use Find Tools for contextual lookup and progressive disclosure by URL, provider, category, group or capability. Access follows the authenticated team policy.';
 
 export function findToolsOptions(args: z.infer<typeof findToolsSchema>) {
   const level = args.level ?? (args.capabilities?.length || args.providers?.length || args.groups?.length || args.urls?.length ? 'tools' : args.categories?.length ? 'providers' : 'categories');
