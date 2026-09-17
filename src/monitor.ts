@@ -19,6 +19,8 @@ import {
 } from './session-credential';
 
 interface SessionData extends CredentialSession {
+  /** The User-Agent the session was authenticated with (see src/origin.ts). */
+  clientUserAgent?: string;
   [key: string]: unknown;
 }
 
