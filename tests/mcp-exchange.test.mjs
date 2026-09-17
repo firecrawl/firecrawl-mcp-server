@@ -135,7 +135,7 @@ async function startFakeExchangeApi(options = {}) {
     }
 
     if (req.method === 'GET' && url.pathname === '/exchange/provider-terms')
-      return json(options.termsStatus ?? 200, options.termsCatalog ?? { providers: [{ provider: 'benzinga', version: 'v1', digest: 'a'.repeat(64), text: 'Review this agreement.' }] });
+      return json(options.termsStatus ?? 200, options.termsCatalog ?? { providers: [{ provider: 'benzinga', name: 'Benzinga', required: true, terms: { version: 'v1', digest: 'a'.repeat(64), document: 'Review this agreement.' } }] });
     if (req.method === 'POST' && url.pathname === '/exchange/provider-terms/accept') {
       if (parsedBody.version === 'stale') return json(409, { success: false, code: 'TERMS_VERSION_MISMATCH', error: 'Read the latest terms.', requiresAction: { url: 'https://www.firecrawl.dev/app/alexandria/benzinga' }, currentVersion: 'v2' });
       if (parsedBody.provider === 'authority') return json(403, { success: false, code: 'PROVIDER_TERMS_AUTHORITY_REQUIRED', error: 'An admin must verify authority.', requiresAction: { url: 'https://www.firecrawl.dev/app/alexandria/authority' } });
@@ -590,12 +590,12 @@ test('firecrawl_scrape rejects url with alexandria, neither, extra options, and 
 test('provider terms tools read and accept exact reviewed terms only with confirmation', async (t) => {
   const { api, client } = await startStdioWithApi(t);
   const read = toolText(await client.request('tools/call', { name: 'firecrawl_terms_show', arguments: { provider: 'benzinga' } }));
-  assert.equal(read.text, 'Review this agreement.');
-  assert.equal(read.digest, 'a'.repeat(64));
+  assert.equal(read.terms.document, 'Review this agreement.');
+  assert.equal(read.terms.digest, 'a'.repeat(64));
   assert.match(read.guidance, /explicit authorization/);
   assert.equal(api.requests[0].method, 'GET');
   assert.equal(api.requests[0].url, '/exchange/provider-terms');
-  const args = { provider: 'benzinga', version: read.version, digest: read.digest, confirmed: true };
+  const args = { provider: 'benzinga', version: read.terms.version, digest: read.terms.digest, confirmed: true };
   for (const invalid of [{ ...args, confirmed: false }, { ...args, confirmed: undefined }, { ...args, version: '' }, { ...args, digest: 'invalid' }])
     await callExpectingError(client, { name: 'firecrawl_terms_accept', arguments: invalid });
   assert.equal(api.requests.length, 1, 'invalid confirmation must never contact the API');
