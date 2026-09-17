@@ -1008,17 +1008,27 @@ This discovery works on both the full and search-only MCP surfaces.
 }
 ```
 
-Start with no arguments to list providers, a `urls` array for contextual matches,
-or filters for `providers`, `categories`, `groups`, and `capabilities`. `level` is
-inferred when omitted and accepts `providers`, `groups`, or `tools`. `expand`
-selects contract sections at the tools level.
+Start with no arguments for categories, then progressively narrow the catalogue:
 
-The response's `data.alexandria[0].data` contains `level`, `items`, `total`, and
-`next`. An item's `next` reveals more detail; top-level `next` fetches the next
-page. Both are complete Exchange calls: pass one as `firecrawl_scrape`'s
-`alexandria` argument. Find Tools costs zero credits and uses `/v2/scrape`; it
-does not execute the paid tools it discovers. URLs from page scrapes can also
-be passed to Find Tools.
+| Arguments | Result |
+| --- | --- |
+| `{}` | Categories and short descriptions |
+| `{"categories":["podcasts"]}` | Providers in that category |
+| `{"categories":["podcasts"],"providers":["particle"]}` | Compact tool names, descriptions, and prices |
+| `{"providers":["particle"],"capabilities":["podcasts/episodes/search"]}` | Complete selected inputs, constraints, response, and examples |
+
+No group hop is required. Explicit `level` supports `categories`, `providers`,
+`groups`, or `tools`; explicit `expand` selects contract sections. `expand: []`
+keeps results compact even when selecting a capability. For broad full contracts,
+explicitly request `level: "tools"` and `expand: ["options", "response", "examples"]`.
+URLs provide contextual discovery without fetching the page.
+
+Results are in `data.alexandria[0].data`. Follow an item's `nextTool` by calling
+its `name` with its `arguments`; the page's `nextTool` advances pagination.
+Existing `next` objects remain Alexandria discovery calls usable through
+`firecrawl_scrape`. The category index uses `/exchange/discover`; subsequent
+steps use `/v2/scrape`. Discovery costs zero credits and never executes the
+provider tools. Read the selected full contract before execution.
 
 These controls require the matching Alexandria API deployment. The existing
 `firecrawl_exchange_discover`, `firecrawl_skills_resolve`, and `firecrawl_skill`
