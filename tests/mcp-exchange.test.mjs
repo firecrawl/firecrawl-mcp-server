@@ -431,6 +431,23 @@ test('exchange tool metadata: discover is listed, scrape url is optional, langua
   assert.equal(getStderr().includes('TypeError'), false, getStderr());
 });
 
+test('ordinary search defaults to web and both tool matches, with explicit opt-outs', async (t) => {
+  const { api, client } = await startStdioWithApi(t);
+  for (const [overrides, sources, domainTools] of [
+    [{}, ['web', 'alexandria'], true],
+    [{ domainTools: false }, ['web', 'alexandria'], false],
+    [{ sources: ['web'] }, ['web'], false],
+  ]) {
+    const result = await client.request('tools/call', {
+      name: 'firecrawl_search',
+      arguments: { query: 'company news', ...overrides },
+    });
+    assert.notEqual(result.isError, true);
+    assert.deepEqual(api.requests.at(-1).body.sources, sources);
+    assert.equal(api.requests.at(-1).body.domainTools, domainTools);
+  }
+});
+
 test('firecrawl_search forwards the exchange source and passes data.exchange and creditsUsed through', async (t) => {
   const { api, client } = await startStdioWithApi(t);
 
@@ -453,6 +470,7 @@ test('firecrawl_search forwards the exchange source and passes data.exchange and
   assert.deepEqual(api.requests[0].body, {
     query: 'nvidia balance sheet',
     sources: [{ type: 'web' }, { type: 'alexandria' }],
+    domainTools: true,
     limit: 5,
     origin: 'mcp-fastmcp',
   });
@@ -482,6 +500,7 @@ test('firecrawl_search forwards bare-string sources verbatim, including the acce
     assert.equal(request.url, '/v2/search');
     assert.deepEqual(request.body, {
       query: 'nvidia balance sheet',
+      domainTools: true,
       sources: sources.map((source) =>
         source === 'exchange'
           ? 'alexandria'

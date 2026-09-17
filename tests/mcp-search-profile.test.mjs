@@ -486,6 +486,7 @@ test('search firecrawl_search sends a clean body built from allowed fields only'
     'categories',
     'highlights',
     'enterprise',
+    'domainTools',
     'origin',
   ]);
   for (const key of Object.keys(sentBody)) {
@@ -495,6 +496,7 @@ test('search firecrawl_search sends a clean body built from allowed fields only'
     query: 'example domain',
     limit: 1,
     sources: [{ type: 'web' }],
+    domainTools: false,
     origin: 'mcp-fastmcp',
   });
 });
@@ -528,6 +530,7 @@ test('search firecrawl_search normalizes the legacy exchange source to alexandri
   assert.deepEqual(searchCalls[0].body, {
     query: 'nvidia balance sheet',
     sources: ['web', 'alexandria'],
+    domainTools: true,
     limit: 5,
     origin: 'mcp-fastmcp',
   });
@@ -1133,4 +1136,21 @@ test('search-only surface rejects catalogue browsing and preserves semantic plus
   const sent = backend.requests.find(r=>r.url==='/v2/search').body;
   assert.deepEqual(sent.sources,['alexandria']);
   assert.equal(sent.domainTools,true);
+});
+
+test('ordinary search profile enables semantic and domain tools by default', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, { FIRECRAWL_API_URL: backend.url });
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 43,
+    method: 'tools/call',
+    params: { name: 'firecrawl_search', arguments: { query: 'company news' } },
+    headers: { 'x-api-key': 'fc-search-key' },
+  });
+  const message = parseSseJson(await res.text());
+  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+  const sent = backend.requests.find((r) => r.url === '/v2/search').body;
+  assert.deepEqual(sent.sources, ['web', 'alexandria']);
+  assert.equal(sent.domainTools, true);
 });

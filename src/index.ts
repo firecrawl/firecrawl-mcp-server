@@ -902,7 +902,9 @@ const searchToolBaseFields = {
   domainTools: z
     .boolean()
     .optional()
-    .describe('Include contextual tool matches for the query and result URLs.'),
+    .describe(
+      'Include domain-matched tools for result URLs. Defaults to true when sources includes alexandria.'
+    ),
   highlights: z
     .boolean()
     .optional()
@@ -2575,8 +2577,11 @@ ${ALEXANDRIA_INSTRUCTIONS}
 
     const searchOpts = {
       ...opts,
-      sources: normalizeSearchSources(opts.sources),
+      sources: normalizeSearchSources(
+        opts.sources ?? (hasCredential(session) ? ['web', 'alexandria'] : ['web'])
+      ),
     } as Record<string, unknown>;
+    searchOpts.domainTools ??= hasAlexandria(searchOpts.sources);
     const includeDomains = searchOpts.includeDomains as string[] | undefined;
     const excludeDomains = searchOpts.excludeDomains as string[] | undefined;
     delete searchOpts.includeDomains;
@@ -3958,17 +3963,18 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
           tbs,
           filter,
           location,
-          sources: normalizeSearchSources(sources),
+          sources: normalizeSearchSources(sources ?? ['web', 'alexandria']),
           categories,
           highlights,
           enterprise,
-          domainTools,
+          domainTools:
+            domainTools ?? hasAlexandria(sources ?? ['web', 'alexandria']),
         }),
         origin: ORIGIN,
       };
 
       log.info('Searching', { query: searchQuery });
-      const exchangeSource = hasAlexandria(sources);
+      const exchangeSource = hasAlexandria(searchBody.sources);
       if (exchangeSource || searchBody.domainTools)
         assertExchangeCredential(session);
       const client = getClientFn(session);
