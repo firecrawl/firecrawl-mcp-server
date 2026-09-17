@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import FirecrawlApp from '@mendable/firecrawl-js';
+import FirecrawlApp from 'firecrawl';
 import dotenv from 'dotenv';
 import { FastMCP, type Logger, UserError } from 'fastmcp';
 import type { IncomingHttpHeaders } from 'http';

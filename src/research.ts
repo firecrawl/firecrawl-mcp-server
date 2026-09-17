@@ -3,10 +3,10 @@
  *
  * Thin MCP wrappers over the `/v2/search/research/*` paper endpoints.
  *
- * The installed `@mendable/firecrawl-js` predates the SDK's `research` client,
- * so we call the endpoints directly through the SDK's HTTP layer (auth +
- * retries) via `client.http.get(...)`, mirroring how the search tool reaches
- * `/v2/search`.
+ * Calls the endpoints directly through the SDK's HTTP layer (auth + retries)
+ * via `client.http.get(...)`, mirroring how the search tool reaches
+ * `/v2/search`, so the tools' request and response shapes stay under this
+ * server's control.
  */
 
 import { z } from 'zod';
