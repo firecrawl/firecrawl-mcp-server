@@ -1192,6 +1192,29 @@ async function relayExchangeError(
   }
 }
 
+async function postSearchWithFallback(
+  client: any,
+  body: Record<string, unknown>,
+  implicitTools: boolean
+): Promise<any> {
+  try {
+    return await client.http.post('/v2/search', body);
+  } catch (error) {
+    const response = (error as any)?.response;
+    const unavailable = [
+      'Provider discovery requires access and does not support zero data retention.',
+      'This endpoint is not enabled for this team.',
+      'Exchange is not enabled for this team.',
+    ].includes(response?.data?.error);
+    if (!implicitTools || response?.status !== 403 || !unavailable) throw error;
+    return client.http.post('/v2/search', {
+      ...body,
+      sources: ['web'],
+      domainTools: false,
+    });
+  }
+}
+
 class ConsoleLogger implements Logger {
   private shouldLog =
     process.env.CLOUD_SERVICE === 'true' ||
@@ -2622,7 +2645,11 @@ ${ALEXANDRIA_INSTRUCTIONS}
     // supports the optional authenticated `firecrawl_search_feedback` workflow.
     const client = getClient(session);
     const postSearch = () =>
-      (client as any).http.post('/v2/search', searchBody);
+      postSearchWithFallback(
+        client,
+        searchBody,
+        opts.sources === undefined && opts.domainTools !== true
+      );
     const context = { tool: 'firecrawl_search' };
     const httpRes = exchangeSource
       ? await relayExchangeError(postSearch, context)
@@ -3979,7 +4006,11 @@ Returns result groups in \`data\` and an operation \`id\`.
         assertExchangeCredential(session);
       const client = getClientFn(session);
       const postSearch = () =>
-        (client as any).http.post('/v2/search', searchBody);
+        postSearchWithFallback(
+          client,
+          searchBody,
+          sources === undefined && domainTools !== true
+        );
       const context = { tool: 'firecrawl_search' };
       const httpRes = exchangeSource
         ? await relayExchangeError(postSearch, context)

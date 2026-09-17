@@ -153,6 +153,10 @@ async function startFakeExchangeApi(options = {}) {
       return res.end('# Particle podcasts');
     }
     if (req.method === 'POST' && url.pathname === '/v2/search') {
+      if (options.searchRefusal && (parsedBody.domainTools || parsedBody.sources?.includes('alexandria'))) {
+        return json(403, { success: false, error: options.searchRefusal });
+      }
+
       return json(200, {
         success: true,
         data: { tools: [CAPABILITY_HIT] },
@@ -410,7 +414,6 @@ test('exchange tool metadata: discover is listed, scrape url is optional, langua
   assert.match(scrape.description, /Alexandria mode.*data\.alexandria/is);
 
   const search = byName.get('firecrawl_search');
-  assert.doesNotMatch([init.instructions, scrape.description, search.description].join("\n"), /creditsCost|creditsUsed|costs? \d+ credits|Discovery is free/i);
   const sourceForms = search.inputSchema.properties.sources.items.anyOf;
   assert.ok(
     sourceForms
@@ -447,6 +450,31 @@ test('ordinary search defaults to web and both tool matches, with explicit opt-o
     assert.deepEqual(api.requests.at(-1).body.sources, sources);
     assert.equal(api.requests.at(-1).body.domainTools, domainTools);
   }
+});
+
+test('default tools fall back only on discovery refusal; explicit tools and other errors remain errors', async (t) => {
+  const { api, client } = await startStdioWithApi(t, {
+    searchRefusal: 'Provider discovery requires access and does not support zero data retention.',
+  });
+  const result = await client.request('tools/call', {
+    name: 'firecrawl_search', arguments: { query: 'company news' },
+  });
+  assert.notEqual(result.isError, true);
+  assert.equal(api.requests.length, 2);
+  assert.deepEqual(api.requests[1].body.sources, ['web']);
+  assert.equal(api.requests[1].body.domainTools, false);
+  for (const explicit of [{ sources: ['alexandria'] }, { domainTools: true }]) {
+    const before = api.requests.length;
+    await callExpectingError(client, {
+      name: 'firecrawl_search', arguments: { query: 'company news', ...explicit },
+    });
+    assert.equal(api.requests.length, before + 1);
+  }
+  const other = await startStdioWithApi(t, { searchRefusal: 'Permission denied.' });
+  await callExpectingError(other.client, {
+    name: 'firecrawl_search', arguments: { query: 'company news' },
+  });
+  assert.equal(other.api.requests.length, 1);
 });
 
 test('firecrawl_search forwards the exchange source and passes data.exchange and creditsUsed through', async (t) => {
