@@ -11,6 +11,7 @@
 
 import { z } from 'zod';
 import type { FastMCP } from 'fastmcp';
+import { originHeaders, requestOrigin } from './origin';
 import {
   CoreHttpError,
   credentialForOutboundRequest,
@@ -18,6 +19,8 @@ import {
 } from './session-credential';
 
 interface SessionData extends CredentialSession {
+  /** The User-Agent the session was authenticated with (see src/origin.ts). */
+  clientUserAgent?: string;
   [key: string]: unknown;
 }
 
@@ -49,6 +52,7 @@ function resolveAuth(session?: SessionData): {
 
 async function monitorRequest(
   session: SessionData | undefined,
+  origin: string,
   path: string,
   init: MonitorRequestInit = {}
 ): Promise<unknown> {
@@ -67,7 +71,7 @@ async function monitorRequest(
     if (s) url += `?${s}`;
   }
 
-  const headers: Record<string, string> = { 'X-Origin': 'mcp-fastmcp' };
+  const headers: Record<string, string> = originHeaders(origin);
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   if (init.body !== undefined) headers['Content-Type'] = 'application/json';
 
@@ -246,10 +250,15 @@ In the simple form, a \`goal\` is required. If \`queries\` contains one or more 
       includeDiffs: z.boolean().optional(),
       webhookUrl: z.string().optional(),
     }),
-    execute: async (args: unknown, { session, log }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, log, client: mcpClient }
+    ): Promise<string> => {
       const body = buildMonitorCreateBody(args as Record<string, unknown>);
       log.info('Creating monitor', { name: String(body.name) });
-      const res = await monitorRequest(session, '/monitor', {
+      const res = await monitorRequest(
+        session,
+        requestOrigin(mcpClient, session), '/monitor', {
         method: 'POST',
         body,
       });
@@ -272,9 +281,14 @@ List monitors for the authenticated account with optional pagination controls. R
       limit: z.number().int().positive().optional(),
       offset: z.number().int().nonnegative().optional(),
     }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<string> => {
       const { limit, offset } = args as { limit?: number; offset?: number };
-      const res = await monitorRequest(session, '/monitor', {
+      const res = await monitorRequest(
+        session,
+        requestOrigin(mcpClient, session), '/monitor', {
         query: { limit, offset },
       });
       return asText(res);
@@ -293,10 +307,14 @@ List monitors for the authenticated account with optional pagination controls. R
 Retrieve one monitor by ID, including its configuration and current state. This does not run or modify the monitor.
 `,
     parameters: z.object({ id: z.string() }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<string> => {
       const { id } = args as { id: string };
       const res = await monitorRequest(
         session,
+        requestOrigin(mcpClient, session),
         `/monitor/${encodeURIComponent(id)}`
       );
       return asText(res);
@@ -320,13 +338,17 @@ Returns the updated monitor.
       id: z.string(),
       body: z.record(z.string(), z.any()),
     }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<string> => {
       const { id, body } = args as {
         id: string;
         body: Record<string, unknown>;
       };
       const res = await monitorRequest(
         session,
+        requestOrigin(mcpClient, session),
         `/monitor/${encodeURIComponent(id)}`,
         { method: 'PATCH', body }
       );
@@ -346,11 +368,15 @@ Returns the updated monitor.
 Permanently delete a monitor by ID and stop its future schedule. This operation cannot be undone and returns deletion status.
 `,
     parameters: z.object({ id: z.string() }),
-    execute: async (args: unknown, { session, log }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, log, client: mcpClient }
+    ): Promise<string> => {
       const { id } = args as { id: string };
       log.info('Deleting monitor', { id });
       const res = await monitorRequest(
         session,
+        requestOrigin(mcpClient, session),
         `/monitor/${encodeURIComponent(id)}`,
         { method: 'DELETE' }
       );
@@ -370,10 +396,14 @@ Permanently delete a monitor by ID and stop its future schedule. This operation 
 Queue an immediate check for a monitor outside its normal schedule. This starts network work for the monitor's configured targets and returns the queued check.
 `,
     parameters: z.object({ id: z.string() }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<string> => {
       const { id } = args as { id: string };
       const res = await monitorRequest(
         session,
+        requestOrigin(mcpClient, session),
         `/monitor/${encodeURIComponent(id)}/run`,
         { method: 'POST' }
       );
@@ -398,7 +428,10 @@ List historical checks for a monitor, optionally filtered by status and bounded 
       offset: z.number().int().nonnegative().optional(),
       status: checkStatusSchema.optional(),
     }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<string> => {
       const { id, limit, offset, status } = args as {
         id: string;
         limit?: number;
@@ -407,6 +440,7 @@ List historical checks for a monitor, optionally filtered by status and bounded 
       };
       const res = await monitorRequest(
         session,
+        requestOrigin(mcpClient, session),
         `/monitor/${encodeURIComponent(id)}/checks`,
         { query: { limit, offset, status } }
       );
@@ -434,7 +468,10 @@ Markdown tracking returns a unified text diff, JSON tracking returns field paths
       skip: z.number().int().nonnegative().optional(),
       pageStatus: pageStatusSchema.optional(),
     }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<string> => {
       const { id, checkId, limit, skip, pageStatus } = args as {
         id: string;
         checkId: string;
@@ -444,6 +481,7 @@ Markdown tracking returns a unified text diff, JSON tracking returns field paths
       };
       const res = await monitorRequest(
         session,
+        requestOrigin(mcpClient, session),
         `/monitor/${encodeURIComponent(id)}/checks/${encodeURIComponent(checkId)}`,
         { query: { limit, skip, status: pageStatus } }
       );

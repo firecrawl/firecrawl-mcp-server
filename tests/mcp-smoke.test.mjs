@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import net from 'node:net';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
+
+const { version: serverVersion } = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+);
 
 async function getFreePort() {
   const server = net.createServer();
@@ -678,6 +683,7 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
     headers: {
       accept: 'application/json, text/event-stream',
       'content-type': 'application/json',
+      'user-agent': 'firecrawl-http-smoke/0.0.0',
       'x-api-key': 'fc-http-test',
     },
     method: 'POST',
@@ -709,7 +715,7 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
   assert.deepEqual(searchRequest.body, {
     highlights: false,
     limit: 1,
-    origin: 'mcp-fastmcp',
+    origin: `mcp-ua-firecrawl-http-smoke@${serverVersion}`,
     query: 'example domain',
   });
   assert.equal(
@@ -1179,7 +1185,7 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
   assert.equal(fakeApi.requests[0].headers.authorization, 'Bearer fc-test');
   assert.deepEqual(fakeApi.requests[0].body, {
     limit: 1,
-    origin: 'mcp-fastmcp',
+    origin: `mcp-firecrawl-mcp-tool-e2e@${serverVersion}`,
     query: 'example domain',
   });
 
@@ -1671,7 +1677,10 @@ test('HTTP cloud keyless Parse completes both phases without credentials and for
 
   const phaseOne = await httpToolCall(port, {
     id: 'keyless-parse-phase-one',
-    headers: { 'x-forwarded-for': '8.8.8.43' },
+    headers: {
+      'user-agent': 'firecrawl-keyless-smoke/0.0.0',
+      'x-forwarded-for': '8.8.8.43',
+    },
     params: {
       arguments: {
         contentType: 'application/pdf',
@@ -1691,7 +1700,10 @@ test('HTTP cloud keyless Parse completes both phases without credentials and for
 
   const phaseTwo = await httpToolCall(port, {
     id: 'keyless-parse-phase-two',
-    headers: { 'x-forwarded-for': '8.8.8.43' },
+    headers: {
+      'user-agent': 'firecrawl-keyless-smoke/0.0.0',
+      'x-forwarded-for': '8.8.8.43',
+    },
     params: {
       arguments: {
         formats: ['markdown'],
@@ -1709,10 +1721,17 @@ test('HTTP cloud keyless Parse completes both phases without credentials and for
   assert.equal(uploadCalls.length, 1);
   assert.equal(parseCalls.length, 1);
   assert.equal(uploadCalls[0].headers.authorization, undefined);
+  assert.equal(
+    uploadCalls[0].headers['x-origin'],
+    `mcp-ua-firecrawl-keyless-smoke@${serverVersion}`
+  );
   assert.equal(parseCalls[0].headers.authorization, undefined);
   assert.equal(parseCalls[0].body.uploadRef, 'test-upload-ref');
   assert.equal(parseCalls[0].body.redactPII, true);
-  assert.equal(parseCalls[0].body.origin, 'mcp-fastmcp');
+  assert.equal(
+    parseCalls[0].body.origin,
+    `mcp-ua-firecrawl-keyless-smoke@${serverVersion}`
+  );
   assert.equal(stderr.includes('keyless-parse-secret'), false, stderr);
   assert.equal(stderr.includes('8.8.8.43'), false, stderr);
 });

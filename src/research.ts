@@ -11,9 +11,12 @@
 
 import { z } from 'zod';
 import { type FastMCP, UserError } from 'fastmcp';
+import { originHeaders, requestOrigin } from './origin';
 
 interface SessionData {
   firecrawlApiKey?: string;
+  /** The User-Agent the session was authenticated with (see src/origin.ts). */
+  clientUserAgent?: string;
   [key: string]: unknown;
 }
 
@@ -32,7 +35,6 @@ type ClientLike = {
 type GetClient = (session?: SessionData) => unknown;
 
 const BASE = '/v2/search/research';
-const ORIGIN_HEADERS = { 'X-Origin': 'mcp-fastmcp' };
 
 /** Append a value (or repeated array values) to a URLSearchParams instance. */
 function appendParam(
@@ -246,7 +248,10 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
           'Inclusive upper bound on created/updated date (`YYYY-MM-DD`).'
         ),
     }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<string> => {
       const { query, k, authors, categories, from, to } = args as {
         query: string;
         k?: number;
@@ -265,7 +270,7 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ results?: PaperHit[] }>(
         withQuery(`${BASE}/papers`, params),
-        ORIGIN_HEADERS
+        originHeaders(requestOrigin(mcpClient, session))
       );
       return fmtHits(res.data?.results);
     },
@@ -291,12 +296,15 @@ Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DO
           'Canonical paperId or primaryId such as `arxiv:1706.03762`, `pmcid:PMC12530322`, `pmid:40953549`, or `doi:10.1016/j.neunet.2025.108095`.'
         ),
     }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<string> => {
       const { paperId } = args as { paperId: string };
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ paper?: PaperHit }>(
         `${BASE}/papers/${encodeURIComponent(paperId)}`,
-        ORIGIN_HEADERS
+        originHeaders(requestOrigin(mcpClient, session))
       );
       return fmtPaperMetadata(res.data?.paper);
     },
@@ -326,7 +334,10 @@ Returns ranked candidates and the evaluated pool size.
         .optional()
         .describe('Apply an additional rerank over the fused candidates.'),
     }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<string> => {
       const { seed_ids, intent, mode, k, rerank } = args as {
         seed_ids: string[];
         intent: string;
@@ -353,7 +364,7 @@ Returns ranked candidates and the evaluated pool size.
           `${BASE}/papers/${encodeURIComponent(primary)}/similar`,
           params
         ),
-        ORIGIN_HEADERS
+        originHeaders(requestOrigin(mcpClient, session))
       );
       const note = res.data?.note ? `\nnote: ${res.data.note}` : '';
       return `${fmtHits(res.data?.results)}\n(poolSize=${res.data?.poolSize ?? 0})${note}`;
@@ -390,7 +401,10 @@ Returns matching passages or a notice when full text is unavailable.
         .optional()
         .describe('Number of passages to return (default 4).'),
     }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<string> => {
       const { paperId, question, k } = args as {
         paperId: string;
         question: string;
@@ -402,7 +416,7 @@ Returns matching passages or a notice when full text is unavailable.
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ passages?: { text: string }[] }>(
         withQuery(`${BASE}/papers/${encodeURIComponent(paperId)}`, params),
-        ORIGIN_HEADERS
+        originHeaders(requestOrigin(mcpClient, session))
       );
       const passages = res.data?.passages ?? [];
       return passages.length
