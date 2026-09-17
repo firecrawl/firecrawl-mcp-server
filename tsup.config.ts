@@ -1,7 +1,12 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/www-authenticate.ts', 'src/agent-hints.ts'],
+  entry: [
+    'src/index.ts',
+    'src/www-authenticate.ts',
+    'src/agent-hints.ts',
+    'src/origin.ts',
+  ],
   format: ['esm'],
   platform: 'node',
   target: 'node22',

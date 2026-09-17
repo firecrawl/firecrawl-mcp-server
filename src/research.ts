@@ -3,18 +3,21 @@
  *
  * Thin MCP wrappers over the `/v2/search/research/*` paper endpoints.
  *
- * The installed `@mendable/firecrawl-js` predates the SDK's `research` client,
- * so we call the endpoints directly through the SDK's HTTP layer (auth +
- * retries) via `client.http.get(...)`, mirroring how the search tool reaches
- * `/v2/search`.
+ * Calls the endpoints directly through the SDK's HTTP layer (auth + retries)
+ * via `client.http.get(...)`, mirroring how the search tool reaches
+ * `/v2/search`, so the tools' request and response shapes stay under this
+ * server's control.
  */
 
 import { z } from 'zod';
 import { type FastMCP, UserError } from 'fastmcp';
 import { formatApiResult, type ApiToolResult } from './agent-hints';
+import { originHeaders, requestOrigin } from './origin';
 
 interface SessionData {
   firecrawlApiKey?: string;
+  /** The User-Agent the session was authenticated with (see src/origin.ts). */
+  clientUserAgent?: string;
   [key: string]: unknown;
 }
 
@@ -33,7 +36,6 @@ type ClientLike = {
 type GetClient = (session?: SessionData) => unknown;
 
 const BASE = '/v2/search/research';
-const ORIGIN_HEADERS = { 'X-Origin': 'mcp-fastmcp' };
 
 /** Append a value (or repeated array values) to a URLSearchParams instance. */
 function appendParam(
@@ -195,7 +197,7 @@ export function registerResearchTools(
   server.addTool({
     name: 'firecrawl_research_search_papers',
     annotations: {
-      title: 'Search research papers',
+      title: 'Firecrawl research paper search',
       readOnlyHint: true, // Semantic search over indexed paper metadata; returns ranked results only.
       openWorldHint: true, // Searches the Firecrawl research paper index.
       destructiveHint: false, // Query-only; no writes to external sources or the research index.
@@ -247,7 +249,10 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
           'Inclusive upper bound on created/updated date (`YYYY-MM-DD`).'
         ),
     }),
-    execute: async (args: unknown, { session }): Promise<ApiToolResult> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<ApiToolResult> => {
       const { query, k, authors, categories, from, to } = args as {
         query: string;
         k?: number;
@@ -266,7 +271,7 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ results?: PaperHit[] }>(
         withQuery(`${BASE}/papers`, params),
-        ORIGIN_HEADERS
+        originHeaders(requestOrigin(mcpClient, session))
       );
       return formatApiResult(res.data, fmtHits(res.data?.results));
     },
@@ -276,7 +281,7 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
   server.addTool({
     name: 'firecrawl_research_inspect_paper',
     annotations: {
-      title: 'Inspect a paper',
+      title: 'Firecrawl inspect research paper',
       readOnlyHint: true, // Fetches canonical metadata (title, abstract, authors) for one paper by ID.
       openWorldHint: true, // Retrieves metadata for papers in public indexes (arXiv, PMC, DOI, etc.).
       destructiveHint: false, // Read-only metadata lookup.
@@ -292,12 +297,15 @@ Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DO
           'Canonical paperId or primaryId such as `arxiv:1706.03762`, `pmcid:PMC12530322`, `pmid:40953549`, or `doi:10.1016/j.neunet.2025.108095`.'
         ),
     }),
-    execute: async (args: unknown, { session }): Promise<ApiToolResult> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<ApiToolResult> => {
       const { paperId } = args as { paperId: string };
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ paper?: PaperHit }>(
         `${BASE}/papers/${encodeURIComponent(paperId)}`,
-        ORIGIN_HEADERS
+        originHeaders(requestOrigin(mcpClient, session))
       );
       return formatApiResult(res.data, fmtPaperMetadata(res.data?.paper));
     },
@@ -307,7 +315,7 @@ Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DO
   server.addTool({
     name: 'firecrawl_research_related_papers',
     annotations: {
-      title: 'Find related papers via citation graph',
+      title: 'Firecrawl related research papers',
       readOnlyHint: true, // Finds related papers via citation graph expansion; returns candidates only.
       openWorldHint: true, // Traverses relationships across the public research paper corpus.
       destructiveHint: false, // Read-only graph query; no modifications.
@@ -327,7 +335,10 @@ Returns ranked candidates and the evaluated pool size.
         .optional()
         .describe('Apply an additional rerank over the fused candidates.'),
     }),
-    execute: async (args: unknown, { session }): Promise<ApiToolResult> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<ApiToolResult> => {
       const { seed_ids, intent, mode, k, rerank } = args as {
         seed_ids: string[];
         intent: string;
@@ -354,7 +365,7 @@ Returns ranked candidates and the evaluated pool size.
           `${BASE}/papers/${encodeURIComponent(primary)}/similar`,
           params
         ),
-        ORIGIN_HEADERS
+        originHeaders(requestOrigin(mcpClient, session))
       );
       const note = res.data?.note ? `\nnote: ${res.data.note}` : '';
       return formatApiResult(
@@ -368,7 +379,7 @@ Returns ranked candidates and the evaluated pool size.
   server.addTool({
     name: 'firecrawl_research_read_paper',
     annotations: {
-      title: 'Read a paper',
+      title: 'Firecrawl read research paper',
       readOnlyHint: true, // Retrieves relevant full-text passages from a paper; does not modify the paper.
       openWorldHint: true, // Reads from publicly indexed paper full text when available.
       destructiveHint: false, // Read-only passage retrieval.
@@ -394,7 +405,10 @@ Returns matching passages or a notice when full text is unavailable.
         .optional()
         .describe('Number of passages to return (default 4).'),
     }),
-    execute: async (args: unknown, { session }): Promise<ApiToolResult> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<ApiToolResult> => {
       const { paperId, question, k } = args as {
         paperId: string;
         question: string;
@@ -406,7 +420,7 @@ Returns matching passages or a notice when full text is unavailable.
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ passages?: { text: string }[] }>(
         withQuery(`${BASE}/papers/${encodeURIComponent(paperId)}`, params),
-        ORIGIN_HEADERS
+        originHeaders(requestOrigin(mcpClient, session))
       );
       const passages = res.data?.passages ?? [];
       return formatApiResult(
@@ -425,7 +439,7 @@ Returns matching passages or a notice when full text is unavailable.
   server.addTool({
     name: 'firecrawl_research_search_github',
     annotations: {
-      title: 'Search GitHub history',
+      title: 'Firecrawl GitHub history search',
       readOnlyHint: true,
       openWorldHint: true,
       destructiveHint: false,
