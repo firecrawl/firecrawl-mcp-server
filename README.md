@@ -1088,9 +1088,13 @@ HTTP 403 and this body:
 The tool result relays it as an error with `structuredContent` carrying `code`,
 `status: 403`, `requestId`, the `requiresAction` object unchanged, and
 `next_actions` (`human_action_required` then `retry_same_request`). Accepting
-terms is a legal act by a signed-in organization admin in the dashboard at
-`requiresAction.url`; the MCP server never accepts them and has no tool that
-does. No credits are charged. Once a person confirms acceptance, call the same
+terms is a legal act. Use `firecrawl_terms_show` with `provider` to read the agreement.
+Present it to the user and obtain explicit authorization to bind their organization
+before calling `firecrawl_terms_accept` with `provider`, the exact reviewed `version`
+and 64-character lowercase hexadecimal `digest`, and `confirmed: true`. A request
+for data is not consent. Authority or eligibility errors may require an organization
+admin to use `requiresAction.url`. No automatic acceptance or uncertain retries occur.
+No credits are charged for the blocked retrieval. After confirmed acceptance, call the same
 tool again with the identical payload and `requestId`.
 
 ## Logging System

@@ -134,6 +134,14 @@ async function startFakeExchangeApi(options = {}) {
       return json(200, { eligible: keylessEligible });
     }
 
+    if (req.method === 'GET' && url.pathname === '/exchange/provider-terms')
+      return json(options.termsStatus ?? 200, options.termsCatalog ?? { providers: [{ provider: 'benzinga', version: 'v1', digest: 'a'.repeat(64), text: 'Review this agreement.' }] });
+    if (req.method === 'POST' && url.pathname === '/exchange/provider-terms/accept') {
+      if (parsedBody.version === 'stale') return json(409, { success: false, code: 'TERMS_VERSION_MISMATCH', error: 'Read the latest terms.', requiresAction: { url: 'https://www.firecrawl.dev/app/alexandria/benzinga' }, currentVersion: 'v2' });
+      if (parsedBody.provider === 'authority') return json(403, { success: false, code: 'PROVIDER_TERMS_AUTHORITY_REQUIRED', error: 'An admin must verify authority.', requiresAction: { url: 'https://www.firecrawl.dev/app/alexandria/authority' } });
+      return json(200, { success: true, provider: parsedBody.provider, accepted: true });
+    }
+
     if (url.pathname === '/exchange/skills/resolve')
       return json(200, { skills: [{ id: 'particle-podcasts' }] });
     if (url.pathname === '/exchange/skills/particle-podcasts/SKILL.md') {
@@ -330,8 +338,8 @@ async function startStdio(t, env) {
   return { client, init, getStderr: () => stderr };
 }
 
-async function startStdioWithApi(t) {
-  const api = await startFakeExchangeApi();
+async function startStdioWithApi(t, options = {}) {
+  const api = await startFakeExchangeApi(options);
   t.after(() => api.close());
   const session = await startStdio(t, {
     FIRECRAWL_API_KEY: 'fc-exchange-test',
@@ -577,6 +585,52 @@ test('firecrawl_scrape rejects url with alexandria, neither, extra options, and 
     });
   }
   assert.equal(api.requests.length, 0);
+});
+
+test('provider terms tools read and accept exact reviewed terms only with confirmation', async (t) => {
+  const { api, client } = await startStdioWithApi(t);
+  const read = toolText(await client.request('tools/call', { name: 'firecrawl_terms_show', arguments: { provider: 'benzinga' } }));
+  assert.equal(read.text, 'Review this agreement.');
+  assert.equal(read.digest, 'a'.repeat(64));
+  assert.match(read.guidance, /explicit authorization/);
+  assert.equal(api.requests[0].method, 'GET');
+  assert.equal(api.requests[0].url, '/exchange/provider-terms');
+  const args = { provider: 'benzinga', version: read.version, digest: read.digest, confirmed: true };
+  for (const invalid of [{ ...args, confirmed: false }, { ...args, confirmed: undefined }, { ...args, version: '' }, { ...args, digest: 'invalid' }])
+    await callExpectingError(client, { name: 'firecrawl_terms_accept', arguments: invalid });
+  assert.equal(api.requests.length, 1, 'invalid confirmation must never contact the API');
+  const accepted = toolText(await client.request('tools/call', { name: 'firecrawl_terms_accept', arguments: args }));
+  assert.equal(accepted.success, true);
+  assert.deepEqual(api.requests[1].body, args);
+  assert.equal(api.requests[1].method, 'POST');
+  assert.equal(api.requests[1].url, '/exchange/provider-terms/accept');
+  assert.equal(api.requests[1].headers.authorization, 'Bearer fc-exchange-test');
+  for (const [options, status, code] of [[{ ...args, version: 'stale' }, 409, 'TERMS_VERSION_MISMATCH'], [{ ...args, provider: 'authority' }, 403, 'PROVIDER_TERMS_AUTHORITY_REQUIRED']]) {
+    const before = api.requests.length;
+    const error = await callExpectingError(client, { name: 'firecrawl_terms_accept', arguments: options });
+    assert.equal(error.structuredContent.status, status);
+    assert.equal(error.structuredContent.code, code);
+    assert.ok(error.structuredContent.requiresAction.url);
+    assert.equal(api.requests.length, before + 1, 'acceptance must not be automatically retried');
+  }
+});
+
+test('terms reads explain eligibility failures and reject empty or malformed catalogs without leaking credentials', async (t) => {
+  for (const options of [
+    { termsCatalog: {} },
+    { termsCatalog: { providers: [] } },
+    { termsCatalog: { success: false, error: 'Team not enabled.', code: 'team_disabled' }, termsStatus: 403 },
+  ]) {
+    const { api, client } = await startStdioWithApi(t, options);
+    const error = await callExpectingError(client, { name: 'firecrawl_terms_show', arguments: { provider: 'benzinga' } });
+    assert.equal(error.isError, true);
+    assert.doesNotMatch(JSON.stringify(error), /fc-exchange-test/);
+    assert.equal(api.requests.length, 1);
+    if (options.termsStatus === 403) {
+      assert.equal(error.structuredContent.code, 'team_disabled');
+      assert.match(error.structuredContent.guidance, /https:\/\/www.firecrawl.dev\/app\/settings\?tab=data-sources/);
+    }
+  }
 });
 
 test('firecrawl_scrape relays an Exchange 403 as an explanatory tool error', async (t) => {
@@ -838,6 +892,8 @@ test('local keyless stdio refuses every Exchange path with the explanatory error
     { arguments: { alexandria: [EXCHANGE_CALL] }, name: 'firecrawl_scrape' },
     { arguments: { cohort: 'finance' }, name: 'firecrawl_exchange_discover' },
     { arguments: {}, name: 'firecrawl_exchange_discover' },
+    { arguments: { provider: 'benzinga' }, name: 'firecrawl_terms_show' },
+    { arguments: { provider: 'benzinga', version: 'v1', digest: 'a'.repeat(64), confirmed: true }, name: 'firecrawl_terms_accept' },
   ]) {
     const result = await client.request('tools/call', params);
     assert.equal(result.isError, true, JSON.stringify(result));

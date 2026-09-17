@@ -880,7 +880,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   assert.match(
     init.instructions,
-    /THIRD_PARTY_DATA_TERMS_REQUIRED.*requiresAction\.url.*human organization admin must visit/is
+    /THIRD_PARTY_DATA_TERMS_REQUIRED.*firecrawl_terms_show.*firecrawl_terms_accept requires explicit user authorization/is
   );
   assert.match(
     byName.get('firecrawl_scrape').description,
