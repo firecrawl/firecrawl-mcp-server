@@ -1721,6 +1721,10 @@ test('HTTP cloud keyless Parse completes both phases without credentials and for
   assert.equal(uploadCalls.length, 1);
   assert.equal(parseCalls.length, 1);
   assert.equal(uploadCalls[0].headers.authorization, undefined);
+  assert.equal(
+    uploadCalls[0].headers['x-origin'],
+    `mcp-ua-firecrawl-keyless-smoke@${serverVersion}`
+  );
   assert.equal(parseCalls[0].headers.authorization, undefined);
   assert.equal(parseCalls[0].body.uploadRef, 'test-upload-ref');
   assert.equal(parseCalls[0].body.redactPII, true);

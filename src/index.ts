@@ -1913,13 +1913,15 @@ function parseApiData(json: any): any {
 async function apiPostJson(
   pathName: string,
   body: Record<string, unknown>,
-  apiKey: string
+  apiKey: string,
+  origin?: string
 ): Promise<any> {
   const response = await fetch(`${resolveApiBaseUrl()}${pathName}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
+      ...(origin ? originHeaders(origin) : {}),
     },
     body: JSON.stringify(body),
   });
@@ -1944,15 +1946,16 @@ async function apiPostJson(
 async function apiPostJsonForSession(
   pathName: string,
   body: Record<string, unknown>,
-  session: SessionData | undefined
+  session: SessionData | undefined,
+  origin: string
 ): Promise<any> {
   const credential = credentialForOutboundRequest(session);
   if (credential) {
-    return apiPostJson(pathName, body, credential);
+    return apiPostJson(pathName, body, credential, origin);
   }
 
   if (isKeylessMode(session)) {
-    return keylessPost(pathName, body, session);
+    return keylessPost(pathName, body, session, origin);
   }
 
   throw new Error(
@@ -2049,7 +2052,8 @@ async function executeHostedParse(
     const uploadJson = await apiPostJsonForSession(
       '/v2/parse/upload-url',
       uploadRequest,
-      session
+      session,
+      origin
     );
     const upload = parseApiData(uploadJson) as ParseUploadUrlData;
     if (!upload?.uploadUrl || !upload?.uploadRef) {
@@ -2100,7 +2104,8 @@ async function executeHostedParse(
   const parseJson = await apiPostJsonForSession(
     '/v2/parse',
     parsePayload,
-    session
+    session,
+    origin
   );
   return asText(parseJson);
 }
@@ -2357,14 +2362,16 @@ function isKeylessMode(session?: SessionData): boolean {
 async function keylessPost(
   path: string,
   body: Record<string, unknown>,
-  session?: SessionData
+  session?: SessionData,
+  originOverride?: string
 ): Promise<any> {
   // The body already names the client's origin (every caller stamps it); the
   // headers of this request and the eligibility probe carry the same value.
   const origin =
-    typeof body.origin === 'string' && body.origin.length > 0
+    originOverride ??
+    (typeof body.origin === 'string' && body.origin.length > 0
       ? body.origin
-      : requestOrigin(undefined, session);
+      : requestOrigin(undefined, session));
   if (isHostedKeylessSession(session)) {
     const eligibility = session?.keylessClientIp
       ? await keylessEligible(session.keylessClientIp, origin)
