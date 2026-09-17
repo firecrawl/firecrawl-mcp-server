@@ -4,10 +4,10 @@
  * Thin MCP wrapper over the `/v2/search/developer` endpoint (GitHub issues,
  * merged pull requests, repository READMEs, and curated documentation sites).
  *
- * The installed `@mendable/firecrawl-js` predates a `developer` client, so we
- * call the endpoint directly through the SDK's HTTP layer (auth + retries) via
- * `client.http.get(...)`, mirroring how the research tools reach
- * `/v2/search/research/*`.
+ * Calls the endpoint directly through the SDK's HTTP layer (auth + retries)
+ * via `client.http.get(...)`, mirroring how the research tools reach
+ * `/v2/search/research/*`, so the tool's request and response shapes stay
+ * under this server's control.
  */
 
 import { z } from 'zod';
