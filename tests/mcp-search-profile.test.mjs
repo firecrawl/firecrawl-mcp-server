@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import net from 'node:net';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
+
+const { version: serverVersion } = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+);
 
 // The fixed contract of the search surface. Nothing outside this set may ever
 // appear on its tools/list or be callable through it.
@@ -307,6 +312,7 @@ function jsonRpc(port, endpoint, { id, method, params = {}, headers = {} }) {
     headers: {
       accept: 'application/json, text/event-stream',
       'content-type': 'application/json',
+      'user-agent': 'firecrawl-search-profile-test/1.0.0',
       ...headers,
     },
     method: 'POST',
@@ -497,7 +503,7 @@ test('search firecrawl_search sends a clean body built from allowed fields only'
     query: 'example domain',
     limit: 1,
     sources: [{ type: 'web' }],
-    origin: 'mcp-fastmcp',
+    origin: `mcp-ua-firecrawl-search-profile-test@${serverVersion}`,
   });
 });
 

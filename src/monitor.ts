@@ -11,6 +11,7 @@
 
 import { z } from 'zod';
 import type { FastMCP } from 'fastmcp';
+import { originHeaders, requestOrigin } from './origin';
 import {
   CoreHttpError,
   credentialForOutboundRequest,
@@ -18,6 +19,8 @@ import {
 } from './session-credential';
 
 interface SessionData extends CredentialSession {
+  /** The User-Agent the session was authenticated with (see src/origin.ts). */
+  clientUserAgent?: string;
   [key: string]: unknown;
 }
 
@@ -49,6 +52,7 @@ function resolveAuth(session?: SessionData): {
 
 async function monitorRequest(
   session: SessionData | undefined,
+  origin: string,
   path: string,
   init: MonitorRequestInit = {}
 ): Promise<unknown> {
@@ -67,7 +71,7 @@ async function monitorRequest(
     if (s) url += `?${s}`;
   }
 
-  const headers: Record<string, string> = { 'X-Origin': 'mcp-fastmcp' };
+  const headers: Record<string, string> = originHeaders(origin);
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   if (init.body !== undefined) headers['Content-Type'] = 'application/json';
 
@@ -219,7 +223,7 @@ export function registerMonitorTools(server: FastMCP<SessionData>): void {
   server.addTool({
     name: 'firecrawl_monitor_create',
     annotations: {
-      title: 'Create monitor',
+      title: 'Create Firecrawl monitor',
       readOnlyHint: false, // Creates a new recurring monitor configuration on the Firecrawl API.
       openWorldHint: true, // Monitors user-specified URLs on the public web on a recurring schedule.
       destructiveHint: false, // Additive; creates a new monitor without deleting existing monitors or external content.
@@ -246,10 +250,15 @@ In the simple form, a \`goal\` is required. If \`queries\` contains one or more 
       includeDiffs: z.boolean().optional(),
       webhookUrl: z.string().optional(),
     }),
-    execute: async (args: unknown, { session, log }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, log, client: mcpClient }
+    ): Promise<string> => {
       const body = buildMonitorCreateBody(args as Record<string, unknown>);
       log.info('Creating monitor', { name: String(body.name) });
-      const res = await monitorRequest(session, '/monitor', {
+      const res = await monitorRequest(
+        session,
+        requestOrigin(mcpClient, session), '/monitor', {
         method: 'POST',
         body,
       });
@@ -260,7 +269,7 @@ In the simple form, a \`goal\` is required. If \`queries\` contains one or more 
   server.addTool({
     name: 'firecrawl_monitor_list',
     annotations: {
-      title: 'List monitors',
+      title: 'List Firecrawl monitors',
       readOnlyHint: true, // Lists monitors for the authenticated account; no mutations.
       openWorldHint: false, // Returns only the user's Firecrawl monitor records, not arbitrary web content.
       destructiveHint: false, // Read-only listing.
@@ -272,9 +281,14 @@ List monitors for the authenticated account with optional pagination controls. R
       limit: z.number().int().positive().optional(),
       offset: z.number().int().nonnegative().optional(),
     }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<string> => {
       const { limit, offset } = args as { limit?: number; offset?: number };
-      const res = await monitorRequest(session, '/monitor', {
+      const res = await monitorRequest(
+        session,
+        requestOrigin(mcpClient, session), '/monitor', {
         query: { limit, offset },
       });
       return asText(res);
@@ -284,7 +298,7 @@ List monitors for the authenticated account with optional pagination controls. R
   server.addTool({
     name: 'firecrawl_monitor_get',
     annotations: {
-      title: 'Get monitor',
+      title: 'Get Firecrawl monitor',
       readOnlyHint: true, // Fetches a single monitor by ID; no mutations.
       openWorldHint: false, // Reads a specific monitor resource in the user's Firecrawl account.
       destructiveHint: false, // Read-only retrieval.
@@ -293,10 +307,14 @@ List monitors for the authenticated account with optional pagination controls. R
 Retrieve one monitor by ID, including its configuration and current state. This does not run or modify the monitor.
 `,
     parameters: z.object({ id: z.string() }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<string> => {
       const { id } = args as { id: string };
       const res = await monitorRequest(
         session,
+        requestOrigin(mcpClient, session),
         `/monitor/${encodeURIComponent(id)}`
       );
       return asText(res);
@@ -306,7 +324,7 @@ Retrieve one monitor by ID, including its configuration and current state. This 
   server.addTool({
     name: 'firecrawl_monitor_update',
     annotations: {
-      title: 'Update monitor',
+      title: 'Update Firecrawl monitor',
       readOnlyHint: false, // PATCHes an existing monitor (status, schedule, targets, webhooks, etc.).
       openWorldHint: true, // Can change which external URLs are monitored and how recurring scrapes run.
       destructiveHint: true, // Can pause, replace, or remove monitor configuration; changes overwrite prior settings.
@@ -320,13 +338,17 @@ Returns the updated monitor.
       id: z.string(),
       body: z.record(z.string(), z.any()),
     }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<string> => {
       const { id, body } = args as {
         id: string;
         body: Record<string, unknown>;
       };
       const res = await monitorRequest(
         session,
+        requestOrigin(mcpClient, session),
         `/monitor/${encodeURIComponent(id)}`,
         { method: 'PATCH', body }
       );
@@ -337,7 +359,7 @@ Returns the updated monitor.
   server.addTool({
     name: 'firecrawl_monitor_delete',
     annotations: {
-      title: 'Delete monitor',
+      title: 'Delete Firecrawl monitor',
       readOnlyHint: false, // Permanently deletes a monitor via DELETE on the API.
       openWorldHint: true, // Deletes a monitor that tracked open-web URLs.
       destructiveHint: true, // Irreversibly removes the monitor and stops its schedule.
@@ -346,11 +368,15 @@ Returns the updated monitor.
 Permanently delete a monitor by ID and stop its future schedule. This operation cannot be undone and returns deletion status.
 `,
     parameters: z.object({ id: z.string() }),
-    execute: async (args: unknown, { session, log }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, log, client: mcpClient }
+    ): Promise<string> => {
       const { id } = args as { id: string };
       log.info('Deleting monitor', { id });
       const res = await monitorRequest(
         session,
+        requestOrigin(mcpClient, session),
         `/monitor/${encodeURIComponent(id)}`,
         { method: 'DELETE' }
       );
@@ -361,7 +387,7 @@ Permanently delete a monitor by ID and stop its future schedule. This operation 
   server.addTool({
     name: 'firecrawl_monitor_run',
     annotations: {
-      title: 'Run monitor now',
+      title: 'Run Firecrawl monitor now',
       readOnlyHint: false, // Triggers an immediate monitor check, queueing a new scrape/diff run.
       openWorldHint: true, // The triggered check scrapes external URLs configured on the monitor.
       destructiveHint: false, // Starts a read-only check job; does not delete the monitor or external sites.
@@ -370,10 +396,14 @@ Permanently delete a monitor by ID and stop its future schedule. This operation 
 Queue an immediate check for a monitor outside its normal schedule. This starts network work for the monitor's configured targets and returns the queued check.
 `,
     parameters: z.object({ id: z.string() }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<string> => {
       const { id } = args as { id: string };
       const res = await monitorRequest(
         session,
+        requestOrigin(mcpClient, session),
         `/monitor/${encodeURIComponent(id)}/run`,
         { method: 'POST' }
       );
@@ -384,7 +414,7 @@ Queue an immediate check for a monitor outside its normal schedule. This starts 
   server.addTool({
     name: 'firecrawl_monitor_checks',
     annotations: {
-      title: 'List monitor checks',
+      title: 'List Firecrawl monitor checks',
       readOnlyHint: true, // Lists historical check runs for a monitor; no mutations.
       openWorldHint: false, // Returns check history for a known monitor ID within the user's account.
       destructiveHint: false, // Read-only listing.
@@ -398,7 +428,10 @@ List historical checks for a monitor, optionally filtered by status and bounded 
       offset: z.number().int().nonnegative().optional(),
       status: checkStatusSchema.optional(),
     }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<string> => {
       const { id, limit, offset, status } = args as {
         id: string;
         limit?: number;
@@ -407,6 +440,7 @@ List historical checks for a monitor, optionally filtered by status and bounded 
       };
       const res = await monitorRequest(
         session,
+        requestOrigin(mcpClient, session),
         `/monitor/${encodeURIComponent(id)}/checks`,
         { query: { limit, offset, status } }
       );
@@ -417,7 +451,7 @@ List historical checks for a monitor, optionally filtered by status and bounded 
   server.addTool({
     name: 'firecrawl_monitor_check',
     annotations: {
-      title: 'Get monitor check',
+      title: 'Get Firecrawl monitor check',
       readOnlyHint: true, // Retrieves a single check run with page-level diff results; no mutations.
       openWorldHint: false, // Reads stored check results for a known monitor/check ID in the user's account.
       destructiveHint: false, // Read-only retrieval of diff snapshots and judgments.
@@ -434,7 +468,10 @@ Markdown tracking returns a unified text diff, JSON tracking returns field paths
       skip: z.number().int().nonnegative().optional(),
       pageStatus: pageStatusSchema.optional(),
     }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<string> => {
       const { id, checkId, limit, skip, pageStatus } = args as {
         id: string;
         checkId: string;
@@ -444,6 +481,7 @@ Markdown tracking returns a unified text diff, JSON tracking returns field paths
       };
       const res = await monitorRequest(
         session,
+        requestOrigin(mcpClient, session),
         `/monitor/${encodeURIComponent(id)}/checks/${encodeURIComponent(checkId)}`,
         { query: { limit, skip, status: pageStatus } }
       );
