@@ -12,6 +12,7 @@
 
 import { z } from 'zod';
 import type { FastMCP } from 'fastmcp';
+import { originHeaders, requestOrigin } from './origin';
 
 interface SessionData {
   firecrawlApiKey?: string;
@@ -34,7 +35,6 @@ type GetClient = (session?: SessionData) => unknown;
 
 // The other mount, /v2/developer/search, may be withdrawn.
 const BASE = '/v2/search/developer';
-const ORIGIN_HEADERS = { 'X-Origin': 'mcp-fastmcp' };
 
 
 interface DeveloperHit {
@@ -111,7 +111,10 @@ Returns ranked results with an ID, source type, URL, title, and the matched pass
         .optional()
         .describe('Set to "only" to search only agent-skill files.'),
     }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<string> => {
       const { query, k, skills } = args as {
         query: string;
         k?: number;
@@ -124,7 +127,7 @@ Returns ranked results with an ID, source type, URL, title, and the matched pass
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{
         results?: DeveloperHit[];
-      }>(`${BASE}?${params.toString()}`, ORIGIN_HEADERS);
+      }>(`${BASE}?${params.toString()}`, originHeaders(requestOrigin(mcpClient, session)));
       return fmtDeveloper(res.data?.results);
     },
   });
