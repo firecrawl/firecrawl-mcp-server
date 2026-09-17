@@ -972,10 +972,13 @@ Example log messages:
 
 ## API response hints
 
-When Firecrawl returns an optional `agent_hints` array of strings, JSON tool
-results preserve it in their existing text. MCP `structuredContent` contains
-`{ agent_hints }` metadata without duplicating large page bodies. Readable
-Developer and Research outputs keep their existing text and show hints in a
+The MCP server explicitly enables Firecrawl API response hints on its outbound
+requests with `X-Firecrawl-Agent-Hints: true`; the API leaves them disabled for
+ordinary callers. When Firecrawl returns an optional `agent_hints` array of
+strings, JSON tool results preserve it in their existing text. MCP
+`structuredContent` contains `{ agent_hints }` metadata without duplicating
+large page bodies. Readable Developer and Research outputs keep their existing
+text and show hints in a
 separate, labeled text block. Empty results can include hints. Error hints
 remain visible with `isError: true`.
 Responses without hints keep their existing output format. Guidance is API

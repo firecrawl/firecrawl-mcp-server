@@ -1487,6 +1487,10 @@ server.getApp().get('/ready', (context) => {
     : context.json({ ok: true }, 200);
 });
 
+const AGENT_HINTS_HEADERS = { 'X-Firecrawl-Agent-Hints': 'true' } as const;
+const ORIGIN = 'mcp-fastmcp';
+const ORIGIN_HEADERS = { 'X-Origin': ORIGIN, ...AGENT_HINTS_HEADERS };
+
 function createClient(apiKey?: string): FirecrawlApp {
   const config: any = {
     ...(process.env.FIRECRAWL_API_URL && {
@@ -1499,11 +1503,20 @@ function createClient(apiKey?: string): FirecrawlApp {
     config.apiKey = apiKey;
   }
 
-  return new FirecrawlApp(config);
+  const client = new FirecrawlApp(config);
+  const axiosInstance = (client as any).http?.instance;
+  if (!axiosInstance?.interceptors?.request?.use) {
+    throw new Error('Firecrawl SDK client cannot enable API agent hints');
+  }
+  axiosInstance.interceptors.request.use((request: any) => {
+    request.headers = {
+      ...(request.headers ?? {}),
+      ...AGENT_HINTS_HEADERS,
+    };
+    return request;
+  });
+  return client;
 }
-
-const ORIGIN = 'mcp-fastmcp';
-const ORIGIN_HEADERS = { 'X-Origin': ORIGIN };
 
 // Safe mode is enabled by default for cloud service to comply with ChatGPT safety requirements
 const SAFE_MODE = process.env.CLOUD_SERVICE === 'true';
@@ -1926,6 +1939,7 @@ async function apiPostJson(
   const response = await fetch(`${resolveApiBaseUrl()}${pathName}`, {
     method: 'POST',
     headers: {
+      ...AGENT_HINTS_HEADERS,
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },

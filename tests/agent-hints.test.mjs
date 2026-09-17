@@ -102,7 +102,7 @@ test('MCP transport preserves hints on empty, readable, crawl and error results'
     let raw = '';
     for await (const chunk of req) raw += chunk;
     const body = raw ? JSON.parse(raw) : {};
-    requests.push({ url: req.url, body });
+    requests.push({ url: req.url, body, headers: req.headers });
     if (req.url.startsWith('/v2/search/developer?')) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ results: [], agent_hints: hints }));
@@ -214,4 +214,7 @@ test('MCP transport preserves hints on empty, readable, crawl and error results'
     cases.length,
     'presenting hints makes no extra API calls'
   );
+  for (const request of requests) {
+    assert.equal(request.headers['x-firecrawl-agent-hints'], 'true');
+  }
 });
