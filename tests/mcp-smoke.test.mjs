@@ -3280,6 +3280,8 @@ test('local Parse preserves job evidence on success and failure and retains invi
           protocolVersion: '2025-06-18',
         });
         client.notify('notifications/initialized');
+        const listed = await client.request('tools/list', {});
+        assert.equal(listed.tools.some(tool => tool.name === 'firecrawl_feedback'), true);
         const result = await client.request('tools/call', {
           name: 'firecrawl_parse',
           arguments: { filePath },
@@ -3392,3 +3394,31 @@ for (const endpoint of ['search', 'scrape', 'parse']) {
     });
   }
 }
+
+
+test('keyless Search failure preserves the feedback reference', async (t) => {
+  const metadata = {
+    jobId: '00000000-0000-4000-8000-000000000000',
+    feedback: { endpoint: 'search', docs: 'https://docs.firecrawl.dev/api-reference/endpoint/feedback' },
+  };
+  const backend = await startFakeFirecrawlBackend({
+    keylessEligible: true,
+    searchResponse: { status: 500, body: { success: false, error: 'Search transport failed', metadata } },
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true', FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url, FIRECRAWL_OAUTH_ISSUER: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true', PORT: String(port), KEYLESS_PROXY_SECRET: 'feedback-test-secret',
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+  const response = await httpToolCall(port, {
+    id: 'failed-search-feedback', headers: { 'x-forwarded-for': '203.0.113.71' },
+    params: { name: 'firecrawl_search', arguments: { query: 'retry reference' } },
+  });
+  const result = parseSseJson(await response.text()).result;
+  assert.equal(result.isError, true);
+  assert.deepEqual(result.structuredContent.metadata, metadata);
+});

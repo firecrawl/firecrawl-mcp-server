@@ -2666,16 +2666,16 @@ if (ENDPOINT_FEEDBACK_DISABLED) {
 
 if (
   !ENDPOINT_FEEDBACK_DISABLED ||
-  isLocalKeylessStartup() ||
+  !resolveCredentialFromEnv() ||
   process.env.CLOUD_SERVICE === 'true'
 ) {
   server.addTool({
     name: 'firecrawl_feedback',
     canList: (session: SessionData) =>
-      !ENDPOINT_FEEDBACK_DISABLED || isKeylessMode(session),
+      !ENDPOINT_FEEDBACK_DISABLED || !hasCredential(session),
     annotations: {
       title: 'Send feedback on a Firecrawl job',
-      readOnlyHint: false, // POSTs structured feedback for a completed job to /v2/feedback.
+      readOnlyHint: false, // POSTs structured feedback for a job to /v2/feedback.
       openWorldHint: true, // Feedback is tied to jobs that processed open-web URLs.
       destructiveHint: false, // Additive only; submits ratings and notes, does not delete jobs or external content.
     },
@@ -2684,15 +2684,54 @@ Submit optional quality feedback for a search, scrape, parse, or map job. Authen
 
 Keyless Search, Scrape, and Parse feedback requires task, assessment, rating, and 1-20 observations. Task, assessment, and each detail contain 10-2000 characters. Each observation includes kind, detail, and basis: output, source_comparison, or expectation. A source_comparison also requires comparison: {reference, detail}.
 
-Search: useful and irrelevant require a one-based position within the delivered group. source names the response group the position refers to: web, images, or news. It is required only when the job requested multiple sources; otherwise it defaults to web. The position must exist in that requested group. irrelevant requires reason: aggregator_over_official, off_topic, stale, wrong_content_type, snippet_misleading, or blocked_or_paywalled. vertical is required on missing and optional on useful/irrelevant: web_general, social, business, research, developer, news, government, finance, or other. missing may include topic (up to 200 characters). missing and irrelevant may include knownSources (up to 20 HTTP(S) URLs): where absent content lives or the source that should have ranked instead. Unmentioned results are unassessed; a full ranking is not required. Do not submit engine attribution; it comes from the stored category tag at that position.
+Search: useful and irrelevant require a one-based position within the delivered group. source names the response group the position refers to: web, images, or news. It is required for multi-source jobs. Omission defaults to web, so images-only and news-only jobs must explicitly name their source. The position must exist in that requested group. irrelevant requires reason: aggregator_over_official, off_topic, stale, wrong_content_type, snippet_misleading, or blocked_or_paywalled. vertical is required on missing and optional on useful/irrelevant: web_general, social, business, research, developer, news, government, finance, or other. missing may include topic (up to 200 characters). missing and irrelevant may include knownSources (up to 20 HTTP(S) URLs): where absent content lives or the source that should have ranked instead. Unmentioned results are unassessed; a full ranking is not required. Do not submit engine attribution.
 
-Scrape: kind correct, wrong_success, incomplete, or incorrect. wrong_success requires reason: blocked_shell, login_required, paywall, empty, wrong_page, stale, or wrong_locale. incomplete requires reason: partial_content, dynamic_content, pagination, main_content_stripped, or format_lost. incorrect requires reason: wrong, hallucinated, or missing_fields. correct has no reason. Optional location is up to 200 characters. No retryOutcome. Hard-failed Scrape jobs receive no feedback invitation. hallucinated applies only to json, deterministicJson, summary, question, highlights, and changeTracking in json mode; missing_fields applies only to json and deterministicJson. For incomplete and incorrect, prefer source_comparison when the source is already available.
+Scrape: kind correct, wrong_success, incomplete, or incorrect. wrong_success requires reason: blocked_shell, login_required, paywall, empty, wrong_page, stale, or wrong_locale. incomplete requires reason: partial_content, dynamic_content, pagination, main_content_stripped, or format_lost. incorrect requires reason: wrong, hallucinated, or missing_fields. correct has no reason. Optional location is up to 200 characters. No retryOutcome. hallucinated applies only to json, deterministicJson, summary, question, highlights, and changeTracking in json mode; missing_fields applies only to json and deterministicJson. For incomplete and incorrect, prefer source_comparison when the source is already available.
 
 Parse: docClass is required once per submission: born_digital, scanned, mixed, or unknown. Observation kind: correct, text_ocr, table, formula, chart_figure, reading_order, headers_footers, headings_formatting, completeness, images_dropped, or incorrect. text_ocr requires reason: misread_chars, garbled, or missing_text. table requires reason: structure, cells_glued, or digits. completeness requires reason: pages_missing, truncated_at_max_pages, or sections_dropped. incorrect requires reason: wrong, hallucinated, or missing_fields. Other kinds have no reason subtype. Optional page is a one-based positive integer. incorrect applies to json and summary outputs. For text_ocr and table, include the correct text or cell values in comparison.detail when already known. Parse feedback does not automatically retain the document, extracted output, page images, or layout blocks; submitted observations and corrections are retained.
 
-Scrape and Parse: format must be a format type the job requested. It is required for output and source_comparison observations when multiple formats were requested; optional for expectation observations and single-format jobs. All observations retain detail and basis; source_comparison requires comparison: {reference, detail}. comparison.detail contains the correct content from the inspected source.
+Scrape and Parse observations other than failure: format must be a format type the job requested. It is required for output and source_comparison observations when multiple formats were requested; optional for expectation observations and single-format jobs. All observations retain detail and basis; source_comparison requires comparison: {reference, detail}. comparison.detail contains the correct content from the inspected source.
 
-Use only evidence already available. Do not guess missing content, diagnose causes, or investigate further. One accepted submission per keyless identity per UTC day, shared across Search, Scrape, Parse, and all clients. Feedback remains available after operation quota exhaustion and does not restore quota. Returns submission status and feedback ID. Authenticated feedback retains its existing fields.
+Failed Search, Scrape, or Parse jobs: use kind failure with reason timeout, transport_error, proxy_error, or other. Accepted only for a failed job. Include detail and basis; do not supply position, source, format, location, or page. Parse still requires docClass (unknown is allowed).
+
+If the saved Search response is unavailable, otherwise valid observations are accepted and stored with metadata.unverified: true because their positions could not be checked. Job ownership and requested sources are still checked. Available results must contain every referenced position.
+
+Reason definitions:
+- aggregator_over_official: An intermediary was returned where the task needed an available official or primary source.
+- off_topic: The result addresses a different topic from the task.
+- stale: The content is outdated for the time or version the task requires.
+- wrong_content_type: The destination has the wrong content type for the task, such as a discussion instead of a reference.
+- snippet_misleading: The returned description misrepresents source content already inspected.
+- blocked_or_paywalled: Access to the destination was observed to be blocked or require a subscription; do not infer this from its URL or snippet.
+- blocked_shell: The successful response contains a bot challenge or access-blocking shell instead of the requested content.
+- login_required: The successful response contains a login requirement instead of the requested content.
+- paywall: The successful response contains a subscription barrier instead of the requested content.
+- empty: The successful response contains no meaningful requested content.
+- wrong_page: The successful response contains a different page or resource.
+- wrong_locale: The response uses the wrong language or region for the task.
+- partial_content: Only part of the expected content was returned, without a more specific known cause.
+- dynamic_content: Content loaded by client-side rendering or interaction is missing.
+- pagination: Expected content on additional pages is missing.
+- main_content_stripped: Content filtering removed requested primary content.
+- format_lost: Text is present, but meaningful structure such as headings, lists, or code formatting was lost.
+- wrong: Returned facts or values conflict with the inspected source.
+- hallucinated: The output asserts content unsupported by the inspected source.
+- missing_fields: Requested fields are absent from the structured output.
+- misread_chars: Characters were recognized incorrectly.
+- garbled: Extracted text is corrupted or unreadable.
+- missing_text: Visible source text was omitted.
+- structure: Table rows, columns, or header relationships were reconstructed incorrectly.
+- cells_glued: Distinct table cells were merged.
+- digits: Numeric table values were recognized incorrectly.
+- pages_missing: Source pages are absent from the output.
+- truncated_at_max_pages: Extraction ended at the configured page limit; this does not by itself imply a parser error.
+- sections_dropped: Sections within processed pages were omitted.
+- timeout: The operation explicitly reported a timeout.
+- transport_error: The operation explicitly reported a network, connection, or TLS failure.
+- proxy_error: The operation explicitly reported a proxy failure.
+- other: Another operation failure was reported; describe the returned error without guessing its cause.
+
+Use only evidence already available. Do not guess missing content, diagnose causes, or investigate further. The stored keyless submission must fit within 8 KiB (8192 UTF-8 bytes), including server defaults and verification flags. By default, one accepted submission per caller IP per UTC day is shared across Search, Scrape, Parse, and all clients; the server invitation states the deployment allowance. Attempts, including rejected requests, are limited to 30 per minute. Submit within 24 hours from the same caller IP. Contract and example: https://docs.firecrawl.dev/api-reference/endpoint/feedback. Feedback remains available after operation quota exhaustion and does not restore quota. Returns submission status and feedback ID. Authenticated feedback retains its existing fields.
 `,
     parameters: z.object({
       endpoint: z.enum(['search', 'scrape', 'parse', 'map']),
@@ -2720,7 +2759,7 @@ Use only evidence already available. Do not guess missing content, diagnose caus
       metadata: z.record(z.string(), z.unknown()).optional(),
     }),
     execute: async (args: unknown, { session, log }): Promise<string> => {
-      if (ENDPOINT_FEEDBACK_DISABLED && !isKeylessMode(session)) {
+      if (ENDPOINT_FEEDBACK_DISABLED && hasCredential(session)) {
         throw new UserError(
           'Endpoint feedback is disabled for authenticated sessions.'
         );
