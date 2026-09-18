@@ -5,7 +5,9 @@ import { FastMCP, type Logger, UserError } from 'fastmcp';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { ResultStore } from './result-store';
+import { DEFAULT_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS } from './output-budget';
 import path from 'node:path';
 import { z } from 'zod';
 import {
@@ -1268,6 +1270,7 @@ const SEARCH_PROFILE_INSTRUCTIONS =
 // against this set, so anything not listed here can never appear on that
 // instance's tools/list or be called through it.
 const SEARCH_PROFILE_TOOLS = new Set<string>([
+  'firecrawl_read_result',
   'firecrawl_search',
   'firecrawl_developer_search',
   'firecrawl_research_search_papers',
@@ -1375,6 +1378,7 @@ const server = createServer(primaryProfile);
 type RegisteredTool = Parameters<typeof server.addTool>[0];
 
 const KEYLESS_TOOL_NAMES = new Set([
+  'firecrawl_read_result',
   'firecrawl_scrape',
   'firecrawl_search',
   'firecrawl_parse',
@@ -1458,8 +1462,13 @@ function isCoreCredentialRejection(error: unknown): boolean {
   const candidate = error as {
     response?: { status?: unknown };
     status?: unknown;
+    statusCode?: unknown;
   };
-  return candidate.status === 401 || candidate.response?.status === 401;
+  return (
+    candidate.status === 401 ||
+    candidate.statusCode === 401 ||
+    candidate.response?.status === 401
+  );
 }
 
 /**
@@ -1480,7 +1489,11 @@ async function runWithCredentialRecovery<T>(
     // An OAuth session was validated at connect time, so a rejection there is a
     // different fault and keeps its own reconnect guidance; a keyless session
     // never sent an account credential at all.
-    if (session?.authType !== 'api-key' || !isCoreCredentialRejection(error)) {
+    const apiKeySession =
+      session?.authType === 'api-key' ||
+      (session?.authType === 'env' &&
+        isFirecrawlApiKey(session.firecrawlApiKey ?? ''));
+    if (!apiKeySession || !isCoreCredentialRejection(error)) {
       throw error;
     }
     const payload = recoveryPayload('CREDENTIAL_INVALID', requestId);
@@ -1609,6 +1622,58 @@ function emitActionLog(
   }).catch(() => undefined);
 }
 
+const resultStore = new ResultStore();
+const outputTokenSchema = z
+  .number()
+  .int()
+  .min(512)
+  .max(MAX_OUTPUT_TOKENS)
+  .optional()
+  .describe(
+    'Inline response token budget (default 4000; cl100k_base). Larger results remain readable with firecrawl_read_result.'
+  );
+
+function resultOwner(context: {
+  sessionId?: string;
+  session?: SessionData;
+}): string {
+  return createHash('sha256')
+    .update(
+      JSON.stringify([
+        context.session?.firecrawlApiKey || context.session?.userId || context.session?.keylessClientIp
+          ? undefined
+          : context.sessionId,
+        context.session?.firecrawlApiKey,
+        context.session?.teamId,
+        context.session?.userId,
+        context.session?.oauthClientId,
+        context.session?.keylessClientIp,
+      ])
+    )
+    .digest('hex');
+}
+
+const readResultTool: RegisteredTool = {
+  name: 'firecrawl_read_result',
+  description:
+    'Read a retained tool result without executing the provider again. Select a JSON Pointer path (for example /data/tools/0), optionally project fields from records, or follow next to read bounded text chunks. Retention is up to 15 minutes on this server, subject to eviction or restart. Save chunks with your filesystem tools when available; do not load every chunk into context unless needed.',
+  annotations: {
+    title: 'Read a retained result',
+    readOnlyHint: true,
+    destructiveHint: false,
+    openWorldHint: false,
+  },
+  parameters: z.object({
+    resultId: z.string().uuid(),
+    path: z.string().max(1000).optional(),
+    fields: z.array(z.string().max(200)).min(1).max(30).optional(),
+    offset: z.number().int().nonnegative().optional(),
+    maxOutputTokens: outputTokenSchema,
+  }),
+  execute: async (args, context) =>
+    resultStore.read(resultOwner(context), args as { resultId: string }),
+};
+
 function guardHostedTool(
   tool: RegisteredTool,
   { logActions }: { logActions: boolean }
@@ -1619,6 +1684,12 @@ function guardHostedTool(
   const beforeValidate = tool.beforeValidate;
   return {
     ...tool,
+    parameters:
+      tool.name === 'firecrawl_read_result'
+        ? tool.parameters
+        : (tool.parameters as z.ZodObject).safeExtend({
+            maxOutputTokens: outputTokenSchema,
+          }),
     canList: (session: SessionData) =>
       // A credentialError session lists the keyless tool surface (same as a
       // real keyless session, not the full authenticated schema) so the
@@ -1694,12 +1765,35 @@ function guardHostedTool(
         if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
         throw new UserError(String(payload.message), payload);
       }
-      const runTool = () =>
-        runWithCredentialRecovery(
-          () => execute(args, invocationContext),
+      const runTool = async () => {
+        const { maxOutputTokens, ...providerArgs } = args as Record<string, unknown>;
+        const result = await runWithCredentialRecovery(
+          () => execute(
+            tool.name === 'firecrawl_read_result' ? args : providerArgs,
+            invocationContext
+          ),
           requestId,
           invocationSession
         );
+        if (tool.name === 'firecrawl_read_result' || result === undefined) return result;
+        const text = typeof result === 'string' ? result : JSON.stringify(result);
+        const bounded = await resultStore.bound(
+          text,
+          resultOwner(context),
+          typeof maxOutputTokens === 'number' ? maxOutputTokens : DEFAULT_OUTPUT_TOKENS,
+          !isHttpStreamingTransport() && process.env.CLOUD_SERVICE !== 'true'
+            ? process.env.FIRECRAWL_MCP_OUTPUT_DIR
+            : undefined,
+          providerArgs.zeroDataRetention !== true &&
+            (providerArgs.scrapeOptions as Record<string, unknown> | undefined)?.zeroDataRetention !== true
+        );
+        if (bounded === text) return result;
+        if (typeof result === 'string') return bounded;
+        return {
+          content: [{ type: 'text' as const, text: bounded }],
+          isError: typeof result === 'object' && result !== null && 'isError' in result ? Boolean(result.isError) : false,
+        };
+      };
       if (!logActions) return runTool();
 
       emitActionLog(tool.name, 'started', invocationSession, undefined, requestId);
@@ -1736,6 +1830,7 @@ server.addTool = ((tool: RegisteredTool) => {
   }
   addTool(guardHostedTool(tool, { logActions: primaryProfile.id !== 'search' }));
 }) as typeof server.addTool;
+server.addTool(readResultTool);
 
 if (openAiAppsChallengeToken) {
   server
@@ -1844,7 +1939,7 @@ function getClient(session?: SessionData): FirecrawlApp {
 }
 
 function asText(data: unknown): string {
-  return JSON.stringify(data, null, 2);
+  return JSON.stringify(data);
 }
 
 // scrape tool (v2 semantics, minimal args)
@@ -2062,7 +2157,7 @@ const scrapeToolParamsSchema = scrapeParamsSchema
       !args.alexandria ||
       Object.entries(args).every(
         ([key, value]) =>
-          key === 'alexandria' || key === 'requestId' || key === 'timeout' || value === undefined
+          key === 'alexandria' || key === 'requestId' || key === 'timeout' || key === 'maxOutputTokens' || value === undefined
       ),
     'alexandria cannot be combined with url or other scrape options'
   )
@@ -4102,6 +4197,7 @@ if (searchProfileEnabled) {
     }) as FastMCP<SessionData>['addTool'],
   };
 
+  searchServer.addTool(guardHostedTool(readResultTool, { logActions: false }));
   registerResearchTools(searchRegistrar, getClient);
   registerDeveloperTools(searchRegistrar, getClient);
   registerMarketplaceSearchTool(searchRegistrar, getClient);

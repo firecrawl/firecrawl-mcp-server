@@ -30,6 +30,7 @@
     "@mendable/firecrawl-js": "4.25.2",
     "dotenv": "^17.2.2",
     "fastmcp": "4.3.2",
+    "js-tiktoken": "^1.0.21",
     "zod": "^4.1.5"
   },
   "engines": {

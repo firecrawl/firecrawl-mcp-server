@@ -1165,3 +1165,15 @@ Thanks to MCP.so and Klavis AI for hosting and [@gstarwd](https://github.com/gst
 ## License
 
 MIT License - see LICENSE file for details
+
+### Response budgets
+
+Tool responses default to a 4,000-token inline budget, measured with `cl100k_base` (other models tokenize differently). Set `maxOutputTokens` from 512 to 16,000 per call. JSON is compacted before offloading. Expanded discovery, examples, and full contracts remain available.
+
+Oversized responses return `truncated: true`, a preview, and a `resultId`. Use `firecrawl_read_result` with that ID and a JSON Pointer `path` such as `/data/tools/0`; optional `fields` selects record fields. Follow `next` for further chunks. These reads do not call the provider again. Read only the portions needed, rather than loading all chunks into the conversation.
+
+Results are retained in a bounded 64 MiB process-local cache for up to 15 minutes. They may expire sooner after eviction, restart, or routing to another server; an unavailable result returns an explicit error and never automatically reruns the provider. A single result over 64 MiB cannot be retained. This limits individual responses, not the client's total conversation context.
+
+Local stdio users can set `FIRECRAWL_MCP_OUTPUT_DIR` to also save oversized original results as private files. Hosted MCP cannot write to a client's filesystem. A client with filesystem tools can save retrieved chunks itself. Local output files are retained until the user removes them.
+
+Requests with explicit `zeroDataRetention: true` do not retain results or write files. Oversized ZDR output is explicitly marked as preview-only; use narrower inputs or a larger inline budget. Multi-replica hosted deployment needs shared result storage before relying on follow-up reads across replicas.

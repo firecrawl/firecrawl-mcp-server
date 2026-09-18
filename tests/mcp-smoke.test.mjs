@@ -543,7 +543,7 @@ test('HTTP cloud keyless transport preserves app challenge without advertising O
   const anonymousTools = parseSseJson(await unauthenticated.text()).result.tools;
   assert.deepEqual(
     anonymousTools.map((tool) => tool.name).sort(),
-    ['firecrawl_parse', 'firecrawl_scrape', 'firecrawl_search']
+    ['firecrawl_parse', 'firecrawl_read_result', 'firecrawl_scrape', 'firecrawl_search']
   );
   const anonymousParse = anonymousTools.find(
     (tool) => tool.name === 'firecrawl_parse'
@@ -1390,7 +1390,7 @@ test('local HTTP header API keys receive Core credential recovery', async (t) =>
   );
 });
 
-test('local HTTP environment credentials keep self-hosted Core errors', async (t) => {
+test('local HTTP environment API keys receive credential recovery', async (t) => {
   const backend = await startFakeFirecrawlBackend();
   t.after(() => backend.close());
 
@@ -1418,8 +1418,8 @@ test('local HTTP environment credentials keep self-hosted Core errors', async (t
   assert.equal(response.status, 200);
   const result = parseSseJson(await response.text()).result;
   assert.equal(result.isError, true);
-  assert.notEqual(result.content[0].text, INVALID_API_KEY_MESSAGE);
-  assert.notEqual(result.structuredContent?.code, 'CREDENTIAL_INVALID');
+  assert.equal(result.content[0].text, INVALID_API_KEY_MESSAGE);
+  assert.equal(result.structuredContent?.code, 'CREDENTIAL_INVALID');
   assert.equal(backend.requests.some((request) => request.url === '/v2/search'), true);
 });
 

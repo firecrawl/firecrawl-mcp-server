@@ -130,6 +130,9 @@ async function startFakeExchangeApi(options = {}) {
       res.end(JSON.stringify(body));
     };
 
+    if (options.largeResult && (url.pathname === '/v2/search' || url.pathname.startsWith('/exchange/discover'))) return json(200, options.largeResult);
+    if (options.apiStatus) return json(options.apiStatus, { success: false, error: 'Invalid API key' });
+
     if (req.method === 'GET' && url.pathname === '/v2/keyless/eligibility') {
       return json(200, { eligible: keylessEligible });
     }
@@ -166,6 +169,7 @@ async function startFakeExchangeApi(options = {}) {
     }
 
     if (req.method === 'POST' && url.pathname === '/v2/scrape') {
+      if (options.largeResult) return json(200, options.largeResult);
       if (parsedBody.alexandria?.provider === 'firecrawl') return json(200, {success:true, data:{creditsCost:0, alexandria:[{provider:'firecrawl',capability:'find-tools',creditsCost:0,data:{level:'tools',items:[],total:4,next:{provider:'firecrawl',capability:'find-tools',options:{...parsedBody.alexandria.options, offset:4}}}}]}});
 
       if (parsedBody?.alexandria?.[0]?.provider === 'locked') {
@@ -1173,4 +1177,66 @@ test('OAuth-only local sessions advertise authenticated tool guidance', async (t
   const { init } = await startStdio(t, { FIRECRAWL_API_KEY: '', FIRECRAWL_OAUTH_TOKEN: 'fco_test-only', CLOUD_SERVICE: '', HTTP_STREAMABLE_SERVER: '' });
   assert.match(init.instructions, /firecrawl_find_tools/);
   assert.doesNotMatch(init.instructions, /Hosted keyless sessions expose/);
+});
+
+
+test('oversized execution stays bounded and reads selected fields without another provider call', async (t) => {
+  const { tokenCount } = await import('../dist/output-budget.js');
+  const rows = Array.from({ length: 2500 }, (_, id) => ({ id, description: 'long opportunity description '.repeat(40) }));
+  const { api, client } = await startStdioWithApi(t, { largeResult: { success: true, data: { rows } } });
+  const calls = [
+    ['firecrawl_scrape', { alexandria: [EXCHANGE_CALL] }],
+    ['firecrawl_search', { query: 'opportunities' }],
+    ['firecrawl_exchange_discover', { cohort: 'finance', expand: 'all' }],
+    ['firecrawl_find_tools', { providers: ['fred'], capabilities: ['series/observations'], expand: ['options', 'response', 'examples'] }],
+  ];
+  for (const [name, args] of calls) {
+    const response = await client.request('tools/call', { name, arguments: { ...args, maxOutputTokens: 1000 } });
+    const result = toolText(response);
+    assert.equal(result.truncated, true, name);
+    assert.ok(tokenCount(response.content[0].text) <= 1000, name);
+    assert.equal(api.requests.at(-1).body?.maxOutputTokens, undefined);
+    const read = toolText(await client.request('tools/call', { name: 'firecrawl_read_result', arguments: { resultId: result.resultId, path: '/data/rows/2499', fields: ['id'] } }));
+    assert.deepEqual(JSON.parse(read.content), { id: 2499 });
+  }
+  assert.equal(api.requests.length, calls.length);
+  assert.match(api.requests[2].url, /expand=all/);
+  assert.deepEqual(api.requests[3].body.alexandria.options.expand, ['options', 'response', 'examples']);
+});
+
+
+test('local environment API keys get actionable 401 recovery on discovery, search and execution', async (t) => {
+  const { api, client } = await startStdioWithApi(t, { apiStatus: 401 });
+  for (const [name, args] of [
+    ['firecrawl_search', { query: 'pizza' }],
+    ['firecrawl_exchange_discover', {}],
+    ['firecrawl_scrape', { alexandria: [EXCHANGE_CALL] }],
+    ['firecrawl_scrape', { url: 'https://example.com' }],
+  ]) {
+    const result = await client.request('tools/call', { name, arguments: args });
+    assert.equal(result.isError, true, name);
+    assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID', name);
+    assert.match(result.content[0].text, /Replace the key/);
+    assert.doesNotMatch(JSON.stringify(result), /fc-exchange-test/);
+  }
+  assert.equal(api.requests.length, 4);
+});
+
+test('stateless HTTP retained results are readable with the same key and isolated from another key', async (t) => {
+  const api = await startFakeExchangeApi({ largeResult: { success: true, data: { rows: 'record '.repeat(15000), marker: 'last field' } } });
+  t.after(() => api.close());
+  const port = await getFreePort();
+  const child = spawnServer({ CLOUD_SERVICE: 'false', HTTP_STREAMABLE_SERVER: 'true', FASTMCP_ENDPOINT: '/v2/mcp', FIRECRAWL_API_URL: api.url, FIRECRAWL_API_KEY: '', FIRECRAWL_OAUTH_TOKEN: '', HOST: '127.0.0.1', PORT: String(port) });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+  const call = async (key, name, args) => {
+    const response = await httpToolCall(port, { id: Math.random().toString(), headers: { 'x-firecrawl-api-key': key }, params: { name, arguments: args } });
+    return parseSseJson(await response.text()).result;
+  };
+  const result = toolText(await call('fc-alice', 'firecrawl_scrape', { alexandria: [EXCHANGE_CALL] }));
+  assert.equal(result.truncated, true);
+  const selected = toolText(await call('fc-alice', 'firecrawl_read_result', { resultId: result.resultId, path: '/data/marker' }));
+  assert.equal(JSON.parse(selected.content), 'last field');
+  assert.equal((await call('fc-bob', 'firecrawl_read_result', { resultId: result.resultId })).isError, true);
+  assert.equal(api.requests.length, 1);
 });
