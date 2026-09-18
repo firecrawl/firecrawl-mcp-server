@@ -995,12 +995,26 @@ const KEYLESS_PROFILE_INSTRUCTIONS = `Hosted keyless sessions expose firecrawl_s
 
 // The search surface exposes web/developer/research search only. Its instructions
 // and tool copy describe just those tools and stay neutral about how a client
-// uses them.
+// uses them. This text is what the Claude directory connector shows the model;
+// see the note on SEARCH_PROFILE_TOOLS below before changing it.
 const SEARCH_PROFILE_INSTRUCTIONS = `Firecrawl provides web, developer, and research search. Use firecrawl_search to find relevant results across the web and specialized indexes. For a programming question, firecrawl_developer_search searches indexed repositories, GitHub issues, merged pull requests, READMEs, and curated documentation sites and returns the matched passages, and skills: "only" narrows it to agent-skill files; firecrawl_search with categories: ["developer"] reaches the same index beside ordinary web results, returning the hits in the web group rather than as passages and offering no skills filter. For a biomedical, life-science, clinical, or arXiv literature question, the firecrawl_research_* tools search the paper index, while categories: ["research"] on firecrawl_search filters ordinary web results to research-affiliated websites. Use the firecrawl_research_* tools to search academic and research literature, expand from anchor papers via the citation graph, and read full-text passages from a specific paper. All tools are read-only and return ranked results.`;
 
 // The exact set of tools the search surface exposes. Registration is filtered
 // against this set, so anything not listed here can never appear on that
 // instance's tools/list or be called through it.
+//
+// Why this set is frozen: /v2/mcp-search is the Firecrawl connector in
+// Anthropic's Claude directory (https://claude.com/connectors/firecrawl). The
+// names below were agreed one by one with Anthropic's MCP review team in July
+// 2026, after they declined the full server as a web-scraping tool, and the
+// directory page lists them to users. Editing this set changes what Anthropic
+// reviewed and leaves the public listing wrong until someone updates it by
+// hand in the claude.ai submission portal. Before adding, removing, renaming,
+// or hiding anything here, tell partnerships (Noaa) so the listing and
+// Anthropic move at the same time. It has drifted twice: a seventh tool leaked
+// on during Anthropic's review (rolled back in #352, 2026-08-04), and a hidden
+// tool left the directory page advertising something the server no longer served
+// (#395, 2026-09-03). See docs/search-profile.md, "Why this surface exists".
 const SEARCH_PROFILE_TOOLS = new Set<string>([
   'firecrawl_search',
   'firecrawl_developer_search',

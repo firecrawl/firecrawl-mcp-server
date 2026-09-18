@@ -436,6 +436,8 @@ Returns matching passages or a notice when full text is unavailable.
   // Hidden from tools/list so new sessions never see it, still callable so a
   // session holding a cached tool list gets a pointer to the replacement
   // instead of an unknown-tool error. Same shape as firecrawl_extract.
+  // Hiding or removing a tool here also changes the Claude directory
+  // connector's tool list; see the note on SEARCH_PROFILE_TOOLS in index.ts.
   server.addTool({
     name: 'firecrawl_research_search_github',
     annotations: {
