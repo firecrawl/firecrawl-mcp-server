@@ -26,7 +26,7 @@ within the hour.
 
 It has drifted twice. On 2026-07-31 a seventh tool leaked onto the surface while
 Anthropic was reviewing it; they flagged the mismatch and #352 rolled it back.
-On 2026-09-03 #395 hid `firecrawl_research_search_github` and the store page
+On 2026-09-03 #395 hid `firecrawl_research_search_github` and the directory page
 kept advertising it for two weeks. The plan behind the surface is in
 firecrawl/firecrawl-integrations, `docs/mcp-marketplace-search-profile-plan.md`.
 
