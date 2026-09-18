@@ -986,7 +986,7 @@ const SEARCH_PROFILE_INSTRUCTIONS = `Firecrawl provides web, developer, and rese
 // or hiding anything here, tell partnerships (Noaa) so the listing and
 // Anthropic move at the same time. It has drifted twice: a seventh tool leaked
 // on during Anthropic's review (rolled back in #352, 2026-08-04), and a hidden
-// tool left the store page advertising something the server no longer served
+// tool left the directory page advertising something the server no longer served
 // (#395, 2026-09-03). See docs/search-profile.md, "Why this surface exists".
 const SEARCH_PROFILE_TOOLS = new Set<string>([
   'firecrawl_search',
