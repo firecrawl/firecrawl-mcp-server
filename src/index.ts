@@ -2223,7 +2223,7 @@ This tool operates on a known page. For a set of pages use \`firecrawl_crawl\`, 
 
 Firecrawl may reuse recently indexed content instead of refetching the page, and the reuse window varies by domain. Set \`maxAge: 0\` to force a live fetch, or a smaller \`maxAge\` to bound how stale reused content may be. A successful response does not by itself confirm that the state it describes is still current.
 
-Returns the selected content formats and page metadata. After evaluating an authenticated result, when \`firecrawl_feedback\` is available, submit feedback at most once with endpoint \`scrape\` and the result's \`metadata.scrapeId\` as \`jobId\`. Choose an honest \`good\`, \`partial\`, or \`bad\` rating and include specific evidence about what was useful, missing, or incorrect; do not infer quality from request success.
+Returns the selected content formats and page metadata.
 `,
   parameters: scrapeParamsSchema,
   execute: async (
@@ -2276,7 +2276,7 @@ server.addTool({
   description: `
 Enumerate URLs indexed under one website through Firecrawl without fetching each page's content. Use this when the request asks for a site's URL inventory, when several relevant pages must be located, or when the desired page URL is unknown. An optional \`search\` term narrows the URL list, while sitemap, subdomain, query-parameter, and result-limit options control coverage.
 
-Returns matching URLs rather than page bodies. Retrieve one page with \`firecrawl_scrape\`; collect content across multiple pages with \`firecrawl_crawl\`. After evaluating an authenticated result, when \`firecrawl_feedback\` is available, submit feedback at most once with endpoint \`map\` and the result's \`id\` as \`jobId\`. Choose an honest \`good\`, \`partial\`, or \`bad\` rating and include specific evidence about what was useful, missing, or incorrect; do not infer quality from request success.
+Returns matching URLs rather than page bodies. Retrieve one page with \`firecrawl_scrape\`; collect content across multiple pages with \`firecrawl_crawl\`.
 `,
   parameters: z.object({
     url: z.string().url(),
@@ -2320,7 +2320,7 @@ For a programming question, add \`categories: ["developer"]\`. It searches an in
 
 \`categories: ["research"]\` restricts these web results to research-affiliated websites and returns page snippets. The \`firecrawl_research_*\` tools are a separate surface that searches paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature.
 
-Each web result is a title, URL, and description, not the page. Add \`scrapeOptions\` to attach page content in the same call; those fetches ignore \`maxAge\`, so use \`firecrawl_scrape\` when you need a live fetch. Returns source-type result groups and usage metadata. After evaluating an authenticated result, when \`firecrawl_search_feedback\` is available, submit feedback at most once using the result's \`id\` as \`searchId\`. Choose an honest \`good\`, \`partial\`, or \`bad\` rating and include the evidence required by that tool; do not infer quality from request success.
+Each web result is a title, URL, and description, not the page. Add \`scrapeOptions\` to attach page content in the same call; those fetches ignore \`maxAge\`, so use \`firecrawl_scrape\` when you need a live fetch. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
 `,
   parameters: z
     .object({
@@ -3319,7 +3319,7 @@ Parse one supported document into markdown, HTML, links, summary, targeted answe
 
 Local MCP reads \`filePath\` from the server filesystem. Hosted MCP uses two calls: first provide \`filePath\` to receive upload instructions, upload locally, then call again with the returned \`uploadRef\`; do not send both fields together. Remote web URLs belong in \`firecrawl_scrape\`.
 
-Set \`redactPII\` to request redaction of personally identifiable information in the returned content. \`zeroDataRetention\` requires an eligible authenticated account; omit it for anonymous keyless use. Returns upload instructions for hosted phase one or parsed document content for the final call. After evaluating an authenticated final result, when \`firecrawl_feedback\` is available, submit feedback at most once with endpoint \`parse\` and the result's \`metadata.scrapeId\` as \`jobId\`. Choose an honest \`good\`, \`partial\`, or \`bad\` rating and include specific evidence about what was useful, missing, or incorrect; do not infer quality from request success.
+Set \`redactPII\` to request redaction of personally identifiable information in the returned content. \`zeroDataRetention\` requires an eligible authenticated account; omit it for anonymous keyless use. Returns upload instructions for hosted phase one or parsed document content for the final call.
 `,
   parameters: parseParamsSchema,
   execute: async (

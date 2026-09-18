@@ -974,11 +974,8 @@ Example log messages:
 
 The MCP server explicitly enables Firecrawl API response hints on its outbound
 requests with `X-Firecrawl-Agent-Hints: true`; the API leaves them disabled for
-ordinary callers. These hints contain result-dependent next-step guidance;
-static feedback instructions live in the Search, Scrape, Map, and Parse tool
-descriptions so clients can see the correct MCP tool and result identifier
-before making a request. When Firecrawl returns an optional `agent_hints`
-array of strings, JSON tool results preserve it in their existing text. MCP
+ordinary callers. When Firecrawl returns an optional `agent_hints` array of
+strings, JSON tool results preserve it in their existing text. MCP
 `structuredContent` contains `{ agent_hints }` metadata without duplicating
 large page bodies. Readable Developer and Research outputs keep their existing
 text and show hints in a
@@ -993,9 +990,7 @@ hint is not necessarily an MCP tool: this server currently has no Alexandria
 discovery or provider-execution tool, and the search-only profile excludes
 Scrape and feedback tools. Clients should use their advertised tool schemas and
 available capabilities. This change does not add tools, translate prose into
-tool calls, or submit feedback automatically. When feedback tools are available,
-their endpoint descriptions explain which result ID to pass and require an
-honest, evidence-based rating after evaluating the result.
+tool calls, or submit feedback automatically.
 
 **SDK prerequisite:** the pinned `@mendable/firecrawl-js` 4.25.2 discards outer
 envelope hints in high-level Scrape and Map responses and normalized SDK errors.

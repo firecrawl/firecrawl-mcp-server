@@ -12,7 +12,7 @@ import {
 
 const hints = [
   'Inspect the returned tool definitions if they cover the requested fields.',
-  'Use the selected tool definition to make the next request.',
+  'After evaluating this result, submit feedback using its operation ID.',
 ];
 
 test('JSON results expose identical hints to text and structured clients', () => {
