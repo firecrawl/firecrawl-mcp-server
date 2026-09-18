@@ -3,6 +3,7 @@ import { getEncoding } from 'js-tiktoken';
 export const DEFAULT_OUTPUT_TOKENS = 4000;
 export const MAX_OUTPUT_TOKENS = 16000;
 let encoding: ReturnType<typeof getEncoding> | undefined;
+let alternateEncoding: ReturnType<typeof getEncoding> | undefined;
 
 export function tokenCount(text: string): number {
   encoding ??= getEncoding('cl100k_base');
@@ -10,9 +11,17 @@ export function tokenCount(text: string): number {
 }
 
 export function fitsBudget(text: string, maxTokens: number): boolean {
-  const bytes = Buffer.byteLength(text);
-  if (bytes > maxTokens * 8) return false;
-  return bytes <= maxTokens || tokenCount(text) <= maxTokens;
+  if (Buffer.byteLength(text) > maxTokens * 8) return false;
+  const framed = JSON.stringify({
+    content: [{ type: 'text', text }],
+    isError: false,
+  });
+  // Reserve space for JSON-RPC framing; clients may expose serialized content.
+  const budget = maxTokens - 32;
+  if (Buffer.byteLength(framed) <= budget) return true;
+  if (tokenCount(framed) > budget) return false;
+  alternateEncoding ??= getEncoding('o200k_base');
+  return alternateEncoding.encode(framed, [], []).length <= budget;
 }
 
 export function compactJson(text: string): string {

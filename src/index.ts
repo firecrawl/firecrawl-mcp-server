@@ -7,7 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { createHash, randomUUID } from 'node:crypto';
 import { ResultStore } from './result-store';
-import { DEFAULT_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS } from './output-budget';
+import { DEFAULT_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS, fitsBudget } from './output-budget';
 import path from 'node:path';
 import { z } from 'zod';
 import {
@@ -1630,7 +1630,7 @@ const outputTokenSchema = z
   .max(MAX_OUTPUT_TOKENS)
   .optional()
   .describe(
-    'Inline response token budget (default 4000; cl100k_base). Larger results remain readable with firecrawl_read_result.'
+    'Response token budget (default 4000; cl100k_base/o200k_base, including framing). Larger results remain readable with firecrawl_read_result.'
   );
 
 function resultOwner(context: {
@@ -1767,31 +1767,55 @@ function guardHostedTool(
       }
       const runTool = async () => {
         const { maxOutputTokens, ...providerArgs } = args as Record<string, unknown>;
-        const result = await runWithCredentialRecovery(
-          () => execute(
-            tool.name === 'firecrawl_read_result' ? args : providerArgs,
-            invocationContext
-          ),
-          requestId,
-          invocationSession
-        );
-        if (tool.name === 'firecrawl_read_result' || result === undefined) return result;
+        const budget =
+          typeof maxOutputTokens === 'number'
+            ? maxOutputTokens
+            : DEFAULT_OUTPUT_TOKENS;
+        const bound = (text: string) =>
+          resultStore.bound(
+            text,
+            resultOwner(context),
+            budget,
+            !isHttpStreamingTransport() && process.env.CLOUD_SERVICE !== 'true'
+              ? process.env.FIRECRAWL_MCP_OUTPUT_DIR
+              : undefined,
+            providerArgs.zeroDataRetention !== true &&
+              (providerArgs.scrapeOptions as Record<string, unknown> | undefined)
+                ?.zeroDataRetention !== true
+          );
+        let result;
+        try {
+          result = await runWithCredentialRecovery(
+            () =>
+              execute(
+                tool.name === 'firecrawl_read_result' ? args : providerArgs,
+                invocationContext
+              ),
+            requestId,
+            invocationSession
+          );
+        } catch (error) {
+          if (error instanceof Error) {
+            const text = JSON.stringify({
+              message: error.message,
+              ...(error instanceof UserError ? { extras: error.extras } : {}),
+            });
+            if (!fitsBudget(text, budget)) throw new UserError(await bound(text));
+          }
+          throw error;
+        }
+        if (tool.name === 'firecrawl_read_result' || result === undefined)
+          return result;
         const text = typeof result === 'string' ? result : JSON.stringify(result);
-        const bounded = await resultStore.bound(
-          text,
-          resultOwner(context),
-          typeof maxOutputTokens === 'number' ? maxOutputTokens : DEFAULT_OUTPUT_TOKENS,
-          !isHttpStreamingTransport() && process.env.CLOUD_SERVICE !== 'true'
-            ? process.env.FIRECRAWL_MCP_OUTPUT_DIR
-            : undefined,
-          providerArgs.zeroDataRetention !== true &&
-            (providerArgs.scrapeOptions as Record<string, unknown> | undefined)?.zeroDataRetention !== true
-        );
+        const bounded = await bound(text);
         if (bounded === text) return result;
         if (typeof result === 'string') return bounded;
         return {
           content: [{ type: 'text' as const, text: bounded }],
-          isError: typeof result === 'object' && result !== null && 'isError' in result ? Boolean(result.isError) : false,
+          isError:
+            typeof result === 'object' && result !== null && 'isError' in result
+              ? Boolean(result.isError)
+              : false,
         };
       };
       if (!logActions) return runTool();

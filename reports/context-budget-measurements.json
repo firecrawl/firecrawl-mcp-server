@@ -1,0 +1,824 @@
+{
+  "fixtureOnly": true,
+  "tokenizerNote": "Budgets enforce cl100k_base and o200k_base including MCP content framing; neither is an Anthropic tokenizer.",
+  "matrix": [
+    {
+      "fixture": "batch-72KB",
+      "budget": 512,
+      "input": {
+        "bytes": 72448,
+        "cl100k": 11674,
+        "o200k": 11675
+      },
+      "output": {
+        "bytes": 2033,
+        "cl100k": 409,
+        "o200k": 409
+      },
+      "selected": {
+        "bytes": 194,
+        "cl100k": 72,
+        "o200k": 74
+      },
+      "medianMs": 15.75,
+      "maxMs": 556.93
+    },
+    {
+      "fixture": "batch-72KB",
+      "budget": 1000,
+      "input": {
+        "bytes": 72448,
+        "cl100k": 11674,
+        "o200k": 11675
+      },
+      "output": {
+        "bytes": 4621,
+        "cl100k": 828,
+        "o200k": 828
+      },
+      "selected": {
+        "bytes": 194,
+        "cl100k": 72,
+        "o200k": 74
+      },
+      "medianMs": 19.34,
+      "maxMs": 22.75
+    },
+    {
+      "fixture": "batch-72KB",
+      "budget": 4000,
+      "input": {
+        "bytes": 72448,
+        "cl100k": 11674,
+        "o200k": 11675
+      },
+      "output": {
+        "bytes": 20844,
+        "cl100k": 3420,
+        "o200k": 3422
+      },
+      "selected": {
+        "bytes": 194,
+        "cl100k": 72,
+        "o200k": 75
+      },
+      "medianMs": 69.13,
+      "maxMs": 81.46
+    },
+    {
+      "fixture": "batch-72KB",
+      "budget": 16000,
+      "input": {
+        "bytes": 72448,
+        "cl100k": 11674,
+        "o200k": 11675
+      },
+      "output": {
+        "bytes": 72448,
+        "cl100k": 11674,
+        "o200k": 11675
+      },
+      "medianMs": 11.04,
+      "maxMs": 11.57
+    },
+    {
+      "fixture": "search-144KB",
+      "budget": 512,
+      "input": {
+        "bytes": 144950,
+        "cl100k": 23236,
+        "o200k": 23237
+      },
+      "output": {
+        "bytes": 2127,
+        "cl100k": 424,
+        "o200k": 424
+      },
+      "selected": {
+        "bytes": 196,
+        "cl100k": 73,
+        "o200k": 75
+      },
+      "medianMs": 6.83,
+      "maxMs": 8.04
+    },
+    {
+      "fixture": "search-144KB",
+      "budget": 1000,
+      "input": {
+        "bytes": 144950,
+        "cl100k": 23236,
+        "o200k": 23237
+      },
+      "output": {
+        "bytes": 4865,
+        "cl100k": 866,
+        "o200k": 866
+      },
+      "selected": {
+        "bytes": 196,
+        "cl100k": 73,
+        "o200k": 75
+      },
+      "medianMs": 11.65,
+      "maxMs": 12.83
+    },
+    {
+      "fixture": "search-144KB",
+      "budget": 4000,
+      "input": {
+        "bytes": 144950,
+        "cl100k": 23236,
+        "o200k": 23237
+      },
+      "output": {
+        "bytes": 21912,
+        "cl100k": 3584,
+        "o200k": 3584
+      },
+      "selected": {
+        "bytes": 196,
+        "cl100k": 71,
+        "o200k": 73
+      },
+      "medianMs": 49.82,
+      "maxMs": 56.14
+    },
+    {
+      "fixture": "search-144KB",
+      "budget": 16000,
+      "input": {
+        "bytes": 144950,
+        "cl100k": 23236,
+        "o200k": 23237
+      },
+      "output": {
+        "bytes": 90069,
+        "cl100k": 14466,
+        "o200k": 14466
+      },
+      "selected": {
+        "bytes": 196,
+        "cl100k": 73,
+        "o200k": 75
+      },
+      "medianMs": 217.45,
+      "maxMs": 246.61
+    },
+    {
+      "fixture": "jobs-431KB",
+      "budget": 512,
+      "input": {
+        "bytes": 432692,
+        "cl100k": 70486,
+        "o200k": 70487
+      },
+      "output": {
+        "bytes": 2117,
+        "cl100k": 424,
+        "o200k": 424
+      },
+      "selected": {
+        "bytes": 194,
+        "cl100k": 72,
+        "o200k": 74
+      },
+      "medianMs": 6.96,
+      "maxMs": 8.1
+    },
+    {
+      "fixture": "jobs-431KB",
+      "budget": 1000,
+      "input": {
+        "bytes": 432692,
+        "cl100k": 70486,
+        "o200k": 70487
+      },
+      "output": {
+        "bytes": 4812,
+        "cl100k": 862,
+        "o200k": 862
+      },
+      "selected": {
+        "bytes": 194,
+        "cl100k": 69,
+        "o200k": 71
+      },
+      "medianMs": 11.53,
+      "maxMs": 12.31
+    },
+    {
+      "fixture": "jobs-431KB",
+      "budget": 4000,
+      "input": {
+        "bytes": 432692,
+        "cl100k": 70486,
+        "o200k": 70487
+      },
+      "output": {
+        "bytes": 21552,
+        "cl100k": 3586,
+        "o200k": 3586
+      },
+      "selected": {
+        "bytes": 194,
+        "cl100k": 73,
+        "o200k": 75
+      },
+      "medianMs": 51.51,
+      "maxMs": 57.25
+    },
+    {
+      "fixture": "jobs-431KB",
+      "budget": 16000,
+      "input": {
+        "bytes": 432692,
+        "cl100k": 70486,
+        "o200k": 70487
+      },
+      "output": {
+        "bytes": 88611,
+        "cl100k": 14462,
+        "o200k": 14462
+      },
+      "selected": {
+        "bytes": 194,
+        "cl100k": 70,
+        "o200k": 72
+      },
+      "medianMs": 242.7,
+      "maxMs": 424.83
+    },
+    {
+      "fixture": "contracts-1.14MB",
+      "budget": 512,
+      "input": {
+        "bytes": 1143986,
+        "cl100k": 195114,
+        "o200k": 195115
+      },
+      "output": {
+        "bytes": 2025,
+        "cl100k": 423,
+        "o200k": 423
+      },
+      "selected": {
+        "bytes": 202,
+        "cl100k": 75,
+        "o200k": 77
+      },
+      "medianMs": 8.29,
+      "maxMs": 11.2
+    },
+    {
+      "fixture": "contracts-1.14MB",
+      "budget": 1000,
+      "input": {
+        "bytes": 1143986,
+        "cl100k": 195114,
+        "o200k": 195115
+      },
+      "output": {
+        "bytes": 4699,
+        "cl100k": 881,
+        "o200k": 881
+      },
+      "selected": {
+        "bytes": 202,
+        "cl100k": 77,
+        "o200k": 79
+      },
+      "medianMs": 13.62,
+      "maxMs": 14.91
+    },
+    {
+      "fixture": "contracts-1.14MB",
+      "budget": 4000,
+      "input": {
+        "bytes": 1143986,
+        "cl100k": 195114,
+        "o200k": 195115
+      },
+      "output": {
+        "bytes": 21068,
+        "cl100k": 3658,
+        "o200k": 3658
+      },
+      "selected": {
+        "bytes": 202,
+        "cl100k": 76,
+        "o200k": 78
+      },
+      "medianMs": 44.99,
+      "maxMs": 60.13
+    },
+    {
+      "fixture": "contracts-1.14MB",
+      "budget": 16000,
+      "input": {
+        "bytes": 1143986,
+        "cl100k": 195114,
+        "o200k": 195115
+      },
+      "output": {
+        "bytes": 86388,
+        "cl100k": 14763,
+        "o200k": 14763
+      },
+      "selected": {
+        "bytes": 202,
+        "cl100k": 78,
+        "o200k": 80
+      },
+      "medianMs": 213.09,
+      "maxMs": 223.71
+    },
+    {
+      "fixture": "opportunities-2.5MB",
+      "budget": 512,
+      "input": {
+        "bytes": 2510398,
+        "cl100k": 370296,
+        "o200k": 338473
+      },
+      "output": {
+        "bytes": 2290,
+        "cl100k": 426,
+        "o200k": 405
+      },
+      "selected": {
+        "bytes": 205,
+        "cl100k": 76,
+        "o200k": 77
+      },
+      "medianMs": 12.56,
+      "maxMs": 18.63
+    },
+    {
+      "fixture": "opportunities-2.5MB",
+      "budget": 1000,
+      "input": {
+        "bytes": 2510398,
+        "cl100k": 370296,
+        "o200k": 338473
+      },
+      "output": {
+        "bytes": 5330,
+        "cl100k": 872,
+        "o200k": 810
+      },
+      "selected": {
+        "bytes": 205,
+        "cl100k": 77,
+        "o200k": 77
+      },
+      "medianMs": 27.26,
+      "maxMs": 30.58
+    },
+    {
+      "fixture": "opportunities-2.5MB",
+      "budget": 4000,
+      "input": {
+        "bytes": 2510398,
+        "cl100k": 370296,
+        "o200k": 338473
+      },
+      "output": {
+        "bytes": 23857,
+        "cl100k": 3591,
+        "o200k": 3299
+      },
+      "selected": {
+        "bytes": 205,
+        "cl100k": 75,
+        "o200k": 76
+      },
+      "medianMs": 99.57,
+      "maxMs": 104.45
+    },
+    {
+      "fixture": "opportunities-2.5MB",
+      "budget": 16000,
+      "input": {
+        "bytes": 2510398,
+        "cl100k": 370296,
+        "o200k": 338473
+      },
+      "output": {
+        "bytes": 98208,
+        "cl100k": 14500,
+        "o200k": 13274
+      },
+      "selected": {
+        "bytes": 205,
+        "cl100k": 79,
+        "o200k": 80
+      },
+      "medianMs": 426.2,
+      "maxMs": 446.06
+    },
+    {
+      "fixture": "unicode-72KB",
+      "budget": 512,
+      "input": {
+        "bytes": 72650,
+        "cl100k": 22792,
+        "o200k": 11561
+      },
+      "output": {
+        "bytes": 1407,
+        "cl100k": 426,
+        "o200k": 311
+      },
+      "selected": {
+        "bytes": 196,
+        "cl100k": 72,
+        "o200k": 74
+      },
+      "medianMs": 11.9,
+      "maxMs": 12.71
+    },
+    {
+      "fixture": "unicode-72KB",
+      "budget": 1000,
+      "input": {
+        "bytes": 72650,
+        "cl100k": 22792,
+        "o200k": 11561
+      },
+      "output": {
+        "bytes": 2872,
+        "cl100k": 886,
+        "o200k": 546
+      },
+      "selected": {
+        "bytes": 196,
+        "cl100k": 73,
+        "o200k": 75
+      },
+      "medianMs": 25.25,
+      "maxMs": 27
+    },
+    {
+      "fixture": "unicode-72KB",
+      "budget": 4000,
+      "input": {
+        "bytes": 72650,
+        "cl100k": 22792,
+        "o200k": 11561
+      },
+      "output": {
+        "bytes": 11927,
+        "cl100k": 3714,
+        "o200k": 1986
+      },
+      "selected": {
+        "bytes": 196,
+        "cl100k": 77,
+        "o200k": 79
+      },
+      "medianMs": 117.64,
+      "maxMs": 131.99
+    },
+    {
+      "fixture": "unicode-72KB",
+      "budget": 16000,
+      "input": {
+        "bytes": 72650,
+        "cl100k": 22792,
+        "o200k": 11561
+      },
+      "output": {
+        "bytes": 48272,
+        "cl100k": 14990,
+        "o200k": 7720
+      },
+      "selected": {
+        "bytes": 196,
+        "cl100k": 70,
+        "o200k": 72
+      },
+      "medianMs": 647.09,
+      "maxMs": 681.36
+    },
+    {
+      "fixture": "escaped-72KB",
+      "budget": 512,
+      "input": {
+        "bytes": 72776,
+        "cl100k": 25774,
+        "o200k": 28319
+      },
+      "output": {
+        "bytes": 1166,
+        "cl100k": 384,
+        "o200k": 398
+      },
+      "selected": {
+        "bytes": 196,
+        "cl100k": 74,
+        "o200k": 76
+      },
+      "medianMs": 13.76,
+      "maxMs": 14.26
+    },
+    {
+      "fixture": "escaped-72KB",
+      "budget": 1000,
+      "input": {
+        "bytes": 72776,
+        "cl100k": 25774,
+        "o200k": 28319
+      },
+      "output": {
+        "bytes": 2204,
+        "cl100k": 753,
+        "o200k": 797
+      },
+      "selected": {
+        "bytes": 196,
+        "cl100k": 70,
+        "o200k": 72
+      },
+      "medianMs": 30.48,
+      "maxMs": 31.5
+    },
+    {
+      "fixture": "escaped-72KB",
+      "budget": 4000,
+      "input": {
+        "bytes": 72776,
+        "cl100k": 25774,
+        "o200k": 28319
+      },
+      "output": {
+        "bytes": 8487,
+        "cl100k": 3018,
+        "o200k": 3235
+      },
+      "selected": {
+        "bytes": 196,
+        "cl100k": 70,
+        "o200k": 73
+      },
+      "medianMs": 148.24,
+      "maxMs": 162.68
+    },
+    {
+      "fixture": "escaped-72KB",
+      "budget": 16000,
+      "input": {
+        "bytes": 72776,
+        "cl100k": 25774,
+        "o200k": 28319
+      },
+      "output": {
+        "bytes": 33688,
+        "cl100k": 12112,
+        "o200k": 13017
+      },
+      "selected": {
+        "bytes": 196,
+        "cl100k": 72,
+        "o200k": 74
+      },
+      "medianMs": 788.7,
+      "maxMs": 972.16
+    }
+  ],
+  "transport": [
+    {
+      "version": "baseline",
+      "kind": "tools/list",
+      "tools": 31,
+      "bytes": 46428,
+      "cl100k": 10660,
+      "o200k": 10936,
+      "largestTools": [
+        {
+          "name": "firecrawl_scrape",
+          "tokens": 1379
+        },
+        {
+          "name": "firecrawl_search",
+          "tokens": 1376
+        },
+        {
+          "name": "firecrawl_crawl",
+          "tokens": 878
+        },
+        {
+          "name": "firecrawl_interact",
+          "tokens": 798
+        },
+        {
+          "name": "firecrawl_feedback",
+          "tokens": 561
+        },
+        {
+          "name": "firecrawl_parse",
+          "tokens": 534
+        }
+      ],
+      "instructionTokens": 591
+    },
+    {
+      "version": "baseline",
+      "kind": "firecrawl_search",
+      "error": false,
+      "isError": false,
+      "text": {
+        "bytes": 2627113,
+        "cl100k": 402135,
+        "o200k": 370311
+      },
+      "wire": {
+        "bytes": 2666949,
+        "cl100k": 420718,
+        "o200k": 388896
+      },
+      "structuredContentTokens": 0,
+      "ms": 38.42
+    },
+    {
+      "version": "baseline",
+      "kind": "firecrawl_exchange_discover",
+      "error": false,
+      "isError": false,
+      "text": {
+        "bytes": 2627113,
+        "cl100k": 402135,
+        "o200k": 370311
+      },
+      "wire": {
+        "bytes": 2666949,
+        "cl100k": 420718,
+        "o200k": 388896
+      },
+      "structuredContentTokens": 0,
+      "ms": 45.09
+    },
+    {
+      "version": "baseline",
+      "kind": "firecrawl_scrape",
+      "error": false,
+      "isError": false,
+      "text": {
+        "bytes": 2627134,
+        "cl100k": 402158,
+        "o200k": 370334
+      },
+      "wire": {
+        "bytes": 2666970,
+        "cl100k": 420741,
+        "o200k": 388919
+      },
+      "structuredContentTokens": 0,
+      "ms": 15.59
+    },
+    {
+      "version": "baseline",
+      "kind": "firecrawl_scrape",
+      "error": true,
+      "isError": true,
+      "text": {
+        "bytes": 180097,
+        "cl100k": 30039,
+        "o200k": 30039
+      },
+      "wire": {
+        "bytes": 360274,
+        "cl100k": 60098,
+        "o200k": 60100
+      },
+      "structuredContentTokens": 30041,
+      "ms": 11.04
+    },
+    {
+      "version": "current",
+      "kind": "tools/list",
+      "tools": 32,
+      "bytes": 49707,
+      "cl100k": 11515,
+      "o200k": 11808,
+      "largestTools": [
+        {
+          "name": "firecrawl_scrape",
+          "tokens": 1396
+        },
+        {
+          "name": "firecrawl_search",
+          "tokens": 1393
+        },
+        {
+          "name": "firecrawl_crawl",
+          "tokens": 895
+        },
+        {
+          "name": "firecrawl_interact",
+          "tokens": 815
+        },
+        {
+          "name": "firecrawl_feedback",
+          "tokens": 578
+        },
+        {
+          "name": "firecrawl_parse",
+          "tokens": 551
+        }
+      ],
+      "instructionTokens": 591
+    },
+    {
+      "version": "current",
+      "kind": "firecrawl_search",
+      "error": false,
+      "isError": false,
+      "text": {
+        "bytes": 23802,
+        "cl100k": 3592,
+        "o200k": 3301
+      },
+      "wire": {
+        "bytes": 24397,
+        "cl100k": 3963,
+        "o200k": 3674
+      },
+      "structuredContentTokens": 0,
+      "ms": 849.7
+    },
+    {
+      "version": "current",
+      "kind": "firecrawl_exchange_discover",
+      "error": false,
+      "isError": false,
+      "text": {
+        "bytes": 23876,
+        "cl100k": 3592,
+        "o200k": 3300
+      },
+      "wire": {
+        "bytes": 24471,
+        "cl100k": 3963,
+        "o200k": 3673
+      },
+      "structuredContentTokens": 0,
+      "ms": 111.07
+    },
+    {
+      "version": "current",
+      "kind": "firecrawl_scrape",
+      "error": false,
+      "isError": false,
+      "text": {
+        "bytes": 23818,
+        "cl100k": 3592,
+        "o200k": 3300
+      },
+      "wire": {
+        "bytes": 24413,
+        "cl100k": 3963,
+        "o200k": 3673
+      },
+      "structuredContentTokens": 0,
+      "ms": 119.46
+    },
+    {
+      "version": "current",
+      "kind": "firecrawl_scrape",
+      "error": true,
+      "isError": true,
+      "text": {
+        "bytes": 23181,
+        "cl100k": 3945,
+        "o200k": 3945
+      },
+      "wire": {
+        "bytes": 23287,
+        "cl100k": 3967,
+        "o200k": 3968
+      },
+      "structuredContentTokens": 0,
+      "ms": 43.43
+    }
+  ],
+  "failureModes": {
+    "crossInstance": "Not recoverable: process-local storage; no provider rerun",
+    "crossOwner": "Rejected"
+  },
+  "fullRead": {
+    "fixture": "batch-72KB",
+    "calls": 4,
+    "totalTokens": 12237,
+    "originalTokens": 11674,
+    "lossless": true
+  },
+  "apiCalls": 8,
+  "memory": {
+    "rss": 227459072,
+    "heapTotal": 457555968,
+    "heapUsed": 368210024,
+    "external": 12369931,
+    "arrayBuffers": 3051603
+  }
+}

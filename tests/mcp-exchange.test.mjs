@@ -1240,3 +1240,15 @@ test('stateless HTTP retained results are readable with the same key and isolate
   assert.equal((await call('fc-bob', 'firecrawl_read_result', { resultId: result.resultId })).isError, true);
   assert.equal(api.requests.length, 1);
 });
+
+test('oversized provider errors are bounded without duplicated structured content', async (t) => {
+  const { tokenCount } = await import('../dist/output-budget.js');
+  const { client } = await startStdioWithApi(t, { searchRefusal: 'Provider failed. '.repeat(12000) });
+  const result = await client.request('tools/call', { name: 'firecrawl_search', arguments: { query: 'fixture', sources: ['alexandria'], maxOutputTokens: 1000 } });
+  assert.equal(result.isError, true);
+  assert.ok(tokenCount(JSON.stringify(result)) <= 1000);
+  assert.equal(result.structuredContent, undefined);
+  const retained = JSON.parse(result.content[0].text);
+  assert.equal(retained.truncated, true);
+  assert.ok(retained.resultId);
+});

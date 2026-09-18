@@ -95,3 +95,94 @@ test('explicit ZDR never retains or writes the full result', async () => {
   assert.equal(result.next, undefined);
   assert.match(result.message, /Zero Data Retention/);
 });
+
+test('budget matrix bounds serialized MCP envelopes across tokenizers and adversarial text', async () => {
+  const { getEncoding } = await import('js-tiktoken');
+  const alternate = getEncoding('o200k_base');
+  const samples = [
+    '東京 中文 العربية 😀 🔥 ',
+    '\\path\\file "quote"\n\t',
+    '<|endoftext|> <|fim_prefix|>',
+    '0123456789abcdef-_=+{}[]',
+    'one long natural-language description with links https://example.com/a/b?c=d&x=y ',
+  ];
+  for (const maxOutputTokens of [512, 1000, 4000, 16000]) {
+    for (const sample of samples) {
+      const store = new ResultStore();
+      const text = JSON.stringify({ 'a/b': { '~key': sample.repeat(2500) } });
+      const raw = await store.bound(text, 'owner', maxOutputTokens);
+      const frame = JSON.stringify({
+        content: [{ type: 'text', text: raw }],
+        isError: false,
+      });
+      assert.ok(tokenCount(frame) <= maxOutputTokens);
+      assert.ok(alternate.encode(frame, [], []).length <= maxOutputTokens);
+      const first = JSON.parse(raw);
+      if (first.resultId) {
+        const selected = store.read('owner', {
+          resultId: first.resultId,
+          path: '/a~1b/~0key',
+          maxOutputTokens,
+        });
+        const selectedFrame = JSON.stringify({
+          content: [{ type: 'text', text: selected }],
+          isError: false,
+        });
+        assert.ok(tokenCount(selectedFrame) <= maxOutputTokens);
+        assert.ok(
+          alternate.encode(selectedFrame, [], []).length <= maxOutputTokens
+        );
+      }
+    }
+  }
+});
+
+test('capacity eviction, failed file writes and concurrent owners fail safely', async () => {
+  const store = new ResultStore(25000);
+  const first = JSON.parse(
+    await store.bound('first '.repeat(2500), 'one', 512)
+  );
+  const second = JSON.parse(
+    await store.bound('second '.repeat(2500), 'two', 512)
+  );
+  assert.throws(
+    () => store.read('one', { resultId: first.resultId }),
+    /unavailable/
+  );
+  assert.ok(store.read('two', { resultId: second.resultId }));
+  const failedFile = JSON.parse(
+    await store.bound(
+      'third '.repeat(2500),
+      'three',
+      512,
+      '/dev/null/not-a-directory'
+    )
+  );
+  assert.match(failedFile.fileWarning, /failed/);
+  assert.ok(store.read('three', { resultId: failedFile.resultId }));
+  const shared = new ResultStore();
+  const responses = await Promise.all(
+    Array.from({ length: 8 }, (_, id) =>
+      shared.bound(
+        JSON.stringify({ id, text: 'body '.repeat(1000) }),
+        String(id),
+        512
+      )
+    )
+  );
+  responses.forEach((response, id) => {
+    const result = JSON.parse(response);
+    assert.equal(
+      JSON.parse(
+        JSON.parse(
+          shared.read(String(id), { resultId: result.resultId, path: '/id' })
+        ).content
+      ),
+      id
+    );
+    assert.throws(
+      () => shared.read(String(id + 1), { resultId: result.resultId }),
+      /unavailable/
+    );
+  });
+});

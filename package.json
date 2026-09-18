@@ -23,7 +23,8 @@
     "format": "prettier --write .",
     "prepare": "npm run build",
     "publish-prod": "npm run build && npm publish",
-    "publish-beta": "npm run build && npm publish --tag beta"
+    "publish-beta": "npm run build && npm publish --tag beta",
+    "measure:context": "npm run build && node scripts/measure-context.mjs"
   },
   "license": "MIT",
   "dependencies": {

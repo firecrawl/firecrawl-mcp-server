@@ -1168,7 +1168,7 @@ MIT License - see LICENSE file for details
 
 ### Response budgets
 
-Tool responses default to a 4,000-token inline budget, measured with `cl100k_base` (other models tokenize differently). Set `maxOutputTokens` from 512 to 16,000 per call. JSON is compacted before offloading. Expanded discovery, examples, and full contracts remain available.
+Tool responses default to a 4,000-token budget checked against both `cl100k_base` and `o200k_base`, including the serialized MCP content envelope and a small JSON-RPC reserve. Other models tokenize differently. Set `maxOutputTokens` from 512 to 16,000 per call. JSON is compacted before offloading. Expanded discovery, examples, and full contracts remain available.
 
 Oversized responses return `truncated: true`, a preview, and a `resultId`. Use `firecrawl_read_result` with that ID and a JSON Pointer `path` such as `/data/tools/0`; optional `fields` selects record fields. Follow `next` for further chunks. These reads do not call the provider again. Read only the portions needed, rather than loading all chunks into the conversation.
 
@@ -1177,3 +1177,6 @@ Results are retained in a bounded 64 MiB process-local cache for up to 15 minute
 Local stdio users can set `FIRECRAWL_MCP_OUTPUT_DIR` to also save oversized original results as private files. Hosted MCP cannot write to a client's filesystem. A client with filesystem tools can save retrieved chunks itself. Local output files are retained until the user removes them.
 
 Requests with explicit `zeroDataRetention: true` do not retain results or write files. Oversized ZDR output is explicitly marked as preview-only; use narrower inputs or a larger inline budget. Multi-replica hosted deployment needs shared result storage before relying on follow-up reads across replicas.
+
+
+Run `npm run measure:context` for synthetic response-size, projection, continuation, wire-output and tool-schema measurements. It uses a local fake API, requires no real key, and makes no paid provider calls. Set `MCP_BASELINE_DIR` to a built older checkout for before/after comparisons. Results are written to `reports/context-budget-measurements.json`; see `reports/context-budget-measurements.md` for the measured scope and limitations.
