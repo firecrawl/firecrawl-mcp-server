@@ -154,6 +154,30 @@ Add this to your `./codeium/windsurf/model_config.json`:
 }
 ```
 
+### Running on Kiro
+
+For one-click installation, click the install button below and confirm the server in the dialog Kiro shows before it writes your configuration:
+
+[![Add to Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/mcp/add?name=firecrawl-mcp&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22firecrawl-mcp%22%5D%2C%22env%22%3A%7B%22FIRECRAWL_API_KEY%22%3A%22YOUR-API-KEY%22%7D%7D)
+
+For manual installation, follow the MCP Servers [documentation](https://kiro.dev/docs/mcp/) and add the following to your Kiro MCP config (JSON):
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR-API-KEY"
+      }
+    }
+  }
+}
+```
+
+Replace `YOUR-API-KEY` with your Firecrawl API key from https://www.firecrawl.dev/app/api-keys
+
 ### Running with Streamable HTTP Local Mode
 
 To run the server using Streamable HTTP locally instead of the default stdio transport:
