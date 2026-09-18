@@ -891,8 +891,16 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     /request identifies a page and needs its content or defined fields/i
   );
   assert.match(
+    byName.get('firecrawl_scrape').description,
+    /firecrawl_feedback.*endpoint `scrape`.*`metadata\.scrapeId` as `jobId`.*honest.*specific evidence.*do not infer quality from request success/is
+  );
+  assert.match(
     byName.get('firecrawl_map').description,
     /returns matching URLs rather than page bodies/i
+  );
+  assert.match(
+    byName.get('firecrawl_map').description,
+    /firecrawl_feedback.*endpoint `map`.*result's `id` as `jobId`.*honest.*specific evidence.*do not infer quality from request success/is
   );
   assert.match(
     byName.get('firecrawl_agent').description,
@@ -909,6 +917,14 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.match(
     byName.get('firecrawl_search').description,
     /each web result is a title, URL, and description, not the page.*scrapeOptions.*ignore `maxAge`.*firecrawl_scrape/is
+  );
+  assert.match(
+    byName.get('firecrawl_search').description,
+    /firecrawl_search_feedback.*result's `id` as `searchId`.*honest.*evidence required by that tool.*do not infer quality from request success/is
+  );
+  assert.match(
+    byName.get('firecrawl_parse').description,
+    /firecrawl_feedback.*endpoint `parse`.*`metadata\.scrapeId` as `jobId`.*honest.*specific evidence.*do not infer quality from request success/is
   );
   assert.match(
     byName.get('firecrawl_search_feedback').description,
@@ -1035,7 +1051,7 @@ test('local keyless stdio keeps profile guidance keyless-scoped and omits feedba
   assert.ok(search);
   assert.match(
     search.description,
-    /authenticated responses can include an `id` for optional search feedback/i
+    /authenticated result.*when `firecrawl_search_feedback` is available.*result's `id` as `searchId`/is
   );
 });
 
