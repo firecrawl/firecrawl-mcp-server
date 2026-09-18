@@ -8,6 +8,14 @@ import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { z } from 'zod';
+import {
+  agentHintsText,
+  formatApiResult,
+  preserveAgentHints,
+  readAgentHints,
+  readErrorAgentHints,
+  type ApiToolResult,
+} from './agent-hints';
 import { registerDeveloperTools } from './developer';
 import { extractSingleTrustedClientIp } from './keyless-client-ip';
 import { registerMonitorTools } from './monitor';
@@ -137,7 +145,9 @@ function isFirecrawlApiKey(token: string): boolean {
 }
 
 function isLegacyKeyPathRequest(request: MCPAuthRequest | undefined): boolean {
-  return normalizeHeader(request?.headers?.['x-firecrawl-key-transport']) === 'path';
+  return (
+    normalizeHeader(request?.headers?.['x-firecrawl-key-transport']) === 'path'
+  );
 }
 
 function requestShouldReceiveOAuthChallenge(
@@ -174,15 +184,15 @@ function isHttpStreamingTransport(): boolean {
 const DEFAULT_OAUTH_ISSUER = 'https://www.firecrawl.dev';
 const DEFAULT_MCP_RESOURCE_URL = 'https://mcp.firecrawl.dev/v2/mcp';
 const DEFAULT_MCP_OAUTH_RESOURCE_URL = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
-const DEFAULT_MCP_SEARCH_RESOURCE_URL = 'https://mcp.firecrawl.dev/v2/mcp-search';
+const DEFAULT_MCP_SEARCH_RESOURCE_URL =
+  'https://mcp.firecrawl.dev/v2/mcp-search';
 const DEFAULT_MCP_SEARCH_ENDPOINT = '/v2/mcp-search';
 
 // Human-facing guidance values, co-located with the resource defaults above.
 // MCP_CONNECTION_GUIDE_URL stays a stable, neutral entry point even while the
 // docs routing evolves; do not bind recovery payloads to an auth-mode leaf
 // page. It is a human-facing guide, not an MCP endpoint.
-const MCP_CONNECTION_GUIDE_URL =
-  'https://docs.firecrawl.dev/mcp-server';
+const MCP_CONNECTION_GUIDE_URL = 'https://docs.firecrawl.dev/mcp-server';
 
 function withoutTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
@@ -254,7 +264,9 @@ function createOAuthChallengeResponse(
     error instanceof Error ? error.message : String(error || 'Unauthorized');
   // WWW-Authenticate is one header. Flatten CR/LF so a multiline JSON
   // message cannot split the header value.
-  const wwwAuthenticateDescription = errorMessage.replace(/[\r\n]+/g, ' ').trim();
+  const wwwAuthenticateDescription = errorMessage
+    .replace(/[\r\n]+/g, ' ')
+    .trim();
   const wwwAuthenticate = [
     ...(profile.advertiseOAuth
       ? [
@@ -281,7 +293,9 @@ function createOAuthChallengeResponse(
   );
 }
 
-function createInvalidCredentialResponse(_error: InvalidFirecrawlCredentialError): Response {
+function createInvalidCredentialResponse(
+  _error: InvalidFirecrawlCredentialError
+): Response {
   const recovery = invalidApiKeyRecoveryPayload();
   return new Response(
     JSON.stringify({
@@ -354,7 +368,9 @@ function isMcpOAuthEnabled(): boolean {
 
 type OAuthCredentialPurpose = 'general' | 'hosted_mcp_oauth';
 
-function isOAuthCredentialPurpose(value: unknown): value is OAuthCredentialPurpose {
+function isOAuthCredentialPurpose(
+  value: unknown
+): value is OAuthCredentialPurpose {
   return value === 'general' || value === 'hosted_mcp_oauth';
 }
 
@@ -385,7 +401,9 @@ type ResolvedCredential = {
 
 class InvalidFirecrawlCredentialError extends Error {
   constructor() {
-    super('The supplied Firecrawl credential is invalid or revoked. Replace it and retry.');
+    super(
+      'The supplied Firecrawl credential is invalid or revoked. Replace it and retry.'
+    );
     this.name = 'InvalidFirecrawlCredentialError';
   }
 }
@@ -414,7 +432,9 @@ function audienceMatchesResource(
   return values(aud).some((entry) => withoutTrailingSlash(entry) === target);
 }
 
-function credentialMetadata(data: OAuthIntrospectionResponse): CredentialMetadata {
+function credentialMetadata(
+  data: OAuthIntrospectionResponse
+): CredentialMetadata {
   return {
     teamId: typeof data.team_id === 'string' ? data.team_id : undefined,
     userId: typeof data.sub === 'string' ? data.sub : undefined,
@@ -489,9 +509,9 @@ async function introspectToken(
   // `active`, is an unusable answer rather than a verdict on the credential.
   // Reading `active` off `null` would throw past every tagged error here and
   // reach the client as an OAuth challenge carrying raw parser text.
-  const data = (await response.json().catch(() => null)) as
-    | OAuthIntrospectionResponse
-    | null;
+  const data = (await response
+    .json()
+    .catch(() => null)) as OAuthIntrospectionResponse | null;
   if (!data || typeof data.active !== 'boolean') {
     throw credentialValidationUnavailable({
       elapsedMs: elapsedMs(),
@@ -648,7 +668,9 @@ async function authenticateRequest(
     const session: SessionData = {
       authType: resolved?.source === 'oauth' ? 'oauth' : 'api-key',
       firecrawlApiKey: headerCred,
-      ...(isLegacyKeyPathRequest(request) ? { keyTransport: 'path' as const } : {}),
+      ...(isLegacyKeyPathRequest(request)
+        ? { keyTransport: 'path' as const }
+        : {}),
       ...resolved?.metadata,
     };
     return managedCred ? setManagedOAuthApiKey(session, managedCred) : session;
@@ -709,7 +731,9 @@ function searchCompanionAuthMode(
     request?.headers?.['x-firecrawl-api-key'] ?? request?.headers?.['x-api-key']
   );
   if (headerApiKey) return 'api-key';
-  const bearer = request?.headers ? extractBearerToken(request.headers) : undefined;
+  const bearer = request?.headers
+    ? extractBearerToken(request.headers)
+    : undefined;
   if (bearer?.startsWith('fco_')) return 'oauth';
   if (bearer) return 'api-key';
   return 'none';
@@ -817,7 +841,10 @@ function makeAuthenticate(profile: ServerProfile) {
         if (error instanceof CredentialValidationUnavailableError) {
           throw createCredentialValidationUnavailableResponse(error);
         }
-        const shouldChallenge = requestShouldReceiveOAuthChallenge(request, profile);
+        const shouldChallenge = requestShouldReceiveOAuthChallenge(
+          request,
+          profile
+        );
         const oauthChallenge = shouldChallenge
           ? createOAuthChallengeResponse(error, profile)
           : undefined;
@@ -1005,10 +1032,12 @@ function makeFullProfile(): ServerProfile {
   return {
     id: account ? 'account' : 'full',
     resourceName: account ? 'Firecrawl MCP Account' : 'Firecrawl MCP',
-    instructions: account ? FULL_PROFILE_INSTRUCTIONS : KEYLESS_PROFILE_INSTRUCTIONS,
+    instructions: account
+      ? FULL_PROFILE_INSTRUCTIONS
+      : KEYLESS_PROFILE_INSTRUCTIONS,
     resourceUrl: account
-      ? normalizeHeader(process.env.FIRECRAWL_MCP_RESOURCE_URL) ??
-        DEFAULT_MCP_OAUTH_RESOURCE_URL
+      ? (normalizeHeader(process.env.FIRECRAWL_MCP_RESOURCE_URL) ??
+        DEFAULT_MCP_OAUTH_RESOURCE_URL)
       : getMcpResourceUrl(),
     endpoint: account ? '/v2/mcp-oauth' : undefined,
     port: Number(process.env.PORT || 3000),
@@ -1025,7 +1054,9 @@ function searchOAuthOnly(): boolean {
   return process.env.FIRECRAWL_MCP_SEARCH_OAUTH_ONLY === 'true';
 }
 
-function makeSearchProfile({ primary = false }: { primary?: boolean } = {}): ServerProfile {
+function makeSearchProfile({
+  primary = false,
+}: { primary?: boolean } = {}): ServerProfile {
   const oauthOnly = searchOAuthOnly();
   if (primary && !oauthOnly) {
     throw new Error(
@@ -1142,7 +1173,9 @@ function connectionRecoveryPayload(params: {
   };
 }
 
-function invalidApiKeyRecoveryPayload(): Record<string, unknown> & { message: string } {
+function invalidApiKeyRecoveryPayload(): Record<string, unknown> & {
+  message: string;
+} {
   return connectionRecoveryPayload({
     code: 'CREDENTIAL_INVALID',
     authMode: 'api_key',
@@ -1150,7 +1183,9 @@ function invalidApiKeyRecoveryPayload(): Record<string, unknown> & { message: st
   });
 }
 
-function invalidOAuthRecoveryPayload(): Record<string, unknown> & { message: string } {
+function invalidOAuthRecoveryPayload(): Record<string, unknown> & {
+  message: string;
+} {
   return connectionRecoveryPayload({
     code: 'OAUTH_CONNECTION_INVALID',
     authMode: 'oauth',
@@ -1194,6 +1229,14 @@ async function runWithCredentialRecovery<T>(
     // different fault and keeps its own reconnect guidance; a keyless session
     // never sent an account credential at all.
     if (session?.authType !== 'api-key' || !isCoreCredentialRejection(error)) {
+      const hints = readErrorAgentHints(error);
+      if (hints) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new UserError(
+          hints.length ? `${message}\n\n${agentHintsText(hints)}` : message,
+          { error: message, agent_hints: hints }
+        );
+      }
       throw error;
     }
     const payload = recoveryPayload('CREDENTIAL_INVALID', requestId);
@@ -1270,7 +1313,8 @@ function deprecatedExtractPayload() {
         },
       },
     },
-    docs_url: 'https://docs.firecrawl.dev/developer-guides/usage-guides/choosing-the-data-extractor',
+    docs_url:
+      'https://docs.firecrawl.dev/developer-guides/usage-guides/choosing-the-data-extractor',
   };
 }
 type ActionStatus = 'started' | 'success' | 'error';
@@ -1354,7 +1398,14 @@ function guardHostedTool(
         const requestId = randomUUID();
         const payload = recoveryPayload(code, requestId);
         if (logActions) {
-          emitActionLog(tool.name, 'error', session, new UserError(String(payload.message), payload), requestId, code);
+          emitActionLog(
+            tool.name,
+            'error',
+            session,
+            new UserError(String(payload.message), payload),
+            requestId,
+            code
+          );
         }
         return {
           content: [{ type: 'text' as const, text: String(payload.message) }],
@@ -1398,13 +1449,29 @@ function guardHostedTool(
       if (invocationSession.credentialError) {
         const code = 'CREDENTIAL_INVALID';
         const payload = recoveryPayload(code, requestId);
-        if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
+        if (logActions)
+          emitActionLog(
+            tool.name,
+            'error',
+            invocationSession,
+            new UserError(String(payload.message), payload),
+            requestId,
+            code
+          );
         throw new UserError(String(payload.message), payload);
       }
       if (isHostedKeylessSession(invocationSession) && !keylessTool) {
         const code = 'KEYLESS_TOOL_NOT_AVAILABLE';
         const payload = recoveryPayload(code, requestId);
-        if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
+        if (logActions)
+          emitActionLog(
+            tool.name,
+            'error',
+            invocationSession,
+            new UserError(String(payload.message), payload),
+            requestId,
+            code
+          );
         throw new UserError(String(payload.message), payload);
       }
       const runTool = () =>
@@ -1415,10 +1482,22 @@ function guardHostedTool(
         );
       if (!logActions) return runTool();
 
-      emitActionLog(tool.name, 'started', invocationSession, undefined, requestId);
+      emitActionLog(
+        tool.name,
+        'started',
+        invocationSession,
+        undefined,
+        requestId
+      );
       try {
         const result = await runTool();
-        emitActionLog(tool.name, 'success', invocationSession, undefined, requestId);
+        emitActionLog(
+          tool.name,
+          'success',
+          invocationSession,
+          undefined,
+          requestId
+        );
         return result;
       } catch (error) {
         emitActionLog(tool.name, 'error', invocationSession, error, requestId);
@@ -1447,7 +1526,9 @@ server.addTool = ((tool: RegisteredTool) => {
   if (primaryProfile.id === 'search' && tool.name === 'firecrawl_search') {
     return;
   }
-  addTool(guardHostedTool(tool, { logActions: primaryProfile.id !== 'search' }));
+  addTool(
+    guardHostedTool(tool, { logActions: primaryProfile.id !== 'search' })
+  );
 }) as typeof server.addTool;
 
 if (openAiAppsChallengeToken) {
@@ -1475,7 +1556,9 @@ server.getApp().get('/ready', (context) => {
   if (primaryProfile.allowKeyless) {
     required.push('KEYLESS_PROXY_SECRET');
   }
-  const missing = required.filter((name) => !normalizeHeader(process.env[name]));
+  const missing = required.filter(
+    (name) => !normalizeHeader(process.env[name])
+  );
   const configuredEndpoint = getPrimaryEndpoint();
   const resourceMatchesEndpoint = searchPrimary
     ? withoutTrailingSlash(primaryProfile.resourceUrl) ===
@@ -1495,6 +1578,8 @@ server.getApp().get('/ready', (context) => {
     : context.json({ ok: true }, 200);
 });
 
+const AGENT_HINTS_HEADERS = { 'X-Firecrawl-Agent-Hints': 'true' } as const;
+
 function createClient(apiKey?: string): FirecrawlApp {
   const config: any = {
     ...(process.env.FIRECRAWL_API_URL && {
@@ -1507,7 +1592,19 @@ function createClient(apiKey?: string): FirecrawlApp {
     config.apiKey = apiKey;
   }
 
-  return new FirecrawlApp(config);
+  const client = new FirecrawlApp(config);
+  const axiosInstance = (client as any).http?.instance;
+  if (!axiosInstance?.interceptors?.request?.use) {
+    throw new Error('Firecrawl SDK client cannot enable API agent hints');
+  }
+  axiosInstance.interceptors.request.use((request: any) => {
+    request.headers = {
+      ...(request.headers ?? {}),
+      ...AGENT_HINTS_HEADERS,
+    };
+    return request;
+  });
+  return client;
 }
 
 // Safe mode is enabled by default for cloud service to comply with ChatGPT safety requirements
@@ -1553,8 +1650,8 @@ function getClient(session?: SessionData): FirecrawlApp {
   return client;
 }
 
-function asText(data: unknown): string {
-  return JSON.stringify(data, null, 2);
+function asText(data: unknown): ApiToolResult {
+  return formatApiResult(data);
 }
 
 // scrape tool (v2 semantics, minimal args)
@@ -1587,8 +1684,7 @@ function buildFormatsArray(
       result.push({ type: 'json', ...jsonOpts });
     } else if (fmt === 'query') {
       const queryOpts = args.queryOptions as
-        | Record<string, unknown>
-        | undefined;
+        Record<string, unknown> | undefined;
       result.push({ type: 'query', ...queryOpts });
     } else if (fmt === 'screenshot' && args.screenshotOptions) {
       const ssOpts = args.screenshotOptions as Record<string, unknown>;
@@ -1933,6 +2029,7 @@ async function apiPostJson(
   const response = await fetch(`${resolveApiBaseUrl()}${pathName}`, {
     method: 'POST',
     headers: {
+      ...AGENT_HINTS_HEADERS,
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
       ...(origin ? originHeaders(origin) : {}),
@@ -1951,7 +2048,8 @@ async function apiPostJson(
       parsed?.error ||
         parsed?.message ||
         `Firecrawl request failed (HTTP ${response.status})`,
-      response.status
+      response.status,
+      readAgentHints(parsed)
     );
   }
   return parsed;
@@ -2018,7 +2116,7 @@ async function executeHostedParse(
   session: SessionData | undefined,
   log: ToolLogger,
   origin: string
-): Promise<string> {
+): Promise<ApiToolResult> {
   const hasFilePath =
     typeof args.filePath === 'string' && args.filePath.length > 0;
   const hasUploadRef =
@@ -2145,7 +2243,7 @@ Returns the selected content formats and page metadata.
   execute: async (
     args: unknown,
     { session, log, client: mcpClient }
-  ): Promise<string> => {
+  ): Promise<ApiToolResult> => {
     const origin = requestOrigin(mcpClient, session);
     const { url, ...options } = args as { url: string } & Record<
       string,
@@ -2170,7 +2268,7 @@ Returns the selected content formats and page metadata.
         },
         session
       );
-      return asText(json?.data ?? json);
+      return asText(preserveAgentHints(json?.data ?? json, json));
     }
     const client = getClient(session);
     const res = await client.scrape(String(url), {
@@ -2205,7 +2303,7 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
   execute: async (
     args: unknown,
     { session, log, client: mcpClient }
-  ): Promise<string> => {
+  ): Promise<ApiToolResult> => {
     const { url, ...options } = args as { url: string } & Record<
       string,
       unknown
@@ -2250,7 +2348,7 @@ Each web result is a title, URL, and description, not the page. Add \`scrapeOpti
   execute: async (
     args: unknown,
     { session, log, client: mcpClient }
-  ): Promise<string> => {
+  ): Promise<ApiToolResult> => {
     const { query, ...opts } = args as Record<string, unknown>;
 
     const searchOpts = { ...opts } as Record<string, unknown>;
@@ -2403,6 +2501,7 @@ async function keylessPost(
     }
   }
   const headers: Record<string, string> = {
+    ...AGENT_HINTS_HEADERS,
     ...originHeaders(origin),
     'Content-Type': 'application/json',
   };
@@ -2434,8 +2533,10 @@ async function keylessPost(
       });
       throw new UserError(String(payload.message), payload);
     }
-    throw new Error(
-      json?.error || `Firecrawl request failed (HTTP ${response.status})`
+    throw new CoreHttpError(
+      json?.error || `Firecrawl request failed (HTTP ${response.status})`,
+      response.status,
+      readAgentHints(json)
     );
   }
   return json;
@@ -2463,6 +2564,7 @@ async function getCrawlStatusWithOrigin(
       expiresAt: body.expiresAt,
       next: body.next ?? null,
       data: initialDocs,
+      ...(readAgentHints(body) ? { agent_hints: readAgentHints(body) } : {}),
     };
   }
 
@@ -2495,6 +2597,7 @@ async function getCrawlStatusWithOrigin(
     expiresAt: body.expiresAt,
     next: null,
     data: docs,
+    ...(readAgentHints(body) ? { agent_hints: readAgentHints(body) } : {}),
   };
 }
 
@@ -2619,7 +2722,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
     execute: async (
       args: unknown,
       { session, log, client: mcpClient }
-    ): Promise<string> => {
+    ): Promise<ApiToolResult> => {
       const origin = requestOrigin(mcpClient, session);
       const {
         searchId,
@@ -2653,6 +2756,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
       if (querySuggestions) body.querySuggestions = querySuggestions;
 
       const headers: Record<string, string> = {
+        ...AGENT_HINTS_HEADERS,
         ...originHeaders(origin),
         'Content-Type': 'application/json',
       };
@@ -2701,6 +2805,9 @@ Eligibility is limited to successful searches within the feedback age window. Th
           feedbackErrorCode: parsed?.feedbackErrorCode,
           error: parsed?.error ?? `HTTP ${response.status}`,
           retryable: response.status >= 500,
+          ...(readAgentHints(parsed)
+            ? { agent_hints: readAgentHints(parsed) }
+            : {}),
         });
       }
 
@@ -2746,7 +2853,7 @@ Returns submission status, feedback ID, and accounting fields.
     execute: async (
       args: unknown,
       { session, log, client: mcpClient }
-    ): Promise<string> => {
+    ): Promise<ApiToolResult> => {
       const origin = requestOrigin(mcpClient, session);
       const {
         endpoint,
@@ -2778,6 +2885,7 @@ Returns submission status, feedback ID, and accounting fields.
 
       const apiBase = resolveApiBaseUrl();
       const headers: Record<string, string> = {
+        ...AGENT_HINTS_HEADERS,
         ...originHeaders(origin),
         'Content-Type': 'application/json',
       };
@@ -2839,6 +2947,9 @@ Returns submission status, feedback ID, and accounting fields.
           feedbackErrorCode: parsed?.feedbackErrorCode,
           error: parsed?.error ?? `HTTP ${response.status}`,
           retryable: response.status >= 500,
+          ...(readAgentHints(parsed)
+            ? { agent_hints: readAgentHints(parsed) }
+            : {}),
         });
       }
 
@@ -2950,7 +3061,7 @@ Retrieve the current status, progress, and available results for an existing cra
       session,
       client: mcpClient,
     }: { session?: SessionData; client?: McpClient }
-  ): Promise<string> => {
+  ): Promise<ApiToolResult> => {
     const client = getClient(session);
     const id = (args as any).id as string;
     const res = await getCrawlStatusWithOrigin(
@@ -2990,7 +3101,7 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
       structuredContent: payload,
     };
   },
-  execute: async (): Promise<string> => {
+  execute: async (): Promise<ApiToolResult> => {
     const payload = deprecatedExtractPayload();
     throw new UserError(payload.message, payload);
   },
@@ -3017,7 +3128,7 @@ This call returns only a job ID, not the research result. Read the job with \`fi
   execute: async (
     args: unknown,
     { session, log, client: mcpClient }
-  ): Promise<string> => {
+  ): Promise<ApiToolResult> => {
     const client = getClient(session);
     const a = args as Record<string, unknown>;
     log.info('Starting agent', {
@@ -3054,7 +3165,7 @@ Returns job status, progress information, and result data when completed.
   execute: async (
     args: unknown,
     { session, log, client: mcpClient }
-  ): Promise<string> => {
+  ): Promise<ApiToolResult> => {
     const client = getClient(session);
     const { id } = args as { id: string };
     log.info('Checking agent status', { id });
@@ -3088,7 +3199,10 @@ This acts on the live site, so actions such as form submission can create persis
       code: z.string().trim().min(1).optional(),
       language: z.enum(['bash', 'python', 'node']).optional(),
       timeout: z.number().min(1).max(300).optional(),
-      scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+      scrapeOptions: scrapeParamsSchema
+        .omit({ url: true })
+        .partial()
+        .optional(),
     })
     .refine((data) => Boolean(data.scrapeId) !== Boolean(data.url), {
       message:
@@ -3103,7 +3217,7 @@ This acts on the live site, so actions such as form submission can create persis
   execute: async (
     args: unknown,
     { session, log, client: mcpClient }
-  ): Promise<string> => {
+  ): Promise<ApiToolResult> => {
     const origin = requestOrigin(mcpClient, session);
     const client = getClient(session);
     const {
@@ -3157,7 +3271,12 @@ This acts on the live site, so actions such as form submission can create persis
     if (language) interactArgs.language = language;
     if (timeout != null) interactArgs.timeout = timeout;
     const res = await client.interact(activeScrapeId, interactArgs as any);
-    if (openedFromUrl && res && typeof res === 'object' && !Array.isArray(res)) {
+    if (
+      openedFromUrl &&
+      res &&
+      typeof res === 'object' &&
+      !Array.isArray(res)
+    ) {
       return asText({
         ...(res as unknown as Record<string, unknown>),
         scrapeId: activeScrapeId,
@@ -3187,7 +3306,7 @@ Stop the live interact session associated with a \`scrapeId\` and release its re
   execute: async (
     args: unknown,
     { session, log, client: mcpClient }
-  ): Promise<string> => {
+  ): Promise<ApiToolResult> => {
     const client = getClient(session);
     const { scrapeId } = args as { scrapeId: string };
     log.info('Stopping interact session', { scrapeId });
@@ -3220,7 +3339,7 @@ Set \`redactPII\` to request redaction of personally identifiable information in
   execute: async (
     args: unknown,
     { session, log, client: mcpClient }
-  ): Promise<string> => {
+  ): Promise<ApiToolResult> => {
     const origin = requestOrigin(mcpClient, session);
     if (process.env.CLOUD_SERVICE === 'true') {
       return executeHostedParse(args as ParseToolArgs, session, log, origin);
@@ -3262,7 +3381,10 @@ Set \`redactPII\` to request redaction of personally identifiable information in
     form.append('file', blob, filename);
     form.append('options', JSON.stringify(optionsPayload));
 
-    const headers: Record<string, string> = { ...originHeaders(origin) };
+    const headers: Record<string, string> = {
+      ...AGENT_HINTS_HEADERS,
+      ...originHeaders(origin),
+    };
     const credential = credentialForOutboundRequest(session);
     if (credential) {
       headers['Authorization'] = `Bearer ${credential}`;
@@ -3282,17 +3404,22 @@ Set \`redactPII\` to request redaction of personally identifiable information in
     });
 
     const responseText = await response.text();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch {
+      // Preserve non-JSON responses as text, as before.
+    }
     if (!response.ok) {
-      throw new Error(
-        `Parse request failed with status ${response.status}: ${responseText}`
+      const error = (parsed as { error?: unknown })?.error;
+      throw new CoreHttpError(
+        `Parse request failed with status ${response.status}: ${typeof error === 'string' ? error : responseText}`,
+        response.status,
+        readAgentHints(parsed)
       );
     }
 
-    try {
-      return asText(JSON.parse(responseText));
-    } catch {
-      return responseText;
-    }
+    return parsed !== undefined ? asText(parsed) : responseText;
   },
 });
 
@@ -3329,7 +3456,7 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
     execute: async (
       args: unknown,
       { session, log, client: mcpClient }
-    ): Promise<string> => {
+    ): Promise<ApiToolResult> => {
       const {
         query,
         includeDomains,

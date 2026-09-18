@@ -12,6 +12,7 @@
 
 import { z } from 'zod';
 import type { FastMCP } from 'fastmcp';
+import { formatApiResult, type ApiToolResult } from './agent-hints';
 import { originHeaders, requestOrigin } from './origin';
 
 interface SessionData {
@@ -38,7 +39,6 @@ type GetClient = (session?: SessionData) => unknown;
 // The other mount, /v2/developer/search, may be withdrawn.
 const BASE = '/v2/search/developer';
 
-
 interface DeveloperHit {
   /** Stable result id, e.g. `issue:owner/repo#123` or `doc:<hash>`. */
   id?: string;
@@ -52,9 +52,7 @@ interface DeveloperHit {
  * Render developer hits as `## [id] (kind) title` / url / passages blocks.
  * The stable ID prefix supplies the kind. Markdown passages keep newlines.
  */
-function fmtDeveloper(
-  results?: DeveloperHit[]
-): string {
+function fmtDeveloper(results?: DeveloperHit[]): string {
   if (!results || results.length === 0) return '(no results)';
   return results
     .map((r) => {
@@ -116,7 +114,7 @@ Returns ranked results with an ID, source type, URL, title, and the matched pass
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<string> => {
+    ): Promise<ApiToolResult> => {
       const { query, k, skills } = args as {
         query: string;
         k?: number;
@@ -129,8 +127,11 @@ Returns ranked results with an ID, source type, URL, title, and the matched pass
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{
         results?: DeveloperHit[];
-      }>(`${BASE}?${params.toString()}`, originHeaders(requestOrigin(mcpClient, session)));
-      return fmtDeveloper(res.data?.results);
+      }>(
+        `${BASE}?${params.toString()}`,
+        originHeaders(requestOrigin(mcpClient, session))
+      );
+      return formatApiResult(res.data, fmtDeveloper(res.data?.results));
     },
   });
 }

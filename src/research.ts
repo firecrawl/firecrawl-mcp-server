@@ -11,6 +11,7 @@
 
 import { z } from 'zod';
 import { type FastMCP, UserError } from 'fastmcp';
+import { formatApiResult, type ApiToolResult } from './agent-hints';
 import { originHeaders, requestOrigin } from './origin';
 
 interface SessionData {
@@ -251,7 +252,7 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<string> => {
+    ): Promise<ApiToolResult> => {
       const { query, k, authors, categories, from, to } = args as {
         query: string;
         k?: number;
@@ -272,7 +273,7 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
         withQuery(`${BASE}/papers`, params),
         originHeaders(requestOrigin(mcpClient, session))
       );
-      return fmtHits(res.data?.results);
+      return formatApiResult(res.data, fmtHits(res.data?.results));
     },
   });
 
@@ -299,14 +300,14 @@ Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DO
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<string> => {
+    ): Promise<ApiToolResult> => {
       const { paperId } = args as { paperId: string };
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ paper?: PaperHit }>(
         `${BASE}/papers/${encodeURIComponent(paperId)}`,
         originHeaders(requestOrigin(mcpClient, session))
       );
-      return fmtPaperMetadata(res.data?.paper);
+      return formatApiResult(res.data, fmtPaperMetadata(res.data?.paper));
     },
   });
 
@@ -337,7 +338,7 @@ Returns ranked candidates and the evaluated pool size.
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<string> => {
+    ): Promise<ApiToolResult> => {
       const { seed_ids, intent, mode, k, rerank } = args as {
         seed_ids: string[];
         intent: string;
@@ -367,7 +368,10 @@ Returns ranked candidates and the evaluated pool size.
         originHeaders(requestOrigin(mcpClient, session))
       );
       const note = res.data?.note ? `\nnote: ${res.data.note}` : '';
-      return `${fmtHits(res.data?.results)}\n(poolSize=${res.data?.poolSize ?? 0})${note}`;
+      return formatApiResult(
+        res.data,
+        `${fmtHits(res.data?.results)}\n(poolSize=${res.data?.poolSize ?? 0})${note}`
+      );
     },
   });
 
@@ -404,7 +408,7 @@ Returns matching passages or a notice when full text is unavailable.
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<string> => {
+    ): Promise<ApiToolResult> => {
       const { paperId, question, k } = args as {
         paperId: string;
         question: string;
@@ -419,9 +423,12 @@ Returns matching passages or a notice when full text is unavailable.
         originHeaders(requestOrigin(mcpClient, session))
       );
       const passages = res.data?.passages ?? [];
-      return passages.length
-        ? passages.map((p) => p.text).join('\n---\n')
-        : '(no full-text passages available for this paper)';
+      return formatApiResult(
+        res.data,
+        passages.length
+          ? passages.map((p) => p.text).join('\n---\n')
+          : '(no full-text passages available for this paper)'
+      );
     },
   });
 
@@ -455,7 +462,7 @@ Deprecated compatibility entry point. Use firecrawl_developer_search for GitHub 
         structuredContent: payload,
       };
     },
-    execute: async (): Promise<string> => {
+    execute: async (): Promise<ApiToolResult> => {
       const payload = deprecatedGithubPayload();
       throw new UserError(payload.message, payload);
     },
