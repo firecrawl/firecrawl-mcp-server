@@ -992,7 +992,7 @@ Scrape and feedback tools. Clients should use their advertised tool schemas and
 available capabilities. This change does not add tools, translate prose into
 tool calls, or submit feedback automatically.
 
-**SDK prerequisite:** the pinned `@mendable/firecrawl-js` 4.25.2 discards outer
+**SDK prerequisite:** the pinned `firecrawl` 4.40.0 discards outer
 envelope hints in high-level Scrape and Map responses and normalized SDK errors.
 Those paths require an SDK release that preserves optional `agent_hints` on
 returned documents, map results, and `SdkError`. The adapter accepts those fields
