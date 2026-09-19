@@ -543,7 +543,7 @@ test('HTTP cloud keyless transport preserves app challenge without advertising O
   const anonymousTools = parseSseJson(await unauthenticated.text()).result.tools;
   assert.deepEqual(
     anonymousTools.map((tool) => tool.name).sort(),
-    ['firecrawl_parse', 'firecrawl_read_result', 'firecrawl_scrape', 'firecrawl_search']
+    ['firecrawl_parse', 'firecrawl_scrape', 'firecrawl_search']
   );
   const anonymousParse = anonymousTools.find(
     (tool) => tool.name === 'firecrawl_parse'
@@ -878,7 +878,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.match(init.instructions, /firecrawl_scrape retrieves one supplied page/i);
   assert.match(
     init.instructions,
-    /Alexandria is a catalogue of data providers.*firecrawl_scrape with alexandria.*executes up to ten capabilities/is
+    /Alexandria offers ready-made workflows and provider tools.*firecrawl_scrape with alexandria.*executes up to ten capabilities/is
   );
   assert.match(
     init.instructions,

@@ -1166,17 +1166,39 @@ Thanks to MCP.so and Klavis AI for hosting and [@gstarwd](https://github.com/gst
 
 MIT License - see LICENSE file for details
 
-### Response budgets
+### Structured data and large results
 
-Tool responses default to a 4,000-token budget checked against both `cl100k_base` and `o200k_base`, including the serialized MCP content envelope and a small JSON-RPC reserve. Other models tokenize differently. Set `maxOutputTokens` from 512 to 16,000 per call. JSON is compacted before offloading. Expanded discovery, examples, and full contracts remain available.
+Authenticated search defaults to web results, semantic Alexandria tools, and domain matches. Start with the actual question. Use `firecrawl_find_tools` only to inspect a missing selected contract or browse progressively: categories → providers → compact tools → selected contract. Execute tools through `firecrawl_scrape`; ordinary URL scraping and search never automatically execute provider tools.
 
-Oversized responses return `truncated: true`, a preview, and a `resultId`. Use `firecrawl_read_result` with that ID and a JSON Pointer `path` such as `/data/tools/0`; optional `fields` selects record fields. Follow `next` for further chunks. These reads do not call the provider again. Read only the portions needed, rather than loading all chunks into the conversation.
+For a large retained workflow or regular scrape result, call `firecrawl_scrape` with:
 
-Results are retained in a bounded 64 MiB process-local cache for up to 15 minutes. They may expire sooner after eviction, restart, or routing to another server; an unavailable result returns an explicit error and never automatically reruns the provider. A single result over 64 MiB cannot be retained. This limits individual responses, not the client's total conversation context.
+```json
+{
+  "alexandria": {
+    "provider": "firecrawl",
+    "capability": "bash",
+    "options": {
+      "requestId": "<source-request-or-scrape-id>",
+      "command": "ls -lh"
+    }
+  }
+}
+```
 
-Local stdio users can set `FIRECRAWL_MCP_OUTPUT_DIR` to also save oversized original results as private files. Hosted MCP cannot write to a client's filesystem. A client with filesystem tools can save retrieved chunks itself. Local output files are retained until the user removes them.
+Read `stdout`, `stderr`, `exitCode`, and `workspaceId` in `data.alexandria[0].data`. Continue with `options: {workspaceId, command}` to inspect `response.json` using `jq`, or `document.md` using bounded text commands for regular scrapes. Keep output selective. Source loading must be a standalone call; its nested source ID differs from the top-level execution request ID. Workspaces expire after five idle minutes, and not every result is retained (including ZDR and API-provider workflow payloads). Search IDs are not supported.
 
-Requests with explicit `zeroDataRetention: true` do not retain results or write files. Oversized ZDR output is explicitly marked as preview-only; use narrower inputs or a larger inline budget. Multi-replica hosted deployment needs shared result storage before relying on follow-up reads across replicas.
+No default token cap or process-local result cache is added. A harness can reject a large response before the agent sees it; these instructions enable explicit recovery, not automatic overflow detection. When local filesystem tools are available, saving CLI output and reading selected sections is another option.
 
+The CLI discovery sequence maps to these MCP calls:
 
-Run `npm run measure:context` for synthetic response-size, projection, continuation, wire-output and tool-schema measurements. It uses a local fake API, requires no real key, and makes no paid provider calls. Set `MCP_BASELINE_DIR` to a built older checkout for before/after comparisons. Results are written to `reports/context-budget-measurements.json`; see `reports/context-budget-measurements.md` for the measured scope and limitations.
+| Intent | Tool | Arguments |
+| --- | --- | --- |
+| Web + semantic + domain tools | `firecrawl_search` | `{"query":"<user question>"}` |
+| Semantic tools only | `firecrawl_search` | `{"query":"<user question>","sources":["alexandria"]}` |
+| Categories | `firecrawl_find_tools` | `{}` |
+| Providers in a category | `firecrawl_find_tools` | `{"categories":["<category-id>"]}` |
+| Compact provider tools | `firecrawl_find_tools` | `{"providers":["<provider-id>"]}` |
+| Selected contract | `firecrawl_find_tools` | `{"providers":["<provider-id>"],"capabilities":["<capability-id>"]}` |
+| Execute | `firecrawl_scrape` | `{"alexandria":{"provider":"<provider-id>","capability":"<capability-id>","options":{"<required-field>":"<value>"}}}` |
+
+Use the full MCP surface for Find Tools and execution; the dedicated search-only surface does not expose them. Reuse a complete contract from search when present rather than making another discovery call. Follow returned `nextTool` navigation only when more results are needed.

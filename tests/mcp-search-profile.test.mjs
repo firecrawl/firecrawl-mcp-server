@@ -9,7 +9,6 @@ import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs'
 // The fixed contract of the search surface. Nothing outside this set may ever
 // appear on its tools/list or be callable through it.
 const SEARCH_TOOLS = [
-  'firecrawl_read_result',
   'firecrawl_search',
   'firecrawl_developer_search',
   'firecrawl_research_search_papers',

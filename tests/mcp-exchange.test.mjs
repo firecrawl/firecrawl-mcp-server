@@ -445,6 +445,9 @@ test('ordinary search defaults to web and both tool matches, with explicit opt-o
     [{}, ['web', 'alexandria'], true],
     [{ domainTools: false }, ['web', 'alexandria'], false],
     [{ sources: ['web'] }, ['web'], false],
+    [{ sources: ['alexandria'] }, ['alexandria'], false],
+    [{ sources: [{ type: 'alexandria' }] }, [{ type: 'alexandria' }], false],
+    [{ sources: ['alexandria'], domainTools: true }, ['alexandria'], true],
   ]) {
     const result = await client.request('tools/call', {
       name: 'firecrawl_search',
@@ -533,7 +536,7 @@ test('firecrawl_search forwards bare-string sources verbatim, including the acce
     assert.equal(request.url, '/v2/search');
     assert.deepEqual(request.body, {
       query: 'nvidia balance sheet',
-      domainTools: true,
+      domainTools: sources.some(source => ['web', 'news', 'images'].includes(typeof source === 'string' ? source : source.type)),
       sources: sources.map((source) =>
         source === 'exchange'
           ? 'alexandria'
@@ -1180,29 +1183,7 @@ test('OAuth-only local sessions advertise authenticated tool guidance', async (t
 });
 
 
-test('oversized execution stays bounded and reads selected fields without another provider call', async (t) => {
-  const { tokenCount } = await import('../dist/output-budget.js');
-  const rows = Array.from({ length: 2500 }, (_, id) => ({ id, description: 'long opportunity description '.repeat(40) }));
-  const { api, client } = await startStdioWithApi(t, { largeResult: { success: true, data: { rows } } });
-  const calls = [
-    ['firecrawl_scrape', { alexandria: [EXCHANGE_CALL] }],
-    ['firecrawl_search', { query: 'opportunities' }],
-    ['firecrawl_exchange_discover', { cohort: 'finance', expand: 'all' }],
-    ['firecrawl_find_tools', { providers: ['fred'], capabilities: ['series/observations'], expand: ['options', 'response', 'examples'] }],
-  ];
-  for (const [name, args] of calls) {
-    const response = await client.request('tools/call', { name, arguments: { ...args, maxOutputTokens: 1000 } });
-    const result = toolText(response);
-    assert.equal(result.truncated, true, name);
-    assert.ok(tokenCount(response.content[0].text) <= 1000, name);
-    assert.equal(api.requests.at(-1).body?.maxOutputTokens, undefined);
-    const read = toolText(await client.request('tools/call', { name: 'firecrawl_read_result', arguments: { resultId: result.resultId, path: '/data/rows/2499', fields: ['id'] } }));
-    assert.deepEqual(JSON.parse(read.content), { id: 2499 });
-  }
-  assert.equal(api.requests.length, calls.length);
-  assert.match(api.requests[2].url, /expand=all/);
-  assert.deepEqual(api.requests[3].body.alexandria.options.expand, ['options', 'response', 'examples']);
-});
+
 
 
 test('local environment API keys get actionable 401 recovery on discovery, search and execution', async (t) => {
@@ -1222,33 +1203,40 @@ test('local environment API keys get actionable 401 recovery on discovery, searc
   assert.equal(api.requests.length, 4);
 });
 
-test('stateless HTTP retained results are readable with the same key and isolated from another key', async (t) => {
-  const api = await startFakeExchangeApi({ largeResult: { success: true, data: { rows: 'record '.repeat(15000), marker: 'last field' } } });
-  t.after(() => api.close());
-  const port = await getFreePort();
-  const child = spawnServer({ CLOUD_SERVICE: 'false', HTTP_STREAMABLE_SERVER: 'true', FASTMCP_ENDPOINT: '/v2/mcp', FIRECRAWL_API_URL: api.url, FIRECRAWL_API_KEY: '', FIRECRAWL_OAUTH_TOKEN: '', HOST: '127.0.0.1', PORT: String(port) });
-  t.after(() => stopChild(child));
-  await waitForHealth(port, child);
-  const call = async (key, name, args) => {
-    const response = await httpToolCall(port, { id: Math.random().toString(), headers: { 'x-firecrawl-api-key': key }, params: { name, arguments: args } });
-    return parseSseJson(await response.text()).result;
-  };
-  const result = toolText(await call('fc-alice', 'firecrawl_scrape', { alexandria: [EXCHANGE_CALL] }));
-  assert.equal(result.truncated, true);
-  const selected = toolText(await call('fc-alice', 'firecrawl_read_result', { resultId: result.resultId, path: '/data/marker' }));
-  assert.equal(JSON.parse(selected.content), 'last field');
-  assert.equal((await call('fc-bob', 'firecrawl_read_result', { resultId: result.resultId })).isError, true);
+
+
+
+
+test('large provider results remain intact without an implicit token cap', async (t) => {
+  const rows = Array.from({ length: 2500 }, (_, id) => ({ id, description: 'opportunity details '.repeat(50) }));
+  const payload = { success: true, data: { rows } };
+  const { api, client } = await startStdioWithApi(t, { largeResult: payload });
+  const result = toolText(await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { alexandria: [EXCHANGE_CALL] } }));
+  assert.deepEqual(result.data, payload.data);
+  assert.equal(result.truncated, undefined);
   assert.equal(api.requests.length, 1);
+  const tools = await client.request('tools/list', {});
+  assert.equal(tools.tools.some(tool => tool.name === 'firecrawl_read_result'), false);
+  assert.equal(tools.tools.find(tool => tool.name === 'firecrawl_scrape').inputSchema.properties.maxOutputTokens, undefined);
 });
 
-test('oversized provider errors are bounded without duplicated structured content', async (t) => {
-  const { tokenCount } = await import('../dist/output-budget.js');
-  const { client } = await startStdioWithApi(t, { searchRefusal: 'Provider failed. '.repeat(12000) });
-  const result = await client.request('tools/call', { name: 'firecrawl_search', arguments: { query: 'fixture', sources: ['alexandria'], maxOutputTokens: 1000 } });
-  assert.equal(result.isError, true);
-  assert.ok(tokenCount(JSON.stringify(result)) <= 1000);
-  assert.equal(result.structuredContent, undefined);
-  const retained = JSON.parse(result.content[0].text);
-  assert.equal(retained.truncated, true);
-  assert.ok(retained.resultId);
+test('remote Bash source loading and workspace reuse forward through scrape without reexecuting the source', async (t) => {
+  const { api, client } = await startStdioWithApi(t);
+  const sourceId = '11111111-1111-4111-8111-111111111111';
+  for (const options of [
+    { requestId: sourceId, command: 'ls -lh' },
+    { workspaceId: 'workspace-test', command: 'head -n 3 document.md' },
+  ]) {
+    const alexandria = { provider: 'firecrawl', capability: 'bash', options };
+    const result = await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { alexandria } });
+    assert.notEqual(result.isError, true);
+    assert.deepEqual(api.requests.at(-1).body.alexandria, alexandria);
+    assert.notEqual(api.requests.at(-1).headers['x-request-id'], sourceId);
+    assert.equal(api.requests.at(-1).url, '/v2/scrape');
+  }
+  assert.equal(api.requests.length, 2);
+  const tools = await client.request('tools/list', {});
+  const scrape = tools.tools.find(tool => tool.name === 'firecrawl_scrape');
+  assert.match(scrape.description, /capability: "bash"/);
+  assert.match(scrape.description, /top-level requestId/);
 });

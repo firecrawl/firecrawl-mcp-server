@@ -17,6 +17,12 @@ export function hasAlexandria(sources: unknown): boolean {
     )
   );
 }
+export function defaultDomainTools(sources: unknown): boolean {
+  return hasAlexandria(sources) && Array.isArray(sources) && sources.some(
+    source => ['web', 'news', 'images'].includes(typeof source === 'string' ? source : source?.type)
+  );
+}
+
 export function normalizeSearchSources(sources: unknown): unknown {
   if (!Array.isArray(sources)) return sources;
   return sources.map((source) =>
@@ -55,8 +61,9 @@ export const findToolsSchema = z
   .strict();
 
 export const ALEXANDRIA_INSTRUCTIONS =
-  'Authenticated firecrawl_search defaults to web results plus semantic Alexandria tools and domain-matched tools. Use sources: ["web"] for web-only search, or domainTools: false to disable domain matches. ' +
-  'Use firecrawl_search with a query and sources ["alexandria"] to find relevant tool contracts, or mix with web/news/images. Contracts are in data.tools, including inputs, response fields, examples, matchedBy and matchedUrls. domainTools:true adds domain-matched tools to the same array. Search always requires a query. Use Find Tools for contextual lookup and progressive disclosure by URL, provider, category, group or capability. Access follows the authenticated team policy.';
+  'Start with the user’s actual question and constraints. Authenticated firecrawl_search defaults to web results plus semantic Alexandria tools and domain-matched tools. Alexandria offers ready-made workflows and provider tools that can return structured data directly, reducing browsing and parsing. ' +
+  'Use sources: ["web"] for web-only search, sources: ["alexandria"] for semantic tools only, or domainTools: false to disable domain matches. Tool matches in data.tools are discovery, not executed provider data. Use a complete returned contract directly; otherwise inspect only the selected provider and capability with firecrawl_find_tools. Avoid expanding the entire catalogue. ' +
+  'Check coverage, required inputs and access, then execute the selected tool through firecrawl_scrape alexandria. Search scrapeOptions fetches web pages, never provider tools. If no tool fits, use web results or ordinary URL scraping. Keep queries natural; search always requires a query. Search result IDs cannot be loaded into remote Bash.';
 
 export function findToolsOptions(args: z.infer<typeof findToolsSchema>) {
   const level = args.level ?? (args.capabilities?.length || args.providers?.length || args.groups?.length || args.urls?.length ? 'tools' : args.categories?.length ? 'providers' : 'categories');
