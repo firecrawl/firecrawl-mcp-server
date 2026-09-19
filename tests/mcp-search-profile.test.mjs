@@ -370,9 +370,10 @@ test('search surface lists exactly the six read-only tools', async (t) => {
   );
   assert.match(
     search.description,
-    /each web result is a title, URL, and description, not the page/i
+    /each web result is a title, URL, and description/i
   );
   assert.doesNotMatch(search.description, /data\.developer/i);
+  assert.doesNotMatch(search.description, /not the page/i);
 
   assert.deepEqual([...names].sort(), [...SEARCH_TOOLS].sort());
   for (const excluded of EXCLUDED_TOOLS) {
@@ -510,6 +511,34 @@ test('search firecrawl_search sends a clean body built from allowed fields only'
     sources: [{ type: 'web' }],
     origin: `mcp-ua-firecrawl-search-profile-test@${serverVersion}`,
   });
+});
+
+test('search categories reject github on both MCP profiles before calling the API', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { fullPort, searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+  });
+
+  for (const [port, endpoint] of [[fullPort, '/v2/mcp'], [searchPort, SEARCH_ENDPOINT]]) {
+    const tools = await listToolDefinitions(port, endpoint, { 'x-api-key': 'fc-test' });
+    const search = tools.find((tool) => tool.name === 'firecrawl_search');
+    assert.deepEqual(search.inputSchema.properties.categories.items.enum, [
+      'research', 'pdf', 'developer',
+    ]);
+    const res = await jsonRpc(port, endpoint, {
+      id: 40,
+      method: 'tools/call',
+      params: {
+        name: 'firecrawl_search',
+        arguments: { query: 'retry loop backoff', categories: ['github'] },
+      },
+      headers: { 'x-api-key': 'fc-test' },
+    });
+    const message = parseSseJson(await res.text());
+    assert.ok(message.error || message.result?.isError, JSON.stringify(message));
+  }
+  assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
 });
 
 test('search firecrawl_search forwards the developer category in the web group', async (t) => {
