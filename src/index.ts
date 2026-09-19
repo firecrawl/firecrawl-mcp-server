@@ -921,7 +921,7 @@ const searchToolBaseFields = {
   sources: z
     .array(searchSourceSchema)
     .optional()
-    .describe(ALEXANDRIA_INSTRUCTIONS),
+    .describe('Search sources; default web + alexandria. Use alexandria alone for semantic tool discovery.'),
   categories: z
     .array(z.enum(['github', 'research', 'pdf', 'developer']))
     .optional()
