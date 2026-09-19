@@ -896,7 +896,7 @@ const searchToolBaseFields = {
     .boolean()
     .optional()
     .describe(
-      'Return query-relevant highlights for each search result. Set to false to keep the original search snippets.'
+      'Return query-relevant highlights for web and news results. Set to false to keep the original search snippets. Highlights are omitted for zero-data-retention searches.'
     ),
   limit: z.number().int().min(1).max(100).optional(),
   tbs: z.string().optional(),
@@ -2230,7 +2230,7 @@ server.addTool({
     destructiveHint: false, // Query-only; no destructive side effects on external entities.
   },
   description: `
-Search web, news, or image sources and return ranked results with query-relevant highlights in web and news results by default. Highlights are omitted for zero-data-retention searches. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit results to research, PDF, or developer sources.
+Search web, news, or image sources and return ranked results with query-relevant highlights in web and news results by default. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit results to research, PDF, or developer sources.
 
 For a programming question, add \`categories: ["developer"]\`. It searches an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites, and returns the hits in \`data.web\` with \`category: "developer"\`.
 
@@ -3313,7 +3313,7 @@ function registerMarketplaceSearchTool(
       destructiveHint: false,
     },
     description: `
-Search web and specialized indexes, returning ranked results with query-relevant highlights in web and news results by default. Highlights are omitted for zero-data-retention searches. Each web result is a title, URL, and description. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit result types to \`research\`, \`pdf\`, or \`developer\`.
+Search web and specialized indexes, returning ranked results with query-relevant highlights in web and news results by default. Each web result is a title, URL, and description. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit result types to \`research\`, \`pdf\`, or \`developer\`.
 
 For a programming question, add \`categories: ["developer"]\`. It searches an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites, and returns the hits in \`data.web\` with \`category: "developer"\`.
 
