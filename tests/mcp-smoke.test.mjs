@@ -910,6 +910,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     byName.get('firecrawl_search').description,
     /each web result is a title, URL, and description.*scrapeOptions.*ignore `maxAge`.*firecrawl_scrape/is
   );
+  assert.doesNotMatch(byName.get('firecrawl_search').description, /not the page/i);
   assert.match(
     byName.get('firecrawl_search_feedback').description,
     /good.*valuable source.*partial.*missingContent.*bad.*missingContent.*query suggestion/is

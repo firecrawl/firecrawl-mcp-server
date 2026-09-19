@@ -373,6 +373,7 @@ test('search surface lists exactly the six read-only tools', async (t) => {
     /each web result is a title, URL, and description/i
   );
   assert.doesNotMatch(search.description, /data\.developer/i);
+  assert.doesNotMatch(search.description, /not the page/i);
 
   assert.deepEqual([...names].sort(), [...SEARCH_TOOLS].sort());
   for (const excluded of EXCLUDED_TOOLS) {
