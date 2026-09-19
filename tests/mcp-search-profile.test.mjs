@@ -370,7 +370,7 @@ test('search surface lists exactly the six read-only tools', async (t) => {
   );
   assert.match(
     search.description,
-    /each web result is a title, URL, and description, not the page/i
+    /each web result is a title, URL, and description/i
   );
   assert.doesNotMatch(search.description, /data\.developer/i);
 
