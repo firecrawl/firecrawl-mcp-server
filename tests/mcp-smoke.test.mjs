@@ -137,6 +137,9 @@ function spawnServer(env) {
   const child = spawn(process.execPath, ['dist/index.js'], {
     env: {
       ...process.env,
+      FIRECRAWL_API_KEY: '',
+      FIRECRAWL_OAUTH_TOKEN: '',
+      FIRECRAWL_USE_CLI_CREDENTIALS: 'false',
       MCP_DELEGATED_CREDENTIAL_SECRET:
         'test-mcp-delegated-credential-secret-32',
       ...env,
