@@ -896,7 +896,7 @@ const searchToolBaseFields = {
     .boolean()
     .optional()
     .describe(
-      'Return query-relevant highlights for web and news results. Set to false to keep the original search snippets. Highlights are omitted for zero-data-retention searches.'
+      'Return query-relevant highlights for each search result. Set to false to keep the original search snippets. Highlights are omitted for zero-data-retention searches.'
     ),
   limit: z.number().int().min(1).max(100).optional(),
   tbs: z.string().optional(),
