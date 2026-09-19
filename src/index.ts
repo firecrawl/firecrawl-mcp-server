@@ -896,7 +896,7 @@ const searchToolBaseFields = {
     .boolean()
     .optional()
     .describe(
-      'Return query-relevant highlights for each search result. Set to false to keep the original search snippets. Highlights are omitted for zero-data-retention searches.'
+      'Return query-relevant highlights for each search result. Set to false to keep the original search snippets.'
     ),
   limit: z.number().int().min(1).max(100).optional(),
   tbs: z.string().optional(),
@@ -913,7 +913,12 @@ const searchToolBaseFields = {
     .describe(
       'Limit results to specific source types. `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over public repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. `developer` returns hits in `data.web` with `category: "developer"`; the other categories also filter `data.web`.'
     ),
-  enterprise: z.array(z.enum(['default', 'anon', 'zdr'])).optional(),
+  enterprise: z
+    .array(z.enum(['default', 'anon', 'zdr']))
+    .optional()
+    .describe(
+      '`zdr` and `anon` enable zero data retention. Those searches omit highlights.'
+    ),
 };
 
 // Both surfaces forbid specifying includeDomains and excludeDomains together.
