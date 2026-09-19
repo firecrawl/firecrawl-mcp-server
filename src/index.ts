@@ -908,7 +908,7 @@ const searchToolBaseFields = {
     .array(z.object({ type: z.enum(['web', 'images', 'news']) }))
     .optional(),
   categories: z
-    .array(z.enum(['github', 'research', 'pdf', 'developer']))
+    .array(z.enum(['research', 'pdf', 'developer']))
     .optional()
     .describe(
       'Limit results to specific source types. `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. `developer` returns hits in `data.web` with `category: "developer"`; the other categories also filter `data.web`.'
