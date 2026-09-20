@@ -955,7 +955,7 @@ const exchangeCallSchema = z.object({
     .describe(
       'Capability address as returned by search or discover, e.g. "series/observations".'
     ),
-  version: z.string().min(1).max(128).optional().describe('Optional published workflow version. Omit to use the latest version.'),
+  version: z.string().trim().min(1).max(128).optional().describe('Optional published workflow version. Omit to use the latest version.'),
   options: z
     .record(z.string(), z.any())
     .optional()

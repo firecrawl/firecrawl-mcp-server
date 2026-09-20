@@ -1422,8 +1422,8 @@ test('local HTTP environment credentials keep self-hosted Core errors', async (t
   assert.equal(response.status, 200);
   const result = parseSseJson(await response.text()).result;
   assert.equal(result.isError, true);
-  assert.notEqual(result.content[0].text, INVALID_API_KEY_MESSAGE);
-  assert.notEqual(result.structuredContent?.code, 'CREDENTIAL_INVALID');
+  assert.match(result.content[0].text, /Request failed with status code 401/);
+  assert.equal(result.structuredContent?.code, undefined);
   assert.equal(backend.requests.some((request) => request.url === '/v2/search'), true);
 });
 

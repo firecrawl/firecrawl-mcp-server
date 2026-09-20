@@ -9,7 +9,7 @@ test('firecrawl_scrape with alexandria posts the v2 batch and returns the envelo
   const result = await client.request('tools/call', {
     arguments: {
       alexandria: [
-        { ...EXCHANGE_CALL, version: '1.2.3' },
+        { ...EXCHANGE_CALL, version: ' 1.2.3 ' },
         { provider: 'fred', capability: 'series/missing' },
       ],
     },
@@ -67,6 +67,7 @@ test('firecrawl_scrape rejects url with alexandria, neither, extra options, and 
     { alexandria: [] },
     { alexandria: Array.from({ length: 11 }, () => EXCHANGE_CALL) },
     { alexandria: [{ provider: 'fred' }] },
+    { alexandria: [{ ...EXCHANGE_CALL, version: '   ' }] },
   ];
   for (const args of invalid) {
     await callExpectingError(client, {
