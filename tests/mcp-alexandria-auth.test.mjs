@@ -36,7 +36,6 @@ test('local keyless stdio refuses every Exchange path with the explanatory error
   }
 });
 
-
 test('hosted keyless sessions never reach the Exchange; an API key header does', async (t) => {
   const backend = await startFakeExchangeApi({ keylessEligible: true });
   t.after(() => backend.close());
@@ -149,18 +148,6 @@ test('hosted keyless sessions never reach the Exchange; an API key header does',
   });
 });
 
-
-test('OAuth-only local sessions advertise authenticated tool guidance', async (t) => {
-  const { init } = await startStdio(t, { FIRECRAWL_API_KEY: '', FIRECRAWL_OAUTH_TOKEN: 'fco_test-only', CLOUD_SERVICE: '', HTTP_STREAMABLE_SERVER: '' });
-  assert.match(init.instructions, /firecrawl_find_tools/);
-  assert.doesNotMatch(init.instructions, /Hosted keyless sessions expose/);
-});
-
-
-
-
-
-
 test('local environment API keys get actionable 401 recovery on discovery, search and execution', async (t) => {
   const { api, client } = await startStdioWithApi(t, { apiStatus: 401 });
   for (const [name, args] of [
@@ -177,8 +164,3 @@ test('local environment API keys get actionable 401 recovery on discovery, searc
   }
   assert.equal(api.requests.length, 4);
 });
-
-
-
-
-

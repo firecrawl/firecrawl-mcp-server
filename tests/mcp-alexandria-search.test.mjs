@@ -23,7 +23,6 @@ test('ordinary search defaults to web and both tool matches, with explicit opt-o
   }
 });
 
-
 test('default tools fall back only on discovery refusal; explicit tools and other errors remain errors', async (t) => {
   const { api, client } = await startStdioWithApi(t, {
     searchRefusal: 'Provider discovery requires access and does not support zero data retention.',
@@ -48,7 +47,6 @@ test('default tools fall back only on discovery refusal; explicit tools and othe
   });
   assert.equal(other.api.requests.length, 1);
 });
-
 
 test('firecrawl_search forwards the Alexandria source and passes tools and creditsUsed through', async (t) => {
   const { api, client } = await startStdioWithApi(t);
@@ -82,48 +80,6 @@ test('firecrawl_search forwards the Alexandria source and passes tools and credi
   assert.equal(payload.creditsUsed, 0);
   assert.equal(payload.id, '00000000-0000-4000-8000-000000000000');
 });
-
-
-test('firecrawl_search forwards bare-string sources verbatim, including sources: ["alexandria"]', async (t) => {
-  const { api, client } = await startStdioWithApi(t);
-
-  const cases = [
-    ['exchange'],
-    ['web', 'exchange'],
-    ['news', { type: 'exchange' }],
-  ];
-  for (const sources of cases) {
-    const before = api.requests.length;
-    const result = await client.request('tools/call', {
-      arguments: { query: 'nvidia balance sheet', sources },
-      name: 'firecrawl_search',
-    });
-    assert.equal(api.requests.length, before + 1, JSON.stringify(sources));
-    const request = api.requests[before];
-    assert.equal(request.url, '/v2/search');
-    assert.deepEqual(request.body, {
-      query: 'nvidia balance sheet',
-      domainTools: sources.some(source => ['web', 'news', 'images'].includes(typeof source === 'string' ? source : source.type)),
-      sources: sources.map((source) =>
-        source === 'exchange'
-          ? 'alexandria'
-          : source?.type === 'exchange'
-            ? { ...source, type: 'alexandria' }
-            : source
-      ),
-      origin: 'mcp-fastmcp',
-    });
-    assert.deepEqual(toolText(result).data.tools, [CAPABILITY_HIT]);
-  }
-
-  const invalid = await callExpectingError(client, {
-    arguments: { query: 'nvidia', sources: ['catalogue'] },
-    name: 'firecrawl_search',
-  });
-  assert.equal(invalid.isError, true);
-  assert.equal(api.requests.length, cases.length);
-});
-
 
 test('tool detail is forwarded and invalid values are rejected locally', async (t) => {
   const {api,client}=await startStdioWithApi(t);

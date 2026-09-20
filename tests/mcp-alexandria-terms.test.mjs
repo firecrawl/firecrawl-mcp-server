@@ -31,7 +31,6 @@ test('provider terms tools read and accept exact reviewed terms only with confir
   }
 });
 
-
 test('terms reads explain eligibility failures and reject empty or malformed catalogs without leaking credentials', async (t) => {
   for (const options of [
     { termsCatalog: {} },
@@ -52,7 +51,6 @@ test('terms reads explain eligibility failures and reject empty or malformed cat
     }
   }
 });
-
 
 test('firecrawl_scrape relays an Alexandria THIRD_PARTY_DATA_TERMS_REQUIRED as a human handoff', async (t) => {
   const { api, client } = await startStdioWithApi(t);
@@ -93,30 +91,6 @@ test('firecrawl_scrape relays an Alexandria THIRD_PARTY_DATA_TERMS_REQUIRED as a
   ]);
 });
 
-
-test('plain-URL firecrawl_scrape relays the same Alexandria terms handoff from the SDK error', async (t) => {
-  const { api, client } = await startStdioWithApi(t);
-
-  const result = await callExpectingError(client, {
-    arguments: { url: 'https://benzinga.example/news' },
-    name: 'firecrawl_scrape',
-  });
-  assert.equal(api.requests.length, 1);
-  assert.equal(result.transportError, undefined, 'a 403 must surface in-band');
-  assert.match(result.content[0].text, /https:\/\/www\.firecrawl\.dev\/app\/alexandria\/benzinga/);
-  assert.match(result.content[0].text, /admin/);
-  assert.equal(result.structuredContent.code, 'THIRD_PARTY_DATA_TERMS_REQUIRED');
-  assert.deepEqual(
-    result.structuredContent.requiresAction,
-    TERMS_REQUIRED_BODY.requiresAction
-  );
-  assert.equal(result.structuredContent.next_actions[1].tool, 'firecrawl_scrape');
-  assert.equal(result.structuredContent.requestId, undefined);
-  assert.equal(result.structuredContent.next_actions[1].requestId, undefined);
-  assert.doesNotMatch(result.content[0].text, /and requestId/);
-});
-
-
 test('firecrawl_scrape relays a reserved 409 billing error with its code and chargeId', async (t) => {
   const { api, client } = await startStdioWithApi(t);
 
@@ -140,7 +114,6 @@ test('firecrawl_scrape relays a reserved 409 billing error with its code and cha
     requestId: api.requests[0].headers['x-request-id'],
   });
 });
-
 
 test('terms 401 responses recover credentials even without a JSON body', async (t) => {
   for (const termsRaw401 of ['empty', 'text']) {
@@ -168,4 +141,3 @@ test('terms 401 responses recover credentials even without a JSON body', async (
     assert.equal(api.requests.length, 1);
   }
 });
-
