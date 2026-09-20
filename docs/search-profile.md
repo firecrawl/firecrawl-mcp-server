@@ -74,8 +74,7 @@ the behavior. No runtime filter is involved.
 ## Alexandria source
 
 `sources` entries are source names (`web`, `news`, `images`, `alexandria`) or
-`{ type }` objects. The legacy `exchange` alias is accepted in either form and
-normalized to `alexandria` before the `/v2/search` request. Alexandria returns
+`{ type }` objects. Alexandria returns
 compact tool suggestions by default in `data.tools`; these are catalogue entries, not executed
 provider results. Discovery costs no credits and requires an authenticated team
 with Alexandria access; keyless sessions get an explanatory error before any request.
