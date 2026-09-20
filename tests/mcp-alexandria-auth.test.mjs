@@ -18,8 +18,8 @@ test('local keyless stdio refuses every Exchange path with the explanatory error
     { arguments: { alexandria: [EXCHANGE_CALL] }, name: 'firecrawl_scrape' },
     { arguments: { categories: ['finance'] }, name: 'firecrawl_find_tools' },
     { arguments: {}, name: 'firecrawl_find_tools' },
-    { arguments: { provider: 'benzinga' }, name: 'firecrawl_terms_show' },
-    { arguments: { provider: 'benzinga', version: 'v1', digest: 'a'.repeat(64), confirmed: true }, name: 'firecrawl_terms_accept' },
+    { arguments: { alexandria: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } }] }, name: 'firecrawl_scrape' },
+    { arguments: { alexandria: [{ provider: 'firecrawl', capability: 'terms/accept', options: { provider: 'benzinga', version: 'v1', digest: 'a'.repeat(64), confirmed: true } }] }, name: 'firecrawl_scrape' },
   ]) {
     const result = await client.request('tools/call', params);
     assert.equal(result.isError, true, JSON.stringify(result));

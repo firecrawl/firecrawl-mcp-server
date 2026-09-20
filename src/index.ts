@@ -1020,13 +1020,19 @@ function termsRequiredError(
   const retryIdentity = requestId ? ` and requestId ${requestId}` : '';
   const message = `Alexandria provider terms required. An organization admin must accept the ${action.terms} provider's terms (version ${action.version}) before this request can run.`;
   return new UserError(
-    `${message}\n\n1. Read the agreement with firecrawl_terms_show for provider ${action.terms} and present it to the user. Only after explicit authorization to accept that exact version and digest, use firecrawl_terms_accept with confirmed:true. If authority or eligibility requires a dashboard action, ask an organization admin to visit ${action.url} or https://www.firecrawl.dev/app/settings?tab=data-sources if that page is unavailable. Never infer acceptance from a data request.\n2. After they confirm, call ${context.tool} again with the identical payload${retryIdentity}. If the same terms error persists, stop and ask an organization admin to check access at https://www.firecrawl.dev/app/settings?tab=data-sources.\n\nDo not retry until acceptance is confirmed.`,
+    `${message}\n\n1. Read the agreement with firecrawl_scrape using alexandria: {provider: "firecrawl", capability: "terms/show", options: {provider: "${action.terms}"}} and present it to the user. Only after explicit authorization to accept that exact version and digest, use firecrawl_scrape with alexandria: {provider: "firecrawl", capability: "terms/accept", options: {provider: "${action.terms}", version: "<reviewed-version>", digest: "<reviewed-digest>", confirmed: true}}. Send terms calls separately from provider execution. If authority or eligibility requires a dashboard action, ask an organization admin to visit ${action.url} or https://www.firecrawl.dev/app/settings?tab=data-sources if that page is unavailable. Never infer acceptance from a data request.\n2. After they confirm, call ${context.tool} again with the identical payload${retryIdentity}. If the same terms error persists, stop and ask an organization admin to check access at https://www.firecrawl.dev/app/settings?tab=data-sources.\n\nDo not retry until acceptance is confirmed.`,
     {
       code: TERMS_REQUIRED_CODE,
       status: 403,
       message,
       ...(requestId ? { requestId } : {}),
       requiresAction: action,
+      nextTool: {
+        name: 'firecrawl_scrape',
+        arguments: {
+          alexandria: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: action.terms } }],
+        },
+      },
       next_actions: [
         {
           kind: 'human_action_required',
@@ -1166,7 +1172,7 @@ const openAiAppsChallengeToken = normalizeHeader(
 
 const FULL_PROFILE_INSTRUCTIONS =
   ALEXANDRIA_INSTRUCTIONS +
-  ` firecrawl_skills_resolve matches query mentions and page URLs, and firecrawl_skill reads a Markdown contract. Execution with firecrawl_scrape alexandria uses requestId; reuse the returned ID for retries of the same payload, never a new ID to bypass a pending or uncertain 409. Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question — code behaviour, a library or framework, an API contract, an error message, or a known bug — firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of repositories, GitHub issues, merged pull requests, READMEs, and curated documentation sites. Alexandria offers ready-made workflows and provider tools for a direct path to structured data. Prefer normal search before explicit catalogue browsing: firecrawl_search with sources: [{type: "alexandria"}] returns compact tool summaries in data.tools; toolDetail: "full" includes contracts, firecrawl_find_tools starts with categories, lists providers, then compact tools, and expands the selected full contract, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities and returns their results. Alexandria access needs an API key on a team with it enabled. A terms-gated Alexandria provider fails with code THIRD_PARTY_DATA_TERMS_REQUIRED and a requiresAction.url. Read terms with firecrawl_terms_show; firecrawl_terms_accept requires explicit user authorization for the reviewed version and digest and confirmed:true. Otherwise direct an organization admin to the dashboard URL. For large retained workflow or scrape results, firecrawl_scrape can execute firecrawl/bash to inspect shape, filter and project data remotely; see its description for source IDs and workspace reuse. Do not repeat successful provider calls just because the client could not display their output. Provide only the required inputs and account for stated network or external side effects.`;
+  ` firecrawl_skills_resolve matches query mentions and page URLs, and firecrawl_skill reads a Markdown contract. Execution with firecrawl_scrape alexandria uses requestId; reuse the returned ID for retries of the same payload, never a new ID to bypass a pending or uncertain 409. Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question — code behaviour, a library or framework, an API contract, an error message, or a known bug — firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of repositories, GitHub issues, merged pull requests, READMEs, and curated documentation sites. Alexandria offers ready-made workflows and provider tools for a direct path to structured data. Prefer normal search before explicit catalogue browsing: firecrawl_search with sources: [{type: "alexandria"}] returns compact tool summaries in data.tools; toolDetail: "full" includes contracts, firecrawl_find_tools starts with categories, lists providers, then compact tools, and expands the selected full contract, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities and returns their results. Alexandria access needs an API key on a team with it enabled. A terms-gated Alexandria provider fails with code THIRD_PARTY_DATA_TERMS_REQUIRED and a requiresAction.url. Follow the returned terms/show and terms/accept calls through firecrawl_scrape; acceptance requires explicit user authorization for the reviewed version and digest and confirmed:true. Otherwise direct an organization admin to the dashboard URL. For large retained workflow or scrape results, firecrawl_scrape can execute firecrawl/bash to inspect shape, filter and project data remotely; see its description for source IDs and workspace reuse. Do not repeat successful provider calls just because the client could not display their output. Provide only the required inputs and account for stated network or external side effects.`;
 const KEYLESS_PROFILE_INSTRUCTIONS = `Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index and repository research, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.`;
 
 // The search surface exposes web/developer/research search only. Its instructions
@@ -2371,7 +2377,7 @@ server.addTool({
   name: 'firecrawl_scrape',
   annotations: {
     title: 'Scrape a URL',
-    readOnlyHint: SAFE_MODE, // Fetches page content only; in cloud/safe mode interactive browser actions are disabled.
+    readOnlyHint: false, // Alexandria capabilities can record provider agreement acceptance.
     openWorldHint: true, // Accepts any user-supplied URL on the public web.
     destructiveHint: false, // Does not modify, delete, or write to external websites.
   },
@@ -2390,7 +2396,7 @@ For potentially large workflow results, supply and preserve a top-level requestI
 
 URL mode only: set \`domainTools: true\` to also return domain-matched Alexandria tools for the page in \`tools\` on the returned document.
 
-Alexandria execution errors relay a \`code\` and \`chargeId\`: \`request_in_flight\` (409) retry the same requestId later; \`request_unresolved\` (503) keep the requestId for reconciliation, never mint a new one; \`duplicate_request\` (409) the requestId belongs to a different payload; \`unknown_provider\` (404), \`insufficient_credits\` (402), and \`billing_unavailable\` (503) mean nothing executed. A terms-gated Alexandria provider returns \`THIRD_PARTY_DATA_TERMS_REQUIRED\` (403) with \`requiresAction.url\`: read the agreement with firecrawl_terms_show, then use firecrawl_terms_accept only after explicit user authorization for the reviewed version and digest. An organization admin can alternatively accept at the dashboard URL. Retry only after confirmed acceptance.
+Alexandria execution errors relay a \`code\` and \`chargeId\`: \`request_in_flight\` (409) retry the same requestId later; \`request_unresolved\` (503) keep the requestId for reconciliation, never mint a new one; \`duplicate_request\` (409) the requestId belongs to a different payload; \`unknown_provider\` (404), \`insufficient_credits\` (402), and \`billing_unavailable\` (503) mean nothing executed. A terms-gated Alexandria provider returns \`THIRD_PARTY_DATA_TERMS_REQUIRED\` (403) with \`requiresAction.url\`: follow the returned terms/show and terms/accept calls through this tool, only accepting after explicit user authorization for the reviewed version and digest. An organization admin can alternatively accept at the dashboard URL. Retry only after confirmed acceptance.
 `,
   parameters: scrapeToolParamsSchema,
   execute: async (args: unknown, { session, log }): Promise<string> => {
@@ -2626,123 +2632,6 @@ async function executeExchangeCalls(
     );
   }
 }
-
-const termsProviderSchema = z.string().trim().min(1).max(200);
-const termsAcceptSchema = z.object({
-  provider: termsProviderSchema,
-  version: z.string().trim().min(1).max(200),
-  digest: z.string().regex(/^[a-f0-9]{64}$/),
-  confirmed: z
-    .literal(true)
-    .describe(
-      'Explicit user authorization to accept these exact reviewed terms for their organization. Never infer this from a request to retrieve data.'
-    ),
-});
-
-async function requestProviderTerms(
-  session?: SessionData,
-  acceptance?: z.infer<typeof termsAcceptSchema>
-): Promise<any> {
-  assertExchangeCredential(session);
-  const response = await fetch(
-    `${resolveApiBaseUrl()}/exchange/provider-terms${acceptance ? '/accept' : ''}`,
-    {
-      method: acceptance ? 'POST' : 'GET',
-      headers: {
-        ...ORIGIN_HEADERS,
-        Authorization: `Bearer ${credentialForOutboundRequest(session)}`,
-        'Content-Type': 'application/json',
-      },
-      ...(acceptance ? { body: JSON.stringify(acceptance) } : {}),
-      redirect: 'error',
-      signal: AbortSignal.timeout(30_000),
-    }
-  ).catch(() => {
-    throw new UserError(
-      acceptance
-        ? 'Acceptance outcome is uncertain. Check organization acceptance status before retrying; do not submit another acceptance automatically.'
-        : 'Terms could not be retrieved. Try reading them again.',
-      { code: acceptance ? 'terms_acceptance_uncertain' : 'terms_unavailable' }
-    );
-  });
-  const body = (await response.json().catch(() => null)) as any;
-  if (response.status === 401)
-    throw new CoreHttpError(typeof body?.error === 'string' ? body.error : 'Invalid or expired credentials.', 401);
-  if (!body || typeof body !== 'object' || Array.isArray(body))
-    throw new UserError(
-      'Terms endpoint returned an invalid response. Check acceptance status before retrying.',
-      { code: 'invalid_terms_response', status: response.status }
-    );
-  if (!response.ok || body.success === false) {
-    const message =
-      typeof body.error === 'string'
-        ? body.error
-        : `Terms request failed (HTTP ${response.status}).`;
-    throw new UserError(message, {
-      ...body,
-      status: response.status,
-      code: body.code ?? 'terms_error',
-      message,
-      guidance:
-        body.guidance ??
-        'Do not automatically accept or retry. If terms changed, read the current agreement and obtain fresh explicit approval. For authority or eligibility requirements, follow the returned dashboard action or ask an organization admin to review https://www.firecrawl.dev/app/settings?tab=data-sources. A 403 catalogue read can mean this team is not eligible yet.',
-    });
-  }
-  if (acceptance && body.success !== true)
-    throw new UserError(
-      'Acceptance was not confirmed. Check status before retrying.',
-      { code: 'terms_acceptance_unconfirmed', status: response.status }
-    );
-  return body;
-}
-
-server.addTool({
-  name: 'firecrawl_terms_show',
-  annotations: {
-    title: 'Read provider terms',
-    readOnlyHint: true,
-    destructiveHint: false,
-    openWorldHint: false,
-    idempotentHint: true,
-  },
-  description:
-    'Read a provider agreement, current version, digest and acceptance requirements. Authenticated catalogue read. Present the agreement to the user before asking for explicit authorization; this tool never accepts terms.',
-  parameters: z.object({ provider: termsProviderSchema }),
-  execute: async ({ provider }, { session }) => {
-    const body = await requestProviderTerms(session);
-    if (!Array.isArray(body.providers))
-      throw new UserError('Terms endpoint returned an invalid catalog.');
-    const terms = body.providers.find(
-      (item: any) => item.provider === provider
-    );
-    if (!terms)
-      throw new UserError(
-        'Provider not found in the accessible terms catalog.'
-      );
-    return compactText({
-      ...terms,
-      success: true,
-      guidance:
-        'Present this agreement to the user and ask for explicit authorization to accept this exact version and digest for their organization. Only then call firecrawl_terms_accept with confirmed:true. Reading terms or requesting data is not acceptance.',
-    });
-  },
-});
-
-server.addTool({
-  name: 'firecrawl_terms_accept',
-  annotations: {
-    title: 'Accept provider terms',
-    readOnlyHint: false,
-    destructiveHint: true,
-    openWorldHint: true,
-    idempotentHint: false,
-  },
-  description:
-    'Record legally significant acceptance of provider terms for the authenticated organization. First use firecrawl_terms_show and present the agreement. Call only after the user explicitly authorizes acceptance of that exact version and digest and confirms authority to bind their organization. A data request is not authorization. Pass confirmed:true with the reviewed version and digest. Respect eligibility/authority errors; use the returned dashboard URL when required. Never automatically retry uncertain acceptance. After confirmed success, retry the original data request with its identical payload and requestId.',
-  parameters: termsAcceptSchema,
-  execute: async (args, { session }) =>
-    compactText(await requestProviderTerms(session, args)),
-});
 
 server.addTool({
   name: 'firecrawl_find_tools',

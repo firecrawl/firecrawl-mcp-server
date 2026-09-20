@@ -61,18 +61,6 @@ async function startFakeExchangeApi(options = {}) {
       return json(200, { eligible: keylessEligible });
     }
 
-    if (req.method === 'GET' && url.pathname === '/exchange/provider-terms' && options.termsRaw401) {
-      res.writeHead(401, { 'content-type': 'text/plain' });
-      return res.end(options.termsRaw401 === 'empty' ? '' : 'Unauthorized');
-    }
-    if (req.method === 'GET' && url.pathname === '/exchange/provider-terms')
-      return json(options.termsStatus ?? 200, options.termsCatalog ?? { providers: [{ provider: 'benzinga', name: 'Benzinga', required: true, terms: { version: 'v1', digest: 'a'.repeat(64), document: 'Review this agreement.' } }] });
-    if (req.method === 'POST' && url.pathname === '/exchange/provider-terms/accept') {
-      if (parsedBody.version === 'stale') return json(409, { success: false, code: 'TERMS_VERSION_MISMATCH', error: 'Read the latest terms.', requiresAction: { url: 'https://www.firecrawl.dev/app/alexandria/benzinga' }, currentVersion: 'v2' });
-      if (parsedBody.provider === 'authority') return json(403, { success: false, code: 'PROVIDER_TERMS_AUTHORITY_REQUIRED', error: 'An admin must verify authority.', requiresAction: { url: 'https://www.firecrawl.dev/app/alexandria/authority' } });
-      return json(200, { success: true, provider: parsedBody.provider, accepted: true });
-    }
-
     if (url.pathname === '/exchange/skills/resolve')
       return json(200, { skills: [{ id: 'particle-podcasts' }] });
     if (url.pathname === '/exchange/skills/particle-podcasts/SKILL.md') {
@@ -93,6 +81,14 @@ async function startFakeExchangeApi(options = {}) {
     }
 
     if (req.method === 'POST' && url.pathname === '/v2/scrape') {
+      const termsCall = Array.isArray(parsedBody.alexandria) ? parsedBody.alexandria[0] : parsedBody.alexandria;
+      if (termsCall?.provider === 'firecrawl' && ['terms/show', 'terms/accept'].includes(termsCall.capability)) {
+        const data = termsCall.capability === 'terms/show'
+          ? { provider: 'benzinga', terms: { version: 'v1', digest: 'a'.repeat(64), document: 'Review this agreement.' }, status: { accepted: false } }
+          : { provider: 'benzinga', version: termsCall.options.version, digest: termsCall.options.digest, acceptedAt: '2026-09-20T00:00:00Z' };
+        return json(200, { success: true, data: { alexandria: [{ provider: 'firecrawl', capability: termsCall.capability, creditsCost: 0, data }] } });
+      }
+
       if (options.bashRecovery && parsedBody.alexandria?.capability === 'bash') {
         if (options.bashRecovery === 'missing') return json(200, { success: true, data: { alexandria: [{ error: { code: 'result_unavailable' } }] } });
         const identities = options.bashRecovery === 'partial' ? [] : options.largeResult.data.alexandria.map(item => [item.provider, item.capability]);
