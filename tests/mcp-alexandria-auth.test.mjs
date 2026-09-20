@@ -16,8 +16,8 @@ test('local keyless stdio refuses every Exchange path with the explanatory error
       name: 'firecrawl_search',
     },
     { arguments: { alexandria: [EXCHANGE_CALL] }, name: 'firecrawl_scrape' },
-    { arguments: { cohort: 'finance' }, name: 'firecrawl_exchange_discover' },
-    { arguments: {}, name: 'firecrawl_exchange_discover' },
+    { arguments: { categories: ['finance'] }, name: 'firecrawl_find_tools' },
+    { arguments: {}, name: 'firecrawl_find_tools' },
     { arguments: { provider: 'benzinga' }, name: 'firecrawl_terms_show' },
     { arguments: { provider: 'benzinga', version: 'v1', digest: 'a'.repeat(64), confirmed: true }, name: 'firecrawl_terms_accept' },
   ]) {
@@ -73,7 +73,7 @@ test('hosted keyless sessions never reach the Exchange; an API key header does',
   const listed = parseSseJson(await listing.text()).result.tools.map(
     (tool) => tool.name
   );
-  assert.equal(listed.includes('firecrawl_exchange_discover'), false);
+  assert.equal(listed.includes('firecrawl_find_tools'), false);
   assert.equal(listed.includes('firecrawl_scrape'), true);
 
   const discover = parseSseJson(
@@ -83,7 +83,7 @@ test('hosted keyless sessions never reach the Exchange; an API key header does',
         headers: keylessHeaders,
         params: {
           arguments: { cohort: 'finance' },
-          name: 'firecrawl_exchange_discover',
+          name: 'firecrawl_find_tools',
         },
       })
     ).text()
@@ -152,7 +152,7 @@ test('local API key failures remain errors without leaking credentials', async (
   const { api, client } = await startStdioWithApi(t, { apiStatus: 401 });
   for (const [name, args] of [
     ['firecrawl_search', { query: 'pizza' }],
-    ['firecrawl_exchange_discover', {}],
+    ['firecrawl_find_tools', {}],
     ['firecrawl_scrape', { alexandria: [EXCHANGE_CALL] }],
     ['firecrawl_scrape', { url: 'https://example.com' }],
   ]) {

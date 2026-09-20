@@ -942,11 +942,7 @@ function searchDomainsAreExclusive(args: {
 const SEARCH_DOMAINS_CONFLICT_MESSAGE =
   'includeDomains and excludeDomains cannot both be specified';
 
-// Firecrawl Exchange (catalogued data providers). Search returns capability
-// hits, firecrawl_exchange_discover reads a capability's contract, and scrape
-// with `exchange` executes capabilities. Every Exchange call is gated per team
-// by an API key, so keyless and unauthenticated sessions are refused here
-// with an explanatory message instead of an opaque upstream 401/403.
+// Alexandria execution requires authenticated team access.
 const EXCHANGE_KEY_REQUIRED_MESSAGE =
   'Alexandria requires an API key on a team with Alexandria access';
 const EXCHANGE_MAX_CALLS = 10;
@@ -970,42 +966,6 @@ const exchangeCallsSchema = z
   .min(1)
   .max(EXCHANGE_MAX_CALLS);
 
-const exchangeDiscoverParamsSchema = z.object({
-  cohort: z.string().min(1).optional().describe('Cohort slug, e.g. "finance".'),
-  provider: z
-    .string()
-    .min(1)
-    .optional()
-    .describe('Provider slug within the cohort. Requires cohort.'),
-  capability: z
-    .string()
-    .min(1)
-    .optional()
-    .describe(
-      'Capability address within the provider, e.g. "series/observations". Requires cohort and provider; returns the full contract.'
-    ),
-  q: z
-    .string()
-    .min(1)
-    .optional()
-    .describe(
-      'Semantic query over all capabilities. Accepted on the index route only (no cohort, provider, or capability).'
-    ),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .max(24)
-    .optional()
-    .describe('Maximum semantic hits (1-24). Applies with q.'),
-  expand: z
-    .enum(['all'])
-    .optional()
-    .describe('On a cohort route, "all" inlines each provider\'s capabilities.'),
-});
-
-type ExchangeDiscoverArgs = z.infer<typeof exchangeDiscoverParamsSchema>;
-
 function assertExchangeCredential(session?: SessionData): void {
   if (hasCredential(session)) return;
   const payload = {
@@ -1014,57 +974,6 @@ function assertExchangeCredential(session?: SessionData): void {
     docs_url: MCP_CONNECTION_GUIDE_URL,
   };
   throw new UserError(payload.message, payload);
-}
-
-// Every path segment is a catalogue slug. encodeURIComponent leaves "." and
-// ".." intact, so refuse them outright to keep the request under
-// /exchange/discover.
-function encodeExchangeDiscoverSegment(segment: string): string {
-  if (segment === '.' || segment === '..') {
-    throw new UserError(
-      'cohort, provider, and capability segments must be catalogue slugs; "." and ".." are not accepted.'
-    );
-  }
-  return encodeURIComponent(segment);
-}
-
-function buildExchangeDiscoverPath(args: ExchangeDiscoverArgs): string {
-  if (args.q && (args.cohort || args.provider || args.capability)) {
-    throw new UserError(
-      'q is accepted on the index route only: omit cohort, provider, and capability to search semantically, or drop q to walk the catalogue.'
-    );
-  }
-  if (args.provider && !args.cohort) {
-    throw new UserError('provider requires cohort.');
-  }
-  if (args.capability && !(args.cohort && args.provider)) {
-    throw new UserError('capability requires cohort and provider.');
-  }
-  if (args.limit !== undefined && !args.q) {
-    throw new UserError('limit applies with q only.');
-  }
-  if (args.expand && !(args.cohort && !args.provider && !args.capability)) {
-    throw new UserError(
-      'expand applies on a cohort route only: pass cohort without provider or capability.'
-    );
-  }
-  const segments = [args.cohort, args.provider]
-    .filter((segment): segment is string => Boolean(segment))
-    .map(encodeExchangeDiscoverSegment);
-  if (args.capability) {
-    segments.push(
-      ...args.capability
-        .split('/')
-        .filter(Boolean)
-        .map(encodeExchangeDiscoverSegment)
-    );
-  }
-  const params = new URLSearchParams();
-  if (args.q) params.set('q', args.q);
-  if (args.limit !== undefined) params.set('limit', String(args.limit));
-  if (args.expand) params.set('expand', args.expand);
-  const query = params.toString();
-  return `/exchange/discover${segments.length ? `/${segments.join('/')}` : ''}${query ? `?${query}` : ''}`;
 }
 
 const TERMS_REQUIRED_CODE = 'THIRD_PARTY_DATA_TERMS_REQUIRED';
@@ -2046,7 +1955,7 @@ const scrapeToolParamsSchema = scrapeParamsSchema
       .regex(/^[A-Za-z0-9._:-]{1,128}$/)
       .optional()
       .describe(
-        'Exchange execution ID. Reuse for retries of the identical payload; generated when omitted and returned with the result.'
+        'Alexandria execution ID. Reuse for retries of the identical payload; generated when omitted and returned with the result.'
       ),
     alexandria: z.union([exchangeCallSchema, exchangeCallsSchema])
       .optional()
@@ -2076,7 +1985,7 @@ const scrapeToolParamsSchema = scrapeParamsSchema
   )
   .refine(
     (args) => !args.requestId || !!args.alexandria,
-    'requestId applies to Exchange execution only'
+    'requestId applies to Alexandria execution only'
   );
 
 const parseOptionParamsSchema = z.object({
@@ -2497,7 +2406,7 @@ Alexandria execution errors relay a \`code\` and \`chargeId\`: \`request_in_flig
     } & Record<string, unknown>;
     if (alexandria) {
       assertExchangeCredential(session);
-      log.info('Executing Exchange capabilities', {
+      log.info('Executing Alexandria capabilities', {
         count: Array.isArray(alexandria) ? alexandria.length : 1,
       });
       return executeExchangeCalls(session, alexandria, suppliedRequestId, options.timeout as number | undefined);
@@ -2872,33 +2781,6 @@ server.addTool({
     }
     const result = await executeExchangeCalls(session, { provider: 'firecrawl', capability: 'find-tools', options });
     return compactText(withFindToolsNavigation(JSON.parse(result)));
-  },
-});
-
-server.addTool({
-  name: 'firecrawl_exchange_discover',
-  annotations: {
-    title: 'Discover Exchange capabilities',
-    readOnlyHint: true, // Reads the Exchange catalogue; executes nothing.
-    openWorldHint: false, // Bounded to Firecrawl's own provider catalogue.
-    destructiveHint: false, // Catalogue read only.
-  },
-  description: `
-Legacy catalogue interface. Prefer firecrawl_search for natural discovery and firecrawl_find_tools for progressive listing and selected contracts. Browse the Firecrawl Exchange catalogue of data providers and read capability contracts. Two modes: walk the catalogue by omitting \`q\` (no arguments lists cohorts; \`cohort\` lists its providers, with \`expand: "all"\` inlining their capabilities; \`cohort\` + \`provider\` lists that provider; \`cohort\` + \`provider\` + \`capability\` returns the full contract with \`options\`, \`returns\`, \`executable\`, and \`exampleQueries\`), or search semantically with \`q\` and optional \`limit\` on the index route, which returns \`capabilities\` (address, provider, cohorts, concept, similarity) without their contracts.
-
-Legacy semantic hits carry no option schema, so walk to the capability address before executing it with \`firecrawl_scrape\` \`alexandria\`. Exchange needs an API key on a team with Exchange access; a 501 semantic_not_configured means the deployment has no semantic index.
-`,
-  parameters: exchangeDiscoverParamsSchema,
-  execute: async (args: unknown, { session, log }): Promise<string> => {
-    assertExchangeCredential(session);
-    const pathName = buildExchangeDiscoverPath(args as ExchangeDiscoverArgs);
-    log.info('Discovering Exchange capabilities', { path: pathName });
-    const client = getClient(session);
-    const httpRes = await relayExchangeError(
-      () => (client as any).http.get(pathName, ORIGIN_HEADERS),
-      { tool: 'firecrawl_exchange_discover', requestId: session?.requestId }
-    );
-    return compactText(httpRes?.data ?? {});
   },
 });
 

@@ -307,7 +307,7 @@ Use this guide to select the right tool for your task:
 - **If you need multi-source research that returns structured data, do not know the URLs, or the answer spans several sites** (an entity plus its fields, a list, a dataset): use **agent**
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
 - **If you need interactive browser automation** (click, type, navigate): use **interact** with a URL for a fresh page, or **scrape** + **interact** when you already scraped the page or need tighter scrape control
-- **If you need data from a catalogued provider** (Firecrawl Exchange): search with `sources: ["alexandria"]`, inspect the returned tool contract, and execute it with **scrape** `alexandria`
+- **If you need data from a catalogued provider** (Alexandria): search with `sources: ["alexandria"]`, inspect the returned tool contract, and execute it with **scrape** `alexandria`
 
 ### Quick Reference Table
 
@@ -496,7 +496,7 @@ Search the web and optionally extract content from search results.
 
 Set `highlights` to `true` to request query-relevant highlights or `false` to keep the original search snippets. Omit it to use the API's default behavior.
 
-Add `"sources": ["alexandria"]` for semantic tool discovery in `data.tools`, optionally mixed with web/news/images. A query is required. Use `firecrawl_find_tools` on the full MCP surface for contextual lookup and progressive disclosure; see [Exchange Tools](#15-exchange-tools). The legacy `exchange` source is normalized to `alexandria`.
+Add `"sources": ["alexandria"]` for semantic tool discovery in `data.tools`, optionally mixed with web/news/images. A query is required. Use `firecrawl_find_tools` on the full MCP surface for contextual lookup and progressive disclosure; see [Alexandria Tools](#15-alexandria-tools).
 
 For scientific papers, see [Research Tools](#12-research-tools-firecrawl_research_): they search paper abstracts and full text, while `categories: ["research"]` here filters ordinary web results to research-affiliated websites.
 
@@ -956,9 +956,9 @@ Search an index built for coding agents. The index covers GitHub issues, merged 
 
 `firecrawl_search` with `categories: ["developer"]` searches the same index beside the web results. Use this tool instead when you want the matched passages, the `skills` filter, or no web results in the response. The search-only endpoint exposes both tools, and the same choice applies there.
 
-### 15. Exchange Tools
+### 15. Alexandria Tools
 
-Firecrawl Alexandria is a catalogue of data providers reachable through the Firecrawl API with a Firecrawl API key on a team with Alexandria access. Keyless sessions (hosted or local) get `Alexandria requires an API key on a team with Alexandria access`; `firecrawl_exchange_discover` is not listed for hosted keyless sessions.
+Firecrawl Alexandria is a catalogue of data providers reachable through the Firecrawl API with a Firecrawl API key on a team with Alexandria access. Keyless sessions (hosted or local) get `Alexandria requires an API key on a team with Alexandria access`; Alexandria discovery tools are not listed for hosted keyless sessions.
 
 **Semantic discovery (`firecrawl_search`):**
 
@@ -1012,24 +1012,10 @@ URLs provide contextual discovery without fetching the page.
 Results are in `data.alexandria[0].data`. Follow an item's `nextTool` by calling
 its `name` with its `arguments`; the page's `nextTool` advances pagination.
 Existing `next` objects remain Alexandria discovery calls usable through
-`firecrawl_scrape`. The category index uses `/exchange/discover`; subsequent
-steps use `/v2/scrape`. Discovery costs zero credits and never executes the
+`firecrawl_scrape`. Discovery costs zero credits and never executes the
 provider tools. Read the selected full contract before execution.
 
-These controls require the matching Alexandria API deployment. The existing
-`firecrawl_exchange_discover`, `firecrawl_skills_resolve`, and `firecrawl_skill`
-proxy tools remain available for compatibility on the full MCP surface.
-
-**Read a contract (`firecrawl_exchange_discover`):** walk the catalogue or search it.
-
-```json
-{ "name": "firecrawl_exchange_discover", "arguments": {} }
-{ "name": "firecrawl_exchange_discover", "arguments": { "cohort": "finance", "expand": "all" } }
-{ "name": "firecrawl_exchange_discover", "arguments": { "cohort": "finance", "provider": "fred", "capability": "series/observations" } }
-{ "name": "firecrawl_exchange_discover", "arguments": { "q": "balance sheet", "limit": 8 } }
-```
-
-No arguments lists cohorts; `cohort` lists providers (`expand: "all"` inlines their capabilities); `cohort` + `provider` + `capability` returns the full contract (`options`, `returns`, `creditsCost`, `executable`, `exampleQueries`). `q` (with optional `limit`, 1-24) is accepted on the index route only and returns `capabilities` without contracts; a deployment without a semantic index answers `501 semantic_not_configured`.
+These controls require the matching Alexandria API deployment.
 
 **Execute (`firecrawl_scrape` with `alexandria`):** pass `alexandria` instead of `url` (exactly one of the two; requestId and timeout may also be supplied). A single call or an array of up to ten calls is accepted.
 
@@ -1048,7 +1034,7 @@ No arguments lists cohorts; `cohort` lists providers (`expand: "all"` inlines th
 }
 ```
 
-**Returns:** `{ success, scrape_id, requestId, data: { alexandria: [...], creditsCost } }`. Each item is either a result (`provider`, `capability`, `creditsCost`, `data`, `records`, `upstreamStatus`) or an `error` with a `code`; the batch never fails as a whole for a provider error and `data.creditsCost` sums the successful items. Exchange error bodies (403 without Exchange access, and 402/409 billing statuses) are relayed in-band with their `code`.
+**Returns:** `{ success, scrape_id, requestId, data: { alexandria: [...], creditsCost } }`. Each item is either a result (`provider`, `capability`, `creditsCost`, `data`, `records`, `upstreamStatus`) or an `error` with a `code`; the batch never fails as a whole for a provider error and `data.creditsCost` sums the successful items. Alexandria error bodies (403 without Alexandria access, and 402/409 billing statuses) are relayed in-band with their `code`.
 
 Execution generates one `x-request-id` and returns it on success or failure. Retry
 the identical payload with that `requestId`; do not create a new ID after an

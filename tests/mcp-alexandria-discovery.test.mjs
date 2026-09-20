@@ -65,12 +65,10 @@ test('Find Tools trims queries and rejects whitespace before reaching the API', 
   assert.equal(api.requests.length,count);
 });
 
-test('legacy discovery routes a selected contract and rejects unsafe paths locally', async (t) => {
-  const {api,client}=await startStdioWithApi(t);
-  toolText(await client.request('tools/call', {name:'firecrawl_exchange_discover',arguments:{cohort:'finance',provider:'fred',capability:'series/observations'}}));
-  assert.equal(api.requests.at(-1).url,'/exchange/discover/finance/fred/series/observations');
-  for(const arguments_ of [{cohort:'..'},{cohort:'finance',provider:'fred',capability:'../../foo'},{expand:'all'}]) {
-    await callExpectingError(client,{name:'firecrawl_exchange_discover',arguments:arguments_});
-  }
-  assert.equal(api.requests.length,1);
+test('tool inventory exposes current discovery without the legacy Exchange tool', async (t) => {
+  const { client } = await startStdioWithApi(t);
+  const { tools } = await client.request('tools/list', {});
+  assert(tools.some(tool => tool.name === 'firecrawl_find_tools'));
+  assert(!tools.some(tool => tool.name === 'firecrawl_exchange_discover'));
+  for (const tool of tools) assert.doesNotMatch(tool.description, /Firecrawl Exchange|Legacy catalogue interface|Exchange execution/);
 });
