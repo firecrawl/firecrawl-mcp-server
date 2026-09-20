@@ -54,12 +54,12 @@ the behavior. No runtime filter is involved.
 `sources` entries are source names (`web`, `news`, `images`, `alexandria`) or
 `{ type }` objects. The legacy `exchange` alias is accepted in either form and
 normalized to `alexandria` before the `/v2/search` request. Alexandria returns
-matching tool contracts in `data.tools`; these are catalogue entries, not executed
+compact tool suggestions by default in `data.tools`; these are catalogue entries, not executed
 provider results. Discovery costs no credits and requires an authenticated team
 with Alexandria access; keyless sessions get an explanatory error before any request.
 
 Search requires a query and does not accept catalogue browse mode. The full-surface
-catalogue tools (`firecrawl_find_tools`, `firecrawl_exchange_discover`) and execution
+catalogue tool (`firecrawl_find_tools`) and execution
 with `firecrawl_scrape` using `alexandria` are not part of this six-tool surface.
 
 ## OAuth

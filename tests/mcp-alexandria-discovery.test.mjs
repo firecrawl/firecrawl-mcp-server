@@ -9,7 +9,8 @@ test('discovery progresses from categories to compact tools and selected contrac
   assert(tools.some(tool => tool.name === 'firecrawl_find_tools'));
   for (const name of ['firecrawl_search', 'firecrawl_scrape', 'firecrawl_find_tools'])
     assert.doesNotMatch(tools.find(tool => tool.name === name).description, /bash/i);
-  assert(!tools.some(tool => tool.name === 'firecrawl_exchange_discover'));
+  for (const name of ['firecrawl_exchange_discover', 'firecrawl_skills_resolve', 'firecrawl_skill'])
+    assert(!tools.some(tool => tool.name === name));
   const root = toolText(await call({ limit: 1 })).data.alexandria[0].data;
   assert.equal(root.level, 'categories');
   const next = toolText(await call(root.nextTool.arguments)).data.alexandria[0].data;

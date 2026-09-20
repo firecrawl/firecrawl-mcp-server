@@ -307,7 +307,7 @@ Use this guide to select the right tool for your task:
 - **If you need multi-source research that returns structured data, do not know the URLs, or the answer spans several sites** (an entity plus its fields, a list, a dataset): use **agent**
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
 - **If you need interactive browser automation** (click, type, navigate): use **interact** with a URL for a fresh page, or **scrape** + **interact** when you already scraped the page or need tighter scrape control
-- **If you need data from a catalogued provider** (Alexandria): search with `sources: ["alexandria"]`, inspect the returned tool contract, and execute it with **scrape** `alexandria`
+- **If you need data from a catalogued provider** (Alexandria): search with `sources: ["alexandria"]`, inspect the selected contract with **find_tools**, and execute it with **scrape** `alexandria`
 
 ### Quick Reference Table
 
@@ -974,8 +974,9 @@ Firecrawl Alexandria is a catalogue of data providers reachable through the Fire
 }
 ```
 
-`data.tools` contains complete contracts, including inputs, response fields,
-examples, price, and match provenance. `domainTools: true` adds contextual matches to
+`data.tools` defaults to compact suggestions with provider, capability, and
+description. Set `toolDetail: "summary"` for metadata and navigation, or
+`toolDetail: "full"` for contracts including inputs, response fields and examples. `domainTools: true` adds contextual matches to
 query mentions and result URLs in that same array. Check `warning` for unavailable
 discovery. Search requires a query and does not accept catalogue traversal filters.
 This discovery works on both the full and search-only MCP surfaces.
@@ -1143,7 +1144,7 @@ MIT License - see LICENSE file for details
 
 ### Structured data and large results
 
-Authenticated search defaults to web results, semantic Alexandria tools, and domain matches. Start with the actual question. Use `firecrawl_find_tools` only to inspect a missing selected contract or browse progressively: categories → providers → compact tools → selected contract. Execute tools through `firecrawl_scrape`; ordinary URL scraping and search never automatically execute provider tools.
+Authenticated search defaults to web results, semantic Alexandria tools, and domain matches. Start with the actual question. Use `firecrawl_find_tools` for direct semantic tool lookup, selected contracts, or progressive browsing: categories → providers → compact tools → selected contract. Execute tools through `firecrawl_scrape`; ordinary URL scraping and search never automatically execute provider tools.
 
 For selected contracts, prefer `expand: ["options", "response"]` and request examples only if the input shape is unclear. Inspect related capabilities together and reuse the returned contracts.
 

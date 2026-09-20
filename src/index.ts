@@ -1190,8 +1190,7 @@ const openAiAppsChallengeToken = normalizeHeader(
 );
 
 const FULL_PROFILE_INSTRUCTIONS =
-  ALEXANDRIA_INSTRUCTIONS +
-  ` firecrawl_skills_resolve matches query mentions and page URLs, and firecrawl_skill reads a Markdown contract. Execution with firecrawl_scrape alexandria uses requestId; reuse the returned ID for retries of the same payload, never a new ID to bypass a pending or uncertain 409. Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question — code behaviour, a library or framework, an API contract, an error message, or a known bug — firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of repositories, GitHub issues, merged pull requests, READMEs, and curated documentation sites. Alexandria offers ready-made workflows and provider tools for a direct path to structured data. Use firecrawl_search for web results with compact tool suggestions, or firecrawl_find_tools for direct semantic tool lookup and catalogue browsing. firecrawl_search with sources: [{type: "alexandria"}] returns compact tool summaries in data.tools; toolDetail: "full" includes contracts, firecrawl_find_tools starts with categories, lists providers, then compact tools, and expands the selected full contract, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities and returns their results. Alexandria access needs an API key on a team with it enabled. A terms-gated Alexandria provider fails with code THIRD_PARTY_DATA_TERMS_REQUIRED and a requiresAction.url. Follow the returned terms/show and terms/accept calls through firecrawl_scrape; acceptance requires explicit user authorization for the reviewed version and digest and confirmed:true. Otherwise direct an organization admin to the dashboard URL. Do not repeat successful provider calls just because the client could not display their output. Provide only the required inputs and account for stated network or external side effects.`;
+  `Execution with firecrawl_scrape alexandria uses requestId; reuse the returned ID for retries of the same payload, never a new ID to bypass a pending or uncertain 409. Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question — code behaviour, a library or framework, an API contract, an error message, or a known bug — firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of repositories, GitHub issues, merged pull requests, READMEs, and curated documentation sites. Alexandria offers ready-made workflows and provider tools for a direct path to structured data. Use firecrawl_search for web results with compact tool suggestions, or firecrawl_find_tools for direct semantic tool lookup and catalogue browsing. firecrawl_search with sources: [{type: "alexandria"}] returns compact tool summaries in data.tools; toolDetail: "full" includes contracts, firecrawl_find_tools starts with categories, lists providers, then compact tools, and expands the selected full contract, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities and returns their results. Alexandria access needs an API key on a team with it enabled. A terms-gated Alexandria provider fails with code THIRD_PARTY_DATA_TERMS_REQUIRED and a requiresAction.url. Follow the returned terms/show and terms/accept calls through firecrawl_scrape; acceptance requires explicit user authorization for the reviewed version and digest and confirmed:true. Otherwise direct an organization admin to the dashboard URL. Do not repeat successful provider calls just because the client could not display their output. Provide only the required inputs and account for stated network or external side effects.`;
 const KEYLESS_PROFILE_INSTRUCTIONS = `Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index and repository research, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.`;
 
 // The search surface exposes web/developer/research search only. Its instructions
@@ -2455,7 +2454,7 @@ Alexandria execution errors relay a \`code\` and \`chargeId\`: \`request_in_flig
         },
         session
       );
-      return compactText(json?.data ?? json);
+      return asText(json?.data ?? json);
     }
     const client = getClient(session);
     const res = await relayTermsRequired(
@@ -2466,7 +2465,7 @@ Alexandria execution errors relay a \`code\` and \`chargeId\`: \`request_in_flig
         } as any),
       { tool: 'firecrawl_scrape' }
     );
-    return compactText(res);
+    return asText(res);
   },
 });
 
@@ -2692,75 +2691,6 @@ server.addTool({
   },
 });
 
-server.addTool({
-  name: 'firecrawl_skills_resolve',
-  annotations: {
-    title: 'Find contextual tools',
-    readOnlyHint: true,
-    openWorldHint: false,
-    destructiveHint: false,
-  },
-  description:
-    'Find accessible tools mapped to query mentions or URLs from search and scrape. Uses provider-configured mappings, including podcast providers. Returns skill IDs; read their contracts with firecrawl_skill. Catalogue lookup; executes no provider.',
-  parameters: z
-    .object({
-      urls: z.array(z.string().url()).max(100).default([]),
-      query: z.string().min(1).max(2000).optional(),
-      context: z
-        .enum(['search', 'scrape'])
-        .optional()
-        .describe('Which provider placement rules to apply; defaults to search.'),
-    })
-    .refine(
-      (args) => args.urls.length > 0 || !!args.query,
-      'Provide URLs or a query'
-    ),
-  execute: async (args, { session }): Promise<string> => {
-    assertExchangeCredential(session);
-    const response = await relayExchangeError(
-      () =>
-        (getClient(session) as any).http.post(
-          '/exchange/skills/resolve',
-          JSON.stringify(args),
-          { headers: { 'Content-Type': 'application/json' } }
-        ),
-      { tool: 'firecrawl_skills_resolve', requestId: session?.requestId }
-    );
-    return compactText(response?.data ?? {});
-  },
-});
-
-server.addTool({
-  name: 'firecrawl_skill',
-  annotations: {
-    title: 'Read a tool skill document',
-    readOnlyHint: true,
-    openWorldHint: false,
-    destructiveHint: false,
-  },
-  description:
-    'Read the Markdown contract for a skill ID returned by firecrawl_skills_resolve or search skills. Catalogue lookup; executes no provider.',
-  parameters: z.object({
-    id: z
-      .string()
-      .min(1)
-      .refine((id) => id !== '.' && id !== '..', 'Invalid skill ID'),
-  }),
-  execute: async ({ id }, { session }): Promise<string> => {
-    assertExchangeCredential(session);
-    const response = await relayExchangeError(
-      () =>
-        (getClient(session) as any).http.get(
-          `/exchange/skills/${encodeURIComponent(id)}/SKILL.md`,
-          ORIGIN_HEADERS
-        ),
-      { tool: 'firecrawl_skill', requestId: session?.requestId }
-    );
-    return typeof response?.data === 'string'
-      ? response.data
-      : compactText(response?.data ?? {});
-  },
-});
 
 const DEFAULT_CLOUD_API_URL = 'https://api.firecrawl.dev';
 

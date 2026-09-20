@@ -1,13 +1,14 @@
 # Changelog
 
-## [3.25.0] - 2026-09-02
+## [3.25.0] - Unreleased
 
 ### Added
 
-- Alexandria discovery through `firecrawl_search` with `sources: ["alexandria"]` or `sources: [{ "type": "alexandria" }]`. Both profiles normalize the legacy `exchange` source to `alexandria` and return tool contracts in `data.tools` with `creditsUsed` preserved.
-- `firecrawl_find_tools` on the full surface provides category browsing, compact provider tools, selected full contracts, URL lookup and `nextTool` navigation. `firecrawl_exchange_discover` also supports catalogue walks and semantic lookup through `/exchange/discover`.
+- Alexandria discovery through `firecrawl_search` with `sources: ["alexandria"]` or `sources: [{ "type": "alexandria" }]`. Both profiles normalize the legacy `exchange` source to `alexandria` and return compact tool suggestions by default in `data.tools` with `creditsUsed` preserved.
+- `firecrawl_find_tools` on the full surface provides category browsing, compact provider tools, selected full contracts, URL lookup and `nextTool` navigation.
 - `firecrawl_scrape` executes one or up to ten calls using `alexandria: [{ provider, capability, options }]` instead of `url`. Results are returned as `{ success, scrape_id, requestId, data: { alexandria, creditsCost } }`. Errors preserve their code and available charge ID. Keyless sessions receive `Alexandria requires an API key on a team with Alexandria access`.
-- `firecrawl_terms_show` reads provider agreements; `firecrawl_terms_accept` requires the reviewed version and digest plus explicit user authorization and `confirmed: true`.
+- Provider terms are read and accepted through nested `firecrawl_scrape` capabilities after a blocked request. Acceptance requires the reviewed version and digest, explicit user authorization and `confirmed: true`.
+- Successful large Alexandria results use a retained-result handoff above 20,000 estimated tokens when remote access is verified.
 
 ## [3.21.4] - 2026-06-23
 

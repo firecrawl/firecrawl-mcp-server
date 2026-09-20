@@ -1,14 +1,20 @@
 # Alexandria MCP validation — September 19, 2026
 
+These September 19 measurements predate compact search defaults and automatic large-result handoff. They are historical observations, not current release certification.
+
 Tested branch `alexandria-mcp` locally over MCP stdio against the production Firecrawl API. Automated tests also cover local HTTP transports with API fixtures. These results do not certify hosted deployment or every agent harness.
 
-## Automated checks
+## Current behavior
+
+Search defaults to compact tool suggestions. Successful Alexandria execution responses above 20,000 estimated tokens use a small handoff only after remote Bash verifies access to the retained batch. If verification fails, the original response remains inline. Ordinary URL scrapes retain their existing output formatting. The only added top-level tool is `firecrawl_find_tools`; terms and Bash remain nested scrape capabilities.
+
+## Historical automated checks
 
 - Build and TypeScript check pass.
 - All 117 tests pass, including authenticated/keyless surfaces, credential recovery, provider terms, default search and source opt-outs, progressive listing, selected contract expansion, large-output preservation, and Bash forwarding.
 - Fixed a test isolation issue: the smoke-test child previously inherited local API/OAuth credentials, making a nominally keyless instruction check fail on an authenticated developer machine. The helper now starts without credentials unless a test explicitly supplies them.
 
-## Live MCP observations
+## Historical live MCP observations
 
 | Operation | Response bytes | Time | Outcome |
 | --- | ---: | ---: | --- |
