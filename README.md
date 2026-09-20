@@ -1156,6 +1156,8 @@ MIT License - see LICENSE file for details
 
 Authenticated search defaults to web results, semantic Alexandria tools, and domain matches. Start with the actual question. Use `firecrawl_find_tools` only to inspect a missing selected contract or browse progressively: categories → providers → compact tools → selected contract. Execute tools through `firecrawl_scrape`; ordinary URL scraping and search never automatically execute provider tools.
 
+For a potentially large workflow result, supply and preserve a top-level `requestId` before execution. That ID remains available even if the client rejects the response. Regular URL scrapes use the returned scrape ID instead.
+
 For a large retained workflow or regular scrape result, call `firecrawl_scrape` with:
 
 ```json
