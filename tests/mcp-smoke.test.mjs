@@ -715,6 +715,7 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
     origin: 'mcp-fastmcp',
     sources: ['web', 'alexandria'],
     domainTools: true,
+    toolDetail: 'compact',
     query: 'example domain',
   });
   assert.equal(
@@ -1189,6 +1190,7 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
     origin: 'mcp-fastmcp',
     sources: ['web', 'alexandria'],
     domainTools: true,
+    toolDetail: 'compact',
     query: 'example domain',
   });
 

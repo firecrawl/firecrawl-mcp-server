@@ -9,7 +9,7 @@ test('firecrawl_scrape with alexandria posts the v2 batch and returns the envelo
   const result = await client.request('tools/call', {
     arguments: {
       alexandria: [
-        EXCHANGE_CALL,
+        { ...EXCHANGE_CALL, version: '1.2.3' },
         { provider: 'fred', capability: 'series/missing' },
       ],
     },
@@ -25,7 +25,7 @@ test('firecrawl_scrape with alexandria posts the v2 batch and returns the envelo
   );
   assert.deepEqual(api.requests[0].body, {
     alexandria: [
-      EXCHANGE_CALL,
+      { ...EXCHANGE_CALL, version: '1.2.3' },
       { provider: 'fred', capability: 'series/missing' },
     ],
     origin: 'mcp-fastmcp',
