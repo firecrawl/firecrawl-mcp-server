@@ -159,6 +159,8 @@ test('local environment API keys get actionable 401 recovery on discovery, searc
     const result = await client.request('tools/call', { name, arguments: args });
     assert.equal(result.isError, true, name);
     assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID', name);
+    assert.equal(result.structuredContent.auth_mode, 'credential_error');
+    assert.ok(result.structuredContent.docs_url);
     assert.match(result.content[0].text, /Replace the key/);
     assert.doesNotMatch(JSON.stringify(result), /fc-exchange-test/);
   }

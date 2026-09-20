@@ -79,16 +79,18 @@ class StdioMcpClient {
   #child;
   #id = 0;
   #pending = new Map();
+  #failure;
 
   constructor(child) {
     this.#child = child;
     child.stdout.on('data', (chunk) => this.#onData(chunk));
+    child.stdin.on('error', error => this.#fail(error));
+    child.on('error', error => this.#fail(error));
     child.once('exit', (code, signal) => {
       const error = new Error(
         `MCP server exited: code=${code} signal=${signal}`
       );
-      for (const { reject } of this.#pending.values()) reject(error);
-      this.#pending.clear();
+      this.#fail(error);
     });
   }
 
@@ -97,8 +99,8 @@ class StdioMcpClient {
   }
 
   request(method, params = {}) {
+    if (this.#failure) return Promise.reject(this.#failure);
     const id = ++this.#id;
-    this.#write({ id, jsonrpc: '2.0', method, params });
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.#pending.delete(id);
@@ -114,7 +116,14 @@ class StdioMcpClient {
           resolve(value);
         },
       });
+      this.#write({ id, jsonrpc: '2.0', method, params });
     });
+  }
+
+  #fail(error) {
+    this.#failure = error;
+    for (const {reject} of this.#pending.values()) reject(error);
+    this.#pending.clear();
   }
 
   #onData(chunk) {
@@ -125,19 +134,22 @@ class StdioMcpClient {
       const line = this.#buffer.slice(0, newline).replace(/\r$/, '');
       this.#buffer = this.#buffer.slice(newline + 1);
       if (!line.trim()) continue;
-      const message = JSON.parse(line);
+      let message;
+      try { message = JSON.parse(line); }
+      catch (error) { this.#fail(new Error(`Invalid MCP JSON: ${error.message}`)); return; }
       if (message.id !== undefined && this.#pending.has(message.id)) {
         const pending = this.#pending.get(message.id);
         this.#pending.delete(message.id);
         if (message.error)
-          pending.reject(new Error(JSON.stringify(message.error)));
+          pending.reject(Object.assign(new Error(JSON.stringify(message.error)), {rpcError: message.error}));
         else pending.resolve(message.result);
       }
     }
   }
 
   #write(message) {
-    this.#child.stdin.write(`${JSON.stringify(message)}\n`);
+    try { this.#child.stdin.write(`${JSON.stringify(message)}\n`); }
+    catch (error) { this.#fail(error); }
   }
 }
 
@@ -171,13 +183,14 @@ async function startStdioWithApi(t, options = {}) {
 // A tool call that fails either at schema validation (JSON-RPC error or an
 // isError result, depending on the FastMCP version) or inside execute.
 async function callExpectingError(client, params) {
-  try {
-    const result = await client.request('tools/call', params);
-    assert.equal(result.isError, true, JSON.stringify(result));
-    return result;
-  } catch (error) {
+  let result;
+  try { result = await client.request('tools/call', params); }
+  catch (error) {
+    if (!Number.isInteger(error.rpcError?.code)) throw error;
     return { isError: true, transportError: error };
   }
+  assert.equal(result.isError, true, JSON.stringify(result));
+  return result;
 }
 
 function toolText(result) {

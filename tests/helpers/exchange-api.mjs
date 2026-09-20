@@ -32,6 +32,7 @@ async function startFakeExchangeApi(options = {}) {
   const { keylessEligible = false } = options;
   const requests = [];
   const server = createServer(async (req, res) => {
+    try {
     let raw = '';
     req.setEncoding('utf8');
     for await (const chunk of req) raw += chunk;
@@ -50,6 +51,8 @@ async function startFakeExchangeApi(options = {}) {
       res.writeHead(status, { 'content-type': 'application/json' });
       res.end(JSON.stringify(body));
     };
+
+    if (req.method === 'POST' && (!parsedBody || typeof parsedBody !== 'object' || Array.isArray(parsedBody))) return json(400, {error:'Expected a JSON object body'});
 
     if (options.largeResult && (url.pathname === '/v2/search' || url.pathname.startsWith('/exchange/discover'))) return json(200, options.largeResult);
     if (options.apiStatus) return json(options.apiStatus, { success: false, error: 'Invalid API key' });
@@ -171,6 +174,10 @@ async function startFakeExchangeApi(options = {}) {
     }
 
     json(404, { success: false, error: `Unhandled ${req.method} ${req.url}` });
+    } catch (error) {
+      res.writeHead(500, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({error: `Mock API failure: ${error.message}`}));
+    }
   });
 
   await new Promise((resolve, reject) => {

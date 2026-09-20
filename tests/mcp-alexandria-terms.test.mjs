@@ -12,8 +12,10 @@ test('provider terms tools read and accept exact reviewed terms only with confir
   assert.equal(api.requests[0].method, 'GET');
   assert.equal(api.requests[0].url, '/exchange/provider-terms');
   const args = { provider: 'benzinga', version: read.terms.version, digest: read.terms.digest, confirmed: true };
-  for (const invalid of [{ ...args, confirmed: false }, { ...args, confirmed: undefined }, { ...args, version: '' }, { ...args, digest: 'invalid' }])
-    await callExpectingError(client, { name: 'firecrawl_terms_accept', arguments: invalid });
+  for (const [field, value] of [['confirmed', false], ['confirmed', undefined], ['version', ''], ['digest', 'invalid']]) {
+    const error = await callExpectingError(client, { name: 'firecrawl_terms_accept', arguments: {...args, [field]:value} });
+    assert.match(error.transportError?.message ?? JSON.stringify(error), new RegExp(field));
+  }
   assert.equal(api.requests.length, 1, 'invalid confirmation must never contact the API');
   const accepted = toolText(await client.request('tools/call', { name: 'firecrawl_terms_accept', arguments: args }));
   assert.equal(accepted.success, true);
