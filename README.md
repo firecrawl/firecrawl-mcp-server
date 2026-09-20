@@ -960,7 +960,7 @@ Search an index built for coding agents. The index covers GitHub issues, merged 
 The tool requires an authenticated Firecrawl account and is read-only.
 
 - `firecrawl_credit_usage` defaults to `{ "view": "current" }` and returns `remainingCredits`, `planCredits`, `billingPeriodStart`, and `billingPeriodEnd`. Remaining credits can exceed plan credits when the team has top-ups or grants.
-- Pass `{ "view": "historical" }` for calendar-month periods containing `startDate`, `endDate`, and `creditsUsed`. Add `"byApiKey": true` to split periods by API key; each row then includes `apiKey`. The latest period's `endDate` can be null.
+- Pass `{ "view": "historical" }` for calendar-month periods containing `startDate`, `endDate`, and `creditsUsed`. Passing `{ "byApiKey": true }` also selects the historical view and splits periods by API key; each row then includes `apiKey`. Do not combine `byApiKey` with `{ "view": "current" }`. The latest period's `endDate` can be null.
 
 ## Logging System
 
