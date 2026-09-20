@@ -1,0 +1,43 @@
+evals/alexandria/README.md
+  s_8faf22d852794a::t_ac00c4afeaf58b 17,31,58-63
+  s_8faf22d852794a::t_ed523ed16fb6b2 1-16,18-30,32-57,65-74
+  s_8faf22d852794a::t_8fbab4468af271 64
+evals/alexandria/cases.mjs
+  s_8faf22d852794a::t_44e0b2c3878b2b 1-21
+evals/alexandria/transport.mjs
+  s_8faf22d852794a::t_44e0b2c3878b2b 1-76
+evals/alexandria/run.mjs
+  s_8faf22d852794a::t_4ef654bf2eadd7 1-5,7-21,29-52,54,59-73,75-94,96-97,100-105
+  s_8faf22d852794a::t_a69a13fe23a968 22-28
+  s_8faf22d852794a::t_86cecba915f8da 6,53,55-58,74,95
+  s_8faf22d852794a::t_8fbab4468af271 98-99
+evals/alexandria/summary.mjs
+  s_8faf22d852794a::t_8fbab4468af271 8
+  s_8faf22d852794a::t_47ab85a708acfd 24
+  s_8faf22d852794a::t_ac00c4afeaf58b 1-7,9-23,25-32
+evals/alexandria/grade.mjs
+  s_8faf22d852794a::t_4ef654bf2eadd7 1-14,27,29-44,48-50,52-54,56-60,62-63,65-71,73-78,86-87,92-93,95-101
+  s_8faf22d852794a::t_86cecba915f8da 45-47,64
+  s_8faf22d852794a::t_47ab85a708acfd 51,79-85,88-91,94
+  s_8faf22d852794a::t_aaf26ac9eb12ed 15-26,28,55,61,72
+evals/alexandria/grade.test.mjs
+  s_8faf22d852794a::t_86cecba915f8da 22,38
+  s_8faf22d852794a::t_ac00c4afeaf58b 9,61-72
+  s_8faf22d852794a::t_ed523ed16fb6b2 1-8,10-21,23-37,39-60,73-97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b3e9bfdbc082fa1233cbad4a6b181d4b67e3d9bd",
+  "prompts": {},
+  "sessions": {
+    "s_8faf22d852794a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0a6b8-22f2-7903-9cd1-38d24672b2f2",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Developers Digest <124798203+developersdigest@users.noreply.github.com>"
+    }
+  }
+}
