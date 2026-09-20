@@ -120,3 +120,50 @@ test('remote Bash source loading and workspace reuse forward through scrape with
   assert.match(scrape.description, /capability: "bash"/);
   assert.match(scrape.description, /top-level requestId/);
 });
+
+const largeAlexandria = (text = 'x'.repeat(90_000)) => ({
+  success: true,
+  data: { creditsCost: 5, alexandria: [{ ...EXCHANGE_CALL, data: { text } }] },
+});
+
+test('oversized Alexandria results hand off only after retention is confirmed and nextTool works', async (t) => {
+  const { api, client } = await startStdioWithApi(t, { largeResult: largeAlexandria(), bashRecovery: 'available' });
+  const result = toolText(await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { alexandria: EXCHANGE_CALL } }));
+  assert.equal(result.delivery, 'retained');
+  assert.equal(result.inlineTokenBudget, 20000);
+  assert(result.estimatedTokens > 20000);
+  assert(JSON.stringify(result).length < 2000);
+  assert.equal(result.creditsCost, 5);
+  assert.equal(api.requests.length, 2);
+  assert.equal(api.requests[1].body.alexandria.options.requestId, result.requestId);
+  assert.notEqual(api.requests[1].headers['x-request-id'], result.requestId);
+  assert.equal(api.requests[1].headers.authorization, 'Bearer fc-exchange-test');
+  const followup = toolText(await client.request('tools/call', result.nextTool));
+  assert.equal(followup.data.alexandria[0].data.workspaceId, 'retained-workspace');
+  assert.equal(api.requests.length, 3);
+});
+
+test('unavailable or partially retained responses remain intact', async (t) => {
+  for (const bashRecovery of ['missing', 'partial']) {
+    const payload = largeAlexandria();
+    const { api, client } = await startStdioWithApi(t, { largeResult: payload, bashRecovery });
+    const result = toolText(await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { alexandria: EXCHANGE_CALL } }));
+    assert.deepEqual(result.data, payload.data);
+    assert.equal(result.delivery, undefined);
+    assert.equal(api.requests.length, 2);
+  }
+});
+
+test('below-budget results, errors, utility calls and URL scrapes bypass retention', async (t) => {
+  for (const [payload, args] of [
+    [largeAlexandria('small'), { alexandria: EXCHANGE_CALL }],
+    [{ ...largeAlexandria(), success: false }, { alexandria: EXCHANGE_CALL }],
+    [largeAlexandria(), { alexandria: { provider: 'firecrawl', capability: 'bash', options: { workspaceId: 'existing', command: 'cat response.json' } } }],
+    [largeAlexandria(), { url: 'https://example.com' }],
+  ]) {
+    const { api, client } = await startStdioWithApi(t, { largeResult: payload, bashRecovery: 'available' });
+    const result = toolText(await client.request('tools/call', { name: 'firecrawl_scrape', arguments: args }));
+    assert.equal(result.delivery, undefined);
+    assert.equal(api.requests.length, 1);
+  }
+});

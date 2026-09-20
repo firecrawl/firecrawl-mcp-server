@@ -1179,7 +1179,7 @@ Read `stdout`, `stderr`, `exitCode`, and `workspaceId` in `data.alexandria[0].da
 
 For workflow sources, `response.json` preserves the API envelope: select `.data.alexandria[].data`, then the selected contract’s `response.key` when nonempty. Combine related counts and projections in one Bash command when that shape is known, rather than repeatedly inspecting keys.
 
-No default token cap or process-local result cache is added. A harness can reject a large response before the agent sees it; these instructions enable explicit recovery, not automatic overflow detection. When local filesystem tools are available, saving CLI output and reading selected sections is another option.
+Successful Alexandria execution responses above 20,000 estimated tokens (serialized UTF-8 bytes divided by four) return a small handoff after remote Bash confirms the complete batch is accessible. Follow `nextTool` to inspect the retained data. This adds one Bash call and starts a workspace with a five-minute idle TTL. The full payload is preserved. If confirmation fails, the original response stays inline. Search, ordinary URL scrape, error responses and Firecrawl utility calls are unchanged. This delivery budget does not measure the client’s remaining context; no process-local result cache is added. When local filesystem tools are available, saving CLI output and reading selected sections is another option.
 
 The CLI discovery sequence maps to these MCP calls:
 
