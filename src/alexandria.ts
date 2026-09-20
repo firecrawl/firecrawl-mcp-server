@@ -55,7 +55,7 @@ export const findToolsSchema = z
     groups: z.array(z.string().min(1)).min(1).max(50).optional().describe('Optional group IDs for explicit group browsing.'),
     capabilities: z.array(z.string().min(1)).min(1).max(50).optional().describe('Exact capability IDs. A selected capability expands its complete contract by default.'),
     level: z.enum(['categories', 'providers', 'groups', 'tools']).optional(),
-    expand: z.array(z.enum(['options', 'response', 'examples'])).optional().describe('Explicit expansion override; [] keeps results compact. Omit for full contracts on selected capabilities.'),
+    expand: z.array(z.enum(['options', 'response', 'examples'])).optional().describe('Use ["options", "response"] for inputs and output shape without example payloads; [] keeps results compact. Omit for full contracts on selected capabilities.'),
     limit: z.number().int().min(1).max(100).optional(),
     offset: z.number().int().nonnegative().optional(),
   })

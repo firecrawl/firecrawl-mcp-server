@@ -139,7 +139,6 @@ function spawnServer(env) {
       ...process.env,
       FIRECRAWL_API_KEY: '',
       FIRECRAWL_OAUTH_TOKEN: '',
-      FIRECRAWL_USE_CLI_CREDENTIALS: 'false',
       MCP_DELEGATED_CREDENTIAL_SECRET:
         'test-mcp-delegated-credential-secret-32',
       ...env,
@@ -1395,7 +1394,7 @@ test('local HTTP header API keys receive Core credential recovery', async (t) =>
   );
 });
 
-test('local HTTP environment API keys receive credential recovery', async (t) => {
+test('local HTTP environment credentials keep self-hosted Core errors', async (t) => {
   const backend = await startFakeFirecrawlBackend();
   t.after(() => backend.close());
 
@@ -1423,8 +1422,8 @@ test('local HTTP environment API keys receive credential recovery', async (t) =>
   assert.equal(response.status, 200);
   const result = parseSseJson(await response.text()).result;
   assert.equal(result.isError, true);
-  assert.equal(result.content[0].text, INVALID_API_KEY_MESSAGE);
-  assert.equal(result.structuredContent?.code, 'CREDENTIAL_INVALID');
+  assert.notEqual(result.content[0].text, INVALID_API_KEY_MESSAGE);
+  assert.notEqual(result.structuredContent?.code, 'CREDENTIAL_INVALID');
   assert.equal(backend.requests.some((request) => request.url === '/v2/search'), true);
 });
 

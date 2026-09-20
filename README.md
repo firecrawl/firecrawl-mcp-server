@@ -956,20 +956,6 @@ Search an index built for coding agents. The index covers GitHub issues, merged 
 
 `firecrawl_search` with `categories: ["developer"]` searches the same index beside the web results. Use this tool instead when you want the matched passages, the `skills` filter, or no web results in the response. The search-only endpoint exposes both tools, and the same choice applies there.
 
-### Local shared credentials
-
-For a local stdio server, set `FIRECRAWL_USE_CLI_CREDENTIALS=true` to read the
-credentials saved by `firecrawl login`. Explicit API keys or OAuth tokens still
-win. This option is ignored on HTTP/hosted transports.
-
-```bash
-codex mcp add firecrawl_local --env FIRECRAWL_USE_CLI_CREDENTIALS=true -- firecrawl-mcp
-claude mcp add --scope user firecrawl_local --env FIRECRAWL_USE_CLI_CREDENTIALS=true -- firecrawl-mcp
-```
-
-After rebuilding and linking locally with `npm run build` and `npm link`, these
-entries use the linked build. Start a new MCP session to load updated tools.
-
 ### 15. Exchange Tools
 
 Firecrawl Alexandria is a catalogue of data providers reachable through the Firecrawl API with a Firecrawl API key on a team with Alexandria access. Keyless sessions (hosted or local) get `Alexandria requires an API key on a team with Alexandria access`; `firecrawl_exchange_discover` is not listed for hosted keyless sessions.

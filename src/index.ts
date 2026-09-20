@@ -20,7 +20,6 @@ import {
   ALEXANDRIA_INSTRUCTIONS,
   ALEXANDRIA_SEARCH_INSTRUCTIONS,
 } from './alexandria';
-import { loadCliCredentials } from './cli-credentials';
 import { registerDeveloperTools } from './developer';
 import { extractSingleTrustedClientIp } from './keyless-client-ip';
 import { registerMonitorTools } from './monitor';
@@ -40,7 +39,6 @@ import {
 } from './session-credential';
 
 dotenv.config({ debug: false, quiet: true });
-loadCliCredentials();
 
 const require = createRequire(import.meta.url);
 const { version: packageVersion } = require('../package.json') as {
@@ -1462,13 +1460,8 @@ function isCoreCredentialRejection(error: unknown): boolean {
   const candidate = error as {
     response?: { status?: unknown };
     status?: unknown;
-    statusCode?: unknown;
   };
-  return (
-    candidate.status === 401 ||
-    candidate.statusCode === 401 ||
-    candidate.response?.status === 401
-  );
+  return candidate.status === 401 || candidate.response?.status === 401;
 }
 
 /**
@@ -1489,11 +1482,7 @@ async function runWithCredentialRecovery<T>(
     // An OAuth session was validated at connect time, so a rejection there is a
     // different fault and keeps its own reconnect guidance; a keyless session
     // never sent an account credential at all.
-    const apiKeySession =
-      session?.authType === 'api-key' ||
-      (session?.authType === 'env' &&
-        isFirecrawlApiKey(session.firecrawlApiKey ?? ''));
-    if (!apiKeySession || !isCoreCredentialRejection(error)) {
+    if (session?.authType !== 'api-key' || !isCoreCredentialRejection(error)) {
       throw error;
     }
     const payload = recoveryPayload('CREDENTIAL_INVALID', requestId);
@@ -1707,11 +1696,12 @@ function guardHostedTool(
         if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
         throw new UserError(String(payload.message), payload);
       }
-      const runTool = () => runWithCredentialRecovery(
-        () => execute(args, invocationContext),
-        requestId,
-        invocationSession
-      );
+      const runTool = () =>
+        runWithCredentialRecovery(
+          () => execute(args, invocationContext),
+          requestId,
+          invocationSession
+        );
       if (!logActions) return runTool();
 
       emitActionLog(tool.name, 'started', invocationSession, undefined, requestId);
@@ -1856,6 +1846,10 @@ function getClient(session?: SessionData): FirecrawlApp {
 }
 
 function asText(data: unknown): string {
+  return JSON.stringify(data, null, 2);
+}
+
+function compactText(data: unknown): string {
   return JSON.stringify(data);
 }
 
@@ -2526,7 +2520,7 @@ Alexandria execution errors relay a \`code\` and \`chargeId\`: \`request_in_flig
         },
         session
       );
-      return asText(json?.data ?? json);
+      return compactText(json?.data ?? json);
     }
     const client = getClient(session);
     const res = await relayTermsRequired(
@@ -2537,7 +2531,7 @@ Alexandria execution errors relay a \`code\` and \`chargeId\`: \`request_in_flig
         } as any),
       { tool: 'firecrawl_scrape' }
     );
-    return asText(res);
+    return compactText(res);
   },
 });
 
@@ -2653,7 +2647,7 @@ ${ALEXANDRIA_INSTRUCTIONS}
       // identifier to keyless clients, where it would invite an unusable call.
       const keylessResponse = { ...(json ?? {}) };
       delete keylessResponse.id;
-      return asText(keylessResponse);
+      return compactText(keylessResponse);
     }
     // Call /v2/search through the SDK's HTTP layer (auth + retries) instead
     // of `client.search()` so we preserve the full response envelope. The
@@ -2670,7 +2664,7 @@ ${ALEXANDRIA_INSTRUCTIONS}
     const httpRes = exchangeSource
       ? await relayExchangeError(postSearch, context)
       : await relayTermsRequired(postSearch, context);
-    return asText(httpRes?.data ?? {});
+    return compactText(httpRes?.data ?? {});
   },
 });
 
@@ -2701,7 +2695,7 @@ async function executeExchangeCalls(
       ),
       { tool: 'firecrawl_scrape', requestId }
     );
-    return asText({ ...(response?.data ?? {}), requestId });
+    return compactText({ ...(response?.data ?? {}), requestId });
   } catch (error) {
     if ((error as any)?.response?.status === 401) throw error;
     throw new UserError(
@@ -2803,7 +2797,7 @@ server.addTool({
       throw new UserError(
         'Provider not found in the accessible terms catalog.'
       );
-    return asText({
+    return compactText({
       ...terms,
       success: true,
       guidance:
@@ -2825,7 +2819,7 @@ server.addTool({
     'Record legally significant acceptance of provider terms for the authenticated organization. First use firecrawl_terms_show and present the agreement. Call only after the user explicitly authorizes acceptance of that exact version and digest and confirms authority to bind their organization. A data request is not authorization. Pass confirmed:true with the reviewed version and digest. Respect eligibility/authority errors; use the returned dashboard URL when required. Never automatically retry uncertain acceptance. After confirmed success, retry the original data request with its identical payload and requestId.',
   parameters: termsAcceptSchema,
   execute: async (args, { session }) =>
-    asText(await requestProviderTerms(session, args)),
+    compactText(await requestProviderTerms(session, args)),
 });
 
 server.addTool({
@@ -2861,10 +2855,10 @@ server.addTool({
       }));
       const page: any = { level: 'categories', items, total: rows.length };
       if (offset + options.limit < rows.length) page.nextTool = { name: 'firecrawl_find_tools', arguments: { level: 'categories', limit: options.limit, offset: offset + options.limit } };
-      return asText(withFindToolsNavigation({ success: true, data: { creditsCost: 0, alexandria: [{ provider: 'firecrawl', capability: 'find-tools', creditsCost: 0, data: page }] } }));
+      return compactText(withFindToolsNavigation({ success: true, data: { creditsCost: 0, alexandria: [{ provider: 'firecrawl', capability: 'find-tools', creditsCost: 0, data: page }] } }));
     }
     const result = await executeExchangeCalls(session, { provider: 'firecrawl', capability: 'find-tools', options });
-    return asText(withFindToolsNavigation(JSON.parse(result)));
+    return compactText(withFindToolsNavigation(JSON.parse(result)));
   },
 });
 
@@ -2891,7 +2885,7 @@ Legacy semantic hits carry no option schema, so walk to the capability address b
       () => (client as any).http.get(pathName, ORIGIN_HEADERS),
       { tool: 'firecrawl_exchange_discover', requestId: session?.requestId }
     );
-    return asText(httpRes?.data ?? {});
+    return compactText(httpRes?.data ?? {});
   },
 });
 
@@ -2929,7 +2923,7 @@ server.addTool({
         ),
       { tool: 'firecrawl_skills_resolve', requestId: session?.requestId }
     );
-    return asText(response?.data ?? {});
+    return compactText(response?.data ?? {});
   },
 });
 
@@ -2961,7 +2955,7 @@ server.addTool({
     );
     return typeof response?.data === 'string'
       ? response.data
-      : asText(response?.data ?? {});
+      : compactText(response?.data ?? {});
   },
 });
 
@@ -3092,13 +3086,6 @@ async function keylessPost(
             : undefined,
       });
       throw new UserError(String(payload.message), payload);
-    }
-    const termsAction = termsRequiredAction(json);
-    if (termsAction) {
-      throw termsRequiredError(termsAction, {
-        tool: path === '/v2/search' ? 'firecrawl_search' : 'firecrawl_scrape',
-        requestId: session?.requestId,
-      });
     }
     throw new Error(
       json?.error || `Firecrawl request failed (HTTP ${response.status})`
@@ -3764,14 +3751,10 @@ This acts on the live site, so actions such as form submission can create persis
     if (openedFromUrl) {
       log.info('Opening interact session from url', { url });
       const cleanedScrapeOptions = removeEmptyTopLevel(scrapeOptions ?? {});
-      const scraped = await relayTermsRequired(
-        () =>
-          client.scrape(String(url), {
-            ...cleanedScrapeOptions,
-            origin: ORIGIN,
-          } as any),
-        { tool: 'firecrawl_interact', requestId: session?.requestId }
-      );
+      const scraped = await client.scrape(String(url), {
+        ...cleanedScrapeOptions,
+        origin: ORIGIN,
+      } as any);
       scrapeId = (scraped as any)?.metadata?.scrapeId;
       if (!scrapeId) {
         return asText({
@@ -4034,7 +4017,7 @@ Returns result groups in \`data\` and an operation \`id\`.
       const httpRes = exchangeSource
         ? await relayExchangeError(postSearch, context)
         : await relayTermsRequired(postSearch, context);
-      return asText(httpRes?.data ?? {});
+      return compactText(httpRes?.data ?? {});
     },
   });
 }
