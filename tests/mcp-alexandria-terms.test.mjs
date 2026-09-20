@@ -46,3 +46,25 @@ test('firecrawl_scrape relays a reserved 409 billing error with its code and cha
     requestId: api.requests[0].headers['x-request-id'],
   });
 });
+
+
+test('disabled provider offers read-only terms recovery without treating other refusals as terms', async (t) => {
+  for (const [message, expected] of [
+    ['Access to benzinga is disabled for this organization.', true],
+    ['Permission denied.', false],
+    ['Access to another-provider is disabled for this organization.', false],
+  ]) {
+    const { api, client } = await startStdioWithApi(t, { providerRefusal: message });
+    const blocked = await callExpectingError(client, { name: 'firecrawl_scrape', arguments: { alexandria: [{ provider: 'benzinga', capability: 'news/search' }] } });
+    assert.equal(api.requests.length, 1);
+    assert.equal(blocked.structuredContent.status, 403);
+    assert.equal(Boolean(blocked.structuredContent.nextTool), expected);
+    if (expected) {
+      assert.match(blocked.content[0].text, /explicit authorization/);
+      const shown = toolText(await client.request('tools/call', blocked.structuredContent.nextTool));
+      assert.equal(shown.data.alexandria[0].data.status.accepted, false);
+      assert.equal(api.requests.length, 2);
+      assert.equal(api.requests[1].body.alexandria[0].capability, 'terms/show');
+    }
+  }
+});

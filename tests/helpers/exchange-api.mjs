@@ -104,7 +104,7 @@ async function startFakeExchangeApi(options = {}) {
         });
       }
       if (parsedBody?.alexandria?.[0]?.provider === 'benzinga') {
-        return json(403, TERMS_REQUIRED_BODY);
+        return json(403, options.providerRefusal ? { success: false, error: options.providerRefusal } : TERMS_REQUIRED_BODY);
       }
       if (parsedBody?.alexandria?.[0]?.provider === 'inflight') {
         return json(409, {
@@ -145,7 +145,7 @@ async function startFakeExchangeApi(options = {}) {
         });
       }
       if (parsedBody?.url === 'https://benzinga.example/news') {
-        return json(403, TERMS_REQUIRED_BODY);
+        return json(403, options.providerRefusal ? { success: false, error: options.providerRefusal } : TERMS_REQUIRED_BODY);
       }
       if (parsedBody?.url) {
         return json(200, {

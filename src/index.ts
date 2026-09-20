@@ -985,7 +985,7 @@ type TermsRequiredAction = {
   url: string;
 };
 
-type ExchangeErrorContext = { tool: string; requestId?: string };
+type ExchangeErrorContext = { tool: string; requestId?: string; providers?: string[] };
 
 function termsRequiredAction(body: unknown): TermsRequiredAction | undefined {
   const data = body as
@@ -1099,6 +1099,25 @@ async function relayExchangeError(
       typeof data?.error === 'string'
         ? data.error
         : `Alexandria request failed (HTTP ${response.status})`;
+    const disabledProvider = response.status === 403
+      ? context.providers?.find(provider => message === `Access to ${provider} is disabled for this organization.`)
+      : undefined;
+    if (disabledProvider) {
+      throw new UserError(
+        `${message} Read the provider terms and status using nextTool and present them to the user. Never infer acceptance from a data request. Only after explicit authorization for the reviewed version and digest may you call firecrawl_scrape with alexandria:{provider:"firecrawl",capability:"terms/accept",options:{provider:"${disabledProvider}",version:"<reviewed-version>",digest:"<reviewed-digest>",confirmed:true}}. Send terms calls separately. Acceptance may not restore disabled access; an organization admin may need to review https://www.firecrawl.dev/app/settings?tab=data-sources. Retry the original request only after access is restored.`,
+        {
+          code: typeof data?.code === 'string' ? data.code : 'exchange_error',
+          status: 403,
+          message,
+          nextTool: {
+            name: 'firecrawl_scrape',
+            arguments: {
+              alexandria: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: disabledProvider } }],
+            },
+          },
+        }
+      );
+    }
     throw new UserError(message, {
       code: typeof data?.code === 'string' ? data.code : 'exchange_error',
       status: response.status,
@@ -2609,7 +2628,7 @@ async function executeExchangeCalls(
           ...(timeout !== undefined ? { timeoutMs: timeout + 5000 } : {}),
         }
       ),
-      { tool: 'firecrawl_scrape', requestId }
+      { tool: 'firecrawl_scrape', requestId, providers: (Array.isArray(alexandria) ? alexandria : [alexandria]).map(call => call.provider) }
     );
     return alexandriaOutput(
       { ...(response?.data ?? {}), requestId },
