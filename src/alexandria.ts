@@ -39,6 +39,7 @@ export function searchQueryIsValid(args: { query?: string }): boolean {
 
 export const findToolsSchema = z
   .object({
+    query: z.string().min(1).max(2000).optional().describe('Semantic lookup of tools for the data you need. Selectors constrain the search.'),
     urls: z
       .array(
         z
@@ -63,17 +64,17 @@ export const findToolsSchema = z
 export const ALEXANDRIA_INSTRUCTIONS =
   'Start with the user’s actual question and constraints. Authenticated search defaults to web + semantic Alexandria tools + domain-matched tools. Alexandria contains ready-made website workflows, API providers and specialized indexes for structured records, listings, company/financial data, research and public records. Coverage varies; discover current tools rather than assuming one exists. ' +
   'Semantic discovery matches the data you need to capabilities even without a provider website in the web results. Domain matching connects result websites to tools that may fetch richer details, related records or collections beyond the linked page. Inspect coverage and required inputs; a matching domain alone does not guarantee a fit. ' +
-  'Use sources: ["alexandria"] for semantic tools only, sources: ["web"] for web only, or sources: ["web"], domainTools: true for web plus domain tools. domainTools: false disables domain matching. Results in data.tools are contracts, not executed data. Reuse a complete returned contract; otherwise inspect only the selected tool. ' +
-  'On the full MCP surface, firecrawl_find_tools is the list equivalent: {} lists categories; {categories:["<category-id>"]} lists providers; {providers:["<provider-id>"]} lists compact tools; adding capabilities:["<capability-id>"] expands the selected contract. Avoid expanding the entire catalogue. ' +
+  'Use sources: ["alexandria"] for semantic tools only, sources: ["web"] for web only, or sources: ["web"], domainTools: true for web plus domain tools. domainTools: false disables domain matching. Results in data.tools are compact summaries, not executed data. Inspect a selected tool with firecrawl_find_tools using its provider and capability, or set toolDetail: \"full\" for contracts upfront. Reuse a complete returned contract. ' +
+  'On the full MCP surface, firecrawl_find_tools supports semantic query lookup and is the list equivalent: {} lists categories; {categories:["<category-id>"]} lists providers; {providers:["<provider-id>"]} lists compact tools; adding capabilities:["<capability-id>"] expands the selected contract. Avoid expanding the entire catalogue. ' +
   'Execute through firecrawl_scrape with alexandria:{provider,capability,options}. Search scrapeOptions fetches web pages, never provider tools. Use web results when sufficient, tools when they offer a direct route to deeper data. Search IDs cannot be loaded into remote Bash.';
 
 export function findToolsOptions(args: z.infer<typeof findToolsSchema>) {
-  const level = args.level ?? (args.capabilities?.length || args.providers?.length || args.groups?.length || args.urls?.length ? 'tools' : args.categories?.length ? 'providers' : 'categories');
-  if (level === 'categories' && (args.providers?.length || args.categories?.length || args.groups?.length || args.capabilities?.length || args.urls?.length || args.expand !== undefined)) {
+  const level = args.level ?? (args.query || args.capabilities?.length || args.providers?.length || args.groups?.length || args.urls?.length ? 'tools' : args.categories?.length ? 'providers' : 'categories');
+  if (level === 'categories' && (args.query || args.providers?.length || args.categories?.length || args.groups?.length || args.capabilities?.length || args.urls?.length || args.expand !== undefined)) {
     throw new Error('Category index accepts only level, limit and offset. Select a category to browse providers.');
   }
   const { expand, ...selectors } = args;
-  return { ...selectors, ...(expand?.length ? { expand } : {}), level, limit: args.limit ?? 20,
+  return { ...selectors, ...(expand !== undefined ? { expand } : {}), level, limit: args.limit ?? 20,
     ...(args.expand === undefined && level === 'tools' && args.capabilities?.length ? { expand: ['options', 'response', 'examples'] as const } : {}),
   };
 }

@@ -1125,9 +1125,10 @@ test('Find Tools starts with categories and follows category pagination without 
 test('Find Tools infers compact provider tools and full selected contracts while respecting overrides', async (t) => {
   const {api, client} = await startStdioWithApi(t);
   for (const [args,expected] of [
+    [{query:'company records',expand:[]},{query:'company records',expand:[],level:'tools',limit:20}],
     [{providers:['particle']},{providers:['particle'],level:'tools',limit:20}],
     [{categories:['podcasts'],providers:['particle'],capabilities:['podcasts/episodes/search']},{categories:['podcasts'],providers:['particle'],capabilities:['podcasts/episodes/search'],level:'tools',limit:20,expand:['options','response','examples']}],
-    [{providers:['particle'],capabilities:['podcasts/episodes/search'],expand:[]},{providers:['particle'],capabilities:['podcasts/episodes/search'],level:'tools',limit:20}],
+    [{providers:['particle'],capabilities:['podcasts/episodes/search'],expand:[]},{providers:['particle'],capabilities:['podcasts/episodes/search'],level:'tools',limit:20,expand:[]}],
     [{providers:['particle'],level:'groups'},{providers:['particle'],level:'groups',limit:20}],
   ]) {
     const result=toolText(await client.request('tools/call',{name:'firecrawl_find_tools',arguments:args}));
@@ -1239,4 +1240,18 @@ test('remote Bash source loading and workspace reuse forward through scrape with
   const scrape = tools.tools.find(tool => tool.name === 'firecrawl_scrape');
   assert.match(scrape.description, /capability: "bash"/);
   assert.match(scrape.description, /top-level requestId/);
+});
+
+ test('tool detail is forwarded and invalid values are rejected locally', async (t) => {
+  const {api,client}=await startStdioWithApi(t);
+  for(const name of ['firecrawl_search','firecrawl_scrape']) {
+    const base=name === 'firecrawl_search' ? {query:'records'} : {url:'https://example.com',domainTools:true};
+    for(const toolDetail of ['summary','full']) {
+      toolText(await client.request('tools/call',{name,arguments:{...base,toolDetail}}));
+      assert.equal(api.requests.at(-1).body.toolDetail,toolDetail);
+    }
+    const count=api.requests.length;
+    await callExpectingError(client,{name,arguments:{...base,toolDetail:'invalid'}});
+    assert.equal(api.requests.length,count);
+  }
 });

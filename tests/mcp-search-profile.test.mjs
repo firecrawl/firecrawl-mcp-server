@@ -1131,11 +1131,12 @@ test('search-only surface rejects catalogue browsing and preserves semantic plus
   const invalid = parseSseJson(await (await call({query:'podcast episodes',sources:[{type:'alexandria',mode:'browse'}]})).text());
   assert.ok(invalid.error || invalid.result?.isError);
   assert.equal(backend.requests.filter(r=>r.url==='/v2/search').length, 0);
-  const valid = parseSseJson(await (await call({query:'podcast episodes',sources:['alexandria'],domainTools:true})).text());
+  const valid = parseSseJson(await (await call({query:'podcast episodes',sources:['alexandria'],domainTools:true,toolDetail:'full'})).text());
   assert.ok(!valid.error && !valid.result?.isError, JSON.stringify(valid));
   const sent = backend.requests.find(r=>r.url==='/v2/search').body;
   assert.deepEqual(sent.sources,['alexandria']);
   assert.equal(sent.domainTools,true);
+  assert.equal(sent.toolDetail,'full');
 });
 
 test('ordinary search profile enables semantic and domain tools by default', async (t) => {
