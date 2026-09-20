@@ -1156,6 +1156,8 @@ MIT License - see LICENSE file for details
 
 Authenticated search defaults to web results, semantic Alexandria tools, and domain matches. Start with the actual question. Use `firecrawl_find_tools` only to inspect a missing selected contract or browse progressively: categories → providers → compact tools → selected contract. Execute tools through `firecrawl_scrape`; ordinary URL scraping and search never automatically execute provider tools.
 
+For selected contracts, prefer `expand: ["options", "response"]` and request examples only if the input shape is unclear. Inspect related capabilities together and reuse the returned contracts.
+
 For a potentially large workflow result, supply and preserve a top-level `requestId` before execution. That ID remains available even if the client rejects the response. Regular URL scrapes use the returned scrape ID instead.
 
 For a large retained workflow or regular scrape result, call `firecrawl_scrape` with:
@@ -1174,6 +1176,8 @@ For a large retained workflow or regular scrape result, call `firecrawl_scrape` 
 ```
 
 Read `stdout`, `stderr`, `exitCode`, and `workspaceId` in `data.alexandria[0].data`. Continue with `options: {workspaceId, command}` to inspect `response.json` using `jq`, or `document.md` using bounded text commands for regular scrapes. Keep output selective. Source loading must be a standalone call; its nested source ID differs from the top-level execution request ID. Workspaces expire after five idle minutes, and not every result is retained (including ZDR and API-provider workflow payloads). Search IDs are not supported.
+
+For workflow sources, `response.json` preserves the API envelope: select `.data.alexandria[].data`, then the selected contract’s `response.key` when nonempty. Combine related counts and projections in one Bash command when that shape is known, rather than repeatedly inspecting keys.
 
 No default token cap or process-local result cache is added. A harness can reject a large response before the agent sees it; these instructions enable explicit recovery, not automatic overflow detection. When local filesystem tools are available, saving CLI output and reading selected sections is another option.
 
