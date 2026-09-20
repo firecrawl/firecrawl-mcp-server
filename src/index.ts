@@ -897,7 +897,7 @@ function buildSearchQueryWithDomains(
 // scrapeOptions). Defining the field set once keeps the two surfaces from
 // drifting when a source type, category, or filter changes.
 const searchToolBaseFields = {
-  toolDetail: z.enum(['summary', 'full']).optional().describe('Tool summaries by default. Set full for input/output contracts upfront; targeted contract inspection is available on the full MCP surface.'),
+  toolDetail: z.enum(['compact', 'summary', 'full']).optional().describe('Summary by default. Compact returns only provider, capability and description; full includes contracts. Inspect selected compact tools on the full MCP surface using firecrawl_find_tools providers and capabilities.'),
   query: z
     .string()
     .min(1)
@@ -2057,7 +2057,7 @@ const scrapeToolParamsSchema = scrapeParamsSchema
       .describe(
         'Execute catalogued Alexandria capabilities instead of scraping a URL. Exactly one of url or alexandria.'
       ),
-    toolDetail: z.enum(['summary', 'full']).optional().describe('URL domain discovery detail: summary by default, full includes tool contracts.'),
+    toolDetail: z.enum(['compact', 'summary', 'full']).optional().describe('URL domain discovery detail: summary by default, compact returns provider/capability/description, full includes contracts.'),
     domainTools: z
       .boolean()
       .optional()
@@ -3978,7 +3978,7 @@ Returns result groups in \`data\` and an operation \`id\`.
       } = args as {
         query?: string;
         domainTools?: boolean;
-        toolDetail?: 'summary' | 'full';
+        toolDetail?: 'compact' | 'summary' | 'full';
         includeDomains?: string[];
         excludeDomains?: string[];
         limit?: number;

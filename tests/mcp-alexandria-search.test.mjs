@@ -85,7 +85,7 @@ test('tool detail is forwarded and invalid values are rejected locally', async (
   const {api,client}=await startStdioWithApi(t);
   for(const name of ['firecrawl_search','firecrawl_scrape']) {
     const base=name === 'firecrawl_search' ? {query:'records'} : {url:'https://example.com',domainTools:true};
-    for(const toolDetail of ['summary','full']) {
+    for(const toolDetail of ['compact','summary','full']) {
       toolText(await client.request('tools/call',{name,arguments:{...base,toolDetail}}));
       assert.equal(api.requests.at(-1).body.toolDetail,toolDetail);
     }
