@@ -71,6 +71,7 @@ test('firecrawl_search forwards the Alexandria source and passes tools and credi
     query: 'nvidia balance sheet',
     sources: [{ type: 'web' }, { type: 'alexandria' }],
     domainTools: true,
+    toolDetail: 'compact',
     limit: 5,
     origin: 'mcp-fastmcp',
   });
@@ -85,6 +86,8 @@ test('tool detail is forwarded and invalid values are rejected locally', async (
   const {api,client}=await startStdioWithApi(t);
   for(const name of ['firecrawl_search','firecrawl_scrape']) {
     const base=name === 'firecrawl_search' ? {query:'records'} : {url:'https://example.com',domainTools:true};
+    toolText(await client.request('tools/call',{name,arguments:base}));
+    assert.equal(api.requests.at(-1).body.toolDetail,name === 'firecrawl_search' ? 'compact' : undefined);
     for(const toolDetail of ['compact','summary','full']) {
       toolText(await client.request('tools/call',{name,arguments:{...base,toolDetail}}));
       assert.equal(api.requests.at(-1).body.toolDetail,toolDetail);

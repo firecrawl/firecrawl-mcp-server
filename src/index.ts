@@ -897,7 +897,7 @@ function buildSearchQueryWithDomains(
 // scrapeOptions). Defining the field set once keeps the two surfaces from
 // drifting when a source type, category, or filter changes.
 const searchToolBaseFields = {
-  toolDetail: z.enum(['compact', 'summary', 'full']).optional().describe('Summary by default. Compact returns only provider, capability and description; full includes contracts. Inspect selected compact tools on the full MCP surface using firecrawl_find_tools providers and capabilities.'),
+  toolDetail: z.enum(['compact', 'summary', 'full']).optional().describe('Compact by default. Compact returns only provider, capability and description; full includes contracts. Inspect selected compact tools on the full MCP surface using firecrawl_find_tools providers and capabilities.'),
   query: z
     .string()
     .min(1)
@@ -2619,6 +2619,7 @@ ${ALEXANDRIA_INSTRUCTIONS}
       ),
     } as Record<string, unknown>;
     searchOpts.domainTools ??= defaultDomainTools(searchOpts.sources);
+    searchOpts.toolDetail ??= 'compact';
     const includeDomains = searchOpts.includeDomains as string[] | undefined;
     const excludeDomains = searchOpts.excludeDomains as string[] | undefined;
     delete searchOpts.includeDomains;
@@ -4010,7 +4011,7 @@ Returns result groups in \`data\` and an operation \`id\`.
           categories,
           highlights,
           enterprise,
-          toolDetail,
+          toolDetail: toolDetail ?? 'compact',
           domainTools:
             domainTools ?? defaultDomainTools(sources ?? ['web', 'alexandria']),
         }),

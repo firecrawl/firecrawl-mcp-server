@@ -487,6 +487,7 @@ test('search firecrawl_search sends a clean body built from allowed fields only'
     'highlights',
     'enterprise',
     'domainTools',
+    'toolDetail',
     'origin',
   ]);
   for (const key of Object.keys(sentBody)) {
@@ -497,6 +498,7 @@ test('search firecrawl_search sends a clean body built from allowed fields only'
     limit: 1,
     sources: [{ type: 'web' }],
     domainTools: false,
+    toolDetail: 'compact',
     origin: 'mcp-fastmcp',
   });
 });
@@ -531,6 +533,7 @@ test('search firecrawl_search normalizes the legacy exchange source to alexandri
     query: 'nvidia balance sheet',
     sources: ['web', 'alexandria'],
     domainTools: true,
+    toolDetail: 'compact',
     limit: 5,
     origin: 'mcp-fastmcp',
   });
