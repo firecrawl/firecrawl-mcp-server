@@ -83,6 +83,7 @@ async function startFakeExchangeApi(options = {}) {
     if (req.method === 'POST' && url.pathname === '/v2/scrape') {
       const termsCall = Array.isArray(parsedBody.alexandria) ? parsedBody.alexandria[0] : parsedBody.alexandria;
       if (termsCall?.provider === 'firecrawl' && ['terms/show', 'terms/accept'].includes(termsCall.capability)) {
+        if (termsCall.capability === 'terms/accept' && (!termsCall.options?.version || !termsCall.options?.digest || termsCall.options?.confirmed !== true)) return json(400, { success: false, error: 'Reviewed terms and confirmation are required.', code: 'invalid_option' });
         const data = termsCall.capability === 'terms/show'
           ? { provider: 'benzinga', terms: { version: 'v1', digest: 'a'.repeat(64), document: 'Review this agreement.' }, status: { accepted: false } }
           : { provider: 'benzinga', version: termsCall.options.version, digest: termsCall.options.digest, acceptedAt: '2026-09-20T00:00:00Z' };

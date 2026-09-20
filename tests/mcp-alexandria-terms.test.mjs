@@ -58,7 +58,7 @@ test('disabled provider offers read-only terms recovery without treating other r
     const blocked = await callExpectingError(client, { name: 'firecrawl_scrape', arguments: { alexandria: [{ provider: 'benzinga', capability: 'news/search' }] } });
     assert.equal(api.requests.length, 1);
     assert.equal(blocked.structuredContent.status, 403);
-    assert.equal(Boolean(blocked.structuredContent.nextTool), expected);
+    assert.equal(Boolean(blocked.structuredContent.nextTool), expected, message);
     if (expected) {
       assert.match(blocked.content[0].text, /explicit authorization/);
       const shown = toolText(await client.request('tools/call', blocked.structuredContent.nextTool));
