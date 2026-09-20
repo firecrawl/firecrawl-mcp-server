@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { startStdioWithApi, callExpectingError, toolText } from './helpers/exchange-mcp.mjs';
@@ -28,7 +29,7 @@ test('firecrawl_scrape with alexandria posts the v2 batch and returns the envelo
       { ...EXCHANGE_CALL, version: '1.2.3' },
       { provider: 'fred', capability: 'series/missing' },
     ],
-    origin: 'mcp-fastmcp',
+    origin: `mcp-firecrawl-mcp-exchange@${JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version}`,
   });
   assert.deepEqual(Object.keys(api.requests[0].body).sort(), [
     'alexandria',

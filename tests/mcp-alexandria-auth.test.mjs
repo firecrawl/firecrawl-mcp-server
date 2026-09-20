@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { EXCHANGE_KEY_REQUIRED_MESSAGE, KEYLESS_TOOL_MESSAGE, getFreePort, waitForHealth, parseSseJson, spawnServer, stopChild, startStdio, toolText, httpToolCall } from './helpers/exchange-mcp.mjs';
@@ -144,6 +145,6 @@ test('hosted keyless sessions never reach the Exchange; an API key header does',
   );
   assert.deepEqual(scrapeCalls[0].body, {
     alexandria: [EXCHANGE_CALL],
-    origin: 'mcp-fastmcp',
+    origin: `mcp-ua-node@${JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version}`,
   });
 });

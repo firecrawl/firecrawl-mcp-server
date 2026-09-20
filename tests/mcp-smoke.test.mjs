@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import net from 'node:net';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
+
+const { version: serverVersion } = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+);
 
 async function getFreePort() {
   const server = net.createServer();
@@ -208,6 +213,62 @@ async function startFakeFirecrawlApi() {
             ],
           },
           id: '00000000-0000-4000-8000-000000000000',
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/scrape') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: {
+            markdown: '# Scraped fixture',
+            metadata: {
+              scrapeId: '00000000-0000-4000-8000-000000000010',
+              sourceURL: parsedBody.url,
+            },
+          },
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/map') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          id: '00000000-0000-4000-8000-000000000020',
+          links: ['https://example.com/'],
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (
+      req.method === 'POST' &&
+      req.url === '/v2/search/00000000-0000-4000-8000-000000000000/feedback'
+    ) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          creditsRefunded: 0,
+          feedbackId: '00000000-0000-4000-8000-000000000100',
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/feedback') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          creditsRefunded: 0,
+          feedbackId: '00000000-0000-4000-8000-000000000101',
           success: true,
         })
       );
@@ -448,7 +509,24 @@ async function startFakeFirecrawlBackend(options = {}) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify({
-          data: { markdown: '# Parsed fixture' },
+          data: {
+            markdown: '# Parsed fixture',
+            metadata: {
+              scrapeId: '00000000-0000-4000-8000-000000000030',
+            },
+          },
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/feedback') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          creditsRefunded: 0,
+          feedbackId: '00000000-0000-4000-8000-000000000102',
           success: true,
         })
       );
@@ -680,6 +758,7 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
     headers: {
       accept: 'application/json, text/event-stream',
       'content-type': 'application/json',
+      'user-agent': 'firecrawl-http-smoke/0.0.0',
       'x-api-key': 'fc-http-test',
     },
     method: 'POST',
@@ -711,7 +790,7 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
   assert.deepEqual(searchRequest.body, {
     highlights: false,
     limit: 1,
-    origin: 'mcp-fastmcp',
+    origin: `mcp-ua-firecrawl-http-smoke@${serverVersion}`,
     sources: ['web', 'alexandria'],
     domainTools: true,
     toolDetail: 'compact',
@@ -892,8 +971,16 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     /request identifies a page and needs its content or defined fields/i
   );
   assert.match(
+    byName.get('firecrawl_scrape').description,
+    /authenticated responses can include a `metadata\.scrapeId` for optional scrape feedback/i
+  );
+  assert.match(
     byName.get('firecrawl_map').description,
     /returns matching URLs rather than page bodies/i
+  );
+  assert.match(
+    byName.get('firecrawl_map').description,
+    /authenticated responses can include an `id` for optional map feedback/i
   );
   assert.match(
     byName.get('firecrawl_agent').description,
@@ -910,6 +997,14 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.match(
     byName.get('firecrawl_search').description,
     /each web result is a title, URL, and description, not the page.*scrapeOptions.*ignore `maxAge`.*firecrawl_scrape/is
+  );
+  assert.match(
+    byName.get('firecrawl_search').description,
+    /authenticated responses can include an `id` for optional search feedback/i
+  );
+  assert.match(
+    byName.get('firecrawl_parse').description,
+    /authenticated final responses can include a `data\.metadata\.scrapeId` for optional parse feedback/i
   );
   assert.match(
     byName.get('firecrawl_search_feedback').description,
@@ -933,9 +1028,23 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     byName.get('firecrawl_research_search_papers').description,
     /indexed corpus.*biomedical.*PubMed.*bioRxiv.*medRxiv.*arXiv/is
   );
+  // Zod field metadata must survive serialization into tools/list so models
+  // receive parameter-level guidance in addition to the routing distinction
+  // kept in the top-level tool description below.
+  assert.equal(
+    byName.get('firecrawl_search').inputSchema.properties.highlights.description,
+    'Return query-relevant highlights for each search result. Set to false to keep the original search snippets.'
+  );
+  assert.match(
+    byName.get('firecrawl_search').inputSchema.properties.categories.description,
+    /Limit results to specific source types.*developer.*data\.web/is
+  );
+  assert.match(
+    byName.get('firecrawl_developer_search').inputSchema.properties.query
+      .description,
+    /Natural-language developer question.*library.*error message.*API/is
+  );
   // The two surfaces that both answer to "research" must stay distinguishable.
-  // This has to live in the tool description, not a parameter `.describe()`:
-  // no property description survives serialization into tools/list.
   assert.match(
     byName.get('firecrawl_search').description,
     /categories: \["research"\].*research-affiliated websites.*`firecrawl_research_\*` tools are a separate surface.*PubMed, bioRxiv, medRxiv.*arXiv/is
@@ -1186,7 +1295,7 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
   assert.equal(fakeApi.requests[0].headers.authorization, 'Bearer fc-test');
   assert.deepEqual(fakeApi.requests[0].body, {
     limit: 1,
-    origin: 'mcp-fastmcp',
+    origin: `mcp-firecrawl-mcp-tool-e2e@${serverVersion}`,
     sources: ['web', 'alexandria'],
     domainTools: true,
     toolDetail: 'compact',
@@ -1210,6 +1319,77 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
     id: '00000000-0000-4000-8000-000000000000',
     success: true,
   });
+
+  const scrapeResult = await client.request('tools/call', {
+    arguments: { url: 'https://example.com/' },
+    name: 'firecrawl_scrape',
+  });
+  assert.notEqual(scrapeResult.isError, true);
+  const scrapePayload = JSON.parse(scrapeResult.content[0].text);
+  assert.equal(
+    scrapePayload.metadata.scrapeId,
+    '00000000-0000-4000-8000-000000000010'
+  );
+
+  const mapResult = await client.request('tools/call', {
+    arguments: { limit: 1, url: 'https://example.com/' },
+    name: 'firecrawl_map',
+  });
+  assert.notEqual(mapResult.isError, true);
+  const mapPayload = JSON.parse(mapResult.content[0].text);
+  assert.equal(mapPayload.id, '00000000-0000-4000-8000-000000000020');
+
+  const searchFeedbackResult = await client.request('tools/call', {
+    arguments: {
+      querySuggestions: 'Use a narrower query',
+      rating: 'bad',
+      searchId: toolPayload.id,
+    },
+    name: 'firecrawl_search_feedback',
+  });
+  assert.notEqual(searchFeedbackResult.isError, true);
+
+  for (const [endpoint, jobId] of [
+    ['scrape', scrapePayload.metadata.scrapeId],
+    ['map', mapPayload.id],
+  ]) {
+    const feedbackResult = await client.request('tools/call', {
+      arguments: {
+        endpoint,
+        jobId,
+        note: `Feedback for the ${endpoint} result`,
+        rating: 'bad',
+      },
+      name: 'firecrawl_feedback',
+    });
+    assert.notEqual(feedbackResult.isError, true);
+  }
+
+  const searchFeedbackRequest = fakeApi.requests.find(
+    (request) =>
+      request.url ===
+      '/v2/search/00000000-0000-4000-8000-000000000000/feedback'
+  );
+  assert.equal(searchFeedbackRequest.body.rating, 'bad');
+  const endpointFeedbackRequests = fakeApi.requests.filter(
+    (request) => request.url === '/v2/feedback'
+  );
+  assert.deepEqual(
+    endpointFeedbackRequests.map((request) => ({
+      endpoint: request.body.endpoint,
+      jobId: request.body.jobId,
+    })),
+    [
+      {
+        endpoint: 'scrape',
+        jobId: '00000000-0000-4000-8000-000000000010',
+      },
+      {
+        endpoint: 'map',
+        jobId: '00000000-0000-4000-8000-000000000020',
+      },
+    ]
+  );
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
@@ -1681,7 +1861,10 @@ test('HTTP cloud keyless Parse completes both phases without credentials and for
 
   const phaseOne = await httpToolCall(port, {
     id: 'keyless-parse-phase-one',
-    headers: { 'x-forwarded-for': '8.8.8.43' },
+    headers: {
+      'user-agent': 'firecrawl-keyless-smoke/0.0.0',
+      'x-forwarded-for': '8.8.8.43',
+    },
     params: {
       arguments: {
         contentType: 'application/pdf',
@@ -1701,7 +1884,10 @@ test('HTTP cloud keyless Parse completes both phases without credentials and for
 
   const phaseTwo = await httpToolCall(port, {
     id: 'keyless-parse-phase-two',
-    headers: { 'x-forwarded-for': '8.8.8.43' },
+    headers: {
+      'user-agent': 'firecrawl-keyless-smoke/0.0.0',
+      'x-forwarded-for': '8.8.8.43',
+    },
     params: {
       arguments: {
         formats: ['markdown'],
@@ -1719,10 +1905,17 @@ test('HTTP cloud keyless Parse completes both phases without credentials and for
   assert.equal(uploadCalls.length, 1);
   assert.equal(parseCalls.length, 1);
   assert.equal(uploadCalls[0].headers.authorization, undefined);
+  assert.equal(
+    uploadCalls[0].headers['x-origin'],
+    `mcp-ua-firecrawl-keyless-smoke@${serverVersion}`
+  );
   assert.equal(parseCalls[0].headers.authorization, undefined);
   assert.equal(parseCalls[0].body.uploadRef, 'test-upload-ref');
   assert.equal(parseCalls[0].body.redactPII, true);
-  assert.equal(parseCalls[0].body.origin, 'mcp-fastmcp');
+  assert.equal(
+    parseCalls[0].body.origin,
+    `mcp-ua-firecrawl-keyless-smoke@${serverVersion}`
+  );
   assert.equal(stderr.includes('keyless-parse-secret'), false, stderr);
   assert.equal(stderr.includes('8.8.8.43'), false, stderr);
 });
@@ -1921,16 +2114,54 @@ test('HTTP cloud authenticated Parse forwards ZDR for API-key and managed OAuth 
       },
     });
     assert.equal(phaseTwo.status, 200);
-    assert.notEqual(parseSseJson(await phaseTwo.text()).result.isError, true);
+    const phaseTwoResult = parseSseJson(await phaseTwo.text()).result;
+    assert.notEqual(phaseTwoResult.isError, true);
+    const phaseTwoPayload = JSON.parse(phaseTwoResult.content[0].text);
+    assert.equal(
+      phaseTwoPayload.data.metadata.scrapeId,
+      '00000000-0000-4000-8000-000000000030'
+    );
+
+    if (label === 'api-key') {
+      const feedback = await httpToolCall(port, {
+        endpoint: '/v2/mcp-oauth',
+        headers,
+        id: `${label}-parse-feedback`,
+        params: {
+          arguments: {
+            endpoint: 'parse',
+            jobId: phaseTwoPayload.data.metadata.scrapeId,
+            note: 'Feedback for the parsed result',
+            rating: 'bad',
+          },
+          name: 'firecrawl_feedback',
+        },
+      });
+      assert.equal(feedback.status, 200);
+      assert.notEqual(parseSseJson(await feedback.text()).result.isError, true);
+    }
   }
 
   const uploads = backend.requests.filter((r) => r.url === '/v2/parse/upload-url');
   const parses = backend.requests.filter((r) => r.url === '/v2/parse');
+  const feedbackRequests = backend.requests.filter((r) => r.url === '/v2/feedback');
   const introspectedTokens = backend.requests
     .filter((request) => request.url === '/api/oauth/introspect')
     .map((request) => request.body.token);
   assert.equal(uploads.length, 2);
   assert.equal(parses.length, 2);
+  assert.deepEqual(
+    feedbackRequests.map((request) => ({
+      endpoint: request.body.endpoint,
+      jobId: request.body.jobId,
+    })),
+    [
+      {
+        endpoint: 'parse',
+        jobId: '00000000-0000-4000-8000-000000000030',
+      },
+    ]
+  );
   assert.deepEqual(
     introspectedTokens,
     ['fco_parse', 'fco_parse'],
