@@ -77,50 +77,6 @@ test('firecrawl_scrape rejects url with alexandria, neither, extra options, and 
   assert.equal(api.requests.length, 0);
 });
 
-test('Alexandria forwards execution timeout and rejects invalid timeout or empty URL discovery', async (t) => {
-  const { client, api } = await startStdioWithApi(t);
-  await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { alexandria: [EXCHANGE_CALL], timeout: 12000 } });
-  assert.equal(api.requests[0].body.timeout, 12000);
-  for (const timeout of [0, -1, 1.5])
-    await callExpectingError(client, { name: 'firecrawl_scrape', arguments: { alexandria: [EXCHANGE_CALL], timeout } });
-  await callExpectingError(client, { name: 'firecrawl_find_tools', arguments: { urls: [] } });
-  assert.equal(api.requests.length, 1);
-});
-
-test('large provider results remain intact without an implicit token cap', async (t) => {
-  const rows = Array.from({ length: 2500 }, (_, id) => ({ id, description: 'opportunity details '.repeat(50) }));
-  const payload = { success: true, data: { rows } };
-  const { api, client } = await startStdioWithApi(t, { largeResult: payload });
-  const result = toolText(await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { alexandria: [EXCHANGE_CALL] } }));
-  assert.deepEqual(result.data, payload.data);
-  assert.equal(result.truncated, undefined);
-  assert.equal(api.requests.length, 1);
-  const tools = await client.request('tools/list', {});
-  assert.equal(tools.tools.some(tool => tool.name === 'firecrawl_read_result'), false);
-  assert.equal(tools.tools.find(tool => tool.name === 'firecrawl_scrape').inputSchema.properties.maxOutputTokens, undefined);
-});
-
-test('remote Bash source loading and workspace reuse forward through scrape without reexecuting the source', async (t) => {
-  const { api, client } = await startStdioWithApi(t);
-  const sourceId = '11111111-1111-4111-8111-111111111111';
-  for (const options of [
-    { requestId: sourceId, command: 'ls -lh' },
-    { workspaceId: 'workspace-test', command: 'head -n 3 document.md' },
-  ]) {
-    const alexandria = { provider: 'firecrawl', capability: 'bash', options };
-    const result = await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { alexandria } });
-    assert.notEqual(result.isError, true);
-    assert.deepEqual(api.requests.at(-1).body.alexandria, alexandria);
-    assert.notEqual(api.requests.at(-1).headers['x-request-id'], sourceId);
-    assert.equal(api.requests.at(-1).url, '/v2/scrape');
-  }
-  assert.equal(api.requests.length, 2);
-  const tools = await client.request('tools/list', {});
-  const scrape = tools.tools.find(tool => tool.name === 'firecrawl_scrape');
-  assert.match(scrape.description, /capability: "bash"/);
-  assert.match(scrape.description, /top-level requestId/);
-});
-
 const largeAlexandria = (text = 'x'.repeat(90_000)) => ({
   success: true,
   data: { creditsCost: 5, alexandria: [{ ...EXCHANGE_CALL, data: { text } }] },

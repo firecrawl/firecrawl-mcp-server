@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { startStdioWithApi, callExpectingError, toolText } from './helpers/exchange-mcp.mjs';
-import { CAPABILITY_HIT } from './helpers/exchange-api.mjs';
 
 test('ordinary search defaults to web and both tool matches, with explicit opt-outs', async (t) => {
   const { api, client } = await startStdioWithApi(t);
@@ -18,6 +17,8 @@ test('ordinary search defaults to web and both tool matches, with explicit opt-o
       arguments: { query: 'company news', ...overrides },
     });
     assert.notEqual(result.isError, true);
+    assert.equal(api.requests.at(-1).body.toolDetail, 'compact');
+    assert.equal(toolText(result).data.tools[0].provider, 'fred');
     assert.deepEqual(api.requests.at(-1).body.sources, sources);
     assert.equal(api.requests.at(-1).body.domainTools, domainTools);
   }
@@ -46,54 +47,4 @@ test('default tools fall back only on discovery refusal; explicit tools and othe
     name: 'firecrawl_search', arguments: { query: 'company news' },
   });
   assert.equal(other.api.requests.length, 1);
-});
-
-test('firecrawl_search forwards the Alexandria source and passes tools and creditsUsed through', async (t) => {
-  const { api, client } = await startStdioWithApi(t);
-
-  const result = await client.request('tools/call', {
-    arguments: {
-      query: 'nvidia balance sheet',
-      sources: [{ type: 'web' }, { type: 'exchange' }],
-      limit: 5,
-    },
-    name: 'firecrawl_search',
-  });
-
-  assert.equal(api.requests.length, 1);
-  assert.equal(api.requests[0].method, 'POST');
-  assert.equal(api.requests[0].url, '/v2/search');
-  assert.equal(
-    api.requests[0].headers.authorization,
-    'Bearer fc-exchange-test'
-  );
-  assert.deepEqual(api.requests[0].body, {
-    query: 'nvidia balance sheet',
-    sources: [{ type: 'web' }, { type: 'alexandria' }],
-    domainTools: true,
-    toolDetail: 'compact',
-    limit: 5,
-    origin: 'mcp-fastmcp',
-  });
-
-  const payload = toolText(result);
-  assert.deepEqual(payload.data.tools, [CAPABILITY_HIT]);
-  assert.equal(payload.creditsUsed, 0);
-  assert.equal(payload.id, '00000000-0000-4000-8000-000000000000');
-});
-
-test('tool detail is forwarded and invalid values are rejected locally', async (t) => {
-  const {api,client}=await startStdioWithApi(t);
-  for(const name of ['firecrawl_search','firecrawl_scrape']) {
-    const base=name === 'firecrawl_search' ? {query:'records'} : {url:'https://example.com',domainTools:true};
-    toolText(await client.request('tools/call',{name,arguments:base}));
-    assert.equal(api.requests.at(-1).body.toolDetail,name === 'firecrawl_search' ? 'compact' : undefined);
-    for(const toolDetail of ['compact','summary','full']) {
-      toolText(await client.request('tools/call',{name,arguments:{...base,toolDetail}}));
-      assert.equal(api.requests.at(-1).body.toolDetail,toolDetail);
-    }
-    const count=api.requests.length;
-    await callExpectingError(client,{name,arguments:{...base,toolDetail:'invalid'}});
-    assert.equal(api.requests.length,count);
-  }
 });

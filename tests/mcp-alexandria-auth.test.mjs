@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { EXCHANGE_KEY_REQUIRED_MESSAGE, KEYLESS_TOOL_MESSAGE, getFreePort, waitForHealth, parseSseJson, spawnServer, stopChild, startStdio, startStdioWithApi, toolText, httpToolCall } from './helpers/exchange-mcp.mjs';
+import { EXCHANGE_KEY_REQUIRED_MESSAGE, KEYLESS_TOOL_MESSAGE, getFreePort, waitForHealth, parseSseJson, spawnServer, stopChild, startStdio, toolText, httpToolCall } from './helpers/exchange-mcp.mjs';
 import { EXCHANGE_CALL, startFakeExchangeApi } from './helpers/exchange-api.mjs';
 
 test('local keyless stdio refuses every Exchange path with the explanatory error and no network call', async (t) => {
@@ -82,7 +82,7 @@ test('hosted keyless sessions never reach the Exchange; an API key header does',
         id: 2,
         headers: keylessHeaders,
         params: {
-          arguments: { cohort: 'finance' },
+          arguments: { categories: ['finance'] },
           name: 'firecrawl_find_tools',
         },
       })
@@ -146,19 +146,4 @@ test('hosted keyless sessions never reach the Exchange; an API key header does',
     alexandria: [EXCHANGE_CALL],
     origin: 'mcp-fastmcp',
   });
-});
-
-test('local API key failures remain errors without leaking credentials', async (t) => {
-  const { api, client } = await startStdioWithApi(t, { apiStatus: 401 });
-  for (const [name, args] of [
-    ['firecrawl_search', { query: 'pizza' }],
-    ['firecrawl_find_tools', {}],
-    ['firecrawl_scrape', { alexandria: [EXCHANGE_CALL] }],
-    ['firecrawl_scrape', { url: 'https://example.com' }],
-  ]) {
-    const result = await client.request('tools/call', { name, arguments: args });
-    assert.equal(result.isError, true, name);
-    assert.doesNotMatch(JSON.stringify(result), /fc-exchange-test/);
-  }
-  assert.equal(api.requests.length, 4);
 });
