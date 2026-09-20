@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import FirecrawlApp from '@mendable/firecrawl-js';
+import FirecrawlApp from 'firecrawl';
 import dotenv from 'dotenv';
 import { FastMCP, type Logger, UserError } from 'fastmcp';
 import type { IncomingHttpHeaders } from 'http';
@@ -13,6 +13,7 @@ import { extractSingleTrustedClientIp } from './keyless-client-ip';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
 import { escapeWWWAuthenticateValue } from './www-authenticate';
+import { originHeaders, requestOrigin, type McpClient } from './origin';
 import {
   credentialForOutboundRequest,
   copyManagedOAuthApiKey,
@@ -45,6 +46,11 @@ interface SessionData extends CredentialSession {
    * instead of the shared server IP.
    */
   keylessClientIp?: string;
+  /**
+   * The User-Agent of the HTTP request that opened the session, the only
+   * client signal a stateless HTTP tool call carries (see src/origin.ts).
+   */
+  clientUserAgent?: string;
   authType?: 'api-key' | 'oauth' | 'env' | 'keyless' | 'none';
   credentialError?: 'CREDENTIAL_INVALID';
   /** Internal nginx marker for the deprecated credential-in-path route. */
@@ -775,6 +781,10 @@ function makeAuthenticate(profile: ServerProfile) {
 
     const authResult = authenticateRequest(request, profile)
       .then((session) => {
+        const userAgent = request?.headers?.['user-agent'];
+        if (typeof userAgent === 'string' && userAgent !== '') {
+          session.clientUserAgent = userAgent;
+        }
         emitSearchCompanionAuthTelemetry(
           profile,
           request,
@@ -953,17 +963,31 @@ const openAiAppsChallengeToken = normalizeHeader(
   process.env.OPENAI_APPS_CHALLENGE_TOKEN
 );
 
-const FULL_PROFILE_INSTRUCTIONS = `Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and asynchronous research. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent starts multi-source research whose result is read with firecrawl_agent_status. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question — code behaviour, a library or framework, an API contract, an error message, or a known bug — firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of repositories, GitHub issues, merged pull requests, READMEs, and curated documentation sites. Provide only the required inputs and account for stated network or external side effects.`;
-const KEYLESS_PROFILE_INSTRUCTIONS = `Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for asynchronous multi-source research, and firecrawl_research_* for paper-index and repository research.`;
+const FULL_PROFILE_INSTRUCTIONS = `Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question — code behaviour, a library or framework, an API contract, an error message, or a known bug — firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of repositories, GitHub issues, merged pull requests, READMEs, and curated documentation sites. Provide only the required inputs and account for stated network or external side effects.`;
+const KEYLESS_PROFILE_INSTRUCTIONS = `Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, and firecrawl_research_* for paper-index and repository research.`;
 
 // The search surface exposes web/developer/research search only. Its instructions
 // and tool copy describe just those tools and stay neutral about how a client
-// uses them.
+// uses them. This text is what the Claude directory connector shows the model;
+// see the note on SEARCH_PROFILE_TOOLS below before changing it.
 const SEARCH_PROFILE_INSTRUCTIONS = `Firecrawl provides web, developer, and research search. Use firecrawl_search to find relevant results across the web and specialized indexes. For a programming question, firecrawl_developer_search searches indexed repositories, GitHub issues, merged pull requests, READMEs, and curated documentation sites and returns the matched passages, and skills: "only" narrows it to agent-skill files; firecrawl_search with categories: ["developer"] reaches the same index beside ordinary web results, returning the hits in the web group rather than as passages and offering no skills filter. For a biomedical, life-science, clinical, or arXiv literature question, the firecrawl_research_* tools search the paper index, while categories: ["research"] on firecrawl_search filters ordinary web results to research-affiliated websites. Use the firecrawl_research_* tools to search academic and research literature, expand from anchor papers via the citation graph, and read full-text passages from a specific paper. All tools are read-only and return ranked results.`;
 
 // The exact set of tools the search surface exposes. Registration is filtered
 // against this set, so anything not listed here can never appear on that
 // instance's tools/list or be called through it.
+//
+// Why this set is frozen: /v2/mcp-search is the Firecrawl connector in
+// Anthropic's Claude directory (https://claude.com/connectors/firecrawl). The
+// names below were agreed one by one with Anthropic's MCP review team in July
+// 2026, after they declined the full server as a web-scraping tool, and the
+// directory page lists them to users. Editing this set changes what Anthropic
+// reviewed and leaves the public listing wrong until someone updates it by
+// hand in the claude.ai submission portal. Before adding, removing, renaming,
+// or hiding anything here, tell partnerships (Noaa) so the listing and
+// Anthropic move at the same time. It has drifted twice: a seventh tool leaked
+// on during Anthropic's review (rolled back in #352, 2026-08-04), and a hidden
+// tool left the directory page advertising something the server no longer served
+// (#395, 2026-09-03). See docs/search-profile.md, "Why this surface exists".
 const SEARCH_PROFILE_TOOLS = new Set<string>([
   'firecrawl_search',
   'firecrawl_developer_search',
@@ -1229,7 +1253,7 @@ function deprecatedExtractPayload() {
   return {
     code: 'DEPRECATED_TOOL',
     message:
-      'firecrawl_extract is deprecated and unavailable through MCP. For structured data from a known page, call firecrawl_scrape once per URL with formats: ["json"] and jsonOptions containing the prompt and schema. For unknown URLs or multi-source research, use firecrawl_search or firecrawl_agent first.',
+      'firecrawl_extract is deprecated and unavailable through MCP. For structured data from a known page, call firecrawl_scrape once per URL with formats: ["json"] and jsonOptions containing the prompt and schema. When the URLs are not known or the data spans several sites, use firecrawl_agent for multi-source research.',
     replacement: {
       name: 'firecrawl_scrape',
       instructions:
@@ -1485,9 +1509,6 @@ function createClient(apiKey?: string): FirecrawlApp {
 
   return new FirecrawlApp(config);
 }
-
-const ORIGIN = 'mcp-fastmcp';
-const ORIGIN_HEADERS = { 'X-Origin': ORIGIN };
 
 // Safe mode is enabled by default for cloud service to comply with ChatGPT safety requirements
 const SAFE_MODE = process.env.CLOUD_SERVICE === 'true';
@@ -1874,11 +1895,12 @@ function extractParseOptions(args: ParseToolArgs): Record<string, unknown> {
 }
 
 function buildParseOptionsPayload(
-  options: Record<string, unknown>
+  options: Record<string, unknown>,
+  origin: string
 ): Record<string, unknown> {
   const transformed = transformScrapeParams(options);
   const cleaned = removeEmptyTopLevel(transformed) as Record<string, unknown>;
-  return { origin: ORIGIN, ...cleaned };
+  return { origin, ...cleaned };
 }
 
 function buildContinuationArguments(
@@ -1913,13 +1935,15 @@ function parseApiData(json: any): any {
 async function apiPostJson(
   pathName: string,
   body: Record<string, unknown>,
-  apiKey: string
+  apiKey: string,
+  origin?: string
 ): Promise<any> {
   const response = await fetch(`${resolveApiBaseUrl()}${pathName}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
+      ...(origin ? originHeaders(origin) : {}),
     },
     body: JSON.stringify(body),
   });
@@ -1944,15 +1968,16 @@ async function apiPostJson(
 async function apiPostJsonForSession(
   pathName: string,
   body: Record<string, unknown>,
-  session: SessionData | undefined
+  session: SessionData | undefined,
+  origin: string
 ): Promise<any> {
   const credential = credentialForOutboundRequest(session);
   if (credential) {
-    return apiPostJson(pathName, body, credential);
+    return apiPostJson(pathName, body, credential, origin);
   }
 
   if (isKeylessMode(session)) {
-    return keylessPost(pathName, body, session);
+    return keylessPost(pathName, body, session, origin);
   }
 
   throw new Error(
@@ -1999,7 +2024,8 @@ function buildCurlUploadCommand(
 async function executeHostedParse(
   args: ParseToolArgs,
   session: SessionData | undefined,
-  log: ToolLogger
+  log: ToolLogger,
+  origin: string
 ): Promise<string> {
   const hasFilePath =
     typeof args.filePath === 'string' && args.filePath.length > 0;
@@ -2048,7 +2074,8 @@ async function executeHostedParse(
     const uploadJson = await apiPostJsonForSession(
       '/v2/parse/upload-url',
       uploadRequest,
-      session
+      session,
+      origin
     );
     const upload = parseApiData(uploadJson) as ParseUploadUrlData;
     if (!upload?.uploadUrl || !upload?.uploadRef) {
@@ -2093,13 +2120,14 @@ async function executeHostedParse(
 
   const parsePayload = {
     uploadRef: args.uploadRef as string,
-    ...buildParseOptionsPayload(options),
+    ...buildParseOptionsPayload(options, origin),
   };
   log.info('Parsing hosted upload reference');
   const parseJson = await apiPostJsonForSession(
     '/v2/parse',
     parsePayload,
-    session
+    session,
+    origin
   );
   return asText(parseJson);
 }
@@ -2107,7 +2135,7 @@ async function executeHostedParse(
 server.addTool({
   name: 'firecrawl_scrape',
   annotations: {
-    title: 'Scrape a URL',
+    title: 'Firecrawl scrape',
     readOnlyHint: SAFE_MODE, // Fetches page content only; in cloud/safe mode interactive browser actions are disabled.
     openWorldHint: true, // Accepts any user-supplied URL on the public web.
     destructiveHint: false, // Does not modify, delete, or write to external websites.
@@ -2119,10 +2147,14 @@ This tool operates on a known page. For a set of pages use \`firecrawl_crawl\`, 
 
 Firecrawl may reuse recently indexed content instead of refetching the page, and the reuse window varies by domain. Set \`maxAge: 0\` to force a live fetch, or a smaller \`maxAge\` to bound how stale reused content may be. A successful response does not by itself confirm that the state it describes is still current.
 
-Returns the selected content formats and page metadata.
+Returns the selected content formats and page metadata. Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback.
 `,
   parameters: scrapeParamsSchema,
-  execute: async (args: unknown, { session, log }): Promise<string> => {
+  execute: async (
+    args: unknown,
+    { session, log, client: mcpClient }
+  ): Promise<string> => {
+    const origin = requestOrigin(mcpClient, session);
     const { url, ...options } = args as { url: string } & Record<
       string,
       unknown
@@ -2142,7 +2174,7 @@ Returns the selected content formats and page metadata.
         {
           url: String(url),
           ...cleaned,
-          origin: ORIGIN,
+          origin,
         },
         session
       );
@@ -2151,7 +2183,7 @@ Returns the selected content formats and page metadata.
     const client = getClient(session);
     const res = await client.scrape(String(url), {
       ...cleaned,
-      origin: ORIGIN,
+      origin,
     } as any);
     return asText(res);
   },
@@ -2160,7 +2192,7 @@ Returns the selected content formats and page metadata.
 server.addTool({
   name: 'firecrawl_map',
   annotations: {
-    title: 'Map a website',
+    title: 'Firecrawl website map',
     readOnlyHint: true, // Discovers and returns indexed URLs; does not modify the target site.
     openWorldHint: true, // Operates against arbitrary user-supplied web domains.
     destructiveHint: false, // Read-only discovery; no deletion or destructive updates.
@@ -2168,7 +2200,7 @@ server.addTool({
   description: `
 Enumerate URLs indexed under one website through Firecrawl without fetching each page's content. Use this when the request asks for a site's URL inventory, when several relevant pages must be located, or when the desired page URL is unknown. An optional \`search\` term narrows the URL list, while sitemap, subdomain, query-parameter, and result-limit options control coverage.
 
-Returns matching URLs rather than page bodies. Retrieve one page with \`firecrawl_scrape\`; collect content across multiple pages with \`firecrawl_crawl\`.
+Returns matching URLs rather than page bodies. Retrieve one page with \`firecrawl_scrape\`; collect content across multiple pages with \`firecrawl_crawl\`. Authenticated responses can include an \`id\` for optional map feedback.
 `,
   parameters: z.object({
     url: runtimeUrl(),
@@ -2178,7 +2210,10 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
     limit: z.number().optional(),
     ignoreQueryParameters: z.boolean().optional(),
   }),
-  execute: async (args: unknown, { session, log }): Promise<string> => {
+  execute: async (
+    args: unknown,
+    { session, log, client: mcpClient }
+  ): Promise<string> => {
     const { url, ...options } = args as { url: string } & Record<
       string,
       unknown
@@ -2188,7 +2223,7 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
     log.info('Mapping URL', { url: String(url) });
     const res = await client.map(String(url), {
       ...cleaned,
-      origin: ORIGIN,
+      origin: requestOrigin(mcpClient, session),
     } as any);
     return asText(res);
   },
@@ -2197,7 +2232,7 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
 server.addTool({
   name: 'firecrawl_search',
   annotations: {
-    title: 'Search the web',
+    title: 'Firecrawl web search',
     readOnlyHint: true, // Runs a web search and returns results; does not modify external sites.
     openWorldHint: true, // Searches the open web across arbitrary domains and sources.
     destructiveHint: false, // Query-only; no destructive side effects on external entities.
@@ -2220,7 +2255,10 @@ Each web result is a title, URL, and description, not the page. Add \`scrapeOpti
         .optional(),
     })
     .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE),
-  execute: async (args: unknown, { session, log }): Promise<string> => {
+  execute: async (
+    args: unknown,
+    { session, log, client: mcpClient }
+  ): Promise<string> => {
     const { query, ...opts } = args as Record<string, unknown>;
 
     const searchOpts = { ...opts } as Record<string, unknown>;
@@ -2245,7 +2283,7 @@ Each web result is a title, URL, and description, not the page. Add \`scrapeOpti
     const searchBody = {
       query: searchQuery,
       ...(cleaned as any),
-      origin: ORIGIN,
+      origin: requestOrigin(mcpClient, session),
     };
     if (isKeylessMode(session)) {
       const json = await keylessPost('/v2/search', searchBody, session);
@@ -2301,7 +2339,10 @@ function keylessQuotaReason(reason: unknown): reason is 'requests' | 'credits' {
   return reason === 'requests' || reason === 'credits';
 }
 
-async function keylessEligible(clientIp: string): Promise<KeylessEligibility> {
+async function keylessEligible(
+  clientIp: string,
+  origin: string
+): Promise<KeylessEligibility> {
   const secret = process.env.KEYLESS_PROXY_SECRET;
   if (!secret) return { eligible: false, unavailable: true };
   try {
@@ -2309,7 +2350,7 @@ async function keylessEligible(clientIp: string): Promise<KeylessEligibility> {
       `${resolveApiBaseUrl()}/v2/keyless/eligibility`,
       {
         headers: {
-          ...ORIGIN_HEADERS,
+          ...originHeaders(origin),
           'x-firecrawl-keyless-ip': clientIp,
           'x-firecrawl-keyless-secret': secret,
         },
@@ -2343,11 +2384,19 @@ function isKeylessMode(session?: SessionData): boolean {
 async function keylessPost(
   path: string,
   body: Record<string, unknown>,
-  session?: SessionData
+  session?: SessionData,
+  originOverride?: string
 ): Promise<any> {
+  // The body already names the client's origin (every caller stamps it); the
+  // headers of this request and the eligibility probe carry the same value.
+  const origin =
+    originOverride ??
+    (typeof body.origin === 'string' && body.origin.length > 0
+      ? body.origin
+      : requestOrigin(undefined, session));
   if (isHostedKeylessSession(session)) {
     const eligibility = session?.keylessClientIp
-      ? await keylessEligible(session.keylessClientIp)
+      ? await keylessEligible(session.keylessClientIp, origin)
       : { eligible: false };
     if (!eligibility.eligible) {
       const code = eligibility.unavailable
@@ -2362,7 +2411,7 @@ async function keylessPost(
     }
   }
   const headers: Record<string, string> = {
-    ...ORIGIN_HEADERS,
+    ...originHeaders(origin),
     'Content-Type': 'application/json',
   };
   // Forward the real client IP (secret-authenticated) when proxying keyless
@@ -2402,11 +2451,12 @@ async function keylessPost(
 
 async function getCrawlStatusWithOrigin(
   client: FirecrawlApp,
-  jobId: string
+  jobId: string,
+  origin: string
 ): Promise<Record<string, unknown>> {
   const res = await (client as any).http.get(
     `/v2/crawl/${encodeURIComponent(jobId)}`,
-    ORIGIN_HEADERS
+    originHeaders(origin)
   );
   const body = (res?.data ?? {}) as any;
   const initialDocs = Array.isArray(body.data) ? body.data : [];
@@ -2427,7 +2477,10 @@ async function getCrawlStatusWithOrigin(
   const docs = initialDocs.slice();
   let current = body.next as string | null;
   while (current) {
-    const pageRes = await (client as any).http.get(current, ORIGIN_HEADERS);
+    const pageRes = await (client as any).http.get(
+      current,
+      originHeaders(origin)
+    );
     const payload = (pageRes?.data ?? {}) as any;
     if (!payload.success) break;
 
@@ -2456,12 +2509,13 @@ async function getCrawlStatusWithOrigin(
 async function waitForCrawlCompletionWithOrigin(
   client: FirecrawlApp,
   jobId: string,
+  origin: string,
   pollInterval = 2,
   timeout?: number
 ): Promise<Record<string, unknown>> {
   const startedAt = Date.now();
   for (;;) {
-    const status = await getCrawlStatusWithOrigin(client, jobId);
+    const status = await getCrawlStatusWithOrigin(client, jobId, origin);
     if (
       ['completed', 'failed', 'cancelled'].includes(String(status.status ?? ''))
     ) {
@@ -2527,7 +2581,7 @@ if (!SEARCH_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
   server.addTool({
     name: 'firecrawl_search_feedback',
     annotations: {
-      title: 'Send feedback on a search result',
+      title: 'Firecrawl search feedback',
       readOnlyHint: false, // POSTs structured feedback to the API, creating a server-side record.
       openWorldHint: true, // Feedback references open-web search results and external URLs.
       destructiveHint: false, // Additive only; records feedback and may refund credits, does not delete data.
@@ -2570,7 +2624,11 @@ Eligibility is limited to successful searches within the feedback age window. Th
         ),
       querySuggestions: z.string().max(2000).optional(),
     }),
-    execute: async (args: unknown, { session, log }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, log, client: mcpClient }
+    ): Promise<string> => {
+      const origin = requestOrigin(mcpClient, session);
       const {
         searchId,
         rating,
@@ -2592,7 +2650,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
 
       const body: Record<string, unknown> = {
         rating,
-        origin: ORIGIN,
+        origin,
       };
       if (valuableSources && valuableSources.length > 0) {
         body.valuableSources = valuableSources;
@@ -2603,7 +2661,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
       if (querySuggestions) body.querySuggestions = querySuggestions;
 
       const headers: Record<string, string> = {
-        ...ORIGIN_HEADERS,
+        ...originHeaders(origin),
         'Content-Type': 'application/json',
       };
       const credential = credentialForOutboundRequest(session);
@@ -2669,7 +2727,7 @@ if (!ENDPOINT_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
   server.addTool({
     name: 'firecrawl_feedback',
     annotations: {
-      title: 'Send feedback on a Firecrawl job',
+      title: 'Firecrawl job feedback',
       readOnlyHint: false, // POSTs structured feedback for a completed job to /v2/feedback.
       openWorldHint: true, // Feedback is tied to jobs that processed open-web URLs.
       destructiveHint: false, // Additive only; submits ratings and notes, does not delete jobs or external content.
@@ -2693,7 +2751,11 @@ Returns submission status, feedback ID, and accounting fields.
       pageNumbers: z.array(z.number().int().positive()).max(100).optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
     }),
-    execute: async (args: unknown, { session, log }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, log, client: mcpClient }
+    ): Promise<string> => {
+      const origin = requestOrigin(mcpClient, session);
       const {
         endpoint,
         jobId,
@@ -2724,7 +2786,7 @@ Returns submission status, feedback ID, and accounting fields.
 
       const apiBase = resolveApiBaseUrl();
       const headers: Record<string, string> = {
-        ...ORIGIN_HEADERS,
+        ...originHeaders(origin),
         'Content-Type': 'application/json',
       };
       const credential = credentialForOutboundRequest(session);
@@ -2747,7 +2809,7 @@ Returns submission status, feedback ID, and accounting fields.
         url,
         pageNumbers,
         metadata,
-        origin: ORIGIN,
+        origin,
       });
 
       log.info('Submitting endpoint feedback', { endpoint, jobId, rating });
@@ -2796,7 +2858,7 @@ Returns submission status, feedback ID, and accounting fields.
 server.addTool({
   name: 'firecrawl_crawl',
   annotations: {
-    title: 'Run a site crawl',
+    title: 'Firecrawl site crawl',
     readOnlyHint: false, // Starts a server-side crawl job and polls until the job reaches a terminal state.
     openWorldHint: true, // Crawls user-specified URLs across the public web.
     destructiveHint: false, // Reads pages from target sites; does not delete or alter external websites.
@@ -2829,7 +2891,8 @@ Crawl results can be large; use conservative limits when full-site coverage is u
     ignoreQueryParameters: z.boolean().optional(),
     scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
   }),
-  execute: async (args, { session, log }) => {
+  execute: async (args, { session, log, client: mcpClient }) => {
+    const origin = requestOrigin(mcpClient, session);
     const { url, ...options } = args as Record<string, unknown>;
     const client = getClient(session);
 
@@ -2860,7 +2923,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
     const started = await (client as any).http.post('/v2/crawl', {
       url: String(url),
       ...(cleaned as Record<string, unknown>),
-      origin: ORIGIN,
+      origin,
     });
     const crawlId = started?.data?.id;
     if (!crawlId) {
@@ -2869,6 +2932,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
     const res = await waitForCrawlCompletionWithOrigin(
       client,
       crawlId,
+      origin,
       pollInterval,
       timeout
     );
@@ -2879,7 +2943,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
 server.addTool({
   name: 'firecrawl_check_crawl_status',
   annotations: {
-    title: 'Get crawl status',
+    title: 'Firecrawl crawl status',
     readOnlyHint: true, // Retrieves status and results for an existing crawl job by ID; no mutations.
     openWorldHint: false, // Queries only Firecrawl job state within the authenticated account.
     destructiveHint: false, // Status lookup only; no deletes or updates.
@@ -2890,11 +2954,18 @@ Retrieve the current status, progress, and available results for an existing cra
   parameters: z.object({ id: z.string() }),
   execute: async (
     args: unknown,
-    { session }: { session?: SessionData }
+    {
+      session,
+      client: mcpClient,
+    }: { session?: SessionData; client?: McpClient }
   ): Promise<string> => {
     const client = getClient(session);
     const id = (args as any).id as string;
-    const res = await getCrawlStatusWithOrigin(client, id);
+    const res = await getCrawlStatusWithOrigin(
+      client,
+      id,
+      requestOrigin(mcpClient, session)
+    );
     return asText(res);
   },
 });
@@ -2902,13 +2973,13 @@ Retrieve the current status, progress, and available results for an existing cra
 server.addTool({
   name: 'firecrawl_extract',
   annotations: {
-    title: 'Deprecated: use Scrape JSON',
+    title: 'Firecrawl extract (deprecated: use scrape JSON)',
     readOnlyHint: true,
     openWorldHint: true,
     destructiveHint: false,
   },
   description: `
-Deprecated compatibility entry point. Use firecrawl_scrape once per known URL with formats: ["json"] and jsonOptions containing the prompt and schema. Use firecrawl_search or firecrawl_agent before Scrape when URLs are not known.
+Deprecated compatibility entry point. Use firecrawl_scrape once per known URL with formats: ["json"] and jsonOptions containing the prompt and schema. Use firecrawl_agent for multi-source research when the URLs are not known or the data spans several sites.
 `,
   parameters: z.object({
     urls: z.array(z.string()),
@@ -2936,22 +3007,25 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
 server.addTool({
   name: 'firecrawl_agent',
   annotations: {
-    title: 'Start a research agent',
+    title: 'Firecrawl agent',
     readOnlyHint: false, // Starts an autonomous research agent job on the Firecrawl API.
     openWorldHint: true, // The agent browses and searches the open web to fulfill the prompt.
     destructiveHint: false, // Gathers information only; does not delete external data or user resources.
   },
   description: `
-Start an asynchronous web research job from a prompt, optional seed URLs, and an optional JSON schema. Use this for a requested synthesis across multiple sources when the task can wait for asynchronous completion. The agent can search, navigate, read pages, and assemble a structured result.
+Run web research that returns structured data when the URLs are not known or the answer spans several sites. Describe the fields you need in \`prompt\`, optionally pass a JSON \`schema\` and seed \`urls\`, and the research agent searches, navigates, reads pages, and returns JSON assembled across sources. Use it to research an entity plus its fields (founders, pricing, contact details), to build lists and datasets (companies, people, products, jobs, papers), and for pages that need navigation or interaction to reach the data.
 
-This call returns only a job ID, not the research result. Read the job with \`firecrawl_agent_status\` until it reaches \`completed\` or \`failed\`; research commonly takes several minutes. If the job cannot finish within the task's available time, \`firecrawl_search\` and \`firecrawl_scrape\` can gather evidence synchronously.
+This call returns only a job ID, not the research result. Read the job with \`firecrawl_agent_status\` until it reaches \`completed\` or \`failed\`; a typical research run takes one to three minutes. For one known URL use \`firecrawl_scrape\` (with formats: ["json"] for structured output); for a plain lookup that a results page answers, use \`firecrawl_search\`.
 `,
   parameters: z.object({
     prompt: z.string().min(1).max(10000),
     urls: z.array(runtimeUrl()).optional(),
     schema: z.record(z.string(), z.any()).optional(),
   }),
-  execute: async (args: unknown, { session, log }): Promise<string> => {
+  execute: async (
+    args: unknown,
+    { session, log, client: mcpClient }
+  ): Promise<string> => {
     const client = getClient(session);
     const a = args as Record<string, unknown>;
     log.info('Starting agent', {
@@ -2965,7 +3039,7 @@ This call returns only a job ID, not the research result. Read the job with \`fi
     });
     const res = await (client as any).startAgent({
       ...agentBody,
-      origin: ORIGIN,
+      origin: requestOrigin(mcpClient, session),
     });
     return asText(res);
   },
@@ -2974,24 +3048,27 @@ This call returns only a job ID, not the research result. Read the job with \`fi
 server.addTool({
   name: 'firecrawl_agent_status',
   annotations: {
-    title: 'Get agent job status',
+    title: 'Firecrawl agent status',
     readOnlyHint: true, // Polls an existing agent job by ID for progress and results; no mutations.
     openWorldHint: false, // Queries only Firecrawl job state by job ID within the user's account.
     destructiveHint: false, // Read-only status check.
   },
   description: `
-Retrieve progress or final results for a \`firecrawl_agent\` job ID. A \`processing\` response is non-terminal and does not contain the final research result. Check again after 15–30 seconds until the status is \`completed\` or \`failed\`; complex jobs can take several minutes. If the job cannot finish within the task's available time, use \`firecrawl_search\` and \`firecrawl_scrape\` to complete the requested output.
+Retrieve progress or final results for a \`firecrawl_agent\` job ID. A \`processing\` response is non-terminal and does not contain the final research result. Check again after 15–30 seconds until the status is \`completed\` or \`failed\`; a typical research run takes one to three minutes and complex jobs can take longer. If the job cannot finish within the task's available time, use \`firecrawl_search\` and \`firecrawl_scrape\` to complete the requested output.
 
 Returns job status, progress information, and result data when completed.
 `,
   parameters: z.object({ id: z.string() }),
-  execute: async (args: unknown, { session, log }): Promise<string> => {
+  execute: async (
+    args: unknown,
+    { session, log, client: mcpClient }
+  ): Promise<string> => {
     const client = getClient(session);
     const { id } = args as { id: string };
     log.info('Checking agent status', { id });
     const res = await (client as any).http.get(
       `/v2/agent/${encodeURIComponent(id)}`,
-      ORIGIN_HEADERS
+      originHeaders(requestOrigin(mcpClient, session))
     );
     return asText(res?.data ?? {});
   },
@@ -3001,7 +3078,7 @@ Returns job status, progress information, and result data when completed.
 server.addTool({
   name: 'firecrawl_interact',
   annotations: {
-    title: 'Interact with a scraped page',
+    title: 'Firecrawl interact',
     readOnlyHint: false, // Executes browser interactions (clicks, form input, scripts) in a live session.
     openWorldHint: true, // Interacts with pages on the public web via the scraped session.
     destructiveHint: false, // Transient page interactions only; does not delete monitors, jobs, or external sites.
@@ -3031,7 +3108,11 @@ This acts on the live site, so actions such as form submission can create persis
     .refine((data) => data.code || data.prompt, {
       message: "Either 'code' or 'prompt' must be provided.",
     }),
-  execute: async (args: unknown, { session, log }): Promise<string> => {
+  execute: async (
+    args: unknown,
+    { session, log, client: mcpClient }
+  ): Promise<string> => {
+    const origin = requestOrigin(mcpClient, session);
     const client = getClient(session);
     const {
       scrapeId: providedScrapeId,
@@ -3059,7 +3140,7 @@ This acts on the live site, so actions such as form submission can create persis
       const cleanedScrapeOptions = removeEmptyTopLevel(scrapeOptions ?? {});
       const scraped = await client.scrape(String(url), {
         ...cleanedScrapeOptions,
-        origin: ORIGIN,
+        origin,
       } as any);
       scrapeId = (scraped as any)?.metadata?.scrapeId;
       if (!scrapeId) {
@@ -3078,7 +3159,7 @@ This acts on the live site, so actions such as form submission can create persis
     }
     const activeScrapeId = scrapeId;
     log.info('Interacting with page', { scrapeId: activeScrapeId });
-    const interactArgs: Record<string, unknown> = { origin: ORIGIN };
+    const interactArgs: Record<string, unknown> = { origin };
     if (prompt) interactArgs.prompt = prompt;
     if (code) interactArgs.code = code;
     if (language) interactArgs.language = language;
@@ -3100,7 +3181,7 @@ This acts on the live site, so actions such as form submission can create persis
 server.addTool({
   name: 'firecrawl_interact_stop',
   annotations: {
-    title: 'Stop interact session',
+    title: 'Stop Firecrawl interact session',
     readOnlyHint: false, // Calls the API to stop and tear down an active interact session.
     openWorldHint: false, // Operates only on a known Firecrawl scrape/interact session ID.
     destructiveHint: true, // Terminates the live browser session; this end state cannot be resumed.
@@ -3111,13 +3192,16 @@ Stop the live interact session associated with a \`scrapeId\` and release its re
   parameters: z.object({
     scrapeId: z.string(),
   }),
-  execute: async (args: unknown, { session, log }): Promise<string> => {
+  execute: async (
+    args: unknown,
+    { session, log, client: mcpClient }
+  ): Promise<string> => {
     const client = getClient(session);
     const { scrapeId } = args as { scrapeId: string };
     log.info('Stopping interact session', { scrapeId });
     const res = await (client as any).http.delete(
       `/v2/scrape/${encodeURIComponent(scrapeId)}/interact`,
-      ORIGIN_HEADERS
+      originHeaders(requestOrigin(mcpClient, session))
     );
     return asText(res?.data ?? {});
   },
@@ -3128,7 +3212,7 @@ Stop the live interact session associated with a \`scrapeId\` and release its re
 server.addTool({
   name: 'firecrawl_parse',
   annotations: {
-    title: 'Parse a local file',
+    title: 'Firecrawl file parsing',
     readOnlyHint: true, // Local mode reads a file; hosted mode only returns upload instructions or parses an uploadRef.
     openWorldHint: false, // Operates on a local filesystem path/upload reference, not an arbitrary web URL.
     destructiveHint: false, // Read-only parsing; no deletion or writes to the source file.
@@ -3138,12 +3222,16 @@ Parse one supported document into markdown, HTML, links, summary, targeted answe
 
 Local MCP reads \`filePath\` from the server filesystem. Hosted MCP uses two calls: first provide \`filePath\` to receive upload instructions, upload locally, then call again with the returned \`uploadRef\`; do not send both fields together. Remote web URLs belong in \`firecrawl_scrape\`.
 
-Set \`redactPII\` to request redaction of personally identifiable information in the returned content. \`zeroDataRetention\` requires an eligible authenticated account; omit it for anonymous keyless use. Returns upload instructions for hosted phase one or parsed document content for the final call.
+Set \`redactPII\` to request redaction of personally identifiable information in the returned content. \`zeroDataRetention\` requires an eligible authenticated account; omit it for anonymous keyless use. Returns upload instructions for hosted phase one or parsed document content for the final call. Authenticated final responses can include a \`data.metadata.scrapeId\` for optional parse feedback.
 `,
   parameters: parseParamsSchema,
-  execute: async (args: unknown, { session, log }): Promise<string> => {
+  execute: async (
+    args: unknown,
+    { session, log, client: mcpClient }
+  ): Promise<string> => {
+    const origin = requestOrigin(mcpClient, session);
     if (process.env.CLOUD_SERVICE === 'true') {
-      return executeHostedParse(args as ParseToolArgs, session, log);
+      return executeHostedParse(args as ParseToolArgs, session, log, origin);
     }
 
     const apiUrl = process.env.FIRECRAWL_API_URL;
@@ -3171,7 +3259,8 @@ Set \`redactPII\` to request redaction of personally identifiable information in
         : inferContentType(filename);
 
     const optionsPayload = buildParseOptionsPayload(
-      options as Record<string, unknown>
+      options as Record<string, unknown>,
+      origin
     );
 
     const form = new FormData();
@@ -3181,7 +3270,7 @@ Set \`redactPII\` to request redaction of personally identifiable information in
     form.append('file', blob, filename);
     form.append('options', JSON.stringify(optionsPayload));
 
-    const headers: Record<string, string> = { ...ORIGIN_HEADERS };
+    const headers: Record<string, string> = { ...originHeaders(origin) };
     const credential = credentialForOutboundRequest(session);
     if (credential) {
       headers['Authorization'] = `Bearer ${credential}`;
@@ -3226,7 +3315,7 @@ function registerMarketplaceSearchTool(
   registrar.addTool({
     name: 'firecrawl_search',
     annotations: {
-      title: 'Search the web',
+      title: 'Firecrawl web search',
       readOnlyHint: true,
       openWorldHint: true,
       destructiveHint: false,
@@ -3245,7 +3334,10 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
       // error rather than being silently dropped.
       .strict()
       .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE),
-    execute: async (args: unknown, { session, log }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, log, client: mcpClient }
+    ): Promise<string> => {
       const {
         query,
         includeDomains,
@@ -3292,7 +3384,7 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
           highlights,
           enterprise,
         }),
-        origin: ORIGIN,
+        origin: requestOrigin(mcpClient, session),
       };
 
       log.info('Searching', { query: searchQuery });
