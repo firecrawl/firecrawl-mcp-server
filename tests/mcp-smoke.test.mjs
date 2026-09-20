@@ -1021,9 +1021,23 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     byName.get('firecrawl_research_search_papers').description,
     /indexed corpus.*biomedical.*PubMed.*bioRxiv.*medRxiv.*arXiv/is
   );
+  // Zod field metadata must survive serialization into tools/list so models
+  // receive parameter-level guidance in addition to the routing distinction
+  // kept in the top-level tool description below.
+  assert.equal(
+    byName.get('firecrawl_search').inputSchema.properties.highlights.description,
+    'Return query-relevant highlights for each search result. Set to false to keep the original search snippets.'
+  );
+  assert.match(
+    byName.get('firecrawl_search').inputSchema.properties.categories.description,
+    /Limit results to specific source types.*developer.*data\.web/is
+  );
+  assert.match(
+    byName.get('firecrawl_developer_search').inputSchema.properties.query
+      .description,
+    /Natural-language developer question.*library.*error message.*API/is
+  );
   // The two surfaces that both answer to "research" must stay distinguishable.
-  // This has to live in the tool description, not a parameter `.describe()`:
-  // no property description survives serialization into tools/list.
   assert.match(
     byName.get('firecrawl_search').description,
     /categories: \["research"\].*research-affiliated websites.*`firecrawl_research_\*` tools are a separate surface.*PubMed, bioRxiv, medRxiv.*arXiv/is
