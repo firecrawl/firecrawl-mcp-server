@@ -217,6 +217,62 @@ async function startFakeFirecrawlApi() {
       return;
     }
 
+    if (req.method === 'POST' && req.url === '/v2/scrape') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: {
+            markdown: '# Scraped fixture',
+            metadata: {
+              scrapeId: '00000000-0000-4000-8000-000000000010',
+              sourceURL: parsedBody.url,
+            },
+          },
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/map') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          id: '00000000-0000-4000-8000-000000000020',
+          links: ['https://example.com/'],
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (
+      req.method === 'POST' &&
+      req.url === '/v2/search/00000000-0000-4000-8000-000000000000/feedback'
+    ) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          creditsRefunded: 0,
+          feedbackId: '00000000-0000-4000-8000-000000000100',
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/feedback') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          creditsRefunded: 0,
+          feedbackId: '00000000-0000-4000-8000-000000000101',
+          success: true,
+        })
+      );
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/v2/monitor') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
@@ -451,7 +507,24 @@ async function startFakeFirecrawlBackend(options = {}) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify({
-          data: { markdown: '# Parsed fixture' },
+          data: {
+            markdown: '# Parsed fixture',
+            metadata: {
+              scrapeId: '00000000-0000-4000-8000-000000000030',
+            },
+          },
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/feedback') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          creditsRefunded: 0,
+          feedbackId: '00000000-0000-4000-8000-000000000102',
           success: true,
         })
       );
@@ -891,8 +964,16 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     /request identifies a page and needs its content or defined fields/i
   );
   assert.match(
+    byName.get('firecrawl_scrape').description,
+    /authenticated responses can include a `metadata\.scrapeId` for optional scrape feedback/i
+  );
+  assert.match(
     byName.get('firecrawl_map').description,
     /returns matching URLs rather than page bodies/i
+  );
+  assert.match(
+    byName.get('firecrawl_map').description,
+    /authenticated responses can include an `id` for optional map feedback/i
   );
   assert.match(
     byName.get('firecrawl_agent').description,
@@ -909,6 +990,14 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.match(
     byName.get('firecrawl_search').description,
     /each web result is a title, URL, and description, not the page.*scrapeOptions.*ignore `maxAge`.*firecrawl_scrape/is
+  );
+  assert.match(
+    byName.get('firecrawl_search').description,
+    /authenticated responses can include an `id` for optional search feedback/i
+  );
+  assert.match(
+    byName.get('firecrawl_parse').description,
+    /authenticated final responses can include a `data\.metadata\.scrapeId` for optional parse feedback/i
   );
   assert.match(
     byName.get('firecrawl_search_feedback').description,
@@ -1206,6 +1295,77 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
     id: '00000000-0000-4000-8000-000000000000',
     success: true,
   });
+
+  const scrapeResult = await client.request('tools/call', {
+    arguments: { url: 'https://example.com/' },
+    name: 'firecrawl_scrape',
+  });
+  assert.notEqual(scrapeResult.isError, true);
+  const scrapePayload = JSON.parse(scrapeResult.content[0].text);
+  assert.equal(
+    scrapePayload.metadata.scrapeId,
+    '00000000-0000-4000-8000-000000000010'
+  );
+
+  const mapResult = await client.request('tools/call', {
+    arguments: { limit: 1, url: 'https://example.com/' },
+    name: 'firecrawl_map',
+  });
+  assert.notEqual(mapResult.isError, true);
+  const mapPayload = JSON.parse(mapResult.content[0].text);
+  assert.equal(mapPayload.id, '00000000-0000-4000-8000-000000000020');
+
+  const searchFeedbackResult = await client.request('tools/call', {
+    arguments: {
+      querySuggestions: 'Use a narrower query',
+      rating: 'bad',
+      searchId: toolPayload.id,
+    },
+    name: 'firecrawl_search_feedback',
+  });
+  assert.notEqual(searchFeedbackResult.isError, true);
+
+  for (const [endpoint, jobId] of [
+    ['scrape', scrapePayload.metadata.scrapeId],
+    ['map', mapPayload.id],
+  ]) {
+    const feedbackResult = await client.request('tools/call', {
+      arguments: {
+        endpoint,
+        jobId,
+        note: `Feedback for the ${endpoint} result`,
+        rating: 'bad',
+      },
+      name: 'firecrawl_feedback',
+    });
+    assert.notEqual(feedbackResult.isError, true);
+  }
+
+  const searchFeedbackRequest = fakeApi.requests.find(
+    (request) =>
+      request.url ===
+      '/v2/search/00000000-0000-4000-8000-000000000000/feedback'
+  );
+  assert.equal(searchFeedbackRequest.body.rating, 'bad');
+  const endpointFeedbackRequests = fakeApi.requests.filter(
+    (request) => request.url === '/v2/feedback'
+  );
+  assert.deepEqual(
+    endpointFeedbackRequests.map((request) => ({
+      endpoint: request.body.endpoint,
+      jobId: request.body.jobId,
+    })),
+    [
+      {
+        endpoint: 'scrape',
+        jobId: '00000000-0000-4000-8000-000000000010',
+      },
+      {
+        endpoint: 'map',
+        jobId: '00000000-0000-4000-8000-000000000020',
+      },
+    ]
+  );
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
@@ -1930,16 +2090,54 @@ test('HTTP cloud authenticated Parse forwards ZDR for API-key and managed OAuth 
       },
     });
     assert.equal(phaseTwo.status, 200);
-    assert.notEqual(parseSseJson(await phaseTwo.text()).result.isError, true);
+    const phaseTwoResult = parseSseJson(await phaseTwo.text()).result;
+    assert.notEqual(phaseTwoResult.isError, true);
+    const phaseTwoPayload = JSON.parse(phaseTwoResult.content[0].text);
+    assert.equal(
+      phaseTwoPayload.data.metadata.scrapeId,
+      '00000000-0000-4000-8000-000000000030'
+    );
+
+    if (label === 'api-key') {
+      const feedback = await httpToolCall(port, {
+        endpoint: '/v2/mcp-oauth',
+        headers,
+        id: `${label}-parse-feedback`,
+        params: {
+          arguments: {
+            endpoint: 'parse',
+            jobId: phaseTwoPayload.data.metadata.scrapeId,
+            note: 'Feedback for the parsed result',
+            rating: 'bad',
+          },
+          name: 'firecrawl_feedback',
+        },
+      });
+      assert.equal(feedback.status, 200);
+      assert.notEqual(parseSseJson(await feedback.text()).result.isError, true);
+    }
   }
 
   const uploads = backend.requests.filter((r) => r.url === '/v2/parse/upload-url');
   const parses = backend.requests.filter((r) => r.url === '/v2/parse');
+  const feedbackRequests = backend.requests.filter((r) => r.url === '/v2/feedback');
   const introspectedTokens = backend.requests
     .filter((request) => request.url === '/api/oauth/introspect')
     .map((request) => request.body.token);
   assert.equal(uploads.length, 2);
   assert.equal(parses.length, 2);
+  assert.deepEqual(
+    feedbackRequests.map((request) => ({
+      endpoint: request.body.endpoint,
+      jobId: request.body.jobId,
+    })),
+    [
+      {
+        endpoint: 'parse',
+        jobId: '00000000-0000-4000-8000-000000000030',
+      },
+    ]
+  );
   assert.deepEqual(
     introspectedTokens,
     ['fco_parse', 'fco_parse'],
