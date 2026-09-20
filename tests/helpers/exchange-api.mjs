@@ -175,8 +175,12 @@ async function startFakeExchangeApi(options = {}) {
 
     json(404, { success: false, error: `Unhandled ${req.method} ${req.url}` });
     } catch (error) {
+      if (res.headersSent) {
+        res.end();
+        return;
+      }
       res.writeHead(500, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({error: `Mock API failure: ${error.message}`}));
+      res.end(JSON.stringify({error: `Mock API failure: ${error?.message ?? String(error)}`}));
     }
   });
 
