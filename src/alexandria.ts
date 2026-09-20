@@ -39,7 +39,7 @@ export function searchQueryIsValid(args: { query?: string }): boolean {
 
 export const findToolsSchema = z
   .object({
-    query: z.string().min(1).max(2000).optional().describe('Semantic lookup of tools for the data you need. Selectors constrain the search.'),
+    query: z.string().trim().min(1).max(2000).optional().describe('Semantic lookup of tools for the data you need. Selectors constrain the search.'),
     urls: z
       .array(
         z
@@ -62,7 +62,7 @@ export const findToolsSchema = z
   .strict();
 
 export const ALEXANDRIA_INSTRUCTIONS =
-  'Start with the user’s actual question and constraints. Authenticated search defaults to web + semantic Alexandria tools + domain-matched tools. Alexandria contains ready-made website workflows, API providers and specialized indexes for structured records, listings, company/financial data, research and public records. Coverage varies; discover current tools rather than assuming one exists. ' +
+  'Start with the user’s actual question and constraints. Authenticated search defaults to web + semantic Alexandria tools + domain-matched tools. Keyless search defaults to web only. Alexandria contains ready-made website workflows, API providers and specialized indexes for structured records, listings, company/financial data, research and public records. Coverage varies; discover current tools rather than assuming one exists. ' +
   'Semantic discovery matches the data you need to capabilities even without a provider website in the web results. Domain matching connects result websites to tools that may fetch richer details, related records or collections beyond the linked page. Inspect coverage and required inputs; a matching domain alone does not guarantee a fit. ' +
   'Use sources: ["alexandria"] for semantic tools only, sources: ["web"] for web only, or sources: ["web"], domainTools: true for web plus domain tools. domainTools: false disables domain matching. Results in data.tools are compact summaries, not executed data. Inspect a selected tool with firecrawl_find_tools using its provider and capability, or set toolDetail: \"full\" for contracts upfront. Reuse a complete returned contract. ' +
   'On the full MCP surface, firecrawl_find_tools supports semantic query lookup and is the list equivalent: {} lists categories; {categories:["<category-id>"]} lists providers; {providers:["<provider-id>"]} lists compact tools; adding capabilities:["<capability-id>"] expands the selected contract. Avoid expanding the entire catalogue. ' +
@@ -95,3 +95,6 @@ export function withFindToolsNavigation(envelope: any) {
   if (link(page.next)) page.nextTool = link(page.next);
   return envelope;
 }
+
+export const ALEXANDRIA_SEARCH_INSTRUCTIONS =
+  'Authenticated search combines web results, semantic tool summaries and domain matches. Use sources: ["alexandria"] for semantic tools only, or sources: ["web"] for web only. domainTools: false disables domain matching. Tool matches describe available structured-data capabilities, not executed data. toolDetail: "full" includes their input and output contracts. This search-only surface cannot execute tools or progressively browse the catalogue; those actions require the full MCP surface at /v2/mcp.';

@@ -1127,6 +1127,12 @@ test('search-only surface rejects catalogue browsing and preserves semantic plus
   const backend = await startFakeBackend();
   t.after(() => backend.close());
   const { searchPort } = await startHostedServer(t, {FIRECRAWL_API_URL: backend.url});
+  const listing = parseSseJson(await (await jsonRpc(searchPort, SEARCH_ENDPOINT, {id:76,method:'tools/list',params:{},headers:{'x-api-key':'fc-search-key'}})).text());
+  const searchTool = listing.result.tools.find(tool => tool.name === 'firecrawl_search');
+  assert.match(searchTool.description, /search-only surface cannot execute tools/);
+  assert.match(searchTool.description, /full MCP surface/);
+  assert.doesNotMatch(searchTool.description, /Execute through firecrawl_scrape|firecrawl_find_tools is the list/);
+
   const call = arguments_ => jsonRpc(searchPort, SEARCH_ENDPOINT, {id:77,method:'tools/call', params:{name:'firecrawl_search',arguments:arguments_},headers:{'x-api-key':'fc-search-key'}});
   const invalid = parseSseJson(await (await call({query:'podcast episodes',sources:[{type:'alexandria',mode:'browse'}]})).text());
   assert.ok(invalid.error || invalid.result?.isError);

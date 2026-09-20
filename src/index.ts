@@ -18,6 +18,7 @@ import {
   normalizeSearchSources,
   searchQueryIsValid,
   ALEXANDRIA_INSTRUCTIONS,
+  ALEXANDRIA_SEARCH_INSTRUCTIONS,
 } from './alexandria';
 import { loadCliCredentials } from './cli-credentials';
 import { registerDeveloperTools } from './developer';
@@ -896,11 +897,11 @@ function buildSearchQueryWithDomains(
 // scrapeOptions). Defining the field set once keeps the two surfaces from
 // drifting when a source type, category, or filter changes.
 const searchToolBaseFields = {
-  toolDetail: z.enum(['summary', 'full']).optional().describe('Tool summaries by default. Set full for input/output contracts upfront; otherwise inspect a selected tool with firecrawl_find_tools.'),
+  toolDetail: z.enum(['summary', 'full']).optional().describe('Tool summaries by default. Set full for input/output contracts upfront; targeted contract inspection is available on the full MCP surface.'),
   query: z
     .string()
     .min(1)
-    .describe('Query for semantic search; use Find Tools for catalogue lookup.'),
+    .describe('Query for web and semantic tool discovery. Catalogue browsing is available on the full MCP surface.'),
   domainTools: z
     .boolean()
     .optional()
@@ -922,7 +923,7 @@ const searchToolBaseFields = {
   sources: z
     .array(searchSourceSchema)
     .optional()
-    .describe('Search sources; default web + alexandria. Use alexandria alone for semantic tool discovery.'),
+    .describe('Search sources; authenticated sessions default to web + alexandria, keyless sessions to web only. Use alexandria alone for semantic tool discovery.'),
   categories: z
     .array(z.enum(['github', 'research', 'pdf', 'developer']))
     .optional()
@@ -1263,8 +1264,8 @@ const KEYLESS_PROFILE_INSTRUCTIONS = `Hosted keyless sessions expose firecrawl_s
 // and tool copy describe just those tools and stay neutral about how a client
 // uses them.
 const SEARCH_PROFILE_INSTRUCTIONS =
-  ALEXANDRIA_INSTRUCTIONS +
-  `Firecrawl provides web, developer, and research search. Use firecrawl_search to find relevant results across the web and specialized indexes. For a programming question, firecrawl_developer_search searches indexed repositories, GitHub issues, merged pull requests, READMEs, and curated documentation sites and returns the matched passages, and skills: "only" narrows it to agent-skill files; firecrawl_search with categories: ["developer"] reaches the same index beside ordinary web results, returning the hits in the web group rather than as passages and offering no skills filter. For a biomedical, life-science, clinical, or arXiv literature question, the firecrawl_research_* tools search the paper index, while categories: ["research"] on firecrawl_search filters ordinary web results to research-affiliated websites. Use the firecrawl_research_* tools to search academic and research literature, expand from anchor papers via the citation graph, and read full-text passages from a specific paper. All tools are read-only and return ranked results.`;
+  ALEXANDRIA_SEARCH_INSTRUCTIONS +
+  ` Firecrawl provides web, developer, and research search. Use firecrawl_search to find relevant results across the web and specialized indexes. For a programming question, firecrawl_developer_search searches indexed repositories, GitHub issues, merged pull requests, READMEs, and curated documentation sites and returns the matched passages, and skills: "only" narrows it to agent-skill files; firecrawl_search with categories: ["developer"] reaches the same index beside ordinary web results, returning the hits in the web group rather than as passages and offering no skills filter. For a biomedical, life-science, clinical, or arXiv literature question, the firecrawl_research_* tools search the paper index, while categories: ["research"] on firecrawl_search filters ordinary web results to research-affiliated websites. Use the firecrawl_research_* tools to search academic and research literature, expand from anchor papers via the citation graph, and read full-text passages from a specific paper. All tools are read-only and return ranked results.`;
 
 // The exact set of tools the search surface exposes. Registration is filtered
 // against this set, so anything not listed here can never appear on that
@@ -3944,7 +3945,7 @@ Search web and specialized indexes, returning ranked results. Each web result is
 
 For a programming question, add \`categories: ["developer"]\`. It searches an index of repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites, and returns the hits in \`data.web\` with \`category: "developer"\`.
 
-${ALEXANDRIA_INSTRUCTIONS}
+${ALEXANDRIA_SEARCH_INSTRUCTIONS}
 
 Returns result groups in \`data\` and an operation \`id\`.
 `,
@@ -3957,7 +3958,7 @@ Returns result groups in \`data\` and an operation \`id\`.
       .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE)
       .refine(
         searchQueryIsValid,
-        'A query is required. Use Find Tools for catalogue lookup.'
+        'A query is required. Catalogue browsing requires the full MCP surface.'
       ),
     execute: async (args: unknown, { session, log }): Promise<string> => {
       const {
