@@ -132,6 +132,32 @@ function nonEmptyArray(value: unknown): boolean {
 }
 
 /**
+ * A confidence or probability as a number in [0, 1], or 0 when the value is
+ * not one. A malformed answer must not be able to clear the threshold, so
+ * anything non-finite or out of range reads as no confidence at all rather
+ * than being coerced and compared.
+ */
+function unitInterval(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : 0;
+}
+
+/**
+ * The category mapped to a label, considering own properties only. A label
+ * like `constructor` or `toString` would otherwise resolve to an inherited
+ * member of Object.prototype and put a non-string category on the outbound
+ * search.
+ */
+function ownRoute(
+  routes: Record<string, string>,
+  label: string
+): string | undefined {
+  if (!Object.prototype.hasOwnProperty.call(routes, label)) return undefined;
+  const category = routes[label];
+  return typeof category === 'string' && category !== '' ? category : undefined;
+}
+
+/**
  * Ask the classifier which index a query belongs to. Resolves to a decision in
  * every case, including transport failure; it does not reject.
  */
@@ -204,13 +230,11 @@ export async function classifySearchQuery(
     return { routed: false, reason: 'missing_choice', latencyMs: elapsed() };
   }
 
-  const confidence = Number(answer.confidence);
-  const probability = Number(answer.probabilities?.[label]);
-  const safeConfidence = Number.isFinite(confidence) ? confidence : 0;
-  const safeProbability = Number.isFinite(probability) ? probability : 0;
+  const safeConfidence = unitInterval(answer.confidence);
+  const safeProbability = unitInterval(answer.probabilities?.[label]);
   const latencyMs = elapsed();
 
-  const category = config.routes[label];
+  const category = ownRoute(config.routes, label);
   if (!category) {
     return {
       routed: false,

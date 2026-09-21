@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  DEFAULT_ENDPOINT,
   DEFAULT_THRESHOLD,
+  DEFAULT_TIMEOUT_MS,
   applyQueryRouting,
   classifySearchQuery,
   routerConfigFromEnv,
@@ -128,6 +130,47 @@ test('confidence at or below the threshold does not route', async () => {
   assert.equal(body2.categories, undefined);
 });
 
+test('a confidence that is not a probability cannot clear the threshold', async () => {
+  // Out of range, non-numeric, or absent: none of these is a confidence the
+  // classifier meant, and coercing them must not route the search.
+  for (const confidence of [5, 1.0001, -1, Number.NaN, 'high', null, undefined]) {
+    const fetchImpl = stubFetch({
+      type: 'choice',
+      choice: 'developer_index',
+      confidence,
+      probabilities: { developer_index: 1, research_index: 0, web_search: 0 },
+    });
+    const body = { query: 'react hooks exhaustive-deps' };
+    const decision = await applyQueryRouting(body, CONFIG, fetchImpl);
+    assert.equal(
+      decision.routed,
+      false,
+      `confidence ${JSON.stringify(confidence)} should not route`
+    );
+    assert.equal(decision.reason, 'below_threshold');
+    assert.equal(decision.confidence, 0);
+    assert.equal(body.categories, undefined);
+  }
+});
+
+test('a label inherited from Object.prototype is not a route', async () => {
+  // `config.routes[label]` alone would resolve `constructor` to a function and
+  // put it on the outbound call as a category.
+  for (const choice of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+    const fetchImpl = stubFetch({
+      type: 'choice',
+      choice,
+      confidence: 1,
+      probabilities: { [choice]: 1 },
+    });
+    const body = { query: 'anything' };
+    const decision = await applyQueryRouting(body, CONFIG, fetchImpl);
+    assert.equal(decision.routed, false, `${choice} should not route`);
+    assert.equal(decision.reason, 'no_route_for_label');
+    assert.equal(body.categories, undefined);
+  }
+});
+
 test('a call that already names categories or sources is never overridden', async () => {
   let called = false;
   const fetchImpl = async () => {
@@ -189,6 +232,24 @@ test('the router fails open on transport, status, and body failures', async () =
           headers: { 'content-type': 'application/json' },
         }),
       'missing_answer',
+    ],
+    [
+      'answer without a choice',
+      async () =>
+        new Response(JSON.stringify({ answers: { index: {} } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      'missing_choice',
+    ],
+    [
+      'non-string choice',
+      async () =>
+        new Response(
+          JSON.stringify({ answers: { index: { choice: 7, confidence: 1 } } }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        ),
+      'missing_choice',
     ],
   ];
 
@@ -305,5 +366,55 @@ test('env configuration resolves defaults and rejects a nonsense threshold', () 
       FIRECRAWL_QUERY_ROUTER_API_KEY: 'dedicated',
     }).apiKey,
     'dedicated'
+  );
+});
+
+test('env configuration resolves the timeout, its floor, and the endpoint', () => {
+  const base = { FIRECRAWL_QUERY_ROUTER: 'true', TYPESAFE_API_KEY: 'k' };
+
+  assert.equal(routerConfigFromEnv(base).timeoutMs, DEFAULT_TIMEOUT_MS);
+  assert.equal(routerConfigFromEnv(base).endpoint, DEFAULT_ENDPOINT);
+
+  assert.equal(
+    routerConfigFromEnv({ ...base, FIRECRAWL_QUERY_ROUTER_TIMEOUT_MS: '1500' })
+      .timeoutMs,
+    1500
+  );
+  // The floor keeps a too-small value from making every classification time
+  // out, which would look like the router silently doing nothing.
+  for (const tooSmall of ['50', '0', '-1']) {
+    assert.equal(
+      routerConfigFromEnv({
+        ...base,
+        FIRECRAWL_QUERY_ROUTER_TIMEOUT_MS: tooSmall,
+      }).timeoutMs,
+      250,
+      `timeout ${tooSmall} should be floored at 250ms`
+    );
+  }
+  // Unparseable falls back to the default, which is then above the floor.
+  assert.equal(
+    routerConfigFromEnv({ ...base, FIRECRAWL_QUERY_ROUTER_TIMEOUT_MS: 'abc' })
+      .timeoutMs,
+    DEFAULT_TIMEOUT_MS
+  );
+
+  assert.equal(
+    routerConfigFromEnv({
+      ...base,
+      FIRECRAWL_QUERY_ROUTER_ENDPOINT: 'https://classifier.test/v1/systemone',
+    }).endpoint,
+    'https://classifier.test/v1/systemone'
+  );
+  assert.equal(
+    routerConfigFromEnv({ ...base, FIRECRAWL_QUERY_ROUTER_ENDPOINT: '   ' })
+      .endpoint,
+    DEFAULT_ENDPOINT,
+    'a blank endpoint falls back to the default'
+  );
+  assert.equal(
+    routerConfigFromEnv({ ...base, FIRECRAWL_QUERY_ROUTER_MODEL: 'jev-1.13.0' })
+      .model,
+    'jev-1.13.0'
   );
 });
