@@ -19,6 +19,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Scrape any URL into clean, structured data
 - Interact with pages — click, navigate, and operate
 - Deep research with autonomous agent
+- Check current and historical Firecrawl credit usage
 - Automatic retries and rate limiting
 - Cloud and self-hosted support
 - SSE support
@@ -33,9 +34,10 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Use `firecrawl_search` when you're starting from a query rather than a URL and want ranked web results; add `scrapeOptions` if you also want page content fetched in the same call (the search-only endpoint never fetches content).
 - Use `firecrawl_interact` when a page needs a click, type, or navigate action before you can read it — pass a `url` for a fresh page or a `scrapeId` to continue on one you already scraped.
 - Use the `firecrawl_monitor_*` tools when the same page needs to be checked on a recurring schedule with diffs and change alerts, rather than fetched once.
+- Use `firecrawl_credit_usage` to check credits left or monthly consumption, optionally broken down by API key.
 - Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control — the session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
 
-This server lists 25 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 — `firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse` — and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed 6 read-only tools.
+This server lists 26 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 — `firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse` — and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed 6 read-only tools.
 
 ## Installation
 
@@ -952,6 +954,13 @@ Search an index built for coding agents. The index covers GitHub issues, merged 
 **Returns:** Ranked results. Each result carries an ID, a source type (`issue`, `pull_request`, `readme`, or `doc`), a URL, a title, and the matched passages in markdown.
 
 `firecrawl_search` with `categories: ["developer"]` searches the same index beside the web results. Use this tool instead when you want the matched passages, the `skills` filter, or no web results in the response. The search-only endpoint exposes both tools, and the same choice applies there.
+
+### 15. Credit Usage Tool
+
+The tool requires an authenticated Firecrawl account and is read-only.
+
+- `firecrawl_credit_usage` defaults to `{ "view": "current" }` and returns `remainingCredits`, `planCredits`, `billingPeriodStart`, and `billingPeriodEnd`. Remaining credits can exceed plan credits when the team has top-ups or grants.
+- Pass `{ "view": "historical" }` for calendar-month periods containing `startDate`, `endDate`, and `creditsUsed`. Passing `{ "byApiKey": true }` also selects the historical view and splits periods by API key; each row then includes `apiKey`. Do not combine `byApiKey` with `{ "view": "current" }`. The latest period's `endDate` can be null.
 
 ## Logging System
 

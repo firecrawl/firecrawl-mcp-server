@@ -12,6 +12,7 @@ import { registerDeveloperTools } from './developer';
 import { extractSingleTrustedClientIp } from './keyless-client-ip';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
+import { registerUsageTools } from './usage';
 import { escapeWWWAuthenticateValue } from './www-authenticate';
 import { originHeaders, requestOrigin, type McpClient } from './origin';
 import {
@@ -3419,6 +3420,7 @@ if (
 registerMonitorTools(server);
 registerResearchTools(server, getClient);
 registerDeveloperTools(server, getClient);
+registerUsageTools(server, getClient);
 
 if (
   process.env.CLOUD_SERVICE === 'true' &&
