@@ -1325,7 +1325,7 @@ test('local keyless stdio keeps profile guidance keyless-scoped and omits feedba
   );
   assert.match(
     keylessGuidance,
-    /firecrawl_search with categories: \["developer"\].*curated documentation sites/i
+    /firecrawl_search with categories: \["developer"\].*code documentation/i
   );
   assert.match(
     keylessGuidance,

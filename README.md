@@ -930,7 +930,7 @@ Pass `body` when you need crawl targets, JSON change tracking, custom retention,
 
 ### 14. Developer Search Tool (`firecrawl_developer_search`)
 
-Search an index built for coding agents. The index covers GitHub issues, merged pull requests, repository READMEs, and curated documentation sites.
+Search an index built for coding agents. The index covers GitHub issues, merged pull requests, repository READMEs, and code documentation.
 
 **Best for:** A programming question — code behaviour, a library or framework, an API contract, an error message, or a known bug.
 
