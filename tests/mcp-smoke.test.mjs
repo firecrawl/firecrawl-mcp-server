@@ -1592,8 +1592,11 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
   assert.equal(scrapeRequest.headers['x-firecrawl-thread-id'], threadId);
   assert.equal('threadId' in scrapeRequest.body, false);
 
+  // A call that forgets the threadId still lands on the caller's recent
+  // thread (same credential, client, and User-Agent within the idle window)
+  // instead of starting a new one.
   const mapResult = await client.request('tools/call', {
-    arguments: { limit: 1, threadId, url: 'https://example.com/' },
+    arguments: { limit: 1, url: 'https://example.com/' },
     name: 'firecrawl_map',
   });
   assert.notEqual(mapResult.isError, true);
@@ -1700,6 +1703,38 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
     ]
   );
   assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('FIRECRAWL_THREAD_IDLE_SECONDS=0 keeps explicit threads but never recalls one', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+    FIRECRAWL_THREAD_IDLE_SECONDS: '0',
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-no-recall', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const call = (args) =>
+    client
+      .request('tools/call', { arguments: args, name: 'firecrawl_search' })
+      .then((result) => JSON.parse(result.content[0].text).threadId);
+
+  const first = await call({ limit: 1, query: 'one' });
+  const second = await call({ limit: 1, query: 'two' });
+  assert.match(first, UUID_PATTERN);
+  assert.match(second, UUID_PATTERN);
+  assert.notEqual(first, second, 'without recall every bare call starts a thread');
+  assert.equal(await call({ limit: 1, query: 'three', threadId: first }), first);
 });
 
 test('FIRECRAWL_NO_THREAD_ID removes thread correlation end to end', async (t) => {

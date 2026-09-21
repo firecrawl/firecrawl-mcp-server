@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
 /**
@@ -18,10 +18,21 @@ import { z } from 'zod';
  * value as the `threadId` argument on its later calls, and every request in
  * the conversation carries the same header.
  *
+ * When a call arrives without a `threadId`, the server does not always start
+ * a new thread. It first looks for a thread it saw recently from the same
+ * caller (credential, MCP client, User-Agent, keyless IP) and continues that
+ * one. This covers agents that never echo the argument and the first turn of
+ * a conversation, where several parallel calls would otherwise each mint
+ * their own ID. An explicit `threadId` always wins over this inference, which
+ * is what keeps two conversations on one editor connection apart when the
+ * agent cooperates. The memory is per process and expires after an idle
+ * window, so it is a best-effort join, never a source of truth.
+ *
  * The identifier is minted here, at random, and never derived from anything
  * the client sent: it says "these calls belong together" and nothing else.
  * `FIRECRAWL_NO_THREAD_ID` turns the whole mechanism off (no argument on any
- * tool, no header, nothing added to results).
+ * tool, no header, nothing added to results); `FIRECRAWL_THREAD_IDLE_SECONDS`
+ * sets the recall window, and `0` disables recall while keeping explicit IDs.
  */
 
 /** Outbound header carrying the thread ID to the Firecrawl API. */
@@ -93,11 +104,16 @@ export function toolTracksThread(parameters: unknown): boolean {
   );
 }
 
+/** Where a call's thread ID came from. */
+export type ThreadSource = 'argument' | 'recent' | 'minted';
+
 export type ResolvedThread = {
   /** The thread ID every outbound request of this call carries. */
   threadId: string;
   /** True when no usable `threadId` came in and this call minted one. */
   minted: boolean;
+  /** How the ID was chosen; `takeThreadId` alone never yields `recent`. */
+  source: ThreadSource;
   /** The tool arguments with `threadId` removed, so it never reaches an API body. */
   args: unknown;
 };
@@ -109,16 +125,130 @@ export type ResolvedThread = {
  */
 export function takeThreadId(args: unknown): ResolvedThread {
   if (!args || typeof args !== 'object' || Array.isArray(args)) {
-    return { threadId: newThreadId(), minted: true, args };
+    return { threadId: newThreadId(), minted: true, source: 'minted', args };
   }
   const { [THREAD_ID_ARG]: provided, ...rest } = args as Record<
     string,
     unknown
   >;
   if (isValidThreadId(provided)) {
-    return { threadId: provided, minted: false, args: rest };
+    return { threadId: provided, minted: false, source: 'argument', args: rest };
   }
-  return { threadId: newThreadId(), minted: true, args: rest };
+  return { threadId: newThreadId(), minted: true, source: 'minted', args: rest };
+}
+
+/** Environment variable holding the recall window in seconds; `0` disables recall. */
+export const THREAD_IDLE_ENV = 'FIRECRAWL_THREAD_IDLE_SECONDS';
+export const DEFAULT_THREAD_IDLE_MS = 10 * 60 * 1000;
+/** Upper bound on remembered callers per process; the least recently seen goes first. */
+export const THREAD_REGISTRY_MAX_ENTRIES = 10_000;
+
+export function threadIdleMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = (env[THREAD_IDLE_ENV] ?? '').trim();
+  if (raw === '') return DEFAULT_THREAD_IDLE_MS;
+  const seconds = Number(raw);
+  if (!Number.isFinite(seconds) || seconds < 0) return DEFAULT_THREAD_IDLE_MS;
+  return Math.floor(seconds * 1000);
+}
+
+/**
+ * The caller a call is attributed to when it carries no `threadId`, as an
+ * opaque hash: whichever account identity the session resolved (API key id,
+ * OAuth user, team), else a digest of the raw key, else the keyless client
+ * IP; plus the MCP client name and User-Agent so two clients on one account
+ * stay apart. Nothing in the key is reversible, and it never leaves memory.
+ */
+export function threadScopeKey(
+  session:
+    | {
+        apiKeyId?: string;
+        userId?: string;
+        teamId?: string;
+        firecrawlApiKey?: string;
+        keylessClientIp?: string;
+        clientUserAgent?: string;
+      }
+    | undefined,
+  clientName: string | undefined
+): string {
+  const identity =
+    session?.apiKeyId ??
+    session?.userId ??
+    session?.teamId ??
+    (session?.firecrawlApiKey
+      ? `key:${createHash('sha256').update(session.firecrawlApiKey).digest('hex')}`
+      : session?.keylessClientIp
+        ? `ip:${session.keylessClientIp}`
+        : 'anonymous');
+  return createHash('sha256')
+    .update(
+      [
+        identity,
+        clientName ?? '',
+        session?.clientUserAgent ?? '',
+        session?.keylessClientIp ?? '',
+      ].join('\n')
+    )
+    .digest('hex');
+}
+
+/**
+ * Per-process memory of the thread each caller was last seen on. `resolve`
+ * turns the outcome of `takeThreadId` into the thread the call actually uses:
+ * an explicit ID is kept and remembered, a missing one continues the caller's
+ * recent thread when there is one inside the idle window, and otherwise the
+ * freshly minted ID is remembered for the calls that follow.
+ */
+export class ThreadRegistry {
+  readonly #recent = new Map<string, { threadId: string; seenAt: number }>();
+  readonly #idleMs: number;
+  readonly #maxEntries: number;
+  readonly #now: () => number;
+
+  constructor(options: {
+    idleMs?: number;
+    maxEntries?: number;
+    now?: () => number;
+  } = {}) {
+    this.#idleMs = options.idleMs ?? threadIdleMs();
+    this.#maxEntries = options.maxEntries ?? THREAD_REGISTRY_MAX_ENTRIES;
+    this.#now = options.now ?? Date.now;
+  }
+
+  get size(): number {
+    return this.#recent.size;
+  }
+
+  resolve(scopeKey: string, thread: ResolvedThread): ResolvedThread {
+    if (this.#idleMs <= 0) return thread;
+    const now = this.#now();
+    if (thread.source === 'minted') {
+      const recent = this.#recent.get(scopeKey);
+      if (recent && now - recent.seenAt <= this.#idleMs) {
+        this.#remember(scopeKey, recent.threadId, now);
+        return {
+          ...thread,
+          threadId: recent.threadId,
+          minted: false,
+          source: 'recent',
+        };
+      }
+    }
+    this.#remember(scopeKey, thread.threadId, now);
+    return thread;
+  }
+
+  #remember(scopeKey: string, threadId: string, seenAt: number): void {
+    // Delete first so the entry moves to the end: Map keeps insertion order,
+    // which makes the first key the least recently seen.
+    this.#recent.delete(scopeKey);
+    this.#recent.set(scopeKey, { threadId, seenAt });
+    while (this.#recent.size > this.#maxEntries) {
+      const oldest = this.#recent.keys().next().value;
+      if (oldest === undefined) break;
+      this.#recent.delete(oldest);
+    }
+  }
 }
 
 /** Header form of the thread ID, merged into every request the call makes. */

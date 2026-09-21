@@ -18,10 +18,13 @@ import { originHeaders, requestOrigin, type McpClient } from './origin';
 import {
   isThreadIdEnabled,
   takeThreadId,
+  ThreadRegistry,
   threadIdFields,
   threadIdHeaders,
+  threadScopeKey,
   toolTracksThread,
   withThreadId,
+  type ThreadSource,
 } from './thread';
 import {
   credentialForOutboundRequest,
@@ -76,6 +79,8 @@ interface SessionData extends CredentialSession {
    * request as `X-Firecrawl-Thread-Id`, and returned on the result.
    */
   threadId?: string;
+  /** How the call's thread ID was chosen: passed in, recalled, or minted. */
+  threadSource?: ThreadSource;
   [key: string]: unknown;
 }
 
@@ -1317,6 +1322,7 @@ function emitActionLog(
     status,
     request_id: requestId,
     ...(session?.threadId ? { thread_id: session.threadId } : {}),
+    ...(session?.threadSource ? { thread_source: session.threadSource } : {}),
     resource: primaryProfile.resourceUrl,
     ...(error
       ? { error_class: error instanceof Error ? error.name : typeof error }
@@ -1339,6 +1345,7 @@ function emitActionLog(
   const actionLogPayload = { ...payload };
   delete actionLogPayload.code;
   delete actionLogPayload.thread_id;
+  delete actionLogPayload.thread_source;
   void fetch(endpoint, {
     method: 'POST',
     headers: {
@@ -1349,6 +1356,10 @@ function emitActionLog(
     signal: AbortSignal.timeout(1500),
   }).catch(() => undefined);
 }
+
+// One registry per process: the memory of which thread each caller was last
+// seen on, for calls that arrive without a threadId (see src/thread.ts).
+const threadRegistry = new ThreadRegistry();
 
 function guardHostedTool(
   tool: RegisteredTool,
@@ -1419,12 +1430,19 @@ function guardHostedTool(
       // into an API body, the ID rides on the invocation session so every
       // outbound request and action log carries it, and the result gets it
       // back for the agent to pass on. Untracked tools see their args as-is.
-      const thread = tracksThread ? takeThreadId(args) : undefined;
+      const thread = tracksThread
+        ? threadRegistry.resolve(
+            threadScopeKey(context.session, context.client?.version?.name),
+            takeThreadId(args)
+          )
+        : undefined;
       const toolArgs = thread ? (thread.args as typeof args) : args;
       const invocationSession: SessionData = {
         ...context.session,
         requestId,
-        ...(thread ? { threadId: thread.threadId } : {}),
+        ...(thread
+          ? { threadId: thread.threadId, threadSource: thread.source }
+          : {}),
       };
       copyManagedOAuthApiKey(context.session, invocationSession);
       const invocationContext = {

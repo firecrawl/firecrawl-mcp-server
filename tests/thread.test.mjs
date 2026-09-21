@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  DEFAULT_THREAD_IDLE_MS,
   THREAD_ID_HEADER,
+  ThreadRegistry,
   isThreadIdEnabled,
   isValidThreadId,
   takeThreadId,
   threadIdFields,
   threadIdHeaders,
+  threadIdleMs,
+  threadScopeKey,
   toolTracksThread,
   withThreadId,
 } from '../dist/thread.js';
@@ -18,11 +22,13 @@ const THREAD = '11111111-2222-4333-8444-555555555555';
 test('a first call mints a thread ID and later calls keep the one they were given', () => {
   const first = takeThreadId({ url: 'https://example.com/' });
   assert.equal(first.minted, true);
+  assert.equal(first.source, 'minted');
   assert.match(first.threadId, UUID_PATTERN);
   assert.deepEqual(first.args, { url: 'https://example.com/' });
 
   const second = takeThreadId({ threadId: THREAD, url: 'https://example.com/' });
   assert.equal(second.minted, false);
+  assert.equal(second.source, 'argument');
   assert.equal(second.threadId, THREAD);
   // The argument never travels on to an API body.
   assert.deepEqual(second.args, { url: 'https://example.com/' });
@@ -137,4 +143,120 @@ test('the schema field is optional, UUID-only, and absent when disabled', async 
   for (const value of [undefined, '', 'false', '0', 'off']) {
     assert.equal(isThreadIdEnabled({ FIRECRAWL_NO_THREAD_ID: value }), true);
   }
+});
+
+const OTHER = '22222222-3333-4444-8555-666666666666';
+
+test('a call without a threadId continues the caller\'s recent thread', () => {
+  let now = 1_000_000;
+  const registry = new ThreadRegistry({ idleMs: 60_000, now: () => now });
+
+  const first = registry.resolve('caller-a', takeThreadId({ q: 'one' }));
+  assert.equal(first.source, 'minted');
+  assert.match(first.threadId, UUID_PATTERN);
+
+  // Parallel or forgetful follow-ups join the same thread instead of minting.
+  now += 5_000;
+  const second = registry.resolve('caller-a', takeThreadId({ q: 'two' }));
+  assert.equal(second.source, 'recent');
+  assert.equal(second.minted, false);
+  assert.equal(second.threadId, first.threadId);
+  assert.deepEqual(second.args, { q: 'two' });
+
+  // A different caller never sees another caller's thread.
+  const other = registry.resolve('caller-b', takeThreadId({ q: 'three' }));
+  assert.equal(other.source, 'minted');
+  assert.notEqual(other.threadId, first.threadId);
+
+  // Past the idle window the caller starts a new thread.
+  now += 60_001;
+  const later = registry.resolve('caller-a', takeThreadId({ q: 'four' }));
+  assert.equal(later.source, 'minted');
+  assert.notEqual(later.threadId, first.threadId);
+});
+
+test('an explicit threadId always wins and becomes the caller\'s recent thread', () => {
+  const registry = new ThreadRegistry({ idleMs: 60_000, now: () => 1 });
+  registry.resolve('caller-a', takeThreadId({ q: 'one' }));
+
+  const explicit = registry.resolve(
+    'caller-a',
+    takeThreadId({ threadId: THREAD, q: 'two' })
+  );
+  assert.equal(explicit.source, 'argument');
+  assert.equal(explicit.threadId, THREAD);
+
+  // The next call without an ID continues the explicit thread, not the old one.
+  const follow = registry.resolve('caller-a', takeThreadId({ q: 'three' }));
+  assert.equal(follow.source, 'recent');
+  assert.equal(follow.threadId, THREAD);
+
+  // Two conversations on one caller stay apart as long as each names itself.
+  const another = registry.resolve(
+    'caller-a',
+    takeThreadId({ threadId: OTHER, q: 'four' })
+  );
+  assert.equal(another.threadId, OTHER);
+  assert.equal(
+    registry.resolve('caller-a', takeThreadId({ threadId: THREAD, q: 'five' }))
+      .threadId,
+    THREAD
+  );
+});
+
+test('recall can be switched off and the registry stays bounded', () => {
+  const off = new ThreadRegistry({ idleMs: 0 });
+  const a = off.resolve('caller-a', takeThreadId({}));
+  const b = off.resolve('caller-a', takeThreadId({}));
+  assert.equal(a.source, 'minted');
+  assert.equal(b.source, 'minted');
+  assert.notEqual(a.threadId, b.threadId);
+  assert.equal(off.size, 0);
+
+  const bounded = new ThreadRegistry({ idleMs: 60_000, maxEntries: 2, now: () => 1 });
+  const one = bounded.resolve('c1', takeThreadId({}));
+  bounded.resolve('c2', takeThreadId({}));
+  bounded.resolve('c3', takeThreadId({}));
+  assert.equal(bounded.size, 2);
+  // c1 was the least recently seen, so it is gone and mints again.
+  assert.notEqual(bounded.resolve('c1', takeThreadId({})).threadId, one.threadId);
+});
+
+test('the idle window comes from FIRECRAWL_THREAD_IDLE_SECONDS with a safe default', () => {
+  assert.equal(threadIdleMs({}), DEFAULT_THREAD_IDLE_MS);
+  assert.equal(DEFAULT_THREAD_IDLE_MS, 10 * 60 * 1000);
+  assert.equal(threadIdleMs({ FIRECRAWL_THREAD_IDLE_SECONDS: '90' }), 90_000);
+  assert.equal(threadIdleMs({ FIRECRAWL_THREAD_IDLE_SECONDS: '0' }), 0);
+  for (const bad of ['-5', 'soon', 'NaN', 'Infinity']) {
+    assert.equal(
+      threadIdleMs({ FIRECRAWL_THREAD_IDLE_SECONDS: bad }),
+      DEFAULT_THREAD_IDLE_MS,
+      bad
+    );
+  }
+});
+
+test('the scope key separates callers and never contains the credential', () => {
+  const base = { apiKeyId: '42', clientUserAgent: 'cursor/1.0' };
+  const key = threadScopeKey(base, 'cursor');
+  assert.match(key, /^[0-9a-f]{64}$/);
+  assert.equal(threadScopeKey({ ...base }, 'cursor'), key);
+  assert.notEqual(threadScopeKey(base, 'claude-code'), key);
+  assert.notEqual(threadScopeKey({ ...base, apiKeyId: '43' }, 'cursor'), key);
+  assert.notEqual(
+    threadScopeKey({ ...base, clientUserAgent: 'cursor/2.0' }, 'cursor'),
+    key
+  );
+
+  // A raw API key is hashed into the identity, never present in the key.
+  const raw = threadScopeKey({ firecrawlApiKey: 'fc-secret-value' }, 'x');
+  assert.equal(raw.includes('fc-secret'), false);
+  assert.notEqual(raw, threadScopeKey({ firecrawlApiKey: 'fc-other' }, 'x'));
+
+  // Keyless callers are told apart by IP; nothing at all still gets a key.
+  assert.notEqual(
+    threadScopeKey({ keylessClientIp: '8.8.8.1' }, 'x'),
+    threadScopeKey({ keylessClientIp: '8.8.8.2' }, 'x')
+  );
+  assert.match(threadScopeKey(undefined, undefined), /^[0-9a-f]{64}$/);
 });

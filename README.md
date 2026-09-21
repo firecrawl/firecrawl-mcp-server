@@ -243,6 +243,7 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
   - Example: `https://firecrawl.your-domain.com`
   - If not provided, the cloud API will be used (requires API key)
 - `FIRECRAWL_NO_THREAD_ID` (Optional): Set to `true` to disable [thread correlation](#thread-correlation-threadid)
+- `FIRECRAWL_THREAD_IDLE_SECONDS` (Optional): How long a caller's last thread is continued for calls without a `threadId` (default `600`; `0` disables recall)
 
 #### MCP OAuth (Bearer access tokens)
 
@@ -968,12 +969,13 @@ The tool requires an authenticated Firecrawl account and is read-only.
 One agent conversation usually makes several Firecrawl calls: a search, the scrapes it leads to, a retry through another tool when the first attempt falls short. The API sees each call as an unrelated request, so the server groups them with a **thread ID**.
 
 - The first web-data tool call in a conversation mints a random UUID, sends it to the Firecrawl API as the `X-Firecrawl-Thread-Id` header, and returns it as a top-level `threadId` on the tool result.
-- Later calls pass that value back as the optional `threadId` argument. The server validates it (it has to be a UUID), sends the same header, and echoes it on the result. A call without a `threadId` starts a new thread.
+- Later calls pass that value back as the optional `threadId` argument. The server validates it (it has to be a UUID), sends the same header, and echoes it on the result. Failed calls return it in `structuredContent`.
+- A call without a `threadId` continues the thread the same caller (credential, MCP client, User-Agent, keyless IP) was last seen on within the past 10 minutes, and starts a new one otherwise. This memory is per server process and best-effort; an explicit `threadId` always wins over it, which keeps two conversations on one editor connection apart when the agent passes the ID.
 - The argument never reaches an API request body, and the ID is not derived from anything the client sent: it is a random value that says "these calls belong together" and nothing else.
 
 The argument is available on `firecrawl_scrape`, `firecrawl_map`, `firecrawl_search`, `firecrawl_crawl`, `firecrawl_check_crawl_status`, `firecrawl_agent`, `firecrawl_agent_status`, `firecrawl_interact`, `firecrawl_interact_stop`, `firecrawl_parse`, `firecrawl_feedback`, and `firecrawl_search_feedback`. Hosted `firecrawl_parse` carries the thread into the phase-two `nextToolCall` it suggests. The search-only endpoint, the research, developer, monitor, and credit-usage tools take no `threadId`.
 
-Set `FIRECRAWL_NO_THREAD_ID=true` to turn thread correlation off: no tool advertises the argument, no header is sent, and results are returned unchanged.
+Set `FIRECRAWL_NO_THREAD_ID=true` to turn thread correlation off: no tool advertises the argument, no header is sent, and results are returned unchanged. `FIRECRAWL_THREAD_IDLE_SECONDS` changes the recall window (default `600`); `0` keeps explicit `threadId` handling but never continues a recent thread.
 
 ## Logging System
 
