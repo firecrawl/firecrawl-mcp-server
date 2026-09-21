@@ -934,7 +934,7 @@ const queryRouter = routerConfigFromEnv();
  * the web results it asked for.
  */
 const PAPER_INDEX_NOTICE =
-  'This query was classified as a research-literature question and answered from the Firecrawl research paper index instead of general web search. These are papers, not web pages. Set `sources` or `categories` on the call to force a plain web search.';
+  'This query was classified as a research-literature question and answered from the Firecrawl research paper index instead of general web search. These are papers, not web pages, and this response carries no search `id`, so firecrawl_search_feedback does not apply to it. Set `sources` or `categories` on the call to force a plain web search.';
 
 type RouteContext = {
   session?: SessionData;
@@ -1002,6 +1002,15 @@ async function routeSearchBody(
       success: true,
       routedTo: 'research_paper_index',
       notice: PAPER_INDEX_NOTICE,
+      // A retargeted search is a paper-index request, not a /v2/search, so
+      // there is no search UUID behind it. Say so rather than omitting `id`
+      // silently: firecrawl_search_feedback validates a UUID that came from
+      // firecrawl_search, and inventing one would fail at the API.
+      searchFeedback: {
+        available: false,
+        reason:
+          'Answered from the research paper index, which does not issue the /v2/search id that firecrawl_search_feedback requires.',
+      },
       query,
       data: { papers },
     });

@@ -13,10 +13,14 @@
   to the research paper index and returns papers under
   `{ routedTo: "research_paper_index", data: { papers } }` rather than web
   results; that retarget is skipped for keyless sessions and for searches
-  scoped with `includeDomains`/`excludeDomains`. A call that already targets
-  an index is never overridden, and any classifier or paper-index failure
-  leaves the search on its original path. Off by default; both
-  `firecrawl_search` surfaces share the same path.
+  scoped with `includeDomains`/`excludeDomains`, and for calls passing
+  `scrapeOptions`, which the paper index has no pages to attach content to. A
+  retargeted response carries `searchFeedback.available: false`, because a
+  paper-index request issues no `/v2/search` id for
+  `firecrawl_search_feedback`. A call that already targets an index is never
+  overridden, and any classifier or paper-index failure leaves the search on
+  its original path. Off by default; both `firecrawl_search` surfaces share
+  the same path.
 
 ## [3.21.4] - 2026-06-23
 

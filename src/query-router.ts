@@ -152,14 +152,20 @@ function nonEmptyArray(value: unknown): boolean {
 }
 
 /**
- * A probability as a number in [0, 1], or 0 when the value is not one. A
- * malformed answer must not be able to clear the threshold, so anything
- * non-finite or out of range reads as no probability at all rather than being
- * coerced and compared.
+ * A probability as a number in [0, 1], or 0 when the value is not one.
+ *
+ * The check is on the raw value, with no coercion: `Number(true)` is 1 and
+ * `Number('0.9')` is 0.9, so coercing first would let a malformed answer clear
+ * the threshold. A probability that did not arrive as a JSON number reads as
+ * no probability at all, which keeps the fail-open guarantee whole.
  */
 function unitInterval(value: unknown): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : 0;
+  return typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    value <= 1
+    ? value
+    : 0;
 }
 
 /**
@@ -291,14 +297,32 @@ export async function classifySearchQuery(
 
 export type ApplyOptions = {
   /**
-   * Whether the research paper index is reachable for this call. It needs an
-   * authenticated account, so keyless sessions pass false and a research
-   * verdict is left unrouted rather than retargeted to an endpoint that would
-   * reject it.
+   * Whether the research paper index is applicable to this call. Keyless
+   * sessions cannot reach it, and a domain-scoped search is asking about
+   * specific sites rather than about the literature; both pass false so a
+   * research verdict is left unrouted instead of being sent somewhere it does
+   * not belong.
    */
   allowPaperIndex?: boolean;
   fetchImpl?: typeof fetch;
 };
+
+/**
+ * Why a research verdict must not be retargeted, or null when it may be.
+ *
+ * `scrapeOptions` asks for page content attached to each web result. The paper
+ * index returns papers and has nothing to attach it to, so retargeting would
+ * silently drop what the caller explicitly asked for — the search runs as
+ * written instead.
+ */
+function paperIndexBlockedBy(
+  searchBody: Record<string, unknown>,
+  allowPaperIndex: boolean
+): string | null {
+  if (!allowPaperIndex) return 'paper_index_unavailable';
+  if (searchBody.scrapeOptions != null) return 'scrape_options_requested';
+  return null;
+}
 
 /**
  * Decide how an outbound /v2/search call should be routed.
@@ -331,16 +355,20 @@ export async function applyQueryRouting(
   const decision = await classifySearchQuery(query, config, fetchImpl);
   if (!decision.routed) return decision;
 
-  if (decision.target === 'research_paper_index' && !allowPaperIndex) {
-    // Keyless. The paper index needs an account, so the honest outcome is the
-    // unrouted web search the agent asked for, not a call that would 401.
-    return {
-      ...decision,
-      routed: false,
-      reason: 'paper_index_unavailable',
-      target: undefined,
-      category: undefined,
-    };
+  if (decision.target === 'research_paper_index') {
+    const blocked = paperIndexBlockedBy(searchBody, allowPaperIndex);
+    if (blocked) {
+      // The honest outcome is the unrouted web search the agent asked for,
+      // not a paper request that would reject it or quietly answer something
+      // narrower than the call requested.
+      return {
+        ...decision,
+        routed: false,
+        reason: blocked,
+        target: undefined,
+        category: undefined,
+      };
+    }
   }
 
   if (decision.target === 'developer_category' && decision.category) {

@@ -257,7 +257,7 @@ Agents mostly call `firecrawl_search` with no `categories`, so a question whose 
 The two routes behave differently, and the difference matters:
 
 - **Developer** stays on `/v2/search`: the router sets `categories: ["developer"]` and the response shape you get back is unchanged.
-- **Research** retargets to the paper index (`/v2/search/research/papers`), the same corpus `firecrawl_research_search_papers` searches. The response is **papers, not web pages**, returned as `{ success, routedTo: "research_paper_index", notice, query, data: { papers } }`. Each paper carries `id`, `title`, `authors`, `abstract`, and dates. An agent that must have web results should set `sources` or `categories` explicitly.
+- **Research** retargets to the paper index (`/v2/search/research/papers`), the same corpus `firecrawl_research_search_papers` searches. The response is **papers, not web pages**, returned as `{ success, routedTo: "research_paper_index", notice, searchFeedback, query, data: { papers } }`. Every paper has `id`, `title`, `abstract`, and `authors` — `abstract` is an empty string and `authors` is `null` when the paper has none. `categories`, `createdDate`, and `updateDate` appear only when the paper carries them, so do not rely on their presence. A retargeted search has no `/v2/search` id, so `firecrawl_search_feedback` does not apply to it; `searchFeedback.available` is `false` and says why. An agent that must have web results should set `sources` or `categories` explicitly.
 
 Configuration:
 
@@ -270,7 +270,7 @@ Rules the router holds to:
 
 - A call that already sets `categories` or `sources` is never overridden, and the classifier is not even consulted.
 - Anything short of a confident developer or research verdict leaves the call exactly as written, including a confident general-web verdict.
-- The research retarget is skipped, and the search runs normally, when the paper index is not applicable: **keyless sessions** (it needs an account) and **domain-scoped searches** that set `includeDomains` or `excludeDomains`. The developer route still applies in both cases.
+- The research retarget is skipped, and the search runs normally, when the paper index is not applicable: **keyless sessions** (it needs an account), **domain-scoped searches** that set `includeDomains` or `excludeDomains`, and calls passing **`scrapeOptions`** (the paper index has no pages to attach content to, so retargeting would drop what was asked for). The developer route still applies in all three cases.
 - It fails open throughout. A classifier timeout, error, or unparseable answer leaves the search unrouted, and a paper-index request that fails falls back to the web search that was originally asked for. Routing never fails a search.
 - Log lines record the verdict, its probability and confidence, and latency — never the query text.
 

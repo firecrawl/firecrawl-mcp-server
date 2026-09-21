@@ -98,6 +98,40 @@ test('a research verdict is dropped when the paper index is unreachable', async 
   assert.equal(decision.probability, 0.99);
 });
 
+test('a research verdict is dropped when the call asked for scrapeOptions', async () => {
+  // The paper index returns papers, not pages, so there is nothing to attach
+  // the requested page content to. Retargeting would silently drop it.
+  const fetchImpl = stubFetch(verdict('research_index', 0.99));
+  const body = {
+    query: 'mRNA vaccine thermostability lipid nanoparticle',
+    scrapeOptions: { formats: ['markdown'] },
+  };
+
+  const decision = await applyQueryRouting(body, CONFIG, { fetchImpl });
+
+  assert.equal(decision.routed, false);
+  assert.equal(decision.reason, 'scrape_options_requested');
+  assert.equal(decision.target, undefined);
+  assert.deepEqual(body.scrapeOptions, { formats: ['markdown'] });
+  assert.equal(body.categories, undefined);
+});
+
+test('scrapeOptions does not block the developer route', async () => {
+  // Developer stays on /v2/search, so the requested page content is still
+  // attached to the results.
+  const fetchImpl = stubFetch(verdict('developer_index'));
+  const body = {
+    query: 'pnpm workspace protocol resolution',
+    scrapeOptions: { formats: ['markdown'] },
+  };
+
+  const decision = await applyQueryRouting(body, CONFIG, { fetchImpl });
+
+  assert.equal(decision.routed, true);
+  assert.deepEqual(body.categories, ['developer']);
+  assert.deepEqual(body.scrapeOptions, { formats: ['markdown'] });
+});
+
 test('allowPaperIndex: false still permits the developer route', async () => {
   const fetchImpl = stubFetch(verdict('developer_index'));
   const body = { query: 'kubectl rollout restart deployment' };
@@ -176,7 +210,23 @@ test('the gate is the winning probability, strictly above the threshold', async 
 });
 
 test('a probability that is not a probability cannot clear the threshold', async () => {
-  for (const probability of [5, 1.0001, -1, Number.NaN, 'high', null, undefined]) {
+  // Strings and booleans are included deliberately: Number('0.9') is 0.9 and
+  // Number(true) is 1, so coercing before the range check would let a
+  // malformed answer route the search.
+  for (const probability of [
+    5,
+    1.0001,
+    -1,
+    Number.NaN,
+    'high',
+    '0.9',
+    '1',
+    true,
+    null,
+    undefined,
+    {},
+    [0.9],
+  ]) {
     const fetchImpl = stubFetch({
       type: 'choice',
       choice: 'developer_index',
