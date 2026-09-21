@@ -960,7 +960,11 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.match(init.instructions, /firecrawl_scrape retrieves one supplied page/i);
   assert.match(
     init.instructions,
-    /Alexandria offers ready-made workflows and provider tools.*firecrawl_scrape with alexandria.*executes up to ten capabilities/is
+    /first check firecrawl_find_tools for a suitable workflow or data provider/i
+  );
+  assert.match(
+    init.instructions,
+    /firecrawl_scrape with alexandria.*executes up to ten capabilities/is
   );
   assert.match(
     init.instructions,
