@@ -16,6 +16,14 @@ import { registerUsageTools } from './usage';
 import { escapeWWWAuthenticateValue } from './www-authenticate';
 import { originHeaders, requestOrigin, type McpClient } from './origin';
 import {
+  isThreadIdEnabled,
+  takeThreadId,
+  threadIdFields,
+  threadIdHeaders,
+  toolTracksThread,
+  withThreadId,
+} from './thread';
+import {
   credentialForOutboundRequest,
   copyManagedOAuthApiKey,
   CoreHttpError,
@@ -62,6 +70,12 @@ interface SessionData extends CredentialSession {
   oauthClientId?: string;
   resource?: string;
   requestId?: string;
+  /**
+   * Thread ID of the current tool call (see src/thread.ts): taken from the
+   * call's `threadId` argument or minted for it, stamped on every outbound
+   * request as `X-Firecrawl-Thread-Id`, and returned on the result.
+   */
+  threadId?: string;
   [key: string]: unknown;
 }
 
@@ -964,8 +978,16 @@ const openAiAppsChallengeToken = normalizeHeader(
   process.env.OPENAI_APPS_CHALLENGE_TOKEN
 );
 
-const FULL_PROFILE_INSTRUCTIONS = `Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question — code behaviour, a library or framework, an API contract, an error message, or a known bug — firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of repositories, GitHub issues, merged pull requests, READMEs, and curated documentation sites. Provide only the required inputs and account for stated network or external side effects.`;
-const KEYLESS_PROFILE_INSTRUCTIONS = `Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, and firecrawl_research_* for paper-index and repository research.`;
+// One sentence, shared by the full and keyless instructions, that tells the
+// agent what the threadId on every result is for. Empty when the kill switch
+// removes the argument, so the instructions never describe a field that is
+// not there.
+const THREAD_ID_INSTRUCTIONS = isThreadIdEnabled()
+  ? ' Tool results include a threadId; passing it as the threadId argument on later Firecrawl calls in the same conversation groups those requests together.'
+  : '';
+
+const FULL_PROFILE_INSTRUCTIONS = `Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question — code behaviour, a library or framework, an API contract, an error message, or a known bug — firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of repositories, GitHub issues, merged pull requests, READMEs, and curated documentation sites. Provide only the required inputs and account for stated network or external side effects.${THREAD_ID_INSTRUCTIONS}`;
+const KEYLESS_PROFILE_INSTRUCTIONS = `Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, and firecrawl_research_* for paper-index and repository research.${THREAD_ID_INSTRUCTIONS}`;
 
 // The search surface exposes web/developer/research search only. Its instructions
 // and tool copy describe just those tools and stay neutral about how a client
@@ -1294,6 +1316,7 @@ function emitActionLog(
     tool_name: toolName,
     status,
     request_id: requestId,
+    ...(session?.threadId ? { thread_id: session.threadId } : {}),
     resource: primaryProfile.resourceUrl,
     ...(error
       ? { error_class: error instanceof Error ? error.name : typeof error }
@@ -1309,9 +1332,13 @@ function emitActionLog(
     (apiUrl ? `${withoutTrailingSlash(apiUrl)}/v2/mcp/action-logs` : undefined);
   if (!secret || !endpoint || !payload.team_id || status === 'started') return;
   // `code` is an MCP console-log discriminator, not part of the account-scoped
-  // action-log API contract.
+  // action-log API contract. `thread_id` stays out of that POST for now as
+  // well: Core's action-log ingest rejects any field it does not list, so it
+  // joins the contract only once Core accepts it (the API requests themselves
+  // already carry the thread in the X-Firecrawl-Thread-Id header).
   const actionLogPayload = { ...payload };
   delete actionLogPayload.code;
+  delete actionLogPayload.thread_id;
   void fetch(endpoint, {
     method: 'POST',
     headers: {
@@ -1328,6 +1355,7 @@ function guardHostedTool(
   { logActions }: { logActions: boolean }
 ): RegisteredTool {
   const keylessTool = KEYLESS_TOOL_NAMES.has(tool.name);
+  const tracksThread = toolTracksThread(tool.parameters);
   const execute = tool.execute;
   const canList = tool.canList;
   const beforeValidate = tool.beforeValidate;
@@ -1386,9 +1414,17 @@ function guardHostedTool(
     },
     execute: async (args, context) => {
       const requestId = randomUUID();
+      // A tool that declares `threadId` in its schema takes part in thread
+      // correlation: the argument is removed here so no tool can forward it
+      // into an API body, the ID rides on the invocation session so every
+      // outbound request and action log carries it, and the result gets it
+      // back for the agent to pass on. Untracked tools see their args as-is.
+      const thread = tracksThread ? takeThreadId(args) : undefined;
+      const toolArgs = thread ? (thread.args as typeof args) : args;
       const invocationSession: SessionData = {
         ...context.session,
         requestId,
+        ...(thread ? { threadId: thread.threadId } : {}),
       };
       copyManagedOAuthApiKey(context.session, invocationSession);
       const invocationContext = {
@@ -1408,12 +1444,14 @@ function guardHostedTool(
         if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
         throw new UserError(String(payload.message), payload);
       }
-      const runTool = () =>
-        runWithCredentialRecovery(
-          () => execute(args, invocationContext),
+      const runTool = async () => {
+        const result = await runWithCredentialRecovery(
+          () => execute(toolArgs, invocationContext),
           requestId,
           invocationSession
         );
+        return thread ? withThreadId(result, thread.threadId) : result;
+      };
       if (!logActions) return runTool();
 
       emitActionLog(tool.name, 'started', invocationSession, undefined, requestId);
@@ -1524,7 +1562,10 @@ function getClient(session?: SessionData): FirecrawlApp {
     );
   }
   if (!hasManagedOAuthCredential(session)) {
-    return createClient(credentialForOutboundRequest(session));
+    return withThreadHeader(
+      createClient(credentialForOutboundRequest(session)),
+      session
+    );
   }
 
   const client = createClient('request-scoped-hosted-oauth');
@@ -1534,6 +1575,7 @@ function getClient(session?: SessionData): FirecrawlApp {
       reason: 'outbound_client_uninstrumented',
     });
   }
+  withThreadHeader(client, session);
   axiosInstance.interceptors.request.use((config: any) => {
     const credential = credentialForOutboundRequest(session);
     // Unreachable in practice: this interceptor is installed only for a session
@@ -1548,6 +1590,29 @@ function getClient(session?: SessionData): FirecrawlApp {
     config.headers = {
       ...(config.headers ?? {}),
       Authorization: `Bearer ${credential}`,
+    };
+    return config;
+  });
+  return client;
+}
+
+/**
+ * Stamp the call's thread ID on every request the SDK client makes. Best
+ * effort: a client without an axios instance to hook simply sends no header,
+ * since correlation must never make a request fail.
+ */
+function withThreadHeader(
+  client: FirecrawlApp,
+  session?: SessionData
+): FirecrawlApp {
+  const threadId = session?.threadId;
+  if (!threadId) return client;
+  const axiosInstance = (client as any).http?.instance;
+  if (!axiosInstance?.interceptors?.request?.use) return client;
+  axiosInstance.interceptors.request.use((config: any) => {
+    config.headers = {
+      ...(config.headers ?? {}),
+      ...threadIdHeaders(threadId),
     };
     return config;
   });
@@ -1787,6 +1852,7 @@ const parseOptionParamsSchema = z.object({
 });
 
 const localParseParamsSchema = parseOptionParamsSchema.extend({
+  ...threadIdFields(),
   filePath: z
     .string()
     .min(1)
@@ -1831,6 +1897,7 @@ const hostedParseParamsSchema = parseOptionParamsSchema
       .describe(
         'Optional phase 1 size declaration. Hosted MCP does not stat the file; provide this only if the caller already knows it.'
       ),
+    ...threadIdFields(),
   })
   .superRefine((value, ctx) => {
     const hasFilePath =
@@ -1929,7 +1996,8 @@ async function apiPostJson(
   pathName: string,
   body: Record<string, unknown>,
   apiKey: string,
-  origin?: string
+  origin?: string,
+  extraHeaders: Record<string, string> = {}
 ): Promise<any> {
   const response = await fetch(`${resolveApiBaseUrl()}${pathName}`, {
     method: 'POST',
@@ -1937,6 +2005,7 @@ async function apiPostJson(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
       ...(origin ? originHeaders(origin) : {}),
+      ...extraHeaders,
     },
     body: JSON.stringify(body),
   });
@@ -1966,7 +2035,13 @@ async function apiPostJsonForSession(
 ): Promise<any> {
   const credential = credentialForOutboundRequest(session);
   if (credential) {
-    return apiPostJson(pathName, body, credential, origin);
+    return apiPostJson(
+      pathName,
+      body,
+      credential,
+      origin,
+      threadIdHeaders(session?.threadId)
+    );
   }
 
   if (isKeylessMode(session)) {
@@ -2101,7 +2176,12 @@ async function executeHostedParse(
       },
       nextToolCall: {
         name: 'firecrawl_parse',
-        arguments: buildContinuationArguments(upload.uploadRef, options),
+        arguments: {
+          ...buildContinuationArguments(upload.uploadRef, options),
+          // Phase two is a new tool call; carrying the thread here keeps both
+          // halves of one parse under the same thread ID.
+          ...(session?.threadId ? { threadId: session.threadId } : {}),
+        },
       },
       notes: [
         'Run the curl command on the machine that can read filePath.',
@@ -2142,7 +2222,7 @@ Firecrawl may reuse recently indexed content instead of refetching the page, and
 
 Returns the selected content formats and page metadata. Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback.
 `,
-  parameters: scrapeParamsSchema,
+  parameters: scrapeParamsSchema.extend(threadIdFields()),
   execute: async (
     args: unknown,
     { session, log, client: mcpClient }
@@ -2202,6 +2282,7 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
     includeSubdomains: z.boolean().optional(),
     limit: z.number().optional(),
     ignoreQueryParameters: z.boolean().optional(),
+    ...threadIdFields(),
   }),
   execute: async (
     args: unknown,
@@ -2246,6 +2327,7 @@ Each web result is a title, URL, and description, not the page. Add \`scrapeOpti
         .omit({ url: true })
         .partial()
         .optional(),
+      ...threadIdFields(),
     })
     .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE),
   execute: async (
@@ -2405,6 +2487,7 @@ async function keylessPost(
   }
   const headers: Record<string, string> = {
     ...originHeaders(origin),
+    ...threadIdHeaders(session?.threadId),
     'Content-Type': 'application/json',
   };
   // Forward the real client IP (secret-authenticated) when proxying keyless
@@ -2616,6 +2699,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
             'longer `description`.'
         ),
       querySuggestions: z.string().max(2000).optional(),
+      ...threadIdFields(),
     }),
     execute: async (
       args: unknown,
@@ -2655,6 +2739,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
 
       const headers: Record<string, string> = {
         ...originHeaders(origin),
+        ...threadIdHeaders(session?.threadId),
         'Content-Type': 'application/json',
       };
       const credential = credentialForOutboundRequest(session);
@@ -2743,6 +2828,7 @@ Returns submission status, feedback ID, and accounting fields.
       url: z.string().url().optional(),
       pageNumbers: z.array(z.number().int().positive()).max(100).optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
+      ...threadIdFields(),
     }),
     execute: async (
       args: unknown,
@@ -2780,6 +2866,7 @@ Returns submission status, feedback ID, and accounting fields.
       const apiBase = resolveApiBaseUrl();
       const headers: Record<string, string> = {
         ...originHeaders(origin),
+        ...threadIdHeaders(session?.threadId),
         'Content-Type': 'application/json',
       };
       const credential = credentialForOutboundRequest(session);
@@ -2883,6 +2970,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
     deduplicateSimilarURLs: z.boolean().optional(),
     ignoreQueryParameters: z.boolean().optional(),
     scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+    ...threadIdFields(),
   }),
   execute: async (args, { session, log, client: mcpClient }) => {
     const origin = requestOrigin(mcpClient, session);
@@ -2944,7 +3032,7 @@ server.addTool({
   description: `
 Retrieve the current status, progress, and available results for an existing crawl ID. This only reads Firecrawl job state and does not start or modify the crawl.
 `,
-  parameters: z.object({ id: z.string() }),
+  parameters: z.object({ id: z.string(), ...threadIdFields() }),
   execute: async (
     args: unknown,
     {
@@ -3014,6 +3102,7 @@ This call returns only a job ID, not the research result. Read the job with \`fi
     prompt: z.string().min(1).max(10000),
     urls: z.array(z.string().url()).optional(),
     schema: z.record(z.string(), z.any()).optional(),
+    ...threadIdFields(),
   }),
   execute: async (
     args: unknown,
@@ -3051,7 +3140,7 @@ Retrieve progress or final results for a \`firecrawl_agent\` job ID. A \`process
 
 Returns job status, progress information, and result data when completed.
 `,
-  parameters: z.object({ id: z.string() }),
+  parameters: z.object({ id: z.string(), ...threadIdFields() }),
   execute: async (
     args: unknown,
     { session, log, client: mcpClient }
@@ -3090,6 +3179,7 @@ This acts on the live site, so actions such as form submission can create persis
       language: z.enum(['bash', 'python', 'node']).optional(),
       timeout: z.number().min(1).max(300).optional(),
       scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+      ...threadIdFields(),
     })
     .refine((data) => Boolean(data.scrapeId) !== Boolean(data.url), {
       message:
@@ -3184,6 +3274,7 @@ Stop the live interact session associated with a \`scrapeId\` and release its re
 `,
   parameters: z.object({
     scrapeId: z.string(),
+    ...threadIdFields(),
   }),
   execute: async (
     args: unknown,
@@ -3263,7 +3354,10 @@ Set \`redactPII\` to request redaction of personally identifiable information in
     form.append('file', blob, filename);
     form.append('options', JSON.stringify(optionsPayload));
 
-    const headers: Record<string, string> = { ...originHeaders(origin) };
+    const headers: Record<string, string> = {
+      ...originHeaders(origin),
+      ...threadIdHeaders(session?.threadId),
+    };
     const credential = credentialForOutboundRequest(session);
     if (credential) {
       headers['Authorization'] = `Bearer ${credential}`;

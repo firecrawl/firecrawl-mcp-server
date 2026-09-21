@@ -875,6 +875,9 @@ test('primary search profile uses the strict marketplace search tool, not the fu
   const search = tools.find((tool) => tool.name === 'firecrawl_search');
   assert.ok(search, 'primary profile must register firecrawl_search');
   assert.doesNotMatch(JSON.stringify(search.inputSchema), /scrapeOptions/);
+  // Thread correlation is a full-surface feature; the reviewed search contract
+  // takes no threadId and its instructions never mention one.
+  assert.equal('threadId' in search.inputSchema.properties, false);
   assert.doesNotMatch(search.description ?? '', /search_feedback|refund/i);
   assert.equal(search.inputSchema.properties.limit.type, 'integer');
   assert.equal(search.inputSchema.properties.limit.minimum, 1);
