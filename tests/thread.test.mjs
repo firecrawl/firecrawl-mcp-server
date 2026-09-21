@@ -46,7 +46,7 @@ test('only a UUID is accepted as an incoming thread ID', () => {
   // A malformed value that slipped past the schema is replaced, not forwarded.
   const replaced = takeThreadId({ threadId: 'conversation-42', q: 'x' });
   assert.equal(replaced.minted, true);
-  assert.notEqual(replaced.threadId, 'conversation-42');
+  assert.match(replaced.threadId, UUID_PATTERN);
   assert.deepEqual(replaced.args, { q: 'x' });
 });
 

@@ -4,7 +4,9 @@
 
 ### Added
 
-- Thread correlation. Web-data tools (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_map`, `firecrawl_crawl`, `firecrawl_agent`, `firecrawl_interact`, `firecrawl_parse`, the feedback tools, and their status/stop companions) accept an optional `threadId` UUID. The first call in a conversation mints one, returns it as a top-level `threadId` on the result, and later calls pass it back; every outbound API request in the thread carries it as the `X-Firecrawl-Thread-Id` header and the hosted `[MCP_ACTION]` log line records it as `thread_id`. The search-only endpoint and the research, developer, monitor, and credit-usage tools are unchanged. `FIRECRAWL_NO_THREAD_ID=true` disables the feature.
+- Thread correlation. These tools accept an optional `threadId` UUID: `firecrawl_scrape`, `firecrawl_search`, `firecrawl_map`, `firecrawl_crawl`, `firecrawl_check_crawl_status`, `firecrawl_agent`, `firecrawl_agent_status`, `firecrawl_interact`, `firecrawl_interact_stop`, `firecrawl_parse`, `firecrawl_feedback`, and `firecrawl_search_feedback`.
+- The first call in a conversation mints a `threadId` and returns it as the first top-level field of the result (on errors, in `structuredContent`); later calls pass it back. Every outbound API request in the thread carries it as the `X-Firecrawl-Thread-Id` header, and the hosted `[MCP_ACTION]` log line records it as `thread_id`.
+- The search-only endpoint and the research, developer, monitor, and credit-usage tools are unchanged. `FIRECRAWL_NO_THREAD_ID=true` disables the feature.
 
 ## [3.21.4] - 2026-06-23
 

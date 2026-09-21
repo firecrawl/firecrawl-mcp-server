@@ -1070,10 +1070,14 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     'firecrawl_search',
     'firecrawl_map',
     'firecrawl_crawl',
+    'firecrawl_check_crawl_status',
     'firecrawl_agent',
+    'firecrawl_agent_status',
     'firecrawl_interact',
+    'firecrawl_interact_stop',
     'firecrawl_parse',
     'firecrawl_feedback',
+    'firecrawl_search_feedback',
   ]) {
     const threadId = byName.get(name).inputSchema.properties.threadId;
     assert.ok(threadId, `${name} accepts threadId`);
@@ -1614,6 +1618,23 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
     1,
     'a rejected threadId never reaches the API'
   );
+
+  // A failed call keeps the thread: the fake API 404s an unknown crawl, and
+  // the error result still carries threadId so the agent can retry with it.
+  const failed = await client.request('tools/call', {
+    arguments: { id: '00000000-0000-4000-8000-00000000dead', threadId },
+    name: 'firecrawl_check_crawl_status',
+  });
+  assert.equal(failed.isError, true);
+  assert.match(
+    failed.content[0].text,
+    /^Tool 'firecrawl_check_crawl_status' execution failed: /
+  );
+  assert.equal(failed.structuredContent.threadId, threadId);
+  const failedRequest = fakeApi.requests.find((request) =>
+    request.url.startsWith('/v2/crawl/00000000-0000-4000-8000-00000000dead')
+  );
+  assert.equal(failedRequest.headers['x-firecrawl-thread-id'], threadId);
 
   const searchFeedbackResult = await client.request('tools/call', {
     arguments: {

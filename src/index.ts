@@ -1452,7 +1452,34 @@ function guardHostedTool(
         );
         return thread ? withThreadId(result, thread.threadId) : result;
       };
-      if (!logActions) return runTool();
+      // A failed call still belongs to its thread: the agent needs the same
+      // threadId to retry or fall back to another tool. A UserError keeps its
+      // payload and gains threadId in structuredContent; any other error is
+      // rethrown as a UserError carrying fastmcp's own failure text, so the
+      // message the agent reads does not change, plus the threadId.
+      const withThreadOnError = (error: unknown): unknown => {
+        if (!thread) return error;
+        if (error instanceof UserError) {
+          const extras =
+            error.extras && typeof error.extras === 'object' && !Array.isArray(error.extras)
+              ? (error.extras as Record<string, unknown>)
+              : {};
+          return new UserError(error.message, {
+            threadId: thread.threadId,
+            ...extras,
+          });
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        return new UserError(
+          `Tool '${tool.name}' execution failed: ${message}`,
+          { threadId: thread.threadId }
+        );
+      };
+      if (!logActions) {
+        return runTool().catch((error) => {
+          throw withThreadOnError(error);
+        });
+      }
 
       emitActionLog(tool.name, 'started', invocationSession, undefined, requestId);
       try {
@@ -1460,8 +1487,9 @@ function guardHostedTool(
         emitActionLog(tool.name, 'success', invocationSession, undefined, requestId);
         return result;
       } catch (error) {
+        // Log the original error so error_class names the real fault class.
         emitActionLog(tool.name, 'error', invocationSession, error, requestId);
-        throw error;
+        throw withThreadOnError(error);
       }
     },
   };
