@@ -2,7 +2,7 @@
  * Firecrawl Developer search tool.
  *
  * Thin MCP wrapper over the `/v2/search/developer` endpoint (GitHub issues,
- * merged pull requests, repository READMEs, and curated documentation sites).
+ * merged pull requests, repository READMEs, and code documentation).
  *
  * Calls the endpoint directly through the SDK's HTTP layer (auth + retries)
  * via `client.http.get(...)`, mirroring how the research tools reach
@@ -90,7 +90,7 @@ export function registerDeveloperTools(
       destructiveHint: false, // Query-only; no writes to external sources or the developer index.
     },
     description: `
-Search an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites for programming questions that need external documentation or upstream evidence.
+Search an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation for programming questions that need external documentation or upstream evidence.
 
 Returns ranked results with an ID, source type, URL, title, and the matched passages in markdown.
 `,

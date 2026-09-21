@@ -1160,7 +1160,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   assert.match(
     byName.get('firecrawl_developer_search').description,
-    /Search an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites for programming questions that need external documentation or upstream evidence\./
+    /Search an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation for programming questions that need external documentation or upstream evidence\./
   );
   assert.match(
     byName.get('firecrawl_developer_search').inputSchema.properties.query
