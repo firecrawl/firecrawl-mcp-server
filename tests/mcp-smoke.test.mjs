@@ -286,6 +286,63 @@ async function startFakeFirecrawlApi() {
       return;
     }
 
+    if (req.method === 'GET' && req.url === '/v2/team/credit-usage') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: {
+            billingPeriodEnd: '2026-10-01T00:00:00.000Z',
+            billingPeriodStart: '2026-09-01T00:00:00.000Z',
+            planCredits: 1000,
+            remainingCredits: 1250,
+          },
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (
+      req.method === 'GET' &&
+      req.url === '/v2/team/credit-usage/historical?byApiKey=true'
+    ) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          periods: [
+            {
+              apiKey: 'Production key',
+              creditsUsed: 321,
+              endDate: null,
+              startDate: '2026-09-01T00:00:00.000Z',
+            },
+          ],
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (
+      req.method === 'GET' &&
+      req.url === '/v2/team/credit-usage/historical'
+    ) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          periods: [
+            {
+              creditsUsed: 654,
+              endDate: null,
+              startDate: '2026-09-01T00:00:00.000Z',
+            },
+          ],
+          success: true,
+        })
+      );
+      return;
+    }
+
     res.writeHead(404, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ error: `Unhandled ${req.method} ${req.url}` }));
   });
@@ -481,6 +538,43 @@ async function startFakeFirecrawlBackend(options = {}) {
           creditsUsed: 1,
           data: { web: [{ title: 'Example Domain', url: 'https://example.com/' }] },
           id: '00000000-0000-4000-8000-000000000000',
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'GET' && req.url === '/v2/team/credit-usage') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: {
+            billingPeriodEnd: '2026-10-01T00:00:00.000Z',
+            billingPeriodStart: '2026-09-01T00:00:00.000Z',
+            planCredits: 1000,
+            remainingCredits: 750,
+          },
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (
+      req.method === 'GET' &&
+      req.url === '/v2/team/credit-usage/historical?byApiKey=true'
+    ) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          periods: [
+            {
+              apiKey: 'Hosted OAuth key',
+              creditsUsed: 250,
+              endDate: null,
+              startDate: '2026-09-01T00:00:00.000Z',
+            },
+          ],
           success: true,
         })
       );
@@ -936,6 +1030,8 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.ok(toolNames.includes('firecrawl_scrape'));
   assert.ok(toolNames.includes('firecrawl_search'));
   assert.ok(toolNames.includes('firecrawl_parse'));
+  assert.ok(toolNames.includes('firecrawl_credit_usage'));
+  assert.equal(toolNames.includes('firecrawl_credit_usage_historical'), false);
   assert.equal(toolNames.includes('firecrawl_extract'), false);
 
   const deprecatedExtract = await client.request('tools/call', {
@@ -955,6 +1051,19 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
 
   const byName = new Map(tools.tools.map((tool) => [tool.name, tool]));
+  assert.match(
+    byName.get('firecrawl_credit_usage').description,
+    /remainingCredits.*planCredits.*billingPeriodStart.*billingPeriodEnd.*historical.*creditsUsed.*byApiKey.*API key/is
+  );
+  assert.equal(
+    byName.get('firecrawl_credit_usage').inputSchema.properties.view.description,
+    'Select current balance or historical monthly usage. Defaults to current.'
+  );
+  assert.equal(
+    byName.get('firecrawl_credit_usage').inputSchema.properties.byApiKey
+      .description,
+    'Break historical usage down by API key. When view is omitted, true selects the historical view; it cannot be combined with view "current".'
+  );
   // A stdio session with an API key gets the Alexandria-aware instructions,
   // not the keyless wording.
   assert.match(init.instructions, /firecrawl_scrape retrieves one supplied page/i);
@@ -1088,6 +1197,97 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   ].join('\n');
   assertAgentMetadataPolicy(renderedLanguage, assert);
   assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('credit usage tool exposes current balance and both historical request shapes', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-credit-usage-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-credit-usage-smoke', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const current = await client.request('tools/call', {
+    arguments: {},
+    name: 'firecrawl_credit_usage',
+  });
+  assert.deepEqual(JSON.parse(current.content[0].text), {
+    billingPeriodEnd: '2026-10-01T00:00:00.000Z',
+    billingPeriodStart: '2026-09-01T00:00:00.000Z',
+    planCredits: 1000,
+    remainingCredits: 1250,
+  });
+
+  const historical = await client.request('tools/call', {
+    arguments: { view: 'historical' },
+    name: 'firecrawl_credit_usage',
+  });
+  assert.deepEqual(JSON.parse(historical.content[0].text), {
+    periods: [
+      {
+        creditsUsed: 654,
+        endDate: null,
+        startDate: '2026-09-01T00:00:00.000Z',
+      },
+    ],
+    success: true,
+  });
+
+  const historicalByApiKey = await client.request('tools/call', {
+    arguments: { byApiKey: true },
+    name: 'firecrawl_credit_usage',
+  });
+  assert.deepEqual(JSON.parse(historicalByApiKey.content[0].text), {
+    periods: [
+      {
+        apiKey: 'Production key',
+        creditsUsed: 321,
+        endDate: null,
+        startDate: '2026-09-01T00:00:00.000Z',
+      },
+    ],
+    success: true,
+  });
+
+  const contradictory = await client.request('tools/call', {
+    arguments: { byApiKey: true, view: 'current' },
+    name: 'firecrawl_credit_usage',
+  });
+  assert.equal(contradictory.isError, true);
+  assert.match(
+    contradictory.content[0].text,
+    /byApiKey can only be used with view "historical"/i
+  );
+
+  for (const path of [
+    '/v2/team/credit-usage',
+    '/v2/team/credit-usage/historical',
+    '/v2/team/credit-usage/historical?byApiKey=true',
+  ]) {
+    const request = fakeApi.requests.find((candidate) => candidate.url === path);
+    assert.ok(request, path);
+    assert.equal(request.method, 'GET', path);
+    assert.equal(
+      request.headers.authorization,
+      'Bearer fc-credit-usage-test',
+      path
+    );
+    assert.equal(
+      request.headers['x-origin'],
+      `mcp-firecrawl-credit-usage-smoke@${serverVersion}`,
+      path
+    );
+  }
 });
 
 test('local keyless stdio keeps profile guidance keyless-scoped and omits feedback tools', async (t) => {
@@ -3106,6 +3306,112 @@ test('account endpoint accepts legacy OAuth one way and delegates managed keys',
   assert.equal(stderr.includes('fc-managed-secret'), false);
   assert.equal(stderr.includes('fco_account'), false);
   assert.equal(stderr.includes('fco_legacy'), false);
+});
+
+test('hosted OAuth executes current and historical credit usage with delegated credentials', async (t) => {
+  const accountResource = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
+  const backend = await startFakeFirecrawlBackend({
+    introspectionHandler: ({ token }) =>
+      token === 'fco_credit_usage'
+        ? {
+            active: true,
+            api_key: 'fc-managed-credit-usage',
+            aud: accountResource,
+            credential_purpose: 'hosted_mcp_oauth',
+            scope: 'firecrawl:global',
+          }
+        : { active: false },
+  });
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_MCP_RESOURCE_URL: accountResource,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    FIRECRAWL_API_KEY: 'fc-shared-env-must-not-be-used',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const headers = {
+    authorization: 'Bearer fco_credit_usage',
+    'user-agent': 'hosted-oauth-usage-test/1.0',
+  };
+  const currentResponse = await httpToolCall(port, {
+    endpoint: '/v2/mcp-oauth',
+    headers,
+    id: 'hosted-oauth-current-credit-usage',
+    params: { arguments: {}, name: 'firecrawl_credit_usage' },
+  });
+  assert.equal(currentResponse.status, 200);
+  const currentResult = parseSseJson(await currentResponse.text()).result;
+  assert.notEqual(currentResult.isError, true);
+  assert.deepEqual(JSON.parse(currentResult.content[0].text), {
+    billingPeriodEnd: '2026-10-01T00:00:00.000Z',
+    billingPeriodStart: '2026-09-01T00:00:00.000Z',
+    planCredits: 1000,
+    remainingCredits: 750,
+  });
+
+  const historicalResponse = await httpToolCall(port, {
+    endpoint: '/v2/mcp-oauth',
+    headers,
+    id: 'hosted-oauth-historical-credit-usage',
+    params: {
+      arguments: { byApiKey: true },
+      name: 'firecrawl_credit_usage',
+    },
+  });
+  assert.equal(historicalResponse.status, 200);
+  const historicalResult = parseSseJson(await historicalResponse.text()).result;
+  assert.notEqual(historicalResult.isError, true);
+  assert.deepEqual(JSON.parse(historicalResult.content[0].text), {
+    periods: [
+      {
+        apiKey: 'Hosted OAuth key',
+        creditsUsed: 250,
+        endDate: null,
+        startDate: '2026-09-01T00:00:00.000Z',
+      },
+    ],
+    success: true,
+  });
+
+  const usageCalls = backend.requests.filter((request) =>
+    request.url?.startsWith('/v2/team/credit-usage')
+  );
+  assert.deepEqual(
+    usageCalls.map((request) => request.url),
+    [
+      '/v2/team/credit-usage',
+      '/v2/team/credit-usage/historical?byApiKey=true',
+    ]
+  );
+  for (const request of usageCalls) {
+    assert.equal(request.method, 'GET');
+    assert.equal(
+      request.headers['x-origin'],
+      `mcp-ua-hosted-oauth-usage-test@${serverVersion}`
+    );
+    const assertion = request.headers.authorization?.replace(/^Bearer /, '');
+    assert.match(assertion ?? '', /^fcmcp_/);
+    assert.notEqual(assertion, 'fc-shared-env-must-not-be-used');
+    const payload = JSON.parse(
+      Buffer.from(
+        assertion.split('.')[0].slice('fcmcp_'.length),
+        'base64url'
+      ).toString()
+    );
+    assert.equal(payload.api_key, 'fc-managed-credit-usage');
+    assert.equal(payload.purpose, 'hosted_mcp_oauth');
+    assert.equal(payload.aud, 'firecrawl-core');
+  }
 });
 
 test('legacy key-in-path telemetry is sanitized and does not leak the credential', async (t) => {
