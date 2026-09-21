@@ -896,7 +896,7 @@ const searchToolBaseFields = {
     .boolean()
     .optional()
     .describe(
-      'Return highlights for each search result. Set to false to keep the original search snippets.'
+      'Return query-relevant highlights for web and news results when available (default). Set to false to keep the original search snippets.'
     ),
   limit: z.number().int().min(1).max(100).optional(),
   tbs: z.string().optional(),
@@ -908,10 +908,10 @@ const searchToolBaseFields = {
     .array(z.object({ type: z.enum(['web', 'images', 'news']) }))
     .optional(),
   categories: z
-    .array(z.enum(['research', 'pdf', 'developer']))
+    .array(z.enum(['github', 'research', 'pdf', 'developer']))
     .optional()
     .describe(
-      'Limit results to specific source types. `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over public repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. `developer` returns hits in `data.web` with `category: "developer"`; the other categories also filter `data.web`.'
+      'Limit results to specific source types. `github` searches GitHub repositories, code, issues, and docs; `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over public repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. `developer` returns hits in `data.web` with `category: "developer"`; the other categories also filter `data.web`.'
     ),
   enterprise: z.array(z.enum(['default', 'anon', 'zdr'])).optional(),
 };
@@ -2230,13 +2230,13 @@ server.addTool({
     destructiveHint: false, // Query-only; no destructive side effects on external entities.
   },
   description: `
-Search web, news, or image sources and return ranked results with highlights by default. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit results to research, PDF, or developer sources.
+Search web, news, or image sources and return ranked results with query-relevant highlights by default. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit results to GitHub, research, PDF, or developer sources.
 
 For a programming question, add \`categories: ["developer"]\`. It searches an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites, and returns the hits in \`data.web\` with \`category: "developer"\`.
 
 \`categories: ["research"]\` restricts these web results to research-affiliated websites and returns page snippets. The \`firecrawl_research_*\` tools are a separate surface that searches paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature.
 
-Each web result is a title, URL, and description. Add \`scrapeOptions\` to attach page content in the same call; those fetches ignore \`maxAge\`, so use \`firecrawl_scrape\` when you need a live fetch. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
+Each web result is a title, URL, and description. Highlights appear in web \`description\` and news \`snippet\`; otherwise, original snippets are returned. Add \`scrapeOptions\` to attach page content in the same call; those fetches ignore \`maxAge\`, so use \`firecrawl_scrape\` when you need a live fetch. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
 `,
   parameters: z
     .object({
@@ -3313,7 +3313,7 @@ function registerMarketplaceSearchTool(
       destructiveHint: false,
     },
     description: `
-Search web and specialized indexes, returning ranked results with highlights by default. Each web result is a title, URL, and description. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit result types to \`research\`, \`pdf\`, or \`developer\`.
+Search web and specialized indexes, returning ranked results with query-relevant highlights by default. Each web result is a title, URL, and description. Highlights appear in web \`description\` and news \`snippet\`; otherwise, original snippets are returned. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit result types to \`github\`, \`research\`, \`pdf\`, or \`developer\`.
 
 For a programming question, add \`categories: ["developer"]\`. It searches an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites, and returns the hits in \`data.web\` with \`category: "developer"\`.
 
