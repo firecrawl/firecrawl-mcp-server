@@ -2747,9 +2747,7 @@ if (!ENDPOINT_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
       destructiveHint: false, // Additive only; submits ratings and notes, does not delete jobs or external content.
     },
     description: `
-Submit concise quality feedback for a completed search, scrape, parse, or map job. Provide the endpoint, job ID, rating, and relevant issue codes or small contextual fields; omit large page contents and raw outputs.
-
-For Alexandria session feedback, use endpoint="alexandria", rating, requestedWebsite (url and requestedFunctionality), and rationale. Omit jobId and job-specific fields. Optional providerFeedback and capabilityFeedback describe provider or capability issues. A new_capability_request requires requestedFunctionality. Normalized session feedback is limited to 8 KiB.
+Submit concise quality feedback for a Firecrawl job or session. Provide the endpoint, rating, and endpoint-specific fields; omit large page contents and raw outputs.
 
 Returns submission status, feedback ID, and accounting fields.
 `,
