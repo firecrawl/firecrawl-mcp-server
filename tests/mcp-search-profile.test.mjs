@@ -374,9 +374,9 @@ test('search surface lists exactly the six read-only tools', async (t) => {
   );
   assert.doesNotMatch(search.description, /data\.developer/i);
   assert.doesNotMatch(search.description, /not the page/i);
-  assert.match(search.description, /query-relevant highlights by default/i);
+  assert.match(search.description, /ranked results with query-relevant highlights\./i);
   assert.match(
-    search.description,
+    search.inputSchema.properties.highlights.description,
     /highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned/i
   );
 
@@ -518,7 +518,7 @@ test('search firecrawl_search sends a clean body built from allowed fields only'
   });
 });
 
-test('search categories preserve github on both MCP profiles', async (t) => {
+test('search categories reject github on both MCP profiles before calling the API', async (t) => {
   const backend = await startFakeBackend();
   t.after(() => backend.close());
   const { fullPort, searchPort } = await startHostedServer(t, {
@@ -529,7 +529,7 @@ test('search categories preserve github on both MCP profiles', async (t) => {
     const tools = await listToolDefinitions(port, endpoint, { 'x-api-key': 'fc-test' });
     const search = tools.find((tool) => tool.name === 'firecrawl_search');
     assert.deepEqual(search.inputSchema.properties.categories.items.enum, [
-      'github', 'research', 'pdf', 'developer',
+      'research', 'pdf', 'developer',
     ]);
     const res = await jsonRpc(port, endpoint, {
       id: 40,
@@ -541,14 +541,9 @@ test('search categories preserve github on both MCP profiles', async (t) => {
       headers: { 'x-api-key': 'fc-test' },
     });
     const message = parseSseJson(await res.text());
-    assert.equal(message.error, undefined, JSON.stringify(message));
-    assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+    assert.ok(message.error || message.result?.isError, JSON.stringify(message));
   }
-  const searchCalls = backend.requests.filter((r) => r.url === '/v2/search');
-  assert.equal(searchCalls.length, 2);
-  for (const call of searchCalls) {
-    assert.deepEqual(call.body.categories, ['github']);
-  }
+  assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
 });
 
 test('search firecrawl_search forwards the developer category in the web group', async (t) => {

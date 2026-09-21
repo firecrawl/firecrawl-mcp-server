@@ -994,7 +994,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.doesNotMatch(byName.get('firecrawl_search').description, /not the page/i);
   assert.match(
     byName.get('firecrawl_search').description,
-    /query-relevant highlights by default/i
+    /ranked results with query-relevant highlights\./i
   );
   assert.match(
     byName.get('firecrawl_search').description,
@@ -1035,7 +1035,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   // kept in the top-level tool description below.
   assert.equal(
     byName.get('firecrawl_search').inputSchema.properties.highlights.description,
-    'Return query-relevant highlights for web and news results when available (default). Set to false to keep the original search snippets.'
+    'Return query-relevant highlights for web and news results when available (default). Highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned. Set to false to keep the original search snippets.'
   );
   assert.match(
     byName.get('firecrawl_search').inputSchema.properties.categories.description,
