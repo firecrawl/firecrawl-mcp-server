@@ -1035,7 +1035,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   // kept in the top-level tool description below.
   assert.equal(
     byName.get('firecrawl_search').inputSchema.properties.highlights.description,
-    'Return query-relevant highlights for web and news results when available (default). Highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned. Set to false to keep the original search snippets.'
+    'Return query-relevant page excerpts for web and news results when available (default). Highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned. Set to false to keep the original search snippets.'
   );
   assert.match(
     byName.get('firecrawl_search').inputSchema.properties.categories.description,
