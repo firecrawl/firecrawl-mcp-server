@@ -2,6 +2,7 @@
 import FirecrawlApp from 'firecrawl';
 import dotenv from 'dotenv';
 import { FastMCP, type Logger, UserError } from 'fastmcp';
+import type { SerializableValue } from 'fastmcp';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -14,6 +15,7 @@ import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
 import { escapeWWWAuthenticateValue } from './www-authenticate';
 import { originHeaders, requestOrigin, type McpClient } from './origin';
+import { applyQueryRouting, routerConfigFromEnv } from './query-router';
 import {
   credentialForOutboundRequest,
   copyManagedOAuthApiKey,
@@ -915,6 +917,41 @@ const searchToolBaseFields = {
     ),
   enterprise: z.array(z.enum(['default', 'anon', 'zdr'])).optional(),
 };
+
+/**
+ * Realtime index routing for untargeted searches, resolved once at startup.
+ * Null unless FIRECRAWL_QUERY_ROUTER=true and a classifier key is present, in
+ * which case every search path below behaves exactly as it did before.
+ */
+const queryRouter = routerConfigFromEnv();
+
+/**
+ * Route one outbound /v2/search body and log what happened. Shared by both
+ * `firecrawl_search` surfaces so they cannot drift: a search reaching the API
+ * from either registration gets the same treatment.
+ */
+async function routeSearchBody(
+  searchBody: Record<string, unknown>,
+  log: { info: (message: string, data?: SerializableValue) => void }
+): Promise<void> {
+  const decision = await applyQueryRouting(searchBody, queryRouter);
+  if (decision.reason === 'disabled') return;
+  // One line per routed search, and per classifier failure. Every field is a
+  // fixed token or a number and none carries the query, so this stays safe
+  // under zero data retention.
+  log.info(
+    decision.routed
+      ? 'Routed search to a specialized index'
+      : 'Search left untargeted',
+    {
+      reason: decision.reason,
+      label: decision.label ?? null,
+      confidence: decision.confidence ?? null,
+      category: decision.category ?? null,
+      latencyMs: decision.latencyMs,
+    }
+  );
+}
 
 // Both surfaces forbid specifying includeDomains and excludeDomains together.
 function searchDomainsAreExclusive(args: {
@@ -2277,6 +2314,7 @@ Each web result is a title, URL, and description, not the page. Add \`scrapeOpti
       ...(cleaned as any),
       origin: requestOrigin(mcpClient, session),
     };
+    await routeSearchBody(searchBody, log);
     if (isKeylessMode(session)) {
       const json = await keylessPost('/v2/search', searchBody, session);
       // Search feedback requires an authenticated account. Do not expose its
@@ -3380,6 +3418,7 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
       };
 
       log.info('Searching', { query: searchQuery });
+      await routeSearchBody(searchBody, log);
       const client = getClientFn(session);
       const httpRes = await (client as any).http.post('/v2/search', searchBody);
       return asText(httpRes?.data ?? {});

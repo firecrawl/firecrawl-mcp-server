@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Optional automatic index routing for `firecrawl_search`. With
+  `FIRECRAWL_QUERY_ROUTER=true` and a classifier key set, a search naming
+  neither `categories` nor `sources` is classified at request time and routed
+  to the `developer` or `research` category when the classifier's confidence
+  exceeds `FIRECRAWL_QUERY_ROUTER_THRESHOLD` (default `0.8`). A call that
+  already targets an index is never overridden, and any classifier failure
+  leaves the search untouched. Off by default; both `firecrawl_search`
+  surfaces share the same path.
+
 ## [3.21.4] - 2026-06-23
 
 ### Added

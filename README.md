@@ -250,6 +250,24 @@ Hosted Firecrawl can issue OAuth **access tokens** (`fco_…`) via the authoriza
 
 Use **access** tokens (`fco_…`) only. Refresh tokens (`fcr_…`) must be exchanged at the token endpoint, not passed to the scrape/search API.
 
+#### Automatic index routing (opt-in)
+
+Agents mostly call `firecrawl_search` with no `categories`, so a question whose answer lives in the developer index or in research-affiliated sources gets answered from the general web index instead. With routing enabled, a search that names no target is classified at request time and `categories` is filled in for it.
+
+- `FIRECRAWL_QUERY_ROUTER`: set to `true` to enable. Off by default.
+- `FIRECRAWL_QUERY_ROUTER_API_KEY` or `TYPESAFE_API_KEY`: the classifier credential ([TypeSafe](https://docs.typesafe.ai)). Required — without it the router stays off.
+- `FIRECRAWL_QUERY_ROUTER_THRESHOLD` (default `0.8`): the classifier's confidence must be **greater than** this for a call to be rewritten. A value outside `(0, 1]` falls back to the default.
+- `FIRECRAWL_QUERY_ROUTER_TIMEOUT_MS` (default `4000`), `FIRECRAWL_QUERY_ROUTER_MODEL` (default `jev-latest`), and `FIRECRAWL_QUERY_ROUTER_ENDPOINT` for tuning and tests.
+
+Rules the router holds to:
+
+- A call that already sets `categories` or `sources` is never overridden.
+- Anything short of a confident developer or research verdict leaves the call exactly as written, including a confident general-web verdict.
+- It fails open. A classifier timeout, error, or unparseable answer is logged and the search runs unrouted; routing never fails a search.
+- Log lines record the verdict, its confidence, and latency — never the query text.
+
+Routing adds one classifier round trip, bounded by the timeout above, and only to searches that named no target.
+
 #### Search-only surface (hosted)
 
 In hosted mode (`CLOUD_SERVICE=true`) a second in-process instance serves the [search-only endpoint](#search-only-endpoint). The bundled service has a fixed deployment contract: nginx routes `/v2/mcp-search` to the instance on local port `3001`, and the OAuth protected-resource identifier is `https://mcp.firecrawl.dev/v2/mcp-search`.
