@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 
 const managedOAuthApiKey = Symbol('firecrawlManagedOAuthApiKey');
 
@@ -150,6 +150,21 @@ export function copyManagedOAuthApiKey(
 ): void {
   const apiKey = source?.[managedOAuthApiKey];
   if (apiKey) setManagedOAuthApiKey(target, apiKey);
+}
+
+/**
+ * A stable, non-reversible identity for the credential a session carries:
+ * the managed hosted-OAuth key when there is one, else the general key. Used
+ * to attribute calls to one caller (see src/thread.ts) when the session did
+ * not resolve an account identity. Never the credential itself, and never a
+ * signed outbound token, which changes on every request.
+ */
+export function credentialDigest(
+  session?: CredentialSession
+): string | undefined {
+  const credential = session?.[managedOAuthApiKey] ?? session?.firecrawlApiKey;
+  if (!credential) return undefined;
+  return createHash('sha256').update(credential).digest('hex');
 }
 
 export function hasCredential(session?: CredentialSession): boolean {

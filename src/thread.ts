@@ -147,16 +147,23 @@ export function threadIdleMs(env: NodeJS.ProcessEnv = process.env): number {
   const raw = (env[THREAD_IDLE_ENV] ?? '').trim();
   if (raw === '') return DEFAULT_THREAD_IDLE_MS;
   const seconds = Number(raw);
-  if (!Number.isFinite(seconds) || seconds < 0) return DEFAULT_THREAD_IDLE_MS;
-  return Math.floor(seconds * 1000);
+  const ms = seconds * 1000;
+  // A non-number, a negative, or a value large enough to overflow to
+  // Infinity would all silently disable expiry; each falls back to the default.
+  if (!Number.isFinite(ms) || ms < 0) return DEFAULT_THREAD_IDLE_MS;
+  return Math.floor(ms);
 }
 
 /**
  * The caller a call is attributed to when it carries no `threadId`, as an
  * opaque hash: whichever account identity the session resolved (API key id,
- * OAuth user, team), else a digest of the raw key, else the keyless client
- * IP; plus the MCP client name and User-Agent so two clients on one account
- * stay apart. Nothing in the key is reversible, and it never leaves memory.
+ * OAuth user, team), else a digest of the credential it holds (`credential`,
+ * supplied by the caller because managed OAuth keys are not readable here),
+ * else the keyless client IP; plus the MCP client name and User-Agent so two
+ * clients on one account stay apart. A session with none of those has no
+ * caller to attribute to and gets no key: recalling a thread for it would
+ * hand one caller's thread to another. Nothing in the key is reversible, and
+ * it never leaves memory.
  */
 export function threadScopeKey(
   session:
@@ -164,22 +171,23 @@ export function threadScopeKey(
         apiKeyId?: string;
         userId?: string;
         teamId?: string;
-        firecrawlApiKey?: string;
         keylessClientIp?: string;
         clientUserAgent?: string;
       }
     | undefined,
-  clientName: string | undefined
-): string {
+  clientName: string | undefined,
+  credential?: string
+): string | undefined {
   const identity =
     session?.apiKeyId ??
     session?.userId ??
     session?.teamId ??
-    (session?.firecrawlApiKey
-      ? `key:${createHash('sha256').update(session.firecrawlApiKey).digest('hex')}`
+    (credential
+      ? `credential:${credential}`
       : session?.keylessClientIp
         ? `ip:${session.keylessClientIp}`
-        : 'anonymous');
+        : undefined);
+  if (!identity) return undefined;
   return createHash('sha256')
     .update(
       [
@@ -219,8 +227,13 @@ export class ThreadRegistry {
     return this.#recent.size;
   }
 
-  resolve(scopeKey: string, thread: ResolvedThread): ResolvedThread {
-    if (this.#idleMs <= 0) return thread;
+  resolve(
+    scopeKey: string | undefined,
+    thread: ResolvedThread
+  ): ResolvedThread {
+    // No caller identity, or recall switched off: explicit IDs still apply,
+    // but nothing is remembered and nothing is recalled.
+    if (scopeKey === undefined || this.#idleMs <= 0) return thread;
     const now = this.#now();
     if (thread.source === 'minted') {
       const recent = this.#recent.get(scopeKey);

@@ -227,7 +227,7 @@ test('the idle window comes from FIRECRAWL_THREAD_IDLE_SECONDS with a safe defau
   assert.equal(DEFAULT_THREAD_IDLE_MS, 10 * 60 * 1000);
   assert.equal(threadIdleMs({ FIRECRAWL_THREAD_IDLE_SECONDS: '90' }), 90_000);
   assert.equal(threadIdleMs({ FIRECRAWL_THREAD_IDLE_SECONDS: '0' }), 0);
-  for (const bad of ['-5', 'soon', 'NaN', 'Infinity']) {
+  for (const bad of ['-5', 'soon', 'NaN', 'Infinity', '1e400', '9e305']) {
     assert.equal(
       threadIdleMs({ FIRECRAWL_THREAD_IDLE_SECONDS: bad }),
       DEFAULT_THREAD_IDLE_MS,
@@ -248,15 +248,33 @@ test('the scope key separates callers and never contains the credential', () => 
     key
   );
 
-  // A raw API key is hashed into the identity, never present in the key.
-  const raw = threadScopeKey({ firecrawlApiKey: 'fc-secret-value' }, 'x');
-  assert.equal(raw.includes('fc-secret'), false);
-  assert.notEqual(raw, threadScopeKey({ firecrawlApiKey: 'fc-other' }, 'x'));
+  // Without an account identity the credential digest (a hash the caller
+  // supplies, so managed OAuth keys count too) stands in; it is hashed again.
+  const digest = 'a'.repeat(64);
+  const byCredential = threadScopeKey({ clientUserAgent: 'ua' }, 'x', digest);
+  assert.match(byCredential, /^[0-9a-f]{64}$/);
+  assert.equal(byCredential.includes(digest), false);
+  assert.notEqual(
+    byCredential,
+    threadScopeKey({ clientUserAgent: 'ua' }, 'x', 'b'.repeat(64))
+  );
+  // A resolved identity outranks the digest.
+  assert.equal(threadScopeKey(base, 'cursor', digest), key);
 
-  // Keyless callers are told apart by IP; nothing at all still gets a key.
+  // Keyless callers are told apart by IP.
   assert.notEqual(
     threadScopeKey({ keylessClientIp: '8.8.8.1' }, 'x'),
     threadScopeKey({ keylessClientIp: '8.8.8.2' }, 'x')
   );
-  assert.match(threadScopeKey(undefined, undefined), /^[0-9a-f]{64}$/);
+
+  // No identity at all: no key, so nothing is ever recalled across callers.
+  assert.equal(threadScopeKey(undefined, undefined), undefined);
+  assert.equal(threadScopeKey({ clientUserAgent: 'ua' }, 'cursor'), undefined);
+  const registry = new ThreadRegistry({ idleMs: 60_000, now: () => 1 });
+  const a = registry.resolve(undefined, takeThreadId({}));
+  const b = registry.resolve(undefined, takeThreadId({}));
+  assert.equal(a.source, 'minted');
+  assert.equal(b.source, 'minted');
+  assert.notEqual(a.threadId, b.threadId);
+  assert.equal(registry.size, 0);
 });

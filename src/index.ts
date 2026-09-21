@@ -27,6 +27,7 @@ import {
   type ThreadSource,
 } from './thread';
 import {
+  credentialDigest,
   credentialForOutboundRequest,
   copyManagedOAuthApiKey,
   CoreHttpError,
@@ -1392,9 +1393,24 @@ function guardHostedTool(
           : undefined;
       if (code) {
         const requestId = randomUUID();
-        const payload = recoveryPayload(code, requestId);
+        // This call never runs, so nothing is minted or recalled for it; an
+        // explicit threadId the agent sent is still kept on the recovery
+        // payload so the conversation's thread survives the credential fix.
+        const provided = tracksThread ? takeThreadId(args) : undefined;
+        const explicitThread: Record<string, unknown> =
+          provided?.source === 'argument'
+            ? { threadId: provided.threadId }
+            : {};
+        const payload = { ...recoveryPayload(code, requestId), ...explicitThread };
         if (logActions) {
-          emitActionLog(tool.name, 'error', session, new UserError(String(payload.message), payload), requestId, code);
+          emitActionLog(
+            tool.name,
+            'error',
+            { ...session, ...explicitThread, ...(provided?.source === 'argument' ? { threadSource: 'argument' as const } : {}) },
+            new UserError(String(payload.message), payload),
+            requestId,
+            code
+          );
         }
         return {
           content: [{ type: 'text' as const, text: String(payload.message) }],
@@ -1432,7 +1448,11 @@ function guardHostedTool(
       // back for the agent to pass on. Untracked tools see their args as-is.
       const thread = tracksThread
         ? threadRegistry.resolve(
-            threadScopeKey(context.session, context.client?.version?.name),
+            threadScopeKey(
+              context.session,
+              context.client?.version?.name,
+              credentialDigest(context.session)
+            ),
             takeThreadId(args)
           )
         : undefined;
@@ -1450,15 +1470,18 @@ function guardHostedTool(
         session: invocationSession,
       };
 
+      const threadFields: Record<string, unknown> = thread
+        ? { threadId: thread.threadId }
+        : {};
       if (invocationSession.credentialError) {
         const code = 'CREDENTIAL_INVALID';
-        const payload = recoveryPayload(code, requestId);
+        const payload = { ...recoveryPayload(code, requestId), ...threadFields };
         if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
         throw new UserError(String(payload.message), payload);
       }
       if (isHostedKeylessSession(invocationSession) && !keylessTool) {
         const code = 'KEYLESS_TOOL_NOT_AVAILABLE';
-        const payload = recoveryPayload(code, requestId);
+        const payload = { ...recoveryPayload(code, requestId), ...threadFields };
         if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
         throw new UserError(String(payload.message), payload);
       }
