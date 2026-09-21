@@ -617,7 +617,7 @@ for other capability issues.
 
 Each array accepts up to 20 entries. Names and provider names are limited to
 200 characters; narrative fields to 2,000; and HTTP(S) website URLs to 2,048.
-The API limits normalized session feedback to 8 KiB. Session feedback does not
+Normalized session feedback is limited to 8 KiB. Session feedback does not
 require a job ID and does not refund credits.
 
 ### 4. Crawl Tool (`firecrawl_crawl`)

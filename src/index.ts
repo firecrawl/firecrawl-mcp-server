@@ -2719,6 +2719,24 @@ if (ENDPOINT_FEEDBACK_DISABLED) {
 if (!ENDPOINT_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
   const feedbackDetail = z.string().trim().min(1).max(2000);
   const feedbackName = z.string().trim().min(1).max(200);
+  const jobFeedbackFields = [
+    'jobId',
+    'issues',
+    'tags',
+    'note',
+    'valuableSources',
+    'missingContent',
+    'querySuggestions',
+    'url',
+    'pageNumbers',
+    'metadata',
+  ] as const;
+  const sessionFeedbackFields = [
+    'requestedWebsite',
+    'rationale',
+    'providerFeedback',
+    'capabilityFeedback',
+  ] as const;
 
   server.addTool({
     name: 'firecrawl_feedback',
@@ -2731,7 +2749,7 @@ if (!ENDPOINT_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
     description: `
 Submit concise quality feedback for a completed search, scrape, parse, or map job. Provide the endpoint, job ID, rating, and relevant issue codes or small contextual fields; omit large page contents and raw outputs.
 
-For Alexandria session feedback, use endpoint="alexandria", rating, requestedWebsite (url and requestedFunctionality), and rationale. Omit jobId and job-specific fields. Optional providerFeedback and capabilityFeedback describe provider or capability issues. A new_capability_request requires requestedFunctionality. The API limits normalized session feedback to 8 KiB.
+For Alexandria session feedback, use endpoint="alexandria", rating, requestedWebsite (url and requestedFunctionality), and rationale. Omit jobId and job-specific fields. Optional providerFeedback and capabilityFeedback describe provider or capability issues. A new_capability_request requires requestedFunctionality. Normalized session feedback is limited to 8 KiB.
 
 Returns submission status, feedback ID, and accounting fields.
 `,
@@ -2815,6 +2833,12 @@ Returns submission status, feedback ID, and accounting fields.
                     'requestedFunctionality is required for new_capability_request',
                 }
               )
+              .meta({
+                if: {
+                  properties: { issue: { const: 'new_capability_request' } },
+                },
+                then: { required: ['requestedFunctionality'] },
+              })
           )
           .max(20)
           .optional()
@@ -2831,18 +2855,7 @@ Returns submission status, feedback ID, and accounting fields.
               });
             }
           }
-          for (const field of [
-            'jobId',
-            'issues',
-            'tags',
-            'note',
-            'valuableSources',
-            'missingContent',
-            'querySuggestions',
-            'url',
-            'pageNumbers',
-            'metadata',
-          ] as const) {
+          for (const field of jobFeedbackFields) {
             if (value[field] !== undefined) {
               ctx.addIssue({
                 code: 'custom',
@@ -2859,12 +2872,7 @@ Returns submission status, feedback ID, and accounting fields.
               message: `jobId is required for ${value.endpoint}`,
             });
           }
-          for (const field of [
-            'requestedWebsite',
-            'rationale',
-            'providerFeedback',
-            'capabilityFeedback',
-          ] as const) {
+          for (const field of sessionFeedbackFields) {
             if (value[field] !== undefined) {
               ctx.addIssue({
                 code: 'custom',
@@ -2874,6 +2882,22 @@ Returns submission status, feedback ID, and accounting fields.
             }
           }
         }
+      })
+      // Refinements run at invocation; publish the same conditions in tools/list.
+      .meta({
+        if: { properties: { endpoint: { const: 'alexandria' } } },
+        then: {
+          required: ['requestedWebsite', 'rationale'],
+          properties: Object.fromEntries(
+            jobFeedbackFields.map((field) => [field, false])
+          ),
+        },
+        else: {
+          required: ['jobId'],
+          properties: Object.fromEntries(
+            sessionFeedbackFields.map((field) => [field, false])
+          ),
+        },
       }),
     execute: async (
       args,
@@ -2894,13 +2918,21 @@ Returns submission status, feedback ID, and accounting fields.
         throw new Error('Unauthorized: missing API key for feedback.');
       }
 
-      const body = removeEmptyTopLevel({ ...args, origin });
+      const body = JSON.stringify(removeEmptyTopLevel({ ...args, origin }));
+      if (
+        endpoint === 'alexandria' &&
+        Buffer.byteLength(body, 'utf8') > 8 * 1024
+      ) {
+        throw new UserError(
+          'Normalized Alexandria feedback must be 8 KiB or smaller. Shorten the feedback and try again.'
+        );
+      }
 
       log.info('Submitting endpoint feedback', { endpoint, jobId, rating });
       const response = await fetch(`${apiBase}/v2/feedback`, {
         method: 'POST',
         headers,
-        body: JSON.stringify(body),
+        body,
       });
 
       const responseText = await response.text();

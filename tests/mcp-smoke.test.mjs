@@ -1602,6 +1602,42 @@ test('stdio feedback supports sessions and preserves job feedback validation', a
   const feedback = tools.find((tool) => tool.name === 'firecrawl_feedback');
   assert.equal(feedback.inputSchema.type, 'object');
   assert.deepEqual(feedback.inputSchema.required, ['endpoint', 'rating']);
+  assert.deepEqual(feedback.inputSchema.if, {
+    properties: { endpoint: { const: 'alexandria' } },
+  });
+  assert.deepEqual(feedback.inputSchema.then.required, [
+    'requestedWebsite',
+    'rationale',
+  ]);
+  assert.deepEqual(feedback.inputSchema.else.required, ['jobId']);
+  for (const field of [
+    'jobId',
+    'issues',
+    'tags',
+    'note',
+    'valuableSources',
+    'missingContent',
+    'querySuggestions',
+    'url',
+    'pageNumbers',
+    'metadata',
+  ]) {
+    assert.equal(feedback.inputSchema.then.properties[field], false);
+  }
+  for (const field of [
+    'requestedWebsite',
+    'rationale',
+    'providerFeedback',
+    'capabilityFeedback',
+  ]) {
+    assert.equal(feedback.inputSchema.else.properties[field], false);
+  }
+  const capabilitySchema =
+    feedback.inputSchema.properties.capabilityFeedback.items;
+  assert.deepEqual(capabilitySchema.if, {
+    properties: { issue: { const: 'new_capability_request' } },
+  });
+  assert.deepEqual(capabilitySchema.then.required, ['requestedFunctionality']);
   assert.ok(
     feedback.inputSchema.properties.endpoint.enum.includes('alexandria')
   );
@@ -1687,7 +1723,7 @@ test('stdio feedback supports sessions and preserves job feedback validation', a
 
   await submit({
     ...minimal,
-    rationale: '  Availability was incomplete.  ',
+    rationale: ' '.repeat(9 * 1024) + minimal.rationale,
     requestedWebsite: {
       ...minimal.requestedWebsite,
       requestedFunctionality: '  Find available appointments.  ',
@@ -1707,6 +1743,57 @@ test('stdio feedback supports sessions and preserves job feedback validation', a
     ],
     origin: `mcp-feedback-test@${serverVersion}`,
   });
+
+  const atLimit = {
+    ...minimal,
+    rationale: 'a'.repeat(2000),
+    requestedWebsite: {
+      ...minimal.requestedWebsite,
+      requestedFunctionality: 'a'.repeat(2000),
+    },
+    capabilityFeedback: [
+      {
+        ...detailed.capabilityFeedback[0],
+        why: 'a'.repeat(2000),
+        requestedFunctionality: '',
+      },
+    ],
+  };
+  const remainingBytes =
+    8192 -
+    Buffer.byteLength(
+      JSON.stringify({
+        ...atLimit,
+        origin: `mcp-feedback-test@${serverVersion}`,
+      }),
+      'utf8'
+    );
+  assert.ok(remainingBytes > 0 && remainingBytes <= 2000);
+  atLimit.capabilityFeedback[0].requestedFunctionality = 'a'.repeat(
+    remainingBytes
+  );
+  assert.notEqual((await submit(atLimit)).isError, true);
+  assert.equal(
+    Buffer.byteLength(JSON.stringify(fakeApi.requests.at(-1).body), 'utf8'),
+    8192
+  );
+  const requestsBeforeOversized = fakeApi.requests.length;
+  for (const oversized of [
+    { ...atLimit, rationale: atLimit.rationale.slice(0, -1) + 'é' },
+    {
+      ...minimal,
+      providerFeedback: Array(4).fill({
+        name: 'Example',
+        issue: 'other',
+        why: '界'.repeat(1000),
+      }),
+    },
+  ]) {
+    const result = await submit(oversized);
+    assert.equal(result.isError, true);
+    assert.match(result.content[0].text, /8 KiB or smaller/);
+  }
+  assert.equal(fakeApi.requests.length, requestsBeforeOversized);
 
   const jobId = '00000000-0000-4000-8000-000000000010';
   const invalid = [
