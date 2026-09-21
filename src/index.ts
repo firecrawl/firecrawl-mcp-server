@@ -1362,6 +1362,38 @@ function emitActionLog(
 // seen on, for calls that arrive without a threadId (see src/thread.ts).
 const threadRegistry = new ThreadRegistry();
 
+/**
+ * The thread a tracked call runs on. Correlation is observability, so it is
+ * never allowed to fail the call: if attributing the caller throws for any
+ * reason (an unexpected shape in session data, say), the call still gets a
+ * thread, minted fresh and remembered for no one.
+ */
+function resolveThread(
+  args: unknown,
+  context: { session?: SessionData; client?: McpClient }
+): ReturnType<typeof takeThreadId> {
+  const taken = takeThreadId(args);
+  try {
+    return threadRegistry.resolve(
+      threadScopeKey(
+        context.session,
+        context.client?.version?.name,
+        credentialDigest(context.session)
+      ),
+      taken
+    );
+  } catch (error) {
+    console.error(
+      '[MCP_THREAD]',
+      JSON.stringify({
+        event: 'scope_unavailable',
+        error_class: error instanceof Error ? error.name : typeof error,
+      })
+    );
+    return taken;
+  }
+}
+
 function guardHostedTool(
   tool: RegisteredTool,
   { logActions }: { logActions: boolean }
@@ -1446,16 +1478,7 @@ function guardHostedTool(
       // into an API body, the ID rides on the invocation session so every
       // outbound request and action log carries it, and the result gets it
       // back for the agent to pass on. Untracked tools see their args as-is.
-      const thread = tracksThread
-        ? threadRegistry.resolve(
-            threadScopeKey(
-              context.session,
-              context.client?.version?.name,
-              credentialDigest(context.session)
-            ),
-            takeThreadId(args)
-          )
-        : undefined;
+      const thread = tracksThread ? resolveThread(args, context) : undefined;
       const toolArgs = thread ? (thread.args as typeof args) : args;
       const invocationSession: SessionData = {
         ...context.session,

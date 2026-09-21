@@ -278,3 +278,28 @@ test('the scope key separates callers and never contains the credential', () => 
   assert.notEqual(a.threadId, b.threadId);
   assert.equal(registry.size, 0);
 });
+
+test('the credential digest is stable, hides the key, and never throws on bad input', async () => {
+  const { credentialDigest, setManagedOAuthApiKey } = await import(
+    '../dist/session-credential.js'
+  );
+  const digest = credentialDigest({ firecrawlApiKey: 'fc-x' });
+  assert.match(digest, /^[0-9a-f]{64}$/);
+  assert.equal(credentialDigest({ firecrawlApiKey: 'fc-x' }), digest);
+  assert.equal(digest.includes('fc-x'), false);
+  assert.notEqual(credentialDigest({ firecrawlApiKey: 'fc-y' }), digest);
+
+  // A managed hosted-OAuth key (symbol-hidden) counts, and outranks the
+  // general key, so two OAuth users on one client never share a scope.
+  const managed = setManagedOAuthApiKey({ firecrawlApiKey: 'fc-x' }, 'fc-managed');
+  assert.notEqual(credentialDigest(managed), digest);
+  assert.equal(credentialDigest(managed), credentialDigest(setManagedOAuthApiKey({}, 'fc-managed')));
+
+  // External introspection data can be anything; only a non-empty string is
+  // an identity, and nothing here may throw into a tool call.
+  for (const bad of [undefined, null, '', 42, true, {}, ['fc-x']]) {
+    assert.equal(credentialDigest({ firecrawlApiKey: bad }), undefined, String(bad));
+  }
+  assert.equal(credentialDigest(undefined), undefined);
+  assert.equal(threadScopeKey({ clientUserAgent: 'ua' }, 'x', undefined), undefined);
+});

@@ -163,7 +163,9 @@ export function credentialDigest(
   session?: CredentialSession
 ): string | undefined {
   const credential = session?.[managedOAuthApiKey] ?? session?.firecrawlApiKey;
-  if (!credential) return undefined;
+  // Introspection data is external; anything but a non-empty string is not
+  // an identity, and must not reach the hash where it would throw.
+  if (typeof credential !== 'string' || credential.length === 0) return undefined;
   return createHash('sha256').update(credential).digest('hex');
 }
 

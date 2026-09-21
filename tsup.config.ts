@@ -6,6 +6,7 @@ export default defineConfig({
     'src/www-authenticate.ts',
     'src/origin.ts',
     'src/thread.ts',
+    'src/session-credential.ts',
   ],
   format: ['esm'],
   platform: 'node',
