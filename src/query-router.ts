@@ -295,6 +295,56 @@ export async function classifySearchQuery(
   };
 }
 
+/**
+ * A paper as the routed response carries it. Declared structurally rather than
+ * imported from research.ts so this module stays free of the MCP server's
+ * dependencies and can be unit-tested on its own.
+ */
+export type RoutedPaperLike = {
+  id: string;
+  title: string;
+  authors: string | null;
+  abstract: string;
+  categories?: string[];
+  createdDate?: string;
+  updateDate?: string;
+};
+
+/**
+ * The paper index answers with papers, not web pages, so a retargeted search
+ * says so in its own response rather than letting an agent mistake papers for
+ * the web results it asked for.
+ */
+export const PAPER_INDEX_NOTICE =
+  'This query was classified as a research-literature question and answered from the Firecrawl research paper index instead of general web search. These are papers, not web pages, and this response carries no search `id`, so firecrawl_search_feedback does not apply to it. Set `sources` or `categories` on the call to force a plain web search.';
+
+/**
+ * The response body a retargeted search returns.
+ *
+ * It deliberately carries no `id`. A paper-index request is not a /v2/search,
+ * so no search UUID exists behind it, and firecrawl_search_feedback validates
+ * a UUID that came from firecrawl_search — an invented one would fail at the
+ * API. `searchFeedback` states the absence instead of leaving an agent to
+ * discover it.
+ */
+export function routedPaperResponse(
+  query: string,
+  papers: RoutedPaperLike[]
+): Record<string, unknown> {
+  return {
+    success: true,
+    routedTo: 'research_paper_index',
+    notice: PAPER_INDEX_NOTICE,
+    searchFeedback: {
+      available: false,
+      reason:
+        'Answered from the research paper index, which does not issue the /v2/search id that firecrawl_search_feedback requires.',
+    },
+    query,
+    data: { papers },
+  };
+}
+
 export type ApplyOptions = {
   /**
    * Whether the research paper index is applicable to this call. Keyless

@@ -18,7 +18,11 @@ import {
 } from './research';
 import { escapeWWWAuthenticateValue } from './www-authenticate';
 import { originHeaders, requestOrigin, type McpClient } from './origin';
-import { applyQueryRouting, routerConfigFromEnv } from './query-router';
+import {
+  applyQueryRouting,
+  routedPaperResponse,
+  routerConfigFromEnv,
+} from './query-router';
 import {
   credentialForOutboundRequest,
   copyManagedOAuthApiKey,
@@ -928,14 +932,6 @@ const searchToolBaseFields = {
  */
 const queryRouter = routerConfigFromEnv();
 
-/**
- * The paper index answers with papers, not web pages, so a retargeted search
- * says so in its own response rather than letting an agent mistake papers for
- * the web results it asked for.
- */
-const PAPER_INDEX_NOTICE =
-  'This query was classified as a research-literature question and answered from the Firecrawl research paper index instead of general web search. These are papers, not web pages, and this response carries no search `id`, so firecrawl_search_feedback does not apply to it. Set `sources` or `categories` on the call to force a plain web search.';
-
 type RouteContext = {
   session?: SessionData;
   mcpClient?: McpClient;
@@ -998,22 +994,7 @@ async function routeSearchBody(
       limit,
       originHeaders(requestOrigin(context.mcpClient, context.session))
     );
-    return asText({
-      success: true,
-      routedTo: 'research_paper_index',
-      notice: PAPER_INDEX_NOTICE,
-      // A retargeted search is a paper-index request, not a /v2/search, so
-      // there is no search UUID behind it. Say so rather than omitting `id`
-      // silently: firecrawl_search_feedback validates a UUID that came from
-      // firecrawl_search, and inventing one would fail at the API.
-      searchFeedback: {
-        available: false,
-        reason:
-          'Answered from the research paper index, which does not issue the /v2/search id that firecrawl_search_feedback requires.',
-      },
-      query,
-      data: { papers },
-    });
+    return asText(routedPaperResponse(query, papers));
   } catch (error) {
     // Fail open the same way the classifier does: if the paper index cannot
     // answer, the agent still gets the web search it originally asked for.

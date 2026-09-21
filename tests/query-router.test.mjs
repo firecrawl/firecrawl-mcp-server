@@ -4,8 +4,10 @@ import {
   DEFAULT_ENDPOINT,
   DEFAULT_THRESHOLD,
   DEFAULT_TIMEOUT_MS,
+  PAPER_INDEX_NOTICE,
   applyQueryRouting,
   classifySearchQuery,
+  routedPaperResponse,
   routerConfigFromEnv,
 } from '../dist/query-router.js';
 
@@ -501,4 +503,69 @@ test('env configuration resolves the timeout, its floor, and the endpoint', () =
       .model,
     'jev-1.13.0'
   );
+});
+
+const PAPERS = [
+  {
+    id: 'arxiv:2401.00001',
+    title: 'A paper about something',
+    authors: 'A. Researcher; B. Coauthor',
+    abstract: 'We show that things are true.',
+    categories: ['cs.LG'],
+    createdDate: '2026-01-02',
+  },
+  {
+    id: 'pmid:12345678',
+    title: 'A paper with no authors listed',
+    authors: null,
+    abstract: '',
+  },
+];
+
+test('a retargeted response never carries a search id', () => {
+  const body = routedPaperResponse('crispr off-target effects', PAPERS);
+
+  // The load-bearing guarantee: firecrawl_search_feedback validates a UUID
+  // that came from firecrawl_search, and a paper-index request issues none.
+  assert.equal('id' in body, false);
+  assert.equal(body.searchFeedback.available, false);
+  assert.match(body.searchFeedback.reason, /firecrawl_search_feedback/);
+});
+
+test('a retargeted response declares the surface it came from', () => {
+  const body = routedPaperResponse('crispr off-target effects', PAPERS);
+
+  assert.equal(body.success, true);
+  assert.equal(body.routedTo, 'research_paper_index');
+  assert.equal(body.query, 'crispr off-target effects');
+  assert.deepEqual(body.data, { papers: PAPERS });
+  // Top-level shape is pinned so a field cannot be added or dropped silently.
+  assert.deepEqual(Object.keys(body).sort(), [
+    'data',
+    'notice',
+    'query',
+    'routedTo',
+    'searchFeedback',
+    'success',
+  ]);
+});
+
+test('the notice warns that these are papers and that feedback does not apply', () => {
+  const body = routedPaperResponse('anything', []);
+
+  assert.equal(body.notice, PAPER_INDEX_NOTICE);
+  assert.match(PAPER_INDEX_NOTICE, /papers, not web pages/);
+  assert.match(PAPER_INDEX_NOTICE, /no search `id`/);
+  assert.match(PAPER_INDEX_NOTICE, /firecrawl_search_feedback/);
+  // It has to tell the agent how to get a plain web search back.
+  assert.match(PAPER_INDEX_NOTICE, /`sources` or `categories`/);
+});
+
+test('an empty paper result is still a well-formed routed response', () => {
+  const body = routedPaperResponse('no hits for this', []);
+
+  assert.equal(body.success, true);
+  assert.deepEqual(body.data, { papers: [] });
+  assert.equal('id' in body, false);
+  assert.equal(body.searchFeedback.available, false);
 });
