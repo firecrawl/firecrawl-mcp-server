@@ -48,3 +48,20 @@ test('default tools fall back only on discovery refusal; explicit tools and othe
   });
   assert.equal(other.api.requests.length, 1);
 });
+
+test('toolDetail forwards valid values and rejects invalid values before API calls', async (t) => {
+  const { api, client } = await startStdioWithApi(t);
+  for (const [name, args] of [
+    ['firecrawl_search', { query: 'company news' }],
+    ['firecrawl_scrape', { url: 'https://example.com' }],
+  ]) {
+    for (const toolDetail of ['compact', 'full']) {
+      const result = await client.request('tools/call', { name, arguments: { ...args, toolDetail } });
+      assert.notEqual(result.isError, true);
+      assert.equal(api.requests.at(-1).body.toolDetail, toolDetail);
+    }
+    const before = api.requests.length;
+    await callExpectingError(client, { name, arguments: { ...args, toolDetail: 'invalid' } });
+    assert.equal(api.requests.length, before);
+  }
+});

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { EXCHANGE_KEY_REQUIRED_MESSAGE, KEYLESS_TOOL_MESSAGE, getFreePort, waitForHealth, parseSseJson, spawnServer, stopChild, startStdio, toolText, httpToolCall } from './helpers/exchange-mcp.mjs';
+import { EXCHANGE_KEY_REQUIRED_MESSAGE, KEYLESS_TOOL_MESSAGE, getFreePort, waitForHealth, parseSseJson, spawnServer, stopChild, startStdio, startStdioWithApi, toolText, httpToolCall } from './helpers/exchange-mcp.mjs';
 import { EXCHANGE_CALL, startFakeExchangeApi } from './helpers/exchange-api.mjs';
 
 test('local keyless stdio refuses every Exchange path with the explanatory error and no network call', async (t) => {
@@ -147,4 +147,21 @@ test('hosted keyless sessions never reach the Exchange; an API key header does',
     alexandria: [EXCHANGE_CALL],
     origin: `mcp-ua-node@${JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version}`,
   });
+});
+
+test('rejected API keys return in-band errors without leaking credentials on Alexandria paths', async (t) => {
+  const { api, client, getStderr } = await startStdioWithApi(t, { apiStatus: 401 });
+  for (const params of [
+    { name: 'firecrawl_find_tools', arguments: { categories: ['finance'] } },
+    { name: 'firecrawl_search', arguments: { query: 'rates', sources: ['alexandria'] } },
+    { name: 'firecrawl_scrape', arguments: { alexandria: [EXCHANGE_CALL] } },
+    { name: 'firecrawl_scrape', arguments: { alexandria: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } }] } },
+  ]) {
+    const before = api.requests.length;
+    const result = await client.request('tools/call', params);
+    assert.equal(result.isError, true);
+    assert.ok(api.requests.length > before);
+    assert.doesNotMatch(JSON.stringify(result), /fc-exchange-test/);
+  }
+  assert.doesNotMatch(getStderr(), /fc-exchange-test/);
 });

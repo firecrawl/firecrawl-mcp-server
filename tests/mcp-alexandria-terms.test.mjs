@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { TERMS_REQUIRED_BODY } from './helpers/exchange-api.mjs';
 import { startStdioWithApi, callExpectingError, toolText } from './helpers/exchange-mcp.mjs';
 
 test('terms are disclosed after a blocked provider and use scrape instead of top-level tools', async (t) => {
@@ -9,6 +10,19 @@ test('terms are disclosed after a blocked provider and use scrape instead of top
   const blocked = await callExpectingError(client, { name: 'firecrawl_scrape', arguments: { alexandria: [{ provider: 'benzinga', capability: 'news/search' }] } });
   assert.equal(api.requests.length, 1, 'blocked requests never auto-accept');
   assert.match(blocked.content[0].text, /explicit authorization/);
+  const { code, status, requiresAction, requestId, next_actions } = blocked.structuredContent;
+  assert.equal(code, TERMS_REQUIRED_BODY.code);
+  assert.equal(status, 403);
+  assert.deepEqual(requiresAction, TERMS_REQUIRED_BODY.requiresAction);
+  assert.equal(requestId, api.requests[0].headers['x-request-id']);
+  assert.ok(requestId);
+  assert.deepEqual(next_actions, [
+    { kind: 'human_action_required', action: 'accept_terms', who: 'organization_admin',
+      url: requiresAction.url, provider: requiresAction.terms, version: requiresAction.version },
+    { kind: 'retry_same_request', tool: 'firecrawl_scrape', requestId, after: 'human_action_required' },
+  ]);
+  assert.doesNotMatch(JSON.stringify(blocked), /fc-exchange-test/);
+
   const next = blocked.structuredContent.nextTool;
   assert.equal(next.name, 'firecrawl_scrape');
   assert.equal(next.arguments.alexandria[0].capability, 'terms/show');

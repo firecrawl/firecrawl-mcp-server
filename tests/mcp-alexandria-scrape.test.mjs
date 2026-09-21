@@ -121,6 +121,14 @@ test('below-budget results, errors, utility calls and URL scrapes bypass retenti
   ]) {
     const { api, client } = await startStdioWithApi(t, { largeResult: payload, bashRecovery: 'available' });
     const result = toolText(await client.request('tools/call', { name: 'firecrawl_scrape', arguments: args }));
+    const expectedData = args.alexandria?.capability === 'bash'
+      ? { alexandria: [{ provider: 'firecrawl', capability: 'bash', data: {
+          workspaceId: 'retained-workspace', exitCode: 0,
+          stdout: JSON.stringify(payload.data.alexandria.map(item => [item.provider, item.capability])),
+          idleTtlSeconds: 300,
+        } }] }
+      : payload.data;
+    assert.deepEqual(args.url ? result : result.data, expectedData);
     assert.equal(result.delivery, undefined);
     assert.equal(api.requests.length, 1);
   }
