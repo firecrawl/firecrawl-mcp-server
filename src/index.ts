@@ -3180,8 +3180,15 @@ Returns submission status, feedback ID, and accounting fields.
       if (value.endpoint === 'alexandria') {
         const parsed = alexandriaSessionFeedbackSchema.safeParse(value);
         if (!parsed.success) for (const issue of parsed.error.issues) ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message });
-      } else if (!value.jobId) {
-        ctx.addIssue({ code: 'custom', path: ['jobId'], message: 'jobId is required for job feedback' });
+      } else {
+        if (!value.jobId) {
+          ctx.addIssue({ code: 'custom', path: ['jobId'], message: 'jobId is required for job feedback' });
+        }
+        for (const field of Object.keys(alexandriaFeedbackFields) as (keyof typeof alexandriaFeedbackFields)[]) {
+          if (value[field] !== undefined) {
+            ctx.addIssue({ code: 'custom', path: [field], message: `${field} is only supported for Alexandria feedback` });
+          }
+        }
       }
     }),
     execute: async (

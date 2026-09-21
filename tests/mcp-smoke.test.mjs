@@ -1415,6 +1415,26 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
     await assert.rejects(client.request('tools/call', { name: 'firecrawl_feedback', arguments: invalid }), /parameter validation failed/);
     assert.equal(fakeApi.requests.length, before);
   }
+  for (const endpoint of ['search', 'scrape', 'parse', 'map']) {
+    for (const [field, value] of Object.entries({
+      requestedWebsite: sessionFeedback.requestedWebsite,
+      rationale: sessionFeedback.rationale,
+      providerFeedback: [],
+      capabilityFeedback: sessionFeedback.capabilityFeedback,
+    })) {
+      const before = fakeApi.requests.length;
+      await assert.rejects(client.request('tools/call', {
+        name: 'firecrawl_feedback',
+        arguments: {
+          endpoint,
+          jobId: '00000000-0000-4000-8000-000000000010',
+          rating: 'partial',
+          [field]: value,
+        },
+      }), /parameter validation failed/);
+      assert.equal(fakeApi.requests.length, before);
+    }
+  }
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
