@@ -542,6 +542,43 @@ async function startFakeFirecrawlBackend(options = {}) {
       return;
     }
 
+    if (req.method === 'GET' && req.url === '/v2/team/credit-usage') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: {
+            billingPeriodEnd: '2026-10-01T00:00:00.000Z',
+            billingPeriodStart: '2026-09-01T00:00:00.000Z',
+            planCredits: 1000,
+            remainingCredits: 750,
+          },
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (
+      req.method === 'GET' &&
+      req.url === '/v2/team/credit-usage/historical?byApiKey=true'
+    ) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          periods: [
+            {
+              apiKey: 'Hosted OAuth key',
+              creditsUsed: 250,
+              endDate: null,
+              startDate: '2026-09-01T00:00:00.000Z',
+            },
+          ],
+          success: true,
+        })
+      );
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/v2/parse/upload-url') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
@@ -3214,6 +3251,112 @@ test('account endpoint accepts legacy OAuth one way and delegates managed keys',
   assert.equal(stderr.includes('fc-managed-secret'), false);
   assert.equal(stderr.includes('fco_account'), false);
   assert.equal(stderr.includes('fco_legacy'), false);
+});
+
+test('hosted OAuth executes current and historical credit usage with delegated credentials', async (t) => {
+  const accountResource = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
+  const backend = await startFakeFirecrawlBackend({
+    introspectionHandler: ({ token }) =>
+      token === 'fco_credit_usage'
+        ? {
+            active: true,
+            api_key: 'fc-managed-credit-usage',
+            aud: accountResource,
+            credential_purpose: 'hosted_mcp_oauth',
+            scope: 'firecrawl:global',
+          }
+        : { active: false },
+  });
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_MCP_RESOURCE_URL: accountResource,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    FIRECRAWL_API_KEY: 'fc-shared-env-must-not-be-used',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const headers = {
+    authorization: 'Bearer fco_credit_usage',
+    'user-agent': 'hosted-oauth-usage-test/1.0',
+  };
+  const currentResponse = await httpToolCall(port, {
+    endpoint: '/v2/mcp-oauth',
+    headers,
+    id: 'hosted-oauth-current-credit-usage',
+    params: { arguments: {}, name: 'firecrawl_credit_usage' },
+  });
+  assert.equal(currentResponse.status, 200);
+  const currentResult = parseSseJson(await currentResponse.text()).result;
+  assert.notEqual(currentResult.isError, true);
+  assert.deepEqual(JSON.parse(currentResult.content[0].text), {
+    billingPeriodEnd: '2026-10-01T00:00:00.000Z',
+    billingPeriodStart: '2026-09-01T00:00:00.000Z',
+    planCredits: 1000,
+    remainingCredits: 750,
+  });
+
+  const historicalResponse = await httpToolCall(port, {
+    endpoint: '/v2/mcp-oauth',
+    headers,
+    id: 'hosted-oauth-historical-credit-usage',
+    params: {
+      arguments: { byApiKey: true },
+      name: 'firecrawl_credit_usage',
+    },
+  });
+  assert.equal(historicalResponse.status, 200);
+  const historicalResult = parseSseJson(await historicalResponse.text()).result;
+  assert.notEqual(historicalResult.isError, true);
+  assert.deepEqual(JSON.parse(historicalResult.content[0].text), {
+    periods: [
+      {
+        apiKey: 'Hosted OAuth key',
+        creditsUsed: 250,
+        endDate: null,
+        startDate: '2026-09-01T00:00:00.000Z',
+      },
+    ],
+    success: true,
+  });
+
+  const usageCalls = backend.requests.filter((request) =>
+    request.url?.startsWith('/v2/team/credit-usage')
+  );
+  assert.deepEqual(
+    usageCalls.map((request) => request.url),
+    [
+      '/v2/team/credit-usage',
+      '/v2/team/credit-usage/historical?byApiKey=true',
+    ]
+  );
+  for (const request of usageCalls) {
+    assert.equal(request.method, 'GET');
+    assert.equal(
+      request.headers['x-origin'],
+      `mcp-ua-hosted-oauth-usage-test@${serverVersion}`
+    );
+    const assertion = request.headers.authorization?.replace(/^Bearer /, '');
+    assert.match(assertion ?? '', /^fcmcp_/);
+    assert.notEqual(assertion, 'fc-shared-env-must-not-be-used');
+    const payload = JSON.parse(
+      Buffer.from(
+        assertion.split('.')[0].slice('fcmcp_'.length),
+        'base64url'
+      ).toString()
+    );
+    assert.equal(payload.api_key, 'fc-managed-credit-usage');
+    assert.equal(payload.purpose, 'hosted_mcp_oauth');
+    assert.equal(payload.aud, 'firecrawl-core');
+  }
 });
 
 test('legacy key-in-path telemetry is sanitized and does not leak the credential', async (t) => {
