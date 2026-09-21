@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { alexandriaFeedbackFields, alexandriaSessionFeedbackSchema } from './alexandria-feedback.js';
 import FirecrawlApp from 'firecrawl';
 import dotenv from 'dotenv';
 import { FastMCP, type Logger, UserError } from 'fastmcp';
@@ -3149,7 +3150,7 @@ if (!ENDPOINT_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
   server.addTool({
     name: 'firecrawl_feedback',
     annotations: {
-      title: 'Firecrawl job feedback',
+      title: 'Firecrawl feedback',
       readOnlyHint: false, // POSTs structured feedback for a completed job to /v2/feedback.
       openWorldHint: true, // Feedback is tied to jobs that processed open-web URLs.
       destructiveHint: false, // Additive only; submits ratings and notes, does not delete jobs or external content.
@@ -3157,11 +3158,14 @@ if (!ENDPOINT_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
     description: `
 Submit concise quality feedback for a completed search, scrape, parse, or map job. Provide the endpoint, job ID, rating, and relevant issue codes or small contextual fields; omit large page contents and raw outputs.
 
+For an Alexandria session, set endpoint to \`alexandria\`, omit jobId, and provide requestedWebsite (url and requestedFunctionality), rationale, and rating. Optional providerFeedback and capabilityFeedback describe gaps or errors. Alexandria feedback has no job-age deadline and no credit refund.
+
 Returns submission status, feedback ID, and accounting fields.
 `,
     parameters: z.object({
-      endpoint: z.enum(['search', 'scrape', 'parse', 'map']),
-      jobId: z.string().uuid('jobId must be the UUID returned by Firecrawl'),
+      endpoint: z.enum(['search', 'scrape', 'parse', 'map', 'alexandria']),
+      jobId: z.string().uuid('jobId must be the UUID returned by Firecrawl').optional(),
+      ...alexandriaFeedbackFields,
       rating: z.enum(['good', 'bad', 'partial']),
       issues: z.array(feedbackIssueSchema).max(20).optional(),
       tags: z.array(feedbackIssueSchema).max(20).optional(),
@@ -3172,6 +3176,13 @@ Returns submission status, feedback ID, and accounting fields.
       url: z.string().url().optional(),
       pageNumbers: z.array(z.number().int().positive()).max(100).optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
+    }).superRefine((value, ctx) => {
+      if (value.endpoint === 'alexandria') {
+        const parsed = alexandriaSessionFeedbackSchema.safeParse(value);
+        if (!parsed.success) for (const issue of parsed.error.issues) ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message });
+      } else if (!value.jobId) {
+        ctx.addIssue({ code: 'custom', path: ['jobId'], message: 'jobId is required for job feedback' });
+      }
     }),
     execute: async (
       args: unknown,
@@ -3192,7 +3203,7 @@ Returns submission status, feedback ID, and accounting fields.
         pageNumbers,
         metadata,
       } = args as {
-        endpoint: 'search' | 'scrape' | 'parse' | 'map';
+        endpoint: 'search' | 'scrape' | 'parse' | 'map' | 'alexandria';
         jobId: string;
         rating: 'good' | 'bad' | 'partial';
         issues?: string[];
@@ -3218,7 +3229,9 @@ Returns submission status, feedback ID, and accounting fields.
         throw new Error('Unauthorized: missing API key for feedback.');
       }
 
-      const body = removeEmptyTopLevel({
+      const body = endpoint === 'alexandria'
+        ? { ...alexandriaSessionFeedbackSchema.parse(args), origin }
+        : removeEmptyTopLevel({
         endpoint,
         jobId,
         rating,

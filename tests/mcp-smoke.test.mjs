@@ -1390,6 +1390,27 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
       },
     ]
   );
+  const sessionFeedback = {
+    endpoint: 'alexandria', rating: 'partial',
+    requestedWebsite: { url: 'https://example.com', requestedFunctionality: 'Download attachments' },
+    rationale: 'Only summaries available',
+    capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'new_capability_request', why: 'Missing attachments', requestedFunctionality: 'Return document links' }],
+  };
+  const sessionResult = await client.request('tools/call', { name: 'firecrawl_feedback', arguments: sessionFeedback });
+  assert.notEqual(sessionResult.isError, true);
+  const sent = fakeApi.requests.filter(request => request.url === '/v2/feedback').at(-1).body;
+  assert.deepEqual(sent, { ...sessionFeedback, origin: sent.origin });
+  assert.equal('jobId' in sent, false);
+  for (const invalid of [
+    { endpoint: 'scrape', rating: 'good' },
+    { endpoint: 'alexandria', rating: 'good' },
+    { ...sessionFeedback, jobId: '00000000-0000-4000-8000-000000000010' },
+    { ...sessionFeedback, capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'new_capability_request', why: 'Missing attachments' }] },
+  ]) {
+    const before = fakeApi.requests.length;
+    await assert.rejects(client.request('tools/call', { name: 'firecrawl_feedback', arguments: invalid }), /parameter validation failed/);
+    assert.equal(fakeApi.requests.length, before);
+  }
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 

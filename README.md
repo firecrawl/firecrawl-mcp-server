@@ -1184,3 +1184,21 @@ The CLI discovery sequence maps to these MCP calls:
 | Execute | `firecrawl_scrape` | `{"alexandria":{"provider":"<provider-id>","capability":"<capability-id>","options":{"<required-field>":"<value>"}}}` |
 
 Use the full MCP surface for Find Tools and execution; the dedicated search-only surface does not expose them. Reuse a complete contract from search when present rather than making another discovery call. Follow returned `nextTool` navigation only when more results are needed.
+
+### Alexandria session feedback
+
+Use the existing `firecrawl_feedback` tool with `endpoint: "alexandria"`:
+
+```json
+{
+  "endpoint": "alexandria",
+  "rating": "partial",
+  "requestedWebsite": {
+    "url": "https://example.com",
+    "requestedFunctionality": "Find records and download their attachments"
+  },
+  "rationale": "Found summaries but could not retrieve attachments"
+}
+```
+
+This uses authenticated `POST /v2/feedback`, without a job ID, job-age deadline, or credit refund. Optional `providerFeedback` and `capabilityFeedback` arrays describe coverage gaps and execution issues; the tool schema lists supported issue values. A new capability request requires `requestedFunctionality`. Existing feedback opt-out and authentication controls apply.
