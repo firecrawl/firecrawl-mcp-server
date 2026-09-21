@@ -246,21 +246,6 @@ async function startFakeFirecrawlApi() {
       return;
     }
 
-    if (
-      req.method === 'POST' &&
-      req.url === '/v2/search/00000000-0000-4000-8000-000000000000/feedback'
-    ) {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(
-        JSON.stringify({
-          creditsRefunded: 0,
-          feedbackId: '00000000-0000-4000-8000-000000000100',
-          success: true,
-        })
-      );
-      return;
-    }
-
     if (req.method === 'POST' && req.url === '/v2/feedback') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
@@ -1555,10 +1540,34 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
     assert.notEqual(feedbackResult.isError, true);
   }
 
+  const alexandriaResultFeedback = await client.request('tools/call', {
+    arguments: {
+      targetType: 'alexandria_result',
+      feedbackRef: '00000000-0000-4000-8000-000000000040',
+      rating: 'partial',
+      issues: ['stale_data'],
+    },
+    name: 'firecrawl_feedback',
+  });
+  assert.notEqual(alexandriaResultFeedback.isError, true);
+
+  const alexandriaCatalogFeedback = await client.request('tools/call', {
+    arguments: {
+      targetType: 'alexandria_catalog',
+      requestKind: 'website_support',
+      need: 'Support this authenticated industry directory',
+      providerUrl: 'https://directory.example.com/',
+      requiredFields: ['company', 'headcount'],
+    },
+    name: 'firecrawl_feedback',
+  });
+  assert.notEqual(alexandriaCatalogFeedback.isError, true);
+
   const searchFeedbackRequest = fakeApi.requests.find(
     (request) =>
-      request.url ===
-      '/v2/search/00000000-0000-4000-8000-000000000000/feedback'
+      request.url === '/v2/feedback' &&
+      request.body.target?.type === 'firecrawl_job' &&
+      request.body.target?.endpoint === 'search'
   );
   assert.equal(searchFeedbackRequest.body.rating, 'bad');
   const endpointFeedbackRequests = fakeApi.requests.filter(
@@ -1566,17 +1575,49 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
   );
   assert.deepEqual(
     endpointFeedbackRequests.map((request) => ({
-      endpoint: request.body.endpoint,
-      jobId: request.body.jobId,
+      target: request.body.target,
+      request: request.body.request,
     })),
     [
       {
-        endpoint: 'scrape',
-        jobId: '00000000-0000-4000-8000-000000000010',
+        target: {
+          type: 'firecrawl_job',
+          endpoint: 'search',
+          jobId: '00000000-0000-4000-8000-000000000000',
+        },
+        request: undefined,
       },
       {
-        endpoint: 'map',
-        jobId: '00000000-0000-4000-8000-000000000020',
+        target: {
+          type: 'firecrawl_job',
+          endpoint: 'scrape',
+          jobId: '00000000-0000-4000-8000-000000000010',
+        },
+        request: undefined,
+      },
+      {
+        target: {
+          type: 'firecrawl_job',
+          endpoint: 'map',
+          jobId: '00000000-0000-4000-8000-000000000020',
+        },
+        request: undefined,
+      },
+      {
+        target: {
+          type: 'alexandria_result',
+          feedbackRef: '00000000-0000-4000-8000-000000000040',
+        },
+        request: undefined,
+      },
+      {
+        target: { type: 'alexandria_catalog' },
+        request: {
+          kind: 'website_support',
+          need: 'Support this authenticated industry directory',
+          providerUrl: 'https://directory.example.com/',
+          requiredFields: ['company', 'headcount'],
+        },
       },
     ]
   );
@@ -2342,8 +2383,8 @@ test('HTTP cloud authenticated Parse forwards ZDR for API-key and managed OAuth 
   assert.equal(parses.length, 2);
   assert.deepEqual(
     feedbackRequests.map((request) => ({
-      endpoint: request.body.endpoint,
-      jobId: request.body.jobId,
+      endpoint: request.body.target?.endpoint,
+      jobId: request.body.target?.jobId,
     })),
     [
       {
@@ -2729,7 +2770,7 @@ test('feedback tools map a Core 401 to API-key recovery without introspection', 
         searchId: '00000000-0000-4000-8000-000000000001',
       },
       name: 'firecrawl_search_feedback',
-      path: '/v2/search/00000000-0000-4000-8000-000000000001/feedback',
+      path: '/v2/feedback',
     },
     {
       arguments: {

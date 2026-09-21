@@ -2533,6 +2533,21 @@ const feedbackIssueSchema = z
     'Issue codes must use lowercase letters, numbers, underscores, or hyphens'
   );
 
+const ALEXANDRIA_RESULT_ISSUES = new Set([
+  'inaccurate_data',
+  'stale_data',
+  'missing_data',
+  'wrong_entity',
+  'schema_mismatch',
+  'provider_error',
+  'irrelevant_provider',
+  'wrong_capability',
+  'contract_unclear',
+  'slow',
+  'too_expensive',
+  'other',
+]);
+
 const valuableSourceSchema = z.object({
   url: z.string().url(),
   reason: z.string().max(1000).optional(),
@@ -2637,11 +2652,10 @@ Eligibility is limited to successful searches within the feedback age window. Th
       };
 
       const apiBase = resolveApiBaseUrl();
-      const endpoint = `${apiBase}/v2/search/${encodeURIComponent(
-        searchId
-      )}/feedback`;
+      const endpoint = `${apiBase}/v2/feedback`;
 
       const body: Record<string, unknown> = {
+        target: { type: 'firecrawl_job', endpoint: 'search', jobId: searchId },
         rating,
         origin,
       };
@@ -2720,20 +2734,28 @@ if (!ENDPOINT_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
   server.addTool({
     name: 'firecrawl_feedback',
     annotations: {
-      title: 'Firecrawl job feedback',
-      readOnlyHint: false, // POSTs structured feedback for a completed job to /v2/feedback.
-      openWorldHint: true, // Feedback is tied to jobs that processed open-web URLs.
+      title: 'Firecrawl feedback',
+      readOnlyHint: false, // POSTs structured feedback or a catalogue request to /v2/feedback.
+      openWorldHint: true, // Feedback can reference web jobs, data providers, or missing web coverage.
       destructiveHint: false, // Additive only; submits ratings and notes, does not delete jobs or external content.
     },
     description: `
-Submit concise quality feedback for a completed search, scrape, parse, or map job. Provide the endpoint, job ID, rating, and relevant issue codes or small contextual fields; omit large page contents and raw outputs.
+Submit concise quality feedback through the single Firecrawl feedback path. It supports completed search, scrape, parse, and map jobs; individual Alexandria provider results; and requests for missing providers, capabilities, data, or website support. Omit large page contents and raw provider outputs.
 
-Returns submission status, feedback ID, and accounting fields.
+For backwards compatibility, endpoint and jobId without targetType still mean a Firecrawl job. Returns submission status, feedback ID, and accounting fields.
 `,
-    parameters: z.object({
-      endpoint: z.enum(['search', 'scrape', 'parse', 'map']),
-      jobId: z.string().uuid('jobId must be the UUID returned by Firecrawl'),
-      rating: z.enum(['good', 'bad', 'partial']),
+    parameters: z
+      .object({
+      targetType: z
+        .enum(['firecrawl_job', 'alexandria_result', 'alexandria_catalog'])
+        .optional(),
+      endpoint: z.enum(['search', 'scrape', 'parse', 'map']).optional(),
+      jobId: z.string().uuid('jobId must be the UUID returned by Firecrawl').optional(),
+      feedbackRef: z
+        .string()
+        .uuid('feedbackRef must be the UUID returned with the Alexandria result')
+        .optional(),
+      rating: z.enum(['good', 'bad', 'partial']).optional(),
       issues: z.array(feedbackIssueSchema).max(20).optional(),
       tags: z.array(feedbackIssueSchema).max(20).optional(),
       note: z.string().max(4000).optional(),
@@ -2743,15 +2765,80 @@ Returns submission status, feedback ID, and accounting fields.
       url: z.string().url().optional(),
       pageNumbers: z.array(z.number().int().positive()).max(100).optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
-    }),
+      requestKind: z
+        .enum(['new_provider', 'new_capability', 'new_data', 'website_support'])
+        .optional(),
+      need: z.string().min(1).max(2000).optional(),
+      providerName: z.string().min(1).max(200).optional(),
+      providerUrl: z.string().url().optional(),
+      exampleUrls: z.array(z.string().url()).max(5).optional(),
+      requiredFields: z.array(z.string().min(1).max(200)).max(20).optional(),
+      geography: z.string().min(1).max(200).optional(),
+      freshness: z.string().min(1).max(200).optional(),
+    })
+      .superRefine((value, context) => {
+        const targetType = value.targetType ?? 'firecrawl_job';
+        const required = (present: boolean, path: string) => {
+          if (!present)
+            context.addIssue({
+              code: 'custom',
+              message: `${path} is required for ${targetType}`,
+              path: [path],
+            });
+        };
+        if (targetType === 'firecrawl_job') {
+          required(!!value.endpoint, 'endpoint');
+          required(!!value.jobId, 'jobId');
+          required(!!value.rating, 'rating');
+        } else if (targetType === 'alexandria_result') {
+          required(!!value.feedbackRef, 'feedbackRef');
+          required(!!value.rating, 'rating');
+          required((value.issues?.length ?? 0) > 0 || !!value.note, 'issues or note');
+          if ((value.issues?.length ?? 0) > 8) {
+            context.addIssue({
+              code: 'custom',
+              message: 'Alexandria result feedback accepts at most 8 issues',
+              path: ['issues'],
+            });
+          }
+          for (const issue of value.issues ?? []) {
+            if (!ALEXANDRIA_RESULT_ISSUES.has(issue)) {
+              context.addIssue({
+                code: 'custom',
+                message: `Unsupported Alexandria result issue: ${issue}`,
+                path: ['issues'],
+              });
+            }
+          }
+          if ((value.note?.length ?? 0) > 2000) {
+            context.addIssue({
+              code: 'custom',
+              message: 'Alexandria result notes must be at most 2000 characters',
+              path: ['note'],
+            });
+          }
+        } else {
+          required(!!value.requestKind, 'requestKind');
+          required(!!value.need, 'need');
+          if ((value.note?.length ?? 0) > 2000) {
+            context.addIssue({
+              code: 'custom',
+              message: 'Alexandria catalogue notes must be at most 2000 characters',
+              path: ['note'],
+            });
+          }
+        }
+      }),
     execute: async (
       args: unknown,
       { session, log, client: mcpClient }
     ): Promise<string> => {
       const origin = requestOrigin(mcpClient, session);
       const {
+        targetType = 'firecrawl_job',
         endpoint,
         jobId,
+        feedbackRef,
         rating,
         issues,
         tags,
@@ -2762,10 +2849,20 @@ Returns submission status, feedback ID, and accounting fields.
         url,
         pageNumbers,
         metadata,
+        requestKind,
+        need,
+        providerName,
+        providerUrl,
+        exampleUrls,
+        requiredFields,
+        geography,
+        freshness,
       } = args as {
-        endpoint: 'search' | 'scrape' | 'parse' | 'map';
-        jobId: string;
-        rating: 'good' | 'bad' | 'partial';
+        targetType?: 'firecrawl_job' | 'alexandria_result' | 'alexandria_catalog';
+        endpoint?: 'search' | 'scrape' | 'parse' | 'map';
+        jobId?: string;
+        feedbackRef?: string;
+        rating?: 'good' | 'bad' | 'partial';
         issues?: string[];
         tags?: string[];
         note?: string;
@@ -2775,6 +2872,14 @@ Returns submission status, feedback ID, and accounting fields.
         url?: string;
         pageNumbers?: number[];
         metadata?: Record<string, unknown>;
+        requestKind?: 'new_provider' | 'new_capability' | 'new_data' | 'website_support';
+        need?: string;
+        providerName?: string;
+        providerUrl?: string;
+        exampleUrls?: string[];
+        requiredFields?: string[];
+        geography?: string;
+        freshness?: string;
       };
 
       const apiBase = resolveApiBaseUrl();
@@ -2789,9 +2894,7 @@ Returns submission status, feedback ID, and accounting fields.
         throw new Error('Unauthorized: missing API key for feedback.');
       }
 
-      const body = removeEmptyTopLevel({
-        endpoint,
-        jobId,
+      const common = removeEmptyTopLevel({
         rating,
         issues,
         tags,
@@ -2804,8 +2907,34 @@ Returns submission status, feedback ID, and accounting fields.
         metadata,
         origin,
       });
+      const body =
+        targetType === 'firecrawl_job'
+          ? {
+              ...common,
+              target: { type: 'firecrawl_job', endpoint, jobId },
+            }
+          : targetType === 'alexandria_result'
+            ? {
+                ...common,
+                target: { type: 'alexandria_result', feedbackRef },
+              }
+            : removeEmptyTopLevel({
+                target: { type: 'alexandria_catalog' },
+                request: removeEmptyTopLevel({
+                  kind: requestKind,
+                  need,
+                  providerName,
+                  providerUrl,
+                  exampleUrls,
+                  requiredFields,
+                  geography,
+                  freshness,
+                }),
+                note,
+                origin,
+              });
 
-      log.info('Submitting endpoint feedback', { endpoint, jobId, rating });
+      log.info('Submitting feedback', { targetType, endpoint, jobId, rating });
       const response = await fetch(`${apiBase}/v2/feedback`, {
         method: 'POST',
         headers,
