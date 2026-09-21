@@ -23,8 +23,8 @@ importers:
         specifier: 4.40.0
         version: 4.40.0
       zod:
-        specifier: ^4.1.5
-        version: 4.1.11
+        specifier: ^4.2.1
+        version: 4.2.1
     devDependencies:
       '@types/node':
         specifier: ^24.3.1
@@ -1721,8 +1721,8 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
-  zod@4.1.11:
-    resolution: {integrity: sha512-WPsqwxITS2tzx1bzhIKsEs19ABD5vmCVa4xBo2tq/SrV4RNZtfws1EnCWQXM6yh8bD08a1idvkB5MZSBiZsjwg==}
+  zod@4.2.1:
+    resolution: {integrity: sha512-0wZ1IRqGGhMP76gLqz8EyfBXKk0J2qo2+H3fi4mcUP/KtTocoX08nmIAHl1Z2kJIZbZee8KOpBCSNPRgauucjw==}
 
   zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
@@ -2512,7 +2512,7 @@ snapshots:
       strict-event-emitter-types: 2.0.0
       undici: 7.28.0
       uri-templates: 0.2.0
-      xsschema: 0.4.4(zod-to-json-schema@3.25.2(zod@4.1.11))(zod@4.4.3)
+      xsschema: 0.4.4(zod-to-json-schema@3.25.2(zod@4.2.1))(zod@4.4.3)
       yargs: 18.0.0
       zod: 4.4.3
       zod-to-json-schema: 3.25.2(zod@4.4.3)
@@ -3343,7 +3343,7 @@ snapshots:
 
   wrappy@1.0.2: {}
 
-  xsschema@0.4.4(zod-to-json-schema@3.25.2(zod@4.1.11))(zod@4.4.3):
+  xsschema@0.4.4(zod-to-json-schema@3.25.2(zod@4.2.1))(zod@4.4.3):
     optionalDependencies:
       zod: 4.4.3
       zod-to-json-schema: 3.25.2(zod@4.4.3)
@@ -3375,6 +3375,6 @@ snapshots:
 
   zod@3.25.76: {}
 
-  zod@4.1.11: {}
+  zod@4.2.1: {}
 
   zod@4.4.3: {}
