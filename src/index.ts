@@ -2136,7 +2136,7 @@ server.addTool({
   description: `
 Retrieve and extract content from one supplied URL through Firecrawl. Use this when the request identifies a page and needs its content or defined fields. It can return markdown, HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema; JSON is useful when the requested result has defined fields, while markdown preserves readable page content.
 
-This tool operates on a known page. For a set of pages use \`firecrawl_crawl\`. Use \`firecrawl_search\` when additional web sources are needed. Options include JavaScript render delay, cache age, main-content filtering, PII redaction, and lockdown cache-only retrieval. Browser actions may change the live page when interactive actions are enabled.
+This tool operates on a known page. Use \`firecrawl_search\` when additional web sources are needed. For a set of pages use \`firecrawl_crawl\`, and to discover page URLs use \`firecrawl_map\`. Options include JavaScript render delay, cache age, main-content filtering, PII redaction, and lockdown cache-only retrieval. Browser actions may change the live page when interactive actions are enabled.
 
 Firecrawl may reuse recently indexed content instead of refetching the page, and the reuse window varies by domain. Set \`maxAge: 0\` to force a live fetch, or a smaller \`maxAge\` to bound how stale reused content may be. A successful response does not by itself confirm that the state it describes is still current.
 
