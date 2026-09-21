@@ -374,6 +374,7 @@ test('search surface lists exactly the six read-only tools', async (t) => {
   );
   assert.doesNotMatch(search.description, /data\.developer/i);
   assert.doesNotMatch(search.description, /not the page/i);
+  assert.doesNotMatch(search.description, /firecrawl_scrape|scrapeOptions/);
   assert.match(search.description, /ranked results with query-relevant highlights\./i);
   assert.match(
     search.inputSchema.properties.highlights.description,

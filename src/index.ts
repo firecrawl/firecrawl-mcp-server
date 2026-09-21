@@ -2135,7 +2135,7 @@ server.addTool({
   description: `
 Retrieve and extract content from one supplied URL through Firecrawl. Use this when the request identifies a page and needs its content or defined fields. It can return markdown, HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema; JSON is useful when the requested result has defined fields, while markdown preserves readable page content.
 
-This tool operates on a known page. For a set of pages use \`firecrawl_crawl\`, and to discover page URLs use \`firecrawl_map\` or \`firecrawl_search\`. Options include JavaScript render delay, cache age, main-content filtering, PII redaction, and lockdown cache-only retrieval. Browser actions may change the live page when interactive actions are enabled.
+This tool operates on a known page. For a set of pages use \`firecrawl_crawl\`. Use \`firecrawl_search\` when additional web sources are needed. Options include JavaScript render delay, cache age, main-content filtering, PII redaction, and lockdown cache-only retrieval. Browser actions may change the live page when interactive actions are enabled.
 
 Firecrawl may reuse recently indexed content instead of refetching the page, and the reuse window varies by domain. Set \`maxAge: 0\` to force a live fetch, or a smaller \`maxAge\` to bound how stale reused content may be. A successful response does not by itself confirm that the state it describes is still current.
 
@@ -2236,7 +2236,7 @@ For a programming question, add \`categories: ["developer"]\`. It searches an in
 
 \`categories: ["research"]\` restricts these web results to research-affiliated websites and returns page snippets. The \`firecrawl_research_*\` tools are a separate surface that searches paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature.
 
-Each web result is a title, URL, and description. Highlights appear in web \`description\` and news \`snippet\`; otherwise, original snippets are returned. Add \`scrapeOptions\` to attach page content in the same call; those fetches ignore \`maxAge\`, so use \`firecrawl_scrape\` when you need a live fetch. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
+Each web result is a title, URL, and description. Highlights appear in web \`description\` and news \`snippet\`; otherwise, original snippets are returned. If excerpts are insufficient, use \`firecrawl_scrape\` to retrieve content from relevant result URLs. Add \`scrapeOptions\` to attach page content in the same call; those fetches ignore \`maxAge\`, so use \`firecrawl_scrape\` when you need a live fetch. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
 `,
   parameters: z
     .object({

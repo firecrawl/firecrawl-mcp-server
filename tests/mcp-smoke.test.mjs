@@ -965,6 +965,10 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   assert.match(
     byName.get('firecrawl_scrape').description,
+    /use `firecrawl_search` when additional web sources are needed/i
+  );
+  assert.match(
+    byName.get('firecrawl_scrape').description,
     /authenticated responses can include a `metadata\.scrapeId` for optional scrape feedback/i
   );
   assert.match(
@@ -992,6 +996,10 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     /each web result is a title, URL, and description.*scrapeOptions.*ignore `maxAge`.*firecrawl_scrape/is
   );
   assert.doesNotMatch(byName.get('firecrawl_search').description, /not the page/i);
+  assert.match(
+    byName.get('firecrawl_search').description,
+    /if excerpts are insufficient, use `firecrawl_scrape` to retrieve content from relevant result URLs/i
+  );
   assert.match(
     byName.get('firecrawl_search').description,
     /ranked results with query-relevant highlights\./i
