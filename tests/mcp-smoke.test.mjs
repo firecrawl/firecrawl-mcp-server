@@ -1583,6 +1583,339 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
+test('stdio feedback supports sessions and preserves job feedback validation', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'feedback-test', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+  const { tools } = await client.request('tools/list');
+  const feedback = tools.find((tool) => tool.name === 'firecrawl_feedback');
+  assert.equal(feedback.inputSchema.type, 'object');
+  assert.deepEqual(feedback.inputSchema.required, ['endpoint', 'rating']);
+  assert.deepEqual(feedback.inputSchema.if, {
+    properties: { endpoint: { const: 'alexandria' } },
+  });
+  assert.deepEqual(feedback.inputSchema.then.required, [
+    'requestedWebsite',
+    'rationale',
+  ]);
+  assert.deepEqual(feedback.inputSchema.else.required, ['jobId']);
+  for (const field of [
+    'jobId',
+    'issues',
+    'tags',
+    'note',
+    'valuableSources',
+    'missingContent',
+    'querySuggestions',
+    'url',
+    'pageNumbers',
+    'metadata',
+  ]) {
+    assert.equal(feedback.inputSchema.then.properties[field], false);
+  }
+  for (const field of [
+    'requestedWebsite',
+    'rationale',
+    'providerFeedback',
+    'capabilityFeedback',
+  ]) {
+    assert.equal(feedback.inputSchema.else.properties[field], false);
+  }
+  const capabilitySchema =
+    feedback.inputSchema.properties.capabilityFeedback.items;
+  assert.deepEqual(capabilitySchema.if, {
+    properties: { issue: { const: 'new_capability_request' } },
+  });
+  assert.deepEqual(capabilitySchema.then.required, ['requestedFunctionality']);
+  assert.ok(
+    feedback.inputSchema.properties.endpoint.enum.includes('alexandria')
+  );
+  assert.match(
+    feedback.inputSchema.properties.jobId.description,
+    /Omit for alexandria/
+  );
+  assert.match(
+    feedback.inputSchema.properties.requestedWebsite.description,
+    /Required for alexandria/
+  );
+  assert.match(
+    feedback.inputSchema.properties.rationale.description,
+    /Required for alexandria/
+  );
+  assert.match(
+    feedback.inputSchema.properties.capabilityFeedback.items.properties
+      .requestedFunctionality.description,
+    /Required for new_capability_request/
+  );
+
+  const submit = (args) =>
+    client.request('tools/call', {
+      name: 'firecrawl_feedback',
+      arguments: args,
+    });
+  const minimal = {
+    endpoint: 'alexandria',
+    rating: 'partial',
+    requestedWebsite: {
+      url: 'https://example.com/',
+      requestedFunctionality: 'Find available appointments.',
+    },
+    rationale: 'Availability was incomplete.',
+  };
+  const detailed = {
+    ...minimal,
+    providerFeedback: [
+      {
+        name: 'Example',
+        issue: 'insufficient_coverage',
+        why: 'Some locations were missing.',
+      },
+    ],
+    capabilityFeedback: [
+      {
+        name: 'Appointments',
+        provider: 'Example',
+        issue: 'new_capability_request',
+        why: 'Need appointments for a specific location.',
+        requestedFunctionality: 'Filter appointments by location and date.',
+      },
+      {
+        name: 'Availability',
+        provider: 'Example',
+        issue: 'execution_error',
+        why: 'The availability request failed.',
+      },
+    ],
+  };
+  for (const payload of [minimal, detailed]) {
+    const result = await submit(payload);
+    assert.notEqual(result.isError, true);
+    assert.deepEqual(JSON.parse(result.content[0].text), {
+      success: true,
+      creditsRefunded: 0,
+      feedbackId: '00000000-0000-4000-8000-000000000101',
+    });
+    const request = fakeApi.requests.at(-1);
+    assert.equal(request.method, 'POST');
+    assert.equal(request.url, '/v2/feedback');
+    assert.equal(request.headers.authorization, 'Bearer fc-test');
+    assert.equal(
+      request.headers['x-origin'],
+      `mcp-feedback-test@${serverVersion}`
+    );
+    assert.deepEqual(request.body, {
+      ...payload,
+      origin: `mcp-feedback-test@${serverVersion}`,
+    });
+    assert.equal(Object.hasOwn(request.body, 'jobId'), false);
+  }
+
+  await submit({
+    ...minimal,
+    rationale: ' '.repeat(9 * 1024) + minimal.rationale,
+    requestedWebsite: {
+      ...minimal.requestedWebsite,
+      requestedFunctionality: '  Find available appointments.  ',
+    },
+    providerFeedback: [
+      {
+        name: '  Example  ',
+        issue: 'missing_provider',
+        why: '  No provider found.  ',
+      },
+    ],
+  });
+  assert.deepEqual(fakeApi.requests.at(-1).body, {
+    ...minimal,
+    providerFeedback: [
+      { name: 'Example', issue: 'missing_provider', why: 'No provider found.' },
+    ],
+    origin: `mcp-feedback-test@${serverVersion}`,
+  });
+
+  const atLimit = {
+    ...minimal,
+    rationale: 'a'.repeat(2000),
+    requestedWebsite: {
+      ...minimal.requestedWebsite,
+      requestedFunctionality: 'a'.repeat(2000),
+    },
+    capabilityFeedback: [
+      {
+        ...detailed.capabilityFeedback[0],
+        why: 'a'.repeat(2000),
+        requestedFunctionality: '',
+      },
+    ],
+  };
+  const remainingBytes =
+    8192 -
+    Buffer.byteLength(
+      JSON.stringify({
+        ...atLimit,
+        origin: `mcp-feedback-test@${serverVersion}`,
+      }),
+      'utf8'
+    );
+  assert.ok(remainingBytes > 0 && remainingBytes <= 2000);
+  atLimit.capabilityFeedback[0].requestedFunctionality = 'a'.repeat(
+    remainingBytes
+  );
+  assert.notEqual((await submit(atLimit)).isError, true);
+  assert.equal(
+    Buffer.byteLength(JSON.stringify(fakeApi.requests.at(-1).body), 'utf8'),
+    8192
+  );
+  const requestsBeforeOversized = fakeApi.requests.length;
+  for (const oversized of [
+    { ...atLimit, rationale: atLimit.rationale.slice(0, -1) + 'é' },
+    {
+      ...minimal,
+      providerFeedback: Array(4).fill({
+        name: 'Example',
+        issue: 'other',
+        why: '界'.repeat(1000),
+      }),
+    },
+  ]) {
+    const result = await submit(oversized);
+    assert.equal(result.isError, true);
+    assert.match(result.content[0].text, /8 KiB or smaller/);
+  }
+  assert.equal(fakeApi.requests.length, requestsBeforeOversized);
+
+  const jobId = '00000000-0000-4000-8000-000000000010';
+  const invalid = [
+    [{ ...minimal, requestedWebsite: undefined }, /requestedWebsite/],
+    [{ ...minimal, rationale: undefined }, /rationale/],
+    [{ ...minimal, rationale: '   ' }, /rationale/],
+    [{ ...minimal, rationale: 'a'.repeat(2001) }, /rationale/],
+    [{ ...minimal, jobId }, /jobId/],
+    [{ ...minimal, metadata: {} }, /metadata/],
+    [
+      { ...minimal, requestedWebsite: { url: 'https://example.com/' } },
+      /requestedFunctionality/,
+    ],
+    [
+      {
+        ...minimal,
+        requestedWebsite: {
+          ...minimal.requestedWebsite,
+          url: 'ftp://example.com/',
+        },
+      },
+      /url/,
+    ],
+    [
+      {
+        ...minimal,
+        requestedWebsite: {
+          ...minimal.requestedWebsite,
+          url: `https://example.com/${'a'.repeat(2048)}`,
+        },
+      },
+      /url/,
+    ],
+    [
+      {
+        ...minimal,
+        providerFeedback: [
+          { ...detailed.providerFeedback[0], name: 'a'.repeat(201) },
+        ],
+      },
+      /name/,
+    ],
+    [
+      {
+        ...minimal,
+        providerFeedback: [
+          { ...detailed.providerFeedback[0], issue: 'unknown' },
+        ],
+      },
+      /issue/,
+    ],
+    [
+      {
+        ...minimal,
+        providerFeedback: Array(21).fill(detailed.providerFeedback[0]),
+      },
+      /providerFeedback/,
+    ],
+    [
+      {
+        ...minimal,
+        capabilityFeedback: [
+          {
+            ...detailed.capabilityFeedback[0],
+            requestedFunctionality: undefined,
+          },
+        ],
+      },
+      /requestedFunctionality/,
+    ],
+    [
+      {
+        ...minimal,
+        capabilityFeedback: [
+          { ...detailed.capabilityFeedback[1], provider: ' ' },
+        ],
+      },
+      /provider/,
+    ],
+    [
+      {
+        ...minimal,
+        capabilityFeedback: [
+          { ...detailed.capabilityFeedback[1], issue: 'missing_capability' },
+        ],
+      },
+      /issue/,
+    ],
+    [
+      {
+        ...minimal,
+        capabilityFeedback: Array(21).fill(detailed.capabilityFeedback[1]),
+      },
+      /capabilityFeedback/,
+    ],
+    [
+      { endpoint: 'scrape', rating: 'good', jobId, rationale: 'Session only.' },
+      /rationale/,
+    ],
+  ];
+  const requestsBeforeInvalid = fakeApi.requests.length;
+  for (const [payload, message] of invalid) {
+    await assert.rejects(submit(payload), message);
+  }
+  assert.equal(fakeApi.requests.length, requestsBeforeInvalid);
+
+  for (const endpoint of ['search', 'scrape', 'parse', 'map']) {
+    await assert.rejects(submit({ endpoint, rating: 'good' }), /jobId/);
+    await assert.rejects(
+      submit({ endpoint, rating: 'good', jobId: 'invalid' }),
+      /jobId/
+    );
+    const payload = { endpoint, rating: 'good', jobId, note: 'Useful result.' };
+    const result = await submit(payload);
+    assert.notEqual(result.isError, true);
+    assert.deepEqual(fakeApi.requests.at(-1).body, {
+      ...payload,
+      origin: `mcp-feedback-test@${serverVersion}`,
+    });
+  }
+});
+
 test('HTTP cloud transport swaps an fco_ OAuth token for its introspected API key (once)', async (t) => {
   const backend = await startFakeFirecrawlBackend({
     apiKeyFromIntrospection: 'fc-introspected-key',

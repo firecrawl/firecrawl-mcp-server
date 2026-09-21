@@ -550,7 +550,8 @@ Sends structured feedback on a previous `firecrawl_search` result. The first fee
 
 ### 3c. Generic Feedback Tool (`firecrawl_feedback`)
 
-Sends structured feedback for a completed v2 endpoint job through `/v2/feedback`.
+Sends structured feedback for a completed v2 endpoint job or Alexandria session
+through `/v2/feedback`.
 Use this for endpoint-level feedback on `scrape`, `parse`, `map`, or `search`
 jobs. For search-result quality specifically, prefer
 `firecrawl_search_feedback` because it includes search-specific guidance.
@@ -584,6 +585,40 @@ and small metadata objects. Do not include raw scrape/parse outputs.
 **Returns:**
 
 - `{ success, feedbackId, creditsRefunded, creditsRefundedToday?, dailyRefundCap?, dailyCapReached?, alreadySubmitted?, warning? }` JSON.
+
+**Alexandria session feedback:**
+
+Use `endpoint: "alexandria"` with `rating` (`good`, `partial`, or `bad`),
+`requestedWebsite` (`url` and `requestedFunctionality`), and `rationale`.
+Omit `jobId` and the job-specific fields shown above.
+
+```json
+{
+  "name": "firecrawl_feedback",
+  "arguments": {
+    "endpoint": "alexandria",
+    "rating": "partial",
+    "requestedWebsite": {
+      "url": "https://example.com/",
+      "requestedFunctionality": "Find available appointments by location and date."
+    },
+    "rationale": "Availability was incomplete."
+  }
+}
+```
+
+Optional `providerFeedback` entries contain `name`, `issue`
+(`missing_provider`, `insufficient_coverage`, `provider_unavailable`, or `other`),
+and `why`. Optional `capabilityFeedback` entries contain `name`, `provider`,
+`issue` (`new_capability_request`, `insufficient_functionality`,
+`incorrect_result`, `execution_error`, or `other`), and `why`.
+`requestedFunctionality` is required for `new_capability_request` and optional
+for other capability issues.
+
+Each array accepts up to 20 entries. Names and provider names are limited to
+200 characters; narrative fields to 2,000; and HTTP(S) website URLs to 2,048.
+Normalized session feedback is limited to 8 KiB. Session feedback does not
+require a job ID and does not refund credits.
 
 ### 4. Crawl Tool (`firecrawl_crawl`)
 

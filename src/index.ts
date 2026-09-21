@@ -2717,65 +2717,192 @@ if (ENDPOINT_FEEDBACK_DISABLED) {
 }
 
 if (!ENDPOINT_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
+  const feedbackDetail = z.string().trim().min(1).max(2000);
+  const feedbackName = z.string().trim().min(1).max(200);
+  const jobFeedbackFields = [
+    'jobId',
+    'issues',
+    'tags',
+    'note',
+    'valuableSources',
+    'missingContent',
+    'querySuggestions',
+    'url',
+    'pageNumbers',
+    'metadata',
+  ] as const;
+  const sessionFeedbackFields = [
+    'requestedWebsite',
+    'rationale',
+    'providerFeedback',
+    'capabilityFeedback',
+  ] as const;
+
   server.addTool({
     name: 'firecrawl_feedback',
     annotations: {
-      title: 'Firecrawl job feedback',
-      readOnlyHint: false, // POSTs structured feedback for a completed job to /v2/feedback.
-      openWorldHint: true, // Feedback is tied to jobs that processed open-web URLs.
+      title: 'Firecrawl feedback',
+      readOnlyHint: false, // POSTs structured feedback to /v2/feedback.
+      openWorldHint: true, // Feedback references open-web jobs or sessions.
       destructiveHint: false, // Additive only; submits ratings and notes, does not delete jobs or external content.
     },
     description: `
-Submit concise quality feedback for a completed search, scrape, parse, or map job. Provide the endpoint, job ID, rating, and relevant issue codes or small contextual fields; omit large page contents and raw outputs.
+Submit concise quality feedback for a Firecrawl job or session. Provide the endpoint, rating, and endpoint-specific fields; omit large page contents and raw outputs.
 
 Returns submission status, feedback ID, and accounting fields.
 `,
-    parameters: z.object({
-      endpoint: z.enum(['search', 'scrape', 'parse', 'map']),
-      jobId: z.string().uuid('jobId must be the UUID returned by Firecrawl'),
-      rating: z.enum(['good', 'bad', 'partial']),
-      issues: z.array(feedbackIssueSchema).max(20).optional(),
-      tags: z.array(feedbackIssueSchema).max(20).optional(),
-      note: z.string().max(4000).optional(),
-      valuableSources: z.array(valuableSourceSchema).max(50).optional(),
-      missingContent: z.array(missingContentSchema).max(50).optional(),
-      querySuggestions: z.string().max(2000).optional(),
-      url: z.string().url().optional(),
-      pageNumbers: z.array(z.number().int().positive()).max(100).optional(),
-      metadata: z.record(z.string(), z.unknown()).optional(),
-    }),
+    parameters: z
+      .object({
+        endpoint: z.enum(['search', 'scrape', 'parse', 'map', 'alexandria']),
+        jobId: z
+          .string()
+          .uuid('jobId must be the UUID returned by Firecrawl')
+          .optional()
+          .describe(
+            'Required for search, scrape, parse, and map. Omit for alexandria.'
+          ),
+        rating: z.enum(['good', 'bad', 'partial']),
+        issues: z.array(feedbackIssueSchema).max(20).optional(),
+        tags: z.array(feedbackIssueSchema).max(20).optional(),
+        note: z.string().max(4000).optional(),
+        valuableSources: z.array(valuableSourceSchema).max(50).optional(),
+        missingContent: z.array(missingContentSchema).max(50).optional(),
+        querySuggestions: z.string().max(2000).optional(),
+        url: z.string().url().optional(),
+        pageNumbers: z.array(z.number().int().positive()).max(100).optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
+        requestedWebsite: z
+          .strictObject({
+            url: z.url({ protocol: /^https?$/ }).max(2048),
+            requestedFunctionality: feedbackDetail,
+          })
+          .optional()
+          .describe(
+            'Required for alexandria only: the site and functionality the session needed.'
+          ),
+        rationale: feedbackDetail
+          .optional()
+          .describe(
+            'Required for alexandria only: why the session was good, partial, or bad.'
+          ),
+        providerFeedback: z
+          .array(
+            z.strictObject({
+              name: feedbackName,
+              issue: z.enum([
+                'missing_provider',
+                'insufficient_coverage',
+                'provider_unavailable',
+                'other',
+              ]),
+              why: feedbackDetail,
+            })
+          )
+          .max(20)
+          .optional()
+          .describe('Optional for alexandria only.'),
+        capabilityFeedback: z
+          .array(
+            z
+              .strictObject({
+                name: feedbackName,
+                provider: feedbackName,
+                issue: z.enum([
+                  'new_capability_request',
+                  'insufficient_functionality',
+                  'incorrect_result',
+                  'execution_error',
+                  'other',
+                ]),
+                why: feedbackDetail,
+                requestedFunctionality: feedbackDetail
+                  .optional()
+                  .describe(
+                    'Required for new_capability_request; optional otherwise.'
+                  ),
+              })
+              .refine(
+                (value) =>
+                  value.issue !== 'new_capability_request' ||
+                  value.requestedFunctionality !== undefined,
+                {
+                  path: ['requestedFunctionality'],
+                  message:
+                    'requestedFunctionality is required for new_capability_request',
+                }
+              )
+              .meta({
+                if: {
+                  properties: { issue: { const: 'new_capability_request' } },
+                },
+                then: { required: ['requestedFunctionality'] },
+              })
+          )
+          .max(20)
+          .optional()
+          .describe('Optional for alexandria only.'),
+      })
+      .superRefine((value, ctx) => {
+        if (value.endpoint === 'alexandria') {
+          for (const field of ['requestedWebsite', 'rationale'] as const) {
+            if (value[field] === undefined) {
+              ctx.addIssue({
+                code: 'custom',
+                path: [field],
+                message: `${field} is required for alexandria`,
+              });
+            }
+          }
+          for (const field of jobFeedbackFields) {
+            if (value[field] !== undefined) {
+              ctx.addIssue({
+                code: 'custom',
+                path: [field],
+                message: `${field} is not supported for alexandria`,
+              });
+            }
+          }
+        } else {
+          if (value.jobId === undefined) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['jobId'],
+              message: `jobId is required for ${value.endpoint}`,
+            });
+          }
+          for (const field of sessionFeedbackFields) {
+            if (value[field] !== undefined) {
+              ctx.addIssue({
+                code: 'custom',
+                path: [field],
+                message: `${field} is only supported for alexandria`,
+              });
+            }
+          }
+        }
+      })
+      // Refinements run at invocation; publish the same conditions in tools/list.
+      .meta({
+        if: { properties: { endpoint: { const: 'alexandria' } } },
+        then: {
+          required: ['requestedWebsite', 'rationale'],
+          properties: Object.fromEntries(
+            jobFeedbackFields.map((field) => [field, false])
+          ),
+        },
+        else: {
+          required: ['jobId'],
+          properties: Object.fromEntries(
+            sessionFeedbackFields.map((field) => [field, false])
+          ),
+        },
+      }),
     execute: async (
-      args: unknown,
+      args,
       { session, log, client: mcpClient }
     ): Promise<string> => {
       const origin = requestOrigin(mcpClient, session);
-      const {
-        endpoint,
-        jobId,
-        rating,
-        issues,
-        tags,
-        note,
-        valuableSources,
-        missingContent,
-        querySuggestions,
-        url,
-        pageNumbers,
-        metadata,
-      } = args as {
-        endpoint: 'search' | 'scrape' | 'parse' | 'map';
-        jobId: string;
-        rating: 'good' | 'bad' | 'partial';
-        issues?: string[];
-        tags?: string[];
-        note?: string;
-        valuableSources?: { url: string; reason?: string }[];
-        missingContent?: { topic: string; description?: string }[];
-        querySuggestions?: string;
-        url?: string;
-        pageNumbers?: number[];
-        metadata?: Record<string, unknown>;
-      };
+      const { endpoint, jobId, rating } = args;
 
       const apiBase = resolveApiBaseUrl();
       const headers: Record<string, string> = {
@@ -2789,27 +2916,21 @@ Returns submission status, feedback ID, and accounting fields.
         throw new Error('Unauthorized: missing API key for feedback.');
       }
 
-      const body = removeEmptyTopLevel({
-        endpoint,
-        jobId,
-        rating,
-        issues,
-        tags,
-        note,
-        valuableSources,
-        missingContent,
-        querySuggestions,
-        url,
-        pageNumbers,
-        metadata,
-        origin,
-      });
+      const body = JSON.stringify(removeEmptyTopLevel({ ...args, origin }));
+      if (
+        endpoint === 'alexandria' &&
+        Buffer.byteLength(body, 'utf8') > 8 * 1024
+      ) {
+        throw new UserError(
+          'Normalized Alexandria feedback must be 8 KiB or smaller. Shorten the feedback and try again.'
+        );
+      }
 
       log.info('Submitting endpoint feedback', { endpoint, jobId, rating });
       const response = await fetch(`${apiBase}/v2/feedback`, {
         method: 'POST',
         headers,
-        body: JSON.stringify(body),
+        body,
       });
 
       const responseText = await response.text();
