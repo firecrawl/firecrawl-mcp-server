@@ -4,14 +4,19 @@
 
 ### Added
 
-- Optional automatic index routing for `firecrawl_search`. With
-  `FIRECRAWL_QUERY_ROUTER=true` and a classifier key set, a search naming
-  neither `categories` nor `sources` is classified at request time and routed
-  to the `developer` or `research` category when the classifier's confidence
-  exceeds `FIRECRAWL_QUERY_ROUTER_THRESHOLD` (default `0.8`). A call that
-  already targets an index is never overridden, and any classifier failure
-  leaves the search untouched. Off by default; both `firecrawl_search`
-  surfaces share the same path.
+- Optional automatic index routing for `firecrawl_search`. When
+  `FIRECRAWL_QUERY_ROUTER=true` and a classifier key is set, a search that
+  names neither `categories` nor `sources` is classified at request time and
+  routed when the winning option's probability exceeds
+  `FIRECRAWL_QUERY_ROUTER_THRESHOLD` (default `0.8`). A developer verdict sets
+  `categories: ["developer"]` on the same call. A research verdict retargets
+  to the research paper index and returns papers under
+  `{ routedTo: "research_paper_index", data: { papers } }` rather than web
+  results; that retarget is skipped for keyless sessions and for searches
+  scoped with `includeDomains`/`excludeDomains`. A call that already targets
+  an index is never overridden, and any classifier or paper-index failure
+  leaves the search on its original path. Off by default; both
+  `firecrawl_search` surfaces share the same path.
 
 ## [3.21.4] - 2026-06-23
 

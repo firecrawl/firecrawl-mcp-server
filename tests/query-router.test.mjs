@@ -15,7 +15,10 @@ const CONFIG = {
   apiKey: 'test-key',
   threshold: 0.8,
   timeoutMs: 1000,
-  routes: { developer_index: 'developer', research_index: 'research' },
+  routes: {
+    developer_index: 'developer_category',
+    research_index: 'research_paper_index',
+  },
 };
 
 /** A fetch stub that answers with one Choice verdict and records the request. */
@@ -24,35 +27,36 @@ function stubFetch(answer, { status = 200, calls = [] } = {}) {
     calls.push({ url, init, body: JSON.parse(init.body) });
     return new Response(
       JSON.stringify({ model: 'jev-1.13.0', answers: { index: answer } }),
-      {
-        status,
-        headers: { 'content-type': 'application/json' },
-      }
+      { status, headers: { 'content-type': 'application/json' } }
     );
   };
   impl.calls = calls;
   return impl;
 }
 
+/** A verdict with all of the mass on one option. */
+function verdict(choice, probability = 0.98) {
+  const rest = (1 - probability) / 2;
+  const probabilities = {
+    developer_index: rest,
+    research_index: rest,
+    web_search: rest,
+  };
+  probabilities[choice] = probability;
+  return { type: 'choice', choice, confidence: probability, probabilities };
+}
+
 test('a confident developer verdict fills in the developer category', async () => {
-  const fetchImpl = stubFetch({
-    type: 'choice',
-    choice: 'developer_index',
-    confidence: 0.97,
-    probabilities: {
-      developer_index: 0.98,
-      research_index: 0.01,
-      web_search: 0.01,
-    },
-  });
+  const fetchImpl = stubFetch(verdict('developer_index'));
   const body = {
     query: 'asyncpg vs psycopg3 connection pool',
     origin: 'mcp-fastmcp@3.24.1',
   };
 
-  const decision = await applyQueryRouting(body, CONFIG, fetchImpl);
+  const decision = await applyQueryRouting(body, CONFIG, { fetchImpl });
 
   assert.equal(decision.routed, true);
+  assert.equal(decision.target, 'developer_category');
   assert.equal(decision.category, 'developer');
   assert.deepEqual(body.categories, ['developer']);
   // The rest of the outbound body is untouched.
@@ -60,103 +64,146 @@ test('a confident developer verdict fills in the developer category', async () =
   assert.equal(body.origin, 'mcp-fastmcp@3.24.1');
 });
 
-test('a confident research verdict fills in the research category', async () => {
-  const fetchImpl = stubFetch({
-    type: 'choice',
-    choice: 'research_index',
-    confidence: 0.91,
-    probabilities: {
-      developer_index: 0.02,
-      research_index: 0.95,
-      web_search: 0.03,
-    },
-  });
+test('a confident research verdict retargets to the paper index and does not touch the body', async () => {
+  const fetchImpl = stubFetch(verdict('research_index', 0.95));
   const body = { query: 'sleep regularity index mortality UK Biobank' };
 
-  const decision = await applyQueryRouting(body, CONFIG, fetchImpl);
+  const decision = await applyQueryRouting(body, CONFIG, { fetchImpl });
 
   assert.equal(decision.routed, true);
-  assert.deepEqual(body.categories, ['research']);
+  assert.equal(decision.target, 'research_paper_index');
+  // The research route is a different endpoint, so nothing is added to the
+  // /v2/search body — the caller issues the paper-index request instead.
+  assert.equal(decision.category, undefined);
+  assert.equal(body.categories, undefined);
+  assert.deepEqual(Object.keys(body), ['query']);
+});
+
+test('a research verdict is dropped when the paper index is unreachable', async () => {
+  // Keyless sessions, and domain-scoped searches, pass allowPaperIndex: false.
+  const fetchImpl = stubFetch(verdict('research_index', 0.99));
+  const body = { query: 'crispr base editing off-target effects in vivo' };
+
+  const decision = await applyQueryRouting(body, CONFIG, {
+    fetchImpl,
+    allowPaperIndex: false,
+  });
+
+  assert.equal(decision.routed, false);
+  assert.equal(decision.reason, 'paper_index_unavailable');
+  assert.equal(decision.target, undefined);
+  assert.equal(body.categories, undefined);
+  // The verdict is still reported, so the log line explains the drop.
+  assert.equal(decision.label, 'research_index');
+  assert.equal(decision.probability, 0.99);
+});
+
+test('allowPaperIndex: false still permits the developer route', async () => {
+  const fetchImpl = stubFetch(verdict('developer_index'));
+  const body = { query: 'kubectl rollout restart deployment' };
+
+  const decision = await applyQueryRouting(body, CONFIG, {
+    fetchImpl,
+    allowPaperIndex: false,
+  });
+
+  assert.equal(decision.routed, true);
+  assert.deepEqual(body.categories, ['developer']);
 });
 
 test('a confident web verdict leaves the call untargeted', async () => {
-  const fetchImpl = stubFetch({
-    type: 'choice',
-    choice: 'web_search',
-    confidence: 1,
-    probabilities: { developer_index: 0, research_index: 0, web_search: 1 },
-  });
+  const fetchImpl = stubFetch(verdict('web_search', 1));
   const body = { query: 'Brooklinen hand towel price' };
 
-  const decision = await applyQueryRouting(body, CONFIG, fetchImpl);
+  const decision = await applyQueryRouting(body, CONFIG, { fetchImpl });
 
   assert.equal(decision.routed, false);
   assert.equal(decision.reason, 'no_route_for_label');
   assert.equal(body.categories, undefined);
 });
 
-test('confidence at or below the threshold does not route', async () => {
-  // 0.8 exactly: the gate is "greater than", so this must not act.
-  const atThreshold = stubFetch({
+test('the gate is the winning probability, strictly above the threshold', async () => {
+  // Exactly at the threshold must not route; just above it must.
+  const at = stubFetch({
     type: 'choice',
     choice: 'developer_index',
-    confidence: 0.8,
+    confidence: 0.99,
+    probabilities: { developer_index: 0.8, research_index: 0.1, web_search: 0.1 },
+  });
+  const atBody = { query: 'something arguably technical' };
+  const atDecision = await applyQueryRouting(atBody, CONFIG, { fetchImpl: at });
+  assert.equal(atDecision.routed, false);
+  assert.equal(atDecision.reason, 'below_threshold');
+  assert.equal(atBody.categories, undefined);
+
+  const above = stubFetch({
+    type: 'choice',
+    choice: 'developer_index',
+    confidence: 0.4,
     probabilities: {
-      developer_index: 0.86,
-      research_index: 0.07,
-      web_search: 0.07,
+      developer_index: 0.81,
+      research_index: 0.09,
+      web_search: 0.1,
     },
   });
-  const body = { query: 'something arguably technical' };
-  const decision = await applyQueryRouting(body, CONFIG, atThreshold);
-  assert.equal(decision.routed, false);
-  assert.equal(decision.reason, 'below_threshold');
-  assert.equal(body.categories, undefined);
+  const aboveBody = { query: 'something arguably technical' };
+  const aboveDecision = await applyQueryRouting(aboveBody, CONFIG, {
+    fetchImpl: above,
+  });
+  // Low distribution concentration no longer blocks a clear winner: the
+  // probability is what the threshold reads.
+  assert.equal(aboveDecision.routed, true);
+  assert.equal(aboveDecision.probability, 0.81);
+  assert.equal(aboveDecision.confidence, 0.4);
+  assert.deepEqual(aboveBody.categories, ['developer']);
 
   const below = stubFetch({
     type: 'choice',
     choice: 'developer_index',
-    confidence: 0.53,
+    confidence: 1,
     probabilities: {
       developer_index: 0.69,
       research_index: 0.0,
       web_search: 0.31,
     },
   });
-  const body2 = { query: 'something arguably technical' };
-  const decision2 = await applyQueryRouting(body2, CONFIG, below);
-  assert.equal(decision2.routed, false);
-  assert.equal(decision2.reason, 'below_threshold');
-  assert.equal(body2.categories, undefined);
+  const belowBody = { query: 'something arguably technical' };
+  const belowDecision = await applyQueryRouting(belowBody, CONFIG, {
+    fetchImpl: below,
+  });
+  assert.equal(belowDecision.routed, false);
+  assert.equal(belowDecision.reason, 'below_threshold');
 });
 
-test('a confidence that is not a probability cannot clear the threshold', async () => {
-  // Out of range, non-numeric, or absent: none of these is a confidence the
-  // classifier meant, and coercing them must not route the search.
-  for (const confidence of [5, 1.0001, -1, Number.NaN, 'high', null, undefined]) {
+test('a probability that is not a probability cannot clear the threshold', async () => {
+  for (const probability of [5, 1.0001, -1, Number.NaN, 'high', null, undefined]) {
     const fetchImpl = stubFetch({
       type: 'choice',
       choice: 'developer_index',
-      confidence,
-      probabilities: { developer_index: 1, research_index: 0, web_search: 0 },
+      confidence: 1,
+      probabilities: { developer_index: probability },
     });
     const body = { query: 'react hooks exhaustive-deps' };
-    const decision = await applyQueryRouting(body, CONFIG, fetchImpl);
+    const decision = await applyQueryRouting(body, CONFIG, { fetchImpl });
     assert.equal(
       decision.routed,
       false,
-      `confidence ${JSON.stringify(confidence)} should not route`
+      `probability ${JSON.stringify(probability)} should not route`
     );
     assert.equal(decision.reason, 'below_threshold');
-    assert.equal(decision.confidence, 0);
+    assert.equal(decision.probability, 0);
     assert.equal(body.categories, undefined);
   }
 });
 
 test('a label inherited from Object.prototype is not a route', async () => {
-  // `config.routes[label]` alone would resolve `constructor` to a function and
-  // put it on the outbound call as a category.
-  for (const choice of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+  // `config.routes[label]` alone would resolve `constructor` to a function.
+  for (const choice of [
+    'constructor',
+    'toString',
+    '__proto__',
+    'hasOwnProperty',
+  ]) {
     const fetchImpl = stubFetch({
       type: 'choice',
       choice,
@@ -164,7 +211,7 @@ test('a label inherited from Object.prototype is not a route', async () => {
       probabilities: { [choice]: 1 },
     });
     const body = { query: 'anything' };
-    const decision = await applyQueryRouting(body, CONFIG, fetchImpl);
+    const decision = await applyQueryRouting(body, CONFIG, { fetchImpl });
     assert.equal(decision.routed, false, `${choice} should not route`);
     assert.equal(decision.reason, 'no_route_for_label');
     assert.equal(body.categories, undefined);
@@ -179,13 +226,13 @@ test('a call that already names categories or sources is never overridden', asyn
   };
 
   const withCategories = { query: 'react hooks', categories: ['pdf'] };
-  const a = await applyQueryRouting(withCategories, CONFIG, fetchImpl);
+  const a = await applyQueryRouting(withCategories, CONFIG, { fetchImpl });
   assert.equal(a.routed, false);
   assert.equal(a.reason, 'explicit_targeting');
   assert.deepEqual(withCategories.categories, ['pdf']);
 
   const withSources = { query: 'react hooks', sources: [{ type: 'news' }] };
-  const b = await applyQueryRouting(withSources, CONFIG, fetchImpl);
+  const b = await applyQueryRouting(withSources, CONFIG, { fetchImpl });
   assert.equal(b.routed, false);
   assert.equal(b.reason, 'explicit_targeting');
   assert.equal(withSources.categories, undefined);
@@ -255,14 +302,10 @@ test('the router fails open on transport, status, and body failures', async () =
 
   for (const [name, fetchImpl, expectedReason] of cases) {
     const body = { query: 'anything at all' };
-    const decision = await applyQueryRouting(body, CONFIG, fetchImpl);
+    const decision = await applyQueryRouting(body, CONFIG, { fetchImpl });
     assert.equal(decision.routed, false, `${name} should not route`);
     assert.equal(decision.reason, expectedReason, name);
-    assert.equal(
-      body.categories,
-      undefined,
-      `${name} must leave the body alone`
-    );
+    assert.equal(body.categories, undefined, `${name} must leave the body alone`);
   }
 });
 
@@ -279,7 +322,7 @@ test('an empty or missing query is not classified', async () => {
     throw new Error('classifier must not be consulted');
   };
   for (const body of [{ query: '   ' }, { query: '' }, {}, { query: 42 }]) {
-    const decision = await applyQueryRouting(body, CONFIG, fetchImpl);
+    const decision = await applyQueryRouting(body, CONFIG, { fetchImpl });
     assert.equal(decision.routed, false);
     assert.equal(decision.reason, 'no_query');
   }
@@ -287,15 +330,7 @@ test('an empty or missing query is not classified', async () => {
 
 test('the classifier is asked one Choice question over the query alone', async () => {
   const calls = [];
-  const fetchImpl = stubFetch(
-    {
-      type: 'choice',
-      choice: 'web_search',
-      confidence: 1,
-      probabilities: { developer_index: 0, research_index: 0, web_search: 1 },
-    },
-    { calls }
-  );
+  const fetchImpl = stubFetch(verdict('web_search', 1), { calls });
 
   await classifySearchQuery('find me a hotel in Lisbon', CONFIG, fetchImpl);
 
@@ -341,8 +376,8 @@ test('env configuration resolves defaults and rejects a nonsense threshold', () 
   assert.equal(defaults.threshold, DEFAULT_THRESHOLD);
   assert.equal(defaults.model, 'jev-latest');
   assert.deepEqual(defaults.routes, {
-    developer_index: 'developer',
-    research_index: 'research',
+    developer_index: 'developer_category',
+    research_index: 'research_paper_index',
   });
 
   assert.equal(
@@ -392,7 +427,6 @@ test('env configuration resolves the timeout, its floor, and the endpoint', () =
       `timeout ${tooSmall} should be floored at 250ms`
     );
   }
-  // Unparseable falls back to the default, which is then above the floor.
   assert.equal(
     routerConfigFromEnv({ ...base, FIRECRAWL_QUERY_ROUTER_TIMEOUT_MS: 'abc' })
       .timeoutMs,

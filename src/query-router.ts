@@ -2,17 +2,25 @@
  * Realtime index routing for `firecrawl_search`.
  *
  * Agents reach for `firecrawl_search` and almost always leave `categories`
- * unset, so a query whose answer lives in the developer index (repositories,
- * GitHub issues, merged pull requests, READMEs, curated documentation) or
- * among research-affiliated sources is answered from the general web index
- * instead. A 60-day census of MCP search traffic measured that at roughly 15%
- * of keyed calls and a third of keyless ones.
+ * unset, so a question whose answer lives in the developer index or in the
+ * research paper index is answered from the general web index instead. A
+ * 60-day census of MCP search traffic measured that at roughly 15% of keyed
+ * calls and a third of keyless ones.
  *
  * This module closes that gap at request time. For a search that names no
  * target, it asks TypeSafe's Jev — a System One model that returns a typed
  * judgment and a probability distribution rather than prose — which index the
- * query belongs to, and fills in `categories` only when the verdict clears a
- * confidence threshold.
+ * query belongs to, and acts only when the winning option's probability
+ * clears a threshold.
+ *
+ * The two routes are not symmetric, and the asymmetry is the point:
+ *
+ *   - **developer** stays inside `/v2/search`. It is a category on the same
+ *     endpoint, so the response shape the agent gets back is unchanged.
+ *   - **research** retargets to the paper index (`/v2/search/research/papers`),
+ *     a different endpoint returning papers rather than web pages. This is a
+ *     real change of surface, so the caller wraps the result in an envelope
+ *     that says so; see `routeSearchBody` in index.ts.
  *
  * Three properties hold by construction:
  *
@@ -27,18 +35,25 @@
  *     `sources` has said what it wants, and the router leaves it alone.
  */
 
-/** Labels the classifier may return. `web_search` maps to no category. */
+/** Labels the classifier may return. `web_search` maps to no route. */
 export type RouteLabel = 'developer_index' | 'research_index' | 'web_search';
+
+/**
+ * What acting on a verdict means. `developer_category` is a `categories` value
+ * on the same /v2/search call; `research_paper_index` is a different endpoint
+ * and a different response shape, which the caller must handle.
+ */
+export type RouteTarget = 'developer_category' | 'research_paper_index';
 
 export type RouterConfig = {
   endpoint: string;
   model: string;
   apiKey: string;
-  /** A verdict must exceed this to be acted on. */
+  /** The winning option's probability must exceed this to be acted on. */
   threshold: number;
   timeoutMs: number;
-  /** Label -> the `categories` token sent to /v2/search. */
-  routes: Record<string, string>;
+  /** Label -> what to do about it. */
+  routes: Record<string, RouteTarget>;
 };
 
 export type RouteDecision = {
@@ -46,8 +61,12 @@ export type RouteDecision = {
   /** Why the router did or did not act. Safe to log; never contains the query. */
   reason: string;
   label?: string;
-  confidence?: number;
+  /** The winning option's probability. This is what the threshold gates on. */
   probability?: number;
+  /** Distribution concentration, reported for observability only. */
+  confidence?: number;
+  target?: RouteTarget;
+  /** The `categories` value applied, for `developer_category` only. */
   category?: string;
   latencyMs: number;
 };
@@ -57,13 +76,14 @@ export const DEFAULT_MODEL = 'jev-latest';
 export const DEFAULT_THRESHOLD = 0.8;
 export const DEFAULT_TIMEOUT_MS = 4000;
 
-/**
- * Label to `categories` token. `web_search` is deliberately absent: the
- * agent's untargeted call is already the right call for it.
- */
-export const DEFAULT_ROUTES: Record<string, string> = {
-  developer_index: 'developer',
-  research_index: 'research',
+export const DEFAULT_ROUTES: Record<string, RouteTarget> = {
+  developer_index: 'developer_category',
+  research_index: 'research_paper_index',
+};
+
+/** The `categories` token each category-style target applies. */
+const CATEGORY_FOR_TARGET: Partial<Record<RouteTarget, string>> = {
+  developer_category: 'developer',
 };
 
 /**
@@ -132,10 +152,10 @@ function nonEmptyArray(value: unknown): boolean {
 }
 
 /**
- * A confidence or probability as a number in [0, 1], or 0 when the value is
- * not one. A malformed answer must not be able to clear the threshold, so
- * anything non-finite or out of range reads as no confidence at all rather
- * than being coerced and compared.
+ * A probability as a number in [0, 1], or 0 when the value is not one. A
+ * malformed answer must not be able to clear the threshold, so anything
+ * non-finite or out of range reads as no probability at all rather than being
+ * coerced and compared.
  */
 function unitInterval(value: unknown): number {
   const parsed = Number(value);
@@ -143,18 +163,19 @@ function unitInterval(value: unknown): number {
 }
 
 /**
- * The category mapped to a label, considering own properties only. A label
- * like `constructor` or `toString` would otherwise resolve to an inherited
- * member of Object.prototype and put a non-string category on the outbound
- * search.
+ * The target mapped to a label, considering own properties only. A label like
+ * `constructor` or `toString` would otherwise resolve to an inherited member
+ * of Object.prototype and be treated as a route.
  */
 function ownRoute(
-  routes: Record<string, string>,
+  routes: Record<string, RouteTarget>,
   label: string
-): string | undefined {
+): RouteTarget | undefined {
   if (!Object.prototype.hasOwnProperty.call(routes, label)) return undefined;
-  const category = routes[label];
-  return typeof category === 'string' && category !== '' ? category : undefined;
+  const target = routes[label];
+  return target === 'developer_category' || target === 'research_paper_index'
+    ? target
+    : undefined;
 }
 
 /**
@@ -214,11 +235,7 @@ export async function classifySearchQuery(
   try {
     body = await response.json();
   } catch {
-    return {
-      routed: false,
-      reason: 'malformed_response',
-      latencyMs: elapsed(),
-    };
+    return { routed: false, reason: 'malformed_response', latencyMs: elapsed() };
   }
 
   const answer = body?.answers?.index;
@@ -230,32 +247,32 @@ export async function classifySearchQuery(
     return { routed: false, reason: 'missing_choice', latencyMs: elapsed() };
   }
 
-  const safeConfidence = unitInterval(answer.confidence);
-  const safeProbability = unitInterval(answer.probabilities?.[label]);
+  const probability = unitInterval(answer.probabilities?.[label]);
+  const confidence = unitInterval(answer.confidence);
   const latencyMs = elapsed();
 
-  const category = ownRoute(config.routes, label);
-  if (!category) {
+  const target = ownRoute(config.routes, label);
+  if (!target) {
+    // web_search, or a label this deployment does not route. Either way the
+    // agent's original call is already correct.
     return {
       routed: false,
       reason: 'no_route_for_label',
       label,
-      confidence: safeConfidence,
-      probability: safeProbability,
+      probability,
+      confidence,
       latencyMs,
     };
   }
-  // Gate on `confidence` — the concentration of the whole distribution — not
-  // on the winning option's probability. For a three-way choice confidence is
-  // the stricter of the two, which is what auto-editing someone else's call
-  // calls for.
-  if (safeConfidence <= config.threshold) {
+  // Gate on the winning option's probability. Strictly greater than, so a
+  // threshold of 0.8 means "more than 80% of the mass on this option".
+  if (probability <= config.threshold) {
     return {
       routed: false,
       reason: 'below_threshold',
       label,
-      confidence: safeConfidence,
-      probability: safeProbability,
+      probability,
+      confidence,
       latencyMs,
     };
   }
@@ -264,24 +281,41 @@ export async function classifySearchQuery(
     routed: true,
     reason: 'above_threshold',
     label,
-    confidence: safeConfidence,
-    probability: safeProbability,
-    category,
+    probability,
+    confidence,
+    target,
+    category: CATEGORY_FOR_TARGET[target],
     latencyMs,
   };
 }
 
+export type ApplyOptions = {
+  /**
+   * Whether the research paper index is reachable for this call. It needs an
+   * authenticated account, so keyless sessions pass false and a research
+   * verdict is left unrouted rather than retargeted to an endpoint that would
+   * reject it.
+   */
+  allowPaperIndex?: boolean;
+  fetchImpl?: typeof fetch;
+};
+
 /**
- * Fill in `categories` on an outbound /v2/search body when the router is
- * configured, the call named no target, and the classifier is confident.
- * Mutates `searchBody` in place and returns what it decided, so the caller can
- * log one line without re-deriving anything.
+ * Decide how an outbound /v2/search call should be routed.
+ *
+ * For a `developer_category` verdict this fills in `categories` on
+ * `searchBody` in place and the caller proceeds normally. For a
+ * `research_paper_index` verdict the body is NOT modified — the caller must
+ * issue the paper-index request instead, because it is a different endpoint
+ * with a different response shape.
  */
 export async function applyQueryRouting(
   searchBody: Record<string, unknown>,
   config: RouterConfig | null,
-  fetchImpl: typeof fetch = fetch
+  options: ApplyOptions = {}
 ): Promise<RouteDecision> {
+  const { allowPaperIndex = true, fetchImpl = fetch } = options;
+
   if (!config) return { routed: false, reason: 'disabled', latencyMs: 0 };
   if (
     nonEmptyArray(searchBody.categories) ||
@@ -295,7 +329,21 @@ export async function applyQueryRouting(
   }
 
   const decision = await classifySearchQuery(query, config, fetchImpl);
-  if (decision.routed && decision.category) {
+  if (!decision.routed) return decision;
+
+  if (decision.target === 'research_paper_index' && !allowPaperIndex) {
+    // Keyless. The paper index needs an account, so the honest outcome is the
+    // unrouted web search the agent asked for, not a call that would 401.
+    return {
+      ...decision,
+      routed: false,
+      reason: 'paper_index_unavailable',
+      target: undefined,
+      category: undefined,
+    };
+  }
+
+  if (decision.target === 'developer_category' && decision.category) {
     searchBody.categories = [decision.category];
   }
   return decision;

@@ -252,21 +252,29 @@ Use **access** tokens (`fco_…`) only. Refresh tokens (`fcr_…`) must be excha
 
 #### Automatic index routing (opt-in)
 
-Agents mostly call `firecrawl_search` with no `categories`, so a question whose answer lives in the developer index or in research-affiliated sources gets answered from the general web index instead. With routing enabled, a search that names no target is classified at request time and `categories` is filled in for it.
+Agents mostly call `firecrawl_search` with no `categories`, so a question whose answer lives in the developer index or in the research paper index gets answered from the general web index instead. With routing enabled, a search that names no target is classified at request time and sent where it belongs.
+
+The two routes behave differently, and the difference matters:
+
+- **Developer** stays on `/v2/search`: the router sets `categories: ["developer"]` and the response shape you get back is unchanged.
+- **Research** retargets to the paper index (`/v2/search/research/papers`), the same corpus `firecrawl_research_search_papers` searches. The response is **papers, not web pages**, returned as `{ success, routedTo: "research_paper_index", notice, query, data: { papers } }`. Each paper carries `id`, `title`, `authors`, `abstract`, and dates. An agent that must have web results should set `sources` or `categories` explicitly.
+
+Configuration:
 
 - `FIRECRAWL_QUERY_ROUTER`: set to `true` to enable. Off by default.
 - `FIRECRAWL_QUERY_ROUTER_API_KEY` or `TYPESAFE_API_KEY`: the classifier credential ([TypeSafe](https://docs.typesafe.ai)). Required — without it the router stays off.
-- `FIRECRAWL_QUERY_ROUTER_THRESHOLD` (default `0.8`): the classifier's confidence must be **greater than** this for a call to be rewritten. A value outside `(0, 1]` falls back to the default.
-- `FIRECRAWL_QUERY_ROUTER_TIMEOUT_MS` (default `4000`), `FIRECRAWL_QUERY_ROUTER_MODEL` (default `jev-latest`), and `FIRECRAWL_QUERY_ROUTER_ENDPOINT` for tuning and tests.
+- `FIRECRAWL_QUERY_ROUTER_THRESHOLD` (default `0.8`): the winning option's **probability** must be strictly greater than this for the call to be routed. A value outside `(0, 1]` falls back to the default.
+- `FIRECRAWL_QUERY_ROUTER_TIMEOUT_MS` (default `4000`, floored at `250`), `FIRECRAWL_QUERY_ROUTER_MODEL` (default `jev-latest`), and `FIRECRAWL_QUERY_ROUTER_ENDPOINT` for tuning and tests.
 
 Rules the router holds to:
 
-- A call that already sets `categories` or `sources` is never overridden.
+- A call that already sets `categories` or `sources` is never overridden, and the classifier is not even consulted.
 - Anything short of a confident developer or research verdict leaves the call exactly as written, including a confident general-web verdict.
-- It fails open. A classifier timeout, error, or unparseable answer is logged and the search runs unrouted; routing never fails a search.
-- Log lines record the verdict, its confidence, and latency — never the query text.
+- The research retarget is skipped, and the search runs normally, when the paper index is not applicable: **keyless sessions** (it needs an account) and **domain-scoped searches** that set `includeDomains` or `excludeDomains`. The developer route still applies in both cases.
+- It fails open throughout. A classifier timeout, error, or unparseable answer leaves the search unrouted, and a paper-index request that fails falls back to the web search that was originally asked for. Routing never fails a search.
+- Log lines record the verdict, its probability and confidence, and latency — never the query text.
 
-Routing adds one classifier round trip, bounded by the timeout above, and only to searches that named no target.
+**Latency cost.** One classifier round trip on untargeted searches only, bounded by the timeout. Measured against the production TypeSafe endpoint at ~576 input tokens per call: **p50 837 ms, p90 1.0 s, max 1.05 s** (n=12, from a developer laptop; expect lower from a server closer to the endpoint). A research retarget replaces the `/v2/search` call rather than adding to it; a developer route adds the classifier round trip on top of the normal search. Targeted searches and every non-search tool are untouched.
 
 #### Search-only surface (hosted)
 

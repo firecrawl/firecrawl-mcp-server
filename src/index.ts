@@ -12,7 +12,10 @@ import { z } from 'zod';
 import { registerDeveloperTools } from './developer';
 import { extractSingleTrustedClientIp } from './keyless-client-ip';
 import { registerMonitorTools } from './monitor';
-import { registerResearchTools } from './research';
+import {
+  registerResearchTools,
+  searchPapersForRouting,
+} from './research';
 import { escapeWWWAuthenticateValue } from './www-authenticate';
 import { originHeaders, requestOrigin, type McpClient } from './origin';
 import { applyQueryRouting, routerConfigFromEnv } from './query-router';
@@ -926,16 +929,44 @@ const searchToolBaseFields = {
 const queryRouter = routerConfigFromEnv();
 
 /**
+ * The paper index answers with papers, not web pages, so a retargeted search
+ * says so in its own response rather than letting an agent mistake papers for
+ * the web results it asked for.
+ */
+const PAPER_INDEX_NOTICE =
+  'This query was classified as a research-literature question and answered from the Firecrawl research paper index instead of general web search. These are papers, not web pages. Set `sources` or `categories` on the call to force a plain web search.';
+
+type RouteContext = {
+  session?: SessionData;
+  mcpClient?: McpClient;
+  /**
+   * The paper index needs an authenticated account, and a domain-scoped
+   * search (includeDomains / excludeDomains) is asking about specific sites
+   * rather than about the literature. Neither should be retargeted.
+   */
+  allowPaperIndex: boolean;
+  keyless: boolean;
+  domainScoped: boolean;
+};
+
+/**
  * Route one outbound /v2/search body and log what happened. Shared by both
  * `firecrawl_search` surfaces so they cannot drift: a search reaching the API
  * from either registration gets the same treatment.
+ *
+ * Returns a finished response when the search was retargeted to the paper
+ * index, or null to carry on with the normal /v2/search call. A developer
+ * verdict is applied to `searchBody` in place and also returns null.
  */
 async function routeSearchBody(
   searchBody: Record<string, unknown>,
-  log: { info: (message: string, data?: SerializableValue) => void }
-): Promise<void> {
-  const decision = await applyQueryRouting(searchBody, queryRouter);
-  if (decision.reason === 'disabled') return;
+  log: { info: (message: string, data?: SerializableValue) => void },
+  context: RouteContext
+): Promise<string | null> {
+  const decision = await applyQueryRouting(searchBody, queryRouter, {
+    allowPaperIndex: context.allowPaperIndex,
+  });
+  if (decision.reason === 'disabled') return null;
   // One line per routed search, and per classifier failure. Every field is a
   // fixed token or a number and none carries the query, so this stays safe
   // under zero data retention.
@@ -946,11 +977,42 @@ async function routeSearchBody(
     {
       reason: decision.reason,
       label: decision.label ?? null,
+      probability: decision.probability ?? null,
       confidence: decision.confidence ?? null,
+      target: decision.target ?? null,
       category: decision.category ?? null,
+      keyless: context.keyless,
+      domainScoped: context.domainScoped,
       latencyMs: decision.latencyMs,
     }
   );
+  if (decision.target !== 'research_paper_index') return null;
+
+  const query = typeof searchBody.query === 'string' ? searchBody.query : '';
+  const limit =
+    typeof searchBody.limit === 'number' ? searchBody.limit : undefined;
+  try {
+    const papers = await searchPapersForRouting(
+      getClient(context.session),
+      query,
+      limit,
+      originHeaders(requestOrigin(context.mcpClient, context.session))
+    );
+    return asText({
+      success: true,
+      routedTo: 'research_paper_index',
+      notice: PAPER_INDEX_NOTICE,
+      query,
+      data: { papers },
+    });
+  } catch (error) {
+    // Fail open the same way the classifier does: if the paper index cannot
+    // answer, the agent still gets the web search it originally asked for.
+    log.info('Paper-index retarget failed; falling back to web search', {
+      reason: error instanceof Error ? error.name : 'Error',
+    });
+    return null;
+  }
 }
 
 // Both surfaces forbid specifying includeDomains and excludeDomains together.
@@ -2314,8 +2376,19 @@ Each web result is a title, URL, and description, not the page. Add \`scrapeOpti
       ...(cleaned as any),
       origin: requestOrigin(mcpClient, session),
     };
-    await routeSearchBody(searchBody, log);
-    if (isKeylessMode(session)) {
+    const keyless = isKeylessMode(session);
+    const domainScoped = Boolean(
+      includeDomains?.length || excludeDomains?.length
+    );
+    const routed = await routeSearchBody(searchBody, log, {
+      session,
+      mcpClient,
+      allowPaperIndex: !keyless && !domainScoped,
+      keyless,
+      domainScoped,
+    });
+    if (routed !== null) return routed;
+    if (keyless) {
       const json = await keylessPost('/v2/search', searchBody, session);
       // Search feedback requires an authenticated account. Do not expose its
       // identifier to keyless clients, where it would invite an unusable call.
@@ -3418,7 +3491,17 @@ Returns \`{ success, data, id, creditsUsed }\`, with source arrays in \`data\`.
       };
 
       log.info('Searching', { query: searchQuery });
-      await routeSearchBody(searchBody, log);
+      const domainScoped = Boolean(
+        includeDomains?.length || excludeDomains?.length
+      );
+      const routed = await routeSearchBody(searchBody, log, {
+        session,
+        mcpClient,
+        allowPaperIndex: !domainScoped,
+        keyless: false,
+        domainScoped,
+      });
+      if (routed !== null) return routed;
       const client = getClientFn(session);
       const httpRes = await (client as any).http.post('/v2/search', searchBody);
       return asText(httpRes?.data ?? {});
