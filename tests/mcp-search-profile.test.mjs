@@ -26,11 +26,13 @@ const SEARCH_TOOLS = [
   'firecrawl_research_inspect_paper',
   'firecrawl_research_related_papers',
   'firecrawl_research_read_paper',
+  // Alexandria: catalogue lookup and provider execution.
+  'firecrawl_find_tools',
+  'firecrawl_scrape',
 ];
 
 // A representative sample of the full-surface tools that must NOT leak here.
 const EXCLUDED_TOOLS = [
-  'firecrawl_scrape',
   'firecrawl_map',
   'firecrawl_crawl',
   'firecrawl_check_crawl_status',
@@ -181,6 +183,29 @@ async function startFakeBackend(options = {}) {
               url: 'https://github.com/firecrawl/firecrawl/issues/1',
             },
           ],
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/scrape') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          success: true,
+          scrape_id: 'scrape-1',
+          requestId: req.headers['x-request-id'] ?? 'req-1',
+          data: {
+            creditsCost: 1,
+            alexandria: [
+              {
+                provider: 'particle',
+                capability: 'podcasts/episodes/search',
+                creditsCost: 1,
+                data: { episodes: [] },
+              },
+            ],
+          },
         })
       );
       return;
@@ -354,7 +379,7 @@ async function listTools(port, endpoint, headers) {
   return tools.map((tool) => tool.name);
 }
 
-test('search surface lists exactly the six read-only tools', async (t) => {
+test('search surface lists exactly the eight contracted tools', async (t) => {
   const { searchPort, getStderr } = await startHostedServer(t);
 
   const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, {
@@ -373,7 +398,9 @@ test('search surface lists exactly the six read-only tools', async (t) => {
   );
   assert.doesNotMatch(search.description, /data\.developer/i);
   assert.doesNotMatch(search.description, /not the page/i);
-  assert.doesNotMatch(search.description, /firecrawl_scrape|scrapeOptions/);
+  assert.doesNotMatch(search.description, /scrapeOptions/);
+  assert.match(search.description, /firecrawl_scrape with an alexandria body/);
+  assert.match(search.description, /firecrawl_find_tools/);
   assert.match(search.description, /ranked results with query-relevant highlights\./i);
   assert.match(
     search.inputSchema.properties.highlights.description,
@@ -429,14 +456,15 @@ test('search surface does not expose an excluded tool', async (t) => {
   const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
     id: 2,
     method: 'tools/call',
-    params: { arguments: { url: 'https://example.com' }, name: 'firecrawl_scrape' },
+    params: { arguments: { url: 'https://example.com' }, name: 'firecrawl_map' },
     headers: { 'x-api-key': 'fc-test' },
   });
-  // Unknown tool: either a JSON-RPC error or an error result, never a scrape.
+  // Unknown tool: either a JSON-RPC error or an error result, never a map.
   const message = parseSseJson(await res.text());
   const errored = Boolean(message.error) || message.result?.isError === true;
   assert.equal(errored, true, JSON.stringify(message));
   assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
+  assert.equal(backend.requests.some((r) => r.url === '/v2/map'), false);
 });
 
 test('search firecrawl_search rejects scrapeOptions and never fetches page content', async (t) => {
@@ -872,7 +900,7 @@ test('full surface still exposes its complete tool set alongside the search surf
   assert.equal(prm.status, 404);
 });
 
-test('primary search profile is OAuth-only, six-tool frozen, and ready without keyless configuration', async (t) => {
+test('primary search profile is OAuth-only, eight-tool frozen, and ready without keyless configuration', async (t) => {
   const { backendRequests, port, issuerUrl } = await startPrimarySearchServer(t);
 
   const ready = await fetch(`http://127.0.0.1:${port}/ready`);
@@ -1181,9 +1209,8 @@ test('search-only surface rejects catalogue browsing and preserves semantic plus
   assert.ok(Array.isArray(listing.result?.tools), JSON.stringify(listing));
   const searchTool = listing.result.tools.find(tool => tool.name === 'firecrawl_search');
   assert.ok(searchTool, 'firecrawl_search must be listed');
-  assert.match(searchTool.description, /search-only surface cannot execute tools/);
-  assert.match(searchTool.description, /full MCP surface/);
-  assert.doesNotMatch(searchTool.description, /Execute through firecrawl_scrape|firecrawl_find_tools is the list/);
+  assert.doesNotMatch(searchTool.description, /cannot execute tools|full MCP surface/);
+  assert.match(searchTool.description, /firecrawl_scrape with an alexandria body/);
 
   const call = arguments_ => jsonRpc(searchPort, SEARCH_ENDPOINT, {id:77,method:'tools/call', params:{name:'firecrawl_search',arguments:arguments_},headers:{'x-api-key':'fc-search-key'}});
   const invalid = parseSseJson(await (await call({query:'podcast episodes',sources:[{type:'alexandria',mode:'browse'}]})).text());
@@ -1212,4 +1239,57 @@ test('ordinary search profile enables semantic and domain tools by default', asy
   const sent = backend.requests.find((r) => r.url === '/v2/search').body;
   assert.deepEqual(sent.sources, ['web', 'alexandria']);
   assert.equal(sent.domainTools, true);
+});
+
+test('search surface registers the two Alexandria tools with surface-scoped copy', async (t) => {
+  const { searchPort } = await startHostedServer(t);
+  const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, {
+    'x-api-key': 'fc-test',
+  });
+  const scrape = tools.find((tool) => tool.name === 'firecrawl_scrape');
+  const findTools = tools.find((tool) => tool.name === 'firecrawl_find_tools');
+  assert.ok(scrape);
+  assert.ok(findTools);
+  // Descriptions on this surface name only tools it registers.
+  for (const tool of [scrape, findTools]) {
+    assert.doesNotMatch(
+      tool.description,
+      /firecrawl_(?:crawl|map|interact|monitor|agent|feedback|parse)/,
+      tool.name
+    );
+    assert.doesNotMatch(tool.description, /scrapeId/, tool.name);
+  }
+  assert.ok(scrape.inputSchema.properties.alexandria, 'alexandria body is accepted');
+  assert.ok(scrape.inputSchema.properties.url, 'url mode is accepted');
+});
+
+test('search surface executes an Alexandria capability through firecrawl_scrape without a feedback pointer', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+  });
+
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 21,
+    method: 'tools/call',
+    params: {
+      name: 'firecrawl_scrape',
+      arguments: {
+        alexandria: {
+          provider: 'particle',
+          capability: 'podcasts/episodes/search',
+          options: { keyword_search: 'AI agents', limit: 2 },
+        },
+      },
+    },
+    headers: { 'x-api-key': 'fc-test' },
+  });
+  assert.equal(res.status, 200);
+  const message = parseSseJson(await res.text());
+  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+  const scrapeCalls = backend.requests.filter((r) => r.url === '/v2/scrape');
+  assert.equal(scrapeCalls.length, 1);
+  assert.match(JSON.stringify(scrapeCalls[0].body), /"particle"/);
+  assert.doesNotMatch(JSON.stringify(message.result), /firecrawl_feedback/);
 });
