@@ -1291,5 +1291,9 @@ test('search surface executes an Alexandria capability through firecrawl_scrape 
   const scrapeCalls = backend.requests.filter((r) => r.url === '/v2/scrape');
   assert.equal(scrapeCalls.length, 1);
   assert.match(JSON.stringify(scrapeCalls[0].body), /"particle"/);
-  assert.doesNotMatch(JSON.stringify(message.result), /firecrawl_feedback/);
+  const delivered = JSON.stringify(message.result);
+  // The Alexandria entry itself must reach the caller, not only the backend.
+  assert.match(delivered, /particle/);
+  assert.match(delivered, /podcasts\/episodes\/search/);
+  assert.doesNotMatch(delivered, /firecrawl_feedback/);
 });
