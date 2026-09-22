@@ -58,6 +58,41 @@ test('firecrawl_scrape with alexandria posts the v2 batch and returns the envelo
   assert.equal(payload.data.alexandria[1].error.code, 'capability_not_found');
 });
 
+test('duplicate capabilities keep distinct options and ordered mixed results across retries', async (t) => {
+  const identity = { provider: 'skyscanner-net', capability: 'flights/suggest_places' };
+  const calls = [
+    { ...identity, options: { query: 'Mexico', is_destination: false } },
+    { ...identity, options: { query: 'Mexico City', is_destination: true } },
+  ];
+  const response = {
+    success: true,
+    data: {
+      creditsCost: 1,
+      alexandria: [
+        { ...identity, creditsCost: 1, data: { source_url: 'https://example.com/?query=Mexico&is_destination=false' } },
+        { ...identity, error: { code: 'provider_error', message: 'Unavailable', status: 502 } },
+      ],
+    },
+  };
+  const { api, client } = await startStdioWithApi(t, { largeResult: response });
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const result = toolText(await client.request('tools/call', {
+      name: 'firecrawl_scrape',
+      arguments: { alexandria: calls, requestId: 'same-capability-retry' },
+    }));
+    assert.deepEqual(result.data, response.data);
+    assert.equal(result.requestId, 'same-capability-retry');
+  }
+
+  assert.equal(api.requests.length, 2);
+  for (const request of api.requests) {
+    assert.equal(request.url, '/v2/scrape');
+    assert.equal(request.headers['x-request-id'], 'same-capability-retry');
+    assert.deepEqual(request.body.alexandria, calls);
+  }
+});
+
 test('firecrawl_scrape rejects url with alexandria, neither, extra options, and oversized batches without calling the API', async (t) => {
   const { api, client } = await startStdioWithApi(t);
 
