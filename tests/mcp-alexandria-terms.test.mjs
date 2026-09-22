@@ -52,7 +52,15 @@ test('firecrawl_scrape relays a reserved 409 billing error with its code and cha
     result.content[0].text,
     /A request with this x-request-id is still in flight/
   );
-  assert.deepEqual(result.structuredContent, {
+  // The error keeps the conversation's thread alongside the billing fields,
+  // and the same thread reached the API on the failed request.
+  assert.match(result.structuredContent.threadId, /^[0-9a-f-]{36}$/);
+  assert.equal(
+    api.requests[0].headers['x-firecrawl-thread-id'],
+    result.structuredContent.threadId
+  );
+  const { threadId: _thread, ...billing } = result.structuredContent;
+  assert.deepEqual(billing, {
     code: 'request_in_flight',
     status: 409,
     message: 'A request with this x-request-id is still in flight.',

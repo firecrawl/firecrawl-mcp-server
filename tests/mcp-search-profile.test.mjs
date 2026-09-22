@@ -911,10 +911,22 @@ test('primary search readiness requires the exact canonical resource origin', as
 test('primary search profile uses the strict marketplace search tool, not the full search variant', async (t) => {
   const { port } = await startPrimarySearchServer(t);
   const headers = { authorization: 'Bearer fco_primary_strict_search' };
+  const initialize = await initializeProfile(port, SEARCH_ENDPOINT, headers);
   const tools = await listToolDefinitions(port, SEARCH_ENDPOINT, headers);
   const search = tools.find((tool) => tool.name === 'firecrawl_search');
   assert.ok(search, 'primary profile must register firecrawl_search');
   assert.doesNotMatch(JSON.stringify(search.inputSchema), /scrapeOptions/);
+  // Thread correlation is a full-surface feature; the reviewed search contract
+  // takes no threadId and its instructions never mention one.
+  assert.equal('threadId' in search.inputSchema.properties, false);
+  assert.doesNotMatch(initialize.instructions ?? '', /threadId/);
+  for (const tool of tools) {
+    assert.equal(
+      'threadId' in (tool.inputSchema.properties ?? {}),
+      false,
+      `${tool.name} on the search surface must not take threadId`
+    );
+  }
   assert.doesNotMatch(search.description ?? '', /search_feedback|refund/i);
   assert.equal(search.inputSchema.properties.limit.type, 'integer');
   assert.equal(search.inputSchema.properties.limit.minimum, 1);

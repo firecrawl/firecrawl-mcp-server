@@ -9,6 +9,10 @@
 - `firecrawl_scrape` executes one or up to ten calls using `alexandria: [{ provider, capability, options }]` instead of `url`. Results are returned as `{ success, scrape_id, requestId, data: { alexandria, creditsCost } }`. Errors preserve their code and available charge ID. Keyless sessions receive `Alexandria requires an API key on a team with Alexandria access`.
 - Provider terms are read and accepted through nested `firecrawl_scrape` capabilities after a blocked request. Acceptance requires the reviewed version and digest, explicit user authorization and `confirmed: true`.
 - Successful large Alexandria results use a retained-result handoff above 20,000 estimated tokens when remote access is verified.
+- Thread correlation. These tools accept an optional `threadId` UUID: `firecrawl_scrape`, `firecrawl_search`, `firecrawl_map`, `firecrawl_crawl`, `firecrawl_check_crawl_status`, `firecrawl_agent`, `firecrawl_agent_status`, `firecrawl_interact`, `firecrawl_interact_stop`, `firecrawl_parse`, `firecrawl_find_tools`, `firecrawl_feedback`, and `firecrawl_search_feedback` (Alexandria discovery and execution included).
+- The first call in a conversation mints a `threadId` and returns it as the first top-level field of the result (on errors, in `structuredContent`); later calls pass it back. Every outbound API request in the thread carries it as the `X-Firecrawl-Thread-Id` header, and the hosted `[MCP_ACTION]` log line records it as `thread_id`.
+- A call without a `threadId` continues the thread the same caller (credential, MCP client, User-Agent, keyless IP) was last seen on within `FIRECRAWL_THREAD_IDLE_SECONDS` (default `600`), so parallel first calls and agents that never echo the argument still group; an explicit `threadId` always wins. The hosted log line records the choice as `thread_source` (`argument`, `recent`, or `minted`).
+- The search-only endpoint and the research, developer, monitor, and credit-usage tools are unchanged. `FIRECRAWL_NO_THREAD_ID=true` disables the feature.
 
 ## [3.21.4] - 2026-06-23
 

@@ -65,6 +65,18 @@ function assertServerGeneratedRequestId(payload, untrustedValues = []) {
   return payload.request_id;
 }
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// Every thread-tracked tool result carries a server-minted `threadId` first.
+// Split it off so the rest of the payload can still be compared exactly.
+function splitThreadId(payload) {
+  assert.match(payload.threadId, UUID_PATTERN);
+  assert.equal(Object.keys(payload)[0], 'threadId', 'threadId leads the result');
+  const { threadId, ...rest } = payload;
+  return { threadId, rest };
+}
+
 const KEYLESS_ACCOUNT_FIX =
   'Fix: Create an API key at https://www.firecrawl.dev/app/api-keys, then:\n- Set the header: Authorization: Bearer YOUR_API_KEY on https://mcp.firecrawl.dev/v2/mcp\nThen start a new session.';
 const KEYLESS_QUOTA_MESSAGE = `You've hit Firecrawl's free MCP rate limit. To continue using without limits, create a Firecrawl API key.\n\n${KEYLESS_ACCOUNT_FIX}`;
@@ -864,7 +876,10 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
   assert.notEqual(result.isError, true);
   assert.equal(result.content.length, 1);
   assert.equal(result.content[0].type, 'text');
-  assert.deepEqual(JSON.parse(result.content[0].text), {
+  const { threadId, rest: searchPayload } = splitThreadId(
+    JSON.parse(result.content[0].text)
+  );
+  assert.deepEqual(searchPayload, {
     creditsUsed: 1,
     data: {
       web: [
@@ -881,6 +896,9 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
   const searchRequest = fakeApi.requests.find((request) => request.url === '/v2/search');
   assert.equal(searchRequest.method, 'POST');
   assert.equal(searchRequest.headers.authorization, 'Bearer fc-http-test');
+  // Stateless hosted HTTP has no transport session, so the minted thread ID
+  // is the only thing that ties this request to the conversation.
+  assert.equal(searchRequest.headers['x-firecrawl-thread-id'], threadId);
   assert.deepEqual(searchRequest.body, {
     highlights: false,
     limit: 1,
@@ -1051,6 +1069,46 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
 
   const byName = new Map(tools.tools.map((tool) => [tool.name, tool]));
+  // Web-data tools take the optional threadId; account tools stay untouched.
+  for (const name of [
+    'firecrawl_scrape',
+    'firecrawl_search',
+    'firecrawl_map',
+    'firecrawl_crawl',
+    'firecrawl_check_crawl_status',
+    'firecrawl_agent',
+    'firecrawl_agent_status',
+    'firecrawl_interact',
+    'firecrawl_interact_stop',
+    'firecrawl_parse',
+    'firecrawl_feedback',
+    'firecrawl_search_feedback',
+    'firecrawl_find_tools',
+  ]) {
+    const threadId = byName.get(name).inputSchema.properties.threadId;
+    assert.ok(threadId, `${name} accepts threadId`);
+    assert.equal(threadId.type, 'string');
+    assert.equal(threadId.format, 'uuid');
+    assert.match(threadId.description, /earlier Firecrawl tool result/);
+    assert.equal(
+      byName.get(name).inputSchema.required?.includes('threadId') ?? false,
+      false,
+      `${name} threadId is optional`
+    );
+  }
+  for (const name of [
+    'firecrawl_credit_usage',
+    'firecrawl_developer_search',
+    'firecrawl_research_search_papers',
+    'firecrawl_monitor_list',
+  ]) {
+    assert.equal(
+      'threadId' in (byName.get(name).inputSchema.properties ?? {}),
+      false,
+      `${name} does not take threadId`
+    );
+  }
+  assert.match(init.instructions, /threadId/);
   assert.match(
     byName.get('firecrawl_credit_usage').description,
     /remainingCredits.*planCredits.*billingPeriodStart.*billingPeriodEnd.*historical.*creditsUsed.*byApiKey.*API key/is
@@ -1513,7 +1571,12 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
   assert.notEqual(result.isError, true);
   assert.equal(result.content.length, 1);
   assert.equal(result.content[0].type, 'text');
-  const toolPayload = JSON.parse(result.content[0].text);
+  // The first call of a conversation carries no threadId, so the server mints
+  // one, sends it to the API, and hands it back on the result.
+  const { threadId, rest: toolPayload } = splitThreadId(
+    JSON.parse(result.content[0].text)
+  );
+  assert.equal(fakeApi.requests[0].headers['x-firecrawl-thread-id'], threadId);
   assert.deepEqual(toolPayload, {
     creditsUsed: 1,
     data: {
@@ -1528,34 +1591,87 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
     success: true,
   });
 
+  // Passing the threadId back keeps the later calls on the same thread: the
+  // header repeats the value, the API body never sees the argument, and the
+  // result echoes it rather than minting a new one.
   const scrapeResult = await client.request('tools/call', {
-    arguments: { url: 'https://example.com/' },
+    arguments: { threadId, url: 'https://example.com/' },
     name: 'firecrawl_scrape',
   });
   assert.notEqual(scrapeResult.isError, true);
   const scrapePayload = JSON.parse(scrapeResult.content[0].text);
+  assert.equal(scrapePayload.threadId, threadId);
   assert.equal(
     scrapePayload.metadata.scrapeId,
     '00000000-0000-4000-8000-000000000010'
   );
+  const scrapeRequest = fakeApi.requests.find(
+    (request) => request.url === '/v2/scrape'
+  );
+  assert.equal(scrapeRequest.headers['x-firecrawl-thread-id'], threadId);
+  assert.equal('threadId' in scrapeRequest.body, false);
 
+  // A call that forgets the threadId still lands on the caller's recent
+  // thread (same credential, client, and User-Agent within the idle window)
+  // instead of starting a new one.
   const mapResult = await client.request('tools/call', {
     arguments: { limit: 1, url: 'https://example.com/' },
     name: 'firecrawl_map',
   });
   assert.notEqual(mapResult.isError, true);
   const mapPayload = JSON.parse(mapResult.content[0].text);
+  assert.equal(mapPayload.threadId, threadId);
   assert.equal(mapPayload.id, '00000000-0000-4000-8000-000000000020');
+  const mapRequest = fakeApi.requests.find((request) => request.url === '/v2/map');
+  assert.equal(mapRequest.headers['x-firecrawl-thread-id'], threadId);
+  assert.equal('threadId' in mapRequest.body, false);
+
+  // A threadId that is not a UUID fails schema validation (a JSON-RPC
+  // invalid-params error), so it can never become a header value.
+  await assert.rejects(
+    client.request('tools/call', {
+      arguments: { threadId: 'conversation-42', url: 'https://example.com/' },
+      name: 'firecrawl_scrape',
+    }),
+    /threadId must be the UUID returned by an earlier Firecrawl tool result/
+  );
+  assert.equal(
+    fakeApi.requests.filter((request) => request.url === '/v2/scrape').length,
+    1,
+    'a rejected threadId never reaches the API'
+  );
+
+  // A failed call keeps the thread: the fake API 404s an unknown crawl, and
+  // the error result still carries threadId so the agent can retry with it.
+  const failed = await client.request('tools/call', {
+    arguments: { id: '00000000-0000-4000-8000-00000000dead', threadId },
+    name: 'firecrawl_check_crawl_status',
+  });
+  assert.equal(failed.isError, true);
+  assert.match(
+    failed.content[0].text,
+    /^Tool 'firecrawl_check_crawl_status' execution failed: /
+  );
+  assert.equal(failed.structuredContent.threadId, threadId);
+  const failedRequest = fakeApi.requests.find((request) =>
+    request.url.startsWith('/v2/crawl/00000000-0000-4000-8000-00000000dead')
+  );
+  assert.equal(failedRequest.headers['x-firecrawl-thread-id'], threadId);
 
   const searchFeedbackResult = await client.request('tools/call', {
     arguments: {
       querySuggestions: 'Use a narrower query',
       rating: 'bad',
       searchId: toolPayload.id,
+      threadId,
     },
     name: 'firecrawl_search_feedback',
   });
   assert.notEqual(searchFeedbackResult.isError, true);
+  assert.equal(
+    JSON.parse(searchFeedbackResult.content[0].text).threadId,
+    threadId
+  );
 
   for (const [endpoint, jobId] of [
     ['scrape', scrapePayload.metadata.scrapeId],
@@ -1567,6 +1683,7 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
         jobId,
         note: `Feedback for the ${endpoint} result`,
         rating: 'bad',
+        threadId,
       },
       name: 'firecrawl_feedback',
     });
@@ -1579,9 +1696,15 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
       '/v2/search/00000000-0000-4000-8000-000000000000/feedback'
   );
   assert.equal(searchFeedbackRequest.body.rating, 'bad');
+  assert.equal(searchFeedbackRequest.headers['x-firecrawl-thread-id'], threadId);
+  assert.equal('threadId' in searchFeedbackRequest.body, false);
   const endpointFeedbackRequests = fakeApi.requests.filter(
     (request) => request.url === '/v2/feedback'
   );
+  for (const request of endpointFeedbackRequests) {
+    assert.equal(request.headers['x-firecrawl-thread-id'], threadId);
+    assert.equal('threadId' in request.body, false);
+  }
   assert.deepEqual(
     endpointFeedbackRequests.map((request) => ({
       endpoint: request.body.endpoint,
@@ -1649,6 +1772,77 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
     }
   }
   assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('FIRECRAWL_THREAD_IDLE_SECONDS=0 keeps explicit threads but never recalls one', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+    FIRECRAWL_THREAD_IDLE_SECONDS: '0',
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-no-recall', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const call = (args) =>
+    client
+      .request('tools/call', { arguments: args, name: 'firecrawl_search' })
+      .then((result) => JSON.parse(result.content[0].text).threadId);
+
+  const first = await call({ limit: 1, query: 'one' });
+  const second = await call({ limit: 1, query: 'two' });
+  assert.match(first, UUID_PATTERN);
+  assert.match(second, UUID_PATTERN);
+  assert.notEqual(first, second, 'without recall every bare call starts a thread');
+  assert.equal(await call({ limit: 1, query: 'three', threadId: first }), first);
+});
+
+test('FIRECRAWL_NO_THREAD_ID removes thread correlation end to end', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+    FIRECRAWL_NO_THREAD_ID: 'true',
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  const init = await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-no-thread', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+  assert.doesNotMatch(init.instructions, /threadId/);
+
+  const tools = await client.request('tools/list');
+  for (const tool of tools.tools) {
+    assert.equal(
+      'threadId' in (tool.inputSchema.properties ?? {}),
+      false,
+      `${tool.name} must not advertise threadId when disabled`
+    );
+  }
+
+  const result = await client.request('tools/call', {
+    arguments: { limit: 1, query: 'example domain' },
+    name: 'firecrawl_search',
+  });
+  assert.notEqual(result.isError, true);
+  assert.equal('threadId' in JSON.parse(result.content[0].text), false);
+  assert.equal(fakeApi.requests.length, 1);
+  assert.equal('x-firecrawl-thread-id' in fakeApi.requests[0].headers, false);
 });
 
 test('HTTP cloud transport swaps an fco_ OAuth token for its introspected API key (once)', async (t) => {
@@ -2139,6 +2333,10 @@ test('HTTP cloud keyless Parse completes both phases without credentials and for
   const phaseOnePayload = JSON.parse(phaseOneResult.content[0].text);
   assert.equal(phaseOnePayload.upload.uploadRef, 'test-upload-ref');
   assert.equal(phaseOnePayload.nextToolCall.arguments.uploadRef, 'test-upload-ref');
+  // Phase two is a separate tool call; the suggested continuation carries the
+  // thread so both halves of the parse stay under one thread ID.
+  const { threadId } = splitThreadId(phaseOnePayload);
+  assert.equal(phaseOnePayload.nextToolCall.arguments.threadId, threadId);
 
   const phaseTwo = await httpToolCall(port, {
     id: 'keyless-parse-phase-two',
@@ -2150,18 +2348,24 @@ test('HTTP cloud keyless Parse completes both phases without credentials and for
       arguments: {
         formats: ['markdown'],
         redactPII: true,
+        threadId,
         uploadRef: 'test-upload-ref',
       },
       name: 'firecrawl_parse',
     },
   });
   assert.equal(phaseTwo.status, 200);
-  assert.notEqual(parseSseJson(await phaseTwo.text()).result.isError, true);
+  const phaseTwoResult = parseSseJson(await phaseTwo.text()).result;
+  assert.notEqual(phaseTwoResult.isError, true);
+  assert.equal(JSON.parse(phaseTwoResult.content[0].text).threadId, threadId);
 
   const uploadCalls = backend.requests.filter((r) => r.url === '/v2/parse/upload-url');
   const parseCalls = backend.requests.filter((r) => r.url === '/v2/parse');
   assert.equal(uploadCalls.length, 1);
   assert.equal(parseCalls.length, 1);
+  assert.equal(uploadCalls[0].headers['x-firecrawl-thread-id'], threadId);
+  assert.equal(parseCalls[0].headers['x-firecrawl-thread-id'], threadId);
+  assert.equal('threadId' in parseCalls[0].body, false);
   assert.equal(uploadCalls[0].headers.authorization, undefined);
   assert.equal(
     uploadCalls[0].headers['x-origin'],
@@ -2936,12 +3140,15 @@ test('an OAuth session keeps its existing Core 401 behavior', async (t) => {
   assert.equal(feedbackCall.status, 200);
   const feedbackResult = parseSseJson(await feedbackCall.text()).result;
   assert.notEqual(feedbackResult.isError, true);
-  assert.deepEqual(JSON.parse(feedbackResult.content[0].text), {
-    error: 'Unauthorized: Invalid token',
-    retryable: false,
-    status: 401,
-    success: false,
-  });
+  assert.deepEqual(
+    splitThreadId(JSON.parse(feedbackResult.content[0].text)).rest,
+    {
+      error: 'Unauthorized: Invalid token',
+      retryable: false,
+      status: 401,
+      success: false,
+    }
+  );
 });
 
 test('active introspection with an unknown credential purpose fails closed', async (t) => {

@@ -40,6 +40,18 @@ import { registerUsageTools } from './usage';
 import { escapeWWWAuthenticateValue } from './www-authenticate';
 import { originHeaders, requestOrigin, type McpClient } from './origin';
 import {
+  isThreadIdEnabled,
+  takeThreadId,
+  ThreadRegistry,
+  threadIdFields,
+  threadIdHeaders,
+  threadScopeKey,
+  toolTracksThread,
+  withThreadId,
+  type ThreadSource,
+} from './thread';
+import {
+  credentialDigest,
   credentialForOutboundRequest,
   copyManagedOAuthApiKey,
   CoreHttpError,
@@ -86,6 +98,14 @@ interface SessionData extends CredentialSession {
   oauthClientId?: string;
   resource?: string;
   requestId?: string;
+  /**
+   * Thread ID of the current tool call (see src/thread.ts): taken from the
+   * call's `threadId` argument or minted for it, stamped on every outbound
+   * request as `X-Firecrawl-Thread-Id`, and returned on the result.
+   */
+  threadId?: string;
+  /** How the call's thread ID was chosen: passed in, recalled, or minted. */
+  threadSource?: ThreadSource;
   [key: string]: unknown;
 }
 
@@ -1211,10 +1231,18 @@ const openAiAppsChallengeToken = normalizeHeader(
   process.env.OPENAI_APPS_CHALLENGE_TOKEN
 );
 
+// One sentence, shared by the full and keyless instructions, that tells the
+// agent what the threadId on every result is for. Empty when the kill switch
+// removes the argument, so the instructions never describe a field that is
+// not there.
+const THREAD_ID_INSTRUCTIONS = isThreadIdEnabled()
+  ? ' Tool results include a threadId; passing it as the threadId argument on later Firecrawl calls in the same conversation groups those requests together.'
+  : '';
+
 const FULL_PROFILE_INSTRUCTIONS =
   `Execution with firecrawl_scrape alexandria uses requestId; reuse the returned ID for retries of the same payload, never a new ID to bypass a pending or uncertain 409. Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question — code behaviour, a library or framework, an API contract, an error message, or a known bug — firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of repositories, GitHub issues, merged pull requests, READMEs, and curated documentation sites. Authenticated firecrawl_search returns web results together with matching Alexandria providers in data.tools. ${ALEXANDRIA_CATALOGUE_SENTENCE} When a provider matches, prefer it over scraping pages if the task needs the same fields across several entities, provenance, exact figures or timestamps, or a large set of records; execute it through firecrawl_scrape with the returned contract. If web results already answer the question, use them. Before scraping more than one page for the same fields, spend one free firecrawl_find_tools call to check for a provider. Use firecrawl_find_tools to read a contract that was not returned in full or to browse the catalogue by category. ${ALEXANDRIA_SOURCES_OPT_OUT} If no provider fits, continue with web search or firecrawl_agent. firecrawl_search with sources: [{type: "alexandria"}] returns compact tool summaries in data.tools; toolDetail: "full" includes contracts, firecrawl_find_tools starts with categories, lists providers, then compact tools, and expands the selected full contract, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities and returns their results. Alexandria access needs an API key on a team with it enabled. A terms-gated Alexandria provider fails with code THIRD_PARTY_DATA_TERMS_REQUIRED and a requiresAction.url. Follow the returned terms/show and terms/accept calls through firecrawl_scrape; acceptance requires explicit user authorization for the reviewed version and digest and confirmed:true. Otherwise direct an organization admin to the dashboard URL. Do not repeat successful provider calls just because the client could not display their output. Provide only the required inputs and account for stated network or external side effects.
-${ALEXANDRIA_FEEDBACK_GUIDANCE}`;
-const KEYLESS_PROFILE_INSTRUCTIONS = `Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index and repository research, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.`;
+${ALEXANDRIA_FEEDBACK_GUIDANCE}${THREAD_ID_INSTRUCTIONS}`;
+const KEYLESS_PROFILE_INSTRUCTIONS = `Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index and repository research, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.${THREAD_ID_INSTRUCTIONS}`;
 
 // The search surface exposes web/developer/research search only. Its instructions
 // and tool copy describe just those tools and stay neutral about how a client
@@ -1552,6 +1580,8 @@ function emitActionLog(
     tool_name: toolName,
     status,
     request_id: requestId,
+    ...(session?.threadId ? { thread_id: session.threadId } : {}),
+    ...(session?.threadSource ? { thread_source: session.threadSource } : {}),
     resource: primaryProfile.resourceUrl,
     ...(error
       ? { error_class: error instanceof Error ? error.name : typeof error }
@@ -1567,9 +1597,14 @@ function emitActionLog(
     (apiUrl ? `${withoutTrailingSlash(apiUrl)}/v2/mcp/action-logs` : undefined);
   if (!secret || !endpoint || !payload.team_id || status === 'started') return;
   // `code` is an MCP console-log discriminator, not part of the account-scoped
-  // action-log API contract.
+  // action-log API contract. `thread_id` stays out of that POST for now as
+  // well: Core's action-log ingest rejects any field it does not list, so it
+  // joins the contract only once Core accepts it (the API requests themselves
+  // already carry the thread in the X-Firecrawl-Thread-Id header).
   const actionLogPayload = { ...payload };
   delete actionLogPayload.code;
+  delete actionLogPayload.thread_id;
+  delete actionLogPayload.thread_source;
   void fetch(endpoint, {
     method: 'POST',
     headers: {
@@ -1581,11 +1616,48 @@ function emitActionLog(
   }).catch(() => undefined);
 }
 
+// One registry per process: the memory of which thread each caller was last
+// seen on, for calls that arrive without a threadId (see src/thread.ts).
+const threadRegistry = new ThreadRegistry();
+
+/**
+ * The thread a tracked call runs on. Correlation is observability, so it is
+ * never allowed to fail the call: if attributing the caller throws for any
+ * reason (an unexpected shape in session data, say), the call still gets a
+ * thread, minted fresh and remembered for no one.
+ */
+function resolveThread(
+  args: unknown,
+  context: { session?: SessionData; client?: McpClient }
+): ReturnType<typeof takeThreadId> {
+  const taken = takeThreadId(args);
+  try {
+    return threadRegistry.resolve(
+      threadScopeKey(
+        context.session,
+        context.client?.version?.name,
+        credentialDigest(context.session)
+      ),
+      taken
+    );
+  } catch (error) {
+    console.error(
+      '[MCP_THREAD]',
+      JSON.stringify({
+        event: 'scope_unavailable',
+        error_class: error instanceof Error ? error.name : typeof error,
+      })
+    );
+    return taken;
+  }
+}
+
 function guardHostedTool(
   tool: RegisteredTool,
   { logActions }: { logActions: boolean }
 ): RegisteredTool {
   const keylessTool = KEYLESS_TOOL_NAMES.has(tool.name);
+  const tracksThread = toolTracksThread(tool.parameters);
   const execute = tool.execute;
   const canList = tool.canList;
   const beforeValidate = tool.beforeValidate;
@@ -1611,9 +1683,24 @@ function guardHostedTool(
           : undefined;
       if (code) {
         const requestId = randomUUID();
-        const payload = recoveryPayload(code, requestId);
+        // This call never runs, so nothing is minted or recalled for it; an
+        // explicit threadId the agent sent is still kept on the recovery
+        // payload so the conversation's thread survives the credential fix.
+        const provided = tracksThread ? takeThreadId(args) : undefined;
+        const explicitThread: Record<string, unknown> =
+          provided?.source === 'argument'
+            ? { threadId: provided.threadId }
+            : {};
+        const payload = { ...recoveryPayload(code, requestId), ...explicitThread };
         if (logActions) {
-          emitActionLog(tool.name, 'error', session, new UserError(String(payload.message), payload), requestId, code);
+          emitActionLog(
+            tool.name,
+            'error',
+            { ...session, ...explicitThread, ...(provided?.source === 'argument' ? { threadSource: 'argument' as const } : {}) },
+            new UserError(String(payload.message), payload),
+            requestId,
+            code
+          );
         }
         return {
           content: [{ type: 'text' as const, text: String(payload.message) }],
@@ -1644,9 +1731,19 @@ function guardHostedTool(
     },
     execute: async (args, context) => {
       const requestId = randomUUID();
+      // A tool that declares `threadId` in its schema takes part in thread
+      // correlation: the argument is removed here so no tool can forward it
+      // into an API body, the ID rides on the invocation session so every
+      // outbound request and action log carries it, and the result gets it
+      // back for the agent to pass on. Untracked tools see their args as-is.
+      const thread = tracksThread ? resolveThread(args, context) : undefined;
+      const toolArgs = thread ? (thread.args as typeof args) : args;
       const invocationSession: SessionData = {
         ...context.session,
         requestId,
+        ...(thread
+          ? { threadId: thread.threadId, threadSource: thread.source }
+          : {}),
       };
       copyManagedOAuthApiKey(context.session, invocationSession);
       const invocationContext = {
@@ -1654,25 +1751,57 @@ function guardHostedTool(
         session: invocationSession,
       };
 
+      const threadFields: Record<string, unknown> = thread
+        ? { threadId: thread.threadId }
+        : {};
       if (invocationSession.credentialError) {
         const code = 'CREDENTIAL_INVALID';
-        const payload = recoveryPayload(code, requestId);
+        const payload = { ...recoveryPayload(code, requestId), ...threadFields };
         if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
         throw new UserError(String(payload.message), payload);
       }
       if (isHostedKeylessSession(invocationSession) && !keylessTool) {
         const code = 'KEYLESS_TOOL_NOT_AVAILABLE';
-        const payload = recoveryPayload(code, requestId);
+        const payload = { ...recoveryPayload(code, requestId), ...threadFields };
         if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
         throw new UserError(String(payload.message), payload);
       }
-      const runTool = () =>
-        runWithCredentialRecovery(
-          () => execute(args, invocationContext),
+      const runTool = async () => {
+        const result = await runWithCredentialRecovery(
+          () => execute(toolArgs, invocationContext),
           requestId,
           invocationSession
         );
-      if (!logActions) return runTool();
+        return thread ? withThreadId(result, thread.threadId) : result;
+      };
+      // A failed call still belongs to its thread: the agent needs the same
+      // threadId to retry or fall back to another tool. A UserError keeps its
+      // payload and gains threadId in structuredContent; any other error is
+      // rethrown as a UserError carrying fastmcp's own failure text, so the
+      // message the agent reads does not change, plus the threadId.
+      const withThreadOnError = (error: unknown): unknown => {
+        if (!thread) return error;
+        if (error instanceof UserError) {
+          const extras =
+            error.extras && typeof error.extras === 'object' && !Array.isArray(error.extras)
+              ? (error.extras as Record<string, unknown>)
+              : {};
+          return new UserError(error.message, {
+            threadId: thread.threadId,
+            ...extras,
+          });
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        return new UserError(
+          `Tool '${tool.name}' execution failed: ${message}`,
+          { threadId: thread.threadId }
+        );
+      };
+      if (!logActions) {
+        return runTool().catch((error) => {
+          throw withThreadOnError(error);
+        });
+      }
 
       emitActionLog(tool.name, 'started', invocationSession, undefined, requestId);
       try {
@@ -1680,8 +1809,9 @@ function guardHostedTool(
         emitActionLog(tool.name, 'success', invocationSession, undefined, requestId);
         return result;
       } catch (error) {
+        // Log the original error so error_class names the real fault class.
         emitActionLog(tool.name, 'error', invocationSession, error, requestId);
-        throw error;
+        throw withThreadOnError(error);
       }
     },
   };
@@ -1782,7 +1912,10 @@ function getClient(session?: SessionData): FirecrawlApp {
     );
   }
   if (!hasManagedOAuthCredential(session)) {
-    return createClient(credentialForOutboundRequest(session));
+    return withThreadHeader(
+      createClient(credentialForOutboundRequest(session)),
+      session
+    );
   }
 
   const client = createClient('request-scoped-hosted-oauth');
@@ -1792,6 +1925,7 @@ function getClient(session?: SessionData): FirecrawlApp {
       reason: 'outbound_client_uninstrumented',
     });
   }
+  withThreadHeader(client, session);
   axiosInstance.interceptors.request.use((config: any) => {
     const credential = credentialForOutboundRequest(session);
     // Unreachable in practice: this interceptor is installed only for a session
@@ -1806,6 +1940,29 @@ function getClient(session?: SessionData): FirecrawlApp {
     config.headers = {
       ...(config.headers ?? {}),
       Authorization: `Bearer ${credential}`,
+    };
+    return config;
+  });
+  return client;
+}
+
+/**
+ * Stamp the call's thread ID on every request the SDK client makes. Best
+ * effort: a client without an axios instance to hook simply sends no header,
+ * since correlation must never make a request fail.
+ */
+function withThreadHeader(
+  client: FirecrawlApp,
+  session?: SessionData
+): FirecrawlApp {
+  const threadId = session?.threadId;
+  if (!threadId) return client;
+  const axiosInstance = (client as any).http?.instance;
+  if (!axiosInstance?.interceptors?.request?.use) return client;
+  axiosInstance.interceptors.request.use((config: any) => {
+    config.headers = {
+      ...(config.headers ?? {}),
+      ...threadIdHeaders(threadId),
     };
     return config;
   });
@@ -2026,6 +2183,7 @@ const scrapeToolParamsSchema = scrapeParamsSchema
       .describe(
         'URL mode only: include domain-matched Alexandria tools for the page in tools on the returned document.'
       ),
+    ...threadIdFields(),
   })
   .refine(
     (args) => Boolean(args.url) !== Boolean(args.alexandria),
@@ -2036,7 +2194,13 @@ const scrapeToolParamsSchema = scrapeParamsSchema
       !args.alexandria ||
       Object.entries(args).every(
         ([key, value]) =>
-          key === 'alexandria' || key === 'requestId' || key === 'timeout' || value === undefined
+          key === 'alexandria' ||
+          key === 'requestId' ||
+          key === 'timeout' ||
+          // Thread correlation applies to both modes; validation runs before
+          // the tool guard removes the argument, so it must be allowed here.
+          key === 'threadId' ||
+          value === undefined
       ),
     'alexandria cannot be combined with url or other scrape options'
   )
@@ -2093,6 +2257,7 @@ const parseOptionParamsSchema = z.object({
 });
 
 const localParseParamsSchema = parseOptionParamsSchema.extend({
+  ...threadIdFields(),
   filePath: z
     .string()
     .min(1)
@@ -2137,6 +2302,7 @@ const hostedParseParamsSchema = parseOptionParamsSchema
       .describe(
         'Optional phase 1 size declaration. Hosted MCP does not stat the file; provide this only if the caller already knows it.'
       ),
+    ...threadIdFields(),
   })
   .superRefine((value, ctx) => {
     const hasFilePath =
@@ -2235,7 +2401,8 @@ async function apiPostJson(
   pathName: string,
   body: Record<string, unknown>,
   apiKey: string,
-  origin?: string
+  origin?: string,
+  extraHeaders: Record<string, string> = {}
 ): Promise<any> {
   const response = await fetch(`${resolveApiBaseUrl()}${pathName}`, {
     method: 'POST',
@@ -2243,6 +2410,7 @@ async function apiPostJson(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
       ...(origin ? originHeaders(origin) : {}),
+      ...extraHeaders,
     },
     body: JSON.stringify(body),
   });
@@ -2272,7 +2440,13 @@ async function apiPostJsonForSession(
 ): Promise<any> {
   const credential = credentialForOutboundRequest(session);
   if (credential) {
-    return apiPostJson(pathName, body, credential, origin);
+    return apiPostJson(
+      pathName,
+      body,
+      credential,
+      origin,
+      threadIdHeaders(session?.threadId)
+    );
   }
 
   if (isKeylessMode(session)) {
@@ -2407,7 +2581,12 @@ async function executeHostedParse(
       },
       nextToolCall: {
         name: 'firecrawl_parse',
-        arguments: buildContinuationArguments(upload.uploadRef, options),
+        arguments: {
+          ...buildContinuationArguments(upload.uploadRef, options),
+          // Phase two is a new tool call; carrying the thread here keeps both
+          // halves of one parse under the same thread ID.
+          ...(session?.threadId ? { threadId: session.threadId } : {}),
+        },
       },
       notes: [
         'Run the curl command on the machine that can read filePath.',
@@ -2532,6 +2711,7 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
     includeSubdomains: z.boolean().optional(),
     limit: z.number().optional(),
     ignoreQueryParameters: z.boolean().optional(),
+    ...threadIdFields(),
   }),
   execute: async (
     args: unknown,
@@ -2578,6 +2758,7 @@ ${ALEXANDRIA_INSTRUCTIONS}
         .omit({ url: true })
         .partial()
         .optional(),
+      ...threadIdFields(),
     })
     .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE)
     .refine(
@@ -2853,6 +3034,7 @@ async function keylessPost(
   }
   const headers: Record<string, string> = {
     ...originHeaders(origin),
+    ...threadIdHeaders(session?.threadId),
     'Content-Type': 'application/json',
   };
   // Forward the real client IP (secret-authenticated) when proxying keyless
@@ -3064,6 +3246,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
             'longer `description`.'
         ),
       querySuggestions: z.string().max(2000).optional(),
+      ...threadIdFields(),
     }),
     execute: async (
       args: unknown,
@@ -3103,6 +3286,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
 
       const headers: Record<string, string> = {
         ...originHeaders(origin),
+        ...threadIdHeaders(session?.threadId),
         'Content-Type': 'application/json',
       };
       const credential = credentialForOutboundRequest(session);
@@ -3199,6 +3383,7 @@ Returns submission status, feedback ID, and accounting fields.
       url: z.string().url().optional(),
       pageNumbers: z.array(z.number().int().positive()).max(100).optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
+      ...threadIdFields(),
     }).superRefine((value, ctx) => {
       if (value.endpoint === 'alexandria') {
         const parsed = alexandriaSessionFeedbackSchema.safeParse(value);
@@ -3250,6 +3435,7 @@ Returns submission status, feedback ID, and accounting fields.
       const apiBase = resolveApiBaseUrl();
       const headers: Record<string, string> = {
         ...originHeaders(origin),
+        ...threadIdHeaders(session?.threadId),
         'Content-Type': 'application/json',
       };
       const credential = credentialForOutboundRequest(session);
@@ -3355,6 +3541,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
     deduplicateSimilarURLs: z.boolean().optional(),
     ignoreQueryParameters: z.boolean().optional(),
     scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+    ...threadIdFields(),
   }),
   execute: async (args, { session, log, client: mcpClient }) => {
     const origin = requestOrigin(mcpClient, session);
@@ -3416,7 +3603,7 @@ server.addTool({
   description: `
 Retrieve the current status, progress, and available results for an existing crawl ID. This only reads Firecrawl job state and does not start or modify the crawl.
 `,
-  parameters: z.object({ id: z.string() }),
+  parameters: z.object({ id: z.string(), ...threadIdFields() }),
   execute: async (
     args: unknown,
     {
@@ -3486,6 +3673,7 @@ This call returns only a job ID, not the research result. Read the job with \`fi
     prompt: z.string().min(1).max(10000),
     urls: z.array(z.string().url()).optional(),
     schema: z.record(z.string(), z.any()).optional(),
+    ...threadIdFields(),
   }),
   execute: async (
     args: unknown,
@@ -3523,7 +3711,7 @@ Retrieve progress or final results for a \`firecrawl_agent\` job ID. A \`process
 
 Returns job status, progress information, and result data when completed.
 `,
-  parameters: z.object({ id: z.string() }),
+  parameters: z.object({ id: z.string(), ...threadIdFields() }),
   execute: async (
     args: unknown,
     { session, log, client: mcpClient }
@@ -3562,6 +3750,7 @@ This acts on the live site, so actions such as form submission can create persis
       language: z.enum(['bash', 'python', 'node']).optional(),
       timeout: z.number().min(1).max(300).optional(),
       scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+      ...threadIdFields(),
     })
     .refine((data) => Boolean(data.scrapeId) !== Boolean(data.url), {
       message:
@@ -3656,6 +3845,7 @@ Stop the live interact session associated with a \`scrapeId\` and release its re
 `,
   parameters: z.object({
     scrapeId: z.string(),
+    ...threadIdFields(),
   }),
   execute: async (
     args: unknown,
@@ -3735,7 +3925,10 @@ Set \`redactPII\` to request redaction of personally identifiable information in
     form.append('file', blob, filename);
     form.append('options', JSON.stringify(optionsPayload));
 
-    const headers: Record<string, string> = { ...originHeaders(origin) };
+    const headers: Record<string, string> = {
+      ...originHeaders(origin),
+      ...threadIdHeaders(session?.threadId),
+    };
     const credential = credentialForOutboundRequest(session);
     if (credential) {
       headers['Authorization'] = `Bearer ${credential}`;

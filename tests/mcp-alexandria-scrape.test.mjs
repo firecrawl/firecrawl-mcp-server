@@ -128,7 +128,11 @@ test('below-budget results, errors, utility calls and URL scrapes bypass retenti
           idleTtlSeconds: 300,
         } }] }
       : payload.data;
-    assert.deepEqual(args.url ? result : result.data, expectedData);
+    // Every scrape result leads with the server-minted thread ID; the
+    // payload underneath must be untouched.
+    assert.match(result.threadId, /^[0-9a-f-]{36}$/);
+    const { threadId: _thread, ...withoutThread } = result;
+    assert.deepEqual(args.url ? withoutThread : result.data, expectedData);
     assert.equal(result.delivery, undefined);
     assert.equal(api.requests.length, 1);
   }

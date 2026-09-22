@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ALEXANDRIA_FEEDBACK_GUIDANCE } from './alexandria-feedback.js';
+import { threadIdFields } from './thread';
 
 const catalogueTypes = ['alexandria', 'exchange'] as const;
 export const searchSourceSchema = z.union([
@@ -59,6 +60,9 @@ export const findToolsSchema = z
     expand: z.array(z.enum(['options', 'response', 'examples'])).optional().describe('Use ["options", "response"] for inputs and output shape without example payloads; [] keeps results compact. Omit for full contracts on selected capabilities.'),
     limit: z.number().int().min(1).max(100).optional(),
     offset: z.number().int().nonnegative().optional(),
+    // Discovery is part of the same conversation as the execution it leads
+    // to; the schema is strict, so the argument has to be declared here.
+    ...threadIdFields(),
   })
   .strict();
 
