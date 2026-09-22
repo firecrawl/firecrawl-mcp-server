@@ -1127,11 +1127,15 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.match(init.instructions, /firecrawl_scrape retrieves one supplied page/i);
   assert.match(
     init.instructions,
-    /first check firecrawl_find_tools for a suitable workflow or data provider/i
+    /Alexandria is Firecrawl's catalogue of data providers and workflows.*firecrawl_scrape with alexandria.*executes up to ten capabilities/is
   );
   assert.match(
     init.instructions,
-    /firecrawl_scrape with alexandria.*executes up to ten capabilities/is
+    /Passing sources without alexandria in it \(for example \["web"\] or \["news"\]\) excludes Alexandria provider matches; omit sources unless you specifically need web-only or news-only results, or include "alexandria" alongside them/
+  );
+  assert.match(
+    init.instructions,
+    /Before scraping more than one page for the same fields, spend one free firecrawl_find_tools call/
   );
   assert.match(
     init.instructions,
