@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.25.2] - Unreleased
+
+### Changed
+
+- Alexandria routing copy: the server instructions, `firecrawl_search` and `firecrawl_find_tools` descriptions and the `sources` parameter description now describe what Alexandria covers, keep `firecrawl_search` as the front door, say when a provider beats scraping a page, state that passing `sources` without `alexandria` (including `["news"]`) excludes provider matches, and point scrape-first tasks at one search with `sources` unset on authenticated sessions.
+
 ## [3.25.0] - Unreleased
 
 ### Added
