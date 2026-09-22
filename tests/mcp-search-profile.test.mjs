@@ -580,6 +580,21 @@ test('search firecrawl_search forwards domain filters as body fields without rew
     assert.equal(sentBody.query, 'davis cup');
     assert.deepEqual(sentBody[field], domains);
   }
+
+  const before = backend.requests.filter((r) => r.url === '/v2/search').length;
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 102,
+    method: 'tools/call',
+    params: {
+      arguments: { query: 'davis cup', includeDomains: ['a.com'], excludeDomains: ['b.com'] },
+      name: 'firecrawl_search',
+    },
+    headers: { 'x-api-key': 'fc-search-key' },
+  });
+  const message = parseSseJson(await res.text());
+  const errored = Boolean(message.error) || message.result?.isError === true;
+  assert.equal(errored, true, JSON.stringify(message));
+  assert.equal(backend.requests.filter((r) => r.url === '/v2/search').length, before);
 });
 
 test('search firecrawl_search normalizes the legacy exchange source to alexandria', async (t) => {
