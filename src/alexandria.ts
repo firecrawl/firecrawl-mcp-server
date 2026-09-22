@@ -102,7 +102,11 @@ export function withFindToolsNavigation(envelope: any) {
 export const ALEXANDRIA_SEARCH_INSTRUCTIONS =
   'Authenticated search combines web results, semantic tool summaries and domain matches. Use sources: ["alexandria"] for semantic tools only, or sources: ["web"] for web only. domainTools: false disables domain matching. Tool matches describe available structured-data capabilities, not executed data. toolDetail: "compact" (default) returns only provider, capability and description; "summary" adds metadata; "full" includes their input and output contracts. This search-only surface cannot execute tools or progressively browse the catalogue; those actions require the full MCP surface at /v2/mcp.';
 
-const SOURCE_URL_KEYS = new Set(['source_url', 'source_urls', 'sourceUrl', 'sourceUrls']);
+// The three spellings the exchange providers emit: `source_url` on retrieve-provider
+// records (bbb, indeed, census, imf, ...), `source_urls` on a few contracts that cite
+// several upstream rows, and `sourceUrl` on the older providers/ tree (sec-edgar,
+// govinfo, federal-register) and discovery metadata.
+const SOURCE_URL_KEYS = new Set(['source_url', 'source_urls', 'sourceUrl']);
 function isUrlValue(value: unknown): boolean {
   return typeof value === 'string' || (Array.isArray(value) && value.every((v) => typeof v === 'string'));
 }
@@ -130,7 +134,7 @@ function strip(value: any): any {
   }
   return value;
 }
-const SOURCE_URL_TEXT = /("(?:source_urls?|sourceUrls?)"\s*:\s*)(?:"(?:[^"\\]|\\.)*"|\[[^\]]*\])/g;
+const SOURCE_URL_TEXT = /("(?:source_urls?|sourceUrl)"\s*:\s*)(?:"(?:[^"\\]|\\.)*"|\[[^\]]*\])/g;
 function redactText(text: string): string {
   // JSON or JSON lines: strip structurally; anything else: blank the values in place.
   const lines = text.split('\n');
