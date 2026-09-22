@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ALEXANDRIA_FEEDBACK_GUIDANCE } from './alexandria-feedback.js';
 
 const catalogueTypes = ['alexandria', 'exchange'] as const;
 export const searchSourceSchema = z.union([
@@ -67,7 +68,8 @@ export const ALEXANDRIA_INSTRUCTIONS =
   'Use sources: ["alexandria"] for semantic tools only, sources: ["web"] for web only, or sources: ["web"], domainTools: true for web plus domain tools. domainTools: false disables domain matching. Results in data.tools describe available tools, not executed data. Search defaults to toolDetail: "compact", returning only provider, capability and description; "summary" adds metadata and navigation. Inspect selected tools with firecrawl_find_tools using their providers and capabilities plus expand:["options","response"]; request examples only when the input shape is unclear. Batch related contract inspections and reuse complete contracts. Alternatively set toolDetail: \"full\" for contracts upfront. ' +
   'On the full MCP surface, firecrawl_find_tools supports semantic query lookup and is the list equivalent: {} lists categories; {categories:["<category-id>"]} lists providers; {providers:["<provider-id>"]} lists compact tools; adding capabilities:["<capability-id>"] expands the selected contract. Avoid expanding the entire catalogue. ' +
   'Read required inputs and requiresOneOf groups (at least one member per group), example.request/example.response when present, and response.key in the selected contract. Do not assume records is the result key. Follow the declared pagination input and response cursor, preserving filters; catalogue next is separate from provider pagination. ' +
-  'Execute through firecrawl_scrape with alexandria:{provider,capability,options}. Search scrapeOptions fetches web pages, never provider tools. Use web results when sufficient, tools when they offer a direct route to deeper data.';
+  'Execute through firecrawl_scrape with alexandria:{provider,capability,options}. Search scrapeOptions fetches web pages, never provider tools. Use web results when sufficient, tools when they offer a direct route to deeper data. ' +
+  ALEXANDRIA_FEEDBACK_GUIDANCE;
 
 export function findToolsOptions(args: z.infer<typeof findToolsSchema>) {
   const level = args.level ?? (args.query || args.capabilities?.length || args.providers?.length || args.groups?.length || args.urls?.length ? 'tools' : args.categories?.length ? 'providers' : 'categories');

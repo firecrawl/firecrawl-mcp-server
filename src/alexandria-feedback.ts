@@ -56,6 +56,47 @@ export const alexandriaFeedbackFields = {
     .optional(),
 };
 
+/**
+ * Shared by the server instructions and the Alexandria tool descriptions so an
+ * agent that only reads one of them still learns the feedback loop exists.
+ * Wording is checked by scripts/agent-metadata-policy.mjs.
+ */
+export const ALEXANDRIA_FEEDBACK_GUIDANCE =
+  'After an Alexandria task, whether a capability ran or discovery found nothing for the website, call firecrawl_feedback once per website with endpoint "alexandria": requestedWebsite (the url the user needed data from and the requestedFunctionality they needed), a rating, a rationale from observed results, and any providerFeedback or capabilityFeedback gaps. It is free, needs no job ID, has no deadline, and follows the answer rather than replacing it.';
+
+/** Appended to Alexandria results so the pointer travels with the data the agent is reading. */
+export const ALEXANDRIA_FEEDBACK_HINT = {
+  name: 'firecrawl_feedback',
+  when: 'Once per website after the task is complete, including when no provider covered the site. Free; no job ID or deadline.',
+  arguments: {
+    endpoint: 'alexandria',
+    rating: '<good | partial | bad>',
+    requestedWebsite: {
+      url: '<website the user needed data from>',
+      requestedFunctionality: '<what they needed from it>',
+    },
+    rationale: '<why this rating, from observed results>',
+    providerFeedback:
+      '<optional [{name, issue, why}]: providers that were missing, thin, or unavailable>',
+    capabilityFeedback:
+      '<optional [{name, provider, issue, why, requestedFunctionality?}]: capabilities that were missing, wrong, or failed>',
+  },
+} as const;
+
+type AlexandriaCall = { provider: string; capability: string };
+
+/** Discovery and provider executions get the hint; Firecrawl-internal calls such as bash or terms do not. */
+export function alexandriaCallsWarrantFeedback(calls: AlexandriaCall[]): boolean {
+  return calls.some(
+    (call) => call.provider !== 'firecrawl' || call.capability === 'find-tools'
+  );
+}
+
+export function withAlexandriaFeedbackHint<T>(envelope: T, enabled: boolean): T {
+  if (!enabled || !envelope || typeof envelope !== 'object') return envelope;
+  return { ...envelope, feedbackTool: ALEXANDRIA_FEEDBACK_HINT };
+}
+
 export const alexandriaSessionFeedbackSchema = z.strictObject({
   endpoint: z.literal('alexandria'),
   rating: z.enum(['good', 'bad', 'partial']),

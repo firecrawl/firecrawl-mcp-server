@@ -7,9 +7,11 @@ export async function alexandriaOutput(
   payload: any,
   calls: Call[],
   post: Post,
-  recoveryRequestId: string
+  recoveryRequestId: string,
+  // Merged into whichever envelope is returned, inline or retained.
+  extras: Record<string, unknown> = {}
 ): Promise<string> {
-  const serialized = JSON.stringify(payload);
+  const serialized = JSON.stringify({ ...payload, ...extras });
   const responseBytes = Buffer.byteLength(serialized, 'utf8');
   const estimatedTokens = Math.ceil(responseBytes / 4);
   const items = payload?.data?.alexandria;
@@ -83,6 +85,7 @@ export async function alexandriaOutput(
           },
         },
       },
+      ...extras,
     });
   } catch {
     return serialized;
