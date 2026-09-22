@@ -1069,11 +1069,15 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.match(init.instructions, /firecrawl_scrape retrieves one supplied page/i);
   assert.match(
     init.instructions,
-    /first check firecrawl_find_tools for a suitable workflow or data provider/i
+    /Alexandria is Firecrawl's catalogue of data providers and workflows.*firecrawl_scrape with alexandria.*executes up to ten capabilities/is
   );
   assert.match(
     init.instructions,
-    /firecrawl_scrape with alexandria.*executes up to ten capabilities/is
+    /Passing sources without alexandria in it \(for example \["web"\] or \["news"\]\) excludes Alexandria provider matches; omit sources unless you specifically need web-only or news-only results, or include "alexandria" alongside them/
+  );
+  assert.match(
+    init.instructions,
+    /Before scraping more than one page for the same fields, spend one free firecrawl_find_tools call/
   );
   assert.match(
     init.instructions,
@@ -1082,6 +1086,10 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.match(
     byName.get('firecrawl_scrape').description,
     /request identifies a page and needs its content or defined fields/i
+  );
+  assert.match(
+    byName.get('firecrawl_scrape').description,
+    /use `firecrawl_search` when additional web sources are needed/i
   );
   assert.match(
     byName.get('firecrawl_scrape').description,
@@ -1109,7 +1117,20 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   assert.match(
     byName.get('firecrawl_search').description,
-    /each web result is a title, URL, and description, not the page.*scrapeOptions.*ignore `maxAge`.*firecrawl_scrape/is
+    /each web result is a title, URL, and description.*scrapeOptions.*ignore `maxAge`.*firecrawl_scrape/is
+  );
+  assert.doesNotMatch(byName.get('firecrawl_search').description, /not the page/i);
+  assert.match(
+    byName.get('firecrawl_search').description,
+    /if excerpts are insufficient, use `firecrawl_scrape` to retrieve content from relevant result URLs/i
+  );
+  assert.match(
+    byName.get('firecrawl_search').description,
+    /ranked results with query-relevant highlights\./i
+  );
+  assert.match(
+    byName.get('firecrawl_search').description,
+    /highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned/i
   );
   assert.match(
     byName.get('firecrawl_search').description,
@@ -1146,11 +1167,15 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   // kept in the top-level tool description below.
   assert.equal(
     byName.get('firecrawl_search').inputSchema.properties.highlights.description,
-    'Return query-relevant highlights for each search result. Set to false to keep the original search snippets.'
+    'Return query-relevant page excerpts for web and news results when available (default). Highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned. Set to false to keep the original search snippets.'
   );
   assert.match(
     byName.get('firecrawl_search').inputSchema.properties.categories.description,
     /Limit results to specific source types.*developer.*data\.web/is
+  );
+  assert.match(
+    byName.get('firecrawl_developer_search').description,
+    /Search an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation for programming questions that need external documentation or upstream evidence\./
   );
   assert.match(
     byName.get('firecrawl_developer_search').inputSchema.properties.query
@@ -1315,7 +1340,7 @@ test('local keyless stdio keeps profile guidance keyless-scoped and omits feedba
   );
   assert.match(
     keylessGuidance,
-    /firecrawl_search with categories: \["developer"\].*curated documentation sites/i
+    /firecrawl_search with categories: \["developer"\].*code documentation/i
   );
   assert.match(
     keylessGuidance,

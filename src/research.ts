@@ -175,7 +175,7 @@ function deprecatedGithubPayload() {
   return {
     code: 'DEPRECATED_TOOL',
     message:
-      "firecrawl_research_search_github is deprecated and unavailable through MCP. Use firecrawl_developer_search, which searches GitHub issues, pull requests, and READMEs plus curated documentation sites and returns matched passages. It does not carry over this tool's score breakdown or its web fallback results.",
+      "firecrawl_research_search_github is deprecated and unavailable through MCP. Use firecrawl_developer_search, which searches GitHub issues, pull requests, and READMEs plus code documentation and returns matched passages. It does not carry over this tool's score breakdown or its web fallback results.",
     replacement: {
       name: 'firecrawl_developer_search',
       instructions:
@@ -429,8 +429,8 @@ Returns matching passages or a notice when full text is unavailable.
   // Hidden from tools/list so new sessions never see it, still callable so a
   // session holding a cached tool list gets a pointer to the replacement
   // instead of an unknown-tool error. Same shape as firecrawl_extract.
-  // Hiding or removing a tool here also changes the Claude directory
-  // connector's tool list; see the note on SEARCH_PROFILE_TOOLS in index.ts.
+  // Hiding or removing a tool here also changes the search surface's
+  // published tool list; see the note on SEARCH_PROFILE_TOOLS in index.ts.
   server.addTool({
     name: 'firecrawl_research_search_github',
     annotations: {
@@ -440,7 +440,7 @@ Returns matching passages or a notice when full text is unavailable.
       destructiveHint: false,
     },
     description: `
-Deprecated compatibility entry point. Use firecrawl_developer_search for GitHub issues, pull requests, and READMEs, plus curated documentation sites, returned as matched passages.
+Deprecated compatibility entry point. Use firecrawl_developer_search for GitHub issues, pull requests, and READMEs, plus code documentation, returned as matched passages.
 `,
     parameters: z.object({
       query: z.string().min(1),
