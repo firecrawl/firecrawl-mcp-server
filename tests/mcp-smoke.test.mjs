@@ -3637,3 +3637,63 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
     .map((request) => request.body.token);
   assert.deepEqual(introspectedTokens, ['fco_account']);
 });
+
+test('every listed tool declares an output schema and returns structured content', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-output-schema', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  // OpenAI's app-submission scan flags a tool with no outputSchema, and a
+  // client cannot tell a missing schema from an unstructured tool, so every
+  // tool the server lists has to declare one.
+  const { tools } = await client.request('tools/list');
+  assert.ok(tools.length > 0);
+  for (const tool of tools) {
+    assert.ok(tool.outputSchema, `${tool.name} has no outputSchema`);
+    assert.equal(tool.outputSchema.type, 'object', tool.name);
+    assert.ok(
+      Object.keys(tool.outputSchema.properties ?? {}).length > 0,
+      `${tool.name} declares no output properties`
+    );
+  }
+
+  // A declared schema obliges the tool to return structured content, and the
+  // text block stays byte-for-byte what it was before the schema existed.
+  const search = await client.request('tools/call', {
+    arguments: { limit: 1, query: 'example domain' },
+    name: 'firecrawl_search',
+  });
+  assert.notEqual(search.isError, true);
+  assert.equal(search.content.length, 1);
+  // Structured content carries the same payload; the text block keeps the
+  // compact serialization (and key order) the tool has always returned.
+  assert.deepEqual(JSON.parse(search.content[0].text), search.structuredContent);
+  assert.equal(search.content[0].text.includes('\n'), false);
+  assert.equal(search.structuredContent.success, true);
+
+  const scrape = await client.request('tools/call', {
+    arguments: { url: 'https://example.com/' },
+    name: 'firecrawl_scrape',
+  });
+  assert.notEqual(scrape.isError, true);
+  // Pretty-printed here, as before.
+  assert.deepEqual(JSON.parse(scrape.content[0].text), scrape.structuredContent);
+  assert.match(scrape.content[0].text, /^\{\n {2}"/);
+  assert.equal(
+    scrape.structuredContent.metadata.scrapeId,
+    '00000000-0000-4000-8000-000000000010'
+  );
+});
