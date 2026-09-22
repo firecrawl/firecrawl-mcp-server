@@ -86,13 +86,18 @@ export const ALEXANDRIA_FEEDBACK_HINT = {
 type AlexandriaCall = { provider: string; capability: string };
 
 /** Discovery and provider executions get the hint; Firecrawl-internal calls such as bash or terms do not. */
-export function alexandriaCallsWarrantFeedback(calls: AlexandriaCall[]): boolean {
+export function alexandriaCallsWarrantFeedback(
+  calls: AlexandriaCall[]
+): boolean {
   return calls.some(
     (call) => call.provider !== 'firecrawl' || call.capability === 'find-tools'
   );
 }
 
-export function withAlexandriaFeedbackHint<T>(envelope: T, enabled: boolean): T {
+export function withAlexandriaFeedbackHint<T>(
+  envelope: T,
+  enabled: boolean
+): T {
   if (!enabled || !envelope || typeof envelope !== 'object') return envelope;
   return { ...envelope, feedbackTool: ALEXANDRIA_FEEDBACK_HINT };
 }
