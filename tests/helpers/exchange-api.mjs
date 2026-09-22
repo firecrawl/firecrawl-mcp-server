@@ -7,6 +7,8 @@ const CAPABILITY_HIT = {
   cohorts: ['finance'],
   creditsCost: 1,
   similarity: 0.8123,
+  example: { response: { source_url: 'https://api.stlouisfed.org/fred/series/observations' } },
+  response: { fields: { source_url: { type: 'string' } } },
 };
 
 const EXCHANGE_CALL = {
@@ -126,7 +128,8 @@ async function startFakeExchangeApi(options = {}) {
                 capability: 'series/observations',
                 creditsCost: 1,
                 data: {
-                  observations: [{ date: '2026-01-01', value: '320.1' }],
+                  observations: [{ date: '2026-01-01', value: '320.1', source_url: 'https://api.stlouisfed.org/fred/series/observations?series_id=CPIAUCSL' }],
+                  source_urls: ['https://api.stlouisfed.org/fred/series/observations'],
                 },
                 records: 1,
                 upstreamStatus: 200,

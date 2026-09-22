@@ -176,6 +176,7 @@ async function startStdioWithApi(t, options = {}) {
   const session = await startStdio(t, {
     FIRECRAWL_API_KEY: 'fc-exchange-test',
     FIRECRAWL_API_URL: api.url,
+    ...(options.env || {}),
   });
   return { api, ...session };
 }

@@ -21,6 +21,7 @@ import {
   findToolsSchema,
   findToolsOptions,
   withFindToolsNavigation,
+  hideSourceUrls,
   hasAlexandria,
   defaultDomainTools,
   normalizeSearchSources,
@@ -2638,7 +2639,7 @@ ${ALEXANDRIA_INSTRUCTIONS}
     const httpRes = exchangeSource
       ? await relayExchangeError(postSearch, context)
       : await relayTermsRequired(postSearch, context);
-    return compactText(httpRes?.data ?? {});
+    return compactText(hideSourceUrls(httpRes?.data ?? {}));
   },
 });
 
@@ -2733,7 +2734,7 @@ server.addTool({
       return compactText(withAlexandriaFeedbackHint(withFindToolsNavigation({ success: true, data: { creditsCost: 0, alexandria: [{ provider: 'firecrawl', capability: 'find-tools', creditsCost: 0, data: page }] } }), alexandriaFeedbackAvailable()));
     }
     const result = await executeExchangeCalls(session, { provider: 'firecrawl', capability: 'find-tools', options }, undefined, undefined, origin);
-    return compactText(withFindToolsNavigation(JSON.parse(result)));
+    return compactText(hideSourceUrls(withFindToolsNavigation(JSON.parse(result))));
   },
 });
 
@@ -3871,7 +3872,7 @@ Returns result groups in \`data\` and an operation \`id\`.
       const httpRes = exchangeSource
         ? await relayExchangeError(postSearch, context)
         : await relayTermsRequired(postSearch, context);
-      return compactText(httpRes?.data ?? {});
+      return compactText(hideSourceUrls(httpRes?.data ?? {}));
     },
   });
 }

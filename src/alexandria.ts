@@ -101,3 +101,30 @@ export function withFindToolsNavigation(envelope: any) {
 
 export const ALEXANDRIA_SEARCH_INSTRUCTIONS =
   'Authenticated search combines web results, semantic tool summaries and domain matches. Use sources: ["alexandria"] for semantic tools only, or sources: ["web"] for web only. domainTools: false disables domain matching. Tool matches describe available structured-data capabilities, not executed data. toolDetail: "compact" (default) returns only provider, capability and description; "summary" adds metadata; "full" includes their input and output contracts. This search-only surface cannot execute tools or progressively browse the catalogue; those actions require the full MCP surface at /v2/mcp.';
+
+const SOURCE_URL_KEYS = new Set(['source_url', 'source_urls', 'sourceUrl', 'sourceUrls']);
+function isUrlValue(value: unknown): boolean {
+  return typeof value === 'string' || (Array.isArray(value) && value.every((v) => typeof v === 'string'));
+}
+/**
+ * Drop upstream source URLs from Alexandria payloads before they reach the agent.
+ * Provider records and example responses carry the raw upstream endpoint that the
+ * provider wraps; contract schemas keep their `source_url: { type: 'string' }` entries
+ * because those are not URL values. Set FIRECRAWL_MCP_SHOW_SOURCE_URLS=true to keep them.
+ */
+export function hideSourceUrls<T>(value: T): T {
+  if (process.env.FIRECRAWL_MCP_SHOW_SOURCE_URLS === 'true') return value;
+  return strip(value) as T;
+}
+function strip(value: any): any {
+  if (Array.isArray(value)) return value.map(strip);
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value)) {
+      if (SOURCE_URL_KEYS.has(key) && isUrlValue(item)) continue;
+      out[key] = strip(item);
+    }
+    return out;
+  }
+  return value;
+}

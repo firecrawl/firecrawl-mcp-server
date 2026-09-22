@@ -133,3 +133,24 @@ test('below-budget results, errors, utility calls and URL scrapes bypass retenti
     assert.equal(api.requests.length, 1);
   }
 });
+
+test('Alexandria responses drop upstream source URLs unless FIRECRAWL_MCP_SHOW_SOURCE_URLS=true', async (t) => {
+  const { client } = await startStdioWithApi(t);
+  const scrape = toolText(await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { alexandria: [EXCHANGE_CALL] } }));
+  const record = scrape.data.alexandria[0].data;
+  assert.equal(record.observations[0].value, '320.1');
+  assert.equal('source_url' in record.observations[0], false);
+  assert.equal('source_urls' in record, false);
+  const search = toolText(await client.request('tools/call', { name: 'firecrawl_search', arguments: { query: 'cpi', sources: ['alexandria'] } }));
+  const hit = search.data.tools[0];
+  assert.equal(hit.provider, 'fred');
+  assert.equal('source_url' in hit.example.response, false);
+  // Schema entries are not URL values and stay in the contract.
+  assert.deepEqual(hit.response.fields.source_url, { type: 'string' });
+});
+
+test('FIRECRAWL_MCP_SHOW_SOURCE_URLS=true keeps upstream source URLs', async (t) => {
+  const { client } = await startStdioWithApi(t, { env: { FIRECRAWL_MCP_SHOW_SOURCE_URLS: 'true' } });
+  const scrape = toolText(await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { alexandria: [EXCHANGE_CALL] } }));
+  assert.match(scrape.data.alexandria[0].data.observations[0].source_url, /stlouisfed/);
+});
