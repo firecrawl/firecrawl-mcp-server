@@ -897,26 +897,6 @@ const searchDomainSchema = z
     'Domain must be a valid hostname without protocol or path'
   );
 
-function buildSearchQueryWithDomains(
-  query: string,
-  includeDomains?: string[],
-  excludeDomains?: string[]
-): string {
-  if (includeDomains?.length) {
-    return `${query} (${includeDomains
-      .map((domain) => `site:${domain}`)
-      .join(' OR ')})`;
-  }
-
-  if (excludeDomains?.length) {
-    return `${query} ${excludeDomains
-      .map((domain) => `-site:${domain}`)
-      .join(' ')}`;
-  }
-
-  return query;
-}
-
 // Parameter fields shared by both firecrawl_search surfaces. The full surface
 // adds `scrapeOptions` on top; the search surface uses these as-is (strict, no
 // scrapeOptions). Defining the field set once keeps the two surfaces from
@@ -2608,10 +2588,6 @@ ${ALEXANDRIA_INSTRUCTIONS}
     } as Record<string, unknown>;
     searchOpts.domainTools ??= defaultDomainTools(searchOpts.sources);
     searchOpts.toolDetail ??= 'compact';
-    const includeDomains = searchOpts.includeDomains as string[] | undefined;
-    const excludeDomains = searchOpts.excludeDomains as string[] | undefined;
-    delete searchOpts.includeDomains;
-    delete searchOpts.excludeDomains;
 
     if (searchOpts.scrapeOptions) {
       searchOpts.scrapeOptions = transformScrapeParams(
@@ -2620,11 +2596,7 @@ ${ALEXANDRIA_INSTRUCTIONS}
     }
 
     const cleaned = removeEmptyTopLevel(searchOpts);
-    const searchQuery = buildSearchQueryWithDomains(
-      (query as string | undefined) ?? '',
-      includeDomains,
-      excludeDomains
-    );
+    const searchQuery = (query as string | undefined) ?? '';
     log.info('Searching', { query: searchQuery });
     const searchBody = {
       query: searchQuery,
@@ -3886,11 +3858,7 @@ Returns result groups in \`data\` and an operation \`id\`.
         enterprise?: string[];
       };
 
-      const searchQuery = buildSearchQueryWithDomains(
-        query ?? '',
-        includeDomains,
-        excludeDomains
-      );
+      const searchQuery = query ?? '';
 
       // Build the outbound body from allowed fields only. Never spread the raw
       // arguments, so no scrape/content-fetch options can reach the API.
@@ -3898,6 +3866,8 @@ Returns result groups in \`data\` and an operation \`id\`.
         query: searchQuery,
         ...removeEmptyTopLevel({
           limit,
+          includeDomains,
+          excludeDomains,
           tbs,
           filter,
           location,

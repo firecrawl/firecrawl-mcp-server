@@ -526,6 +526,8 @@ test('search firecrawl_search sends a clean body built from allowed fields only'
   const allowedKeys = new Set([
     'query',
     'limit',
+    'includeDomains',
+    'excludeDomains',
     'tbs',
     'filter',
     'location',
@@ -548,6 +550,51 @@ test('search firecrawl_search sends a clean body built from allowed fields only'
     toolDetail: 'compact',
     origin: `mcp-ua-firecrawl-search-profile-test@${serverVersion}`,
   });
+});
+
+test('search firecrawl_search forwards domain filters as body fields without rewriting the query', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+  });
+
+  const cases = [
+    ['includeDomains', ['www.sport1.de', 'www.atptour.com']],
+    ['excludeDomains', ['facebook.com', 'en.wikipedia.org']],
+  ];
+  for (const [id, [field, domains]] of cases.entries()) {
+    const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+      id: 100 + id,
+      method: 'tools/call',
+      params: {
+        arguments: { query: 'davis cup', sources: ['web'], [field]: domains },
+        name: 'firecrawl_search',
+      },
+      headers: { 'x-api-key': 'fc-search-key' },
+    });
+    assert.equal(res.status, 200);
+    const message = parseSseJson(await res.text());
+    assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+    const sentBody = backend.requests.filter((r) => r.url === '/v2/search').at(-1).body;
+    assert.equal(sentBody.query, 'davis cup');
+    assert.deepEqual(sentBody[field], domains);
+  }
+
+  const before = backend.requests.filter((r) => r.url === '/v2/search').length;
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 102,
+    method: 'tools/call',
+    params: {
+      arguments: { query: 'davis cup', includeDomains: ['a.com'], excludeDomains: ['b.com'] },
+      name: 'firecrawl_search',
+    },
+    headers: { 'x-api-key': 'fc-search-key' },
+  });
+  const message = parseSseJson(await res.text());
+  const errored = Boolean(message.error) || message.result?.isError === true;
+  assert.equal(errored, true, JSON.stringify(message));
+  assert.equal(backend.requests.filter((r) => r.url === '/v2/search').length, before);
 });
 
 test('search firecrawl_search normalizes the legacy exchange source to alexandria', async (t) => {
