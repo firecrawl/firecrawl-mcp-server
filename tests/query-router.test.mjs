@@ -118,6 +118,23 @@ test('a research verdict is dropped when the call asked for scrapeOptions', asyn
   assert.equal(body.categories, undefined);
 });
 
+test('a research verdict is dropped when the call asked for domainTools', async () => {
+  // Alexandria tool suggestions ride along with web results. The paper index
+  // has none to offer, so retargeting would drop them.
+  const fetchImpl = stubFetch(verdict('research_index', 0.99));
+  const body = {
+    query: 'protein folding inference benchmarks',
+    domainTools: true,
+  };
+
+  const decision = await applyQueryRouting(body, CONFIG, { fetchImpl });
+
+  assert.equal(decision.routed, false);
+  assert.equal(decision.reason, 'domain_tools_requested');
+  assert.equal(decision.target, undefined);
+  assert.equal(body.categories, undefined);
+});
+
 test('scrapeOptions does not block the developer route', async () => {
   // Developer stays on /v2/search, so the requested page content is still
   // attached to the results.

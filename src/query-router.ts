@@ -360,10 +360,11 @@ export type ApplyOptions = {
 /**
  * Why a research verdict must not be retargeted, or null when it may be.
  *
- * `scrapeOptions` asks for page content attached to each web result. The paper
- * index returns papers and has nothing to attach it to, so retargeting would
- * silently drop what the caller explicitly asked for — the search runs as
- * written instead.
+ * `scrapeOptions` asks for page content attached to each web result, and
+ * `domainTools` asks for Alexandria tool suggestions alongside them. The paper
+ * index returns papers and can satisfy neither, so retargeting would silently
+ * drop what the caller explicitly asked for — the search runs as written
+ * instead.
  */
 function paperIndexBlockedBy(
   searchBody: Record<string, unknown>,
@@ -371,6 +372,7 @@ function paperIndexBlockedBy(
 ): string | null {
   if (!allowPaperIndex) return 'paper_index_unavailable';
   if (searchBody.scrapeOptions != null) return 'scrape_options_requested';
+  if (searchBody.domainTools != null) return 'domain_tools_requested';
   return null;
 }
 

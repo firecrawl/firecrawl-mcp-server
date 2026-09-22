@@ -1,9 +1,14 @@
 # Changelog
 
-## [Unreleased]
+## [3.25.0] - Unreleased
 
 ### Added
 
+- Alexandria discovery through `firecrawl_search` with `sources: ["alexandria"]` or `sources: [{ "type": "alexandria" }]`. Both profiles normalize the legacy `exchange` source to `alexandria` and return compact tool suggestions by default in `data.tools` with `creditsUsed` preserved.
+- `firecrawl_find_tools` on the full surface provides category browsing, compact provider tools, selected full contracts, URL lookup and `nextTool` navigation.
+- `firecrawl_scrape` executes one or up to ten calls using `alexandria: [{ provider, capability, options }]` instead of `url`. Results are returned as `{ success, scrape_id, requestId, data: { alexandria, creditsCost } }`. Errors preserve their code and available charge ID. Keyless sessions receive `Alexandria requires an API key on a team with Alexandria access`.
+- Provider terms are read and accepted through nested `firecrawl_scrape` capabilities after a blocked request. Acceptance requires the reviewed version and digest, explicit user authorization and `confirmed: true`.
+- Successful large Alexandria results use a retained-result handoff above 20,000 estimated tokens when remote access is verified.
 - Optional automatic index routing for `firecrawl_search`. When
   `FIRECRAWL_QUERY_ROUTER=true` and a classifier key is set, a search that
   names neither `categories` nor `sources` is classified at request time and
