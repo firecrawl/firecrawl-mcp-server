@@ -1227,18 +1227,12 @@ const SEARCH_PROFILE_INSTRUCTIONS =
 // against this set, so anything not listed here can never appear on that
 // instance's tools/list or be called through it.
 //
-// Why this set is frozen: /v2/mcp-search is the Firecrawl connector in
-// Anthropic's Claude directory (https://claude.com/connectors/firecrawl). The
-// names below were agreed one by one with Anthropic's MCP review team in July
-// 2026, after they declined the full server as a web-scraping tool, and the
-// directory page lists them to users. Editing this set changes what Anthropic
-// reviewed and leaves the public listing wrong until someone updates it by
-// hand in the claude.ai submission portal. Before adding, removing, renaming,
-// or hiding anything here, tell partnerships (Noaa) so the listing and
-// Anthropic move at the same time. It has drifted twice: a seventh tool leaked
-// on during Anthropic's review (rolled back in #352, 2026-08-04), and a hidden
-// tool left the directory page advertising something the server no longer served
-// (#395, 2026-09-03). See docs/search-profile.md, "Why this surface exists".
+// Why this set is frozen: /v2/mcp-search backs a published connector listing
+// that declares these tool names to users. Editing this set changes what that
+// listing advertises and leaves it wrong until the listing is updated by hand.
+// Before adding, removing, renaming, or hiding anything here, tell partnerships
+// so the listing and the server move at the same time. See
+// docs/search-profile.md, "Why the tool set is fixed".
 const SEARCH_PROFILE_TOOLS = new Set<string>([
   'firecrawl_search',
   'firecrawl_developer_search',

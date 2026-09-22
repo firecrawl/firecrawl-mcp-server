@@ -14,10 +14,9 @@ const { version: serverVersion } = JSON.parse(
 // The fixed contract of the search surface. Nothing outside this set may ever
 // appear on its tools/list or be callable through it.
 //
-// If this assertion fails because you changed the set on purpose: the Claude
-// directory listing has to change too, and Anthropic has to be told. Read
-// "Why this surface exists" in docs/search-profile.md and tell partnerships
-// before merging. Keep this list a hand-written copy; deriving it from
+// If this assertion fails because you changed the set on purpose: the
+// connector listing has to change too. Read "Why the tool set is fixed" in
+// docs/search-profile.md and tell partnerships before merging. Keep this list a hand-written copy; deriving it from
 // SEARCH_PROFILE_TOOLS in src would turn the test into "the surface matches
 // whatever the code says" and it would stop catching drift.
 const SEARCH_TOOLS = [

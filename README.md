@@ -81,7 +81,7 @@ A read-only, search-only surface is also hosted at:
 https://mcp.firecrawl.dev/v2/mcp-search
 ```
 
-It exposes a fixed set of six read-only tools: `firecrawl_search`, `firecrawl_developer_search`, and the four `firecrawl_research_*` tools. It performs no page-content fetching and has its own OAuth identity; the full endpoint above is unchanged. It is the connector listed in Anthropic's Claude directory, so its tool set is a reviewed contract rather than a profile to tune. See [docs/search-profile.md](docs/search-profile.md) for the full contract and what a change to it involves.
+It exposes a fixed set of six read-only tools: `firecrawl_search`, `firecrawl_developer_search`, and the four `firecrawl_research_*` tools. It performs no page-content fetching and has its own OAuth identity; the full endpoint above is unchanged. It backs a published connector listing, so its tool set is a contract rather than a profile to tune. See [docs/search-profile.md](docs/search-profile.md) for the full contract and what a change to it involves.
 
 ### Running with npx
 

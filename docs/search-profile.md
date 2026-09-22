@@ -1,34 +1,22 @@
 # Search-only MCP surface (`/v2/mcp-search`)
 
-The server runs two FastMCP instances in one process:
+The hosted server serves two surfaces:
 
-- The **full** surface at `/v2/mcp`, with the complete tool set unchanged.
+- The **full** surface at `/v2/mcp`, with the complete tool set.
 - The **search** surface at `/v2/mcp-search`, with a fixed, read-only subset.
 
 Only the request path selects the surface. There is no inspection of client
 identity, `User-Agent`, or `clientInfo`.
 
-## Why this surface exists
+## Why the tool set is fixed
 
-This endpoint is the Firecrawl connector in Anthropic's Claude directory
-(https://claude.com/connectors/firecrawl, "Anthropic verified"). Anthropic
-declined the full server for the directory in June 2026 as a web-scraping tool;
-the read-only tools below are the scope their MCP review team agreed to in July
-2026, name by name, and the directory page lists those names to users. The tool
-set is therefore a contract with a third party, not an internal preference.
-
-Any change to the set (adding, removing, renaming, or hiding a tool) needs two
-things outside this repo that cannot be automated from here: the listing has to
-be updated in the claude.ai submission portal, and Anthropic's directory team
-has to be told. Partnerships (Noaa Engervall) owns both. Say so before the
+The search surface backs a published connector listing. Its tool set is a
+contract with that listing, not an internal preference: `tools/list` on this
+path must match the tool names the listing declares. Changing the set (adding,
+removing, renaming, or hiding a tool) therefore needs the listing updated as
+well, and that cannot be done from this repo. Tell partnerships before the
 change merges, not after it deploys; every merge to `main` reaches production
 within the hour.
-
-It has drifted twice. On 2026-07-31 a seventh tool leaked onto the surface while
-Anthropic was reviewing it; they flagged the mismatch and #352 rolled it back.
-On 2026-09-03 #395 hid `firecrawl_research_search_github` and the directory page
-kept advertising it for two weeks. The plan behind the surface is in
-firecrawl/firecrawl-integrations, `docs/mcp-marketplace-search-profile-plan.md`.
 
 ## Tool contract
 
@@ -74,14 +62,14 @@ the behavior. No runtime filter is involved.
 ## Alexandria source
 
 `sources` entries are source names (`web`, `news`, `images`, `alexandria`) or
-`{ type }` objects. Alexandria returns
-compact tool suggestions by default in `data.tools`; these are catalogue entries, not executed
-provider results. Discovery costs no credits and requires an authenticated team
-with Alexandria access; keyless sessions get an explanatory error before any request.
+`{ type }` objects. Alexandria returns compact tool suggestions by default in
+`data.tools`; these are catalogue entries, not executed provider results.
+Discovery costs no credits and requires an authenticated team with Alexandria
+access; keyless sessions get an explanatory error before any request.
 
-Search requires a query and does not accept catalogue browse mode. The full-surface
-catalogue tool (`firecrawl_find_tools`) and execution
-with `firecrawl_scrape` using `alexandria` are not part of this six-tool surface.
+Search requires a query and does not accept catalogue browse mode. The
+catalogue tool (`firecrawl_find_tools`) and execution with `firecrawl_scrape`
+using `alexandria` are available on the full surface only.
 
 ## OAuth
 
