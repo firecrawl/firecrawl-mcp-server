@@ -71,6 +71,18 @@ no request from this surface can ask the API to fetch third-party page content.
 The schema and body construction enforce this directly, and contract tests guard
 the behavior. No runtime filter is involved.
 
+## Alexandria source
+
+`sources` entries are source names (`web`, `news`, `images`, `alexandria`) or
+`{ type }` objects. Alexandria returns
+compact tool suggestions by default in `data.tools`; these are catalogue entries, not executed
+provider results. Discovery costs no credits and requires an authenticated team
+with Alexandria access; keyless sessions get an explanatory error before any request.
+
+Search requires a query and does not accept catalogue browse mode. The full-surface
+catalogue tool (`firecrawl_find_tools`) and execution
+with `firecrawl_scrape` using `alexandria` are not part of this six-tool surface.
+
 ## OAuth
 
 - **Resource identity.** The surface advertises its own protected resource,
