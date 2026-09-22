@@ -33,6 +33,7 @@ export const alexandriaFeedbackFields = {
           provider: name,
           issue: z.enum([
             'new_capability_request',
+            'missing_capability',
             'insufficient_functionality',
             'incorrect_result',
             'execution_error',

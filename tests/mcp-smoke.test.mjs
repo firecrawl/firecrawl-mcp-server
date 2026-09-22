@@ -1605,11 +1605,20 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
   const sent = fakeApi.requests.filter(request => request.url === '/v2/feedback').at(-1).body;
   assert.deepEqual(sent, { ...sessionFeedback, origin: sent.origin });
   assert.equal('jobId' in sent, false);
+  const missingCapabilityFeedback = {
+    ...sessionFeedback,
+    capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'missing_capability', why: 'Provider has no attachment capability' }],
+  };
+  const missingCapabilityResult = await client.request('tools/call', { name: 'firecrawl_feedback', arguments: missingCapabilityFeedback });
+  assert.notEqual(missingCapabilityResult.isError, true);
+  const sentMissingCapability = fakeApi.requests.filter(request => request.url === '/v2/feedback').at(-1).body;
+  assert.deepEqual(sentMissingCapability, { ...missingCapabilityFeedback, origin: sentMissingCapability.origin });
   for (const invalid of [
     { endpoint: 'scrape', rating: 'good' },
     { endpoint: 'alexandria', rating: 'good' },
     { ...sessionFeedback, jobId: '00000000-0000-4000-8000-000000000010' },
     { ...sessionFeedback, capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'new_capability_request', why: 'Missing attachments' }] },
+    { ...sessionFeedback, capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'unknown_issue', why: 'Not a supported issue code' }] },
   ]) {
     const before = fakeApi.requests.length;
     await assert.rejects(client.request('tools/call', { name: 'firecrawl_feedback', arguments: invalid }), /parameter validation failed/);
