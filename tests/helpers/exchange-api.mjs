@@ -92,7 +92,7 @@ async function startFakeExchangeApi(options = {}) {
         return json(200, { success: true, data: { alexandria: [{ provider: 'firecrawl', capability: termsCall.capability, creditsCost: 0, data }] } });
       }
 
-      if (!options.bashRecovery && parsedBody.alexandria?.capability === 'bash') {
+      if (!options.bashRecovery && !options.largeResult && parsedBody.alexandria?.capability === 'bash') {
         const stdout = parsedBody.alexandria.options?.command?.includes('jsonl')
           ? '{"date":"2026-01-01","source_url":"https://api.stlouisfed.org/fred/series/observations"}\n{"date":"2026-02-01","source_urls":["https://api.stlouisfed.org/x"]}'
           : 'date=2026-01-01 "source_url": "https://api.stlouisfed.org/fred/series/observations" tail';
