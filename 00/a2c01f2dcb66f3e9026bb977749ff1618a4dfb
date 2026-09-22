@@ -1,0 +1,19 @@
+tests/mcp-alexandria-scrape.test.mjs
+  s_e7a607be42a533::t_35a64f7d63af2f 61-95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "00a2c01f2dcb66f3e9026bb977749ff1618a4dfb",
+  "prompts": {},
+  "sessions": {
+    "s_e7a607be42a533": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b200-b2f9-7e40-9de8-5f3a7f1269e6",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Developers Digest <124798203+developersdigest@users.noreply.github.com>"
+    }
+  }
+}
