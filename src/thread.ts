@@ -274,8 +274,10 @@ export function threadIdHeaders(
 /**
  * Put the thread ID on a tool result so the agent can pass it back. Only a
  * JSON object result (what every tracked tool returns) is touched: the field
- * goes first so it survives client-side truncation of long documents. Any
- * other shape, including a JSON array or free text, is returned unchanged.
+ * goes first so it survives client-side truncation of long documents, and
+ * the result keeps its formatting (compact stays compact, indented stays
+ * indented) so no tool pays extra tokens for the stamp. Any other shape,
+ * including a JSON array or free text, is returned unchanged.
  */
 export function withThreadId(result: unknown, threadId: string): unknown {
   if (typeof result !== 'string' || !result.trimStart().startsWith('{')) {
@@ -292,5 +294,8 @@ export function withThreadId(result: unknown, threadId: string): unknown {
   }
   const rest = { ...(parsed as Record<string, unknown>) };
   delete rest[THREAD_ID_ARG];
-  return JSON.stringify({ [THREAD_ID_ARG]: threadId, ...rest }, null, 2);
+  const stamped = { [THREAD_ID_ARG]: threadId, ...rest };
+  return result.includes('\n')
+    ? JSON.stringify(stamped, null, 2)
+    : JSON.stringify(stamped);
 }

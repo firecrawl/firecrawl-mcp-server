@@ -499,6 +499,8 @@ test('search firecrawl_search sends a clean body built from allowed fields only'
     'categories',
     'highlights',
     'enterprise',
+    'domainTools',
+    'toolDetail',
     'origin',
   ]);
   for (const key of Object.keys(sentBody)) {
@@ -508,6 +510,44 @@ test('search firecrawl_search sends a clean body built from allowed fields only'
     query: 'example domain',
     limit: 1,
     sources: [{ type: 'web' }],
+    domainTools: false,
+    toolDetail: 'compact',
+    origin: `mcp-ua-firecrawl-search-profile-test@${serverVersion}`,
+  });
+});
+
+test('search firecrawl_search normalizes the legacy exchange source to alexandria', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+  });
+
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 42,
+    method: 'tools/call',
+    params: {
+      arguments: {
+        query: 'nvidia balance sheet',
+        sources: ['web', 'exchange'],
+        limit: 5,
+      },
+      name: 'firecrawl_search',
+    },
+    headers: { 'x-api-key': 'fc-search-key' },
+  });
+  assert.equal(res.status, 200);
+  const message = parseSseJson(await res.text());
+  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+
+  const searchCalls = backend.requests.filter((r) => r.url === '/v2/search');
+  assert.equal(searchCalls.length, 1);
+  assert.deepEqual(searchCalls[0].body, {
+    query: 'nvidia balance sheet',
+    sources: ['web', 'alexandria'],
+    domainTools: true,
+    toolDetail: 'compact',
+    limit: 5,
     origin: `mcp-ua-firecrawl-search-profile-test@${serverVersion}`,
   });
 });
@@ -1109,4 +1149,45 @@ test('companion telemetry follows credential precedence without resolving API ke
     ]
   );
   assert.doesNotMatch(getStdout(), /fc-primary-credential|fco_secondary-credential/);
+});
+
+test('search-only surface rejects catalogue browsing and preserves semantic plus contextual discovery', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {FIRECRAWL_API_URL: backend.url});
+  const listing = parseSseJson(await (await jsonRpc(searchPort, SEARCH_ENDPOINT, {id:76,method:'tools/list',params:{},headers:{'x-api-key':'fc-search-key'}})).text());
+  assert.ok(Array.isArray(listing.result?.tools), JSON.stringify(listing));
+  const searchTool = listing.result.tools.find(tool => tool.name === 'firecrawl_search');
+  assert.ok(searchTool, 'firecrawl_search must be listed');
+  assert.match(searchTool.description, /search-only surface cannot execute tools/);
+  assert.match(searchTool.description, /full MCP surface/);
+  assert.doesNotMatch(searchTool.description, /Execute through firecrawl_scrape|firecrawl_find_tools is the list/);
+
+  const call = arguments_ => jsonRpc(searchPort, SEARCH_ENDPOINT, {id:77,method:'tools/call', params:{name:'firecrawl_search',arguments:arguments_},headers:{'x-api-key':'fc-search-key'}});
+  const invalid = parseSseJson(await (await call({query:'podcast episodes',sources:[{type:'alexandria',mode:'browse'}]})).text());
+  assert.ok(invalid.error || invalid.result?.isError);
+  assert.equal(backend.requests.filter(r=>r.url==='/v2/search').length, 0);
+  const valid = parseSseJson(await (await call({query:'podcast episodes',sources:['alexandria'],domainTools:true,toolDetail:'full'})).text());
+  assert.ok(!valid.error && !valid.result?.isError, JSON.stringify(valid));
+  const sent = backend.requests.find(r=>r.url==='/v2/search').body;
+  assert.deepEqual(sent.sources,['alexandria']);
+  assert.equal(sent.domainTools,true);
+  assert.equal(sent.toolDetail,'full');
+});
+
+test('ordinary search profile enables semantic and domain tools by default', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, { FIRECRAWL_API_URL: backend.url });
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 43,
+    method: 'tools/call',
+    params: { name: 'firecrawl_search', arguments: { query: 'company news' } },
+    headers: { 'x-api-key': 'fc-search-key' },
+  });
+  const message = parseSseJson(await res.text());
+  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+  const sent = backend.requests.find((r) => r.url === '/v2/search').body;
+  assert.deepEqual(sent.sources, ['web', 'alexandria']);
+  assert.equal(sent.domainTools, true);
 });

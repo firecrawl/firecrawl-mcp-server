@@ -81,8 +81,11 @@ test('a JSON object result gets threadId first; other shapes are left alone', ()
     metadata: { scrapeId: 'x' },
   });
   assert.equal(Object.keys(JSON.parse(stamped))[0], 'threadId');
-  // Pretty-printed like every other tool result.
-  assert.equal(stamped, JSON.stringify(JSON.parse(stamped), null, 2));
+  // A compact result stays compact and an indented one stays indented, so the
+  // stamp never changes how many tokens a tool's output costs.
+  assert.equal(stamped, JSON.stringify(JSON.parse(stamped)));
+  const pretty = withThreadId(JSON.stringify({ a: 1 }, null, 2), THREAD);
+  assert.equal(pretty, JSON.stringify({ threadId: THREAD, a: 1 }, null, 2));
 
   // An upstream threadId is replaced by the one this call actually used.
   assert.equal(

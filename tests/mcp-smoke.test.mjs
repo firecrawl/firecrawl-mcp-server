@@ -154,6 +154,8 @@ function spawnServer(env) {
   const child = spawn(process.execPath, ['dist/index.js'], {
     env: {
       ...process.env,
+      FIRECRAWL_API_KEY: '',
+      FIRECRAWL_OAUTH_TOKEN: '',
       MCP_DELEGATED_CREDENTIAL_SECRET:
         'test-mcp-delegated-credential-secret-32',
       ...env,
@@ -901,6 +903,9 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
     highlights: false,
     limit: 1,
     origin: `mcp-ua-firecrawl-http-smoke@${serverVersion}`,
+    sources: ['web', 'alexandria'],
+    domainTools: true,
+    toolDetail: 'compact',
     query: 'example domain',
   });
   assert.equal(
@@ -1078,6 +1083,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     'firecrawl_parse',
     'firecrawl_feedback',
     'firecrawl_search_feedback',
+    'firecrawl_find_tools',
   ]) {
     const threadId = byName.get(name).inputSchema.properties.threadId;
     assert.ok(threadId, `${name} accepts threadId`);
@@ -1116,14 +1122,20 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
       .description,
     'Break historical usage down by API key. When view is omitted, true selects the historical view; it cannot be combined with view "current".'
   );
+  // A stdio session with an API key gets the Alexandria-aware instructions,
+  // not the keyless wording.
   assert.match(init.instructions, /firecrawl_scrape retrieves one supplied page/i);
   assert.match(
     init.instructions,
-    /Authorization bearer API key.*including firecrawl_map for site URL discovery/is
+    /first check firecrawl_find_tools for a suitable workflow or data provider/i
   );
   assert.match(
     init.instructions,
-    /Authorization bearer API key.*firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known/is
+    /firecrawl_scrape with alexandria.*executes up to ten capabilities/is
+  );
+  assert.match(
+    init.instructions,
+    /THIRD_PARTY_DATA_TERMS_REQUIRED.*terms\/show.*terms\/accept.*acceptance requires explicit user authorization/is
   );
   assert.match(
     byName.get('firecrawl_scrape').description,
@@ -1218,11 +1230,11 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   assert.match(
     init.instructions,
-    /firecrawl_search with categories: \["research"\] filters ordinary web results to research-affiliated websites/i
+    /firecrawl_search with categories: \["research"\] is a website filter over ordinary web results and reaches different sources/i
   );
   assert.match(
     init.instructions,
-    /Authorization bearer API key.*firecrawl_research_\* for paper-index and repository research/is
+    /firecrawl_research_\* tools search a paper index of abstracts and full text/i
   );
   assert.match(
     byName.get('firecrawl_research_related_papers').description,
@@ -1546,6 +1558,9 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
   assert.deepEqual(fakeApi.requests[0].body, {
     limit: 1,
     origin: `mcp-firecrawl-mcp-tool-e2e@${serverVersion}`,
+    sources: ['web', 'alexandria'],
+    domainTools: true,
+    toolDetail: 'compact',
     query: 'example domain',
   });
 
@@ -1702,6 +1717,56 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
       },
     ]
   );
+  const sessionFeedback = {
+    endpoint: 'alexandria', rating: 'partial',
+    requestedWebsite: { url: 'https://example.com', requestedFunctionality: 'Download attachments' },
+    rationale: 'Only summaries available',
+    capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'new_capability_request', why: 'Missing attachments', requestedFunctionality: 'Return document links' }],
+  };
+  const sessionResult = await client.request('tools/call', { name: 'firecrawl_feedback', arguments: sessionFeedback });
+  assert.notEqual(sessionResult.isError, true);
+  const sent = fakeApi.requests.filter(request => request.url === '/v2/feedback').at(-1).body;
+  assert.deepEqual(sent, { ...sessionFeedback, origin: sent.origin });
+  assert.equal('jobId' in sent, false);
+  const missingCapabilityFeedback = {
+    ...sessionFeedback,
+    capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'missing_capability', why: 'Provider has no attachment capability' }],
+  };
+  const missingCapabilityResult = await client.request('tools/call', { name: 'firecrawl_feedback', arguments: missingCapabilityFeedback });
+  assert.notEqual(missingCapabilityResult.isError, true);
+  const sentMissingCapability = fakeApi.requests.filter(request => request.url === '/v2/feedback').at(-1).body;
+  assert.deepEqual(sentMissingCapability, { ...missingCapabilityFeedback, origin: sentMissingCapability.origin });
+  for (const invalid of [
+    { endpoint: 'scrape', rating: 'good' },
+    { endpoint: 'alexandria', rating: 'good' },
+    { ...sessionFeedback, jobId: '00000000-0000-4000-8000-000000000010' },
+    { ...sessionFeedback, capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'new_capability_request', why: 'Missing attachments' }] },
+    { ...sessionFeedback, capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'unknown_issue', why: 'Not a supported issue code' }] },
+  ]) {
+    const before = fakeApi.requests.length;
+    await assert.rejects(client.request('tools/call', { name: 'firecrawl_feedback', arguments: invalid }), /parameter validation failed/);
+    assert.equal(fakeApi.requests.length, before);
+  }
+  for (const endpoint of ['search', 'scrape', 'parse', 'map']) {
+    for (const [field, value] of Object.entries({
+      requestedWebsite: sessionFeedback.requestedWebsite,
+      rationale: sessionFeedback.rationale,
+      providerFeedback: [],
+      capabilityFeedback: sessionFeedback.capabilityFeedback,
+    })) {
+      const before = fakeApi.requests.length;
+      await assert.rejects(client.request('tools/call', {
+        name: 'firecrawl_feedback',
+        arguments: {
+          endpoint,
+          jobId: '00000000-0000-4000-8000-000000000010',
+          rating: 'partial',
+          [field]: value,
+        },
+      }), /parameter validation failed/);
+      assert.equal(fakeApi.requests.length, before);
+    }
+  }
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
@@ -1985,8 +2050,8 @@ test('local HTTP environment credentials keep self-hosted Core errors', async (t
   assert.equal(response.status, 200);
   const result = parseSseJson(await response.text()).result;
   assert.equal(result.isError, true);
-  assert.notEqual(result.content[0].text, INVALID_API_KEY_MESSAGE);
-  assert.notEqual(result.structuredContent?.code, 'CREDENTIAL_INVALID');
+  assert.match(result.content[0].text, /Request failed with status code 401/);
+  assert.equal(result.structuredContent?.code, undefined);
   assert.equal(backend.requests.some((request) => request.url === '/v2/search'), true);
 });
 
