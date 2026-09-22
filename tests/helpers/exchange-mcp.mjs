@@ -174,9 +174,9 @@ async function startStdioWithApi(t, options = {}) {
   const api = await startFakeExchangeApi(options);
   t.after(() => api.close());
   const session = await startStdio(t, {
+    ...(options.env || {}),
     FIRECRAWL_API_KEY: 'fc-exchange-test',
     FIRECRAWL_API_URL: api.url,
-    ...(options.env || {}),
   });
   return { api, ...session };
 }

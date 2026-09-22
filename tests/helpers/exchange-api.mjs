@@ -92,13 +92,19 @@ async function startFakeExchangeApi(options = {}) {
         return json(200, { success: true, data: { alexandria: [{ provider: 'firecrawl', capability: termsCall.capability, creditsCost: 0, data }] } });
       }
 
+      if (!options.bashRecovery && parsedBody.alexandria?.capability === 'bash') {
+        const stdout = parsedBody.alexandria.options?.command?.includes('jsonl')
+          ? '{"date":"2026-01-01","source_url":"https://api.stlouisfed.org/fred/series/observations"}\n{"date":"2026-02-01","source_urls":["https://api.stlouisfed.org/x"]}'
+          : 'date=2026-01-01 "source_url": "https://api.stlouisfed.org/fred/series/observations" tail';
+        return json(200, { success: true, data: { alexandria: [{ provider: 'firecrawl', capability: 'bash', data: { workspaceId: 'retained-workspace', exitCode: 0, stdout, idleTtlSeconds: 300 } }] } });
+      }
       if (options.bashRecovery && parsedBody.alexandria?.capability === 'bash') {
         if (options.bashRecovery === 'missing') return json(200, { success: true, data: { alexandria: [{ error: { code: 'result_unavailable' } }] } });
         const identities = options.bashRecovery === 'partial' ? [] : options.largeResult.data.alexandria.map(item => [item.provider, item.capability]);
         return json(200, { success: true, data: { alexandria: [{ provider: 'firecrawl', capability: 'bash', data: { workspaceId: 'retained-workspace', exitCode: 0, stdout: JSON.stringify(identities), idleTtlSeconds: 300 } }] } });
       }
       if (options.largeResult) return json(200, options.largeResult);
-      if (parsedBody.alexandria?.provider === 'firecrawl') return json(200, {success:true, data:{creditsCost:0, alexandria:[{provider:'firecrawl',capability:'find-tools',creditsCost:0,data:{level:'tools',items:[],total:4,next:{provider:'firecrawl',capability:'find-tools',options:{...parsedBody.alexandria.options, offset:4}}}}]}});
+      if (parsedBody.alexandria?.provider === 'firecrawl') return json(200, {success:true, data:{creditsCost:0, alexandria:[{provider:'firecrawl',capability:'find-tools',creditsCost:0,data:{level:'tools',items:[{provider:'fred',capability:'series/observations',example:{response:{source_url:'https://api.stlouisfed.org/fred/series/observations'}},response:{fields:{source_url:{type:'string'}}}}],total:4,next:{provider:'firecrawl',capability:'find-tools',options:{...parsedBody.alexandria.options, offset:4}}}}]}});
 
       if (parsedBody?.alexandria?.[0]?.provider === 'locked') {
         return json(403, {

@@ -147,10 +147,28 @@ test('Alexandria responses drop upstream source URLs unless FIRECRAWL_MCP_SHOW_S
   assert.equal('source_url' in hit.example.response, false);
   // Schema entries are not URL values and stay in the contract.
   assert.deepEqual(hit.response.fields.source_url, { type: 'string' });
+  const found = toolText(await client.request('tools/call', { name: 'firecrawl_find_tools', arguments: { providers: ['fred'] } }));
+  const item = found.data.alexandria[0].data.items[0];
+  assert.equal(item.provider, 'fred');
+  assert.equal('source_url' in item.example.response, false);
+  assert.deepEqual(item.response.fields.source_url, { type: 'string' });
+  // Retained-result projections through firecrawl/bash are text; JSON lines are stripped structurally, other text has the values blanked.
+  const jsonl = toolText(await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { alexandria: { provider: 'firecrawl', capability: 'bash', options: { workspaceId: 'retained-workspace', command: 'jq -c . response.jsonl' } } } }));
+  const lines = jsonl.data.alexandria[0].data.stdout.split('\n').map((line) => JSON.parse(line));
+  assert.deepEqual(lines, [{ date: '2026-01-01' }, { date: '2026-02-01' }]);
+  const text = toolText(await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { alexandria: { provider: 'firecrawl', capability: 'bash', options: { workspaceId: 'retained-workspace', command: 'grep date response.json' } } } }));
+  assert.doesNotMatch(text.data.alexandria[0].data.stdout, /stlouisfed/);
+  assert.match(text.data.alexandria[0].data.stdout, /"source_url": "\[hidden\]"/);
 });
 
 test('FIRECRAWL_MCP_SHOW_SOURCE_URLS=true keeps upstream source URLs', async (t) => {
   const { client } = await startStdioWithApi(t, { env: { FIRECRAWL_MCP_SHOW_SOURCE_URLS: 'true' } });
   const scrape = toolText(await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { alexandria: [EXCHANGE_CALL] } }));
   assert.match(scrape.data.alexandria[0].data.observations[0].source_url, /stlouisfed/);
+  const search = toolText(await client.request('tools/call', { name: 'firecrawl_search', arguments: { query: 'cpi', sources: ['alexandria'] } }));
+  assert.match(search.data.tools[0].example.response.source_url, /stlouisfed/);
+  const found = toolText(await client.request('tools/call', { name: 'firecrawl_find_tools', arguments: { providers: ['fred'] } }));
+  assert.match(found.data.alexandria[0].data.items[0].example.response.source_url, /stlouisfed/);
+  const text = toolText(await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { alexandria: { provider: 'firecrawl', capability: 'bash', options: { workspaceId: 'retained-workspace', command: 'grep date response.json' } } } }));
+  assert.match(text.data.alexandria[0].data.stdout, /stlouisfed/);
 });

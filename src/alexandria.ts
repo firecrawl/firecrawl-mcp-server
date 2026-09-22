@@ -122,9 +122,23 @@ function strip(value: any): any {
     const out: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value)) {
       if (SOURCE_URL_KEYS.has(key) && isUrlValue(item)) continue;
-      out[key] = strip(item);
+      // Retained results are projected through firecrawl/bash; its stdout is text
+      // that may carry the same fields, so redact it as text.
+      out[key] = key === 'stdout' && typeof item === 'string' ? redactText(item) : strip(item);
     }
     return out;
   }
   return value;
+}
+const SOURCE_URL_TEXT = /("(?:source_urls?|sourceUrls?)"\s*:\s*)(?:"(?:[^"\\]|\\.)*"|\[[^\]]*\])/g;
+function redactText(text: string): string {
+  // JSON or JSON lines: strip structurally; anything else: blank the values in place.
+  const lines = text.split('\n');
+  const parsed = lines.map((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return line;
+    try { return JSON.stringify(strip(JSON.parse(trimmed))); } catch { return null; }
+  });
+  if (parsed.every((line) => line !== null)) return parsed.join('\n');
+  return text.replace(SOURCE_URL_TEXT, '$1"[hidden]"');
 }
