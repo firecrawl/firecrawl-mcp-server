@@ -74,7 +74,7 @@ export const ALEXANDRIA_SOURCES_OPT_OUT =
 export const ALEXANDRIA_SEARCH_LEAD =
   'Authenticated search also returns matching Alexandria data providers in data.tools (' + ALEXANDRIA_CATALOGUE_VERTICALS + '). Prefer a provider over scraping pages when the task needs the same fields across several entities, exact figures or timestamps, provenance, or many records; use web results when they already answer the question. ' + ALEXANDRIA_SOURCES_OPT_OUT;
 export const ALEXANDRIA_CONTRACT_GUIDANCE =
-  'Read the selected contract before executing: required inputs and requiresOneOf groups (at least one member per group), example.request/example.response when present, and response.key (do not assume records is the result key). Follow the declared pagination input and response cursor, preserving filters; catalogue next is separate from provider pagination.';
+  'The selected contract defines required inputs, requiresOneOf groups (at least one member per group), example.request/example.response when present, and response.key (which may differ from records). Provider pagination uses the declared input and response cursor with the same filters; catalogue next is separate from provider pagination.';
 
 export function findToolsOptions(args: z.infer<typeof findToolsSchema>) {
   const level = args.level ?? (args.query || args.capabilities?.length || args.providers?.length || args.groups?.length || args.urls?.length ? 'tools' : args.categories?.length ? 'providers' : 'categories');
@@ -105,4 +105,4 @@ export function withFindToolsNavigation(envelope: any) {
 }
 
 export const ALEXANDRIA_SEARCH_INSTRUCTIONS =
-  'Authenticated search combines web results, semantic tool summaries and domain matches. Use sources: ["alexandria"] for semantic tools only, or sources: ["web"] for web only. domainTools: false disables domain matching. Tool matches describe available structured-data capabilities, not executed data. toolDetail: "compact" (default) returns only provider, capability and description; "summary" adds metadata; "full" includes their input and output contracts. Execute a matched tool through firecrawl_scrape with an alexandria body; use firecrawl_find_tools to browse the catalogue or read a full contract.';
+  'Authenticated search combines web results, semantic tool summaries and domain matches. Use sources: ["alexandria"] for semantic tools only, or sources: ["web"] for web only. domainTools: false disables domain matching. Tool matches describe available structured-data capabilities, not executed data. toolDetail: "compact" (default) returns only provider, capability and description; "summary" adds metadata; "full" includes their input and output contracts. firecrawl_scrape with an alexandria body executes a selected capability; firecrawl_find_tools provides catalogue browsing and full contracts.';
