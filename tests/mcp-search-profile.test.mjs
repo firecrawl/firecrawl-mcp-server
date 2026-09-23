@@ -1293,6 +1293,10 @@ test('search surface registers the two Alexandria tools with surface-scoped copy
   const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, {
     'x-api-key': 'fc-test',
   });
+  // Claude Code truncates tool descriptions at 2,048 characters.
+  for (const tool of tools) {
+    assert.ok((tool.description ?? '').length <= 2048, `${tool.name} description is ${(tool.description ?? '').length} chars`);
+  }
   const scrape = tools.find((tool) => tool.name === 'firecrawl_scrape');
   const findTools = tools.find((tool) => tool.name === 'firecrawl_find_tools');
   assert.ok(scrape);

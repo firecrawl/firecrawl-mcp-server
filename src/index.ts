@@ -25,7 +25,8 @@ import {
   defaultDomainTools,
   normalizeSearchSources,
   searchQueryIsValid,
-  ALEXANDRIA_INSTRUCTIONS,
+  ALEXANDRIA_SEARCH_LEAD,
+  ALEXANDRIA_CONTRACT_GUIDANCE,
   ALEXANDRIA_CATALOGUE_SENTENCE,
   ALEXANDRIA_CATALOGUE_VERTICALS,
   ALEXANDRIA_SOURCES_OPT_OUT,
@@ -906,7 +907,7 @@ const searchToolBaseFields = {
   query: z
     .string()
     .min(1)
-    .describe('Query for web and semantic tool discovery. Catalogue browsing is available through firecrawl_find_tools.'),
+    .describe('Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Catalogue browsing is available through firecrawl_find_tools.'),
   domainTools: z
     .boolean()
     .optional()
@@ -923,8 +924,8 @@ const searchToolBaseFields = {
   tbs: z.string().optional(),
   filter: z.string().optional(),
   location: z.string().optional(),
-  includeDomains: z.array(searchDomainSchema).optional(),
-  excludeDomains: z.array(searchDomainSchema).optional(),
+  includeDomains: z.array(searchDomainSchema).optional().describe('Hostnames to restrict results to. Mutually exclusive with excludeDomains.'),
+  excludeDomains: z.array(searchDomainSchema).optional().describe('Hostnames to leave out of results. Mutually exclusive with includeDomains.'),
   sources: z
     .array(searchSourceSchema)
     .optional()
@@ -1196,7 +1197,7 @@ const openAiAppsChallengeToken = normalizeHeader(
 );
 
 const FULL_PROFILE_INSTRUCTIONS =
-  `Execution with firecrawl_scrape alexandria uses requestId; reuse the returned ID for retries of the same payload, never a new ID to bypass a pending or uncertain 409. Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question — code behaviour, a library or framework, an API contract, an error message, or a known bug — firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of public repositories, GitHub issues, merged pull requests, READMEs, and code documentation. Authenticated firecrawl_search returns web results together with matching Alexandria providers in data.tools. ${ALEXANDRIA_CATALOGUE_SENTENCE} When a provider matches, prefer it over scraping pages if the task needs the same fields across several entities, provenance, exact figures or timestamps, or a large set of records; execute it through firecrawl_scrape with the returned contract. If web results already answer the question, use them. Before scraping more than one page for the same fields, spend one free firecrawl_find_tools call to check for a provider. Use firecrawl_find_tools to read a contract that was not returned in full or to browse the catalogue by category. ${ALEXANDRIA_SOURCES_OPT_OUT} If no provider fits, continue with web search or firecrawl_agent. firecrawl_search with sources: [{type: "alexandria"}] returns compact tool summaries in data.tools; toolDetail: "full" includes contracts, firecrawl_find_tools starts with categories, lists providers, then compact tools, and expands the selected full contract, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities and returns their results. Alexandria access needs an API key on a team with it enabled. A terms-gated Alexandria provider fails with code THIRD_PARTY_DATA_TERMS_REQUIRED and a requiresAction.url. Follow the returned terms/show and terms/accept calls through firecrawl_scrape; acceptance requires explicit user authorization for the reviewed version and digest and confirmed:true. Otherwise direct an organization admin to the dashboard URL. Do not repeat successful provider calls just because the client could not display their output. Provide only the required inputs and account for stated network or external side effects.
+  `Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. Authenticated firecrawl_search returns web results together with matching Alexandria providers in data.tools. ${ALEXANDRIA_CATALOGUE_SENTENCE} When a provider matches, prefer it over scraping pages if the task needs the same fields across several entities, provenance, exact figures or timestamps, or a large set of records; execute it through firecrawl_scrape with the returned contract. If web results already answer the question, use them. Before scraping more than one page for the same fields, spend one free firecrawl_find_tools call to check for a provider. Use firecrawl_find_tools to read a contract that was not returned in full or to browse the catalogue by category. ${ALEXANDRIA_SOURCES_OPT_OUT} If no provider fits, continue with web search or firecrawl_agent. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question — code behaviour, a library or framework, an API contract, an error message, or a known bug — firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of public repositories, GitHub issues, merged pull requests, READMEs, and code documentation. Execution with firecrawl_scrape alexandria uses requestId; reuse the returned ID for retries of the same payload, never a new ID to bypass a pending or uncertain 409. firecrawl_search with sources: [{type: "alexandria"}] returns compact tool summaries in data.tools; toolDetail: "full" includes contracts, firecrawl_find_tools starts with categories, lists providers, then compact tools, and expands the selected full contract, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities and returns their results. Alexandria access needs an API key on a team with it enabled. A terms-gated Alexandria provider fails with code THIRD_PARTY_DATA_TERMS_REQUIRED and a requiresAction.url. Follow the returned terms/show and terms/accept calls through firecrawl_scrape; acceptance requires explicit user authorization for the reviewed version and digest and confirmed:true. Otherwise direct an organization admin to the dashboard URL. Do not repeat successful provider calls just because the client could not display their output. Provide only the required inputs and account for stated network or external side effects.
 ${ALEXANDRIA_FEEDBACK_GUIDANCE}`;
 const KEYLESS_PROFILE_INSTRUCTIONS = `Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index and repository research, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.`;
 
@@ -2004,12 +2005,14 @@ const scrapeToolParamsSchema = scrapeParamsSchema
       .regex(/^[A-Za-z0-9._:-]{1,128}$/)
       .optional()
       .describe(
-        'Alexandria execution ID. Reuse for retries of the identical payload; generated when omitted and returned with the result.'
+        'Alexandria execution ID. Reuse the returned ID for retries of the identical payload, never a new ID to bypass pending or uncertain execution; generated when omitted. For potentially large workflow results, supply and preserve one before execution. Errors relay a code and chargeId: request_in_flight (409) retry the same requestId later; request_unresolved (503) keep the requestId for reconciliation, never mint a new one; duplicate_request (409) the requestId belongs to a different payload; unknown_provider (404), insufficient_credits (402) and billing_unavailable (503) mean nothing executed.'
       ),
     alexandria: z.union([exchangeCallSchema, exchangeCallsSchema])
       .optional()
       .describe(
-        'Execute catalogued Alexandria capabilities instead of scraping a URL. Exactly one of url or alexandria.'
+        'Execute catalogued Alexandria capabilities instead of scraping a URL. Exactly one of url or alexandria. One {provider, capability, options} object or an array of 1-10, found through firecrawl_search or firecrawl_find_tools. Each call may include version to pin a published workflow; omitting it uses latest. Only timeout also applies at the top level. ' +
+          ALEXANDRIA_CONTRACT_GUIDANCE +
+          ' Returns per-capability results in data.alexandria with data, records, or an error with a code; check each item even when the outer response succeeds. If a response provides nextTool, follow it to read a large result instead of repeating a successful provider call. Needs an API key on a team with Alexandria enabled. A terms-gated provider returns THIRD_PARTY_DATA_TERMS_REQUIRED (403) with requiresAction.url: follow the returned terms/show and terms/accept calls through this tool, accepting only after explicit user authorization for the reviewed version and digest; an organization admin can instead accept at the dashboard URL. Retry only after confirmed acceptance.'
       ),
     toolDetail: z.enum(['compact', 'summary', 'full']).optional().describe('URL domain discovery detail: summary by default, compact returns provider/capability/description, full includes contracts.'),
     domainTools: z
@@ -2432,23 +2435,13 @@ const scrapeTool: RegisteredTool = {
     destructiveHint: false, // Does not modify, delete, or write to external websites.
   },
   description: `
-Retrieve and extract content from one supplied URL through Firecrawl. Use this when the request identifies a page and needs its content or defined fields. It can return markdown, HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema; JSON is useful when the requested result has defined fields, while markdown preserves readable page content.
+Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields. Use \`firecrawl_search\` when additional web sources are needed, \`firecrawl_map\` to list a site's URLs, and \`firecrawl_crawl\` for a set of pages.
 
-This tool operates on a known page. Use \`firecrawl_search\` when additional web sources are needed. For a set of pages use \`firecrawl_crawl\`, and to discover page URLs use \`firecrawl_map\`. Options include JavaScript render delay, cache age, main-content filtering, PII redaction, and lockdown cache-only retrieval. Browser actions may change the live page when interactive actions are enabled.
-
-Firecrawl may reuse recently indexed content instead of refetching the page, and the reuse window varies by domain. Set \`maxAge: 0\` to force a live fetch, or a smaller \`maxAge\` to bound how stale reused content may be. A successful response does not by itself confirm that the state it describes is still current.
-
-Returns the selected content formats and page metadata. Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback.
+Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch or a smaller \`maxAge\` to bound staleness. A successful response does not by itself confirm the page is still current. Browser actions can change the live page when interactive actions are enabled. Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback.
 
 On an authenticated session with Alexandria access, if you are about to scrape the same fields from several pages, first run \`firecrawl_search\` with \`sources\` unset (or \`firecrawl_find_tools\`): a matching Alexandria provider returns those fields as typed records in one call. Keyless sessions have no provider matches; scrape directly.
-Alexandria mode: pass \`alexandria\` (one \`{provider, capability, options}\` object or an array of 1-10) instead of \`url\` to execute catalogued Alexandria capabilities found through \`firecrawl_search\` sources \`alexandria\` or \`firecrawl_find_tools\`. The optional requestId identifies one logical execution: reuse the returned ID for retries of the identical payload, never a new ID to bypass pending or uncertain execution. Each call may include version to pin a published workflow; omitting it uses latest. Only timeout also applies at the top level in this mode. Returns per-capability results in \`data.alexandria\`, including \`data\`, \`records\`, or an \`error\` with a code. Check each item for errors even when the outer response is successful. Alexandria needs an API key on a team with Alexandria enabled.
-Alexandria mode: pass \`alexandria\` (one \`{provider, capability, options}\` object or an array of 1-10) instead of \`url\` to execute catalogued Alexandria capabilities found through \`firecrawl_search\` sources \`alexandria\` or \`firecrawl_find_tools\`. The optional requestId identifies one logical execution: reuse the returned ID for retries of the identical payload, never a new ID to bypass pending or uncertain execution. Each call may include version to pin a published workflow; omitting it uses latest. Only timeout also applies at the top level in this mode. Returns per-capability results in \`data.alexandria\`, including \`data\`, \`records\`, or an \`error\` with a code. Check each item for errors even when the outer response is successful. Alexandria needs an API key on a team with Alexandria enabled. Alexandria results include a \`feedbackTool\` pointer: after the task, report how the catalogue served the website through \`firecrawl_feedback\` with endpoint \`alexandria\` (free, no job ID).
 
-For potentially large workflow results, supply and preserve a top-level requestId before execution. If a response provides nextTool, follow its instructions to access the result without repeating a successful provider call.
-
-URL mode only: set \`domainTools: true\` to also return domain-matched Alexandria tools for the page in \`tools\` on the returned document.
-
-Alexandria execution errors relay a \`code\` and \`chargeId\`: \`request_in_flight\` (409) retry the same requestId later; \`request_unresolved\` (503) keep the requestId for reconciliation, never mint a new one; \`duplicate_request\` (409) the requestId belongs to a different payload; \`unknown_provider\` (404), \`insufficient_credits\` (402), and \`billing_unavailable\` (503) mean nothing executed. A terms-gated Alexandria provider returns \`THIRD_PARTY_DATA_TERMS_REQUIRED\` (403) with \`requiresAction.url\`: follow the returned terms/show and terms/accept calls through this tool, only accepting after explicit user authorization for the reviewed version and digest. An organization admin can alternatively accept at the dashboard URL. Retry only after confirmed acceptance.
+Alexandria mode: pass \`alexandria\` instead of \`url\` to execute catalogued capabilities; the \`alexandria\` and \`requestId\` parameters describe batching, retries, errors and provider terms. Alexandria results include a \`feedbackTool\` pointer: after the task, report how the catalogue served the website through \`firecrawl_feedback\` with endpoint \`alexandria\` (free, no job ID).
 `,
   parameters: scrapeToolParamsSchema,
   execute: async (args: unknown, { session, log, client: mcpClient }): Promise<string> => {
@@ -2554,15 +2547,13 @@ server.addTool({
     destructiveHint: false, // Query-only; no destructive side effects on external entities.
   },
   description: `
-Search web, news, or image sources and return ranked results with query-relevant highlights. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit results to research, PDF, or developer sources.
+Search web, news, or image sources and return ranked results with query-relevant highlights. Each web result is a title, URL, and description; use \`firecrawl_scrape\` on a result URL when the excerpt is not enough.
 
-For a programming question, add \`categories: ["developer"]\`. It searches an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and returns the results in \`data.web\` with \`category: "developer"\`.
+${ALEXANDRIA_SEARCH_LEAD}
 
-\`categories: ["research"]\` restricts these web results to research-affiliated websites and returns page snippets. The \`firecrawl_research_*\` tools are a separate surface that searches paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature.
+Tool matches are discovery, not executed data: execute one through \`firecrawl_scrape\` with an \`alexandria\` body, or read its full contract with \`firecrawl_find_tools\`. After an Alexandria task, call firecrawl_feedback once per website with endpoint "alexandria" (free, no job ID).
 
-Each web result is a title, URL, and description. Highlights appear in web \`description\` and news \`snippet\`; otherwise, original snippets are returned. If excerpts are insufficient, use \`firecrawl_scrape\` to retrieve content from relevant result URLs. Add \`scrapeOptions\` to attach page content in the same call; those fetches ignore \`maxAge\`, so use \`firecrawl_scrape\` when you need a live fetch. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
-
-${ALEXANDRIA_INSTRUCTIONS}
+For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`. \`categories: ["research"]\` restricts web results to research-affiliated websites; the \`firecrawl_research_*\` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Query operators, domain filters, \`categories\`, \`toolDetail\` and \`scrapeOptions\` are described on their parameters. Authenticated responses can include an \`id\` for optional search feedback.
 `,
   parameters: z
     .object({
@@ -2570,7 +2561,8 @@ ${ALEXANDRIA_INSTRUCTIONS}
       scrapeOptions: scrapeParamsSchema
         .omit({ url: true })
         .partial()
-        .optional(),
+        .optional()
+        .describe('Attach page content for web results in the same call. These fetches ignore maxAge, so use firecrawl_scrape when you need a live fetch. scrapeOptions fetches web pages, never Alexandria provider tools.'),
     })
     .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE)
     .refine(
@@ -2734,18 +2726,11 @@ server.addTool(findToolsTool);
 // (no crawl, map, interact, monitor, parse or feedback references). Registered
 // on the search surface in place of the module-level tools above.
 const SEARCH_SURFACE_SCRAPE_DESCRIPTION = `
-Retrieve and extract content from one supplied URL through Firecrawl, or execute catalogued Alexandria capabilities. Use URL mode when the request identifies a page and needs its content or defined fields. It can return markdown, HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema; JSON is useful when the requested result has defined fields, while markdown preserves readable page content. Options include JavaScript render delay, cache age, main-content filtering, PII redaction, and lockdown cache-only retrieval. Browser actions may change the live page when interactive actions are enabled. A named browser profile can load saved session data and overwrite its stored state.
-
-Firecrawl may reuse recently indexed content instead of refetching the page, and the reuse window varies by domain. Set \`maxAge: 0\` to force a live fetch, or a smaller \`maxAge\` to bound how stale reused content may be. A successful response does not by itself confirm that the state it describes is still current. URL mode returns the selected content formats and page metadata.
+Scrape one URL and return its content, or execute catalogued Alexandria capabilities. URL mode returns markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema, plus page metadata. Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch. A successful response does not by itself confirm the page is still current. Browser actions can change the live page when interactive actions are enabled, and a named browser profile can load saved session data and overwrite its stored state.
 
 Before scraping the same fields from several pages, first run \`firecrawl_search\` with \`sources\` unset (or \`firecrawl_find_tools\`): a matching Alexandria provider returns those fields as typed records in one call.
-Alexandria mode: pass \`alexandria\` (one \`{provider, capability, options}\` object or an array of 1-10) instead of \`url\` to execute catalogued Alexandria capabilities found through \`firecrawl_search\` sources \`alexandria\` or \`firecrawl_find_tools\`. The optional requestId identifies one logical execution: reuse the returned ID for retries of the identical payload, never a new ID to bypass pending or uncertain execution. Each call may include version to pin a published workflow; omitting it uses latest. Only timeout also applies at the top level in this mode. Returns per-capability results in \`data.alexandria\`, including \`data\`, \`records\`, or an \`error\` with a code. Check each item for errors even when the outer response is successful. Alexandria execution is billed at the capability's listed price and needs a team with Alexandria enabled.
 
-For potentially large workflow results, supply and preserve a top-level requestId before execution. If a response provides nextTool, follow its instructions to access the result without repeating a successful provider call.
-
-URL mode only: set \`domainTools: true\` to also return domain-matched Alexandria tools for the page in \`tools\` on the returned document.
-
-Alexandria execution errors relay a \`code\` and \`chargeId\`: \`request_in_flight\` (409) retry the same requestId later; \`request_unresolved\` (503) keep the requestId for reconciliation, never mint a new one; \`duplicate_request\` (409) the requestId belongs to a different payload; \`unknown_provider\` (404), \`insufficient_credits\` (402), and \`billing_unavailable\` (503) mean nothing executed. A terms-gated Alexandria provider returns \`THIRD_PARTY_DATA_TERMS_REQUIRED\` (403) with \`requiresAction.url\`: follow the returned terms/show and terms/accept calls through this tool, only accepting after explicit user authorization for the reviewed version and digest. An organization admin can alternatively accept at the dashboard URL. Retry only after confirmed acceptance.
+Alexandria mode: pass \`alexandria\` instead of \`url\`; the \`alexandria\` and \`requestId\` parameters describe batching, retries, errors and provider terms. Alexandria execution is billed at the capability's listed price and needs a team with Alexandria enabled.
 `;
 const searchSurfaceScrapeTool: RegisteredTool = {
   ...scrapeTool,
