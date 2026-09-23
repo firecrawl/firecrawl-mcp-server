@@ -2775,7 +2775,7 @@ Reason definitions:
 - proxy_error: The operation explicitly reported a proxy failure.
 - other: Another operation failure was reported; describe the returned error without guessing its cause.
 
-Use only evidence already available. Do not guess missing content, diagnose causes, or investigate further. The stored keyless submission must fit within 8 KiB (8192 UTF-8 bytes), including server defaults and verification flags. By default, one accepted submission per caller IP per UTC day is shared across Search, Scrape, Parse, and all clients; the server invitation states the deployment allowance. Attempts, including rejected requests, are limited to 30 per minute. Submit within 24 hours from the same caller IP. Contract and example: https://docs.firecrawl.dev/api-reference/endpoint/feedback. Feedback remains available after operation quota exhaustion and does not restore quota. Returns submission status and feedback ID. Authenticated feedback retains its existing fields.
+Use only evidence already available. Do not guess missing content, diagnose causes, or investigate further. The stored keyless submission must fit within 8 KiB (8192 UTF-8 bytes), including server defaults and verification flags. Each job accepts one submission, and retrying returns the original feedback ID. Submission attempts are rate limited. Submit within 24 hours from the same caller IP. Contract and example: https://docs.firecrawl.dev/api-reference/endpoint/feedback. Feedback remains available after operation quota exhaustion and does not restore quota. Returns submission status and feedback ID. Authenticated feedback retains its existing fields.
 `,
     parameters: z.object({
       endpoint: z.enum(['search', 'scrape', 'parse', 'map']),

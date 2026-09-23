@@ -3077,12 +3077,17 @@ test('hosted keyless feedback bypasses exhausted operation allowance and preserv
               feedbackId: '00000000-0000-4000-8000-000000000001',
               creditsRefunded: 0,
             }
-          : {
-              success: false,
-              error: 'Feedback rejected',
-              feedbackErrorCode:
-                status === 429 ? 'DAILY_LIMIT_REACHED' : 'INVALID_BODY',
-            };
+          : status === 429
+            ? {
+                success: false,
+                error: 'Too many feedback attempts. Retry in one minute.',
+                retry_after_seconds: 60,
+              }
+            : {
+                success: false,
+                error: 'Feedback rejected',
+                feedbackErrorCode: 'INVALID_BODY',
+              };
       const backend = await startFakeFirecrawlBackend({
         keylessEligible: false,
         feedbackResponse: { status, body },

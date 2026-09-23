@@ -557,10 +557,9 @@ jobs require `endpoint`, `jobId`, `rating`, `task`, `assessment`, and 1-20
 The tool description lists the category fields below. Use only available evidence
 and keep unverified expectations distinct from source comparisons.
 
-By default, keyless submissions are limited to one per caller IP per UTC day across Search,
-Scrape, Parse, and all clients, with references valid for 24 hours. The server invitation states the deployment allowance. Feedback remains
-available after operation allowance is exhausted and does not consume or restore
-that allowance.
+Keyless job references are valid for 24 hours. Each job accepts one submission;
+retrying it returns the original feedback ID. Feedback remains available after
+operation allowance is exhausted and does not consume or restore that allowance.
 
 Authenticated callers retain the existing issue/note fields for Search, Scrape,
 Parse, and Map. For authenticated Search-specific feedback, continue using
@@ -582,7 +581,7 @@ Scrape and Parse observations other than failure: format must be a format type t
 
 Failed Search, Scrape, or Parse jobs: use kind failure with reason timeout, transport_error, proxy_error, or other. Accepted only for a failed job. Include detail and basis; do not supply position, source, format, location, or page. Parse still requires docClass (unknown is allowed).
 
-The stored keyless submission must fit within 8 KiB (8192 UTF-8 bytes), including server defaults and verification flags. By default, one accepted submission per caller IP per UTC day is shared across Search, Scrape, Parse, and all clients; the server invitation states the deployment allowance. Attempts, including rejected requests, are limited to 30 per minute. Submit within 24 hours from the same caller IP. Contract and example: https://docs.firecrawl.dev/api-reference/endpoint/feedback.
+The stored keyless submission must fit within 8 KiB (8192 UTF-8 bytes), including server defaults and verification flags. Each job accepts one submission, and retrying returns the original feedback ID. Submission attempts are rate limited. Submit within 24 hours from the same caller IP. Contract and example: https://docs.firecrawl.dev/api-reference/endpoint/feedback.
 
 If the saved Search response is unavailable, otherwise valid observations are accepted and stored with metadata.unverified: true because their positions could not be checked. Job ownership and requested sources are still checked. Available results must contain every referenced position.
 
