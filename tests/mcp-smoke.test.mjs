@@ -6,6 +6,7 @@ import net from 'node:net';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
+import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
 
 const { version: serverVersion } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
@@ -1067,9 +1068,13 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   // A stdio session with an API key gets the Alexandria-aware instructions,
   // not the keyless wording.
   assert.match(init.instructions, /firecrawl_scrape retrieves one supplied page/i);
-  // Claude Code truncates server instructions at 2,048 characters; the Alexandria
-  // routing paragraph has to land inside that window.
-  const instructionsHead = init.instructions.slice(0, 2048);
+  // Claude Code truncates server instructions at CLAUDE_CODE_TEXT_CAP characters; the
+  // Alexandria routing paragraph has to land inside that window. Trade-off: the
+  // developer/research routing and the requestId retry rule now sit after it, past the
+  // cap. Both are also carried where Claude Code does not truncate them: the
+  // firecrawl_search description (developer and research categories, asserted below)
+  // and the requestId parameter description (retry rule, asserted in the budget test).
+  const instructionsHead = init.instructions.slice(0, CLAUDE_CODE_TEXT_CAP);
   assert.match(instructionsHead, /Alexandria is Firecrawl's catalogue of data providers/);
   assert.match(instructionsHead, /Before scraping more than one page for the same fields/);
   assert.match(instructionsHead, /Passing sources without alexandria in it/);
