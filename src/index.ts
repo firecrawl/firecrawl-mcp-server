@@ -2435,13 +2435,13 @@ const scrapeTool: RegisteredTool = {
     destructiveHint: false, // Does not modify, delete, or write to external websites.
   },
   description: `
-Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields. Use \`firecrawl_search\` when additional web sources are needed, \`firecrawl_map\` to list a site's URLs, and \`firecrawl_crawl\` for a set of pages.
+Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields. Use \`firecrawl_search\` when additional web sources are needed; on an authenticated session, \`firecrawl_map\` lists a site's URLs and \`firecrawl_crawl\` collects a set of pages.
 
 Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch or a smaller \`maxAge\` to bound staleness. A successful response does not by itself confirm the page is still current. Browser actions can change the live page when interactive actions are enabled. Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback.
 
 On an authenticated session with Alexandria access, if you are about to scrape the same fields from several pages, first run \`firecrawl_search\` with \`sources\` unset (or \`firecrawl_find_tools\`): a matching Alexandria provider returns those fields as typed records in one call. Keyless sessions have no provider matches; scrape directly.
 
-Alexandria mode: pass \`alexandria\` instead of \`url\` to execute catalogued capabilities; the \`alexandria\` and \`requestId\` parameters describe batching, retries, errors and provider terms. Alexandria results include a \`feedbackTool\` pointer: after the task, report how the catalogue served the website through \`firecrawl_feedback\` with endpoint \`alexandria\` (free, no job ID).
+Alexandria mode, on an authenticated session with Alexandria access: pass \`alexandria\` instead of \`url\` to execute catalogued capabilities; the \`alexandria\` and \`requestId\` parameters describe batching, retries, errors and provider terms, and its results include a \`feedbackTool\` pointer: after the task, report how the catalogue served the website through \`firecrawl_feedback\` with endpoint \`alexandria\` (free, no job ID).
 `,
   parameters: scrapeToolParamsSchema,
   execute: async (args: unknown, { session, log, client: mcpClient }): Promise<string> => {
@@ -2551,7 +2551,7 @@ Search web, news, or image sources and return ranked results with query-relevant
 
 ${ALEXANDRIA_SEARCH_LEAD}
 
-Tool matches are discovery, not executed data: execute one through \`firecrawl_scrape\` with an \`alexandria\` body, or read its full contract with \`firecrawl_find_tools\`. After an Alexandria task, call firecrawl_feedback once per website with endpoint "alexandria" (free, no job ID).
+On an authenticated session, tool matches are discovery, not executed data: execute one through \`firecrawl_scrape\` with an \`alexandria\` body, or read its full contract with \`firecrawl_find_tools\`; after an Alexandria task, call firecrawl_feedback once per website with endpoint "alexandria" (free, no job ID). Keyless sessions get no Alexandria matches in data.tools.
 
 For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`. \`categories: ["research"]\` restricts web results to research-affiliated websites; the \`firecrawl_research_*\` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Query operators, domain filters, \`categories\`, \`toolDetail\` and \`scrapeOptions\` are described on their parameters. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
 `,
