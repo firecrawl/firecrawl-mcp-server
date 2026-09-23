@@ -12,19 +12,19 @@ function assertFeedbackHint(payload) {
   assert.equal(payload.feedbackTool?.name, 'firecrawl_feedback');
   assert.equal(payload.feedbackTool.arguments.endpoint, 'alexandria');
   assert.match(payload.feedbackTool.arguments.requestedWebsite.url, /website/i);
-  assert.match(payload.feedbackTool.when, /once per website/i);
+  assert.match(payload.feedbackTool.when, /^Optional, once per website/i);
 }
 
-test('server instructions and Alexandria tool descriptions point at firecrawl_feedback', async (t) => {
+test('server instructions and Alexandria tool descriptions present feedback as optional', async (t) => {
   const { client, init } = await startStdioWithApi(t);
-  assert.match(init.instructions, /call firecrawl_feedback once per website with endpoint "alexandria"/);
+  assert.match(init.instructions, /Optional Alexandria quality feedback is available through firecrawl_feedback with endpoint "alexandria"/);
   assert.match(init.instructions, /whether a capability ran or discovery found nothing for the website/);
   const { tools } = await client.request('tools/list', {});
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
   assert(byName.has('firecrawl_feedback'));
-  assert.match(byName.get('firecrawl_scrape').description, /feedbackTool.*firecrawl_feedback.*endpoint `alexandria`/s);
-  assert.match(byName.get('firecrawl_find_tools').description, /feedbackTool.*firecrawl_feedback.*including when nothing covered it/s);
-  assert.match(byName.get('firecrawl_search').description, /call firecrawl_feedback once per website/);
+  assert.match(byName.get('firecrawl_scrape').description, /feedbackTool.*optional.*firecrawl_feedback.*endpoint `alexandria`/s);
+  assert.match(byName.get('firecrawl_find_tools').description, /feedbackTool.*optional.*firecrawl_feedback.*including when nothing covered it/s);
+  assert.match(byName.get('firecrawl_search').description, /Optional Alexandria quality feedback is available through firecrawl_feedback/);
 });
 
 test('Alexandria executions and discovery results carry the feedback hint; utility calls do not', async (t) => {

@@ -2441,7 +2441,7 @@ Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch
 
 On an authenticated session with Alexandria access, if you are about to scrape the same fields from several pages, first run \`firecrawl_search\` with \`sources\` unset (or \`firecrawl_find_tools\`): a matching Alexandria provider returns those fields as typed records in one call. Keyless sessions have no provider matches; scrape directly.
 
-Alexandria mode, on an authenticated session with Alexandria access: pass \`alexandria\` instead of \`url\` to execute catalogued capabilities; the \`alexandria\` and \`requestId\` parameters describe batching, retries, errors and provider terms, and its results include a \`feedbackTool\` pointer: after the task, report how the catalogue served the website through \`firecrawl_feedback\` with endpoint \`alexandria\` (free, no job ID).
+Alexandria mode, on an authenticated session with Alexandria access: pass \`alexandria\` instead of \`url\` to execute catalogued capabilities; the \`alexandria\` and \`requestId\` parameters describe batching, retries, errors and provider terms, and its results include a \`feedbackTool\` pointer for optional \`firecrawl_feedback\` with endpoint \`alexandria\` (free, no job ID).
 `,
   parameters: scrapeToolParamsSchema,
   execute: async (args: unknown, { session, log, client: mcpClient }): Promise<string> => {
@@ -2551,7 +2551,7 @@ Search web, news, or image sources and return ranked results with query-relevant
 
 ${ALEXANDRIA_SEARCH_LEAD}
 
-On an authenticated session, tool matches are discovery, not executed data: execute one through \`firecrawl_scrape\` with an \`alexandria\` body, or read its full contract with \`firecrawl_find_tools\`; after an Alexandria task, call firecrawl_feedback once per website with endpoint "alexandria" (free, no job ID). Keyless sessions get no Alexandria matches in data.tools.
+On an authenticated session, tool matches are discovery, not executed data: execute one through \`firecrawl_scrape\` with an \`alexandria\` body, or read its full contract with \`firecrawl_find_tools\`. Optional Alexandria quality feedback is available through firecrawl_feedback with endpoint "alexandria" on authenticated sessions (free, no job ID). Keyless sessions get no Alexandria matches in data.tools.
 
 For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`. \`categories: ["research"]\` restricts web results to research-affiliated websites; the \`firecrawl_research_*\` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Query operators, domain filters, \`categories\`, \`toolDetail\` and \`scrapeOptions\` are described on their parameters. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
 `,
@@ -2689,7 +2689,7 @@ const findToolsTool: RegisteredTool = {
     idempotentHint: true,
   },
   description:
-    'Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers ' + ALEXANDRIA_CATALOGUE_VERTICALS + ': typed, sourced records through published contracts. Prefer normal firecrawl_search for a data task; it already returns matching providers. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Use query for semantic discovery or urls to find providers for a website. With no arguments, browse categories, then providers and tools. Inspect a selected contract before executing through firecrawl_scrape; reuse contracts already returned. Follow nextTool for further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results. Results include a feedbackTool pointer: after the task, report how the catalogue served the website through firecrawl_feedback with endpoint alexandria, including when nothing covered it (free, no job ID).',
+    'Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers ' + ALEXANDRIA_CATALOGUE_VERTICALS + ': typed, sourced records through published contracts. Prefer normal firecrawl_search for a data task; it already returns matching providers. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Use query for semantic discovery or urls to find providers for a website. With no arguments, browse categories, then providers and tools. Inspect a selected contract before executing through firecrawl_scrape; reuse contracts already returned. Follow nextTool for further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results. Results include a feedbackTool pointer for optional firecrawl_feedback with endpoint alexandria, including when nothing covered it (free, no job ID).',
   parameters: findToolsSchema,
   execute: async (args, { session, client: mcpClient }) => {
     const origin = requestOrigin(mcpClient, session);
