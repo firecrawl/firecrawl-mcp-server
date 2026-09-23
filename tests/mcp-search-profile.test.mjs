@@ -6,6 +6,7 @@ import net from 'node:net';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
+import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
 
 const { version: serverVersion } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
@@ -1293,6 +1294,10 @@ test('search surface registers the two Alexandria tools with surface-scoped copy
   const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, {
     'x-api-key': 'fc-test',
   });
+  // Claude Code truncates tool descriptions at CLAUDE_CODE_TEXT_CAP characters.
+  for (const tool of tools) {
+    assert.ok((tool.description ?? '').length <= CLAUDE_CODE_TEXT_CAP, `${tool.name} description is ${(tool.description ?? '').length} chars`);
+  }
   const scrape = tools.find((tool) => tool.name === 'firecrawl_scrape');
   const findTools = tools.find((tool) => tool.name === 'firecrawl_find_tools');
   assert.ok(scrape);

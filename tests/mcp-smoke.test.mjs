@@ -6,6 +6,7 @@ import net from 'node:net';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
+import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
 
 const { version: serverVersion } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
@@ -1067,6 +1068,16 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   // A stdio session with an API key gets the Alexandria-aware instructions,
   // not the keyless wording.
   assert.match(init.instructions, /firecrawl_scrape retrieves one supplied page/i);
+  // Claude Code truncates server instructions at CLAUDE_CODE_TEXT_CAP characters; the
+  // Alexandria routing paragraph has to land inside that window. Trade-off: the
+  // developer/research routing and the requestId retry rule now sit after it, past the
+  // cap. Both are also carried where Claude Code does not truncate them: the
+  // firecrawl_search description (developer and research categories, asserted below)
+  // and the requestId parameter description (retry rule, asserted in the budget test).
+  const instructionsHead = init.instructions.slice(0, CLAUDE_CODE_TEXT_CAP);
+  assert.match(instructionsHead, /Alexandria is Firecrawl's catalogue of data providers/);
+  assert.match(instructionsHead, /Before scraping more than one page for the same fields/);
+  assert.match(instructionsHead, /Passing sources without alexandria in it/);
   assert.match(
     init.instructions,
     /Alexandria is Firecrawl's catalogue of data providers and workflows.*firecrawl_scrape with alexandria.*executes up to ten capabilities/is
@@ -1111,25 +1122,22 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     byName.get('firecrawl_agent_status').description,
     /processing.*non-terminal.*does not contain the final research result/is
   );
-  assert.match(
-    byName.get('firecrawl_search').description,
-    /operators include.*related:host.*non-exhaustive/is
-  );
-  assert.match(
-    byName.get('firecrawl_search').description,
-    /each web result is a title, URL, and description.*scrapeOptions.*ignore `maxAge`.*firecrawl_scrape/is
-  );
+  // Mechanics live on the parameters so the description stays under Claude Code's 2,048-character cap.
+  const searchParams = byName.get('firecrawl_search').inputSchema.properties;
+  assert.match(searchParams.query.description, /operators include.*related:host.*non-exhaustive/is);
+  assert.match(byName.get('firecrawl_search').description, /each web result is a title, URL, and description/i);
+  assert.match(searchParams.scrapeOptions.description, /ignore maxAge.*firecrawl_scrape/is);
   assert.doesNotMatch(byName.get('firecrawl_search').description, /not the page/i);
   assert.match(
     byName.get('firecrawl_search').description,
-    /if excerpts are insufficient, use `firecrawl_scrape` to retrieve content from relevant result URLs/i
+    /use `firecrawl_scrape` on a result URL when the excerpt is not enough/i
   );
   assert.match(
     byName.get('firecrawl_search').description,
     /ranked results with query-relevant highlights\./i
   );
   assert.match(
-    byName.get('firecrawl_search').description,
+    searchParams.highlights.description,
     /highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned/i
   );
   assert.match(
