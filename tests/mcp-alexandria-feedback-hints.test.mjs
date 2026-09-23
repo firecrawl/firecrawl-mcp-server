@@ -15,16 +15,14 @@ function assertFeedbackHint(payload) {
   assert.match(payload.feedbackTool.when, /once per website/i);
 }
 
-test('server instructions and Alexandria tool descriptions point at firecrawl_feedback', async (t) => {
+test('server instructions and find_tools point at firecrawl_feedback', async (t) => {
   const { client, init } = await startStdioWithApi(t);
   assert.match(init.instructions, /call firecrawl_feedback once per website with endpoint "alexandria"/);
   assert.match(init.instructions, /whether a capability ran or discovery found nothing for the website/);
   const { tools } = await client.request('tools/list', {});
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
   assert(byName.has('firecrawl_feedback'));
-  assert.match(byName.get('firecrawl_scrape').description, /feedbackTool.*firecrawl_feedback.*endpoint `alexandria`/s);
   assert.match(byName.get('firecrawl_find_tools').description, /feedbackTool.*firecrawl_feedback.*including when nothing covered it/s);
-  assert.match(byName.get('firecrawl_search').description, /call firecrawl_feedback once per website/);
 });
 
 test('Alexandria executions and discovery results carry the feedback hint; utility calls do not', async (t) => {

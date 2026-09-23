@@ -730,15 +730,17 @@ test('HTTP cloud keyless transport preserves app challenge without advertising O
     (tool) => tool.name === 'firecrawl_search'
   );
   assert.ok(anonymousSearch);
+  const anonymousCategories =
+    anonymousSearch.inputSchema.properties.categories.description;
   assert.match(
-    anonymousSearch.description,
-    /categories: \["developer"\].*data\.web.*category.*developer/is
+    anonymousCategories,
+    /`developer`.*`data\.web` with `category: "developer"`/is
   );
   assert.match(
-    anonymousSearch.description,
-    /categories: \["research"\].*research-affiliated websites.*`firecrawl_research_\*` tools are a separate surface.*PubMed, bioRxiv, medRxiv.*arXiv/is
+    anonymousCategories,
+    /`research` restricts ordinary web results to research-affiliated websites.*`firecrawl_research_\*` tools.*PubMed, bioRxiv, medRxiv.*arXiv/is
   );
-  assert.doesNotMatch(anonymousSearch.description, /data\.developer/i);
+  assert.doesNotMatch(anonymousCategories, /data\.developer/i);
 
   const initialize = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({
@@ -1095,6 +1097,17 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     byName.get('firecrawl_scrape').description,
     /authenticated responses can include a `metadata\.scrapeId` for optional scrape feedback/i
   );
+  const scrape = byName.get('firecrawl_scrape');
+  assert.ok(scrape.description.length <= 2048, 'scrape description must fit a 2,048-character client limit');
+  assert.doesNotMatch(scrape.description, /Alexandria mode|request_in_flight/);
+  assert.match(
+    scrape.inputSchema.properties.alexandria.description,
+    /one `\{provider, capability, options\}` object or an array of 1-10.*requiresOneOf.*`data\.alexandria`/s
+  );
+  assert.match(
+    scrape.inputSchema.properties.requestId.description,
+    /`request_in_flight` \(409\).*`request_unresolved` \(503\).*`duplicate_request` \(409\)/s
+  );
   assert.match(
     byName.get('firecrawl_map').description,
     /returns matching URLs rather than page bodies/i
@@ -1111,30 +1124,28 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     byName.get('firecrawl_agent_status').description,
     /processing.*non-terminal.*does not contain the final research result/is
   );
+  const search = byName.get('firecrawl_search');
+  assert.ok(search.description.length <= 2048, 'search description must fit a 2,048-character client limit');
   assert.match(
-    byName.get('firecrawl_search').description,
+    search.inputSchema.properties.query.description,
     /operators include.*related:host.*non-exhaustive/is
   );
   assert.match(
-    byName.get('firecrawl_search').description,
-    /each web result is a title, URL, and description.*scrapeOptions.*ignore `maxAge`.*firecrawl_scrape/is
+    search.inputSchema.properties.scrapeOptions.description,
+    /ignore `maxAge`.*firecrawl_scrape.*never Alexandria provider tools/is
   );
-  assert.doesNotMatch(byName.get('firecrawl_search').description, /not the page/i);
+  assert.doesNotMatch(search.description, /not the page/i);
   assert.match(
-    byName.get('firecrawl_search').description,
-    /if excerpts are insufficient, use `firecrawl_scrape` to retrieve content from relevant result URLs/i
-  );
-  assert.match(
-    byName.get('firecrawl_search').description,
-    /ranked results with query-relevant highlights\./i
+    search.description,
+    /if highlights are not enough, or you need a live fetch, call `firecrawl_scrape` on the relevant URLs/i
   );
   assert.match(
-    byName.get('firecrawl_search').description,
+    search.description,
+    /ranked results with titles, URLs, and query-relevant highlights\./i
+  );
+  assert.match(
+    search.inputSchema.properties.highlights.description,
     /highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned/i
-  );
-  assert.match(
-    byName.get('firecrawl_search').description,
-    /authenticated responses can include an `id` for optional search feedback/i
   );
   assert.match(
     byName.get('firecrawl_parse').description,
@@ -1183,13 +1194,15 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     /Natural-language developer question.*library.*error message.*API/is
   );
   // The two surfaces that both answer to "research" must stay distinguishable.
+  const searchCategories =
+    byName.get('firecrawl_search').inputSchema.properties.categories.description;
   assert.match(
-    byName.get('firecrawl_search').description,
-    /categories: \["research"\].*research-affiliated websites.*`firecrawl_research_\*` tools are a separate surface.*PubMed, bioRxiv, medRxiv.*arXiv/is
+    searchCategories,
+    /`research` restricts ordinary web results to research-affiliated websites.*`firecrawl_research_\*` tools.*PubMed, bioRxiv, medRxiv.*arXiv/is
   );
   assert.match(
-    byName.get('firecrawl_search').description,
-    /categories: \["developer"\].*data\.web.*category.*developer/is
+    searchCategories,
+    /`developer`.*`data\.web` with `category: "developer"`/is
   );
   assert.doesNotMatch(
     byName.get('firecrawl_search').description,
@@ -1372,10 +1385,7 @@ test('local keyless stdio keeps profile guidance keyless-scoped and omits feedba
   assert.equal(toolNames.includes('firecrawl_feedback'), false);
   const search = tools.tools.find((tool) => tool.name === 'firecrawl_search');
   assert.ok(search);
-  assert.match(
-    search.description,
-    /authenticated responses can include an `id` for optional search feedback/i
-  );
+  assert.doesNotMatch(search.description, /firecrawl_search_feedback|firecrawl_feedback/);
 });
 
 test('monitor create gives queries precedence over page targets', async (t) => {
