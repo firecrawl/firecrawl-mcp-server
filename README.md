@@ -504,7 +504,7 @@ For scientific papers, see [Research Tools](#12-research-tools-firecrawl_researc
 
 **Returns:**
 
-- Array of search results with optional scraped content, plus an `id` field. Keyless callers can use the returned job reference and optional invitation with `firecrawl_feedback`. Authenticated callers can continue using `firecrawl_search_feedback` with its existing fields and policy.
+- Array of search results with optional scraped content, plus an `id` field. Keyless callers can use the returned job reference and feedback invitation with `firecrawl_feedback`. Authenticated callers can continue using `firecrawl_search_feedback` with its existing fields and policy.
 
 **Prompt Example:**
 

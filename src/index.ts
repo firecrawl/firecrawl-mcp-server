@@ -699,7 +699,7 @@ async function authenticateRequest(
       'No FIRECRAWL_API_KEY or FIRECRAWL_API_URL set. Running in keyless mode. ' +
         'firecrawl_scrape and firecrawl_search use the Firecrawl cloud with usage limits. ' +
         'Local firecrawl_parse requires FIRECRAWL_API_URL to be explicitly configured before reading or uploading files. ' +
-        'Optional firecrawl_feedback is available when enabled. ' +
+        'firecrawl_feedback requests evidence about keyless jobs in exchange for free keyless use. ' +
         'Other tools require an API key (get one free at https://firecrawl.dev).'
     );
   }
