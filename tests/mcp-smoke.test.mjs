@@ -731,6 +731,19 @@ test('HTTP cloud keyless transport preserves app challenge without advertising O
     (tool) => tool.name === 'firecrawl_search'
   );
   assert.ok(anonymousSearch);
+  // Keyless sessions list only search, scrape and parse, and FastMCP serves one
+  // description per tool. Every sentence that points at a tool or mode keyless
+  // sessions do not have must say it applies to authenticated sessions.
+  const listedNames = new Set(anonymousTools.map((tool) => tool.name));
+  for (const tool of anonymousTools) {
+    const sentences = tool.description.replace(/\s+/g, ' ').split(/(?<=[.!?])\s+(?=[A-Z`])/);
+    for (const sentence of sentences) {
+      const unlisted = [...sentence.matchAll(/\bfirecrawl_[a-z_]+/g)].map((m) => m[0]).filter((name) => !listedNames.has(name) && !name.startsWith('firecrawl_research_'));
+      if (unlisted.length || /Alexandria mode/.test(sentence)) {
+        assert.match(sentence, /authenticated/i, `${tool.name}: keyless sessions see an unscoped reference to ${unlisted.join(', ') || 'Alexandria mode'}: ${sentence}`);
+      }
+    }
+  }
   assert.match(
     anonymousSearch.description,
     /categories: \["developer"\].*data\.web.*category.*developer/is
