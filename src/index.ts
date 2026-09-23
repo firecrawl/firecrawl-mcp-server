@@ -2005,7 +2005,7 @@ const scrapeToolParamsSchema = scrapeParamsSchema
       .regex(/^[A-Za-z0-9._:-]{1,128}$/)
       .optional()
       .describe(
-        'Identifies one logical Alexandria execution; generated when omitted and returned with the result. Repeated attempts of the identical payload require the same ID. A new ID cannot reconcile a pending or uncertain execution. A caller-supplied ID supports recovery if no response is received. Errors relay a code and may include chargeId: request_in_flight (409) means the execution is pending; request_unresolved (503) requires reconciliation under the same ID; duplicate_request (409) means the ID belongs to a different payload; unknown_provider (404), insufficient_credits (402) and billing_unavailable (503) mean nothing executed.'
+        'Identifies one logical Alexandria execution; generated when omitted and returned with the result. Repeated attempts of the identical payload require the same ID. A new ID cannot reconcile a pending or uncertain execution. A caller-supplied ID supports recovery if no response is received. Errors relay a code and may include chargeId. request_in_flight (409) means the execution is pending; request_unresolved (503) requires reconciliation under the same ID; duplicate_request (409) means the ID belongs to a different payload; unknown_provider (404), insufficient_credits (402) and billing_unavailable (503) mean nothing executed.'
       ),
     alexandria: z.union([exchangeCallSchema, exchangeCallsSchema])
       .optional()

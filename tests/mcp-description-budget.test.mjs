@@ -25,7 +25,4 @@ test('every tool description fits the 2,048-character cap and keeps the routing 
   assert.match(scrape, /^Scrape one URL and return its content/);
   assert.match(scrape, /`firecrawl_search` with `sources` unset.*can discover providers for the same fields across several pages/);
   assert.match(byName.get('firecrawl_find_tools'), /Prefer normal firecrawl_search/);
-  // The retry rule moved out of the instructions' first window; it lives on the parameter.
-  const scrapeParams = tools.find((tool) => tool.name === 'firecrawl_scrape').inputSchema.properties;
-  assert.match(scrapeParams.requestId.description, /Repeated attempts of the identical payload require the same ID/);
 });

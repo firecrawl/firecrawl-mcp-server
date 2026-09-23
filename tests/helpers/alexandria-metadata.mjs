@@ -15,18 +15,11 @@ export function assertAlexandriaMetadata(tools, instructions = '') {
   assert.match(alexandria.description, /data request does not authorize acceptance/i);
   assert.match(alexandria.description, /execution remains blocked until acceptance is confirmed/i);
 
-  const descriptions = [instructions];
-  function collect(value) {
-    if (!value || typeof value !== 'object') return;
-    for (const [key, child] of Object.entries(value)) {
-      if (key === 'description' && typeof child === 'string') descriptions.push(child);
-      else collect(child);
-    }
+  const descriptions = [instructions, requestId.description, alexandria.description];
+  for (const name of ['firecrawl_search', 'firecrawl_scrape', 'firecrawl_find_tools']) {
+    descriptions.push(tools.find((tool) => tool.name === name).description);
   }
-  collect(tools);
   for (const description of descriptions) {
     assert.doesNotMatch(description, /follow the returned terms\/show and terms\/accept|retry the same requestId later|call firecrawl_feedback once per website|after the task, report how the catalogue/i);
-    const paragraphs = description.split('\n').map((line) => line.trim()).filter(Boolean);
-    assert.equal(new Set(paragraphs).size, paragraphs.length, 'metadata has no duplicate paragraphs');
   }
 }

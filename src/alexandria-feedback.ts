@@ -56,11 +56,7 @@ export const alexandriaFeedbackFields = {
     .optional(),
 };
 
-/**
- * Shared by the server instructions and the Alexandria tool descriptions so an
- * agent that only reads one of them still learns the feedback loop exists.
- * Wording is checked by scripts/agent-metadata-policy.mjs.
- */
+/** Optional feedback guidance for the full-profile server instructions. */
 export const ALEXANDRIA_FEEDBACK_GUIDANCE =
   'Optional Alexandria quality feedback is available through firecrawl_feedback with endpoint "alexandria", whether a capability ran or discovery found nothing for the website. One submission describes one requested website and functionality, a rating, a rationale from observed results, and any provider or capability gaps. It is free, needs no job ID, and has no deadline.';
 
