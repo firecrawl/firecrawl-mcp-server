@@ -1196,7 +1196,7 @@ Find Tools and execution are available on both the full surface and the search s
 
 ### Alexandria session feedback
 
-Use the existing `firecrawl_feedback` tool with `endpoint: "alexandria"`:
+The existing `firecrawl_feedback` tool accepts `endpoint: "alexandria"`:
 
 ```json
 {
@@ -1212,4 +1212,4 @@ Use the existing `firecrawl_feedback` tool with `endpoint: "alexandria"`:
 
 This uses authenticated `POST /v2/feedback`, without a job ID, job-age deadline, or credit refund. Optional `providerFeedback` and `capabilityFeedback` arrays describe coverage gaps and execution issues; the tool schema lists supported issue values. A `new_capability_request` requires `requestedFunctionality`; `missing_capability` (the provider exists but lacks the capability) does not. Existing feedback opt-out and authentication controls apply.
 
-Agents are pointed at this loop from three places: the server instructions, the `firecrawl_scrape` and `firecrawl_find_tools` descriptions, and a `feedbackTool` object attached to every Alexandria execution and discovery result (with the tool name and a skeleton of the arguments). The hint is omitted for Firecrawl-internal calls such as `bash` and when `firecrawl_feedback` is not registered (`FIRECRAWL_NO_ENDPOINT_FEEDBACK` or keyless startup).
+Eligible Alexandria execution and discovery results include a `feedbackTool` pointer with the tool name and a skeleton of the arguments. The pointer is omitted for Firecrawl-internal calls such as `bash` and when `firecrawl_feedback` is not registered (`FIRECRAWL_NO_ENDPOINT_FEEDBACK` or keyless startup).
