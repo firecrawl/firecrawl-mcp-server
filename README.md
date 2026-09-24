@@ -37,7 +37,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Use `firecrawl_credit_usage` to check credits left or monthly consumption, optionally broken down by API key.
 - Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control — the session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
 
-This server lists 26 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 — `firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse` — and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed 6 read-only tools.
+This server lists 26 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 — `firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse` — and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 8 tools (search, developer and research search, plus Alexandria catalogue lookup and execution).
 
 ## Installation
 
@@ -75,13 +75,13 @@ Never put an API key in the server URL. Never put an API key in an agent chat. C
 
 #### Search-only endpoint
 
-A read-only, search-only surface is also hosted at:
+A fixed-scope search surface is also hosted at:
 
 ```
 https://mcp.firecrawl.dev/v2/mcp-search
 ```
 
-It exposes a fixed set of six read-only tools: `firecrawl_search`, `firecrawl_developer_search`, and the four `firecrawl_research_*` tools. It performs no page-content fetching and has its own OAuth identity; the full endpoint above is unchanged. It is the connector listed in Anthropic's Claude directory, so its tool set is a reviewed contract rather than a profile to tune. See [docs/search-profile.md](docs/search-profile.md) for the full contract and what a change to it involves.
+It exposes a fixed set of eight tools: `firecrawl_search`, `firecrawl_developer_search`, the four `firecrawl_research_*` tools, and the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`. Its `firecrawl_search` fetches no page content, and the surface has its own OAuth identity; the full endpoint above is unchanged. It backs a published connector listing, so its tool set is a contract rather than a profile to tune. See [docs/search-profile.md](docs/search-profile.md) for the full contract and what a change to it involves.
 
 ### Running with npx
 
@@ -259,7 +259,7 @@ Agents mostly call `firecrawl_search` with no `categories`, so a question whose 
 The two routes behave differently, and the difference matters:
 
 - **Developer** stays on `/v2/search`: the router sets `categories: ["developer"]` and the response shape you get back is unchanged.
-- **Research** retargets to the paper index (`/v2/search/research/papers`), the same corpus `firecrawl_research_search_papers` searches. The response is **papers, not web pages**, returned as `{ success, routedTo: "research_paper_index", notice, searchFeedback, query, data: { papers } }`. Every paper has `id`, `title`, `abstract`, and `authors` — `abstract` is an empty string and `authors` is `null` when the paper has none. `categories`, `createdDate`, and `updateDate` appear only when the paper carries them, so do not rely on their presence. A retargeted search has no `/v2/search` id, so `firecrawl_search_feedback` does not apply to it; `searchFeedback.available` is `false` and says why. An agent that must have web results should set `sources` or `categories` explicitly.
+- **Research** retargets to the paper index (`/v2/search/research/papers`), the same corpus `firecrawl_research_search_papers` searches. The response is **papers, not web pages**. It conforms to the tool's declared `outputSchema` — `{ success, warning, data }` at the top level, with `data: { routedTo: "research_paper_index", query, papers, searchFeedback }` — and carries `structuredContent` like every other search response. Every paper has `id`, `title`, `abstract`, and `authors` — `abstract` is an empty string and `authors` is `null` when the paper has none. `categories`, `createdDate`, and `updateDate` appear only when the paper carries them, so do not rely on their presence. A retargeted search has no `/v2/search` id, so `firecrawl_search_feedback` does not apply to it; `data.searchFeedback.available` is `false` and says why. An agent that must have web results should set `sources` or `categories` explicitly.
 
 Configuration:
 
@@ -270,7 +270,7 @@ Configuration:
 
 Rules the router holds to:
 
-- A call that already sets `categories` or `sources` is never overridden, and the classifier is not even consulted.
+- A call where the **caller** sets `categories`, `sources`, or `domainTools` is never overridden, and the classifier is not even consulted. The server's own defaults for `sources` and `domainTools` do not count as targeting.
 - Anything short of a confident developer or research verdict leaves the call exactly as written, including a confident general-web verdict.
 - The research retarget is skipped, and the search runs normally, when the paper index is not applicable: **keyless sessions** (it needs an account), **domain-scoped searches** that set `includeDomains` or `excludeDomains`, and calls passing **`scrapeOptions`** (the paper index has no pages to attach content to, so retargeting would drop what was asked for). The developer route still applies in all three cases.
 - It fails open throughout. A classifier timeout, error, or unparseable answer leaves the search unrouted, and a paper-index request that fails falls back to the web search that was originally asked for. Routing never fails a search.
@@ -524,7 +524,7 @@ Search the web and optionally extract content from search results.
 
 Set `highlights` to `true` to request query-relevant highlights or `false` to keep the original search snippets. Omit it to use the API's default behavior.
 
-Add `"sources": ["alexandria"]` for semantic tool discovery in `data.tools`, optionally mixed with web/news/images. A query is required. Use `firecrawl_find_tools` on the full MCP surface for contextual lookup and progressive disclosure; see [Alexandria Tools](#15-alexandria-tools).
+Add `"sources": ["alexandria"]` for semantic tool discovery in `data.tools`, optionally mixed with web/news/images. A query is required. Use `firecrawl_find_tools` for contextual lookup and progressive disclosure; see [Alexandria Tools](#15-alexandria-tools).
 
 For scientific papers, see [Research Tools](#12-research-tools-firecrawl_research_): they search paper abstracts and full text, while `categories: ["research"]` here filters ordinary web results to research-affiliated websites.
 
@@ -959,7 +959,7 @@ Pass `body` when you need crawl targets, JSON change tracking, custom retention,
 
 ### 14. Developer Search Tool (`firecrawl_developer_search`)
 
-Search an index built for coding agents. The index covers GitHub issues, merged pull requests, repository READMEs, and curated documentation sites.
+Search an index built for coding agents. The index covers GitHub issues, merged pull requests, repository READMEs, and code documentation.
 
 **Best for:** A programming question — code behaviour, a library or framework, an API contract, an error message, or a known bug.
 
@@ -1009,7 +1009,7 @@ query mentions and result URLs in that same array. Check `warning` for unavailab
 discovery. Search requires a query and does not accept catalogue traversal filters.
 This discovery works on both the full and search-only MCP surfaces.
 
-**Progressive disclosure (`firecrawl_find_tools`, full MCP surface):**
+**Progressive disclosure (`firecrawl_find_tools`):**
 
 ```json
 {
@@ -1218,7 +1218,7 @@ The CLI discovery sequence maps to these MCP calls:
 | Selected contract | `firecrawl_find_tools` | `{"providers":["<provider-id>"],"capabilities":["<capability-id>"]}` |
 | Execute | `firecrawl_scrape` | `{"alexandria":{"provider":"<provider-id>","capability":"<capability-id>","options":{"<required-field>":"<value>"}}}` |
 
-Use the full MCP surface for Find Tools and execution; the dedicated search-only surface does not expose them. Reuse a complete contract from search when present rather than making another discovery call. Follow returned `nextTool` navigation only when more results are needed.
+Find Tools and execution are available on both the full surface and the search surface. Reuse a complete contract from search when present rather than making another discovery call. Follow returned `nextTool` navigation only when more results are needed.
 
 ### Alexandria session feedback
 
@@ -1237,3 +1237,5 @@ Use the existing `firecrawl_feedback` tool with `endpoint: "alexandria"`:
 ```
 
 This uses authenticated `POST /v2/feedback`, without a job ID, job-age deadline, or credit refund. Optional `providerFeedback` and `capabilityFeedback` arrays describe coverage gaps and execution issues; the tool schema lists supported issue values. A `new_capability_request` requires `requestedFunctionality`; `missing_capability` (the provider exists but lacks the capability) does not. Existing feedback opt-out and authentication controls apply.
+
+Agents are pointed at this loop from three places: the server instructions, the `firecrawl_scrape` and `firecrawl_find_tools` descriptions, and a `feedbackTool` object attached to every Alexandria execution and discovery result (with the tool name and a skeleton of the arguments). The hint is omitted for Firecrawl-internal calls such as `bash` and when `firecrawl_feedback` is not registered (`FIRECRAWL_NO_ENDPOINT_FEEDBACK` or keyless startup).

@@ -118,21 +118,45 @@ test('a research verdict is dropped when the call asked for scrapeOptions', asyn
   assert.equal(body.categories, undefined);
 });
 
-test('a research verdict is dropped when the call asked for domainTools', async () => {
-  // Alexandria tool suggestions ride along with web results. The paper index
-  // has none to offer, so retargeting would drop them.
-  const fetchImpl = stubFetch(verdict('research_index', 0.99));
+test('a caller-named target is never overridden, even on a defaulted body', async () => {
+  // `sources` and `domainTools` are defaulted onto every outbound body now, so
+  // intent has to arrive as callerTargeted. The classifier is not consulted.
+  let called = false;
+  const fetchImpl = async () => {
+    called = true;
+    throw new Error('classifier must not be consulted');
+  };
   const body = {
     query: 'protein folding inference benchmarks',
+    sources: [{ type: 'web' }],
+    domainTools: true,
+  };
+
+  const decision = await applyQueryRouting(body, CONFIG, {
+    fetchImpl,
+    callerTargeted: true,
+  });
+
+  assert.equal(decision.routed, false);
+  assert.equal(decision.reason, 'explicit_targeting');
+  assert.equal(called, false);
+  assert.equal(body.categories, undefined);
+});
+
+test('a defaulted sources/domainTools body still routes when the caller named nothing', async () => {
+  // The regression this guards: reading targeting off the body would see the
+  // server's own defaults and disable routing on every search.
+  const fetchImpl = stubFetch(verdict('developer_index'));
+  const body = {
+    query: 'pnpm workspace protocol resolution',
+    sources: [{ type: 'web' }],
     domainTools: true,
   };
 
   const decision = await applyQueryRouting(body, CONFIG, { fetchImpl });
 
-  assert.equal(decision.routed, false);
-  assert.equal(decision.reason, 'domain_tools_requested');
-  assert.equal(decision.target, undefined);
-  assert.equal(body.categories, undefined);
+  assert.equal(decision.routed, true);
+  assert.deepEqual(body.categories, ['developer']);
 });
 
 test('scrapeOptions does not block the developer route', async () => {
@@ -301,7 +325,10 @@ test('a call that already names categories or sources is never overridden', asyn
   assert.deepEqual(withCategories.categories, ['pdf']);
 
   const withSources = { query: 'react hooks', sources: [{ type: 'news' }] };
-  const b = await applyQueryRouting(withSources, CONFIG, { fetchImpl });
+  const b = await applyQueryRouting(withSources, CONFIG, {
+    fetchImpl,
+    callerTargeted: true,
+  });
   assert.equal(b.routed, false);
   assert.equal(b.reason, 'explicit_targeting');
   assert.equal(withSources.categories, undefined);
@@ -545,32 +572,28 @@ test('a retargeted response never carries a search id', () => {
   // The load-bearing guarantee: firecrawl_search_feedback validates a UUID
   // that came from firecrawl_search, and a paper-index request issues none.
   assert.equal('id' in body, false);
-  assert.equal(body.searchFeedback.available, false);
-  assert.match(body.searchFeedback.reason, /firecrawl_search_feedback/);
+  assert.equal(body.data.searchFeedback.available, false);
+  assert.match(body.data.searchFeedback.reason, /firecrawl_search_feedback/);
 });
 
-test('a retargeted response declares the surface it came from', () => {
+test('a retargeted response conforms to the declared search output schema', () => {
   const body = routedPaperResponse('crispr off-target effects', PAPERS);
 
+  // Only fields searchOutputSchema declares may appear at the top level;
+  // everything retarget-specific lives under `data`, which it types as
+  // unknown. A response violating the tool's own advertised output would be
+  // worse than not routing at all.
+  assert.deepEqual(Object.keys(body).sort(), ['data', 'success', 'warning']);
   assert.equal(body.success, true);
-  assert.equal(body.routedTo, 'research_paper_index');
-  assert.equal(body.query, 'crispr off-target effects');
-  assert.deepEqual(body.data, { papers: PAPERS });
-  // Top-level shape is pinned so a field cannot be added or dropped silently.
-  assert.deepEqual(Object.keys(body).sort(), [
-    'data',
-    'notice',
-    'query',
-    'routedTo',
-    'searchFeedback',
-    'success',
-  ]);
+  assert.equal(body.data.routedTo, 'research_paper_index');
+  assert.equal(body.data.query, 'crispr off-target effects');
+  assert.deepEqual(body.data.papers, PAPERS);
 });
 
 test('the notice warns that these are papers and that feedback does not apply', () => {
   const body = routedPaperResponse('anything', []);
 
-  assert.equal(body.notice, PAPER_INDEX_NOTICE);
+  assert.equal(body.warning, PAPER_INDEX_NOTICE);
   assert.match(PAPER_INDEX_NOTICE, /papers, not web pages/);
   assert.match(PAPER_INDEX_NOTICE, /no search `id`/);
   assert.match(PAPER_INDEX_NOTICE, /firecrawl_search_feedback/);
@@ -582,7 +605,7 @@ test('an empty paper result is still a well-formed routed response', () => {
   const body = routedPaperResponse('no hits for this', []);
 
   assert.equal(body.success, true);
-  assert.deepEqual(body.data, { papers: [] });
+  assert.deepEqual(body.data.papers, []);
   assert.equal('id' in body, false);
-  assert.equal(body.searchFeedback.available, false);
+  assert.equal(body.data.searchFeedback.available, false);
 });

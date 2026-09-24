@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- The search surface (`/v2/mcp-search`) now exposes `firecrawl_find_tools` and `firecrawl_scrape` alongside its six search tools, so agents can execute the Alexandria providers that `firecrawl_search` already returns. Both carry surface-scoped descriptions that name only tools registered on that surface, and Alexandria results there omit the `firecrawl_feedback` pointer. See docs/search-profile.md.
+
+### Fixed
+
+- `firecrawl_search` on both surfaces now forwards `includeDomains` and `excludeDomains` to `/v2/search` as body fields instead of rewriting the query with `site:` operators, so the API's domain enforcement applies to MCP callers.
+
 ## [3.25.0] - Unreleased
 
 ### Added
@@ -17,12 +27,15 @@
   `categories: ["developer"]` on the same call. A research verdict retargets
   to the research paper index and returns papers under
   `{ routedTo: "research_paper_index", data: { papers } }` rather than web
-  results; that retarget is skipped for keyless sessions and for searches
-  scoped with `includeDomains`/`excludeDomains`, and for calls passing
-  `scrapeOptions`, which the paper index has no pages to attach content to. A
-  retargeted response carries `searchFeedback.available: false`, because a
+  results, in a body that conforms to the tool's declared `outputSchema`; that
+  retarget is skipped for keyless sessions, for searches scoped with
+  `includeDomains`/`excludeDomains`, and for calls passing `scrapeOptions`,
+  which the paper index has no pages to attach content to. A retargeted
+  response carries `data.searchFeedback.available: false`, because a
   paper-index request issues no `/v2/search` id for
-  `firecrawl_search_feedback`. A call that already targets an index is never
+  `firecrawl_search_feedback`. Targeting is read from the caller's arguments,
+  so the server's own `sources`/`domainTools` defaults do not suppress
+  routing. A call that already targets an index is never
   overridden, and any classifier or paper-index failure leaves the search on
   its original path. Off by default; both `firecrawl_search` surfaces share
   the same path.

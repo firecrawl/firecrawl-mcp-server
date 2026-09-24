@@ -321,10 +321,16 @@ export const PAPER_INDEX_NOTICE =
 /**
  * The response body a retargeted search returns.
  *
+ * Shaped to satisfy `searchOutputSchema`, which `firecrawl_search` advertises:
+ * only `success`, `warning`, and `data` appear at the top level, and
+ * everything specific to the retarget lives inside `data`, which the schema
+ * declares as unknown. A response that violated the tool's own declared output
+ * would be worse than no routing at all.
+ *
  * It deliberately carries no `id`. A paper-index request is not a /v2/search,
  * so no search UUID exists behind it, and firecrawl_search_feedback validates
  * a UUID that came from firecrawl_search — an invented one would fail at the
- * API. `searchFeedback` states the absence instead of leaving an agent to
+ * API. `data.searchFeedback` states the absence instead of leaving an agent to
  * discover it.
  */
 export function routedPaperResponse(
@@ -333,15 +339,19 @@ export function routedPaperResponse(
 ): Record<string, unknown> {
   return {
     success: true,
-    routedTo: 'research_paper_index',
-    notice: PAPER_INDEX_NOTICE,
-    searchFeedback: {
-      available: false,
-      reason:
-        'Answered from the research paper index, which does not issue the /v2/search id that firecrawl_search_feedback requires.',
+    // `warning` is the schema's channel for "this is not quite what you asked
+    // for", which is exactly what a retarget is.
+    warning: PAPER_INDEX_NOTICE,
+    data: {
+      routedTo: 'research_paper_index',
+      query,
+      papers,
+      searchFeedback: {
+        available: false,
+        reason:
+          'Answered from the research paper index, which does not issue the /v2/search id that firecrawl_search_feedback requires.',
+      },
     },
-    query,
-    data: { papers },
   };
 }
 
@@ -354,17 +364,28 @@ export type ApplyOptions = {
    * not belong.
    */
   allowPaperIndex?: boolean;
+  /**
+   * Whether the CALLER named a target — `sources` or `domainTools` — as
+   * opposed to the server defaulting them.
+   *
+   * This cannot be read off `searchBody`: both fields are now defaulted on
+   * every search before the body is built, so an untargeted call and a
+   * deliberately targeted one look identical there. Reading the body would
+   * make every search look explicitly targeted and silently disable routing
+   * altogether. `categories` carries no default and is still read from the
+   * body.
+   */
+  callerTargeted?: boolean;
   fetchImpl?: typeof fetch;
 };
 
 /**
  * Why a research verdict must not be retargeted, or null when it may be.
  *
- * `scrapeOptions` asks for page content attached to each web result, and
- * `domainTools` asks for Alexandria tool suggestions alongside them. The paper
- * index returns papers and can satisfy neither, so retargeting would silently
- * drop what the caller explicitly asked for — the search runs as written
- * instead.
+ * `scrapeOptions` asks for page content attached to each web result. The paper
+ * index returns papers and has nothing to attach it to, so retargeting would
+ * silently drop what the caller explicitly asked for — the search runs as
+ * written instead.
  */
 function paperIndexBlockedBy(
   searchBody: Record<string, unknown>,
@@ -372,7 +393,6 @@ function paperIndexBlockedBy(
 ): string | null {
   if (!allowPaperIndex) return 'paper_index_unavailable';
   if (searchBody.scrapeOptions != null) return 'scrape_options_requested';
-  if (searchBody.domainTools != null) return 'domain_tools_requested';
   return null;
 }
 
@@ -390,13 +410,14 @@ export async function applyQueryRouting(
   config: RouterConfig | null,
   options: ApplyOptions = {}
 ): Promise<RouteDecision> {
-  const { allowPaperIndex = true, fetchImpl = fetch } = options;
+  const {
+    allowPaperIndex = true,
+    callerTargeted = false,
+    fetchImpl = fetch,
+  } = options;
 
   if (!config) return { routed: false, reason: 'disabled', latencyMs: 0 };
-  if (
-    nonEmptyArray(searchBody.categories) ||
-    nonEmptyArray(searchBody.sources)
-  ) {
+  if (callerTargeted || nonEmptyArray(searchBody.categories)) {
     return { routed: false, reason: 'explicit_targeting', latencyMs: 0 };
   }
   const query = searchBody.query;

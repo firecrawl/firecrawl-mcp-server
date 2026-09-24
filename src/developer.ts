@@ -2,7 +2,7 @@
  * Firecrawl Developer search tool.
  *
  * Thin MCP wrapper over the `/v2/search/developer` endpoint (GitHub issues,
- * merged pull requests, repository READMEs, and curated documentation sites).
+ * merged pull requests, repository READMEs, and code documentation).
  *
  * Calls the endpoint directly through the SDK's HTTP layer (auth + retries)
  * via `client.http.get(...)`, mirroring how the research tools reach
@@ -11,8 +11,9 @@
  */
 
 import { z } from 'zod';
-import type { FastMCP } from 'fastmcp';
+import type { ContentResult, FastMCP } from 'fastmcp';
 import { originHeaders, requestOrigin } from './origin';
+import { developerSearchOutputSchema, withStructured } from './tool-output';
 
 interface SessionData {
   firecrawlApiKey?: string;
@@ -90,10 +91,11 @@ export function registerDeveloperTools(
       destructiveHint: false, // Query-only; no writes to external sources or the developer index.
     },
     description: `
-For a developer question — code behaviour, a library or framework, an API contract, an error message, or a known bug — search an index built for coding agents. The index covers repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. Set skills to "only" to limit the search to agent-skill files.
+Search an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation for programming questions that need external documentation or upstream evidence.
 
 Returns ranked results with an ID, source type, URL, title, and the matched passages in markdown.
 `,
+    outputSchema: developerSearchOutputSchema,
     parameters: z.object({
       query: z
         .string()
@@ -116,7 +118,7 @@ Returns ranked results with an ID, source type, URL, title, and the matched pass
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<string> => {
+    ): Promise<ContentResult> => {
       const { query, k, skills } = args as {
         query: string;
         k?: number;
@@ -130,7 +132,8 @@ Returns ranked results with an ID, source type, URL, title, and the matched pass
       const res = await client.http.get<{
         results?: DeveloperHit[];
       }>(`${BASE}?${params.toString()}`, originHeaders(requestOrigin(mcpClient, session)));
-      return fmtDeveloper(res.data?.results);
+      const results = res.data?.results ?? [];
+      return withStructured(fmtDeveloper(results), { results });
     },
   });
 }

@@ -6,6 +6,7 @@ import net from 'node:net';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
+import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
 
 const { version: serverVersion } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
@@ -236,6 +237,37 @@ async function startFakeFirecrawlApi() {
       return;
     }
 
+    if (req.method === 'POST' && req.url === '/v2/agent') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          id: '00000000-0000-4000-8000-000000000030',
+          success: true,
+          threadId: '00000000-0000-4000-8000-000000000031',
+          threadTurn: 1,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'GET' && req.url === '/v2/agent/00000000-0000-4000-8000-000000000030') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          creditsUsed: 5,
+          data: { answer: 'fixture' },
+          expiresAt: '2026-10-01T00:00:00.000Z',
+          mode: 'extract',
+          model: 'spark-2',
+          status: 'completed',
+          success: true,
+          threadId: '00000000-0000-4000-8000-000000000031',
+          threadTurn: 1,
+        })
+      );
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/v2/map') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
@@ -268,8 +300,12 @@ async function startFakeFirecrawlApi() {
       res.end(
         JSON.stringify({
           creditsRefunded: 0,
+          creditsRefundedToday: 100,
+          dailyCapReached: true,
+          dailyRefundCap: 100,
           feedbackId: '00000000-0000-4000-8000-000000000101',
           success: true,
+          warning: 'Daily refund cap reached; feedback is still recorded.',
         })
       );
       return;
@@ -730,6 +766,24 @@ test('HTTP cloud keyless transport preserves app challenge without advertising O
     (tool) => tool.name === 'firecrawl_search'
   );
   assert.ok(anonymousSearch);
+  for (const name of ['firecrawl_search', 'firecrawl_scrape']) {
+    const tool = anonymousTools.find((item) => item.name === name);
+    assert.equal(tool?._meta?.['anthropic/alwaysLoad'], true, name);
+  }
+  assert.equal(anonymousParse._meta?.['anthropic/alwaysLoad'], undefined);
+  // Keyless sessions list only search, scrape and parse, and FastMCP serves one
+  // description per tool. Every sentence that points at a tool or mode keyless
+  // sessions do not have must say it applies to authenticated sessions.
+  const listedNames = new Set(anonymousTools.map((tool) => tool.name));
+  for (const tool of anonymousTools) {
+    const sentences = tool.description.replace(/\s+/g, ' ').split(/(?<=[.!?])\s+(?=[A-Z`])/);
+    for (const sentence of sentences) {
+      const unlisted = [...sentence.matchAll(/\bfirecrawl_[a-z_]+/g)].map((m) => m[0]).filter((name) => !listedNames.has(name) && !name.startsWith('firecrawl_research_'));
+      if (unlisted.length || /Alexandria mode/.test(sentence)) {
+        assert.match(sentence, /authenticated/i, `${tool.name}: keyless sessions see an unscoped reference to ${unlisted.join(', ') || 'Alexandria mode'}: ${sentence}`);
+      }
+    }
+  }
   assert.match(
     anonymousSearch.description,
     /categories: \["developer"\].*data\.web.*category.*developer/is
@@ -1051,6 +1105,10 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
 
   const byName = new Map(tools.tools.map((tool) => [tool.name, tool]));
+  for (const name of ['firecrawl_search', 'firecrawl_scrape']) {
+    assert.equal(byName.get(name)?._meta?.['anthropic/alwaysLoad'], true, name);
+  }
+  assert.equal(byName.get('firecrawl_map')?._meta?.['anthropic/alwaysLoad'], undefined);
   assert.match(
     byName.get('firecrawl_credit_usage').description,
     /remainingCredits.*planCredits.*billingPeriodStart.*billingPeriodEnd.*historical.*creditsUsed.*byApiKey.*API key/is
@@ -1067,13 +1125,27 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   // A stdio session with an API key gets the Alexandria-aware instructions,
   // not the keyless wording.
   assert.match(init.instructions, /firecrawl_scrape retrieves one supplied page/i);
+  // Claude Code truncates server instructions at CLAUDE_CODE_TEXT_CAP characters; the
+  // Alexandria routing paragraph has to land inside that window. Trade-off: the
+  // developer/research routing and the requestId retry rule now sit after it, past the
+  // cap. Both are also carried where Claude Code does not truncate them: the
+  // firecrawl_search description (developer and research categories, asserted below)
+  // and the requestId parameter description (retry rule, asserted in the budget test).
+  const instructionsHead = init.instructions.slice(0, CLAUDE_CODE_TEXT_CAP);
+  assert.match(instructionsHead, /Alexandria is Firecrawl's catalogue of data providers/);
+  assert.match(instructionsHead, /Before scraping more than one page for the same fields/);
+  assert.match(instructionsHead, /Passing sources without alexandria in it/);
   assert.match(
     init.instructions,
-    /first check firecrawl_find_tools for a suitable workflow or data provider/i
+    /Alexandria is Firecrawl's catalogue of data providers and workflows.*firecrawl_scrape with alexandria.*executes up to ten capabilities/is
   );
   assert.match(
     init.instructions,
-    /firecrawl_scrape with alexandria.*executes up to ten capabilities/is
+    /Passing sources without alexandria in it \(for example \["web"\] or \["news"\]\) excludes Alexandria provider matches; omit sources unless you specifically need web-only or news-only results, or include "alexandria" alongside them/
+  );
+  assert.match(
+    init.instructions,
+    /Before scraping more than one page for the same fields, spend one free firecrawl_find_tools call/
   );
   assert.match(
     init.instructions,
@@ -1082,6 +1154,10 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.match(
     byName.get('firecrawl_scrape').description,
     /request identifies a page and needs its content or defined fields/i
+  );
+  assert.match(
+    byName.get('firecrawl_scrape').description,
+    /use `firecrawl_search` when additional web sources are needed/i
   );
   assert.match(
     byName.get('firecrawl_scrape').description,
@@ -1103,13 +1179,23 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     byName.get('firecrawl_agent_status').description,
     /processing.*non-terminal.*does not contain the final research result/is
   );
+  // Mechanics live on the parameters so the description stays under Claude Code's 2,048-character cap.
+  const searchParams = byName.get('firecrawl_search').inputSchema.properties;
+  assert.match(searchParams.query.description, /operators include.*related:host.*non-exhaustive/is);
+  assert.match(byName.get('firecrawl_search').description, /each web result is a title, URL, and description/i);
+  assert.match(searchParams.scrapeOptions.description, /ignore maxAge.*firecrawl_scrape/is);
+  assert.doesNotMatch(byName.get('firecrawl_search').description, /not the page/i);
   assert.match(
     byName.get('firecrawl_search').description,
-    /operators include.*related:host.*non-exhaustive/is
+    /use `firecrawl_scrape` on a result URL when the excerpt is not enough/i
   );
   assert.match(
     byName.get('firecrawl_search').description,
-    /each web result is a title, URL, and description, not the page.*scrapeOptions.*ignore `maxAge`.*firecrawl_scrape/is
+    /ranked results with query-relevant highlights\./i
+  );
+  assert.match(
+    searchParams.highlights.description,
+    /highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned/i
   );
   assert.match(
     byName.get('firecrawl_search').description,
@@ -1146,11 +1232,15 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   // kept in the top-level tool description below.
   assert.equal(
     byName.get('firecrawl_search').inputSchema.properties.highlights.description,
-    'Return query-relevant highlights for each search result. Set to false to keep the original search snippets.'
+    'Return query-relevant page excerpts for web and news results when available (default). Highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned. Set to false to keep the original search snippets.'
   );
   assert.match(
     byName.get('firecrawl_search').inputSchema.properties.categories.description,
     /Limit results to specific source types.*developer.*data\.web/is
+  );
+  assert.match(
+    byName.get('firecrawl_developer_search').description,
+    /Search an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation for programming questions that need external documentation or upstream evidence\./
   );
   assert.match(
     byName.get('firecrawl_developer_search').inputSchema.properties.query
@@ -1315,7 +1405,7 @@ test('local keyless stdio keeps profile guidance keyless-scoped and omits feedba
   );
   assert.match(
     keylessGuidance,
-    /firecrawl_search with categories: \["developer"\].*curated documentation sites/i
+    /firecrawl_search with categories: \["developer"\].*code documentation/i
   );
   assert.match(
     keylessGuidance,
@@ -2135,6 +2225,15 @@ test('HTTP cloud keyless Parse completes both phases without credentials and for
   const phaseOnePayload = JSON.parse(phaseOneResult.content[0].text);
   assert.equal(phaseOnePayload.upload.uploadRef, 'test-upload-ref');
   assert.equal(phaseOnePayload.nextToolCall.arguments.uploadRef, 'test-upload-ref');
+  // The continuation data has to reach structuredContent as well: a client
+  // reading only the structured result still has to be able to finish the
+  // upload flow, and parseOutputSchema is what decides whether it survives.
+  assert.deepEqual(phaseOneResult.structuredContent, phaseOnePayload);
+  assert.equal(
+    typeof phaseOneResult.structuredContent.upload.command,
+    'string'
+  );
+  assert.ok(phaseOneResult.structuredContent.notes.length > 0);
 
   const phaseTwo = await httpToolCall(port, {
     id: 'keyless-parse-phase-two',
@@ -3611,4 +3710,110 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
     .filter((request) => request.url === '/api/oauth/introspect')
     .map((request) => request.body.token);
   assert.deepEqual(introspectedTokens, ['fco_account']);
+});
+
+test('every listed tool declares an output schema and returns structured content', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-output-schema', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  // OpenAI's app-submission scan flags a tool with no outputSchema, and a
+  // client cannot tell a missing schema from an unstructured tool, so every
+  // tool the server lists has to declare one.
+  const { tools } = await client.request('tools/list');
+  assert.ok(tools.length > 0);
+  for (const tool of tools) {
+    assert.ok(tool.outputSchema, `${tool.name} has no outputSchema`);
+    assert.equal(tool.outputSchema.type, 'object', tool.name);
+    assert.ok(
+      Object.keys(tool.outputSchema.properties ?? {}).length > 0,
+      `${tool.name} declares no output properties`
+    );
+  }
+
+  // A declared schema obliges the tool to return structured content. The text
+  // block has to stay what it was before the schema existed, so it is pinned
+  // against the fixture rather than against the structured content beside it —
+  // a change to both at once would slip past that comparison.
+  const search = await client.request('tools/call', {
+    arguments: { limit: 1, query: 'example domain' },
+    name: 'firecrawl_search',
+  });
+  assert.notEqual(search.isError, true);
+  assert.equal(search.content.length, 1);
+  const expectedSearchPayload = {
+    creditsUsed: 1,
+    data: { web: [{ title: 'Example Domain', url: 'https://example.com/' }] },
+    id: '00000000-0000-4000-8000-000000000000',
+    success: true,
+  };
+  // Compact, in the API's key order: what `compactText` produced.
+  assert.equal(
+    search.content[0].text,
+    JSON.stringify(expectedSearchPayload)
+  );
+  assert.deepEqual(search.structuredContent, expectedSearchPayload);
+
+  const scrape = await client.request('tools/call', {
+    arguments: { url: 'https://example.com/' },
+    name: 'firecrawl_scrape',
+  });
+  assert.notEqual(scrape.isError, true);
+  const expectedScrapePayload = {
+    markdown: '# Scraped fixture',
+    metadata: {
+      scrapeId: '00000000-0000-4000-8000-000000000010',
+      sourceURL: 'https://example.com/',
+    },
+  };
+  // Two-space pretty-printing: what `asText` produced.
+  assert.equal(
+    scrape.content[0].text,
+    JSON.stringify(expectedScrapePayload, null, 2)
+  );
+  assert.deepEqual(scrape.structuredContent, expectedScrapePayload);
+
+  // Codex reads structuredContent in place of the text block, so fields a later
+  // call or the model needs (thread and expiry on agent jobs, feedback receipts)
+  // have to be named in the schema or they vanish for Codex.
+  const agent = await client.request('tools/call', {
+    arguments: { prompt: 'Find the example domain owner' },
+    name: 'firecrawl_agent',
+  });
+  assert.notEqual(agent.isError, true);
+  assert.equal(agent.structuredContent.id, '00000000-0000-4000-8000-000000000030');
+  assert.equal(agent.structuredContent.threadId, '00000000-0000-4000-8000-000000000031');
+  assert.equal(agent.structuredContent.threadTurn, 1);
+  const agentStatus = await client.request('tools/call', {
+    arguments: { id: '00000000-0000-4000-8000-000000000030' },
+    name: 'firecrawl_agent_status',
+  });
+  assert.notEqual(agentStatus.isError, true);
+  for (const key of ['expiresAt', 'model', 'mode', 'threadId', 'threadTurn']) {
+    assert.ok(key in agentStatus.structuredContent, `agent status structuredContent lost ${key}`);
+  }
+  const feedback = await client.request('tools/call', {
+    arguments: { endpoint: 'scrape', jobId: '00000000-0000-4000-8000-000000000010', note: 'fixture', rating: 'good' },
+    name: 'firecrawl_feedback',
+  });
+  assert.notEqual(feedback.isError, true);
+  assert.equal(feedback.structuredContent.feedbackId, '00000000-0000-4000-8000-000000000101');
+  assert.equal(feedback.structuredContent.creditsRefunded, 0);
+  for (const key of ['creditsRefundedToday', 'dailyRefundCap', 'dailyCapReached', 'warning']) {
+    assert.ok(key in feedback.structuredContent, `feedback structuredContent lost ${key}`);
+  }
+  assert.equal('id' in feedback.structuredContent, false);
 });
