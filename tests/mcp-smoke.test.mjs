@@ -300,8 +300,12 @@ async function startFakeFirecrawlApi() {
       res.end(
         JSON.stringify({
           creditsRefunded: 0,
+          creditsRefundedToday: 100,
+          dailyCapReached: true,
+          dailyRefundCap: 100,
           feedbackId: '00000000-0000-4000-8000-000000000101',
           success: true,
+          warning: 'Daily refund cap reached; feedback is still recorded.',
         })
       );
       return;
@@ -3808,4 +3812,8 @@ test('every listed tool declares an output schema and returns structured content
   assert.notEqual(feedback.isError, true);
   assert.equal(feedback.structuredContent.feedbackId, '00000000-0000-4000-8000-000000000101');
   assert.equal(feedback.structuredContent.creditsRefunded, 0);
+  for (const key of ['creditsRefundedToday', 'dailyRefundCap', 'dailyCapReached', 'warning']) {
+    assert.ok(key in feedback.structuredContent, `feedback structuredContent lost ${key}`);
+  }
+  assert.equal('id' in feedback.structuredContent, false);
 });
