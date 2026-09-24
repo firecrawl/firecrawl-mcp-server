@@ -37,7 +37,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Use `firecrawl_credit_usage` to check credits left or monthly consumption, optionally broken down by API key.
 - Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control — the session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
 
-This server lists 26 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 — `firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse` — and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed 6 read-only tools.
+This server lists 26 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 — `firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse` — and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 8 tools (search, developer and research search, plus Alexandria catalogue lookup and execution).
 
 ## Installation
 
@@ -75,13 +75,13 @@ Never put an API key in the server URL. Never put an API key in an agent chat. C
 
 #### Search-only endpoint
 
-A read-only, search-only surface is also hosted at:
+A fixed-scope search surface is also hosted at:
 
 ```
 https://mcp.firecrawl.dev/v2/mcp-search
 ```
 
-It exposes a fixed set of six read-only tools: `firecrawl_search`, `firecrawl_developer_search`, and the four `firecrawl_research_*` tools. It performs no page-content fetching and has its own OAuth identity; the full endpoint above is unchanged. It is the connector listed in Anthropic's Claude directory, so its tool set is a reviewed contract rather than a profile to tune. See [docs/search-profile.md](docs/search-profile.md) for the full contract and what a change to it involves.
+It exposes a fixed set of eight tools: `firecrawl_search`, `firecrawl_developer_search`, the four `firecrawl_research_*` tools, and the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`. Its `firecrawl_search` fetches no page content, and the surface has its own OAuth identity; the full endpoint above is unchanged. It backs a published connector listing, so its tool set is a contract rather than a profile to tune. See [docs/search-profile.md](docs/search-profile.md) for the full contract and what a change to it involves.
 
 ### Running with npx
 
@@ -498,7 +498,7 @@ Search the web and optionally extract content from search results.
 
 Set `highlights` to `true` to request query-relevant highlights or `false` to keep the original search snippets. Omit it to use the API's default behavior.
 
-Add `"sources": ["alexandria"]` for semantic tool discovery in `data.tools`, optionally mixed with web/news/images. A query is required. Use `firecrawl_find_tools` on the full MCP surface for contextual lookup and progressive disclosure; see [Alexandria Tools](#15-alexandria-tools).
+Add `"sources": ["alexandria"]` for semantic tool discovery in `data.tools`, optionally mixed with web/news/images. A query is required. Use `firecrawl_find_tools` for contextual lookup and progressive disclosure; see [Alexandria Tools](#15-alexandria-tools).
 
 For scientific papers, see [Research Tools](#12-research-tools-firecrawl_research_): they search paper abstracts and full text, while `categories: ["research"]` here filters ordinary web results to research-affiliated websites.
 
@@ -983,7 +983,7 @@ query mentions and result URLs in that same array. Check `warning` for unavailab
 discovery. Search requires a query and does not accept catalogue traversal filters.
 This discovery works on both the full and search-only MCP surfaces.
 
-**Progressive disclosure (`firecrawl_find_tools`, full MCP surface):**
+**Progressive disclosure (`firecrawl_find_tools`):**
 
 ```json
 {
@@ -1192,7 +1192,7 @@ The CLI discovery sequence maps to these MCP calls:
 | Selected contract | `firecrawl_find_tools` | `{"providers":["<provider-id>"],"capabilities":["<capability-id>"]}` |
 | Execute | `firecrawl_scrape` | `{"alexandria":{"provider":"<provider-id>","capability":"<capability-id>","options":{"<required-field>":"<value>"}}}` |
 
-Use the full MCP surface for Find Tools and execution; the dedicated search-only surface does not expose them. Reuse a complete contract from search when present rather than making another discovery call. Follow returned `nextTool` navigation only when more results are needed.
+Find Tools and execution are available on both the full surface and the search surface. Reuse a complete contract from search when present rather than making another discovery call. Follow returned `nextTool` navigation only when more results are needed.
 
 ### Alexandria session feedback
 

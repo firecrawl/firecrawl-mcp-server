@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { ALEXANDRIA_FEEDBACK_GUIDANCE } from './alexandria-feedback.js';
 
 const catalogueTypes = ['alexandria', 'exchange'] as const;
 export const searchSourceSchema = z.union([
@@ -69,14 +68,13 @@ export const ALEXANDRIA_CATALOGUE_SENTENCE =
 export const ALEXANDRIA_SOURCES_OPT_OUT =
   'Passing sources without alexandria in it (for example ["web"] or ["news"]) excludes Alexandria provider matches; omit sources unless you specifically need web-only or news-only results, or include "alexandria" alongside them.';
 
-export const ALEXANDRIA_INSTRUCTIONS =
-  'Start with the user’s actual question and constraints. Authenticated search returns matching Alexandria providers beside web results; prefer a provider over page scraping when the task needs the same fields across several entities, provenance, exact figures, or many records, and use web results when they already answer the question. Authenticated search defaults to web + semantic Alexandria tools + domain-matched tools. Keyless search defaults to web only. ' + ALEXANDRIA_CATALOGUE_SENTENCE + ' Coverage varies; discover current tools rather than assuming one exists. ' +
-  'Semantic discovery matches the data you need to capabilities even without a provider website in the web results. Domain matching connects result websites to tools that may fetch richer details, related records or collections beyond the linked page. Inspect coverage and required inputs; a matching domain alone does not guarantee a fit. ' +
-  '' + ALEXANDRIA_SOURCES_OPT_OUT + ' Use sources: ["alexandria"] for semantic tools only, sources: ["web"] for web only, or sources: ["web"], domainTools: true for web plus domain tools. domainTools: false disables domain matching. Results in data.tools describe available tools, not executed data. Search defaults to toolDetail: "compact", returning only provider, capability and description; "summary" adds metadata and navigation. Inspect selected tools with firecrawl_find_tools using their providers and capabilities plus expand:["options","response"]; request examples only when the input shape is unclear. Batch related contract inspections and reuse complete contracts. Alternatively set toolDetail: \"full\" for contracts upfront. ' +
-  'On the full MCP surface, firecrawl_find_tools supports semantic query lookup and is the list equivalent: {} lists categories; {categories:["<category-id>"]} lists providers; {providers:["<provider-id>"]} lists compact tools; adding capabilities:["<capability-id>"] expands the selected contract. Avoid expanding the entire catalogue. ' +
-  'Read required inputs and requiresOneOf groups (at least one member per group), example.request/example.response when present, and response.key in the selected contract. Do not assume records is the result key. Follow the declared pagination input and response cursor, preserving filters; catalogue next is separate from provider pagination. ' +
-  'Execute through firecrawl_scrape with alexandria:{provider,capability,options}. Search scrapeOptions fetches web pages, never provider tools. Use web results when sufficient, tools when they offer a direct route to deeper data. ' +
-  ALEXANDRIA_FEEDBACK_GUIDANCE;
+// Claude Code truncates each tool description at 2,048 characters, so the routing
+// copy that changes behaviour sits in the first lines of each description and the
+// mechanics live on the parameters they describe.
+export const ALEXANDRIA_SEARCH_LEAD =
+  'Authenticated search also returns matching Alexandria data providers in data.tools (' + ALEXANDRIA_CATALOGUE_VERTICALS + '). Prefer a provider over scraping pages when the task needs the same fields across several entities, exact figures or timestamps, provenance, or many records; use web results when they already answer the question. ' + ALEXANDRIA_SOURCES_OPT_OUT;
+export const ALEXANDRIA_CONTRACT_GUIDANCE =
+  'Read the selected contract before executing: required inputs and requiresOneOf groups (at least one member per group), example.request/example.response when present, and response.key (do not assume records is the result key). Follow the declared pagination input and response cursor, preserving filters; catalogue next is separate from provider pagination.';
 
 export function findToolsOptions(args: z.infer<typeof findToolsSchema>) {
   const level = args.level ?? (args.query || args.capabilities?.length || args.providers?.length || args.groups?.length || args.urls?.length ? 'tools' : args.categories?.length ? 'providers' : 'categories');
@@ -107,4 +105,4 @@ export function withFindToolsNavigation(envelope: any) {
 }
 
 export const ALEXANDRIA_SEARCH_INSTRUCTIONS =
-  'Authenticated search combines web results, semantic tool summaries and domain matches. Use sources: ["alexandria"] for semantic tools only, or sources: ["web"] for web only. domainTools: false disables domain matching. Tool matches describe available structured-data capabilities, not executed data. toolDetail: "compact" (default) returns only provider, capability and description; "summary" adds metadata; "full" includes their input and output contracts. This search-only surface cannot execute tools or progressively browse the catalogue; those actions require the full MCP surface at /v2/mcp.';
+  'Authenticated search combines web results, semantic tool summaries and domain matches. Use sources: ["alexandria"] for semantic tools only, or sources: ["web"] for web only. domainTools: false disables domain matching. Tool matches describe available structured-data capabilities, not executed data. toolDetail: "compact" (default) returns only provider, capability and description; "summary" adds metadata; "full" includes their input and output contracts. Execute a matched tool through firecrawl_scrape with an alexandria body; use firecrawl_find_tools to browse the catalogue or read a full contract.';

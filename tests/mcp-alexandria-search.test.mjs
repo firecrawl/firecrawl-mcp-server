@@ -65,3 +65,26 @@ test('toolDetail forwards valid values and rejects invalid values before API cal
     assert.equal(api.requests.length, before);
   }
 });
+
+test('full firecrawl_search forwards domain filters as body fields without rewriting the query', async (t) => {
+  const { api, client } = await startStdioWithApi(t);
+  for (const [field, domains] of [
+    ['includeDomains', ['www.sport1.de', 'www.atptour.com']],
+    ['excludeDomains', ['facebook.com', 'en.wikipedia.org']],
+  ]) {
+    const result = await client.request('tools/call', {
+      name: 'firecrawl_search',
+      arguments: { query: 'davis cup', sources: ['web'], [field]: domains },
+    });
+    assert.notEqual(result.isError, true);
+    const body = api.requests.at(-1).body;
+    assert.equal(body.query, 'davis cup');
+    assert.deepEqual(body[field], domains);
+  }
+  const before = api.requests.length;
+  await callExpectingError(client, {
+    name: 'firecrawl_search',
+    arguments: { query: 'davis cup', includeDomains: ['a.com'], excludeDomains: ['b.com'] },
+  });
+  assert.equal(api.requests.length, before);
+});

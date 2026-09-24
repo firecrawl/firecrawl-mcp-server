@@ -1,38 +1,26 @@
 # Search-only MCP surface (`/v2/mcp-search`)
 
-The server runs two FastMCP instances in one process:
+The hosted server serves two surfaces:
 
-- The **full** surface at `/v2/mcp`, with the complete tool set unchanged.
-- The **search** surface at `/v2/mcp-search`, with a fixed, read-only subset.
+- The **full** surface at `/v2/mcp`, with the complete tool set.
+- The **search** surface at `/v2/mcp-search`, with a fixed subset.
 
 Only the request path selects the surface. There is no inspection of client
 identity, `User-Agent`, or `clientInfo`.
 
-## Why this surface exists
+## Why the tool set is fixed
 
-This endpoint is the Firecrawl connector in Anthropic's Claude directory
-(https://claude.com/connectors/firecrawl, "Anthropic verified"). Anthropic
-declined the full server for the directory in June 2026 as a web-scraping tool;
-the read-only tools below are the scope their MCP review team agreed to in July
-2026, name by name, and the directory page lists those names to users. The tool
-set is therefore a contract with a third party, not an internal preference.
-
-Any change to the set (adding, removing, renaming, or hiding a tool) needs two
-things outside this repo that cannot be automated from here: the listing has to
-be updated in the claude.ai submission portal, and Anthropic's directory team
-has to be told. Partnerships (Noaa Engervall) owns both. Say so before the
+The search surface backs a published connector listing. Its tool set is a
+contract with that listing, not an internal preference: `tools/list` on this
+path must match the tool names the listing declares. Changing the set (adding,
+removing, renaming, or hiding a tool) therefore needs the listing updated as
+well, and that cannot be done from this repo. Tell partnerships before the
 change merges, not after it deploys; every merge to `main` reaches production
 within the hour.
 
-It has drifted twice. On 2026-07-31 a seventh tool leaked onto the surface while
-Anthropic was reviewing it; they flagged the mismatch and #352 rolled it back.
-On 2026-09-03 #395 hid `firecrawl_research_search_github` and the directory page
-kept advertising it for two weeks. The plan behind the surface is in
-firecrawl/firecrawl-integrations, `docs/mcp-marketplace-search-profile-plan.md`.
-
 ## Tool contract
 
-The search surface exposes exactly these six read-only tools and nothing else:
+The search surface exposes exactly these eight tools and nothing else:
 
 | Tool | Purpose |
 | --- | --- |
@@ -42,25 +30,27 @@ The search surface exposes exactly these six read-only tools and nothing else:
 | `firecrawl_research_inspect_paper` | Canonical metadata for one paper |
 | `firecrawl_research_related_papers` | Citation-graph expansion from anchor papers |
 | `firecrawl_research_read_paper` | Full-text passages from one paper |
+| `firecrawl_find_tools` | Browse the Alexandria catalogue and read provider contracts (free) |
+| `firecrawl_scrape` | Execute an Alexandria capability with an `alexandria` body, or retrieve one supplied URL (billed) |
 
 Registration on this instance is filtered against that allowlist, so any tool
-outside the set, including scrape, map, crawl, extract, agent, interact, parse,
+outside the set, including map, crawl, extract, agent, interact, parse,
 monitor, and the feedback tools, is never registered, except for one
 deprecated name kept for backward compatibility and described below.
-`tools/list` reflects only these six tools.
+`tools/list` reflects only these eight tools.
 
 One additional name, the deprecated `firecrawl_research_search_github`, is
 also registered on this instance but hidden from `tools/list`; a `tools/call`
 for it returns a `DEPRECATED_TOOL` payload pointing callers at
 `firecrawl_developer_search`, so cached sessions that predate its removal
 still get a meaningful response instead of an unknown-tool error. Calling any
-other name not in the six-tool set returns an unknown-tool error.
+other name not in the eight-tool set returns an unknown-tool error.
 
 `firecrawl_developer_search` queries `/v2/search/developer` and returns the
 matched passages; `firecrawl_search` with `categories: ["developer"]` reaches the
 same index beside ordinary web results. Both are available here.
 
-## No page-content fetching
+## `firecrawl_search` fetches no page content
 
 The search surface's `firecrawl_search` takes **no `scrapeOptions`**. Its input
 schema is strict (unknown fields are rejected), and its executor builds the
@@ -71,17 +61,24 @@ no request from this surface can ask the API to fetch third-party page content.
 The schema and body construction enforce this directly, and contract tests guard
 the behavior. No runtime filter is involved.
 
+`firecrawl_scrape` on this surface is the same tool as on the full surface
+(URL retrieval or Alexandria execution), registered with a description that
+names only tools this surface exposes. `firecrawl_find_tools` is registered the
+same way. Alexandria results on this surface carry no `feedbackTool` pointer,
+since `firecrawl_feedback` is not registered here.
+
 ## Alexandria source
 
 `sources` entries are source names (`web`, `news`, `images`, `alexandria`) or
-`{ type }` objects. Alexandria returns
-compact tool suggestions by default in `data.tools`; these are catalogue entries, not executed
-provider results. Discovery costs no credits and requires an authenticated team
-with Alexandria access; keyless sessions get an explanatory error before any request.
+`{ type }` objects. Alexandria returns compact tool suggestions by default in
+`data.tools`; these are catalogue entries, not executed provider results.
+Discovery costs no credits and requires an authenticated team with Alexandria
+access; keyless sessions get an explanatory error before any request.
 
-Search requires a query and does not accept catalogue browse mode. The full-surface
-catalogue tool (`firecrawl_find_tools`) and execution
-with `firecrawl_scrape` using `alexandria` are not part of this six-tool surface.
+Search requires a query and does not accept catalogue browse mode; use
+`firecrawl_find_tools` to browse the catalogue or read a full contract, and
+`firecrawl_scrape` with `alexandria` to execute a capability. Both are part of
+the eight-tool surface.
 
 ## OAuth
 
@@ -121,7 +118,7 @@ or the authorization server allowlist.
 
 ## Tests
 
-`tests/mcp-search-profile.test.mjs` asserts the six-tool contract, unknown-tool
+`tests/mcp-search-profile.test.mjs` asserts the eight-tool contract, unknown-tool
 rejection, `scrapeOptions` rejection, the clean outbound body, authenticated
 `tools/list`, the path-scoped metadata document, audience acceptance/rejection,
 and that the full surface is unaffected. It runs in CI via `pnpm test`.
