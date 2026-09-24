@@ -237,6 +237,37 @@ async function startFakeFirecrawlApi() {
       return;
     }
 
+    if (req.method === 'POST' && req.url === '/v2/agent') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          id: '00000000-0000-4000-8000-000000000030',
+          success: true,
+          threadId: '00000000-0000-4000-8000-000000000031',
+          threadTurn: 1,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'GET' && req.url === '/v2/agent/00000000-0000-4000-8000-000000000030') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          creditsUsed: 5,
+          data: { answer: 'fixture' },
+          expiresAt: '2026-10-01T00:00:00.000Z',
+          mode: 'extract',
+          model: 'spark-2',
+          status: 'completed',
+          success: true,
+          threadId: '00000000-0000-4000-8000-000000000031',
+          threadTurn: 1,
+        })
+      );
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/v2/map') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
@@ -3750,4 +3781,31 @@ test('every listed tool declares an output schema and returns structured content
     JSON.stringify(expectedScrapePayload, null, 2)
   );
   assert.deepEqual(scrape.structuredContent, expectedScrapePayload);
+
+  // Codex reads structuredContent in place of the text block, so fields a later
+  // call or the model needs (thread and expiry on agent jobs, feedback receipts)
+  // have to be named in the schema or they vanish for Codex.
+  const agent = await client.request('tools/call', {
+    arguments: { prompt: 'Find the example domain owner' },
+    name: 'firecrawl_agent',
+  });
+  assert.notEqual(agent.isError, true);
+  assert.equal(agent.structuredContent.id, '00000000-0000-4000-8000-000000000030');
+  assert.equal(agent.structuredContent.threadId, '00000000-0000-4000-8000-000000000031');
+  assert.equal(agent.structuredContent.threadTurn, 1);
+  const agentStatus = await client.request('tools/call', {
+    arguments: { id: '00000000-0000-4000-8000-000000000030' },
+    name: 'firecrawl_agent_status',
+  });
+  assert.notEqual(agentStatus.isError, true);
+  for (const key of ['expiresAt', 'model', 'mode', 'threadId', 'threadTurn']) {
+    assert.ok(key in agentStatus.structuredContent, `agent status structuredContent lost ${key}`);
+  }
+  const feedback = await client.request('tools/call', {
+    arguments: { endpoint: 'scrape', jobId: '00000000-0000-4000-8000-000000000010', note: 'fixture', rating: 'good' },
+    name: 'firecrawl_feedback',
+  });
+  assert.notEqual(feedback.isError, true);
+  assert.equal(feedback.structuredContent.feedbackId, '00000000-0000-4000-8000-000000000101');
+  assert.equal(feedback.structuredContent.creditsRefunded, 0);
 });

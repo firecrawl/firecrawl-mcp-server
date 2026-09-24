@@ -180,6 +180,8 @@ export const feedbackOutputSchema = z
     retryable: bool('Whether retrying the submission can succeed.'),
     message: str('Human-readable result of the submission.'),
     id: str('Identifier of the recorded feedback.'),
+    feedbackId: str('Identifier of the recorded feedback.'),
+    creditsRefunded: num('Credits refunded for the feedback, when eligible.'),
     data: unknown('Payload returned with the accepted feedback.'),
     raw: str('Response body when it was not JSON.'),
   })
@@ -208,6 +210,8 @@ export const agentOutputSchema = z
     error,
     id: str('Agent job identifier, for `firecrawl_agent_status`.'),
     status: str('Job state at submission time.'),
+    threadId: str('Research thread this job belongs to.'),
+    threadTurn: num('Turn number of this job within its thread.'),
   })
   .describe('The queued research job. The result is read with `firecrawl_agent_status`.');
 
@@ -221,6 +225,11 @@ export const agentStatusOutputSchema = z
     data: unknown('Research result, present once the job has completed.'),
     creditsUsed: num('Credits the job consumed.'),
     sources: unknown('Sources the agent read.'),
+    expiresAt: str('When the job result expires and can no longer be read.'),
+    model: str('Agent model that ran the job.'),
+    mode: str('Agent mode the job ran in.'),
+    threadId: str('Research thread this job belongs to.'),
+    threadTurn: num('Turn number of this job within its thread.'),
   })
   .describe('Progress or final result of a research agent job.');
 
