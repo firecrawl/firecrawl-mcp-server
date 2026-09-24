@@ -2190,6 +2190,15 @@ test('HTTP cloud keyless Parse completes both phases without credentials and for
   const phaseOnePayload = JSON.parse(phaseOneResult.content[0].text);
   assert.equal(phaseOnePayload.upload.uploadRef, 'test-upload-ref');
   assert.equal(phaseOnePayload.nextToolCall.arguments.uploadRef, 'test-upload-ref');
+  // The continuation data has to reach structuredContent as well: a client
+  // reading only the structured result still has to be able to finish the
+  // upload flow, and parseOutputSchema is what decides whether it survives.
+  assert.deepEqual(phaseOneResult.structuredContent, phaseOnePayload);
+  assert.equal(
+    typeof phaseOneResult.structuredContent.upload.command,
+    'string'
+  );
+  assert.ok(phaseOneResult.structuredContent.notes.length > 0);
 
   const phaseTwo = await httpToolCall(port, {
     id: 'keyless-parse-phase-two',
@@ -3700,30 +3709,45 @@ test('every listed tool declares an output schema and returns structured content
     );
   }
 
-  // A declared schema obliges the tool to return structured content, and the
-  // text block stays byte-for-byte what it was before the schema existed.
+  // A declared schema obliges the tool to return structured content. The text
+  // block has to stay what it was before the schema existed, so it is pinned
+  // against the fixture rather than against the structured content beside it —
+  // a change to both at once would slip past that comparison.
   const search = await client.request('tools/call', {
     arguments: { limit: 1, query: 'example domain' },
     name: 'firecrawl_search',
   });
   assert.notEqual(search.isError, true);
   assert.equal(search.content.length, 1);
-  // Structured content carries the same payload; the text block keeps the
-  // compact serialization (and key order) the tool has always returned.
-  assert.deepEqual(JSON.parse(search.content[0].text), search.structuredContent);
-  assert.equal(search.content[0].text.includes('\n'), false);
-  assert.equal(search.structuredContent.success, true);
+  const expectedSearchPayload = {
+    creditsUsed: 1,
+    data: { web: [{ title: 'Example Domain', url: 'https://example.com/' }] },
+    id: '00000000-0000-4000-8000-000000000000',
+    success: true,
+  };
+  // Compact, in the API's key order: what `compactText` produced.
+  assert.equal(
+    search.content[0].text,
+    JSON.stringify(expectedSearchPayload)
+  );
+  assert.deepEqual(search.structuredContent, expectedSearchPayload);
 
   const scrape = await client.request('tools/call', {
     arguments: { url: 'https://example.com/' },
     name: 'firecrawl_scrape',
   });
   assert.notEqual(scrape.isError, true);
-  // Pretty-printed here, as before.
-  assert.deepEqual(JSON.parse(scrape.content[0].text), scrape.structuredContent);
-  assert.match(scrape.content[0].text, /^\{\n {2}"/);
+  const expectedScrapePayload = {
+    markdown: '# Scraped fixture',
+    metadata: {
+      scrapeId: '00000000-0000-4000-8000-000000000010',
+      sourceURL: 'https://example.com/',
+    },
+  };
+  // Two-space pretty-printing: what `asText` produced.
   assert.equal(
-    scrape.structuredContent.metadata.scrapeId,
-    '00000000-0000-4000-8000-000000000010'
+    scrape.content[0].text,
+    JSON.stringify(expectedScrapePayload, null, 2)
   );
+  assert.deepEqual(scrape.structuredContent, expectedScrapePayload);
 });
