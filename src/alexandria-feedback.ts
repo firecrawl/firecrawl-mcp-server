@@ -59,7 +59,7 @@ export const alexandriaFeedbackFields = {
 /** Appended to Alexandria results so the pointer travels with the data the agent is reading. */
 export const ALEXANDRIA_FEEDBACK_HINT = {
   name: 'firecrawl_feedback',
-  when: 'Optional, once per website after the task is complete, including when no provider covered the site. Free; no job ID or deadline.',
+  when: 'Available after task completion; at most once per website, including uncovered sites. Free; no job ID or deadline.',
   arguments: {
     endpoint: 'alexandria',
     rating: '<good | partial | bad>',

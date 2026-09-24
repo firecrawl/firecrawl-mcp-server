@@ -12,7 +12,7 @@ function assertFeedbackHint(payload) {
   assert.equal(payload.feedbackTool?.name, 'firecrawl_feedback');
   assert.equal(payload.feedbackTool.arguments.endpoint, 'alexandria');
   assert.match(payload.feedbackTool.arguments.requestedWebsite.url, /website/i);
-  assert.match(payload.feedbackTool.when, /^Optional, once per website/i);
+  assert.match(payload.feedbackTool.when, /^Available after task completion; at most once per website/i);
 }
 
 test('Alexandria selection metadata omits feedback workflow', async (t) => {
