@@ -390,6 +390,11 @@ test('search surface lists exactly the eight contracted tools', async (t) => {
   const names = tools.map((tool) => tool.name);
   const search = tools.find((tool) => tool.name === 'firecrawl_search');
   assert.ok(search);
+  assert.equal(search._meta?.['anthropic/alwaysLoad'], undefined);
+  assert.equal(
+    tools.find((tool) => tool.name === 'firecrawl_scrape')?._meta?.['anthropic/alwaysLoad'],
+    undefined
+  );
   assert.match(
     search.description,
     /categories: \["developer"\].*data\.web.*category.*developer/is
@@ -1101,6 +1106,10 @@ test('account (mcp-oauth) full-surface instructions satisfy the same metadata po
   const headers = { authorization: 'Bearer fco_account_metadata' };
   const initialize = await initializeProfile(port, '/v2/mcp-oauth', headers);
   const tools = await listToolDefinitions(port, '/v2/mcp-oauth', headers);
+  for (const name of ['firecrawl_search', 'firecrawl_scrape']) {
+    const tool = tools.find((item) => item.name === name);
+    assert.equal(tool?._meta?.['anthropic/alwaysLoad'], true, name);
+  }
 
   assertAlexandriaMetadata(tools, initialize.instructions);
   assertAgentMetadataPolicy(
