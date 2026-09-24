@@ -2758,6 +2758,7 @@ Alexandria mode: pass \`alexandria\` instead of \`url\`; the \`alexandria\` and 
 `;
 const searchSurfaceScrapeTool: RegisteredTool = {
   ...scrapeTool,
+  _meta: { 'anthropic/alwaysLoad': true },
   description: SEARCH_SURFACE_SCRAPE_DESCRIPTION,
 };
 
@@ -3822,6 +3823,7 @@ function registerMarketplaceSearchTool(
 ): void {
   registrar.addTool({
     name: 'firecrawl_search',
+    _meta: { 'anthropic/alwaysLoad': true },
     annotations: {
       title: 'Firecrawl web search',
       readOnlyHint: true,
