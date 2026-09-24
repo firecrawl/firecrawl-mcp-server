@@ -1,10 +1,16 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import net from 'node:net';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
+import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
+
+const { version: serverVersion } = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+);
 
 async function getFreePort() {
   const server = net.createServer();
@@ -137,6 +143,8 @@ function spawnServer(env) {
   const child = spawn(process.execPath, ['dist/index.js'], {
     env: {
       ...process.env,
+      FIRECRAWL_API_KEY: '',
+      FIRECRAWL_OAUTH_TOKEN: '',
       MCP_DELEGATED_CREDENTIAL_SECRET:
         'test-mcp-delegated-credential-secret-32',
       ...env,
@@ -212,11 +220,159 @@ async function startFakeFirecrawlApi() {
       return;
     }
 
+    if (req.method === 'POST' && req.url === '/v2/scrape') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: {
+            markdown: '# Scraped fixture',
+            metadata: {
+              scrapeId: '00000000-0000-4000-8000-000000000010',
+              sourceURL: parsedBody.url,
+            },
+          },
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/agent') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          id: '00000000-0000-4000-8000-000000000030',
+          success: true,
+          threadId: '00000000-0000-4000-8000-000000000031',
+          threadTurn: 1,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'GET' && req.url === '/v2/agent/00000000-0000-4000-8000-000000000030') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          creditsUsed: 5,
+          data: { answer: 'fixture' },
+          expiresAt: '2026-10-01T00:00:00.000Z',
+          mode: 'extract',
+          model: 'spark-2',
+          status: 'completed',
+          success: true,
+          threadId: '00000000-0000-4000-8000-000000000031',
+          threadTurn: 1,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/map') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          id: '00000000-0000-4000-8000-000000000020',
+          links: ['https://example.com/'],
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (
+      req.method === 'POST' &&
+      req.url === '/v2/search/00000000-0000-4000-8000-000000000000/feedback'
+    ) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          creditsRefunded: 0,
+          feedbackId: '00000000-0000-4000-8000-000000000100',
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/feedback') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          creditsRefunded: 0,
+          creditsRefundedToday: 100,
+          dailyCapReached: true,
+          dailyRefundCap: 100,
+          feedbackId: '00000000-0000-4000-8000-000000000101',
+          success: true,
+          warning: 'Daily refund cap reached; feedback is still recorded.',
+        })
+      );
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/v2/monitor') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify({
           data: { id: 'mon_001' },
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'GET' && req.url === '/v2/team/credit-usage') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: {
+            billingPeriodEnd: '2026-10-01T00:00:00.000Z',
+            billingPeriodStart: '2026-09-01T00:00:00.000Z',
+            planCredits: 1000,
+            remainingCredits: 1250,
+          },
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (
+      req.method === 'GET' &&
+      req.url === '/v2/team/credit-usage/historical?byApiKey=true'
+    ) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          periods: [
+            {
+              apiKey: 'Production key',
+              creditsUsed: 321,
+              endDate: null,
+              startDate: '2026-09-01T00:00:00.000Z',
+            },
+          ],
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (
+      req.method === 'GET' &&
+      req.url === '/v2/team/credit-usage/historical'
+    ) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          periods: [
+            {
+              creditsUsed: 654,
+              endDate: null,
+              startDate: '2026-09-01T00:00:00.000Z',
+            },
+          ],
           success: true,
         })
       );
@@ -424,6 +580,43 @@ async function startFakeFirecrawlBackend(options = {}) {
       return;
     }
 
+    if (req.method === 'GET' && req.url === '/v2/team/credit-usage') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: {
+            billingPeriodEnd: '2026-10-01T00:00:00.000Z',
+            billingPeriodStart: '2026-09-01T00:00:00.000Z',
+            planCredits: 1000,
+            remainingCredits: 750,
+          },
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (
+      req.method === 'GET' &&
+      req.url === '/v2/team/credit-usage/historical?byApiKey=true'
+    ) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          periods: [
+            {
+              apiKey: 'Hosted OAuth key',
+              creditsUsed: 250,
+              endDate: null,
+              startDate: '2026-09-01T00:00:00.000Z',
+            },
+          ],
+          success: true,
+        })
+      );
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/v2/parse/upload-url') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
@@ -446,7 +639,24 @@ async function startFakeFirecrawlBackend(options = {}) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify({
-          data: { markdown: '# Parsed fixture' },
+          data: {
+            markdown: '# Parsed fixture',
+            metadata: {
+              scrapeId: '00000000-0000-4000-8000-000000000030',
+            },
+          },
+          success: true,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/v2/feedback') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          creditsRefunded: 0,
+          feedbackId: '00000000-0000-4000-8000-000000000102',
           success: true,
         })
       );
@@ -556,6 +766,24 @@ test('HTTP cloud keyless transport preserves app challenge without advertising O
     (tool) => tool.name === 'firecrawl_search'
   );
   assert.ok(anonymousSearch);
+  for (const name of ['firecrawl_search', 'firecrawl_scrape']) {
+    const tool = anonymousTools.find((item) => item.name === name);
+    assert.equal(tool?._meta?.['anthropic/alwaysLoad'], true, name);
+  }
+  assert.equal(anonymousParse._meta?.['anthropic/alwaysLoad'], undefined);
+  // Keyless sessions list only search, scrape and parse, and FastMCP serves one
+  // description per tool. Every sentence that points at a tool or mode keyless
+  // sessions do not have must say it applies to authenticated sessions.
+  const listedNames = new Set(anonymousTools.map((tool) => tool.name));
+  for (const tool of anonymousTools) {
+    const sentences = tool.description.replace(/\s+/g, ' ').split(/(?<=[.!?])\s+(?=[A-Z`])/);
+    for (const sentence of sentences) {
+      const unlisted = [...sentence.matchAll(/\bfirecrawl_[a-z_]+/g)].map((m) => m[0]).filter((name) => !listedNames.has(name) && !name.startsWith('firecrawl_research_'));
+      if (unlisted.length || /Alexandria mode/.test(sentence)) {
+        assert.match(sentence, /authenticated/i, `${tool.name}: keyless sessions see an unscoped reference to ${unlisted.join(', ') || 'Alexandria mode'}: ${sentence}`);
+      }
+    }
+  }
   assert.match(
     anonymousSearch.description,
     /categories: \["developer"\].*data\.web.*category.*developer/is
@@ -678,6 +906,7 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
     headers: {
       accept: 'application/json, text/event-stream',
       'content-type': 'application/json',
+      'user-agent': 'firecrawl-http-smoke/0.0.0',
       'x-api-key': 'fc-http-test',
     },
     method: 'POST',
@@ -713,7 +942,10 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
   assert.deepEqual(searchRequest.body, {
     highlights: false,
     limit: 1,
-    origin: 'mcp-fastmcp',
+    origin: `mcp-ua-firecrawl-http-smoke@${serverVersion}`,
+    sources: ['web', 'alexandria'],
+    domainTools: true,
+    toolDetail: 'compact',
     query: 'example domain',
   });
   assert.equal(
@@ -856,6 +1088,8 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.ok(toolNames.includes('firecrawl_scrape'));
   assert.ok(toolNames.includes('firecrawl_search'));
   assert.ok(toolNames.includes('firecrawl_parse'));
+  assert.ok(toolNames.includes('firecrawl_credit_usage'));
+  assert.equal(toolNames.includes('firecrawl_credit_usage_historical'), false);
   assert.equal(toolNames.includes('firecrawl_extract'), false);
 
   const deprecatedExtract = await client.request('tools/call', {
@@ -875,22 +1109,71 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
 
   const byName = new Map(tools.tools.map((tool) => [tool.name, tool]));
+  for (const name of ['firecrawl_search', 'firecrawl_scrape']) {
+    assert.equal(byName.get(name)?._meta?.['anthropic/alwaysLoad'], true, name);
+  }
+  assert.equal(byName.get('firecrawl_map')?._meta?.['anthropic/alwaysLoad'], undefined);
+  assert.match(
+    byName.get('firecrawl_credit_usage').description,
+    /remainingCredits.*planCredits.*billingPeriodStart.*billingPeriodEnd.*historical.*creditsUsed.*byApiKey.*API key/is
+  );
+  assert.equal(
+    byName.get('firecrawl_credit_usage').inputSchema.properties.view.description,
+    'Select current balance or historical monthly usage. Defaults to current.'
+  );
+  assert.equal(
+    byName.get('firecrawl_credit_usage').inputSchema.properties.byApiKey
+      .description,
+    'Break historical usage down by API key. When view is omitted, true selects the historical view; it cannot be combined with view "current".'
+  );
+  // A stdio session with an API key gets the Alexandria-aware instructions,
+  // not the keyless wording.
   assert.match(init.instructions, /firecrawl_scrape retrieves one supplied page/i);
+  // Claude Code truncates server instructions at CLAUDE_CODE_TEXT_CAP characters; the
+  // Alexandria routing paragraph has to land inside that window. Trade-off: the
+  // developer/research routing and the requestId retry rule now sit after it, past the
+  // cap. Both are also carried where Claude Code does not truncate them: the
+  // firecrawl_search description (developer and research categories, asserted below)
+  // and the requestId parameter description (retry rule, asserted in the budget test).
+  const instructionsHead = init.instructions.slice(0, CLAUDE_CODE_TEXT_CAP);
+  assert.match(instructionsHead, /Alexandria is Firecrawl's catalogue of data providers/);
+  assert.match(instructionsHead, /Before scraping more than one page for the same fields/);
+  assert.match(instructionsHead, /Passing sources without alexandria in it/);
   assert.match(
     init.instructions,
-    /Authorization bearer API key.*including firecrawl_map for site URL discovery/is
+    /Alexandria is Firecrawl's catalogue of data providers and workflows.*firecrawl_scrape with alexandria.*executes up to ten capabilities/is
   );
   assert.match(
     init.instructions,
-    /Authorization bearer API key.*firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known/is
+    /Passing sources without alexandria in it \(for example \["web"\] or \["news"\]\) excludes Alexandria provider matches; omit sources unless you specifically need web-only or news-only results, or include "alexandria" alongside them/
+  );
+  assert.match(
+    init.instructions,
+    /Before scraping more than one page for the same fields, spend one free firecrawl_find_tools call/
+  );
+  assert.match(
+    init.instructions,
+    /THIRD_PARTY_DATA_TERMS_REQUIRED.*terms\/show.*terms\/accept.*acceptance requires explicit user authorization/is
   );
   assert.match(
     byName.get('firecrawl_scrape').description,
     /request identifies a page and needs its content or defined fields/i
   );
   assert.match(
+    byName.get('firecrawl_scrape').description,
+    /use `firecrawl_search` when additional web sources are needed/i
+  );
+  assert.match(
+    byName.get('firecrawl_scrape').description,
+    /authenticated responses can include a `metadata\.scrapeId` for optional scrape feedback/i
+  );
+  assert.match(
     byName.get('firecrawl_map').description,
     /returns matching URLs rather than page bodies/i
+  );
+  assert.match(
+    byName.get('firecrawl_map').description,
+    /authenticated responses can include an `id` for optional map feedback/i
   );
   assert.match(
     byName.get('firecrawl_agent').description,
@@ -900,13 +1183,31 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     byName.get('firecrawl_agent_status').description,
     /processing.*non-terminal.*does not contain the final research result/is
   );
+  // Mechanics live on the parameters so the description stays under Claude Code's 2,048-character cap.
+  const searchParams = byName.get('firecrawl_search').inputSchema.properties;
+  assert.match(searchParams.query.description, /operators include.*related:host.*non-exhaustive/is);
+  assert.match(byName.get('firecrawl_search').description, /each web result is a title, URL, and description/i);
+  assert.match(searchParams.scrapeOptions.description, /ignore maxAge.*firecrawl_scrape/is);
+  assert.doesNotMatch(byName.get('firecrawl_search').description, /not the page/i);
   assert.match(
     byName.get('firecrawl_search').description,
-    /operators include.*related:host.*non-exhaustive/is
+    /use `firecrawl_scrape` on a result URL when the excerpt is not enough/i
   );
   assert.match(
     byName.get('firecrawl_search').description,
-    /each web result is a title, URL, and description, not the page.*scrapeOptions.*ignore `maxAge`.*firecrawl_scrape/is
+    /ranked results with query-relevant highlights\./i
+  );
+  assert.match(
+    searchParams.highlights.description,
+    /highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned/i
+  );
+  assert.match(
+    byName.get('firecrawl_search').description,
+    /authenticated responses can include an `id` for optional search feedback/i
+  );
+  assert.match(
+    byName.get('firecrawl_parse').description,
+    /authenticated final responses can include a `data\.metadata\.scrapeId` for optional parse feedback/i
   );
   assert.match(
     byName.get('firecrawl_search_feedback').description,
@@ -930,9 +1231,27 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     byName.get('firecrawl_research_search_papers').description,
     /indexed corpus.*biomedical.*PubMed.*bioRxiv.*medRxiv.*arXiv/is
   );
+  // Zod field metadata must survive serialization into tools/list so models
+  // receive parameter-level guidance in addition to the routing distinction
+  // kept in the top-level tool description below.
+  assert.equal(
+    byName.get('firecrawl_search').inputSchema.properties.highlights.description,
+    'Return query-relevant page excerpts for web and news results when available (default). Highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned. Set to false to keep the original search snippets.'
+  );
+  assert.match(
+    byName.get('firecrawl_search').inputSchema.properties.categories.description,
+    /Limit results to specific source types.*developer.*data\.web/is
+  );
+  assert.match(
+    byName.get('firecrawl_developer_search').description,
+    /Search an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation for programming questions that need external documentation or upstream evidence\./
+  );
+  assert.match(
+    byName.get('firecrawl_developer_search').inputSchema.properties.query
+      .description,
+    /Natural-language developer question.*library.*error message.*API/is
+  );
   // The two surfaces that both answer to "research" must stay distinguishable.
-  // This has to live in the tool description, not a parameter `.describe()`:
-  // no property description survives serialization into tools/list.
   assert.match(
     byName.get('firecrawl_search').description,
     /categories: \["research"\].*research-affiliated websites.*`firecrawl_research_\*` tools are a separate surface.*PubMed, bioRxiv, medRxiv.*arXiv/is
@@ -947,11 +1266,11 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   assert.match(
     init.instructions,
-    /firecrawl_search with categories: \["research"\] filters ordinary web results to research-affiliated websites/i
+    /firecrawl_search with categories: \["research"\] is a website filter over ordinary web results and reaches different sources/i
   );
   assert.match(
     init.instructions,
-    /Authorization bearer API key.*firecrawl_research_\* for paper-index and repository research/is
+    /firecrawl_research_\* tools search a paper index of abstracts and full text/i
   );
   assert.match(
     byName.get('firecrawl_research_related_papers').description,
@@ -972,6 +1291,97 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   ].join('\n');
   assertAgentMetadataPolicy(renderedLanguage, assert);
   assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('credit usage tool exposes current balance and both historical request shapes', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-credit-usage-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-credit-usage-smoke', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const current = await client.request('tools/call', {
+    arguments: {},
+    name: 'firecrawl_credit_usage',
+  });
+  assert.deepEqual(JSON.parse(current.content[0].text), {
+    billingPeriodEnd: '2026-10-01T00:00:00.000Z',
+    billingPeriodStart: '2026-09-01T00:00:00.000Z',
+    planCredits: 1000,
+    remainingCredits: 1250,
+  });
+
+  const historical = await client.request('tools/call', {
+    arguments: { view: 'historical' },
+    name: 'firecrawl_credit_usage',
+  });
+  assert.deepEqual(JSON.parse(historical.content[0].text), {
+    periods: [
+      {
+        creditsUsed: 654,
+        endDate: null,
+        startDate: '2026-09-01T00:00:00.000Z',
+      },
+    ],
+    success: true,
+  });
+
+  const historicalByApiKey = await client.request('tools/call', {
+    arguments: { byApiKey: true },
+    name: 'firecrawl_credit_usage',
+  });
+  assert.deepEqual(JSON.parse(historicalByApiKey.content[0].text), {
+    periods: [
+      {
+        apiKey: 'Production key',
+        creditsUsed: 321,
+        endDate: null,
+        startDate: '2026-09-01T00:00:00.000Z',
+      },
+    ],
+    success: true,
+  });
+
+  const contradictory = await client.request('tools/call', {
+    arguments: { byApiKey: true, view: 'current' },
+    name: 'firecrawl_credit_usage',
+  });
+  assert.equal(contradictory.isError, true);
+  assert.match(
+    contradictory.content[0].text,
+    /byApiKey can only be used with view "historical"/i
+  );
+
+  for (const path of [
+    '/v2/team/credit-usage',
+    '/v2/team/credit-usage/historical',
+    '/v2/team/credit-usage/historical?byApiKey=true',
+  ]) {
+    const request = fakeApi.requests.find((candidate) => candidate.url === path);
+    assert.ok(request, path);
+    assert.equal(request.method, 'GET', path);
+    assert.equal(
+      request.headers.authorization,
+      'Bearer fc-credit-usage-test',
+      path
+    );
+    assert.equal(
+      request.headers['x-origin'],
+      `mcp-firecrawl-credit-usage-smoke@${serverVersion}`,
+      path
+    );
+  }
 });
 
 test('local keyless stdio keeps profile guidance keyless-scoped and omits feedback tools', async (t) => {
@@ -999,7 +1409,7 @@ test('local keyless stdio keeps profile guidance keyless-scoped and omits feedba
   );
   assert.match(
     keylessGuidance,
-    /firecrawl_search with categories: \["developer"\].*curated documentation sites/i
+    /firecrawl_search with categories: \["developer"\].*code documentation/i
   );
   assert.match(
     keylessGuidance,
@@ -1183,7 +1593,10 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
   assert.equal(fakeApi.requests[0].headers.authorization, 'Bearer fc-test');
   assert.deepEqual(fakeApi.requests[0].body, {
     limit: 1,
-    origin: 'mcp-fastmcp',
+    origin: `mcp-firecrawl-mcp-tool-e2e@${serverVersion}`,
+    sources: ['web', 'alexandria'],
+    domainTools: true,
+    toolDetail: 'compact',
     query: 'example domain',
   });
 
@@ -1208,6 +1621,127 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
     id: '00000000-0000-4000-8000-000000000000',
     success: true,
   });
+
+  const scrapeResult = await client.request('tools/call', {
+    arguments: { url: 'https://example.com/' },
+    name: 'firecrawl_scrape',
+  });
+  assert.notEqual(scrapeResult.isError, true);
+  const scrapePayload = JSON.parse(scrapeResult.content[0].text);
+  assert.equal(
+    scrapePayload.metadata.scrapeId,
+    '00000000-0000-4000-8000-000000000010'
+  );
+
+  const mapResult = await client.request('tools/call', {
+    arguments: { limit: 1, url: 'https://example.com/' },
+    name: 'firecrawl_map',
+  });
+  assert.notEqual(mapResult.isError, true);
+  const mapPayload = JSON.parse(mapResult.content[0].text);
+  assert.equal(mapPayload.id, '00000000-0000-4000-8000-000000000020');
+
+  const searchFeedbackResult = await client.request('tools/call', {
+    arguments: {
+      querySuggestions: 'Use a narrower query',
+      rating: 'bad',
+      searchId: toolPayload.id,
+    },
+    name: 'firecrawl_search_feedback',
+  });
+  assert.notEqual(searchFeedbackResult.isError, true);
+
+  for (const [endpoint, jobId] of [
+    ['scrape', scrapePayload.metadata.scrapeId],
+    ['map', mapPayload.id],
+  ]) {
+    const feedbackResult = await client.request('tools/call', {
+      arguments: {
+        endpoint,
+        jobId,
+        note: `Feedback for the ${endpoint} result`,
+        rating: 'bad',
+      },
+      name: 'firecrawl_feedback',
+    });
+    assert.notEqual(feedbackResult.isError, true);
+  }
+
+  const searchFeedbackRequest = fakeApi.requests.find(
+    (request) =>
+      request.url ===
+      '/v2/search/00000000-0000-4000-8000-000000000000/feedback'
+  );
+  assert.equal(searchFeedbackRequest.body.rating, 'bad');
+  const endpointFeedbackRequests = fakeApi.requests.filter(
+    (request) => request.url === '/v2/feedback'
+  );
+  assert.deepEqual(
+    endpointFeedbackRequests.map((request) => ({
+      endpoint: request.body.endpoint,
+      jobId: request.body.jobId,
+    })),
+    [
+      {
+        endpoint: 'scrape',
+        jobId: '00000000-0000-4000-8000-000000000010',
+      },
+      {
+        endpoint: 'map',
+        jobId: '00000000-0000-4000-8000-000000000020',
+      },
+    ]
+  );
+  const sessionFeedback = {
+    endpoint: 'alexandria', rating: 'partial',
+    requestedWebsite: { url: 'https://example.com', requestedFunctionality: 'Download attachments' },
+    rationale: 'Only summaries available',
+    capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'new_capability_request', why: 'Missing attachments', requestedFunctionality: 'Return document links' }],
+  };
+  const sessionResult = await client.request('tools/call', { name: 'firecrawl_feedback', arguments: sessionFeedback });
+  assert.notEqual(sessionResult.isError, true);
+  const sent = fakeApi.requests.filter(request => request.url === '/v2/feedback').at(-1).body;
+  assert.deepEqual(sent, { ...sessionFeedback, origin: sent.origin });
+  assert.equal('jobId' in sent, false);
+  const missingCapabilityFeedback = {
+    ...sessionFeedback,
+    capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'missing_capability', why: 'Provider has no attachment capability' }],
+  };
+  const missingCapabilityResult = await client.request('tools/call', { name: 'firecrawl_feedback', arguments: missingCapabilityFeedback });
+  assert.notEqual(missingCapabilityResult.isError, true);
+  const sentMissingCapability = fakeApi.requests.filter(request => request.url === '/v2/feedback').at(-1).body;
+  assert.deepEqual(sentMissingCapability, { ...missingCapabilityFeedback, origin: sentMissingCapability.origin });
+  for (const invalid of [
+    { endpoint: 'scrape', rating: 'good' },
+    { endpoint: 'alexandria', rating: 'good' },
+    { ...sessionFeedback, jobId: '00000000-0000-4000-8000-000000000010' },
+    { ...sessionFeedback, capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'new_capability_request', why: 'Missing attachments' }] },
+    { ...sessionFeedback, capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'unknown_issue', why: 'Not a supported issue code' }] },
+  ]) {
+    const before = fakeApi.requests.length;
+    await assert.rejects(client.request('tools/call', { name: 'firecrawl_feedback', arguments: invalid }), /parameter validation failed/);
+    assert.equal(fakeApi.requests.length, before);
+  }
+  for (const endpoint of ['search', 'scrape', 'parse', 'map']) {
+    for (const [field, value] of Object.entries({
+      requestedWebsite: sessionFeedback.requestedWebsite,
+      rationale: sessionFeedback.rationale,
+      providerFeedback: [],
+      capabilityFeedback: sessionFeedback.capabilityFeedback,
+    })) {
+      const before = fakeApi.requests.length;
+      await assert.rejects(client.request('tools/call', {
+        name: 'firecrawl_feedback',
+        arguments: {
+          endpoint,
+          jobId: '00000000-0000-4000-8000-000000000010',
+          rating: 'partial',
+          [field]: value,
+        },
+      }), /parameter validation failed/);
+      assert.equal(fakeApi.requests.length, before);
+    }
+  }
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
@@ -1420,8 +1954,8 @@ test('local HTTP environment credentials keep self-hosted Core errors', async (t
   assert.equal(response.status, 200);
   const result = parseSseJson(await response.text()).result;
   assert.equal(result.isError, true);
-  assert.notEqual(result.content[0].text, INVALID_API_KEY_MESSAGE);
-  assert.notEqual(result.structuredContent?.code, 'CREDENTIAL_INVALID');
+  assert.match(result.content[0].text, /Request failed with status code 401/);
+  assert.equal(result.structuredContent?.code, undefined);
   assert.equal(backend.requests.some((request) => request.url === '/v2/search'), true);
 });
 
@@ -1679,7 +2213,10 @@ test('HTTP cloud keyless Parse completes both phases without credentials and for
 
   const phaseOne = await httpToolCall(port, {
     id: 'keyless-parse-phase-one',
-    headers: { 'x-forwarded-for': '8.8.8.43' },
+    headers: {
+      'user-agent': 'firecrawl-keyless-smoke/0.0.0',
+      'x-forwarded-for': '8.8.8.43',
+    },
     params: {
       arguments: {
         contentType: 'application/pdf',
@@ -1696,10 +2233,22 @@ test('HTTP cloud keyless Parse completes both phases without credentials and for
   const phaseOnePayload = JSON.parse(phaseOneResult.content[0].text);
   assert.equal(phaseOnePayload.upload.uploadRef, 'test-upload-ref');
   assert.equal(phaseOnePayload.nextToolCall.arguments.uploadRef, 'test-upload-ref');
+  // The continuation data has to reach structuredContent as well: a client
+  // reading only the structured result still has to be able to finish the
+  // upload flow, and parseOutputSchema is what decides whether it survives.
+  assert.deepEqual(phaseOneResult.structuredContent, phaseOnePayload);
+  assert.equal(
+    typeof phaseOneResult.structuredContent.upload.command,
+    'string'
+  );
+  assert.ok(phaseOneResult.structuredContent.notes.length > 0);
 
   const phaseTwo = await httpToolCall(port, {
     id: 'keyless-parse-phase-two',
-    headers: { 'x-forwarded-for': '8.8.8.43' },
+    headers: {
+      'user-agent': 'firecrawl-keyless-smoke/0.0.0',
+      'x-forwarded-for': '8.8.8.43',
+    },
     params: {
       arguments: {
         formats: ['markdown'],
@@ -1717,10 +2266,17 @@ test('HTTP cloud keyless Parse completes both phases without credentials and for
   assert.equal(uploadCalls.length, 1);
   assert.equal(parseCalls.length, 1);
   assert.equal(uploadCalls[0].headers.authorization, undefined);
+  assert.equal(
+    uploadCalls[0].headers['x-origin'],
+    `mcp-ua-firecrawl-keyless-smoke@${serverVersion}`
+  );
   assert.equal(parseCalls[0].headers.authorization, undefined);
   assert.equal(parseCalls[0].body.uploadRef, 'test-upload-ref');
   assert.equal(parseCalls[0].body.redactPII, true);
-  assert.equal(parseCalls[0].body.origin, 'mcp-fastmcp');
+  assert.equal(
+    parseCalls[0].body.origin,
+    `mcp-ua-firecrawl-keyless-smoke@${serverVersion}`
+  );
   assert.equal(stderr.includes('keyless-parse-secret'), false, stderr);
   assert.equal(stderr.includes('8.8.8.43'), false, stderr);
 });
@@ -1919,16 +2475,54 @@ test('HTTP cloud authenticated Parse forwards ZDR for API-key and managed OAuth 
       },
     });
     assert.equal(phaseTwo.status, 200);
-    assert.notEqual(parseSseJson(await phaseTwo.text()).result.isError, true);
+    const phaseTwoResult = parseSseJson(await phaseTwo.text()).result;
+    assert.notEqual(phaseTwoResult.isError, true);
+    const phaseTwoPayload = JSON.parse(phaseTwoResult.content[0].text);
+    assert.equal(
+      phaseTwoPayload.data.metadata.scrapeId,
+      '00000000-0000-4000-8000-000000000030'
+    );
+
+    if (label === 'api-key') {
+      const feedback = await httpToolCall(port, {
+        endpoint: '/v2/mcp-oauth',
+        headers,
+        id: `${label}-parse-feedback`,
+        params: {
+          arguments: {
+            endpoint: 'parse',
+            jobId: phaseTwoPayload.data.metadata.scrapeId,
+            note: 'Feedback for the parsed result',
+            rating: 'bad',
+          },
+          name: 'firecrawl_feedback',
+        },
+      });
+      assert.equal(feedback.status, 200);
+      assert.notEqual(parseSseJson(await feedback.text()).result.isError, true);
+    }
   }
 
   const uploads = backend.requests.filter((r) => r.url === '/v2/parse/upload-url');
   const parses = backend.requests.filter((r) => r.url === '/v2/parse');
+  const feedbackRequests = backend.requests.filter((r) => r.url === '/v2/feedback');
   const introspectedTokens = backend.requests
     .filter((request) => request.url === '/api/oauth/introspect')
     .map((request) => request.body.token);
   assert.equal(uploads.length, 2);
   assert.equal(parses.length, 2);
+  assert.deepEqual(
+    feedbackRequests.map((request) => ({
+      endpoint: request.body.endpoint,
+      jobId: request.body.jobId,
+    })),
+    [
+      {
+        endpoint: 'parse',
+        jobId: '00000000-0000-4000-8000-000000000030',
+      },
+    ]
+  );
   assert.deepEqual(
     introspectedTokens,
     ['fco_parse', 'fco_parse'],
@@ -2830,6 +3424,112 @@ test('account endpoint accepts legacy OAuth one way and delegates managed keys',
   assert.equal(stderr.includes('fco_legacy'), false);
 });
 
+test('hosted OAuth executes current and historical credit usage with delegated credentials', async (t) => {
+  const accountResource = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
+  const backend = await startFakeFirecrawlBackend({
+    introspectionHandler: ({ token }) =>
+      token === 'fco_credit_usage'
+        ? {
+            active: true,
+            api_key: 'fc-managed-credit-usage',
+            aud: accountResource,
+            credential_purpose: 'hosted_mcp_oauth',
+            scope: 'firecrawl:global',
+          }
+        : { active: false },
+  });
+  t.after(() => backend.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp-oauth',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_MCP_RESOURCE_URL: accountResource,
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    FIRECRAWL_API_KEY: 'fc-shared-env-must-not-be-used',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const headers = {
+    authorization: 'Bearer fco_credit_usage',
+    'user-agent': 'hosted-oauth-usage-test/1.0',
+  };
+  const currentResponse = await httpToolCall(port, {
+    endpoint: '/v2/mcp-oauth',
+    headers,
+    id: 'hosted-oauth-current-credit-usage',
+    params: { arguments: {}, name: 'firecrawl_credit_usage' },
+  });
+  assert.equal(currentResponse.status, 200);
+  const currentResult = parseSseJson(await currentResponse.text()).result;
+  assert.notEqual(currentResult.isError, true);
+  assert.deepEqual(JSON.parse(currentResult.content[0].text), {
+    billingPeriodEnd: '2026-10-01T00:00:00.000Z',
+    billingPeriodStart: '2026-09-01T00:00:00.000Z',
+    planCredits: 1000,
+    remainingCredits: 750,
+  });
+
+  const historicalResponse = await httpToolCall(port, {
+    endpoint: '/v2/mcp-oauth',
+    headers,
+    id: 'hosted-oauth-historical-credit-usage',
+    params: {
+      arguments: { byApiKey: true },
+      name: 'firecrawl_credit_usage',
+    },
+  });
+  assert.equal(historicalResponse.status, 200);
+  const historicalResult = parseSseJson(await historicalResponse.text()).result;
+  assert.notEqual(historicalResult.isError, true);
+  assert.deepEqual(JSON.parse(historicalResult.content[0].text), {
+    periods: [
+      {
+        apiKey: 'Hosted OAuth key',
+        creditsUsed: 250,
+        endDate: null,
+        startDate: '2026-09-01T00:00:00.000Z',
+      },
+    ],
+    success: true,
+  });
+
+  const usageCalls = backend.requests.filter((request) =>
+    request.url?.startsWith('/v2/team/credit-usage')
+  );
+  assert.deepEqual(
+    usageCalls.map((request) => request.url),
+    [
+      '/v2/team/credit-usage',
+      '/v2/team/credit-usage/historical?byApiKey=true',
+    ]
+  );
+  for (const request of usageCalls) {
+    assert.equal(request.method, 'GET');
+    assert.equal(
+      request.headers['x-origin'],
+      `mcp-ua-hosted-oauth-usage-test@${serverVersion}`
+    );
+    const assertion = request.headers.authorization?.replace(/^Bearer /, '');
+    assert.match(assertion ?? '', /^fcmcp_/);
+    assert.notEqual(assertion, 'fc-shared-env-must-not-be-used');
+    const payload = JSON.parse(
+      Buffer.from(
+        assertion.split('.')[0].slice('fcmcp_'.length),
+        'base64url'
+      ).toString()
+    );
+    assert.equal(payload.api_key, 'fc-managed-credit-usage');
+    assert.equal(payload.purpose, 'hosted_mcp_oauth');
+    assert.equal(payload.aud, 'firecrawl-core');
+  }
+});
+
 test('legacy key-in-path telemetry is sanitized and does not leak the credential', async (t) => {
   const backend = await startFakeFirecrawlBackend();
   t.after(() => backend.close());
@@ -3018,4 +3718,122 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
     .filter((request) => request.url === '/api/oauth/introspect')
     .map((request) => request.body.token);
   assert.deepEqual(introspectedTokens, ['fco_account']);
+});
+
+test('every listed tool declares an output schema and returns structured content', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-output-schema', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  // OpenAI's app-submission scan flags a tool with no outputSchema, and a
+  // client cannot tell a missing schema from an unstructured tool, so every
+  // tool the server lists has to declare one.
+  const { tools } = await client.request('tools/list');
+  assert.ok(tools.length > 0);
+  for (const tool of tools) {
+    assert.ok(tool.outputSchema, `${tool.name} has no outputSchema`);
+    assert.equal(tool.outputSchema.type, 'object', tool.name);
+    assert.ok(
+      Object.keys(tool.outputSchema.properties ?? {}).length > 0,
+      `${tool.name} declares no output properties`
+    );
+  }
+
+  // A declared schema obliges the tool to return structured content. The text
+  // block has to stay what it was before the schema existed, so it is pinned
+  // against the fixture rather than against the structured content beside it —
+  // a change to both at once would slip past that comparison.
+  const search = await client.request('tools/call', {
+    arguments: { limit: 1, query: 'example domain' },
+    name: 'firecrawl_search',
+  });
+  assert.notEqual(search.isError, true);
+  assert.equal(search.content.length, 1);
+  // `source` and `position` are stamped onto every result on the way out, so
+  // the model can address a result in search feedback without counting array
+  // elements. They ride along into both the text block and structuredContent.
+  const expectedSearchPayload = {
+    creditsUsed: 1,
+    data: {
+      web: [
+        {
+          title: 'Example Domain',
+          url: 'https://example.com/',
+          source: 'web',
+          position: 1,
+        },
+      ],
+    },
+    id: '00000000-0000-4000-8000-000000000000',
+    success: true,
+  };
+  // Compact, in the API's key order: what `compactText` produced.
+  assert.equal(
+    search.content[0].text,
+    JSON.stringify(expectedSearchPayload)
+  );
+  assert.deepEqual(search.structuredContent, expectedSearchPayload);
+
+  const scrape = await client.request('tools/call', {
+    arguments: { url: 'https://example.com/' },
+    name: 'firecrawl_scrape',
+  });
+  assert.notEqual(scrape.isError, true);
+  const expectedScrapePayload = {
+    markdown: '# Scraped fixture',
+    metadata: {
+      scrapeId: '00000000-0000-4000-8000-000000000010',
+      sourceURL: 'https://example.com/',
+    },
+  };
+  // Two-space pretty-printing: what `asText` produced.
+  assert.equal(
+    scrape.content[0].text,
+    JSON.stringify(expectedScrapePayload, null, 2)
+  );
+  assert.deepEqual(scrape.structuredContent, expectedScrapePayload);
+
+  // Codex reads structuredContent in place of the text block, so fields a later
+  // call or the model needs (thread and expiry on agent jobs, feedback receipts)
+  // have to be named in the schema or they vanish for Codex.
+  const agent = await client.request('tools/call', {
+    arguments: { prompt: 'Find the example domain owner' },
+    name: 'firecrawl_agent',
+  });
+  assert.notEqual(agent.isError, true);
+  assert.equal(agent.structuredContent.id, '00000000-0000-4000-8000-000000000030');
+  assert.equal(agent.structuredContent.threadId, '00000000-0000-4000-8000-000000000031');
+  assert.equal(agent.structuredContent.threadTurn, 1);
+  const agentStatus = await client.request('tools/call', {
+    arguments: { id: '00000000-0000-4000-8000-000000000030' },
+    name: 'firecrawl_agent_status',
+  });
+  assert.notEqual(agentStatus.isError, true);
+  for (const key of ['expiresAt', 'model', 'mode', 'threadId', 'threadTurn']) {
+    assert.ok(key in agentStatus.structuredContent, `agent status structuredContent lost ${key}`);
+  }
+  const feedback = await client.request('tools/call', {
+    arguments: { endpoint: 'scrape', jobId: '00000000-0000-4000-8000-000000000010', note: 'fixture', rating: 'good' },
+    name: 'firecrawl_feedback',
+  });
+  assert.notEqual(feedback.isError, true);
+  assert.equal(feedback.structuredContent.feedbackId, '00000000-0000-4000-8000-000000000101');
+  assert.equal(feedback.structuredContent.creditsRefunded, 0);
+  for (const key of ['creditsRefundedToday', 'dailyRefundCap', 'dailyCapReached', 'warning']) {
+    assert.ok(key in feedback.structuredContent, `feedback structuredContent lost ${key}`);
+  }
+  assert.equal('id' in feedback.structuredContent, false);
 });

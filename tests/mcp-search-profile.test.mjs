@@ -1,13 +1,25 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import net from 'node:net';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
+import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
+
+const { version: serverVersion } = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+);
 
 // The fixed contract of the search surface. Nothing outside this set may ever
 // appear on its tools/list or be callable through it.
+//
+// If this assertion fails because you changed the set on purpose: the
+// connector listing has to change too. Read "Why the tool set is fixed" in
+// docs/search-profile.md and tell partnerships before merging. Keep this list a hand-written copy; deriving it from
+// SEARCH_PROFILE_TOOLS in src would turn the test into "the surface matches
+// whatever the code says" and it would stop catching drift.
 const SEARCH_TOOLS = [
   'firecrawl_search',
   'firecrawl_developer_search',
@@ -15,11 +27,13 @@ const SEARCH_TOOLS = [
   'firecrawl_research_inspect_paper',
   'firecrawl_research_related_papers',
   'firecrawl_research_read_paper',
+  // Alexandria: catalogue lookup and provider execution.
+  'firecrawl_find_tools',
+  'firecrawl_scrape',
 ];
 
 // A representative sample of the full-surface tools that must NOT leak here.
 const EXCLUDED_TOOLS = [
-  'firecrawl_scrape',
   'firecrawl_map',
   'firecrawl_crawl',
   'firecrawl_check_crawl_status',
@@ -175,6 +189,29 @@ async function startFakeBackend(options = {}) {
       return;
     }
 
+    if (req.method === 'POST' && req.url === '/v2/scrape') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          success: true,
+          scrape_id: 'scrape-1',
+          requestId: req.headers['x-request-id'] ?? 'req-1',
+          data: {
+            creditsCost: 1,
+            alexandria: [
+              {
+                provider: 'particle',
+                capability: 'podcasts/episodes/search',
+                creditsCost: 1,
+                data: { episodes: [] },
+              },
+            ],
+          },
+        })
+      );
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/v2/search') {
       // The developer category returns developer-tagged hits in the standard
       // web group, matching the live Search response shape.
@@ -305,6 +342,7 @@ function jsonRpc(port, endpoint, { id, method, params = {}, headers = {} }) {
     headers: {
       accept: 'application/json, text/event-stream',
       'content-type': 'application/json',
+      'user-agent': 'firecrawl-search-profile-test/1.0.0',
       ...headers,
     },
     method: 'POST',
@@ -342,7 +380,7 @@ async function listTools(port, endpoint, headers) {
   return tools.map((tool) => tool.name);
 }
 
-test('search surface lists exactly the six read-only tools', async (t) => {
+test('search surface lists exactly the eight contracted tools', async (t) => {
   const { searchPort, getStderr } = await startHostedServer(t);
 
   const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, {
@@ -351,15 +389,29 @@ test('search surface lists exactly the six read-only tools', async (t) => {
   const names = tools.map((tool) => tool.name);
   const search = tools.find((tool) => tool.name === 'firecrawl_search');
   assert.ok(search);
+  assert.equal(search._meta?.['anthropic/alwaysLoad'], undefined);
+  assert.equal(
+    tools.find((tool) => tool.name === 'firecrawl_scrape')?._meta?.['anthropic/alwaysLoad'],
+    undefined
+  );
   assert.match(
     search.description,
     /categories: \["developer"\].*data\.web.*category.*developer/is
   );
   assert.match(
     search.description,
-    /each web result is a title, URL, and description, not the page/i
+    /each web result is a title, URL, and description/i
   );
   assert.doesNotMatch(search.description, /data\.developer/i);
+  assert.doesNotMatch(search.description, /not the page/i);
+  assert.doesNotMatch(search.description, /scrapeOptions/);
+  assert.match(search.description, /firecrawl_scrape with an alexandria body/);
+  assert.match(search.description, /firecrawl_find_tools/);
+  assert.match(search.description, /ranked results with query-relevant highlights\./i);
+  assert.match(
+    search.inputSchema.properties.highlights.description,
+    /highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned/i
+  );
 
   assert.deepEqual([...names].sort(), [...SEARCH_TOOLS].sort());
   for (const excluded of EXCLUDED_TOOLS) {
@@ -410,14 +462,15 @@ test('search surface does not expose an excluded tool', async (t) => {
   const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
     id: 2,
     method: 'tools/call',
-    params: { arguments: { url: 'https://example.com' }, name: 'firecrawl_scrape' },
+    params: { arguments: { url: 'https://example.com' }, name: 'firecrawl_map' },
     headers: { 'x-api-key': 'fc-test' },
   });
-  // Unknown tool: either a JSON-RPC error or an error result, never a scrape.
+  // Unknown tool: either a JSON-RPC error or an error result, never a map.
   const message = parseSseJson(await res.text());
   const errored = Boolean(message.error) || message.result?.isError === true;
   assert.equal(errored, true, JSON.stringify(message));
   assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
+  assert.equal(backend.requests.some((r) => r.url === '/v2/map'), false);
 });
 
 test('search firecrawl_search rejects scrapeOptions and never fetches page content', async (t) => {
@@ -479,6 +532,8 @@ test('search firecrawl_search sends a clean body built from allowed fields only'
   const allowedKeys = new Set([
     'query',
     'limit',
+    'includeDomains',
+    'excludeDomains',
     'tbs',
     'filter',
     'location',
@@ -486,6 +541,8 @@ test('search firecrawl_search sends a clean body built from allowed fields only'
     'categories',
     'highlights',
     'enterprise',
+    'domainTools',
+    'toolDetail',
     'origin',
   ]);
   for (const key of Object.keys(sentBody)) {
@@ -495,8 +552,119 @@ test('search firecrawl_search sends a clean body built from allowed fields only'
     query: 'example domain',
     limit: 1,
     sources: [{ type: 'web' }],
-    origin: 'mcp-fastmcp',
+    domainTools: false,
+    toolDetail: 'compact',
+    origin: `mcp-ua-firecrawl-search-profile-test@${serverVersion}`,
   });
+});
+
+test('search firecrawl_search forwards domain filters as body fields without rewriting the query', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+  });
+
+  const cases = [
+    ['includeDomains', ['www.sport1.de', 'www.atptour.com']],
+    ['excludeDomains', ['facebook.com', 'en.wikipedia.org']],
+  ];
+  for (const [id, [field, domains]] of cases.entries()) {
+    const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+      id: 100 + id,
+      method: 'tools/call',
+      params: {
+        arguments: { query: 'davis cup', sources: ['web'], [field]: domains },
+        name: 'firecrawl_search',
+      },
+      headers: { 'x-api-key': 'fc-search-key' },
+    });
+    assert.equal(res.status, 200);
+    const message = parseSseJson(await res.text());
+    assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+    const sentBody = backend.requests.filter((r) => r.url === '/v2/search').at(-1).body;
+    assert.equal(sentBody.query, 'davis cup');
+    assert.deepEqual(sentBody[field], domains);
+  }
+
+  const before = backend.requests.filter((r) => r.url === '/v2/search').length;
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 102,
+    method: 'tools/call',
+    params: {
+      arguments: { query: 'davis cup', includeDomains: ['a.com'], excludeDomains: ['b.com'] },
+      name: 'firecrawl_search',
+    },
+    headers: { 'x-api-key': 'fc-search-key' },
+  });
+  const message = parseSseJson(await res.text());
+  const errored = Boolean(message.error) || message.result?.isError === true;
+  assert.equal(errored, true, JSON.stringify(message));
+  assert.equal(backend.requests.filter((r) => r.url === '/v2/search').length, before);
+});
+
+test('search firecrawl_search normalizes the legacy exchange source to alexandria', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+  });
+
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 42,
+    method: 'tools/call',
+    params: {
+      arguments: {
+        query: 'nvidia balance sheet',
+        sources: ['web', 'exchange'],
+        limit: 5,
+      },
+      name: 'firecrawl_search',
+    },
+    headers: { 'x-api-key': 'fc-search-key' },
+  });
+  assert.equal(res.status, 200);
+  const message = parseSseJson(await res.text());
+  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+
+  const searchCalls = backend.requests.filter((r) => r.url === '/v2/search');
+  assert.equal(searchCalls.length, 1);
+  assert.deepEqual(searchCalls[0].body, {
+    query: 'nvidia balance sheet',
+    sources: ['web', 'alexandria'],
+    domainTools: true,
+    toolDetail: 'compact',
+    limit: 5,
+    origin: `mcp-ua-firecrawl-search-profile-test@${serverVersion}`,
+  });
+});
+
+test('search categories reject github on both MCP profiles before calling the API', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { fullPort, searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+  });
+
+  for (const [port, endpoint] of [[fullPort, '/v2/mcp'], [searchPort, SEARCH_ENDPOINT]]) {
+    const tools = await listToolDefinitions(port, endpoint, { 'x-api-key': 'fc-test' });
+    const search = tools.find((tool) => tool.name === 'firecrawl_search');
+    assert.deepEqual(search.inputSchema.properties.categories.items.enum, [
+      'research', 'pdf', 'developer',
+    ]);
+    const res = await jsonRpc(port, endpoint, {
+      id: 40,
+      method: 'tools/call',
+      params: {
+        name: 'firecrawl_search',
+        arguments: { query: 'retry loop backoff', categories: ['github'] },
+      },
+      headers: { 'x-api-key': 'fc-test' },
+    });
+    const message = parseSseJson(await res.text());
+    assert.ok(message.error || message.result?.isError, JSON.stringify(message));
+  }
+  assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
 });
 
 test('search firecrawl_search forwards the developer category in the web group', async (t) => {
@@ -788,7 +956,7 @@ test('full surface still exposes its complete tool set alongside the search surf
   assert.equal(prm.status, 404);
 });
 
-test('primary search profile is OAuth-only, six-tool frozen, and ready without keyless configuration', async (t) => {
+test('primary search profile is OAuth-only, eight-tool frozen, and ready without keyless configuration', async (t) => {
   const { backendRequests, port, issuerUrl } = await startPrimarySearchServer(t);
 
   const ready = await fetch(`http://127.0.0.1:${port}/ready`);
@@ -939,6 +1107,10 @@ test('account (mcp-oauth) full-surface instructions satisfy the same metadata po
   const headers = { authorization: 'Bearer fco_account_metadata' };
   const initialize = await initializeProfile(port, '/v2/mcp-oauth', headers);
   const tools = await listToolDefinitions(port, '/v2/mcp-oauth', headers);
+  for (const name of ['firecrawl_search', 'firecrawl_scrape']) {
+    const tool = tools.find((item) => item.name === name);
+    assert.equal(tool?._meta?.['anthropic/alwaysLoad'], true, name);
+  }
 
   assertAgentMetadataPolicy(
     [initialize.instructions, ...tools.map((tool) => tool.description ?? '')],
@@ -1087,4 +1259,105 @@ test('companion telemetry follows credential precedence without resolving API ke
     ]
   );
   assert.doesNotMatch(getStdout(), /fc-primary-credential|fco_secondary-credential/);
+});
+
+test('search-only surface rejects catalogue browsing and preserves semantic plus contextual discovery', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {FIRECRAWL_API_URL: backend.url});
+  const listing = parseSseJson(await (await jsonRpc(searchPort, SEARCH_ENDPOINT, {id:76,method:'tools/list',params:{},headers:{'x-api-key':'fc-search-key'}})).text());
+  assert.ok(Array.isArray(listing.result?.tools), JSON.stringify(listing));
+  const searchTool = listing.result.tools.find(tool => tool.name === 'firecrawl_search');
+  assert.ok(searchTool, 'firecrawl_search must be listed');
+  assert.doesNotMatch(searchTool.description, /cannot execute tools|full MCP surface/);
+  assert.match(searchTool.description, /firecrawl_scrape with an alexandria body/);
+
+  const call = arguments_ => jsonRpc(searchPort, SEARCH_ENDPOINT, {id:77,method:'tools/call', params:{name:'firecrawl_search',arguments:arguments_},headers:{'x-api-key':'fc-search-key'}});
+  const invalid = parseSseJson(await (await call({query:'podcast episodes',sources:[{type:'alexandria',mode:'browse'}]})).text());
+  assert.ok(invalid.error || invalid.result?.isError);
+  assert.equal(backend.requests.filter(r=>r.url==='/v2/search').length, 0);
+  const valid = parseSseJson(await (await call({query:'podcast episodes',sources:['alexandria'],domainTools:true,toolDetail:'full'})).text());
+  assert.ok(!valid.error && !valid.result?.isError, JSON.stringify(valid));
+  const sent = backend.requests.find(r=>r.url==='/v2/search').body;
+  assert.deepEqual(sent.sources,['alexandria']);
+  assert.equal(sent.domainTools,true);
+  assert.equal(sent.toolDetail,'full');
+});
+
+test('ordinary search profile enables semantic and domain tools by default', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, { FIRECRAWL_API_URL: backend.url });
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 43,
+    method: 'tools/call',
+    params: { name: 'firecrawl_search', arguments: { query: 'company news' } },
+    headers: { 'x-api-key': 'fc-search-key' },
+  });
+  const message = parseSseJson(await res.text());
+  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+  const sent = backend.requests.find((r) => r.url === '/v2/search').body;
+  assert.deepEqual(sent.sources, ['web', 'alexandria']);
+  assert.equal(sent.domainTools, true);
+});
+
+test('search surface registers the two Alexandria tools with surface-scoped copy', async (t) => {
+  const { searchPort } = await startHostedServer(t);
+  const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, {
+    'x-api-key': 'fc-test',
+  });
+  // Claude Code truncates tool descriptions at CLAUDE_CODE_TEXT_CAP characters.
+  for (const tool of tools) {
+    assert.ok((tool.description ?? '').length <= CLAUDE_CODE_TEXT_CAP, `${tool.name} description is ${(tool.description ?? '').length} chars`);
+  }
+  const scrape = tools.find((tool) => tool.name === 'firecrawl_scrape');
+  const findTools = tools.find((tool) => tool.name === 'firecrawl_find_tools');
+  assert.ok(scrape);
+  assert.ok(findTools);
+  // Descriptions on this surface name only tools it registers.
+  for (const tool of [scrape, findTools]) {
+    assert.doesNotMatch(
+      tool.description,
+      /firecrawl_(?:crawl|map|interact|monitor|agent|feedback|parse)/,
+      tool.name
+    );
+    assert.doesNotMatch(tool.description, /scrapeId/, tool.name);
+  }
+  assert.ok(scrape.inputSchema.properties.alexandria, 'alexandria body is accepted');
+  assert.ok(scrape.inputSchema.properties.url, 'url mode is accepted');
+});
+
+test('search surface executes an Alexandria capability through firecrawl_scrape without a feedback pointer', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+  });
+
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 21,
+    method: 'tools/call',
+    params: {
+      name: 'firecrawl_scrape',
+      arguments: {
+        alexandria: {
+          provider: 'particle',
+          capability: 'podcasts/episodes/search',
+          options: { keyword_search: 'AI agents', limit: 2 },
+        },
+      },
+    },
+    headers: { 'x-api-key': 'fc-test' },
+  });
+  assert.equal(res.status, 200);
+  const message = parseSseJson(await res.text());
+  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+  const scrapeCalls = backend.requests.filter((r) => r.url === '/v2/scrape');
+  assert.equal(scrapeCalls.length, 1);
+  assert.match(JSON.stringify(scrapeCalls[0].body), /"particle"/);
+  const delivered = JSON.stringify(message.result);
+  // The Alexandria entry itself must reach the caller, not only the backend.
+  assert.match(delivered, /particle/);
+  assert.match(delivered, /podcasts\/episodes\/search/);
+  assert.doesNotMatch(delivered, /firecrawl_feedback/);
 });

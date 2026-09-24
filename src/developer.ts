@@ -2,19 +2,23 @@
  * Firecrawl Developer search tool.
  *
  * Thin MCP wrapper over the `/v2/search/developer` endpoint (GitHub issues,
- * merged pull requests, repository READMEs, and curated documentation sites).
+ * merged pull requests, repository READMEs, and code documentation).
  *
- * The installed `@mendable/firecrawl-js` predates a `developer` client, so we
- * call the endpoint directly through the SDK's HTTP layer (auth + retries) via
- * `client.http.get(...)`, mirroring how the research tools reach
- * `/v2/search/research/*`.
+ * Calls the endpoint directly through the SDK's HTTP layer (auth + retries)
+ * via `client.http.get(...)`, mirroring how the research tools reach
+ * `/v2/search/research/*`, so the tool's request and response shapes stay
+ * under this server's control.
  */
 
 import { z } from 'zod';
-import type { FastMCP } from 'fastmcp';
+import type { ContentResult, FastMCP } from 'fastmcp';
+import { originHeaders, requestOrigin } from './origin';
+import { developerSearchOutputSchema, withStructured } from './tool-output';
 
 interface SessionData {
   firecrawlApiKey?: string;
+  /** The User-Agent the session was authenticated with (see src/origin.ts). */
+  clientUserAgent?: string;
   [key: string]: unknown;
 }
 
@@ -34,7 +38,6 @@ type GetClient = (session?: SessionData) => unknown;
 
 // The other mount, /v2/developer/search, may be withdrawn.
 const BASE = '/v2/search/developer';
-const ORIGIN_HEADERS = { 'X-Origin': 'mcp-fastmcp' };
 
 
 interface DeveloperHit {
@@ -82,16 +85,17 @@ export function registerDeveloperTools(
   server.addTool({
     name: 'firecrawl_developer_search',
     annotations: {
-      title: 'Search developer sources',
+      title: 'Firecrawl developer search',
       readOnlyHint: true, // Semantic search over an indexed developer corpus; returns ranked results only.
       openWorldHint: true, // Searches the Firecrawl developer index of public GitHub and documentation content.
       destructiveHint: false, // Query-only; no writes to external sources or the developer index.
     },
     description: `
-For a developer question — code behaviour, a library or framework, an API contract, an error message, or a known bug — search an index built for coding agents. The index covers repositories, GitHub issues, merged pull requests, repository READMEs, and curated documentation sites. Set skills to "only" to limit the search to agent-skill files.
+Search an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation for programming questions that need external documentation or upstream evidence.
 
 Returns ranked results with an ID, source type, URL, title, and the matched passages in markdown.
 `,
+    outputSchema: developerSearchOutputSchema,
     parameters: z.object({
       query: z
         .string()
@@ -111,7 +115,10 @@ Returns ranked results with an ID, source type, URL, title, and the matched pass
         .optional()
         .describe('Set to "only" to search only agent-skill files.'),
     }),
-    execute: async (args: unknown, { session }): Promise<string> => {
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<ContentResult> => {
       const { query, k, skills } = args as {
         query: string;
         k?: number;
@@ -124,8 +131,9 @@ Returns ranked results with an ID, source type, URL, title, and the matched pass
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{
         results?: DeveloperHit[];
-      }>(`${BASE}?${params.toString()}`, ORIGIN_HEADERS);
-      return fmtDeveloper(res.data?.results);
+      }>(`${BASE}?${params.toString()}`, originHeaders(requestOrigin(mcpClient, session)));
+      const results = res.data?.results ?? [];
+      return withStructured(fmtDeveloper(results), { results });
     },
   });
 }
