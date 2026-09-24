@@ -2010,6 +2010,8 @@ const scrapeParamsSchema = z.object({
 // firecrawl_scrape accepts either a page URL or an Exchange batch. The base
 // schema stays url-required because search, crawl, and monitor reuse it for
 // nested scrapeOptions, where `alexandria` has no meaning.
+const ALEXANDRIA_IGNORED_SCRAPE_OPTIONS = new Set(['toolDetail', 'domainTools']);
+
 const scrapeToolParamsSchema = scrapeParamsSchema
   .extend({
     url: z.string().url().optional(),
@@ -2028,12 +2030,12 @@ const scrapeToolParamsSchema = scrapeParamsSchema
           ALEXANDRIA_CONTRACT_GUIDANCE +
           ' Returns per-capability results in data.alexandria with data, records, or an error with a code; check each item even when the outer response succeeds. If a response provides nextTool, follow it to read a large result instead of repeating a successful provider call. Needs an API key on a team with Alexandria enabled. A terms-gated provider returns THIRD_PARTY_DATA_TERMS_REQUIRED (403) with requiresAction.url: follow the returned terms/show and terms/accept calls through this tool, accepting only after explicit user authorization for the reviewed version and digest; an organization admin can instead accept at the dashboard URL. Retry only after confirmed acceptance.'
       ),
-    toolDetail: z.enum(['compact', 'summary', 'full']).optional().describe('URL domain discovery detail: summary by default, compact returns provider/capability/description, full includes contracts.'),
+    toolDetail: z.enum(['compact', 'summary', 'full']).optional().describe('URL mode only: domain discovery detail, summary by default; compact returns provider/capability/description, full includes contracts. Ignored with alexandria.'),
     domainTools: z
       .boolean()
       .optional()
       .describe(
-        'URL mode only: include domain-matched Alexandria tools for the page in tools on the returned document.'
+        'URL mode only: include domain-matched Alexandria tools for the page in tools on the returned document. Ignored with alexandria.'
       ),
   })
   .refine(
@@ -2045,7 +2047,16 @@ const scrapeToolParamsSchema = scrapeParamsSchema
       !args.alexandria ||
       Object.entries(args).every(
         ([key, value]) =>
-          key === 'alexandria' || key === 'requestId' || key === 'timeout' || value === undefined
+          key === 'alexandria' ||
+          key === 'requestId' ||
+          key === 'timeout' ||
+          // URL-mode discovery options that mean nothing when executing a
+          // provider. Agents carry toolDetail over from firecrawl_search (where
+          // it selects contract detail), so accept and ignore them rather than
+          // failing the call: Codex sent toolDetail on 18 of 315 Alexandria
+          // executions across the AX EXP-058 runs, each one a wasted round trip.
+          ALEXANDRIA_IGNORED_SCRAPE_OPTIONS.has(key) ||
+          value === undefined
       ),
     'alexandria cannot be combined with url or other scrape options'
   )
