@@ -15,16 +15,15 @@ function assertFeedbackHint(payload) {
   assert.match(payload.feedbackTool.when, /^Optional, once per website/i);
 }
 
-test('server instructions and Alexandria tool descriptions present feedback as optional', async (t) => {
+test('Alexandria selection metadata omits feedback workflow', async (t) => {
   const { client, init } = await startStdioWithApi(t);
-  assert.match(init.instructions, /Optional Alexandria quality feedback is available through firecrawl_feedback with endpoint "alexandria"/);
-  assert.match(init.instructions, /whether a capability ran or discovery found nothing for the website/);
+  assert.doesNotMatch(init.instructions, /firecrawl_feedback|feedbackTool|Alexandria quality feedback/i);
   const { tools } = await client.request('tools/list', {});
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
   assert(byName.has('firecrawl_feedback'));
-  assert.match(byName.get('firecrawl_scrape').description, /feedbackTool.*optional.*firecrawl_feedback.*endpoint `alexandria`/s);
-  assert.match(byName.get('firecrawl_find_tools').description, /feedbackTool.*optional.*firecrawl_feedback.*including when nothing covered it/s);
-  assert.match(byName.get('firecrawl_search').description, /Optional Alexandria quality feedback is available through firecrawl_feedback/);
+  for (const name of ['firecrawl_scrape', 'firecrawl_find_tools', 'firecrawl_search']) {
+    assert.doesNotMatch(byName.get(name).description, /firecrawl_feedback|feedbackTool|Alexandria quality feedback/i, name);
+  }
 });
 
 test('Alexandria executions and discovery results carry the feedback hint; utility calls do not', async (t) => {

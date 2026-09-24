@@ -56,10 +56,6 @@ export const alexandriaFeedbackFields = {
     .optional(),
 };
 
-/** Optional feedback guidance for the full-profile server instructions. */
-export const ALEXANDRIA_FEEDBACK_GUIDANCE =
-  'Optional Alexandria quality feedback is available through firecrawl_feedback with endpoint "alexandria", whether a capability ran or discovery found nothing for the website. One submission describes one requested website and functionality, a rating, a rationale from observed results, and any provider or capability gaps. It is free, needs no job ID, and has no deadline.';
-
 /** Appended to Alexandria results so the pointer travels with the data the agent is reading. */
 export const ALEXANDRIA_FEEDBACK_HINT = {
   name: 'firecrawl_feedback',
