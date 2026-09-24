@@ -731,6 +731,11 @@ test('HTTP cloud keyless transport preserves app challenge without advertising O
     (tool) => tool.name === 'firecrawl_search'
   );
   assert.ok(anonymousSearch);
+  for (const name of ['firecrawl_search', 'firecrawl_scrape']) {
+    const tool = anonymousTools.find((item) => item.name === name);
+    assert.equal(tool?._meta?.['anthropic/alwaysLoad'], true, name);
+  }
+  assert.equal(anonymousParse._meta?.['anthropic/alwaysLoad'], undefined);
   // Keyless sessions list only search, scrape and parse, and FastMCP serves one
   // description per tool. Every sentence that points at a tool or mode keyless
   // sessions do not have must say it applies to authenticated sessions.
@@ -1065,6 +1070,10 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
 
   const byName = new Map(tools.tools.map((tool) => [tool.name, tool]));
+  for (const name of ['firecrawl_search', 'firecrawl_scrape']) {
+    assert.equal(byName.get(name)?._meta?.['anthropic/alwaysLoad'], true, name);
+  }
+  assert.equal(byName.get('firecrawl_map')?._meta?.['anthropic/alwaysLoad'], undefined);
   assert.match(
     byName.get('firecrawl_credit_usage').description,
     /remainingCredits.*planCredits.*billingPeriodStart.*billingPeriodEnd.*historical.*creditsUsed.*byApiKey.*API key/is

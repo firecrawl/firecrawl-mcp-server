@@ -2496,7 +2496,10 @@ Alexandria mode, on an authenticated session with Alexandria access: pass \`alex
     return asText(res);
   },
 };
-server.addTool(scrapeTool);
+server.addTool({
+  ...scrapeTool,
+  _meta: { 'anthropic/alwaysLoad': true },
+});
 
 server.addTool({
   name: 'firecrawl_map',
@@ -2540,6 +2543,7 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
 
 server.addTool({
   name: 'firecrawl_search',
+  _meta: { 'anthropic/alwaysLoad': true },
   annotations: {
     title: 'Firecrawl web search',
     readOnlyHint: true, // Runs a web search and returns results; does not modify external sites.
