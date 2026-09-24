@@ -6,8 +6,9 @@
  */
 
 import { z } from 'zod';
-import type { FastMCP } from 'fastmcp';
+import type { ContentResult, FastMCP } from 'fastmcp';
 import { originHeaders, requestOrigin, type McpClient } from './origin';
+import { creditUsageOutputSchema, structuredText } from './tool-output';
 
 interface SessionData {
   firecrawlApiKey?: string;
@@ -25,10 +26,6 @@ type UsageClient = {
 };
 
 type GetClient = (session?: SessionData) => unknown;
-
-function asText(data: unknown): string {
-  return JSON.stringify(data, null, 2);
-}
 
 interface CreditUsageData {
   remainingCredits?: number;
@@ -81,6 +78,7 @@ The current view returns \`remainingCredits\`, \`planCredits\`, \`billingPeriodS
 
 The historical view returns periods sorted by start date with \`startDate\`, \`endDate\`, and \`creditsUsed\`. Set \`byApiKey\` to include separate periods per API key, identified by the optional \`apiKey\` field. The newest period's \`endDate\` can be null.
 `,
+    outputSchema: creditUsageOutputSchema,
     parameters: z.object({
       view: z
         .enum(['current', 'historical'])
@@ -98,7 +96,7 @@ The historical view returns periods sorted by start date with \`startDate\`, \`e
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<string> => {
+    ): Promise<ContentResult> => {
       const { view, byApiKey } = args as {
         view?: 'current' | 'historical';
         byApiKey?: boolean;
@@ -124,7 +122,7 @@ The historical view returns periods sorted by start date with \`startDate\`, \`e
           response.data,
           'get historical credit usage'
         );
-        return asText(response.data);
+        return structuredText(response.data);
       }
 
       const response = await client.http.get<CreditUsageResponse>(
@@ -133,7 +131,7 @@ The historical view returns periods sorted by start date with \`startDate\`, \`e
       );
       assertSuccessful(response.status, response.data, 'get credit usage');
       const data = response.data.data ?? response.data;
-      return asText({
+      return structuredText({
         remainingCredits:
           data.remainingCredits ?? data.remaining_credits ?? 0,
         planCredits: data.planCredits ?? data.plan_credits,

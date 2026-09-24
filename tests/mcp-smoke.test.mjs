@@ -237,6 +237,37 @@ async function startFakeFirecrawlApi() {
       return;
     }
 
+    if (req.method === 'POST' && req.url === '/v2/agent') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          id: '00000000-0000-4000-8000-000000000030',
+          success: true,
+          threadId: '00000000-0000-4000-8000-000000000031',
+          threadTurn: 1,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'GET' && req.url === '/v2/agent/00000000-0000-4000-8000-000000000030') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          creditsUsed: 5,
+          data: { answer: 'fixture' },
+          expiresAt: '2026-10-01T00:00:00.000Z',
+          mode: 'extract',
+          model: 'spark-2',
+          status: 'completed',
+          success: true,
+          threadId: '00000000-0000-4000-8000-000000000031',
+          threadTurn: 1,
+        })
+      );
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/v2/map') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
@@ -269,8 +300,12 @@ async function startFakeFirecrawlApi() {
       res.end(
         JSON.stringify({
           creditsRefunded: 0,
+          creditsRefundedToday: 100,
+          dailyCapReached: true,
+          dailyRefundCap: 100,
           feedbackId: '00000000-0000-4000-8000-000000000101',
           success: true,
+          warning: 'Daily refund cap reached; feedback is still recorded.',
         })
       );
       return;
@@ -2190,6 +2225,15 @@ test('HTTP cloud keyless Parse completes both phases without credentials and for
   const phaseOnePayload = JSON.parse(phaseOneResult.content[0].text);
   assert.equal(phaseOnePayload.upload.uploadRef, 'test-upload-ref');
   assert.equal(phaseOnePayload.nextToolCall.arguments.uploadRef, 'test-upload-ref');
+  // The continuation data has to reach structuredContent as well: a client
+  // reading only the structured result still has to be able to finish the
+  // upload flow, and parseOutputSchema is what decides whether it survives.
+  assert.deepEqual(phaseOneResult.structuredContent, phaseOnePayload);
+  assert.equal(
+    typeof phaseOneResult.structuredContent.upload.command,
+    'string'
+  );
+  assert.ok(phaseOneResult.structuredContent.notes.length > 0);
 
   const phaseTwo = await httpToolCall(port, {
     id: 'keyless-parse-phase-two',
@@ -3666,4 +3710,110 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
     .filter((request) => request.url === '/api/oauth/introspect')
     .map((request) => request.body.token);
   assert.deepEqual(introspectedTokens, ['fco_account']);
+});
+
+test('every listed tool declares an output schema and returns structured content', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-output-schema', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  // OpenAI's app-submission scan flags a tool with no outputSchema, and a
+  // client cannot tell a missing schema from an unstructured tool, so every
+  // tool the server lists has to declare one.
+  const { tools } = await client.request('tools/list');
+  assert.ok(tools.length > 0);
+  for (const tool of tools) {
+    assert.ok(tool.outputSchema, `${tool.name} has no outputSchema`);
+    assert.equal(tool.outputSchema.type, 'object', tool.name);
+    assert.ok(
+      Object.keys(tool.outputSchema.properties ?? {}).length > 0,
+      `${tool.name} declares no output properties`
+    );
+  }
+
+  // A declared schema obliges the tool to return structured content. The text
+  // block has to stay what it was before the schema existed, so it is pinned
+  // against the fixture rather than against the structured content beside it —
+  // a change to both at once would slip past that comparison.
+  const search = await client.request('tools/call', {
+    arguments: { limit: 1, query: 'example domain' },
+    name: 'firecrawl_search',
+  });
+  assert.notEqual(search.isError, true);
+  assert.equal(search.content.length, 1);
+  const expectedSearchPayload = {
+    creditsUsed: 1,
+    data: { web: [{ title: 'Example Domain', url: 'https://example.com/' }] },
+    id: '00000000-0000-4000-8000-000000000000',
+    success: true,
+  };
+  // Compact, in the API's key order: what `compactText` produced.
+  assert.equal(
+    search.content[0].text,
+    JSON.stringify(expectedSearchPayload)
+  );
+  assert.deepEqual(search.structuredContent, expectedSearchPayload);
+
+  const scrape = await client.request('tools/call', {
+    arguments: { url: 'https://example.com/' },
+    name: 'firecrawl_scrape',
+  });
+  assert.notEqual(scrape.isError, true);
+  const expectedScrapePayload = {
+    markdown: '# Scraped fixture',
+    metadata: {
+      scrapeId: '00000000-0000-4000-8000-000000000010',
+      sourceURL: 'https://example.com/',
+    },
+  };
+  // Two-space pretty-printing: what `asText` produced.
+  assert.equal(
+    scrape.content[0].text,
+    JSON.stringify(expectedScrapePayload, null, 2)
+  );
+  assert.deepEqual(scrape.structuredContent, expectedScrapePayload);
+
+  // Codex reads structuredContent in place of the text block, so fields a later
+  // call or the model needs (thread and expiry on agent jobs, feedback receipts)
+  // have to be named in the schema or they vanish for Codex.
+  const agent = await client.request('tools/call', {
+    arguments: { prompt: 'Find the example domain owner' },
+    name: 'firecrawl_agent',
+  });
+  assert.notEqual(agent.isError, true);
+  assert.equal(agent.structuredContent.id, '00000000-0000-4000-8000-000000000030');
+  assert.equal(agent.structuredContent.threadId, '00000000-0000-4000-8000-000000000031');
+  assert.equal(agent.structuredContent.threadTurn, 1);
+  const agentStatus = await client.request('tools/call', {
+    arguments: { id: '00000000-0000-4000-8000-000000000030' },
+    name: 'firecrawl_agent_status',
+  });
+  assert.notEqual(agentStatus.isError, true);
+  for (const key of ['expiresAt', 'model', 'mode', 'threadId', 'threadTurn']) {
+    assert.ok(key in agentStatus.structuredContent, `agent status structuredContent lost ${key}`);
+  }
+  const feedback = await client.request('tools/call', {
+    arguments: { endpoint: 'scrape', jobId: '00000000-0000-4000-8000-000000000010', note: 'fixture', rating: 'good' },
+    name: 'firecrawl_feedback',
+  });
+  assert.notEqual(feedback.isError, true);
+  assert.equal(feedback.structuredContent.feedbackId, '00000000-0000-4000-8000-000000000101');
+  assert.equal(feedback.structuredContent.creditsRefunded, 0);
+  for (const key of ['creditsRefundedToday', 'dailyRefundCap', 'dailyCapReached', 'warning']) {
+    assert.ok(key in feedback.structuredContent, `feedback structuredContent lost ${key}`);
+  }
+  assert.equal('id' in feedback.structuredContent, false);
 });

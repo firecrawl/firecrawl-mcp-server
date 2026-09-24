@@ -9,13 +9,31 @@ import {
 } from './alexandria-feedback.js';
 import FirecrawlApp from 'firecrawl';
 import dotenv from 'dotenv';
-import { FastMCP, type Logger, UserError } from 'fastmcp';
+import { type ContentResult, FastMCP, type Logger, UserError } from 'fastmcp';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { z } from 'zod';
+import {
+  agentOutputSchema,
+  agentStatusOutputSchema,
+  crawlOutputSchema,
+  deprecatedToolOutputSchema,
+  feedbackOutputSchema,
+  findToolsOutputSchema,
+  interactOutputSchema,
+  interactStopOutputSchema,
+  mapOutputSchema,
+  parseOutputSchema,
+  scrapeOutputSchema,
+  searchOutputSchema,
+  structuredCompact,
+  structuredJsonText,
+  structuredText,
+  withStructured,
+} from './tool-output';
 import {
   searchSourceSchema,
   findToolsSchema,
@@ -1809,10 +1827,6 @@ function asText(data: unknown): string {
   return JSON.stringify(data, null, 2);
 }
 
-function compactText(data: unknown): string {
-  return JSON.stringify(data);
-}
-
 // scrape tool (v2 semantics, minimal args)
 // Centralized scrape params (used by scrape, and referenced in search/crawl scrapeOptions)
 
@@ -2443,8 +2457,9 @@ On an authenticated session with Alexandria access, if you are about to scrape t
 
 Alexandria mode, on an authenticated session with Alexandria access: pass \`alexandria\` instead of \`url\` to execute catalogued capabilities; the \`alexandria\` and \`requestId\` parameters describe batching, retries, errors and provider terms, and its results include a \`feedbackTool\` pointer: after the task, report how the catalogue served the website through \`firecrawl_feedback\` with endpoint \`alexandria\` (free, no job ID).
 `,
+  outputSchema: scrapeOutputSchema,
   parameters: scrapeToolParamsSchema,
-  execute: async (args: unknown, { session, log, client: mcpClient }): Promise<string> => {
+  execute: async (args: unknown, { session, log, client: mcpClient }): Promise<ContentResult> => {
     const origin = requestOrigin(mcpClient, session);
     const {
       url,
@@ -2461,7 +2476,9 @@ Alexandria mode, on an authenticated session with Alexandria access: pass \`alex
       log.info('Executing Alexandria capabilities', {
         count: Array.isArray(alexandria) ? alexandria.length : 1,
       });
-      return executeExchangeCalls(session, alexandria, suppliedRequestId, options.timeout as number | undefined, origin);
+      return structuredJsonText(
+        await executeExchangeCalls(session, alexandria, suppliedRequestId, options.timeout as number | undefined, origin)
+      );
     }
     const transformed = transformScrapeParams(
       options as Record<string, unknown>
@@ -2482,7 +2499,7 @@ Alexandria mode, on an authenticated session with Alexandria access: pass \`alex
         },
         session
       );
-      return asText(json?.data ?? json);
+      return structuredText(json?.data ?? json);
     }
     const client = getClient(session);
     const res = await relayTermsRequired(
@@ -2493,7 +2510,7 @@ Alexandria mode, on an authenticated session with Alexandria access: pass \`alex
         } as any),
       { tool: 'firecrawl_scrape' }
     );
-    return asText(res);
+    return structuredText(res);
   },
 };
 server.addTool({
@@ -2514,6 +2531,7 @@ Enumerate URLs indexed under one website through Firecrawl without fetching each
 
 Returns matching URLs rather than page bodies. Retrieve one page with \`firecrawl_scrape\`; collect content across multiple pages with \`firecrawl_crawl\`. Authenticated responses can include an \`id\` for optional map feedback.
 `,
+  outputSchema: mapOutputSchema,
   parameters: z.object({
     url: z.string().url(),
     search: z.string().optional(),
@@ -2525,7 +2543,7 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
   execute: async (
     args: unknown,
     { session, log, client: mcpClient }
-  ): Promise<string> => {
+  ): Promise<ContentResult> => {
     const { url, ...options } = args as { url: string } & Record<
       string,
       unknown
@@ -2537,7 +2555,7 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
       ...cleaned,
       origin: requestOrigin(mcpClient, session),
     } as any);
-    return asText(res);
+    return structuredText(res);
   },
 });
 
@@ -2559,6 +2577,7 @@ On an authenticated session, tool matches are discovery, not executed data: exec
 
 For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`. \`categories: ["research"]\` restricts web results to research-affiliated websites; the \`firecrawl_research_*\` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Query operators, domain filters, \`categories\`, \`toolDetail\` and \`scrapeOptions\` are described on their parameters. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
 `,
+  outputSchema: searchOutputSchema,
   parameters: z
     .object({
       ...searchToolBaseFields,
@@ -2573,7 +2592,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       searchQueryIsValid,
       'A query is required. Use Find Tools for catalogue lookup.'
     ),
-  execute: async (args: unknown, { session, log, client: mcpClient }): Promise<string> => {
+  execute: async (args: unknown, { session, log, client: mcpClient }): Promise<ContentResult> => {
     const { query, ...opts } = args as Record<string, unknown>;
 
     const searchOpts = {
@@ -2608,7 +2627,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       // identifier to keyless clients, where it would invite an unusable call.
       const keylessResponse = { ...(json ?? {}) };
       delete keylessResponse.id;
-      return compactText(keylessResponse);
+      return structuredCompact(keylessResponse);
     }
     // Call /v2/search through the SDK's HTTP layer (auth + retries) instead
     // of `client.search()` so we preserve the full response envelope. The
@@ -2625,7 +2644,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
     const httpRes = exchangeSource
       ? await relayExchangeError(postSearch, context)
       : await relayTermsRequired(postSearch, context);
-    return compactText(httpRes?.data ?? {});
+    return structuredCompact(httpRes?.data ?? {});
   },
 });
 
@@ -2694,6 +2713,7 @@ const findToolsTool: RegisteredTool = {
   },
   description:
     'Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers ' + ALEXANDRIA_CATALOGUE_VERTICALS + ': typed, sourced records through published contracts. Prefer normal firecrawl_search for a data task; it already returns matching providers. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Use query for semantic discovery or urls to find providers for a website. With no arguments, browse categories, then providers and tools. Inspect a selected contract before executing through firecrawl_scrape; reuse contracts already returned. Follow nextTool for further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results. Results include a feedbackTool pointer: after the task, report how the catalogue served the website through firecrawl_feedback with endpoint alexandria, including when nothing covered it (free, no job ID).',
+  outputSchema: findToolsOutputSchema,
   parameters: findToolsSchema,
   execute: async (args, { session, client: mcpClient }) => {
     const origin = requestOrigin(mcpClient, session);
@@ -2717,10 +2737,10 @@ const findToolsTool: RegisteredTool = {
       }));
       const page: any = { level: 'categories', items, total: rows.length };
       if (offset + options.limit < rows.length) page.nextTool = { name: 'firecrawl_find_tools', arguments: { level: 'categories', limit: options.limit, offset: offset + options.limit } };
-      return compactText(withAlexandriaFeedbackHint(withFindToolsNavigation({ success: true, data: { creditsCost: 0, alexandria: [{ provider: 'firecrawl', capability: 'find-tools', creditsCost: 0, data: page }] } }), alexandriaFeedbackAvailable(session)));
+      return structuredCompact(withAlexandriaFeedbackHint(withFindToolsNavigation({ success: true, data: { creditsCost: 0, alexandria: [{ provider: 'firecrawl', capability: 'find-tools', creditsCost: 0, data: page }] } }), alexandriaFeedbackAvailable(session)));
     }
     const result = await executeExchangeCalls(session, { provider: 'firecrawl', capability: 'find-tools', options }, undefined, undefined, origin);
-    return compactText(withFindToolsNavigation(JSON.parse(result)));
+    return structuredCompact(withFindToolsNavigation(JSON.parse(result)));
   },
 };
 server.addTool(findToolsTool);
@@ -3037,6 +3057,7 @@ Records schema-validated quality feedback for a prior \`firecrawl_search\` UUID 
 
 Eligibility is limited to successful searches within the feedback age window. The record is idempotent per search ID. Eligible first feedback for a search can refund 1 credit; refunds are subject to the team's daily cap. The response reports whether a refund was applied, along with submission and daily-cap status.
 `,
+    outputSchema: feedbackOutputSchema,
     parameters: z.object({
       searchId: z
         .string()
@@ -3073,7 +3094,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
     execute: async (
       args: unknown,
       { session, log, client: mcpClient }
-    ): Promise<string> => {
+    ): Promise<ContentResult> => {
       const origin = requestOrigin(mcpClient, session);
       const {
         searchId,
@@ -3149,7 +3170,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
           status: response.status,
           feedbackErrorCode: parsed?.feedbackErrorCode,
         });
-        return asText({
+        return structuredText({
           success: false,
           status: response.status,
           feedbackErrorCode: parsed?.feedbackErrorCode,
@@ -3158,7 +3179,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
         });
       }
 
-      return asText(parsed);
+      return structuredText(parsed);
     },
   });
 }
@@ -3196,6 +3217,7 @@ For an Alexandria session, set endpoint to \`alexandria\`, omit jobId, and provi
 
 Returns submission status, feedback ID, and accounting fields.
 `,
+    outputSchema: feedbackOutputSchema,
     parameters: z.object({
       endpoint: z.enum(['search', 'scrape', 'parse', 'map', 'alexandria']),
       jobId: z.string().uuid('jobId must be the UUID returned by Firecrawl').optional(),
@@ -3228,7 +3250,7 @@ Returns submission status, feedback ID, and accounting fields.
     execute: async (
       args: unknown,
       { session, log, client: mcpClient }
-    ): Promise<string> => {
+    ): Promise<ContentResult> => {
       const origin = requestOrigin(mcpClient, session);
       const {
         endpoint,
@@ -3317,7 +3339,7 @@ Returns submission status, feedback ID, and accounting fields.
           status: response.status,
           feedbackErrorCode: parsed?.feedbackErrorCode,
         });
-        return asText({
+        return structuredText({
           success: false,
           status: response.status,
           feedbackErrorCode: parsed?.feedbackErrorCode,
@@ -3326,7 +3348,7 @@ Returns submission status, feedback ID, and accounting fields.
         });
       }
 
-      return asText(parsed);
+      return structuredText(parsed);
     },
   });
 }
@@ -3367,7 +3389,8 @@ Crawl results can be large; use conservative limits when full-site coverage is u
     ignoreQueryParameters: z.boolean().optional(),
     scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
   }),
-  execute: async (args, { session, log, client: mcpClient }) => {
+  outputSchema: crawlOutputSchema,
+  execute: async (args, { session, log, client: mcpClient }): Promise<ContentResult> => {
     const origin = requestOrigin(mcpClient, session);
     const { url, ...options } = args as Record<string, unknown>;
     const client = getClient(session);
@@ -3403,7 +3426,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
     });
     const crawlId = started?.data?.id;
     if (!crawlId) {
-      return asText(started?.data ?? {});
+      return structuredText(started?.data ?? {});
     }
     const res = await waitForCrawlCompletionWithOrigin(
       client,
@@ -3412,7 +3435,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
       pollInterval,
       timeout
     );
-    return asText(res);
+    return structuredText(res);
   },
 });
 
@@ -3427,6 +3450,7 @@ server.addTool({
   description: `
 Retrieve the current status, progress, and available results for an existing crawl ID. This only reads Firecrawl job state and does not start or modify the crawl.
 `,
+  outputSchema: crawlOutputSchema,
   parameters: z.object({ id: z.string() }),
   execute: async (
     args: unknown,
@@ -3434,7 +3458,7 @@ Retrieve the current status, progress, and available results for an existing cra
       session,
       client: mcpClient,
     }: { session?: SessionData; client?: McpClient }
-  ): Promise<string> => {
+  ): Promise<ContentResult> => {
     const client = getClient(session);
     const id = (args as any).id as string;
     const res = await getCrawlStatusWithOrigin(
@@ -3442,7 +3466,7 @@ Retrieve the current status, progress, and available results for an existing cra
       id,
       requestOrigin(mcpClient, session)
     );
-    return asText(res);
+    return structuredText(res);
   },
 });
 
@@ -3457,6 +3481,7 @@ server.addTool({
   description: `
 Deprecated compatibility entry point. Use firecrawl_scrape once per known URL with formats: ["json"] and jsonOptions containing the prompt and schema. Use firecrawl_agent for multi-source research when the URLs are not known or the data spans several sites.
 `,
+  outputSchema: deprecatedToolOutputSchema,
   parameters: z.object({
     urls: z.array(z.string()),
     prompt: z.string().optional(),
@@ -3493,6 +3518,7 @@ Run web research that returns structured data when the URLs are not known or the
 
 This call returns only a job ID, not the research result. Read the job with \`firecrawl_agent_status\` until it reaches \`completed\` or \`failed\`; a typical research run takes one to three minutes. For one known URL use \`firecrawl_scrape\` (with formats: ["json"] for structured output); for a plain lookup that a results page answers, use \`firecrawl_search\`.
 `,
+  outputSchema: agentOutputSchema,
   parameters: z.object({
     prompt: z.string().min(1).max(10000),
     urls: z.array(z.string().url()).optional(),
@@ -3501,7 +3527,7 @@ This call returns only a job ID, not the research result. Read the job with \`fi
   execute: async (
     args: unknown,
     { session, log, client: mcpClient }
-  ): Promise<string> => {
+  ): Promise<ContentResult> => {
     const client = getClient(session);
     const a = args as Record<string, unknown>;
     log.info('Starting agent', {
@@ -3517,7 +3543,7 @@ This call returns only a job ID, not the research result. Read the job with \`fi
       ...agentBody,
       origin: requestOrigin(mcpClient, session),
     });
-    return asText(res);
+    return structuredText(res);
   },
 });
 
@@ -3534,11 +3560,12 @@ Retrieve progress or final results for a \`firecrawl_agent\` job ID. A \`process
 
 Returns job status, progress information, and result data when completed.
 `,
+  outputSchema: agentStatusOutputSchema,
   parameters: z.object({ id: z.string() }),
   execute: async (
     args: unknown,
     { session, log, client: mcpClient }
-  ): Promise<string> => {
+  ): Promise<ContentResult> => {
     const client = getClient(session);
     const { id } = args as { id: string };
     log.info('Checking agent status', { id });
@@ -3546,7 +3573,7 @@ Returns job status, progress information, and result data when completed.
       `/v2/agent/${encodeURIComponent(id)}`,
       originHeaders(requestOrigin(mcpClient, session))
     );
-    return asText(res?.data ?? {});
+    return structuredText(res?.data ?? {});
   },
 });
 
@@ -3564,6 +3591,7 @@ Open or reuse a live browser session to navigate a page, click controls, fill fi
 
 This acts on the live site, so actions such as form submission can create persistent external side effects. Returns execution output, stdout/stderr, exit status, and session viewing URLs.
 `,
+  outputSchema: interactOutputSchema,
   parameters: z
     .object({
       scrapeId: z.string().trim().min(1).optional(),
@@ -3587,7 +3615,7 @@ This acts on the live site, so actions such as form submission can create persis
   execute: async (
     args: unknown,
     { session, log, client: mcpClient }
-  ): Promise<string> => {
+  ): Promise<ContentResult> => {
     const origin = requestOrigin(mcpClient, session);
     const client = getClient(session);
     const {
@@ -3620,7 +3648,7 @@ This acts on the live site, so actions such as form submission can create persis
       } as any);
       scrapeId = (scraped as any)?.metadata?.scrapeId;
       if (!scrapeId) {
-        return asText({
+        return structuredText({
           error:
             'Could not open an interact session: the scrape did not return a scrapeId. Try firecrawl_scrape first, then pass its scrapeId.',
           url,
@@ -3628,7 +3656,7 @@ This acts on the live site, so actions such as form submission can create persis
       }
     }
     if (!scrapeId) {
-      return asText({
+      return structuredText({
         error: 'Could not open an interact session: missing scrapeId.',
         url,
       });
@@ -3642,15 +3670,15 @@ This acts on the live site, so actions such as form submission can create persis
     if (timeout != null) interactArgs.timeout = timeout;
     const res = await client.interact(activeScrapeId, interactArgs as any);
     if (openedFromUrl && res && typeof res === 'object' && !Array.isArray(res)) {
-      return asText({
+      return structuredText({
         ...(res as unknown as Record<string, unknown>),
         scrapeId: activeScrapeId,
       });
     }
     if (openedFromUrl) {
-      return asText({ scrapeId: activeScrapeId, result: res });
+      return structuredText({ scrapeId: activeScrapeId, result: res });
     }
-    return asText(res);
+    return structuredText(res);
   },
 });
 
@@ -3665,13 +3693,14 @@ server.addTool({
   description: `
 Stop the live interact session associated with a \`scrapeId\` and release its resources. Returns a success confirmation.
 `,
+  outputSchema: interactStopOutputSchema,
   parameters: z.object({
     scrapeId: z.string(),
   }),
   execute: async (
     args: unknown,
     { session, log, client: mcpClient }
-  ): Promise<string> => {
+  ): Promise<ContentResult> => {
     const client = getClient(session);
     const { scrapeId } = args as { scrapeId: string };
     log.info('Stopping interact session', { scrapeId });
@@ -3679,7 +3708,7 @@ Stop the live interact session associated with a \`scrapeId\` and release its re
       `/v2/scrape/${encodeURIComponent(scrapeId)}/interact`,
       originHeaders(requestOrigin(mcpClient, session))
     );
-    return asText(res?.data ?? {});
+    return structuredText(res?.data ?? {});
   },
 });
 
@@ -3700,14 +3729,17 @@ Local MCP reads \`filePath\` from the server filesystem. Hosted MCP uses two cal
 
 Set \`redactPII\` to request redaction of personally identifiable information in the returned content. \`zeroDataRetention\` requires an eligible authenticated account; omit it for anonymous keyless use. Returns upload instructions for hosted phase one or parsed document content for the final call. Authenticated final responses can include a \`data.metadata.scrapeId\` for optional parse feedback.
 `,
+  outputSchema: parseOutputSchema,
   parameters: parseParamsSchema,
   execute: async (
     args: unknown,
     { session, log, client: mcpClient }
-  ): Promise<string> => {
+  ): Promise<ContentResult> => {
     const origin = requestOrigin(mcpClient, session);
     if (process.env.CLOUD_SERVICE === 'true') {
-      return executeHostedParse(args as ParseToolArgs, session, log, origin);
+      return structuredJsonText(
+        await executeHostedParse(args as ParseToolArgs, session, log, origin)
+      );
     }
 
     const apiUrl = process.env.FIRECRAWL_API_URL;
@@ -3773,9 +3805,9 @@ Set \`redactPII\` to request redaction of personally identifiable information in
     }
 
     try {
-      return asText(JSON.parse(responseText));
+      return structuredText(JSON.parse(responseText));
     } catch {
-      return responseText;
+      return withStructured(responseText, { raw: responseText });
     }
   },
 });
@@ -3805,6 +3837,7 @@ ${ALEXANDRIA_SEARCH_INSTRUCTIONS}
 
 Returns result groups in \`data\` and an operation \`id\`.
 `,
+    outputSchema: searchOutputSchema,
     parameters: z
       .object({ ...searchToolBaseFields })
       // Reject unknown fields (notably scrapeOptions): this surface exposes no
@@ -3816,7 +3849,7 @@ Returns result groups in \`data\` and an operation \`id\`.
         searchQueryIsValid,
         'A query is required. Use firecrawl_find_tools to browse the catalogue.'
       ),
-    execute: async (args: unknown, { session, log, client: mcpClient }): Promise<string> => {
+    execute: async (args: unknown, { session, log, client: mcpClient }): Promise<ContentResult> => {
       const {
         query,
         includeDomains,
@@ -3886,7 +3919,7 @@ Returns result groups in \`data\` and an operation \`id\`.
       const httpRes = exchangeSource
         ? await relayExchangeError(postSearch, context)
         : await relayTermsRequired(postSearch, context);
-      return compactText(httpRes?.data ?? {});
+      return structuredCompact(httpRes?.data ?? {});
     },
   });
 }
