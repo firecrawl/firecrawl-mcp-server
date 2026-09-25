@@ -119,7 +119,6 @@ function assertKeylessAccountRecovery(
   } else {
     assert.equal(result.content[0].text, message);
   }
-  assert.equal(result.structuredContent.message, message);
   assert.equal(result.structuredContent.code, code);
   assert.equal(result.structuredContent.auth_mode, 'keyless');
   assert.equal(result.structuredContent.message, message);
