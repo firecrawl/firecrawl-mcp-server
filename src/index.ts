@@ -2952,7 +2952,8 @@ async function getCrawlStatusWithOrigin(
 
   const docs = initialDocs.slice();
   let current = body.next as string | null;
-  while (current) {
+  let previous: string | null = null;
+  while (current && current !== previous) {
     const pageRes = await (client as any).http.get(
       current,
       originHeaders(origin)
@@ -2964,6 +2965,8 @@ async function getCrawlStatusWithOrigin(
       ? payload.data
       : payload.data?.pages || [];
     docs.push(...pageData);
+
+    previous = current;
     current =
       payload.next ??
       (Array.isArray(payload.data) ? null : payload.data?.next) ??
@@ -2977,7 +2980,7 @@ async function getCrawlStatusWithOrigin(
     total: body.total ?? 0,
     creditsUsed: body.creditsUsed,
     expiresAt: body.expiresAt,
-    next: null,
+    next: current,
     data: docs,
   };
 }
