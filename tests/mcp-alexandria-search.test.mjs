@@ -8,6 +8,7 @@ test('ordinary search defaults to web and both tool matches, with explicit opt-o
     [{}, ['web', 'alexandria'], true],
     [{ domainTools: false }, ['web', 'alexandria'], false],
     [{ sources: ['web'] }, ['web'], false],
+    [{ sources: ['web'], domainTools: true }, ['web'], true],
     [{ sources: ['alexandria'] }, ['alexandria'], false],
     [{ sources: [{ type: 'alexandria' }] }, [{ type: 'alexandria' }], false],
     [{ sources: ['alexandria'], domainTools: true }, ['alexandria'], true],

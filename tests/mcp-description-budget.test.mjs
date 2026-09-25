@@ -19,7 +19,7 @@ test('every tool description fits the 2,048-character cap and keeps the routing 
   const byName = new Map(tools.map((tool) => [tool.name, tool.description.trim()]));
   const search = byName.get('firecrawl_search');
   assert.match(search, /Alexandria data providers in data\.tools/);
-  assert.match(search, /Passing sources without alexandria in it .* excludes Alexandria provider matches/);
+  assert.match(search, /sources: \["web"\] omits semantic provider discovery; domainTools: true can still return website-matched tools/);
   assert.match(search, /Prefer a provider over scraping pages/);
   const scrape = byName.get('firecrawl_scrape');
   assert.match(scrape, /^Scrape one URL and return its content/);
