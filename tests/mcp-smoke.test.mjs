@@ -3870,4 +3870,30 @@ test('firecrawl_agent forwards model, effort, maxCredits and strictConstrainToUR
   for (const key of ['model', 'effort', 'maxCredits', 'strictConstrainToURLs']) {
     assert.ok(!(key in bareRequest.body), `bare agent request leaked ${key}`);
   }
+
+  // A falsy value is still a value: `strictConstrainToURLs: false` must reach
+  // the body, so a later truthiness check in the forwarding code cannot drop it.
+  const relaxed = await client.request('tools/call', {
+    arguments: {
+      prompt: 'Find the example domain owner',
+      strictConstrainToURLs: false,
+      urls: ['https://example.com/'],
+    },
+    name: 'firecrawl_agent',
+  });
+  assert.notEqual(relaxed.isError, true);
+  const relaxedRequest = fakeApi.requests.filter((request) => request.url === '/v2/agent').at(-1);
+  assert.equal(relaxedRequest.body.strictConstrainToURLs, false);
+
+  // The schema rejects a non-positive spending limit as a parameter-validation
+  // error before anything is sent.
+  const sentBefore = fakeApi.requests.filter((request) => request.url === '/v2/agent').length;
+  await assert.rejects(
+    client.request('tools/call', {
+      arguments: { maxCredits: 0, prompt: 'Find the example domain owner' },
+      name: 'firecrawl_agent',
+    }),
+    /maxCredits/
+  );
+  assert.equal(fakeApi.requests.filter((request) => request.url === '/v2/agent').length, sentBefore);
 });
