@@ -86,7 +86,7 @@ const warning = str('Non-fatal warning about the result.');
 
 /** Keys every Alexandria-capable response can carry (see `alexandriaOutput`). */
 const alexandriaEnvelope = {
-  requestId: str('Identifier of this logical execution; reuse it only for a retry of the identical payload.'),
+  requestId: str('Identifier of this Alexandria execution.'),
   scrape_id: str('Identifier of the underlying scrape.'),
   receipt: unknown('Billing receipt for the execution.'),
   creditsCost: num('Credits this call consumed.'),
@@ -98,8 +98,8 @@ const alexandriaEnvelope = {
   workspaceId: str('Workspace holding a retained result, for inspection through virtual Bash.'),
   idleTtlSeconds: num('Seconds a retained workspace stays available while idle.'),
   message: str('Guidance that accompanies the result.'),
-  nextTool: unknown('A follow-up tool call (`{name, arguments}`) that continues or inspects this result.'),
-  feedbackTool: unknown('Pointer to the feedback tool for reporting how this result served the task.'),
+  nextTool: unknown('Tool reference for further access to this result, when available.'),
+  feedbackTool: unknown('Feedback tool reference, when available.'),
 };
 
 // --- src/index.ts tools -----------------------------------------------------
@@ -157,7 +157,7 @@ export const searchOutputSchema = z
     id: str('Search identifier, for optional `firecrawl_search_feedback`.'),
     creditsUsed: num('Credits this search consumed.'),
     tools: unknown('Domain-matched Alexandria tools for the results.'),
-    nextTool: unknown('A follow-up tool call that continues this search.'),
+    nextTool: unknown('Tool reference for continuing this search, when available.'),
     feedbackTool: unknown('Pointer to the feedback tool for this search.'),
   })
   .describe('Ranked search results grouped by source.');

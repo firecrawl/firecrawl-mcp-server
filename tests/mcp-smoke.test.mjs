@@ -1125,12 +1125,9 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   // A stdio session with an API key gets the Alexandria-aware instructions,
   // not the keyless wording.
   assert.match(init.instructions, /firecrawl_scrape retrieves one supplied page/i);
-  // Claude Code truncates server instructions at CLAUDE_CODE_TEXT_CAP characters; the
-  // Alexandria routing paragraph has to land inside that window. Trade-off: the
-  // developer/research routing and the requestId retry rule now sit after it, past the
-  // cap. Both are also carried where Claude Code does not truncate them: the
-  // firecrawl_search description (developer and research categories, asserted below)
-  // and the requestId parameter description (retry rule, asserted in the budget test).
+  // Keep Alexandria routing within the truncated server instructions. Search
+  // descriptions carry provider discovery guidance; execution errors carry
+  // recovery guidance when it applies.
   const instructionsHead = init.instructions.slice(0, CLAUDE_CODE_TEXT_CAP);
   assert.match(instructionsHead, /Alexandria is Firecrawl's catalogue of data providers/);
   assert.match(instructionsHead, /For the same fields across multiple pages/);
@@ -1146,10 +1143,6 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.match(
     init.instructions,
     /For the same fields across multiple pages, firecrawl_find_tools offers free provider discovery/
-  );
-  assert.match(
-    init.instructions,
-    /THIRD_PARTY_DATA_TERMS_REQUIRED.*terms\/show.*terms\/accept.*acceptance requires explicit user authorization/is
   );
   assert.match(
     byName.get('firecrawl_scrape').description,
