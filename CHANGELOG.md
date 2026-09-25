@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `firecrawl_agent` accepts `onTermsRequired` (`"skip"`, `"ask"` or `"fail"`), forwarded as `exchange.onTermsRequired`. The agent only calls Alexandria providers whose data terms the team has accepted; `firecrawl_agent_status` now keeps `exchange` (including `skippedProviders`, `requiresAction` and `error`), `pendingApproval` and `message` in its structured content. There is no auto-accept: `terms/accept` still needs the user's explicit consent.
+
 ### Changed
 
 - The search surface (`/v2/mcp-search`) now exposes `firecrawl_find_tools` and `firecrawl_scrape` alongside its six search tools, so agents can execute the Alexandria providers that `firecrawl_search` already returns. Both carry surface-scoped descriptions that name only tools registered on that surface, and Alexandria results there omit the `firecrawl_feedback` pointer. See docs/search-profile.md.
