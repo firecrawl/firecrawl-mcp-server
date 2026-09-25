@@ -1,6 +1,12 @@
 import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
+function unreadable(filePath: string, rootReal: string): Error {
+  return new Error(
+    `Cannot read file: ${filePath}. It must stay inside ${rootReal}. Set FIRECRAWL_PARSE_ROOT to widen it.`
+  );
+}
+
 export function parseRootFromEnv(
   env: NodeJS.ProcessEnv,
   cwd: string
@@ -26,7 +32,7 @@ export async function resolveParseFile(
   try {
     fileReal = await realpath(abs);
   } catch {
-    throw new Error(`Cannot read file: ${filePath}`);
+    throw unreadable(filePath, rootReal);
   }
 
   const rel = path.relative(rootReal, fileReal);
@@ -36,10 +42,7 @@ export async function resolveParseFile(
     rel.startsWith(`..${path.sep}`) ||
     path.isAbsolute(rel)
   ) {
-    throw new Error(
-      `filePath is outside the parse root (${rootReal}). ` +
-        'Set FIRECRAWL_PARSE_ROOT to the directory that contains the file.'
-    );
+    throw unreadable(filePath, rootReal);
   }
 
   const info = await stat(fileReal);

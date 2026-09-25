@@ -3795,7 +3795,7 @@ Set \`redactPII\` to request redaction of personally identifiable information in
       parseRootFromEnv(process.env, process.cwd())
     );
     const buffer = await readFile(absPath);
-    const filename = path.basename(absPath);
+    const filename = path.basename(filePath);
     const fileContentType =
       overrideContentType && overrideContentType.length > 0
         ? overrideContentType

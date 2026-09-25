@@ -242,6 +242,9 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 - `FIRECRAWL_API_URL` (Optional): Custom API endpoint for self-hosted instances
   - Example: `https://firecrawl.your-domain.com`
   - If not provided, the cloud API will be used (requires API key)
+- `FIRECRAWL_PARSE_ROOT` (Optional): Directory local `firecrawl_parse` may read
+  - Defaults to the server working directory
+  - The file must stay inside this directory. A leading `~` is not expanded.
 
 #### MCP OAuth (Bearer access tokens)
 
@@ -276,6 +279,9 @@ export FIRECRAWL_API_URL=https://firecrawl.your-domain.com
 
 # Optional authentication for self-hosted
 export FIRECRAWL_API_KEY=your-api-key  # If your instance requires auth
+
+# Optional directory local parse may read. Defaults to the working directory.
+export FIRECRAWL_PARSE_ROOT=/var/lib/firecrawl/docs
 ```
 
 ### Usage with Claude Desktop

@@ -61,7 +61,7 @@ test('a sibling directory that shares a path prefix is rejected', async () => {
 
   await assert.rejects(
     resolveParseFile(sibling, root),
-    /filePath is outside the parse root/
+    /Cannot read file:/
   );
 });
 
@@ -86,6 +86,21 @@ test('a directory inside the root is rejected', async () => {
   await assert.rejects(resolveParseFile('docs', root), /Not a file: docs/);
 });
 
+test('a symlinked directory inside the root that points outside is rejected', async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), 'parse-parent-'));
+  const root = path.join(parent, 'root');
+  const outside = path.join(parent, 'outside');
+  await mkdir(root);
+  await mkdir(outside);
+  await writeFile(path.join(outside, 'secret.pdf'), 'nope');
+  await symlink(outside, path.join(root, 'sub'));
+
+  await assert.rejects(
+    resolveParseFile(path.join('sub', 'secret.pdf'), root),
+    /Cannot read file:/
+  );
+});
+
 test('a path outside the root is rejected', async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), 'parse-parent-'));
   const root = path.join(parent, 'root');
@@ -93,13 +108,14 @@ test('a path outside the root is rejected', async () => {
   await mkdir(root);
   await writeFile(outside, 'nope');
 
-  await assert.rejects(
-    resolveParseFile(outside, root),
-    /filePath is outside the parse root/
-  );
+  await assert.rejects(resolveParseFile(outside, root), /Cannot read file:/);
   await assert.rejects(
     resolveParseFile('../secret.txt', root),
-    /filePath is outside the parse root/
+    /Cannot read file:/
+  );
+  await assert.rejects(
+    resolveParseFile('missing.pdf', root),
+    /Cannot read file: missing\.pdf/
   );
 });
 
@@ -113,7 +129,7 @@ test('a symlink inside the root that points outside is rejected', async () => {
 
   await assert.rejects(
     resolveParseFile('link.pdf', root),
-    /filePath is outside the parse root/
+    /Cannot read file:/
   );
 });
 
