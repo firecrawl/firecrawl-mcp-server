@@ -1116,10 +1116,10 @@ executed by the MCP adapter.
 The strings are passed through unchanged. An HTTP operation mentioned in a
 hint is not necessarily an MCP tool: Alexandria discovery is available through
 `firecrawl_find_tools`, and provider execution uses `firecrawl_scrape` with an
-`alexandria` body. The search-only profile exposes those paths but excludes
-URL-mode Scrape and feedback tools. Clients should use their advertised tool
-schemas and available capabilities. This change does not add tools, translate
-prose into tool calls, or submit feedback automatically.
+`alexandria` body. The search-only profile exposes those paths and URL-mode
+Scrape, but does not expose feedback tools. Clients should use their advertised
+tool schemas and available capabilities. This change does not add tools,
+translate prose into tool calls, or submit feedback automatically.
 
 The pinned `firecrawl` 4.40.0 discards outer-envelope hints in high-level
 Scrape and Map responses and normalized SDK errors. The adapter captures hints
