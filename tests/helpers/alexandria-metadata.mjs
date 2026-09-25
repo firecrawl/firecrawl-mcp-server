@@ -19,6 +19,7 @@ export function assertAlexandriaMetadata(tools, instructions) {
   for (const name of ['firecrawl_search', 'firecrawl_scrape', 'firecrawl_find_tools']) {
     const tool = tools.find((item) => item.name === name);
     assert.ok(tool, `${name} must be registered`);
+    assert.ok(tool.outputSchema?.properties, `${name} must expose output property metadata`);
     descriptions.push(tool.description ?? '');
     for (const schema of [tool.inputSchema, tool.outputSchema]) {
       for (const field of Object.values(schema?.properties ?? {})) {
