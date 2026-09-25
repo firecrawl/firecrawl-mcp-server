@@ -658,7 +658,7 @@ Parse local files or hosted upload references with Firecrawl's `/v2/parse` endpo
 
 **Not recommended for:** Remote URLs (use scrape), multiple files in one call (call parse once per file), or browser-only actions such as screenshots and clicks.
 
-**Hosted MCP flow:** Hosted MCP cannot read the caller's filesystem directly. Call `firecrawl_parse` with `filePath` to receive a short-lived upload command and `nextToolCall`, upload the file locally, then call `firecrawl_parse` again with the returned `uploadRef`. Minting the hosted upload URL requires Firecrawl auth or keyless eligibility. In local `npx firecrawl-mcp` mode, direct file parsing currently requires `FIRECRAWL_API_URL` pointing to a self-hosted Firecrawl API; a plain cloud API-key-only local server cannot read and upload files through this tool.
+**Hosted MCP flow:** Hosted MCP cannot read the caller's filesystem directly. Call `firecrawl_parse` with `filePath` to receive a short-lived upload command and `nextToolCall`, upload the file locally, then call `firecrawl_parse` again with the returned `uploadRef`. Minting the hosted upload URL requires Firecrawl auth or keyless eligibility. In local `npx firecrawl-mcp` mode, direct file parsing requires `FIRECRAWL_API_URL` pointing to a self-hosted Firecrawl API. The file must stay inside `FIRECRAWL_PARSE_ROOT`, or the server working directory when that variable is unset.
 
 **Usage Example:**
 
@@ -666,7 +666,7 @@ Parse local files or hosted upload references with Firecrawl's `/v2/parse` endpo
 {
   "name": "firecrawl_parse",
   "arguments": {
-    "filePath": "/absolute/path/to/document.pdf",
+    "filePath": "./document.pdf",
     "formats": ["markdown"],
     "parsers": ["pdf"],
     "zeroDataRetention": true
