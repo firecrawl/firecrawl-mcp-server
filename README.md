@@ -504,7 +504,7 @@ For scientific papers, see [Research Tools](#12-research-tools-firecrawl_researc
 
 **Returns:**
 
-- Array of search results (with optional scraped content), plus an `id` field. Pass that `id` to `firecrawl_search_feedback` after you've used the results to refund 1 credit (search costs 2) and improve search quality.
+- Search results grouped by source (`data.web`, `data.images`, `data.news`), with optional scraped content, plus an `id` field. Every result carries a `source` and a 1-indexed `position`, numbered from 1 within its own group — copy the pair straight into `firecrawl_search_feedback`'s `valuableResults` rather than counting array elements. Pass that `id` to `firecrawl_search_feedback` after you've used the results to refund 1 credit (search costs 2) and improve search quality.
 
 **Prompt Example:**
 
