@@ -3163,7 +3163,8 @@ Eligibility is limited to successful searches within the feedback age window. Th
 
       // Other 4xx responses are terminal; surface a structured payload (with
       // retryable=false) so agents do not retry-loop on substantive-feedback
-      // rejections, expired windows, etc.
+      // rejections, expired windows, etc. Forward `details` so an INVALID_BODY
+      // rejection names the offending field instead of leaving the agent to guess.
       if (!response.ok) {
         log.warn('Search feedback rejected', {
           status: response.status,
@@ -3173,6 +3174,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
           success: false,
           status: response.status,
           feedbackErrorCode: parsed?.feedbackErrorCode,
+          details: parsed?.details,
           error: parsed?.error ?? `HTTP ${response.status}`,
           retryable: response.status >= 500,
         });
@@ -3342,6 +3344,7 @@ Returns submission status, feedback ID, and accounting fields.
           success: false,
           status: response.status,
           feedbackErrorCode: parsed?.feedbackErrorCode,
+          details: parsed?.details,
           error: parsed?.error ?? `HTTP ${response.status}`,
           retryable: response.status >= 500,
         });
