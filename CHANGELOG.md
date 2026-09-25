@@ -4,7 +4,7 @@
 
 ### Added
 
-- `firecrawl_agent` now exposes the optional `model` (`spark-2`, `spark-1-mini`, `spark-1-pro`), `effort` (`low`, `medium`, `high`), `maxCredits`, and `strictConstrainToURLs` parameters that `POST /v2/agent` already accepts, and forwards them in the request body.
+- `firecrawl_agent` now exposes the optional `effort` (`low`, `medium`, `high`), `maxCredits`, and `strictConstrainToURLs` parameters that `POST /v2/agent` already accepts, and forwards them in the request body.
 
 ### Changed
 

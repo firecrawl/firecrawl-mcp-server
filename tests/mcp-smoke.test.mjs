@@ -3818,7 +3818,7 @@ test('every listed tool declares an output schema and returns structured content
   assert.equal('id' in feedback.structuredContent, false);
 });
 
-test('firecrawl_agent forwards model, effort, maxCredits and strictConstrainToURLs to /v2/agent', async (t) => {
+test('firecrawl_agent forwards effort, maxCredits and strictConstrainToURLs to /v2/agent', async (t) => {
   const fakeApi = await startFakeFirecrawlApi();
   t.after(() => fakeApi.close());
 
@@ -3842,7 +3842,6 @@ test('firecrawl_agent forwards model, effort, maxCredits and strictConstrainToUR
     arguments: {
       effort: 'high',
       maxCredits: 100,
-      model: 'spark-2',
       prompt: 'Find the example domain owner',
       strictConstrainToURLs: true,
       urls: ['https://example.com/'],
@@ -3855,7 +3854,6 @@ test('firecrawl_agent forwards model, effort, maxCredits and strictConstrainToUR
   assert.equal(agentRequest.method, 'POST');
   assert.equal(agentRequest.body.prompt, 'Find the example domain owner');
   assert.deepEqual(agentRequest.body.urls, ['https://example.com/']);
-  assert.equal(agentRequest.body.model, 'spark-2');
   assert.equal(agentRequest.body.effort, 'high');
   assert.equal(agentRequest.body.maxCredits, 100);
   assert.equal(agentRequest.body.strictConstrainToURLs, true);
@@ -3867,7 +3865,7 @@ test('firecrawl_agent forwards model, effort, maxCredits and strictConstrainToUR
   });
   assert.notEqual(bare.isError, true);
   const bareRequest = fakeApi.requests.filter((request) => request.url === '/v2/agent').at(-1);
-  for (const key of ['model', 'effort', 'maxCredits', 'strictConstrainToURLs']) {
+  for (const key of ['effort', 'maxCredits', 'strictConstrainToURLs']) {
     assert.ok(!(key in bareRequest.body), `bare agent request leaked ${key}`);
   }
 
