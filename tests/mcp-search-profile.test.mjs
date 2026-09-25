@@ -1303,10 +1303,10 @@ test('ordinary search profile enables semantic and domain tools by default', asy
 
 test('search surface registers the two Alexandria tools with surface-scoped copy', async (t) => {
   const { searchPort } = await startHostedServer(t);
-  const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, {
-    'x-api-key': 'fc-test',
-  });
-  assertAlexandriaMetadata(tools);
+  const headers = { 'x-api-key': 'fc-test' };
+  const initialize = await initializeProfile(searchPort, SEARCH_ENDPOINT, headers);
+  const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, headers);
+  assertAlexandriaMetadata(tools, initialize.instructions);
   // Claude Code truncates tool descriptions at CLAUDE_CODE_TEXT_CAP characters.
   for (const tool of tools) {
     assert.ok((tool.description ?? '').length <= CLAUDE_CODE_TEXT_CAP, `${tool.name} description is ${(tool.description ?? '').length} chars`);
