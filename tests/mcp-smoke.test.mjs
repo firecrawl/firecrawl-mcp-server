@@ -1133,19 +1133,19 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   // and the requestId parameter description (retry rule, asserted in the budget test).
   const instructionsHead = init.instructions.slice(0, CLAUDE_CODE_TEXT_CAP);
   assert.match(instructionsHead, /Alexandria is Firecrawl's catalogue of data providers/);
-  assert.match(instructionsHead, /Before scraping more than one page for the same fields/);
-  assert.match(instructionsHead, /Passing sources without alexandria in it/);
+  assert.match(instructionsHead, /For the same fields across multiple pages/);
+  assert.match(instructionsHead, /sources: \["web"\] omits semantic provider discovery/);
   assert.match(
     init.instructions,
     /Alexandria is Firecrawl's catalogue of data providers and workflows.*firecrawl_scrape with alexandria.*executes up to ten capabilities/is
   );
   assert.match(
     init.instructions,
-    /Passing sources without alexandria in it \(for example \["web"\] or \["news"\]\) excludes Alexandria provider matches; omit sources unless you specifically need web-only or news-only results, or include "alexandria" alongside them/
+    /sources: \["web"\] omits semantic provider discovery; domainTools: true can still return website-matched tools. Web-only results use domainTools: false/
   );
   assert.match(
     init.instructions,
-    /Before scraping more than one page for the same fields, spend one free firecrawl_find_tools call/
+    /For the same fields across multiple pages, firecrawl_find_tools offers free provider discovery/
   );
   assert.match(
     init.instructions,

@@ -7,6 +7,7 @@ import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
 import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
+import { assertAlexandriaMetadata } from './helpers/alexandria-metadata.mjs';
 
 const { version: serverVersion } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
@@ -1065,6 +1066,7 @@ test('primary search profile agent language satisfies metadata policy gates', as
   const initialize = await initializeProfile(port, SEARCH_ENDPOINT, headers);
   const tools = await listToolDefinitions(port, SEARCH_ENDPOINT, headers);
 
+  assertAlexandriaMetadata(tools, initialize.instructions);
   assertAgentMetadataPolicy(
     [initialize.instructions, ...tools.map((tool) => tool.description ?? '')],
     assert
@@ -1112,6 +1114,7 @@ test('account (mcp-oauth) full-surface instructions satisfy the same metadata po
     assert.equal(tool?._meta?.['anthropic/alwaysLoad'], true, name);
   }
 
+  assertAlexandriaMetadata(tools, initialize.instructions);
   assertAgentMetadataPolicy(
     [initialize.instructions, ...tools.map((tool) => tool.description ?? '')],
     assert
@@ -1303,9 +1306,10 @@ test('ordinary search profile enables semantic and domain tools by default', asy
 
 test('search surface registers the two Alexandria tools with surface-scoped copy', async (t) => {
   const { searchPort } = await startHostedServer(t);
-  const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, {
-    'x-api-key': 'fc-test',
-  });
+  const headers = { 'x-api-key': 'fc-test' };
+  const initialize = await initializeProfile(searchPort, SEARCH_ENDPOINT, headers);
+  const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, headers);
+  assertAlexandriaMetadata(tools, initialize.instructions);
   // Claude Code truncates tool descriptions at CLAUDE_CODE_TEXT_CAP characters.
   for (const tool of tools) {
     assert.ok((tool.description ?? '').length <= CLAUDE_CODE_TEXT_CAP, `${tool.name} description is ${(tool.description ?? '').length} chars`);
