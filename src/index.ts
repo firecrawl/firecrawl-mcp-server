@@ -3524,7 +3524,7 @@ server.addTool({
     destructiveHint: false, // Gathers information only; does not delete external data or user resources.
   },
   description: `
-Run web research that returns structured data when the URLs are not known or the answer spans several sites. Describe the fields you need in \`prompt\`, optionally pass a JSON \`schema\` and seed \`urls\`, and the research agent searches, navigates, reads pages, and returns JSON assembled across sources. Use it to research an entity plus its fields (founders, pricing, contact details), to build lists and datasets (companies, people, products, jobs, papers), and for pages that need navigation or interaction to reach the data.
+Run web research that returns structured data when the URLs are not known or the answer spans several sites. Describe the fields you need in \`prompt\`, optionally pass a JSON \`schema\` and seed \`urls\`, and the research agent searches, navigates, reads pages, and returns JSON assembled across sources. Use it to research an entity plus its fields (founders, pricing, contact details), to build lists and datasets (companies, people, products, jobs, papers), and for pages that need navigation or interaction to reach the data. Optional \`effort\` sets the reasoning budget, \`maxCredits\` caps spend, and \`strictConstrainToURLs\` keeps the agent to the supplied \`urls\`.
 
 This call returns only a job ID, not the research result. Read the job with \`firecrawl_agent_status\` until it reaches \`completed\` or \`failed\`; a typical research run takes one to three minutes. For one known URL use \`firecrawl_scrape\` (with formats: ["json"] for structured output); for a plain lookup that a results page answers, use \`firecrawl_search\`.
 `,
@@ -3533,6 +3533,24 @@ This call returns only a job ID, not the research result. Read the job with \`fi
     prompt: z.string().min(1).max(10000),
     urls: z.array(z.string().url()).optional(),
     schema: z.record(z.string(), z.any()).optional(),
+    effort: z
+      .enum(['low', 'medium', 'high'])
+      .optional()
+      .describe('Reasoning budget for the agent task.'),
+    maxCredits: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe(
+        'Spending limit in credits for this run. Defaults to 2500 on the API.'
+      ),
+    strictConstrainToURLs: z
+      .boolean()
+      .optional()
+      .describe(
+        'If true, agent will only visit URLs provided in the urls array.'
+      ),
   }),
   execute: async (
     args: unknown,
@@ -3548,6 +3566,9 @@ This call returns only a job ID, not the research result. Read the job with \`fi
       prompt: a.prompt as string,
       urls: a.urls as string[] | undefined,
       schema: (a.schema as Record<string, unknown>) || undefined,
+      effort: a.effort as 'low' | 'medium' | 'high' | undefined,
+      maxCredits: a.maxCredits as number | undefined,
+      strictConstrainToURLs: a.strictConstrainToURLs as boolean | undefined,
     });
     const res = await (client as any).startAgent({
       ...agentBody,
