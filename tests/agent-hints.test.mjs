@@ -1,8 +1,14 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import test from 'node:test';
-import { setTimeout as delay } from 'node:timers/promises';
+import {
+  getFreePort,
+  httpToolCall,
+  parseSseJson,
+  spawnServer,
+  stopChild,
+  waitForHealth,
+} from './helpers/exchange-mcp.mjs';
 import {
   preserveAgentHints,
   readAgentHints,
@@ -103,56 +109,30 @@ async function close(server) {
   });
 }
 
-async function stopChild(child) {
-  if (child.exitCode !== null || child.signalCode !== null) return;
-  child.kill('SIGTERM');
-  await Promise.race([
-    new Promise((resolve) => child.once('exit', resolve)),
-    delay(2000).then(() => child.exitCode === null && child.kill('SIGKILL')),
-  ]);
-}
-
 async function startTransport(t, backendPort) {
   for (let attempt = 0; attempt < 4; attempt++) {
-    const portReservation = createServer();
-    const port = await listen(portReservation);
-    await close(portReservation);
-    const child = spawn(process.execPath, ['dist/index.js'], {
-      env: {
-        ...process.env,
-        CLOUD_SERVICE: 'true',
-        FASTMCP_ENDPOINT: '/v2/mcp',
-        FIRECRAWL_API_URL: `http://127.0.0.1:${backendPort}`,
-        FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
-        FIRECRAWL_OAUTH_ISSUER: `http://127.0.0.1:${backendPort}`,
-        HTTP_STREAMABLE_SERVER: 'true',
-        MCP_DELEGATED_CREDENTIAL_SECRET: 'test-delegated-credential-secret-32',
-        PORT: String(port),
-      },
-      stdio: ['pipe', 'pipe', 'pipe'],
+    const port = await getFreePort();
+    const child = spawnServer({
+      CLOUD_SERVICE: 'true',
+      FASTMCP_ENDPOINT: '/v2/mcp',
+      FIRECRAWL_API_URL: `http://127.0.0.1:${backendPort}`,
+      FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+      FIRECRAWL_OAUTH_ISSUER: `http://127.0.0.1:${backendPort}`,
+      HTTP_STREAMABLE_SERVER: 'true',
+      PORT: String(port),
     });
     let stderr = '';
     child.stderr.on('data', (chunk) => (stderr += chunk));
     child.stdout.resume();
-    let healthy = false;
-    for (let poll = 0; poll < 60; poll++) {
-      if (child.exitCode !== null || child.signalCode !== null) break;
-      const response = await fetch(`http://127.0.0.1:${port}/health`).catch(
-        () => undefined
-      );
-      if (response?.ok) {
-        healthy = true;
-        break;
-      }
-      await delay(100);
-    }
-    if (healthy) {
+    try {
+      await waitForHealth(port, child);
       t.after(() => stopChild(child));
       return port;
-    }
-    await stopChild(child);
-    if (!stderr.includes('EADDRINUSE') || attempt === 3) {
-      assert.fail(`MCP server failed to start: ${stderr}`);
+    } catch (error) {
+      await stopChild(child);
+      if (!stderr.includes('EADDRINUSE') || attempt === 3) {
+        assert.fail(`MCP server failed to start: ${stderr || error}`);
+      }
     }
   }
   throw new Error('MCP server did not bind a free port');
@@ -262,25 +242,13 @@ test('MCP transport preserves hints on empty, readable, crawl and error results'
     { name: 'firecrawl_scrape', arguments: { alexandria: [{ provider: 'benzinga', capability: 'news/search' }] } },
   ];
   for (const [id, params] of cases.entries()) {
-    const response = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
-      method: 'POST',
-      headers: {
-        accept: 'application/json, text/event-stream',
-        'content-type': 'application/json',
-        'x-api-key': 'fc-hints-test',
-      },
-      body: JSON.stringify({
-        id,
-        jsonrpc: '2.0',
-        method: 'tools/call',
-        params,
-      }),
+    const response = await httpToolCall(port, {
+      id,
+      headers: { 'x-api-key': 'fc-hints-test' },
+      params,
     });
     assert.equal(response.status, 200);
-    const body = await response.text();
-    const data = body.split(/\r?\n/).find((line) => line.startsWith('data: '));
-    assert.ok(data, body);
-    const result = JSON.parse(data.slice(6)).result;
+    const result = parseSseJson(await response.text()).result;
     assert.deepEqual(result.structuredContent?.agent_hints, hints, params.name + ':' + JSON.stringify(params.arguments));
     const visibleText = result.content.map((item) => item.text).join('\n');
     for (const hint of hints) assert.ok(visibleText.includes(hint));
