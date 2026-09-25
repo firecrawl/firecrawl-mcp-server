@@ -167,6 +167,16 @@ async function stopChild(child) {
   ]);
 }
 
+const REJECTED_FEEDBACK_JOB_ID = '00000000-0000-4000-8000-0000000000ee';
+const INVALID_FEEDBACK_DETAILS = [
+  {
+    code: 'invalid_value',
+    values: ['no_results', 'irrelevant_results'],
+    path: ['issues', 0],
+    message: 'Invalid option: expected one of "no_results"|"irrelevant_results"',
+  },
+];
+
 async function startFakeFirecrawlApi() {
   const requests = [];
   const server = createServer(async (req, res) => {
@@ -275,6 +285,26 @@ async function startFakeFirecrawlApi() {
           id: '00000000-0000-4000-8000-000000000020',
           links: ['https://example.com/'],
           success: true,
+        })
+      );
+      return;
+    }
+
+    // Feedback for this job ID is rejected the way Core rejects a body that
+    // fails schema validation: 400 INVALID_BODY with zod issues in `details`.
+    if (
+      req.method === 'POST' &&
+      (req.url === `/v2/search/${REJECTED_FEEDBACK_JOB_ID}/feedback` ||
+        (req.url === '/v2/feedback' &&
+          parsedBody?.jobId === REJECTED_FEEDBACK_JOB_ID))
+    ) {
+      res.writeHead(400, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          success: false,
+          error: 'Invalid request body',
+          details: INVALID_FEEDBACK_DETAILS,
+          feedbackErrorCode: 'INVALID_BODY',
         })
       );
       return;
@@ -1735,6 +1765,49 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
     }
   }
   assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('feedback tools forward INVALID_BODY validation details from the API', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-feedback-details', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const expected = {
+    success: false,
+    status: 400,
+    feedbackErrorCode: 'INVALID_BODY',
+    details: INVALID_FEEDBACK_DETAILS,
+    error: 'Invalid request body',
+    retryable: false,
+  };
+
+  for (const [name, args] of [
+    [
+      'firecrawl_search_feedback',
+      { searchId: REJECTED_FEEDBACK_JOB_ID, rating: 'bad' },
+    ],
+    [
+      'firecrawl_feedback',
+      { endpoint: 'search', jobId: REJECTED_FEEDBACK_JOB_ID, rating: 'bad' },
+    ],
+  ]) {
+    const result = await client.request('tools/call', { name, arguments: args });
+    assert.deepEqual(JSON.parse(result.content[0].text), expected, name);
+    assert.deepEqual(result.structuredContent, expected, name);
+  }
 });
 
 test('HTTP cloud transport swaps an fco_ OAuth token for its introspected API key (once)', async (t) => {

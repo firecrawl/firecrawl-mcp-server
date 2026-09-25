@@ -9,6 +9,7 @@
 ### Fixed
 
 - `firecrawl_search` on both surfaces now forwards `includeDomains` and `excludeDomains` to `/v2/search` as body fields instead of rewriting the query with `site:` operators, so the API's domain enforcement applies to MCP callers.
+- `firecrawl_feedback` and `firecrawl_search_feedback` now forward the API's `details` when a submission is rejected as `INVALID_BODY`, in both the text and structured results, so an agent can see which field to correct instead of retrying the same payload.
 
 ## [3.25.0] - Unreleased
 
