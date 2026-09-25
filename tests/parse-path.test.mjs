@@ -1,9 +1,22 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, symlink, writeFile, realpath } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { parseRootFromEnv, resolveParseFile } from '../dist/parse-path.js';
+
+async function tempDir(t) {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'parse-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  return dir;
+}
 
 test('the parse root is the working directory unless FIRECRAWL_PARSE_ROOT is set', () => {
   assert.equal(parseRootFromEnv({}, '/work'), '/work');
@@ -17,8 +30,8 @@ test('the parse root is the working directory unless FIRECRAWL_PARSE_ROOT is set
   );
 });
 
-test('a file inside the root resolves, including an absolute path', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'parse-root-'));
+test('a file inside the root resolves, including an absolute path', async (t) => {
+  const root = await tempDir(t);
   const file = path.join(root, 'note.pdf');
   await writeFile(file, 'pdf');
   const rootReal = await realpath(root);
@@ -33,8 +46,8 @@ test('a file inside the root resolves, including an absolute path', async () => 
   );
 });
 
-test('a file whose name starts with two dots stays inside the root', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'parse-root-'));
+test('a file whose name starts with two dots stays inside the root', async (t) => {
+  const root = await tempDir(t);
   await writeFile(path.join(root, '..note.pdf'), 'pdf');
   const rootReal = await realpath(root);
   assert.equal(
@@ -43,30 +56,27 @@ test('a file whose name starts with two dots stays inside the root', async () =>
   );
 });
 
-test('a missing file is rejected', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'parse-root-'));
+test('a missing file is rejected', async (t) => {
+  const root = await tempDir(t);
   await assert.rejects(
     resolveParseFile('missing.pdf', root),
     /Cannot read file: missing\.pdf/
   );
 });
 
-test('a sibling directory that shares a path prefix is rejected', async () => {
-  const parent = await mkdtemp(path.join(os.tmpdir(), 'parse-parent-'));
+test('a sibling directory that shares a path prefix is rejected', async (t) => {
+  const parent = await tempDir(t);
   const root = path.join(parent, 'data');
   const sibling = path.join(parent, 'database', 'secret.txt');
   await mkdir(root);
   await mkdir(path.dirname(sibling), { recursive: true });
   await writeFile(sibling, 'nope');
 
-  await assert.rejects(
-    resolveParseFile(sibling, root),
-    /Cannot read file:/
-  );
+  await assert.rejects(resolveParseFile(sibling, root), /Cannot read file:/);
 });
 
-test('a symlink inside the root that points at another file inside the root is allowed', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'parse-root-'));
+test('a symlink inside the root that points at another file inside the root is allowed', async (t) => {
+  const root = await tempDir(t);
   const file = path.join(root, 'note.pdf');
   await writeFile(file, 'pdf');
   await symlink(file, path.join(root, 'alias.pdf'));
@@ -78,16 +88,15 @@ test('a symlink inside the root that points at another file inside the root is a
   );
 });
 
-test('a directory inside the root is rejected', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'parse-root-'));
-  const dir = path.join(root, 'docs');
-  await mkdir(dir);
+test('a directory inside the root is rejected', async (t) => {
+  const root = await tempDir(t);
+  await mkdir(path.join(root, 'docs'));
 
   await assert.rejects(resolveParseFile('docs', root), /Not a file: docs/);
 });
 
-test('a symlinked directory inside the root that points outside is rejected', async () => {
-  const parent = await mkdtemp(path.join(os.tmpdir(), 'parse-parent-'));
+test('a symlinked directory inside the root that points outside is rejected', async (t) => {
+  const parent = await tempDir(t);
   const root = path.join(parent, 'root');
   const outside = path.join(parent, 'outside');
   await mkdir(root);
@@ -101,8 +110,8 @@ test('a symlinked directory inside the root that points outside is rejected', as
   );
 });
 
-test('a path outside the root is rejected', async () => {
-  const parent = await mkdtemp(path.join(os.tmpdir(), 'parse-parent-'));
+test('a path outside the root is rejected', async (t) => {
+  const parent = await tempDir(t);
   const root = path.join(parent, 'root');
   const outside = path.join(parent, 'secret.txt');
   await mkdir(root);
@@ -119,8 +128,8 @@ test('a path outside the root is rejected', async () => {
   );
 });
 
-test('a symlink inside the root that points outside is rejected', async () => {
-  const parent = await mkdtemp(path.join(os.tmpdir(), 'parse-parent-'));
+test('a symlink inside the root that points outside is rejected', async (t) => {
+  const parent = await tempDir(t);
   const root = path.join(parent, 'root');
   const outside = path.join(parent, 'secret.txt');
   await mkdir(root);
@@ -133,8 +142,8 @@ test('a symlink inside the root that points outside is rejected', async () => {
   );
 });
 
-test('a missing parse root is rejected', async () => {
-  const parent = await mkdtemp(path.join(os.tmpdir(), 'parse-parent-'));
+test('a missing parse root is rejected', async (t) => {
+  const parent = await tempDir(t);
   const missing = path.join(parent, 'gone');
   await assert.rejects(
     resolveParseFile('note.pdf', missing),
