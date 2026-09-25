@@ -303,6 +303,7 @@ async function startFakeFirecrawlApi() {
                   provider: 'apollo',
                   name: 'Apollo',
                   version: 'F-1.0.0',
+                  digest: null,
                   url: 'https://www.firecrawl.dev/app/alexandria/apollo',
                   show: { provider: 'firecrawl', capability: 'terms/show', options: { provider: 'apollo' } },
                   accept: {
@@ -319,7 +320,7 @@ async function startFakeFirecrawlApi() {
             kind: 'terms',
             reason: 'Apollo could add verified work emails.',
             calls: [],
-            terms: [{ id: 'apollo', provider: 'apollo', name: 'Apollo', version: 'F-1.0.0', url: 'https://www.firecrawl.dev/app/alexandria/apollo' }],
+            terms: [{ id: 'apollo', provider: 'apollo', name: 'Apollo', version: 'F-1.0.0', digest: null, url: 'https://www.firecrawl.dev/app/alexandria/apollo' }],
             resolution: null,
           },
         })
@@ -3897,7 +3898,7 @@ test('firecrawl_agent forwards onTermsRequired and status keeps the terms-requir
 
   const { tools } = await client.request('tools/list');
   const agentTool = tools.find((tool) => tool.name === 'firecrawl_agent');
-  assert.deepEqual(agentTool.inputSchema.properties.onTermsRequired.enum, ['skip', 'ask', 'fail']);
+  assert.deepEqual(agentTool.inputSchema.properties.onTermsRequired.enum, ['skip', 'ask']);
   assert.match(agentTool.description, /exchange\.skippedProviders/);
   assert.match(agentTool.description, /exchange\.requiresAction/);
   assert.match(agentTool.description, /Never call terms\/accept without the user's explicit consent/);
@@ -3921,7 +3922,7 @@ test('firecrawl_agent forwards onTermsRequired and status keeps the terms-requir
   // There is no auto-accept mode: any other value fails parameter validation.
   await assert.rejects(
     client.request('tools/call', {
-      arguments: { prompt: 'Find the key business contact at exa.ai', onTermsRequired: 'accept' },
+      arguments: { prompt: 'Find the key business contact at exa.ai', onTermsRequired: 'fail' },
       name: 'firecrawl_agent',
     }),
     /onTermsRequired/
