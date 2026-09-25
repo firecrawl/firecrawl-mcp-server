@@ -1825,6 +1825,33 @@ function asText(data: unknown): string {
   return JSON.stringify(data, null, 2);
 }
 
+const SEARCH_RESULT_SOURCES = ['web', 'images', 'news'] as const;
+
+// Stamp each search result with its `source` and 1-indexed `position` so the
+// model can copy both straight into `firecrawl_search_feedback.valuableResults`
+// without counting array elements (miscounts silently corrupt feedback data).
+// Results come back grouped and each group is numbered from 1 independently, so
+// the position alone does not identify a result — always carry the source with
+// it. The stamps stay derived from each array's order, so never reorder or
+// filter between here and the returned envelope. The stamps are spread last on
+// purpose: they address the result for feedback, so they must win over any
+// same-named field the API returns rather than being silently overwritten.
+function annotateResultPositions<T>(envelope: T): T {
+  const data = (envelope as { data?: Record<string, unknown> } | null)?.data;
+  if (!data) return envelope;
+
+  for (const source of SEARCH_RESULT_SOURCES) {
+    const results = data[source];
+    if (!Array.isArray(results)) continue;
+    data[source] = results.map((result, i) =>
+      result && typeof result === 'object'
+        ? { ...result, source, position: i + 1 }
+        : result
+    );
+  }
+  return envelope;
+}
+
 // scrape tool (v2 semantics, minimal args)
 // Centralized scrape params (used by scrape, and referenced in search/crawl scrapeOptions)
 
@@ -2584,7 +2611,7 @@ ${ALEXANDRIA_SEARCH_LEAD}
 
 On an authenticated session, tool matches describe available capabilities; \`firecrawl_find_tools\` returns their contracts and \`firecrawl_scrape\` with an \`alexandria\` body executes a selected capability. Keyless sessions get no Alexandria matches in data.tools.
 
-For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`. \`categories: ["research"]\` restricts web results to research-affiliated websites; the \`firecrawl_research_*\` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Query operators, domain filters, \`categories\`, \`toolDetail\` and \`scrapeOptions\` are described on their parameters. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
+For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`. \`categories: ["research"]\` restricts web results to research-affiliated websites; the \`firecrawl_research_*\` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Query operators, domain filters, \`categories\`, \`toolDetail\` and \`scrapeOptions\` are described on their parameters. Returns source-type result groups and usage metadata. Every result carries a \`source\` and 1-indexed \`position\`. Authenticated responses can include an \`id\` for optional search feedback — pass it to \`firecrawl_search_feedback\` with the useful \`source\`/\`position\` pairs.
 `,
   outputSchema: searchOutputSchema,
   parameters: z
@@ -2634,7 +2661,8 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       const json = await keylessPost('/v2/search', searchBody, session);
       // Search feedback requires an authenticated account. Do not expose its
       // identifier to keyless clients, where it would invite an unusable call.
-      const keylessResponse = { ...(json ?? {}) };
+      // Positions are still stamped: they identify a result regardless of auth.
+      const keylessResponse = { ...annotateResultPositions(json ?? {}) };
       delete keylessResponse.id;
       return structuredCompact(keylessResponse);
     }
@@ -2653,7 +2681,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
     const httpRes = exchangeSource
       ? await relayExchangeError(postSearch, context)
       : await relayTermsRequired(postSearch, context);
-    return structuredCompact(httpRes?.data ?? {});
+    return structuredCompact(annotateResultPositions(httpRes?.data ?? {}));
   },
 });
 
@@ -3063,9 +3091,11 @@ if (!SEARCH_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
       destructiveHint: false, // Additive only; records feedback and may refund credits, does not delete data.
     },
     description: `
-Records schema-validated quality feedback for a prior \`firecrawl_search\` UUID \`searchId\`. A \`good\` rating requires a valuable source, \`partial\` a valuable source or at least one \`missingContent\` entry, and \`bad\` at least one \`missingContent\` entry or a query suggestion; caps are 50 \`valuableSources\` and 20 \`missingContent\` entries.
+Records schema-validated quality feedback for a prior \`firecrawl_search\` UUID \`searchId\`. A \`good\` rating requires a valuable result or a valuable source, \`partial\` either of those or at least one \`missingContent\` entry, and \`bad\` at least one \`missingContent\` entry or a query suggestion; caps are 50 \`valuableResults\`, 50 \`valuableSources\`, and 20 \`missingContent\` entries.
 
 Eligibility is limited to successful searches within the feedback age window. The record is idempotent per search ID. Eligible first feedback for a search can refund 1 credit; refunds are subject to the team's daily cap. The response reports whether a refund was applied, along with submission and daily-cap status.
+
+Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\` copied off the result. Groups are numbered from 1 independently, so \`{"source":"web","position":1}\` and \`{"source":"news","position":1}\` are different results. Be exhaustive — results you do not list are treated as not useful. Reserve \`valuableSources\` for useful URLs that were NOT among the returned results; never report one result in both fields.
 `,
     outputSchema: feedbackOutputSchema,
     parameters: z.object({
@@ -3082,6 +3112,24 @@ Eligibility is limited to successful searches within the feedback age window. Th
         )
         .max(50)
         .optional(),
+      valuableResults: z
+        .array(
+          z.object({
+            source: z.enum(SEARCH_RESULT_SOURCES),
+            position: z.number().int().positive(),
+            reason: z.string().max(1000).optional(),
+          })
+        )
+        .max(50)
+        .optional()
+        .describe(
+          'Every result that was actually useful, copied from the `source` and `position` ' +
+            'stamped on each result. Each group is numbered from 1 independently, so the ' +
+            'source is required — `{"source":"web","position":1}` and ' +
+            '`{"source":"news","position":1}` are different results. Be exhaustive — ' +
+            'unlisted results are treated as not useful. Do not also list the same results ' +
+            'in valuableSources.'
+        ),
       missingContent: z
         .array(
           z.object({
@@ -3110,12 +3158,18 @@ Eligibility is limited to successful searches within the feedback age window. Th
         searchId,
         rating,
         valuableSources,
+        valuableResults,
         missingContent,
         querySuggestions,
       } = args as {
         searchId: string;
         rating: 'good' | 'bad' | 'partial';
         valuableSources?: { url: string; reason?: string }[];
+        valuableResults?: {
+          source: (typeof SEARCH_RESULT_SOURCES)[number];
+          position: number;
+          reason?: string;
+        }[];
         missingContent?: { topic: string; description?: string }[];
         querySuggestions?: string;
       };
@@ -3131,6 +3185,9 @@ Eligibility is limited to successful searches within the feedback age window. Th
       };
       if (valuableSources && valuableSources.length > 0) {
         body.valuableSources = valuableSources;
+      }
+      if (valuableResults && valuableResults.length > 0) {
+        body.valuableResults = valuableResults;
       }
       if (missingContent && missingContent.length > 0) {
         body.missingContent = missingContent;
@@ -3867,7 +3924,7 @@ For a programming question, add \`categories: ["developer"]\`. It searches an in
 
 ${ALEXANDRIA_SEARCH_INSTRUCTIONS}
 
-Returns result groups in \`data\` and an operation \`id\`.
+Returns result groups in \`data\` and an operation \`id\`. Every result carries a \`source\` and a 1-indexed \`position\`, numbered from 1 within its own group.
 `,
     outputSchema: searchOutputSchema,
     parameters: z
@@ -3951,7 +4008,7 @@ Returns result groups in \`data\` and an operation \`id\`.
       const httpRes = exchangeSource
         ? await relayExchangeError(postSearch, context)
         : await relayTermsRequired(postSearch, context);
-      return structuredCompact(httpRes?.data ?? {});
+      return structuredCompact(annotateResultPositions(httpRes?.data ?? {}));
     },
   });
 }

@@ -167,7 +167,7 @@ async function stopChild(child) {
   ]);
 }
 
-async function startFakeFirecrawlApi() {
+async function startFakeFirecrawlApi({ searchResponse } = {}) {
   const requests = [];
   const server = createServer(async (req, res) => {
     let body = '';
@@ -203,19 +203,21 @@ async function startFakeFirecrawlApi() {
     if (req.method === 'POST' && req.url === '/v2/search') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
-        JSON.stringify({
-          creditsUsed: 1,
-          data: {
-            web: [
-              {
-                title: 'Example Domain',
-                url: 'https://example.com/',
-              },
-            ],
-          },
-          id: '00000000-0000-4000-8000-000000000000',
-          success: true,
-        })
+        JSON.stringify(
+          searchResponse ?? {
+            creditsUsed: 1,
+            data: {
+              web: [
+                {
+                  title: 'Example Domain',
+                  url: 'https://example.com/',
+                },
+              ],
+            },
+            id: '00000000-0000-4000-8000-000000000000',
+            success: true,
+          }
+        )
       );
       return;
     }
@@ -921,8 +923,12 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
   assert.deepEqual(JSON.parse(result.content[0].text), {
     creditsUsed: 1,
     data: {
+      // Stamped by annotateResultPositions so the model can cite results in
+      // firecrawl_search_feedback.valuableResults without counting.
       web: [
         {
+          source: 'web',
+          position: 1,
           title: 'Example Domain',
           url: 'https://example.com/',
         },
@@ -1556,6 +1562,75 @@ test('developer search serves server-shaped passages uncapped', async (t) => {
   );
 });
 
+test('search results are stamped per group and the stamps win', async (t) => {
+  // Each group is numbered from 1 independently, so `position` alone does not
+  // identify a result — feedback needs the pair. The `news` entry arrives with
+  // its own `source` and `position`, which must not survive into the stamps
+  // the model is told to cite.
+  const fakeApi = await startFakeFirecrawlApi({
+    searchResponse: {
+      creditsUsed: 1,
+      data: {
+        web: [
+          { title: 'W1', url: 'https://w1.example/' },
+          { title: 'W2', url: 'https://w2.example/' },
+        ],
+        images: [{ title: 'I1', url: 'https://i1.example/' }],
+        news: [
+          { title: 'N1', url: 'https://n1.example/' },
+          { title: 'N2', url: 'https://n2.example/', source: 'Example Wire', position: 99 },
+        ],
+      },
+      id: '00000000-0000-4000-8000-000000000000',
+      success: true,
+    },
+  });
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-stamp-e2e', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const result = await client.request('tools/call', {
+    arguments: { query: 'example domain' },
+    name: 'firecrawl_search',
+  });
+  assert.notEqual(result.isError, true);
+  const envelope = JSON.parse(result.content[0].text);
+
+  assert.deepEqual(
+    envelope.data.web.map((r) => [r.source, r.position]),
+    [
+      ['web', 1],
+      ['web', 2],
+    ]
+  );
+  assert.deepEqual(
+    envelope.data.images.map((r) => [r.source, r.position]),
+    [['images', 1]]
+  );
+  // news restarts at 1 rather than continuing from the web group.
+  assert.deepEqual(
+    envelope.data.news.map((r) => [r.source, r.position]),
+    [
+      ['news', 1],
+      ['news', 2],
+    ]
+  );
+  // The publisher's own `source` and `position` lose to the stamps.
+  assert.equal(envelope.data.news[1].title, 'N2');
+});
+
 test('stdio transport calls Firecrawl API through a tool end to end', async (t) => {
   const fakeApi = await startFakeFirecrawlApi();
   t.after(() => fakeApi.close());
@@ -1603,8 +1678,12 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
   assert.deepEqual(toolPayload, {
     creditsUsed: 1,
     data: {
+      // Stamped by annotateResultPositions so the model can cite results in
+      // firecrawl_search_feedback.valuableResults without counting.
       web: [
         {
+          source: 'web',
+          position: 1,
           title: 'Example Domain',
           url: 'https://example.com/',
         },
@@ -3754,9 +3833,21 @@ test('every listed tool declares an output schema and returns structured content
   });
   assert.notEqual(search.isError, true);
   assert.equal(search.content.length, 1);
+  // `source` and `position` are stamped onto every result on the way out, so
+  // the model can address a result in search feedback without counting array
+  // elements. They ride along into both the text block and structuredContent.
   const expectedSearchPayload = {
     creditsUsed: 1,
-    data: { web: [{ title: 'Example Domain', url: 'https://example.com/' }] },
+    data: {
+      web: [
+        {
+          title: 'Example Domain',
+          url: 'https://example.com/',
+          source: 'web',
+          position: 1,
+        },
+      ],
+    },
     id: '00000000-0000-4000-8000-000000000000',
     success: true,
   };
