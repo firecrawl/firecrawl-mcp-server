@@ -30,7 +30,12 @@ export async function resolveParseFile(
   }
 
   const rel = path.relative(rootReal, fileReal);
-  if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
+  if (
+    rel === '' ||
+    rel === '..' ||
+    rel.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(rel)
+  ) {
     throw new Error('filePath is outside the parse root');
   }
   return fileReal;

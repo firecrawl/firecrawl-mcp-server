@@ -33,6 +33,16 @@ test('a file inside the root resolves, including an absolute path', async () => 
   );
 });
 
+test('a file whose name starts with two dots stays inside the root', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'parse-root-'));
+  await writeFile(path.join(root, '..note.pdf'), 'pdf');
+  const rootReal = await realpath(root);
+  assert.equal(
+    await resolveParseFile('..note.pdf', root),
+    path.join(rootReal, '..note.pdf')
+  );
+});
+
 test('a missing file is rejected', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'parse-root-'));
   await assert.rejects(
