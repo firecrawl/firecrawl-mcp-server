@@ -10,9 +10,17 @@
  */
 
 import { z } from 'zod';
-import { type FastMCP, UserError } from 'fastmcp';
-import { formatApiResult, type ApiToolResult } from './agent-hints';
+import { type ContentResult, type FastMCP, UserError } from 'fastmcp';
+import { withAgentHints } from './agent-hints';
 import { originHeaders, requestOrigin } from './origin';
+import {
+  deprecatedToolOutputSchema,
+  researchPaperOutputSchema,
+  researchReadOutputSchema,
+  researchRelatedOutputSchema,
+  researchSearchOutputSchema,
+  withStructured,
+} from './tool-output';
 
 interface SessionData {
   firecrawlApiKey?: string;
@@ -176,7 +184,7 @@ function deprecatedGithubPayload() {
   return {
     code: 'DEPRECATED_TOOL',
     message:
-      "firecrawl_research_search_github is deprecated and unavailable through MCP. Use firecrawl_developer_search, which searches GitHub issues, pull requests, and READMEs plus curated documentation sites and returns matched passages. It does not carry over this tool's score breakdown or its web fallback results.",
+      "firecrawl_research_search_github is deprecated and unavailable through MCP. Use firecrawl_developer_search, which searches GitHub issues, pull requests, and READMEs plus code documentation and returns matched passages. It does not carry over this tool's score breakdown or its web fallback results.",
     replacement: {
       name: 'firecrawl_developer_search',
       instructions:
@@ -209,6 +217,7 @@ Several distinct framings of the same question surface different papers than a s
 
 Returns ranked papers with canonical IDs, titles, authors, and abstracts.
 `,
+    outputSchema: researchSearchOutputSchema,
     parameters: z.object({
       query: z
         .string()
@@ -252,7 +261,7 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<ApiToolResult> => {
+    ): Promise<ContentResult> => {
       const { query, k, authors, categories, from, to } = args as {
         query: string;
         k?: number;
@@ -273,7 +282,8 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
         withQuery(`${BASE}/papers`, params),
         originHeaders(requestOrigin(mcpClient, session))
       );
-      return formatApiResult(res.data, fmtHits(res.data?.results));
+      const results = res.data?.results ?? [];
+      return withAgentHints(withStructured(fmtHits(results), { results }), res.data, true);
     },
   });
 
@@ -289,6 +299,7 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
     description: `
 Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DOI identifier. Returns the title, abstract, authors, categories, source IDs, and dates as markdown.
 `,
+    outputSchema: researchPaperOutputSchema,
     parameters: z.object({
       paperId: z
         .string()
@@ -300,14 +311,18 @@ Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DO
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<ApiToolResult> => {
+    ): Promise<ContentResult> => {
       const { paperId } = args as { paperId: string };
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ paper?: PaperHit }>(
         `${BASE}/papers/${encodeURIComponent(paperId)}`,
         originHeaders(requestOrigin(mcpClient, session))
       );
-      return formatApiResult(res.data, fmtPaperMetadata(res.data?.paper));
+      const paper = res.data?.paper;
+      return withAgentHints(withStructured(
+        fmtPaperMetadata(paper),
+        paper ? { paper } : {}
+      ), res.data, true);
     },
   });
 
@@ -325,6 +340,7 @@ Find citation-graph candidates from one to ten \`seed_ids\`; the first ID is the
 
 Returns ranked candidates and the evaluated pool size.
 `,
+    outputSchema: researchRelatedOutputSchema,
     parameters: z.object({
       seed_ids: z.array(z.string()).min(1).max(10),
       intent: z.string().min(1),
@@ -338,7 +354,7 @@ Returns ranked candidates and the evaluated pool size.
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<ApiToolResult> => {
+    ): Promise<ContentResult> => {
       const { seed_ids, intent, mode, k, rerank } = args as {
         seed_ids: string[];
         intent: string;
@@ -367,11 +383,13 @@ Returns ranked candidates and the evaluated pool size.
         ),
         originHeaders(requestOrigin(mcpClient, session))
       );
+      const results = res.data?.results ?? [];
+      const poolSize = res.data?.poolSize ?? 0;
       const note = res.data?.note ? `\nnote: ${res.data.note}` : '';
-      return formatApiResult(
-        res.data,
-        `${fmtHits(res.data?.results)}\n(poolSize=${res.data?.poolSize ?? 0})${note}`
-      );
+      return withAgentHints(withStructured(
+        `${fmtHits(results)}\n(poolSize=${poolSize})${note}`,
+        { results, poolSize, ...(res.data?.note ? { note: res.data.note } : {}) }
+      ), res.data, true);
     },
   });
 
@@ -389,6 +407,7 @@ Retrieve in-body passages from one paper that are relevant to a specific questio
 
 Returns matching passages or a notice when full text is unavailable.
 `,
+    outputSchema: researchReadOutputSchema,
     parameters: z.object({
       paperId: z
         .string()
@@ -408,7 +427,7 @@ Returns matching passages or a notice when full text is unavailable.
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<ApiToolResult> => {
+    ): Promise<ContentResult> => {
       const { paperId, question, k } = args as {
         paperId: string;
         question: string;
@@ -423,12 +442,12 @@ Returns matching passages or a notice when full text is unavailable.
         originHeaders(requestOrigin(mcpClient, session))
       );
       const passages = res.data?.passages ?? [];
-      return formatApiResult(
-        res.data,
+      return withAgentHints(withStructured(
         passages.length
           ? passages.map((p) => p.text).join('\n---\n')
-          : '(no full-text passages available for this paper)'
-      );
+          : '(no full-text passages available for this paper)',
+        { passages }
+      ), res.data, true);
     },
   });
 
@@ -436,8 +455,8 @@ Returns matching passages or a notice when full text is unavailable.
   // Hidden from tools/list so new sessions never see it, still callable so a
   // session holding a cached tool list gets a pointer to the replacement
   // instead of an unknown-tool error. Same shape as firecrawl_extract.
-  // Hiding or removing a tool here also changes the Claude directory
-  // connector's tool list; see the note on SEARCH_PROFILE_TOOLS in index.ts.
+  // Hiding or removing a tool here also changes the search surface's
+  // published tool list; see the note on SEARCH_PROFILE_TOOLS in index.ts.
   server.addTool({
     name: 'firecrawl_research_search_github',
     annotations: {
@@ -447,8 +466,9 @@ Returns matching passages or a notice when full text is unavailable.
       destructiveHint: false,
     },
     description: `
-Deprecated compatibility entry point. Use firecrawl_developer_search for GitHub issues, pull requests, and READMEs, plus curated documentation sites, returned as matched passages.
+Deprecated compatibility entry point. Use firecrawl_developer_search for GitHub issues, pull requests, and READMEs, plus code documentation, returned as matched passages.
 `,
+    outputSchema: deprecatedToolOutputSchema,
     parameters: z.object({
       query: z.string().min(1),
       k: z.number().int().min(1).max(100).optional(),
@@ -462,7 +482,7 @@ Deprecated compatibility entry point. Use firecrawl_developer_search for GitHub 
         structuredContent: payload,
       };
     },
-    execute: async (): Promise<ApiToolResult> => {
+    execute: async (): Promise<string> => {
       const payload = deprecatedGithubPayload();
       throw new UserError(payload.message, payload);
     },

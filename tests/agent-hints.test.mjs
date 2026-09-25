@@ -8,6 +8,7 @@ import {
   preserveAgentHints,
   readAgentHints,
   readErrorAgentHints,
+  withAgentHints,
 } from '../dist/agent-hints.js';
 
 const hints = [
@@ -80,6 +81,18 @@ test('errors retain hints without promoting nested page data', () => {
   });
   assert.equal(result.isError, true);
   assert.deepEqual(result.structuredContent.agent_hints, hints);
+});
+
+test('adding hints preserves existing structured results and readable text', () => {
+  const result = {
+    content: [{ type: 'text', text: '(no results)' }],
+    structuredContent: { results: [] },
+  };
+  const enriched = withAgentHints(result, { agent_hints: hints }, true);
+  assert.deepEqual(enriched.structuredContent, { results: [], agent_hints: hints });
+  assert.equal(enriched.content[0].text, '(no results)');
+  assert.match(enriched.content[1].text, /Firecrawl API agent_hints/);
+  assert.equal(withAgentHints(result, {}), result);
 });
 
 async function listen(server) {
@@ -200,13 +213,18 @@ test('MCP transport preserves hints on empty, readable, crawl and error results'
     const data = body.split(/\r?\n/).find((line) => line.startsWith('data: '));
     assert.ok(data, body);
     const result = JSON.parse(data.slice(6)).result;
-    assert.deepEqual(result.structuredContent.agent_hints, hints);
+    assert.deepEqual(result.structuredContent?.agent_hints, hints, params.name + ':' + (params.arguments.query ?? params.arguments.id));
     const visibleText = result.content.map((item) => item.text).join('\n');
     for (const hint of hints) assert.ok(visibleText.includes(hint));
     assert.equal(result.isError === true, params.arguments.query === 'invalid');
     if (params.name === 'firecrawl_developer_search') {
+      assert.deepEqual(result.structuredContent.results, []);
       assert.equal(result.content[0].text, '(no results)');
       assert.match(result.content[1].text, /Firecrawl API agent_hints/);
+    } else if (params.name === 'firecrawl_check_crawl_status') {
+      assert.deepEqual(result.structuredContent.data, []);
+    } else if (params.arguments.query === 'empty') {
+      assert.deepEqual(result.structuredContent.data, { web: [] });
     }
   }
   assert.equal(

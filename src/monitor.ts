@@ -10,13 +10,18 @@
  */
 
 import { z } from 'zod';
-import type { FastMCP } from 'fastmcp';
+import type { ContentResult, FastMCP } from 'fastmcp';
+import { AGENT_HINTS_HEADERS, readAgentHints, withAgentHints } from './agent-hints';
 import { originHeaders, requestOrigin } from './origin';
 import {
-  formatApiResult,
-  readAgentHints,
-  type ApiToolResult,
-} from './agent-hints';
+  monitorCheckOutputSchema,
+  monitorChecksOutputSchema,
+  monitorDeleteOutputSchema,
+  monitorListOutputSchema,
+  monitorOutputSchema,
+  monitorRunOutputSchema,
+  structuredText,
+} from './tool-output';
 import {
   CoreHttpError,
   credentialForOutboundRequest,
@@ -78,7 +83,7 @@ async function monitorRequest(
 
   const headers: Record<string, string> = {
     ...originHeaders(origin),
-    'X-Firecrawl-Agent-Hints': 'true',
+    ...AGENT_HINTS_HEADERS,
   };
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   if (init.body !== undefined) headers['Content-Type'] = 'application/json';
@@ -101,8 +106,8 @@ async function monitorRequest(
   return payload;
 }
 
-function asText(data: unknown): ApiToolResult {
-  return formatApiResult(data);
+function monitorResult(data: unknown): ContentResult {
+  return withAgentHints(structuredText(data), data);
 }
 
 const pageStatusSchema = z.enum(['same', 'new', 'changed', 'removed', 'error']);
@@ -176,12 +181,8 @@ function buildMonitorCreateBody(
       ...(typeof args.maxResults === 'number'
         ? { maxResults: args.maxResults }
         : {}),
-      ...(includeDomains && includeDomains.length > 0
-        ? { includeDomains }
-        : {}),
-      ...(excludeDomains && excludeDomains.length > 0
-        ? { excludeDomains }
-        : {}),
+      ...(includeDomains && includeDomains.length > 0 ? { includeDomains } : {}),
+      ...(excludeDomains && excludeDomains.length > 0 ? { excludeDomains } : {}),
     };
   } else {
     target = { type: 'scrape', urls };
@@ -245,6 +246,7 @@ Create a recurring scrape, crawl, or search monitor that compares each check wit
 
 In the simple form, a \`goal\` is required. If \`queries\` contains one or more non-empty values and is supplied with \`page\`/\`pages\`, \`queries\` create the search target and page targets are ignored. A monitor schedules future network checks and can send configured email or webhook notifications. Returns the created monitor.
 `,
+    outputSchema: monitorOutputSchema,
     parameters: z.object({
       body: z.record(z.string(), z.any()).optional(),
       page: z.string().optional(),
@@ -265,19 +267,16 @@ In the simple form, a \`goal\` is required. If \`queries\` contains one or more 
     execute: async (
       args: unknown,
       { session, log, client: mcpClient }
-    ): Promise<ApiToolResult> => {
+    ): Promise<ContentResult> => {
       const body = buildMonitorCreateBody(args as Record<string, unknown>);
       log.info('Creating monitor', { name: String(body.name) });
       const res = await monitorRequest(
         session,
-        requestOrigin(mcpClient, session),
-        '/monitor',
-        {
-          method: 'POST',
-          body,
-        }
-      );
-      return asText(res);
+        requestOrigin(mcpClient, session), '/monitor', {
+        method: 'POST',
+        body,
+      });
+      return monitorResult(res);
     },
   });
 
@@ -292,6 +291,7 @@ In the simple form, a \`goal\` is required. If \`queries\` contains one or more 
     description: `
 List monitors for the authenticated account with optional pagination controls. Returns one page of monitor records and pagination metadata.
 `,
+    outputSchema: monitorListOutputSchema,
     parameters: z.object({
       limit: z.number().int().positive().optional(),
       offset: z.number().int().nonnegative().optional(),
@@ -299,17 +299,14 @@ List monitors for the authenticated account with optional pagination controls. R
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<ApiToolResult> => {
+    ): Promise<ContentResult> => {
       const { limit, offset } = args as { limit?: number; offset?: number };
       const res = await monitorRequest(
         session,
-        requestOrigin(mcpClient, session),
-        '/monitor',
-        {
-          query: { limit, offset },
-        }
-      );
-      return asText(res);
+        requestOrigin(mcpClient, session), '/monitor', {
+        query: { limit, offset },
+      });
+      return monitorResult(res);
     },
   });
 
@@ -324,18 +321,19 @@ List monitors for the authenticated account with optional pagination controls. R
     description: `
 Retrieve one monitor by ID, including its configuration and current state. This does not run or modify the monitor.
 `,
+    outputSchema: monitorOutputSchema,
     parameters: z.object({ id: z.string() }),
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<ApiToolResult> => {
+    ): Promise<ContentResult> => {
       const { id } = args as { id: string };
       const res = await monitorRequest(
         session,
         requestOrigin(mcpClient, session),
         `/monitor/${encodeURIComponent(id)}`
       );
-      return asText(res);
+      return monitorResult(res);
     },
   });
 
@@ -352,6 +350,7 @@ Patch an existing monitor by ID. The body can change its name, active/paused sta
 
 Returns the updated monitor.
 `,
+    outputSchema: monitorOutputSchema,
     parameters: z.object({
       id: z.string(),
       body: z.record(z.string(), z.any()),
@@ -359,7 +358,7 @@ Returns the updated monitor.
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<ApiToolResult> => {
+    ): Promise<ContentResult> => {
       const { id, body } = args as {
         id: string;
         body: Record<string, unknown>;
@@ -370,7 +369,7 @@ Returns the updated monitor.
         `/monitor/${encodeURIComponent(id)}`,
         { method: 'PATCH', body }
       );
-      return asText(res);
+      return monitorResult(res);
     },
   });
 
@@ -385,11 +384,12 @@ Returns the updated monitor.
     description: `
 Permanently delete a monitor by ID and stop its future schedule. This operation cannot be undone and returns deletion status.
 `,
+    outputSchema: monitorDeleteOutputSchema,
     parameters: z.object({ id: z.string() }),
     execute: async (
       args: unknown,
       { session, log, client: mcpClient }
-    ): Promise<ApiToolResult> => {
+    ): Promise<ContentResult> => {
       const { id } = args as { id: string };
       log.info('Deleting monitor', { id });
       const res = await monitorRequest(
@@ -398,7 +398,7 @@ Permanently delete a monitor by ID and stop its future schedule. This operation 
         `/monitor/${encodeURIComponent(id)}`,
         { method: 'DELETE' }
       );
-      return asText(res);
+      return monitorResult(res);
     },
   });
 
@@ -413,11 +413,12 @@ Permanently delete a monitor by ID and stop its future schedule. This operation 
     description: `
 Queue an immediate check for a monitor outside its normal schedule. This starts network work for the monitor's configured targets and returns the queued check.
 `,
+    outputSchema: monitorRunOutputSchema,
     parameters: z.object({ id: z.string() }),
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<ApiToolResult> => {
+    ): Promise<ContentResult> => {
       const { id } = args as { id: string };
       const res = await monitorRequest(
         session,
@@ -425,7 +426,7 @@ Queue an immediate check for a monitor outside its normal schedule. This starts 
         `/monitor/${encodeURIComponent(id)}/run`,
         { method: 'POST' }
       );
-      return asText(res);
+      return monitorResult(res);
     },
   });
 
@@ -440,6 +441,7 @@ Queue an immediate check for a monitor outside its normal schedule. This starts 
     description: `
 List historical checks for a monitor, optionally filtered by status and bounded by a result limit. Returns one page of check summaries and pagination metadata.
 `,
+    outputSchema: monitorChecksOutputSchema,
     parameters: z.object({
       id: z.string(),
       limit: z.number().int().positive().optional(),
@@ -449,7 +451,7 @@ List historical checks for a monitor, optionally filtered by status and bounded 
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<ApiToolResult> => {
+    ): Promise<ContentResult> => {
       const { id, limit, offset, status } = args as {
         id: string;
         limit?: number;
@@ -462,7 +464,7 @@ List historical checks for a monitor, optionally filtered by status and bounded 
         `/monitor/${encodeURIComponent(id)}/checks`,
         { query: { limit, offset, status } }
       );
-      return asText(res);
+      return monitorResult(res);
     },
   });
 
@@ -479,6 +481,7 @@ Retrieve one monitor check and its page-level results, optionally filtered by pa
 
 Markdown tracking returns a unified text diff, JSON tracking returns field paths with previous/current values and a current snapshot, and mixed tracking returns both. Returns one page of results plus a \`next\` URL when more pages exist.
 `,
+    outputSchema: monitorCheckOutputSchema,
     parameters: z.object({
       id: z.string(),
       checkId: z.string(),
@@ -489,7 +492,7 @@ Markdown tracking returns a unified text diff, JSON tracking returns field paths
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<ApiToolResult> => {
+    ): Promise<ContentResult> => {
       const { id, checkId, limit, skip, pageStatus } = args as {
         id: string;
         checkId: string;
@@ -503,7 +506,7 @@ Markdown tracking returns a unified text diff, JSON tracking returns field paths
         `/monitor/${encodeURIComponent(id)}/checks/${encodeURIComponent(checkId)}`,
         { query: { limit, skip, status: pageStatus } }
       );
-      return asText(res);
+      return monitorResult(res);
     },
   });
 }
