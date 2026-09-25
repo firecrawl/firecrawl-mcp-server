@@ -51,6 +51,41 @@ test('a missing file is rejected', async () => {
   );
 });
 
+test('a sibling directory that shares a path prefix is rejected', async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), 'parse-parent-'));
+  const root = path.join(parent, 'data');
+  const sibling = path.join(parent, 'database', 'secret.txt');
+  await mkdir(root);
+  await mkdir(path.dirname(sibling), { recursive: true });
+  await writeFile(sibling, 'nope');
+
+  await assert.rejects(
+    resolveParseFile(sibling, root),
+    /filePath is outside the parse root/
+  );
+});
+
+test('a symlink inside the root that points at another file inside the root is allowed', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'parse-root-'));
+  const file = path.join(root, 'note.pdf');
+  await writeFile(file, 'pdf');
+  await symlink(file, path.join(root, 'alias.pdf'));
+  const rootReal = await realpath(root);
+
+  assert.equal(
+    await resolveParseFile('alias.pdf', root),
+    path.join(rootReal, 'note.pdf')
+  );
+});
+
+test('a directory inside the root is rejected', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'parse-root-'));
+  const dir = path.join(root, 'docs');
+  await mkdir(dir);
+
+  await assert.rejects(resolveParseFile('docs', root), /Not a file: docs/);
+});
+
 test('a path outside the root is rejected', async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), 'parse-parent-'));
   const root = path.join(parent, 'root');

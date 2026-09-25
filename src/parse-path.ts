@@ -1,4 +1,4 @@
-import { realpath } from 'node:fs/promises';
+import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 export function parseRootFromEnv(
@@ -36,7 +36,15 @@ export async function resolveParseFile(
     rel.startsWith(`..${path.sep}`) ||
     path.isAbsolute(rel)
   ) {
-    throw new Error('filePath is outside the parse root');
+    throw new Error(
+      `filePath is outside the parse root (${rootReal}). ` +
+        'Set FIRECRAWL_PARSE_ROOT to the directory that contains the file.'
+    );
+  }
+
+  const info = await stat(fileReal);
+  if (!info.isFile()) {
+    throw new Error(`Not a file: ${filePath}`);
   }
   return fileReal;
 }
