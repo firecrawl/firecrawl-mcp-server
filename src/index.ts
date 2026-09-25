@@ -3527,6 +3527,8 @@ server.addTool({
 Run web research that returns structured data when the URLs are not known or the answer spans several sites. Describe the fields you need in \`prompt\`, optionally pass a JSON \`schema\` and seed \`urls\`, and the research agent searches, navigates, reads pages, and returns JSON assembled across sources. Use it to research an entity plus its fields (founders, pricing, contact details), to build lists and datasets (companies, people, products, jobs, papers), and for pages that need navigation or interaction to reach the data. Optional \`effort\` sets the reasoning budget, \`maxCredits\` caps spend, and \`strictConstrainToURLs\` keeps the agent to the supplied \`urls\`.
 
 This call returns only a job ID, not the research result. Read the job with \`firecrawl_agent_status\` until it reaches \`completed\` or \`failed\`; a typical research run takes one to three minutes. For one known URL use \`firecrawl_scrape\` (with formats: ["json"] for structured output); for a plain lookup that a results page answers, use \`firecrawl_search\`.
+
+The agent only calls Alexandria providers whose data terms the team has accepted. The status result's \`exchange.skippedProviders\` lists gated providers that would have helped, and with \`onTermsRequired\` "ask" or "fail", \`exchange.requiresAction\` holds the exact terms/show and terms/accept calls. Never call terms/accept without the user's explicit consent to that provider's terms; a data request is not consent. After they agree, run the accept call through \`firecrawl_scrape\` and start \`firecrawl_agent\` again.
 `,
   outputSchema: agentOutputSchema,
   parameters: z.object({
@@ -3551,6 +3553,12 @@ This call returns only a job ID, not the research result. Read the job with \`fi
       .describe(
         'If true, agent will only visit URLs provided in the urls array.'
       ),
+    onTermsRequired: z
+      .enum(['skip', 'ask', 'fail'])
+      .optional()
+      .describe(
+        'What to do when a provider the agent would use needs data terms the team has not accepted. Gated providers are never called. "skip" (default): answer with accepted providers and list the rest in exchange.skippedProviders. "ask": the same, plus exchange.requiresAction with the terms/show and terms/accept calls. "fail": stop making calls once a gated provider is needed and set exchange.error (THIRD_PARTY_DATA_TERMS_REQUIRED). There is no auto-accept.'
+      ),
   }),
   execute: async (
     args: unknown,
@@ -3562,6 +3570,7 @@ This call returns only a job ID, not the research result. Read the job with \`fi
       prompt: (a.prompt as string).substring(0, 100),
       urlCount: Array.isArray(a.urls) ? a.urls.length : 0,
     });
+    const onTermsRequired = a.onTermsRequired as 'skip' | 'ask' | 'fail' | undefined;
     const agentBody = removeEmptyTopLevel({
       prompt: a.prompt as string,
       urls: a.urls as string[] | undefined,
@@ -3569,6 +3578,7 @@ This call returns only a job ID, not the research result. Read the job with \`fi
       effort: a.effort as 'low' | 'medium' | 'high' | undefined,
       maxCredits: a.maxCredits as number | undefined,
       strictConstrainToURLs: a.strictConstrainToURLs as boolean | undefined,
+      exchange: onTermsRequired ? { onTermsRequired } : undefined,
     });
     const res = await (client as any).startAgent({
       ...agentBody,

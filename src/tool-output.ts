@@ -234,6 +234,13 @@ export const agentStatusOutputSchema = z
     mode: str('Agent mode the job ran in.'),
     threadId: str('Research thread this job belongs to.'),
     threadTurn: num('Turn number of this job within its thread.'),
+    message: unknown('The agent\'s reply, including what it could not answer.'),
+    exchange: unknown(
+      'What the job did with Alexandria providers: onTermsRequired, paidCalls, creditsUsed, skippedProviders (gated providers that would have helped), requiresAction (terms/show and terms/accept calls; call accept only with the user\'s explicit consent) and error (THIRD_PARTY_DATA_TERMS_REQUIRED in "fail" mode).'
+    ),
+    pendingApproval: unknown(
+      'Set when the job ended waiting on the caller; kind "terms" lists providers whose data terms need accepting.'
+    ),
   })
   .describe('Progress or final result of a research agent job.');
 

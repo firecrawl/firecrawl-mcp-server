@@ -268,6 +268,65 @@ async function startFakeFirecrawlApi() {
       return;
     }
 
+    if (req.method === 'GET' && req.url === '/v2/agent/00000000-0000-4000-8000-000000000032') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: null,
+          expiresAt: '2026-10-01T00:00:00.000Z',
+          message: 'Apollo could add verified work emails.',
+          mode: 'chat',
+          model: 'spark-2',
+          status: 'completed',
+          success: true,
+          exchange: {
+            enabled: true,
+            onTermsRequired: 'ask',
+            paidCalls: 0,
+            creditsUsed: null,
+            skippedProviders: [
+              {
+                provider: 'apollo',
+                name: 'Apollo',
+                capability: 'people/search',
+                reason: 'terms_required',
+                version: 'F-1.0.0',
+                termsUrl: 'https://www.firecrawl.dev/app/alexandria/apollo',
+              },
+            ],
+            requiresAction: {
+              type: 'accept_terms',
+              approvalId: '00000000-0000-4000-8000-000000000033',
+              providers: [
+                {
+                  id: 'apollo',
+                  provider: 'apollo',
+                  name: 'Apollo',
+                  version: 'F-1.0.0',
+                  url: 'https://www.firecrawl.dev/app/alexandria/apollo',
+                  show: { provider: 'firecrawl', capability: 'terms/show', options: { provider: 'apollo' } },
+                  accept: {
+                    provider: 'firecrawl',
+                    capability: 'terms/accept',
+                    options: { provider: 'apollo', version: 'F-1.0.0', digest: null, confirmed: true },
+                  },
+                },
+              ],
+            },
+          },
+          pendingApproval: {
+            id: '00000000-0000-4000-8000-000000000033',
+            kind: 'terms',
+            reason: 'Apollo could add verified work emails.',
+            calls: [],
+            terms: [{ id: 'apollo', provider: 'apollo', name: 'Apollo', version: 'F-1.0.0', url: 'https://www.firecrawl.dev/app/alexandria/apollo' }],
+            resolution: null,
+          },
+        })
+      );
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/v2/map') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
@@ -3894,4 +3953,66 @@ test('firecrawl_agent forwards effort, maxCredits and strictConstrainToURLs to /
     /maxCredits/
   );
   assert.equal(fakeApi.requests.filter((request) => request.url === '/v2/agent').length, sentBefore);
+});
+
+test('firecrawl_agent forwards onTermsRequired and status keeps the terms-required fields', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-terms-required', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const { tools } = await client.request('tools/list');
+  const agentTool = tools.find((tool) => tool.name === 'firecrawl_agent');
+  assert.deepEqual(agentTool.inputSchema.properties.onTermsRequired.enum, ['skip', 'ask', 'fail']);
+  assert.match(agentTool.description, /exchange\.skippedProviders/);
+  assert.match(agentTool.description, /exchange\.requiresAction/);
+  assert.match(agentTool.description, /Never call terms\/accept without the user's explicit consent/);
+
+  const asked = await client.request('tools/call', {
+    arguments: { prompt: 'Find the key business contact at exa.ai', onTermsRequired: 'ask' },
+    name: 'firecrawl_agent',
+  });
+  assert.notEqual(asked.isError, true);
+  const plain = await client.request('tools/call', {
+    arguments: { prompt: 'Find the example domain owner' },
+    name: 'firecrawl_agent',
+  });
+  assert.notEqual(plain.isError, true);
+  const bodies = fakeApi.requests
+    .filter((request) => request.method === 'POST' && request.url === '/v2/agent')
+    .map((request) => request.body);
+  assert.deepEqual(bodies[0].exchange, { onTermsRequired: 'ask' });
+  assert.equal('exchange' in bodies[1], false);
+
+  // There is no auto-accept mode: any other value fails parameter validation.
+  await assert.rejects(
+    client.request('tools/call', {
+      arguments: { prompt: 'Find the key business contact at exa.ai', onTermsRequired: 'accept' },
+      name: 'firecrawl_agent',
+    }),
+    /onTermsRequired/
+  );
+
+  const status = await client.request('tools/call', {
+    arguments: { id: '00000000-0000-4000-8000-000000000032' },
+    name: 'firecrawl_agent_status',
+  });
+  assert.notEqual(status.isError, true);
+  const structured = status.structuredContent;
+  assert.equal(structured.exchange.skippedProviders[0].reason, 'terms_required');
+  assert.equal(structured.exchange.requiresAction.providers[0].accept.capability, 'terms/accept');
+  assert.equal(structured.pendingApproval.kind, 'terms');
+  assert.equal(structured.message, 'Apollo could add verified work emails.');
 });
