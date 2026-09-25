@@ -1061,8 +1061,11 @@ class StdioMcpClient {
 }
 
 test('stdio transport initializes and lists Firecrawl tools', async (t) => {
+  const api = await startFakeFirecrawlApi();
+  t.after(() => api.close());
   const child = spawnServer({
     FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: api.url,
   });
   let stderr = '';
   child.stderr.on('data', (chunk) => {
@@ -1087,6 +1090,34 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.ok(toolNames.includes('firecrawl_credit_usage'));
   assert.equal(toolNames.includes('firecrawl_credit_usage_historical'), false);
   assert.equal(toolNames.includes('firecrawl_extract'), false);
+
+  const toolsWithUriFormats = tools.tools
+    .filter((tool) =>
+      JSON.stringify(tool.inputSchema).includes('"format":"uri"')
+    )
+    .map((tool) => tool.name);
+  assert.deepEqual(
+    toolsWithUriFormats,
+    [],
+    `MCP tool schemas must not expose provider-incompatible URI formats: ${toolsWithUriFormats.join(', ')}`
+  );
+
+  const requestsBeforeInvalidUrl = api.requests.length;
+  await assert.rejects(
+    client.request('tools/call', {
+      arguments: { url: 'not-a-url' },
+      name: 'firecrawl_scrape',
+    }),
+    /-32602.*invalid url/i
+  );
+  assert.equal(api.requests.length, requestsBeforeInvalidUrl);
+
+  const trimmedUrl = await client.request('tools/call', {
+    arguments: { url: ' https://example.com/path ' },
+    name: 'firecrawl_scrape',
+  });
+  assert.notEqual(trimmedUrl.isError, true);
+  assert.equal(api.requests.at(-1).body.url, 'https://example.com/path');
 
   const deprecatedExtract = await client.request('tools/call', {
     // beforeValidate must intercept before the legacy required `urls` schema.

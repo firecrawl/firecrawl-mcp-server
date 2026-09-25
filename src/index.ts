@@ -1916,8 +1916,16 @@ function transformScrapeParams(
   return out;
 }
 
+// Keep URL validation at runtime without publishing `format: "uri"`, which
+// some MCP clients reject even though the value is valid JSON Schema.
+function runtimeUrl(schema = z.string().trim()) {
+  return schema.refine((value) => URL.canParse(value), {
+    message: 'Invalid URL',
+  });
+}
+
 const scrapeParamsSchema = z.object({
-  url: z.string().url(),
+  url: runtimeUrl(),
   formats: z
     .array(
       z.enum([
@@ -2542,7 +2550,7 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
 `,
   outputSchema: mapOutputSchema,
   parameters: z.object({
-    url: z.string().url(),
+    url: runtimeUrl(),
     search: z.string().optional(),
     sitemap: z.enum(['include', 'skip', 'only']).optional(),
     includeSubdomains: z.boolean().optional(),
@@ -3017,7 +3025,7 @@ const feedbackIssueSchema = z
   );
 
 const valuableSourceSchema = z.object({
-  url: z.string().url(),
+  url: runtimeUrl(),
   reason: z.string().max(1000).optional(),
 });
 
@@ -3076,7 +3084,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
       valuableSources: z
         .array(
           z.object({
-            url: z.string().url(),
+            url: runtimeUrl(),
             reason: z.string().max(1000).optional(),
           })
         )
@@ -3239,7 +3247,7 @@ Returns submission status, feedback ID, and accounting fields.
       valuableSources: z.array(valuableSourceSchema).max(50).optional(),
       missingContent: z.array(missingContentSchema).max(50).optional(),
       querySuggestions: z.string().max(2000).optional(),
-      url: z.string().url().optional(),
+      url: runtimeUrl().optional(),
       pageNumbers: z.array(z.number().int().positive()).max(100).optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
     }).superRefine((value, ctx) => {
@@ -3531,7 +3539,7 @@ This call returns only a job ID, not the research result. Read the job with \`fi
   outputSchema: agentOutputSchema,
   parameters: z.object({
     prompt: z.string().min(1).max(10000),
-    urls: z.array(z.string().url()).optional(),
+    urls: z.array(runtimeUrl()).optional(),
     schema: z.record(z.string(), z.any()).optional(),
     effort: z
       .enum(['low', 'medium', 'high'])
@@ -3626,7 +3634,7 @@ This acts on the live site, so actions such as form submission can create persis
   parameters: z
     .object({
       scrapeId: z.string().trim().min(1).optional(),
-      url: z.string().trim().url().optional(),
+      url: runtimeUrl(z.string().trim()).optional(),
       prompt: z.string().trim().min(1).optional(),
       code: z.string().trim().min(1).optional(),
       language: z.enum(['bash', 'python', 'node']).optional(),
