@@ -739,7 +739,22 @@ The agent performs web searches, follows links, reads pages, and gathers data au
   - `"skip"` (default): answer with accepted providers only. `exchange.skippedProviders` on the status result lists the gated providers that would have helped.
   - `"ask"`: the same, plus `exchange.requiresAction` with the exact `terms/show` and `terms/accept` calls for each provider. Each provider's `digest` is always present and is `string | null`; when it is `null`, `terms/show` returns the current digest to send.
 
-**Provider terms:** there is no auto-accept mode. Only call `terms/accept` (through `firecrawl_scrape` with `alexandria`) after the user has explicitly agreed to that provider's terms; a data request is not consent. Once accepted, start `firecrawl_agent` again and the provider becomes available.
+- `threadId`: Optional. Continue an existing thread: the `threadId` from an earlier `firecrawl_agent` or `firecrawl_agent_status` result. Omit to start a new thread. On a follow-up, omitted `mode`, `urls`, `schema` and `exchange` settings carry over from the previous turn.
+- `mode`: Optional. `"extract"` (default) returns the complete structured result every turn. `"chat"` lets a follow-up that asks for no new data get a short reply in `message` instead of a re-run; `exchange.requireApproval` needs it.
+- `exchange`: Optional. Alexandria provider settings for this turn, forwarded as-is to `POST /v2/agent`:
+  - `enabled`, `toolkits` (provider slugs), `maxCalls` (1 to 30), `requireApproval` (paid calls end the turn with a `pendingApproval`; needs `mode: "chat"`), `onTermsRequired` (same as the top-level argument; send one or the other)
+  - `approve`: `{ approvalId, callIds?, always? }` answers yes to the `pendingApproval` the previous turn ended on. `callIds` and `always` apply to paid-call approvals only.
+  - `decline`: `{ approvalId }` answers no. A declined terms offer keeps those providers out of the rest of the thread.
+  - `approve` and `decline` need `threadId`, and only one of them can be sent.
+
+**Provider terms (ask mode):** there is no auto-accept mode. When a turn ends on a terms offer, the status result carries `pendingApproval` (`kind: "terms"`) and `exchange.requiresAction` with the `approvalId` and the exact `terms/show` and `terms/accept` calls. To use the provider:
+
+1. Show the user the terms (`terms/show` through `firecrawl_scrape` with `alexandria`).
+2. Get the user's explicit consent to that provider's terms. A data request is not consent.
+3. Run the `terms/accept` call through `firecrawl_scrape`.
+4. Continue the same thread: call `firecrawl_agent` with the same `threadId` and `exchange.approve: { "approvalId": "..." }`.
+
+If the user says no, call `firecrawl_agent` with the same `threadId` and `exchange.decline: { "approvalId": "..." }` instead.
 
 **Prompt Example:**
 
@@ -786,9 +801,22 @@ Then poll with `firecrawl_agent_status` using the returned job ID.
 }
 ```
 
+**Usage Example (continue the thread after the user accepted a provider's terms):**
+
+```json
+{
+  "name": "firecrawl_agent",
+  "arguments": {
+    "prompt": "I accepted the Apollo terms. Continue.",
+    "threadId": "0199a1b2-0000-7000-8000-000000000031",
+    "exchange": { "approve": { "approvalId": "0199a1b2-0000-7000-8000-000000000033" } }
+  }
+}
+```
+
 **Returns:**
 
-- Job ID for status checking. Use `firecrawl_agent_status` to poll for results.
+- Job ID for status checking, plus `threadId` and `threadTurn`. Use `firecrawl_agent_status` to poll for results.
 
 ### 9. Check Agent Status (`firecrawl_agent_status`)
 

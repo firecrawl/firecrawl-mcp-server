@@ -3515,6 +3515,57 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
   },
 });
 
+// Mirrors agentExchangeSchema in firecrawl/firecrawl
+// apps/api/src/controllers/v2/types.ts: the gateway forwards it verbatim to
+// the agent service, which owns every default and the per-thread inheritance.
+const agentOnTermsRequiredSchema = z.enum(['skip', 'ask']).optional();
+const agentExchangeSchema = z
+  .strictObject({
+    enabled: z
+      .boolean()
+      .optional()
+      .describe('Let the agent call Alexandria providers. On by default.'),
+    toolkits: z
+      .array(z.string())
+      .optional()
+      .describe('Pin the providers the agent may use, by slug. Omitted means the whole catalog.'),
+    maxCalls: z
+      .number()
+      .int()
+      .min(1)
+      .max(30)
+      .optional()
+      .describe('Most provider calls the agent may make in this turn.'),
+    requireApproval: z
+      .boolean()
+      .optional()
+      .describe(
+        'End the turn with a paid-call pendingApproval before any paid provider call. Requires mode "chat".'
+      ),
+    approve: z
+      .strictObject({
+        approvalId: z.string().uuid(),
+        callIds: z.array(z.string()).optional(),
+        always: z.boolean().optional(),
+      })
+      .optional()
+      .describe(
+        'Answer yes to the pendingApproval the previous turn of this thread ended on (its id, also exchange.requiresAction.approvalId). Needs threadId. For a terms offer, send it only after the user explicitly agreed and terms/accept succeeded; callIds and always are ignored on terms offers. For paid calls, callIds picks a subset (default all) and always stops asking for the rest of the thread.'
+      ),
+    decline: z
+      .strictObject({ approvalId: z.string().uuid() })
+      .optional()
+      .describe(
+        'Answer no to that pendingApproval. Needs threadId. A declined terms offer keeps those providers out of the rest of the thread.'
+      ),
+    onTermsRequired: agentOnTermsRequiredSchema.describe(
+      'Same as the top-level onTermsRequired.'
+    ),
+  })
+  .describe(
+    'Alexandria provider settings for this turn, forwarded as the request\'s exchange object.'
+  );
+
 server.addTool({
   name: 'firecrawl_agent',
   annotations: {
@@ -3528,7 +3579,9 @@ Run web research that returns structured data when the URLs are not known or the
 
 This call returns only a job ID, not the research result. Read the job with \`firecrawl_agent_status\` until it reaches \`completed\` or \`failed\`; a typical research run takes one to three minutes. For one known URL use \`firecrawl_scrape\` (with formats: ["json"] for structured output); for a plain lookup that a results page answers, use \`firecrawl_search\`.
 
-The agent only calls Alexandria providers whose data terms the team has accepted. The status result's \`exchange.skippedProviders\` lists gated providers that would have helped, and with \`onTermsRequired\` "ask", \`exchange.requiresAction\` holds the exact terms/show and terms/accept calls. Never call terms/accept without the user's explicit consent to that provider's terms; a data request is not consent. After they agree, run the accept call through \`firecrawl_scrape\` and start \`firecrawl_agent\` again.
+The job also returns a \`threadId\`. To continue that thread, pass it with a follow-up \`prompt\`; omitted \`mode\`, \`urls\`, \`schema\` and exchange settings carry over from the previous turn.
+
+The agent only calls Alexandria providers whose data terms the team has accepted. The status result's \`exchange.skippedProviders\` lists gated providers that would have helped. With \`onTermsRequired\` "ask", a terms offer ends the turn: \`pendingApproval\` (kind "terms") and \`exchange.requiresAction\` carry the \`approvalId\` and the exact terms/show and terms/accept calls. Show the user the terms, get their EXPLICIT consent, run terms/accept through \`firecrawl_scrape\`, then call \`firecrawl_agent\` with the same \`threadId\` and \`exchange.approve: {approvalId}\`. If they decline, send \`exchange.decline: {approvalId}\` instead. Never call terms/accept without that consent; a data request is not consent.
 `,
   outputSchema: agentOutputSchema,
   parameters: z.object({
@@ -3553,13 +3606,53 @@ The agent only calls Alexandria providers whose data terms the team has accepted
       .describe(
         'If true, agent will only visit URLs provided in the urls array.'
       ),
-    onTermsRequired: z
-      .enum(['skip', 'ask'])
+    onTermsRequired: agentOnTermsRequiredSchema.describe(
+      'What to do when a provider the agent would use needs data terms the team has not accepted. Gated providers are never called. "skip" (default): answer with accepted providers and list the rest in exchange.skippedProviders. "ask": the same, plus exchange.requiresAction with the terms/show and terms/accept calls. Each provider digest is string | null and always present; when null, terms/show returns it. There is no auto-accept. Same as exchange.onTermsRequired; omitted on a follow-up keeps the previous turn\'s value.'
+    ),
+    threadId: z
+      .string()
+      .uuid()
       .optional()
       .describe(
-        'What to do when a provider the agent would use needs data terms the team has not accepted. Gated providers are never called. "skip" (default): answer with accepted providers and list the rest in exchange.skippedProviders. "ask": the same, plus exchange.requiresAction with the terms/show and terms/accept calls. Each provider digest is string | null and always present; when null, terms/show returns it. There is no auto-accept.'
+        'Continue this thread: the threadId from an earlier firecrawl_agent or firecrawl_agent_status result. Omit to start a new thread.'
       ),
-  }),
+    mode: z
+      .enum(['extract', 'chat'])
+      .optional()
+      .describe(
+        '"extract" (default) returns the complete structured result every turn. "chat" lets a follow-up that asks no new data get a short reply in message instead of a re-run; required for exchange.requireApproval. Omitted on a follow-up keeps the previous turn\'s mode.'
+      ),
+    exchange: agentExchangeSchema.optional(),
+  })
+  .refine(
+    (data) => !(data.exchange?.approve && data.exchange?.decline),
+    {
+      message:
+        'Send exchange.approve or exchange.decline, not both: each answers the pending approval one way.',
+      path: ['exchange'],
+    }
+  )
+  .refine(
+    (data) =>
+      !(data.exchange?.approve || data.exchange?.decline) ||
+      Boolean(data.threadId),
+    {
+      message:
+        'exchange.approve and exchange.decline answer a pending approval on an existing thread: pass that thread\'s threadId.',
+      path: ['threadId'],
+    }
+  )
+  .refine(
+    (data) =>
+      !data.onTermsRequired ||
+      !data.exchange?.onTermsRequired ||
+      data.onTermsRequired === data.exchange.onTermsRequired,
+    {
+      message:
+        'onTermsRequired and exchange.onTermsRequired disagree; send one of them.',
+      path: ['onTermsRequired'],
+    }
+  ),
   execute: async (
     args: unknown,
     { session, log, client: mcpClient }
@@ -3569,8 +3662,17 @@ The agent only calls Alexandria providers whose data terms the team has accepted
     log.info('Starting agent', {
       prompt: (a.prompt as string).substring(0, 100),
       urlCount: Array.isArray(a.urls) ? a.urls.length : 0,
+      threadId: (a.threadId as string | undefined) ?? null,
     });
     const onTermsRequired = a.onTermsRequired as 'skip' | 'ask' | undefined;
+    // The top-level onTermsRequired is shorthand for exchange.onTermsRequired;
+    // the refine above rejects the two disagreeing. Everything else in
+    // exchange is forwarded verbatim: the agent service owns the defaults and
+    // the per-thread inheritance.
+    const exchange = {
+      ...((a.exchange as Record<string, unknown> | undefined) ?? {}),
+      ...(onTermsRequired ? { onTermsRequired } : {}),
+    };
     const agentBody = removeEmptyTopLevel({
       prompt: a.prompt as string,
       urls: a.urls as string[] | undefined,
@@ -3578,7 +3680,9 @@ The agent only calls Alexandria providers whose data terms the team has accepted
       effort: a.effort as 'low' | 'medium' | 'high' | undefined,
       maxCredits: a.maxCredits as number | undefined,
       strictConstrainToURLs: a.strictConstrainToURLs as boolean | undefined,
-      exchange: onTermsRequired ? { onTermsRequired } : undefined,
+      threadId: a.threadId as string | undefined,
+      mode: a.mode as 'extract' | 'chat' | undefined,
+      exchange,
     });
     const res = await (client as any).startAgent({
       ...agentBody,
