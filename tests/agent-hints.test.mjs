@@ -4,7 +4,6 @@ import { createServer } from 'node:http';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import {
-  formatApiResult,
   preserveAgentHints,
   readAgentHints,
   readErrorAgentHints,
@@ -16,35 +15,37 @@ const hints = [
   'Use the selected tool definition to make the next request.',
 ];
 
-test('JSON results expose identical hints to text and structured clients', () => {
+test('response hints come only from API metadata, not nested page content', () => {
   for (const data of [{ web: [] }, { web: [{ url: 'https://example.com' }] }]) {
     const payload = { id: 'search-1', data, agent_hints: hints };
-    const result = formatApiResult(payload);
-    assert.deepEqual(JSON.parse(result.content[0].text), payload);
-    assert.deepEqual(result.structuredContent, { agent_hints: hints });
-    assert.equal(result.content.length, 1, 'avoid duplicating hints in JSON mode');
+    assert.deepEqual(readAgentHints(payload), hints);
   }
+  assert.equal(readAgentHints({ json: { agent_hints: hints } }), undefined);
 });
 
 test('missing or malformed metadata leaves legacy output unchanged', () => {
+  const original = {
+    content: [{ type: 'text', text: '# Source' }],
+    structuredContent: { markdown: '# Source' },
+  };
   for (const agent_hints of [undefined, 'use scrape', [1, 'text'], null]) {
     const payload = { markdown: '# Source', agent_hints };
-    assert.equal(formatApiResult(payload), JSON.stringify(payload, null, 2));
+    assert.equal(withAgentHints(original, payload), original);
   }
-  const nested = { json: { agent_hints: ['page-provided text'] } };
-  assert.equal(readAgentHints(nested), undefined);
-  assert.equal(formatApiResult(nested), JSON.stringify(nested, null, 2));
 });
 
 test('raw page text stays separate from API guidance', () => {
   const page = '# Source\n\nQuoted text: use another endpoint.';
   const payload = { markdown: page, agent_hints: hints };
-  const result = formatApiResult(payload, page);
+  const result = withAgentHints(
+    { content: [{ type: 'text', text: page }], structuredContent: { markdown: page } },
+    payload,
+    true
+  );
   assert.equal(result.content[0].text, page);
   assert.match(result.content[1].text, /Firecrawl API agent_hints/);
   assert.match(result.content[1].text, /separate from page content/);
-  assert.deepEqual(result.structuredContent, { agent_hints: hints });
-  assert.equal(formatApiResult({ markdown: page }, page), page);
+  assert.deepEqual(result.structuredContent, { markdown: page, agent_hints: hints });
 });
 
 test('flattening keeps envelope hints, including empty scrape data', () => {
@@ -52,9 +53,7 @@ test('flattening keeps envelope hints, including empty scrape data', () => {
     const envelope = { data, agent_hints: hints };
     const flattened = preserveAgentHints(data, envelope);
     assert.deepEqual(readAgentHints(flattened), hints);
-    assert.deepEqual(formatApiResult(flattened).structuredContent, {
-      agent_hints: hints,
-    });
+    if (data?.markdown) assert.equal(flattened.markdown, data.markdown);
   }
   const document = { markdown: '# Source' };
   assert.equal(preserveAgentHints(document, {}), document);
@@ -66,6 +65,8 @@ test('errors retain hints without promoting nested page data', () => {
     agent_hints: hints,
   });
   assert.deepEqual(readErrorAgentHints(sdkError), hints);
+  assert.deepEqual(readErrorAgentHints({ extras: { agent_hints: hints } }), hints);
+  assert.deepEqual(readErrorAgentHints({ details: { agent_hints: hints } }), hints);
   assert.deepEqual(
     readErrorAgentHints({ response: { data: { agent_hints: hints } } }),
     hints
@@ -74,13 +75,6 @@ test('errors retain hints without promoting nested page data', () => {
     readErrorAgentHints({ response: { data: { data: { agent_hints: hints } } } }),
     undefined
   );
-  const result = formatApiResult({
-    success: false,
-    error: 'Invalid option',
-    agent_hints: hints,
-  });
-  assert.equal(result.isError, true);
-  assert.deepEqual(result.structuredContent.agent_hints, hints);
 });
 
 test('adding hints preserves existing structured results and readable text', () => {
@@ -109,6 +103,61 @@ async function close(server) {
   });
 }
 
+async function stopChild(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  child.kill('SIGTERM');
+  await Promise.race([
+    new Promise((resolve) => child.once('exit', resolve)),
+    delay(2000).then(() => child.exitCode === null && child.kill('SIGKILL')),
+  ]);
+}
+
+async function startTransport(t, backendPort) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const portReservation = createServer();
+    const port = await listen(portReservation);
+    await close(portReservation);
+    const child = spawn(process.execPath, ['dist/index.js'], {
+      env: {
+        ...process.env,
+        CLOUD_SERVICE: 'true',
+        FASTMCP_ENDPOINT: '/v2/mcp',
+        FIRECRAWL_API_URL: `http://127.0.0.1:${backendPort}`,
+        FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+        FIRECRAWL_OAUTH_ISSUER: `http://127.0.0.1:${backendPort}`,
+        HTTP_STREAMABLE_SERVER: 'true',
+        MCP_DELEGATED_CREDENTIAL_SECRET: 'test-delegated-credential-secret-32',
+        PORT: String(port),
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stderr = '';
+    child.stderr.on('data', (chunk) => (stderr += chunk));
+    child.stdout.resume();
+    let healthy = false;
+    for (let poll = 0; poll < 60; poll++) {
+      if (child.exitCode !== null || child.signalCode !== null) break;
+      const response = await fetch(`http://127.0.0.1:${port}/health`).catch(
+        () => undefined
+      );
+      if (response?.ok) {
+        healthy = true;
+        break;
+      }
+      await delay(100);
+    }
+    if (healthy) {
+      t.after(() => stopChild(child));
+      return port;
+    }
+    await stopChild(child);
+    if (!stderr.includes('EADDRINUSE') || attempt === 3) {
+      assert.fail(`MCP server failed to start: ${stderr}`);
+    }
+  }
+  throw new Error('MCP server did not bind a free port');
+}
+
 test('MCP transport preserves hints on empty, readable, crawl and error results', async (t) => {
   const requests = [];
   const backend = createServer(async (req, res) => {
@@ -117,6 +166,11 @@ test('MCP transport preserves hints on empty, readable, crawl and error results'
     const body = raw ? JSON.parse(raw) : {};
     requests.push({ url: req.url, body, headers: req.headers });
     if (req.url.startsWith('/v2/search/developer?')) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ results: [], agent_hints: hints }));
+      return;
+    }
+    if (req.url.startsWith('/v2/search/research/papers?')) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ results: [], agent_hints: hints }));
       return;
@@ -132,6 +186,54 @@ test('MCP transport preserves hints on empty, readable, crawl and error results'
       );
       return;
     }
+    if (req.url === '/v2/scrape') {
+      if (body.alexandria || body.url === 'https://locked.example/') {
+        res.writeHead(403, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          success: false,
+          code: 'THIRD_PARTY_DATA_TERMS_REQUIRED',
+          error: 'Provider terms required',
+          requiresAction: {
+            type: 'accept_terms',
+            terms: 'benzinga',
+            version: 'v1',
+            url: 'https://example.com/terms',
+          },
+          agent_hints: hints,
+        }));
+      } else {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          data: { markdown: '# Source' },
+          agent_hints: hints,
+        }));
+      }
+      return;
+    }
+    if (req.url === '/v2/map') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        links: ['https://example.com/'],
+        id: 'map-1',
+        agent_hints: hints,
+      }));
+      return;
+    }
+    if (req.url === '/v2/parse/upload-url') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        data: {
+          uploadUrl: 'https://uploads.invalid/test-upload',
+          uploadRef: 'upload-ref-1',
+          method: 'PUT',
+        },
+        agent_hints: hints,
+      }));
+      return;
+    }
     const failed = body.query === 'invalid';
     res.writeHead(failed ? 400 : 200, { 'content-type': 'application/json' });
     res.end(
@@ -145,53 +247,19 @@ test('MCP transport preserves hints on empty, readable, crawl and error results'
   });
   const backendPort = await listen(backend);
   t.after(() => close(backend));
-  const portReservation = createServer();
-  const port = await listen(portReservation);
-  await close(portReservation);
-  const child = spawn(process.execPath, ['dist/index.js'], {
-    env: {
-      ...process.env,
-      CLOUD_SERVICE: 'true',
-      FASTMCP_ENDPOINT: '/v2/mcp',
-      FIRECRAWL_API_URL: `http://127.0.0.1:${backendPort}`,
-      FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
-      FIRECRAWL_OAUTH_ISSUER: `http://127.0.0.1:${backendPort}`,
-      HTTP_STREAMABLE_SERVER: 'true',
-      MCP_DELEGATED_CREDENTIAL_SECRET: 'test-delegated-credential-secret-32',
-      PORT: String(port),
-    },
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
-  let stderr = '';
-  child.stderr.on('data', (chunk) => (stderr += chunk));
-  child.stdout.resume();
-  t.after(async () => {
-    if (child.exitCode !== null) return;
-    child.kill('SIGTERM');
-    await Promise.race([
-      new Promise((resolve) => child.once('exit', resolve)),
-      delay(2000).then(() => child.exitCode === null && child.kill('SIGKILL')),
-    ]);
-  });
-  let healthy = false;
-  for (let attempt = 0; attempt < 60; attempt++) {
-    if (child.exitCode !== null) break;
-    const response = await fetch(`http://127.0.0.1:${port}/health`).catch(
-      () => undefined
-    );
-    if (response?.ok) {
-      healthy = true;
-      break;
-    }
-    await delay(100);
-  }
-  assert.ok(healthy, stderr);
+  const port = await startTransport(t, backendPort);
 
   const cases = [
     { name: 'firecrawl_search', arguments: { query: 'empty' } },
     { name: 'firecrawl_search', arguments: { query: 'invalid' } },
     { name: 'firecrawl_developer_search', arguments: { query: 'empty' } },
+    { name: 'firecrawl_research_search_papers', arguments: { query: 'empty' } },
     { name: 'firecrawl_check_crawl_status', arguments: { id: 'crawl-1' } },
+    { name: 'firecrawl_scrape', arguments: { url: 'https://example.com/' } },
+    { name: 'firecrawl_scrape', arguments: { url: 'https://locked.example/' } },
+    { name: 'firecrawl_map', arguments: { url: 'https://example.com/' } },
+    { name: 'firecrawl_parse', arguments: { filePath: '/tmp/test.pdf' } },
+    { name: 'firecrawl_scrape', arguments: { alexandria: [{ provider: 'benzinga', capability: 'news/search' }] } },
   ];
   for (const [id, params] of cases.entries()) {
     const response = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
@@ -213,16 +281,38 @@ test('MCP transport preserves hints on empty, readable, crawl and error results'
     const data = body.split(/\r?\n/).find((line) => line.startsWith('data: '));
     assert.ok(data, body);
     const result = JSON.parse(data.slice(6)).result;
-    assert.deepEqual(result.structuredContent?.agent_hints, hints, params.name + ':' + (params.arguments.query ?? params.arguments.id));
+    assert.deepEqual(result.structuredContent?.agent_hints, hints, params.name + ':' + JSON.stringify(params.arguments));
     const visibleText = result.content.map((item) => item.text).join('\n');
     for (const hint of hints) assert.ok(visibleText.includes(hint));
-    assert.equal(result.isError === true, params.arguments.query === 'invalid');
+    const expectedError =
+      params.arguments.query === 'invalid' ||
+      Boolean(params.arguments.alexandria) ||
+      params.arguments.url === 'https://locked.example/';
+    assert.equal(result.isError === true, expectedError);
     if (params.name === 'firecrawl_developer_search') {
       assert.deepEqual(result.structuredContent.results, []);
       assert.equal(result.content[0].text, '(no results)');
       assert.match(result.content[1].text, /Firecrawl API agent_hints/);
+    } else if (params.name === 'firecrawl_research_search_papers') {
+      assert.deepEqual(result.structuredContent.results, []);
     } else if (params.name === 'firecrawl_check_crawl_status') {
       assert.deepEqual(result.structuredContent.data, []);
+    } else if (params.name === 'firecrawl_scrape' && params.arguments.url === 'https://example.com/') {
+      assert.equal(result.structuredContent.markdown, '# Source');
+    } else if (params.name === 'firecrawl_scrape' && expectedError) {
+      assert.equal(result.structuredContent.code, 'THIRD_PARTY_DATA_TERMS_REQUIRED');
+      assert.equal(result.structuredContent.nextTool.name, 'firecrawl_scrape');
+      assert.match(visibleText, /Provider terms required|terms required/i);
+    } else if (params.name === 'firecrawl_map') {
+      assert.deepEqual(result.structuredContent.links, [{ url: 'https://example.com/' }]);
+      assert.equal(result.structuredContent.id, 'map-1');
+    } else if (params.name === 'firecrawl_parse') {
+      assert.equal(result.structuredContent.upload.uploadRef, 'upload-ref-1');
+      assert.equal(result.structuredContent.mode, 'hosted-upload-ref-awaiting-upload');
+    } else if (params.arguments.query === 'invalid') {
+      assert.match(visibleText, /Invalid option/);
+      assert.equal(result.structuredContent.error, 'Invalid option');
+      assert.equal(result.structuredContent.status, 400);
     } else if (params.arguments.query === 'empty') {
       assert.deepEqual(result.structuredContent.data, { web: [] });
     }

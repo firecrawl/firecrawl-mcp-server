@@ -1045,7 +1045,8 @@ function termsRequiredAction(body: unknown): TermsRequiredAction | undefined {
 
 function termsRequiredError(
   action: TermsRequiredAction,
-  context: ExchangeErrorContext
+  context: ExchangeErrorContext,
+  hints?: string[]
 ): UserError {
   const requestId = context.requestId;
   const retryIdentity = requestId ? ` and requestId ${requestId}` : '';
@@ -1056,6 +1057,7 @@ function termsRequiredError(
       code: TERMS_REQUIRED_CODE,
       status: 403,
       message,
+      ...(hints ? { agent_hints: hints } : {}),
       ...(requestId ? { requestId } : {}),
       requiresAction: action,
       nextTool: {
@@ -1093,7 +1095,8 @@ function throwIfTermsRequired(
     | null
     | undefined;
   const action = termsRequiredAction(source?.response?.data ?? source?.details);
-  if (action) throw termsRequiredError(action, context);
+  if (action)
+    throw termsRequiredError(action, context, readErrorAgentHints(error));
 }
 
 async function relayTermsRequired<T>(
@@ -1785,6 +1788,8 @@ server.getApp().get('/ready', (context) => {
     : context.json({ ok: true }, 200);
 });
 
+let warnedMissingAgentHintsInterceptor = false;
+
 function createClient(apiKey?: string): FirecrawlApp {
   const config: any = {
     ...(process.env.FIRECRAWL_API_URL && {
@@ -1799,17 +1804,53 @@ function createClient(apiKey?: string): FirecrawlApp {
 
   const client = new FirecrawlApp(config);
   const axiosInstance = (client as any).http?.instance;
-  if (!axiosInstance?.interceptors?.request?.use) {
-    throw new Error('Firecrawl SDK client cannot enable API agent hints');
+  if (axiosInstance?.interceptors?.request?.use) {
+    axiosInstance.interceptors.request.use((request: any) => {
+      if (typeof request.headers?.set === 'function') {
+        request.headers.set('X-Firecrawl-Agent-Hints', 'true');
+      } else {
+        request.headers = { ...(request.headers ?? {}), ...AGENT_HINTS_HEADERS };
+      }
+      return request;
+    });
+  } else if (!warnedMissingAgentHintsInterceptor) {
+    warnedMissingAgentHintsInterceptor = true;
+    console.warn(
+      '[firecrawl-mcp] SDK request interceptor unavailable; API agent hints may be absent.'
+    );
   }
-  axiosInstance.interceptors.request.use((request: any) => {
-    request.headers = {
-      ...(request.headers ?? {}),
-      ...AGENT_HINTS_HEADERS,
-    };
-    return request;
-  });
   return client;
+}
+
+/** Keep SDK validation, retries, and result shaping while retaining response metadata. */
+async function sdkResultWithAgentHints<T>(
+  client: FirecrawlApp,
+  execute: () => Promise<T>
+): Promise<T> {
+  const responseInterceptors = (client as any).http?.instance?.interceptors
+    ?.response;
+  if (!responseInterceptors?.use) return execute();
+  let hints: string[] | undefined;
+  const interceptor = responseInterceptors.use((response: any) => {
+    hints = readAgentHints(response?.data) ?? hints;
+    return response;
+  });
+  try {
+    const result = await execute();
+    return preserveAgentHints(result, { agent_hints: hints }) as T;
+  } catch (error) {
+    if (
+      hints &&
+      error &&
+      typeof error === 'object' &&
+      !readErrorAgentHints(error)
+    ) {
+      (error as { agent_hints?: string[] }).agent_hints = hints;
+    }
+    throw error;
+  } finally {
+    responseInterceptors.eject?.(interceptor);
+  }
 }
 
 // Safe mode is enabled by default for cloud service to comply with ChatGPT safety requirements
@@ -1846,10 +1887,14 @@ function getClient(session?: SessionData): FirecrawlApp {
         reason: 'delegated_credential_unavailable',
       });
     }
-    config.headers = {
-      ...(config.headers ?? {}),
-      Authorization: `Bearer ${credential}`,
-    };
+    if (typeof config.headers?.set === 'function') {
+      config.headers.set('Authorization', `Bearer ${credential}`);
+    } else {
+      config.headers = {
+        ...(config.headers ?? {}),
+        Authorization: `Bearer ${credential}`,
+      };
+    }
     return config;
   });
   return client;
@@ -2419,6 +2464,7 @@ async function executeHostedParse(
       session,
       origin
     );
+    const uploadHints = readAgentHints(uploadJson);
     const upload = parseApiData(uploadJson) as ParseUploadUrlData;
     if (!upload?.uploadUrl || !upload?.uploadRef) {
       throw new Error(
@@ -2435,6 +2481,7 @@ async function executeHostedParse(
 
     return asText({
       success: true,
+      ...(uploadHints ? { agent_hints: uploadHints } : {}),
       mode: 'hosted-upload-ref-awaiting-upload',
       message:
         'Hosted MCP cannot read local files. Run the local upload command, then call firecrawl_parse again with uploadRef. No Firecrawl API key is included in this command.',
@@ -2538,10 +2585,12 @@ Alexandria mode, on an authenticated session with Alexandria access: \`alexandri
     const client = getClient(session);
     const res = await relayTermsRequired(
       () =>
-        client.scrape(String(url), {
-          ...cleaned,
-          origin,
-        } as any),
+        sdkResultWithAgentHints(client, () =>
+          client.scrape(String(url), {
+            ...cleaned,
+            origin,
+          } as any)
+        ),
       { tool: 'firecrawl_scrape' }
     );
     return structuredText(res);
@@ -2585,10 +2634,12 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
     const client = getClient(session);
     const cleaned = removeEmptyTopLevel(options as Record<string, unknown>);
     log.info('Mapping URL', { url: String(url) });
-    const res = await client.map(String(url), {
-      ...cleaned,
-      origin: requestOrigin(mcpClient, session),
-    } as any);
+    const res = await sdkResultWithAgentHints(client, () =>
+      client.map(String(url), {
+        ...cleaned,
+        origin: requestOrigin(mcpClient, session),
+      } as any)
+    );
     return structuredText(res);
   },
 });
@@ -2942,6 +2993,8 @@ async function keylessPost(
             ? json.retry_after_seconds
             : undefined,
       });
+      const hints = readAgentHints(json);
+      if (hints) payload.agent_hints = hints;
       throw new UserError(String(payload.message), payload);
     }
     throw new CoreHttpError(

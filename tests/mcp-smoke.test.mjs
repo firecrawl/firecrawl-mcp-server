@@ -2120,7 +2120,12 @@ test('HTTP cloud keyless quota stays 200 isError without inlining retry_after_se
         keylessEligible: true,
         searchResponse: {
           status: 429,
-          body: { error: 'limit', reason: 'credits', retry_after_seconds: 42 },
+          body: {
+            error: 'limit',
+            reason: 'credits',
+            retry_after_seconds: 42,
+            agent_hints: ['Create an API key to continue after the keyless limit.'],
+          },
         },
       },
       'KEYLESS_QUOTA_EXHAUSTED',
@@ -2173,11 +2178,22 @@ test('HTTP cloud keyless quota stays 200 isError without inlining retry_after_se
     });
     assert.equal(response.status, 200, label);
     const result = parseSseJson(await response.text()).result;
-    assertKeylessAccountRecovery(result, {
-      code: expectedCode,
-      message: KEYLESS_QUOTA_MESSAGE,
-      retryAfterSeconds,
-    });
+    if (label === 'core-with-reason') {
+      assert.equal(result.isError, true);
+      assert.equal(result.structuredContent.code, expectedCode);
+      assert.equal(result.structuredContent.retry_after_seconds, retryAfterSeconds);
+      assert.deepEqual(result.structuredContent.agent_hints, [
+        'Create an API key to continue after the keyless limit.',
+      ]);
+      assert.ok(result.content[0].text.includes(KEYLESS_QUOTA_MESSAGE));
+      assert.match(result.content[0].text, /Firecrawl API agent_hints/);
+    } else {
+      assertKeylessAccountRecovery(result, {
+        code: expectedCode,
+        message: KEYLESS_QUOTA_MESSAGE,
+        retryAfterSeconds,
+      });
+    }
     assert.doesNotMatch(result.content[0].text, /about 42 seconds/, label);
     assert.doesNotMatch(result.content[0].text, /claude mcp add/, label);
     await cleanup();
