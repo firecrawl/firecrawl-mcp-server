@@ -299,7 +299,6 @@ async function startFakeFirecrawlApi() {
               approvalId: '00000000-0000-4000-8000-000000000033',
               providers: [
                 {
-                  id: 'apollo',
                   provider: 'apollo',
                   name: 'Apollo',
                   version: 'F-1.0.0',
@@ -320,7 +319,7 @@ async function startFakeFirecrawlApi() {
             kind: 'terms',
             reason: 'Apollo could add verified work emails.',
             calls: [],
-            terms: [{ id: 'apollo', provider: 'apollo', name: 'Apollo', version: 'F-1.0.0', digest: null, url: 'https://www.firecrawl.dev/app/alexandria/apollo' }],
+            terms: [{ provider: 'apollo', name: 'Apollo', version: 'F-1.0.0', digest: null, url: 'https://www.firecrawl.dev/app/alexandria/apollo' }],
             resolution: null,
           },
         })
