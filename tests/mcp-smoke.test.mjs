@@ -3817,3 +3817,57 @@ test('every listed tool declares an output schema and returns structured content
   }
   assert.equal('id' in feedback.structuredContent, false);
 });
+
+test('firecrawl_agent forwards model, effort, maxCredits and strictConstrainToURLs to /v2/agent', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-agent-params', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  // The API accepts these on POST /v2/agent; the tool has to pass every one
+  // through untouched so an agent can tune the run without a second surface.
+  const result = await client.request('tools/call', {
+    arguments: {
+      effort: 'high',
+      maxCredits: 100,
+      model: 'spark-2',
+      prompt: 'Find the example domain owner',
+      strictConstrainToURLs: true,
+      urls: ['https://example.com/'],
+    },
+    name: 'firecrawl_agent',
+  });
+  assert.notEqual(result.isError, true);
+
+  const agentRequest = fakeApi.requests.find((request) => request.url === '/v2/agent');
+  assert.equal(agentRequest.method, 'POST');
+  assert.equal(agentRequest.body.prompt, 'Find the example domain owner');
+  assert.deepEqual(agentRequest.body.urls, ['https://example.com/']);
+  assert.equal(agentRequest.body.model, 'spark-2');
+  assert.equal(agentRequest.body.effort, 'high');
+  assert.equal(agentRequest.body.maxCredits, 100);
+  assert.equal(agentRequest.body.strictConstrainToURLs, true);
+
+  // Omitted options stay off the wire so the API keeps its own defaults.
+  const bare = await client.request('tools/call', {
+    arguments: { prompt: 'Find the example domain owner' },
+    name: 'firecrawl_agent',
+  });
+  assert.notEqual(bare.isError, true);
+  const bareRequest = fakeApi.requests.filter((request) => request.url === '/v2/agent').at(-1);
+  for (const key of ['model', 'effort', 'maxCredits', 'strictConstrainToURLs']) {
+    assert.ok(!(key in bareRequest.body), `bare agent request leaked ${key}`);
+  }
+});

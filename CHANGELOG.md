@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `firecrawl_agent` now exposes the optional `model` (`spark-2`, `spark-1-mini`, `spark-1-pro`), `effort` (`low`, `medium`, `high`), `maxCredits`, and `strictConstrainToURLs` parameters that `POST /v2/agent` already accepts, and forwards them in the request body.
+
 ### Changed
 
 - The search surface (`/v2/mcp-search`) now exposes `firecrawl_find_tools` and `firecrawl_scrape` alongside its six search tools, so agents can execute the Alexandria providers that `firecrawl_search` already returns. Both carry surface-scoped descriptions that name only tools registered on that surface, and Alexandria results there omit the `firecrawl_feedback` pointer. See docs/search-profile.md.
