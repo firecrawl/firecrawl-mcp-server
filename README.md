@@ -737,8 +737,7 @@ The agent performs web searches, follows links, reads pages, and gathers data au
 - `schema`: Optional JSON schema for structured output
 - `onTermsRequired`: Optional. What to do when an Alexandria provider the agent would use needs data terms your team has not accepted. Gated providers are never called in any mode.
   - `"skip"` (default): answer with accepted providers only. `exchange.skippedProviders` on the status result lists the gated providers that would have helped.
-  - `"ask"`: the same, plus `exchange.requiresAction` with the exact `terms/show` and `terms/accept` calls for each provider.
-  - `"fail"`: stop making calls once a gated provider is needed, and set `exchange.error` to `THIRD_PARTY_DATA_TERMS_REQUIRED`.
+  - `"ask"`: the same, plus `exchange.requiresAction` with the exact `terms/show` and `terms/accept` calls for each provider. Each provider's `digest` is always present and is `string | null`; when it is `null`, `terms/show` returns the current digest to send.
 
 **Provider terms:** there is no auto-accept mode. Only call `terms/accept` (through `firecrawl_scrape` with `alexandria`) after the user has explicitly agreed to that provider's terms; a data request is not consent. Once accepted, start `firecrawl_agent` again and the provider becomes available.
 

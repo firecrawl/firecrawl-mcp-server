@@ -236,7 +236,7 @@ export const agentStatusOutputSchema = z
     threadTurn: num('Turn number of this job within its thread.'),
     message: unknown('The agent\'s reply, including what it could not answer.'),
     exchange: unknown(
-      'What the job did with Alexandria providers: onTermsRequired, paidCalls, creditsUsed, skippedProviders (gated providers that would have helped), requiresAction (terms/show and terms/accept calls; call accept only with the user\'s explicit consent) and error (THIRD_PARTY_DATA_TERMS_REQUIRED in "fail" mode).'
+      'What the job did with Alexandria providers: onTermsRequired, paidCalls, creditsUsed, skippedProviders (gated providers that would have helped), and requiresAction (terms/show and terms/accept calls, each provider digest string | null and always present; call accept only with the user\'s explicit consent).'
     ),
     pendingApproval: unknown(
       'Set when the job ended waiting on the caller; kind "terms" lists providers whose data terms need accepting.'

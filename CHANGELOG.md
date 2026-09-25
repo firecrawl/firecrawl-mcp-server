@@ -5,7 +5,7 @@
 ### Added
 
 - `firecrawl_agent` now exposes the optional `effort` (`low`, `medium`, `high`), `maxCredits`, and `strictConstrainToURLs` parameters that `POST /v2/agent` already accepts, and forwards them in the request body.
-- `firecrawl_agent` accepts `onTermsRequired` (`"skip"`, `"ask"` or `"fail"`), forwarded as `exchange.onTermsRequired`. The agent only calls Alexandria providers whose data terms the team has accepted; `firecrawl_agent_status` now keeps `exchange` (including `skippedProviders`, `requiresAction` and `error`), `pendingApproval` and `message` in its structured content. There is no auto-accept: `terms/accept` still needs the user's explicit consent.
+- `firecrawl_agent` accepts `onTermsRequired` (`"skip"` or `"ask"`), forwarded as `exchange.onTermsRequired`. The agent only calls Alexandria providers whose data terms the team has accepted; `firecrawl_agent_status` now keeps `exchange` (including `skippedProviders` and `requiresAction`, whose provider `digest` is `string | null` and always present), `pendingApproval` and `message` in its structured content. There is no auto-accept: `terms/accept` still needs the user's explicit consent.
 
 ### Changed
 
