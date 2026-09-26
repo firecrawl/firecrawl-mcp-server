@@ -285,72 +285,13 @@ async function startFakeFirecrawlApi() {
       return;
     }
 
-    if (req.method === 'GET' && req.url === '/v2/agent/00000000-0000-4000-8000-000000000032') {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(
-        JSON.stringify({
-          data: null,
-          expiresAt: '2026-10-01T00:00:00.000Z',
-          message: 'Apollo could add verified work emails.',
-          mode: 'chat',
-          model: 'spark-2',
-          status: 'completed',
-          success: true,
-          exchange: {
-            enabled: true,
-            onTermsRequired: 'ask',
-            paidCalls: 0,
-            creditsUsed: null,
-            skippedProviders: [
-              {
-                provider: 'apollo',
-                name: 'Apollo',
-                capability: 'people/search',
-                reason: 'terms_required',
-                version: 'F-1.0.0',
-                termsUrl: 'https://www.firecrawl.dev/app/alexandria/apollo',
-              },
-            ],
-            requiresAction: {
-              type: 'accept_terms',
-              approvalId: '00000000-0000-4000-8000-000000000033',
-              providers: [
-                {
-                  provider: 'apollo',
-                  name: 'Apollo',
-                  version: 'F-1.0.0',
-                  digest: null,
-                  url: 'https://www.firecrawl.dev/app/alexandria/apollo',
-                  show: { provider: 'firecrawl', capability: 'terms/show', options: { provider: 'apollo' } },
-                  accept: {
-                    provider: 'firecrawl',
-                    capability: 'terms/accept',
-                    options: { provider: 'apollo', version: 'F-1.0.0', digest: null, confirmed: true },
-                  },
-                },
-              ],
-            },
-          },
-          pendingApproval: {
-            id: '00000000-0000-4000-8000-000000000033',
-            kind: 'terms',
-            reason: 'Apollo could add verified work emails.',
-            calls: [],
-            terms: [{ provider: 'apollo', name: 'Apollo', version: 'F-1.0.0', digest: null, url: 'https://www.firecrawl.dev/app/alexandria/apollo' }],
-            resolution: null,
-          },
-        })
-      );
-      return;
-    }
-
     if (req.method === 'GET' && req.url === '/v2/agent/00000000-0000-4000-8000-000000000034') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify({
           data: null,
           expiresAt: '2026-10-01T00:00:00.000Z',
-          message: 'Apollo can return verified work emails for 3 credits.',
+          message: 'Kept the 2 founders.',
           mode: 'chat',
           model: 'spark-2',
           status: 'completed',
@@ -358,22 +299,6 @@ async function startFakeFirecrawlApi() {
           threadId: '00000000-0000-4000-8000-000000000031',
           threadTurn: 2,
           suggestions: [{ label: 'Only founders', prompt: 'Only keep the founders' }],
-          exchange: { enabled: true, requireApproval: true, paidCalls: 0, creditsUsed: null },
-          pendingApproval: {
-            id: '00000000-0000-4000-8000-000000000035',
-            kind: 'calls',
-            reason: 'Apollo can return verified work emails.',
-            calls: [
-              {
-                id: 'call-1',
-                provider: 'apollo',
-                capability: 'people/search',
-                input: { domain: 'exa.ai' },
-                creditsEstimate: 3,
-              },
-            ],
-            resolution: null,
-          },
         })
       );
       return;
@@ -4007,70 +3932,7 @@ test('firecrawl_agent forwards effort, maxCredits and strictConstrainToURLs to /
   assert.equal(fakeApi.requests.filter((request) => request.url === '/v2/agent').length, sentBefore);
 });
 
-test('firecrawl_agent forwards onTermsRequired and status keeps the terms-required fields', async (t) => {
-  const fakeApi = await startFakeFirecrawlApi();
-  t.after(() => fakeApi.close());
-
-  const child = spawnServer({
-    FIRECRAWL_API_KEY: 'fc-test',
-    FIRECRAWL_API_URL: fakeApi.url,
-  });
-  t.after(() => stopChild(child));
-
-  const client = new StdioMcpClient(child);
-  await client.request('initialize', {
-    capabilities: {},
-    clientInfo: { name: 'firecrawl-mcp-terms-required', version: '0.0.0' },
-    protocolVersion: '2025-06-18',
-  });
-  client.notify('notifications/initialized');
-
-  const { tools } = await client.request('tools/list');
-  const agentTool = tools.find((tool) => tool.name === 'firecrawl_agent');
-  assert.equal('onTermsRequired' in agentTool.inputSchema.properties, false);
-  assert.deepEqual(agentTool.inputSchema.properties.exchange.properties.onTermsRequired.enum, ['skip', 'ask']);
-  assert.match(agentTool.description, /exchange\.skippedProviders/);
-  assert.match(agentTool.description, /exchange\.requiresAction/);
-  assert.match(agentTool.description, /get their EXPLICIT consent.*Never call terms\/accept without that consent/);
-
-  const asked = await client.request('tools/call', {
-    arguments: { prompt: 'Find the key business contact at exa.ai', exchange: { onTermsRequired: 'ask' } },
-    name: 'firecrawl_agent',
-  });
-  assert.notEqual(asked.isError, true);
-  const plain = await client.request('tools/call', {
-    arguments: { prompt: 'Find the example domain owner' },
-    name: 'firecrawl_agent',
-  });
-  assert.notEqual(plain.isError, true);
-  const bodies = fakeApi.requests
-    .filter((request) => request.method === 'POST' && request.url === '/v2/agent')
-    .map((request) => request.body);
-  assert.deepEqual(bodies[0].exchange, { onTermsRequired: 'ask' });
-  assert.equal('exchange' in bodies[1], false);
-
-  // There is no auto-accept mode: any other value fails parameter validation.
-  await assert.rejects(
-    client.request('tools/call', {
-      arguments: { prompt: 'Find the key business contact at exa.ai', exchange: { onTermsRequired: 'fail' } },
-      name: 'firecrawl_agent',
-    }),
-    /onTermsRequired/
-  );
-
-  const status = await client.request('tools/call', {
-    arguments: { id: '00000000-0000-4000-8000-000000000032' },
-    name: 'firecrawl_agent_status',
-  });
-  assert.notEqual(status.isError, true);
-  const structured = status.structuredContent;
-  assert.equal(structured.exchange.skippedProviders[0].reason, 'terms_required');
-  assert.equal(structured.exchange.requiresAction.providers[0].accept.capability, 'terms/accept');
-  assert.equal(structured.pendingApproval.kind, 'terms');
-  assert.equal(structured.message, 'Apollo could add verified work emails.');
-});
-
-test('firecrawl_agent continues a thread and answers a pending approval', async (t) => {
+test('firecrawl_agent continues a thread', async (t) => {
   const fakeApi = await startFakeFirecrawlApi();
   t.after(() => fakeApi.close());
 
@@ -4089,83 +3951,25 @@ test('firecrawl_agent continues a thread and answers a pending approval', async 
   client.notify('notifications/initialized');
 
   const threadId = '00000000-0000-4000-8000-000000000031';
-  const approvalId = '00000000-0000-4000-8000-000000000033';
 
   const { tools } = await client.request('tools/list');
   const agentTool = tools.find((tool) => tool.name === 'firecrawl_agent');
   const props = agentTool.inputSchema.properties;
   assert.equal(props.threadId.format, 'uuid');
   assert.deepEqual(props.mode.enum, ['extract', 'chat']);
-  // The exchange object mirrors the gateway's agentExchangeSchema key for key.
-  assert.deepEqual(Object.keys(props.exchange.properties).sort(), [
-    'approve',
-    'decline',
-    'enabled',
-    'maxCalls',
-    'onTermsRequired',
-    'requireApproval',
-    'toolkits',
-  ]);
-  assert.equal(props.exchange.additionalProperties, false);
-  assert.deepEqual(Object.keys(props.exchange.properties.approve.properties).sort(), [
-    'always',
-    'approvalId',
-    'callIds',
-  ]);
-  assert.deepEqual(props.exchange.properties.approve.required, ['approvalId']);
-  assert.deepEqual(Object.keys(props.exchange.properties.decline.properties), ['approvalId']);
-  assert.equal(props.exchange.properties.maxCalls.minimum, 1);
-  assert.equal(props.exchange.properties.maxCalls.maximum, 30);
   assert.equal('model' in props, false);
   assert.ok(agentTool.description.length <= CLAUDE_CODE_TEXT_CAP, `description is ${agentTool.description.length} chars`);
-  assert.match(agentTool.description, /same `threadId` and `exchange\.approve: \{approvalId\}`/);
-  assert.match(agentTool.description, /`exchange\.decline: \{approvalId\}`/);
-  assert.match(agentTool.description, /EXPLICIT consent/);
-  assert.match(agentTool.description, /Never call terms\/accept without that consent/);
+  assert.match(agentTool.description, /To continue that thread, pass it with a follow-up `prompt`/);
 
   const call = (args) => client.request('tools/call', { arguments: args, name: 'firecrawl_agent' });
 
-  // 1. A follow-up turn on the same thread.
+  // A follow-up turn on the same thread, and a turn that only sets the mode.
   const followUp = await call({ prompt: 'Only keep the founders', threadId, mode: 'chat' });
   assert.notEqual(followUp.isError, true);
   assert.equal(followUp.structuredContent.threadId, threadId);
   assert.equal(followUp.structuredContent.threadTurn, 1);
-
-  // 2. Accepting a terms offer after terms/accept, and declining one.
-  const approved = await call({
-    prompt: 'I accepted the Apollo terms. Continue.',
-    threadId,
-    exchange: { approve: { approvalId } },
-  });
-  assert.notEqual(approved.isError, true);
-  const declined = await call({
-    prompt: 'Do not use Apollo.',
-    threadId,
-    exchange: { decline: { approvalId } },
-  });
-  assert.notEqual(declined.isError, true);
-
-  // A paid-call approval with a subset, plus the other exchange settings.
-  const paid = await call({
-    prompt: 'Run only the first call.',
-    threadId,
-    exchange: {
-      approve: { approvalId, callIds: ['call-1'], always: true },
-      toolkits: ['apollo'],
-      maxCalls: 4,
-      requireApproval: true,
-      enabled: true,
-    },
-    mode: 'chat',
-  });
-  assert.notEqual(paid.isError, true);
-
-  const asked = await call({
-    prompt: 'Keep asking about terms.',
-    threadId,
-    exchange: { maxCalls: 2, onTermsRequired: 'ask' },
-  });
-  assert.notEqual(asked.isError, true);
+  const inherited = await call({ prompt: 'Add their LinkedIn URLs', threadId });
+  assert.notEqual(inherited.isError, true);
 
   const bodies = fakeApi.requests
     .filter((request) => request.method === 'POST' && request.url === '/v2/agent')
@@ -4176,56 +3980,21 @@ test('firecrawl_agent continues a thread and answers a pending approval', async 
     });
   assert.deepEqual(bodies, [
     { prompt: 'Only keep the founders', threadId, mode: 'chat' },
-    { prompt: 'I accepted the Apollo terms. Continue.', threadId, exchange: { approve: { approvalId } } },
-    { prompt: 'Do not use Apollo.', threadId, exchange: { decline: { approvalId } } },
-    {
-      prompt: 'Run only the first call.',
-      threadId,
-      exchange: {
-        approve: { approvalId, callIds: ['call-1'], always: true },
-        toolkits: ['apollo'],
-        maxCalls: 4,
-        requireApproval: true,
-        enabled: true,
-      },
-      mode: 'chat',
-    },
-    { prompt: 'Keep asking about terms.', threadId, exchange: { maxCalls: 2, onTermsRequired: 'ask' } },
+    { prompt: 'Add their LinkedIn URLs', threadId },
   ]);
   // Nothing invents a model: the gateway runs every request on spark-2.
   for (const body of bodies) assert.equal('model' in body, false);
 
-  // Schema validation: every rejection happens before any request is sent.
-  const sent = bodies.length;
-  const rejects = [
+  // Invalid values fail parameter validation before anything is sent.
+  for (const [args, pattern] of [
     [{ prompt: 'x', threadId: 'not-a-uuid' }, /threadId/],
     [{ prompt: 'x', mode: 'research' }, /mode/],
-    [{ prompt: 'x', threadId, exchange: { approve: { approvalId: 'nope' } } }, /approvalId/],
-    [{ prompt: 'x', threadId, exchange: { approve: {} } }, /approvalId/],
-    [{ prompt: 'x', threadId, exchange: { approve: { approvalId, autoAccept: true } } }, /autoAccept/],
-    [{ prompt: 'x', threadId, exchange: { acceptTerms: true } }, /acceptTerms/],
-    [{ prompt: 'x', threadId, exchange: { maxCalls: 31 } }, /maxCalls/],
-    [{ prompt: 'x', threadId, exchange: { maxCalls: 0 } }, /maxCalls/],
-    [{ prompt: 'x', threadId, exchange: { onTermsRequired: 'accept' } }, /onTermsRequired/],
-    [{ prompt: 'x', exchange: { approve: { approvalId } } }, /threadId/],
-    [{ prompt: 'x', exchange: { decline: { approvalId } } }, /threadId/],
-    [
-      { prompt: 'x', threadId, exchange: { approve: { approvalId }, decline: { approvalId } } },
-      /not both/,
-    ],
-    [{ prompt: 'x', threadId, exchange: { toolkits: ['a', 'b', 'c', 'd', 'e', 'f'] } }, /toolkits/],
-    // The agent service checks the mode on the request itself, so an inherited
-    // chat mode is not enough.
-    [{ prompt: 'x', exchange: { requireApproval: true } }, /requireApproval needs mode/],
-    [{ prompt: 'x', mode: 'extract', exchange: { requireApproval: true } }, /requireApproval needs mode/],
-    [{ prompt: 'x', threadId, exchange: { requireApproval: true } }, /requireApproval needs mode/],
-  ];
-  for (const [args, pattern] of rejects) {
+  ]) {
     await assert.rejects(call(args), pattern, JSON.stringify(args));
   }
   assert.equal(
     fakeApi.requests.filter((request) => request.method === 'POST' && request.url === '/v2/agent').length,
-    sent
+    bodies.length
   );
 
   // A thread error from the API reaches the caller with its message.
@@ -4235,26 +4004,16 @@ test('firecrawl_agent continues a thread and answers a pending approval', async 
   );
   assert.match(busy, /This thread already has a run in progress/);
 
-  // 3. Status keeps the thread and both pendingApproval shapes in structuredContent.
-  const status = async (id) => {
-    const result = await client.request('tools/call', { arguments: { id }, name: 'firecrawl_agent_status' });
-    assert.notEqual(result.isError, true);
-    return result.structuredContent;
-  };
-  const terms = await status('00000000-0000-4000-8000-000000000032');
-  assert.equal(terms.pendingApproval.kind, 'terms');
-  assert.deepEqual(terms.pendingApproval.calls, []);
-  assert.equal(terms.pendingApproval.terms[0].provider, 'apollo');
-  assert.equal(terms.exchange.requiresAction.type, 'accept_terms');
-  assert.equal(terms.exchange.requiresAction.approvalId, terms.pendingApproval.id);
-  assert.equal(terms.exchange.requiresAction.providers[0].show.capability, 'terms/show');
-
-  const paidStatus = await status('00000000-0000-4000-8000-000000000034');
-  assert.equal(paidStatus.threadId, threadId);
-  assert.equal(paidStatus.threadTurn, 2);
-  assert.equal(paidStatus.mode, 'chat');
-  assert.equal(paidStatus.pendingApproval.kind, 'calls');
-  assert.equal(paidStatus.pendingApproval.calls[0].id, 'call-1');
-  assert.equal(paidStatus.pendingApproval.calls[0].creditsEstimate, 3);
-  assert.deepEqual(paidStatus.suggestions, [{ label: 'Only founders', prompt: 'Only keep the founders' }]);
+  // Status keeps the thread fields, the chat reply and the suggestions.
+  const status = await client.request('tools/call', {
+    arguments: { id: '00000000-0000-4000-8000-000000000034' },
+    name: 'firecrawl_agent_status',
+  });
+  assert.notEqual(status.isError, true);
+  const structured = status.structuredContent;
+  assert.equal(structured.threadId, threadId);
+  assert.equal(structured.threadTurn, 2);
+  assert.equal(structured.mode, 'chat');
+  assert.equal(structured.message, 'Kept the 2 founders.');
+  assert.deepEqual(structured.suggestions, [{ label: 'Only founders', prompt: 'Only keep the founders' }]);
 });
