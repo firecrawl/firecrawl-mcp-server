@@ -16,6 +16,13 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { z } from 'zod';
 import {
+  AGENT_HINTS_HEADERS,
+  agentHintsText,
+  preserveAgentHints,
+  readAgentHints,
+  readErrorAgentHints,
+} from './agent-hints';
+import {
   agentOutputSchema,
   agentStatusOutputSchema,
   crawlOutputSchema,
@@ -1038,7 +1045,8 @@ function termsRequiredAction(body: unknown): TermsRequiredAction | undefined {
 
 function termsRequiredError(
   action: TermsRequiredAction,
-  context: ExchangeErrorContext
+  context: ExchangeErrorContext,
+  hints?: string[]
 ): UserError {
   const requestId = context.requestId;
   const retryIdentity = requestId ? ` and requestId ${requestId}` : '';
@@ -1049,6 +1057,7 @@ function termsRequiredError(
       code: TERMS_REQUIRED_CODE,
       status: 403,
       message,
+      ...(hints ? { agent_hints: hints } : {}),
       ...(requestId ? { requestId } : {}),
       requiresAction: action,
       nextTool: {
@@ -1086,7 +1095,8 @@ function throwIfTermsRequired(
     | null
     | undefined;
   const action = termsRequiredAction(source?.response?.data ?? source?.details);
-  if (action) throw termsRequiredError(action, context);
+  if (action)
+    throw termsRequiredError(action, context, readErrorAgentHints(error));
 }
 
 async function relayTermsRequired<T>(
@@ -1119,6 +1129,7 @@ async function relayExchangeError(
     if (!response || response.status === 401) throw error;
     const data = response.data as
       { error?: unknown; code?: unknown; chargeId?: unknown } | undefined;
+    const hints = readErrorAgentHints(error);
     const message =
       typeof data?.error === 'string'
         ? data.error
@@ -1133,6 +1144,7 @@ async function relayExchangeError(
           code: typeof data?.code === 'string' ? data.code : 'exchange_error',
           status: 403,
           message,
+          ...(hints ? { agent_hints: hints } : {}),
           nextTool: {
             name: 'firecrawl_scrape',
             arguments: {
@@ -1146,6 +1158,7 @@ async function relayExchangeError(
       code: typeof data?.code === 'string' ? data.code : 'exchange_error',
       status: response.status,
       message,
+      ...(hints ? { agent_hints: hints } : {}),
       ...(typeof data?.chargeId === 'string'
         ? { chargeId: data.chargeId }
         : {}),
@@ -1461,6 +1474,18 @@ async function runWithCredentialRecovery<T>(
     // different fault and keeps its own reconnect guidance; a keyless session
     // never sent an account credential at all.
     if (session?.authType !== 'api-key' || !isCoreCredentialRejection(error)) {
+      const hints = readErrorAgentHints(error);
+      if (hints) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new UserError(
+          hints.length ? `${message}\n\n${agentHintsText(hints)}` : message,
+          {
+            ...(error instanceof UserError ? error.extras : {}),
+            error: message,
+            agent_hints: hints,
+          }
+        );
+      }
       throw error;
     }
     const payload = recoveryPayload('CREDENTIAL_INVALID', requestId);
@@ -1763,6 +1788,8 @@ server.getApp().get('/ready', (context) => {
     : context.json({ ok: true }, 200);
 });
 
+let warnedMissingAgentHintsInterceptor = false;
+
 function createClient(apiKey?: string): FirecrawlApp {
   const config: any = {
     ...(process.env.FIRECRAWL_API_URL && {
@@ -1775,7 +1802,55 @@ function createClient(apiKey?: string): FirecrawlApp {
     config.apiKey = apiKey;
   }
 
-  return new FirecrawlApp(config);
+  const client = new FirecrawlApp(config);
+  const axiosInstance = (client as any).http?.instance;
+  if (axiosInstance?.interceptors?.request?.use) {
+    axiosInstance.interceptors.request.use((request: any) => {
+      if (typeof request.headers?.set === 'function') {
+        request.headers.set('X-Firecrawl-Agent-Hints', 'true');
+      } else {
+        request.headers = { ...(request.headers ?? {}), ...AGENT_HINTS_HEADERS };
+      }
+      return request;
+    });
+  } else if (!warnedMissingAgentHintsInterceptor) {
+    warnedMissingAgentHintsInterceptor = true;
+    console.warn(
+      '[firecrawl-mcp] SDK request interceptor unavailable; API agent hints may be absent.'
+    );
+  }
+  return client;
+}
+
+/** Keep SDK validation, retries, and result shaping while retaining response metadata. */
+async function sdkResultWithAgentHints<T>(
+  client: FirecrawlApp,
+  execute: () => Promise<T>
+): Promise<T> {
+  const responseInterceptors = (client as any).http?.instance?.interceptors
+    ?.response;
+  if (!responseInterceptors?.use) return execute();
+  let hints: string[] | undefined;
+  const interceptor = responseInterceptors.use((response: any) => {
+    hints = readAgentHints(response?.data) ?? hints;
+    return response;
+  });
+  try {
+    const result = await execute();
+    return preserveAgentHints(result, { agent_hints: hints }) as T;
+  } catch (error) {
+    if (
+      hints &&
+      error &&
+      typeof error === 'object' &&
+      !readErrorAgentHints(error)
+    ) {
+      (error as { agent_hints?: string[] }).agent_hints = hints;
+    }
+    throw error;
+  } finally {
+    responseInterceptors.eject?.(interceptor);
+  }
 }
 
 // Safe mode is enabled by default for cloud service to comply with ChatGPT safety requirements
@@ -1812,10 +1887,14 @@ function getClient(session?: SessionData): FirecrawlApp {
         reason: 'delegated_credential_unavailable',
       });
     }
-    config.headers = {
-      ...(config.headers ?? {}),
-      Authorization: `Bearer ${credential}`,
-    };
+    if (typeof config.headers?.set === 'function') {
+      config.headers.set('Authorization', `Bearer ${credential}`);
+    } else {
+      config.headers = {
+        ...(config.headers ?? {}),
+        Authorization: `Bearer ${credential}`,
+      };
+    }
     return config;
   });
   return client;
@@ -2258,6 +2337,7 @@ async function apiPostJson(
   const response = await fetch(`${resolveApiBaseUrl()}${pathName}`, {
     method: 'POST',
     headers: {
+      ...AGENT_HINTS_HEADERS,
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
       ...(origin ? originHeaders(origin) : {}),
@@ -2276,7 +2356,8 @@ async function apiPostJson(
       parsed?.error ||
         parsed?.message ||
         `Firecrawl request failed (HTTP ${response.status})`,
-      response.status
+      response.status,
+      readAgentHints(parsed)
     );
   }
   return parsed;
@@ -2394,6 +2475,7 @@ async function executeHostedParse(
       session,
       origin
     );
+    const uploadHints = readAgentHints(uploadJson);
     const upload = parseApiData(uploadJson) as ParseUploadUrlData;
     if (!upload?.uploadUrl || !upload?.uploadRef) {
       throw new Error(
@@ -2410,6 +2492,7 @@ async function executeHostedParse(
 
     return asText({
       success: true,
+      ...(uploadHints ? { agent_hints: uploadHints } : {}),
       mode: 'hosted-upload-ref-awaiting-upload',
       message:
         'Hosted MCP cannot read local files. Run the local upload command, then call firecrawl_parse again with uploadRef. No Firecrawl API key is included in this command.',
@@ -2508,15 +2591,17 @@ Alexandria mode, on an authenticated session with Alexandria access: \`alexandri
         },
         session
       );
-      return structuredText(json?.data ?? json);
+      return structuredText(preserveAgentHints(json?.data ?? json, json));
     }
     const client = getClient(session);
     const res = await relayTermsRequired(
       () =>
-        client.scrape(String(url), {
-          ...cleaned,
-          origin,
-        } as any),
+        sdkResultWithAgentHints(client, () =>
+          client.scrape(String(url), {
+            ...cleaned,
+            origin,
+          } as any)
+        ),
       { tool: 'firecrawl_scrape' }
     );
     return structuredText(res);
@@ -2560,10 +2645,12 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
     const client = getClient(session);
     const cleaned = removeEmptyTopLevel(options as Record<string, unknown>);
     log.info('Mapping URL', { url: String(url) });
-    const res = await client.map(String(url), {
-      ...cleaned,
-      origin: requestOrigin(mcpClient, session),
-    } as any);
+    const res = await sdkResultWithAgentHints(client, () =>
+      client.map(String(url), {
+        ...cleaned,
+        origin: requestOrigin(mcpClient, session),
+      } as any)
+    );
     return structuredText(res);
   },
 });
@@ -2887,6 +2974,7 @@ async function keylessPost(
     }
   }
   const headers: Record<string, string> = {
+    ...AGENT_HINTS_HEADERS,
     ...originHeaders(origin),
     'Content-Type': 'application/json',
   };
@@ -2916,10 +3004,14 @@ async function keylessPost(
             ? json.retry_after_seconds
             : undefined,
       });
+      const hints = readAgentHints(json);
+      if (hints) payload.agent_hints = hints;
       throw new UserError(String(payload.message), payload);
     }
-    throw new Error(
-      json?.error || `Firecrawl request failed (HTTP ${response.status})`
+    throw new CoreHttpError(
+      json?.error || `Firecrawl request failed (HTTP ${response.status})`,
+      response.status,
+      readAgentHints(json)
     );
   }
   return json;
@@ -2947,6 +3039,7 @@ async function getCrawlStatusWithOrigin(
       expiresAt: body.expiresAt,
       next: body.next ?? null,
       data: initialDocs,
+      ...(readAgentHints(body) ? { agent_hints: readAgentHints(body) } : {}),
     };
   }
 
@@ -2979,6 +3072,7 @@ async function getCrawlStatusWithOrigin(
     expiresAt: body.expiresAt,
     next: null,
     data: docs,
+    ...(readAgentHints(body) ? { agent_hints: readAgentHints(body) } : {}),
   };
 }
 
@@ -3138,6 +3232,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
       if (querySuggestions) body.querySuggestions = querySuggestions;
 
       const headers: Record<string, string> = {
+        ...AGENT_HINTS_HEADERS,
         ...originHeaders(origin),
         'Content-Type': 'application/json',
       };
@@ -3186,6 +3281,9 @@ Eligibility is limited to successful searches within the feedback age window. Th
           feedbackErrorCode: parsed?.feedbackErrorCode,
           error: parsed?.error ?? `HTTP ${response.status}`,
           retryable: response.status >= 500,
+          ...(readAgentHints(parsed)
+            ? { agent_hints: readAgentHints(parsed) }
+            : {}),
         });
       }
 
@@ -3292,6 +3390,7 @@ Returns submission status, feedback ID, and accounting fields.
 
       const apiBase = resolveApiBaseUrl();
       const headers: Record<string, string> = {
+        ...AGENT_HINTS_HEADERS,
         ...originHeaders(origin),
         'Content-Type': 'application/json',
       };
@@ -3355,6 +3454,9 @@ Returns submission status, feedback ID, and accounting fields.
           feedbackErrorCode: parsed?.feedbackErrorCode,
           error: parsed?.error ?? `HTTP ${response.status}`,
           retryable: response.status >= 500,
+          ...(readAgentHints(parsed)
+            ? { agent_hints: readAgentHints(parsed) }
+            : {}),
         });
       }
 
@@ -3809,7 +3911,10 @@ Set \`redactPII\` to request redaction of personally identifiable information in
     form.append('file', blob, filename);
     form.append('options', JSON.stringify(optionsPayload));
 
-    const headers: Record<string, string> = { ...originHeaders(origin) };
+    const headers: Record<string, string> = {
+      ...AGENT_HINTS_HEADERS,
+      ...originHeaders(origin),
+    };
     const credential = credentialForOutboundRequest(session);
     if (credential) {
       headers['Authorization'] = `Bearer ${credential}`;
@@ -3830,8 +3935,16 @@ Set \`redactPII\` to request redaction of personally identifiable information in
 
     const responseText = await response.text();
     if (!response.ok) {
-      throw new Error(
-        `Parse request failed with status ${response.status}: ${responseText}`
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(responseText);
+      } catch {
+        // Keep the original non-JSON error text.
+      }
+      throw new CoreHttpError(
+        `Parse request failed with status ${response.status}: ${responseText}`,
+        response.status,
+        readAgentHints(parsed)
       );
     }
 

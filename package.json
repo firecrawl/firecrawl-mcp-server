@@ -15,7 +15,7 @@
   },
   "scripts": {
     "build": "rm -rf dist && tsup && node -e \"require('fs').chmodSync('dist/index.js', '755')\"",
-    "test": "npm run build && node --test tests/*.test.mjs",
+    "test": "npm run build && node --test --test-concurrency=1 tests/*.test.mjs",
     "start": "node dist/index.js",
     "start:cloud": "CLOUD_SERVICE=true node dist/index.js",
     "lint": "eslint src/**/*.ts",

@@ -12,6 +12,7 @@
 
 import { z } from 'zod';
 import type { ContentResult, FastMCP } from 'fastmcp';
+import { withAgentHints } from './agent-hints';
 import { originHeaders, requestOrigin } from './origin';
 import { developerSearchOutputSchema, withStructured } from './tool-output';
 
@@ -133,7 +134,7 @@ Returns ranked results with an ID, source type, URL, title, and the matched pass
         results?: DeveloperHit[];
       }>(`${BASE}?${params.toString()}`, originHeaders(requestOrigin(mcpClient, session)));
       const results = res.data?.results ?? [];
-      return withStructured(fmtDeveloper(results), { results });
+      return withAgentHints(withStructured(fmtDeveloper(results), { results }), res.data, true);
     },
   });
 }

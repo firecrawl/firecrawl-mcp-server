@@ -11,6 +11,7 @@
 
 import { z } from 'zod';
 import type { ContentResult, FastMCP } from 'fastmcp';
+import { AGENT_HINTS_HEADERS, readAgentHints, withAgentHints } from './agent-hints';
 import { originHeaders, requestOrigin } from './origin';
 import {
   monitorCheckOutputSchema,
@@ -80,7 +81,10 @@ async function monitorRequest(
     if (s) url += `?${s}`;
   }
 
-  const headers: Record<string, string> = originHeaders(origin);
+  const headers: Record<string, string> = {
+    ...originHeaders(origin),
+    ...AGENT_HINTS_HEADERS,
+  };
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   if (init.body !== undefined) headers['Content-Type'] = 'application/json';
 
@@ -96,10 +100,14 @@ async function monitorRequest(
     const message =
       payload?.error ||
       `HTTP ${response.status}: ${response.statusText || 'Request failed'}`;
-    throw new CoreHttpError(message, response.status);
+    throw new CoreHttpError(message, response.status, readAgentHints(payload));
   }
 
   return payload;
+}
+
+function monitorResult(data: unknown): ContentResult {
+  return withAgentHints(structuredText(data), data);
 }
 
 const pageStatusSchema = z.enum(['same', 'new', 'changed', 'removed', 'error']);
@@ -268,7 +276,7 @@ In the simple form, a \`goal\` is required. If \`queries\` contains one or more 
         method: 'POST',
         body,
       });
-      return structuredText(res);
+      return monitorResult(res);
     },
   });
 
@@ -298,7 +306,7 @@ List monitors for the authenticated account with optional pagination controls. R
         requestOrigin(mcpClient, session), '/monitor', {
         query: { limit, offset },
       });
-      return structuredText(res);
+      return monitorResult(res);
     },
   });
 
@@ -325,7 +333,7 @@ Retrieve one monitor by ID, including its configuration and current state. This 
         requestOrigin(mcpClient, session),
         `/monitor/${encodeURIComponent(id)}`
       );
-      return structuredText(res);
+      return monitorResult(res);
     },
   });
 
@@ -361,7 +369,7 @@ Returns the updated monitor.
         `/monitor/${encodeURIComponent(id)}`,
         { method: 'PATCH', body }
       );
-      return structuredText(res);
+      return monitorResult(res);
     },
   });
 
@@ -390,7 +398,7 @@ Permanently delete a monitor by ID and stop its future schedule. This operation 
         `/monitor/${encodeURIComponent(id)}`,
         { method: 'DELETE' }
       );
-      return structuredText(res);
+      return monitorResult(res);
     },
   });
 
@@ -418,7 +426,7 @@ Queue an immediate check for a monitor outside its normal schedule. This starts 
         `/monitor/${encodeURIComponent(id)}/run`,
         { method: 'POST' }
       );
-      return structuredText(res);
+      return monitorResult(res);
     },
   });
 
@@ -456,7 +464,7 @@ List historical checks for a monitor, optionally filtered by status and bounded 
         `/monitor/${encodeURIComponent(id)}/checks`,
         { query: { limit, offset, status } }
       );
-      return structuredText(res);
+      return monitorResult(res);
     },
   });
 
@@ -498,7 +506,7 @@ Markdown tracking returns a unified text diff, JSON tracking returns field paths
         `/monitor/${encodeURIComponent(id)}/checks/${encodeURIComponent(checkId)}`,
         { query: { limit, skip, status: pageStatus } }
       );
-      return structuredText(res);
+      return monitorResult(res);
     },
   });
 }

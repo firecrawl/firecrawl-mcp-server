@@ -108,12 +108,17 @@ async function waitForCredentialValidationLog(readStderr) {
 
 function assertKeylessAccountRecovery(
   result,
-  { code, message, retryAfterSeconds, untrustedRequestIds = [] }
+  { code, message, retryAfterSeconds, untrustedRequestIds = [], hints }
 ) {
   assert.equal(result.isError, true);
   assert.equal(result.content[0].type, 'text');
-  assert.equal(result.content[0].text, message);
-  assert.equal(result.content[0].text, result.structuredContent.message);
+  if (hints) {
+    assert.ok(result.content[0].text.startsWith(message));
+    assert.match(result.content[0].text, /Firecrawl API agent_hints/);
+    assert.deepEqual(result.structuredContent.agent_hints, hints);
+  } else {
+    assert.equal(result.content[0].text, message);
+  }
   assert.equal(result.structuredContent.code, code);
   assert.equal(result.structuredContent.auth_mode, 'keyless');
   assert.equal(result.structuredContent.message, message);
@@ -2120,7 +2125,12 @@ test('HTTP cloud keyless quota stays 200 isError without inlining retry_after_se
         keylessEligible: true,
         searchResponse: {
           status: 429,
-          body: { error: 'limit', reason: 'credits', retry_after_seconds: 42 },
+          body: {
+            error: 'limit',
+            reason: 'credits',
+            retry_after_seconds: 42,
+            agent_hints: ['Create an API key to continue after the keyless limit.'],
+          },
         },
       },
       'KEYLESS_QUOTA_EXHAUSTED',
@@ -2177,6 +2187,9 @@ test('HTTP cloud keyless quota stays 200 isError without inlining retry_after_se
       code: expectedCode,
       message: KEYLESS_QUOTA_MESSAGE,
       retryAfterSeconds,
+      ...(label === 'core-with-reason'
+        ? { hints: ['Create an API key to continue after the keyless limit.'] }
+        : {}),
     });
     assert.doesNotMatch(result.content[0].text, /about 42 seconds/, label);
     assert.doesNotMatch(result.content[0].text, /claude mcp add/, label);

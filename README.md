@@ -1099,6 +1099,33 @@ Example log messages:
 [ERROR] Rate limit exceeded
 ```
 
+## API response hints
+
+The MCP server explicitly enables Firecrawl API response hints on its outbound
+requests with `X-Firecrawl-Agent-Hints: true`; the API leaves them disabled for
+ordinary callers. When Firecrawl returns an optional `agent_hints` array of
+strings, JSON tool results preserve it in their existing text and
+`structuredContent` alongside the tool's other structured fields. Readable
+Developer and Research outputs keep their existing text and show hints in a
+separate, labeled text block. Empty results can include hints. Error hints
+remain visible with `isError: true`.
+Responses without hints keep their existing output format. Guidance is API
+metadata, separate from the scraped page's content; it is not generated or
+executed by the MCP adapter.
+
+The strings are passed through unchanged. An HTTP operation mentioned in a
+hint is not necessarily an MCP tool: Alexandria discovery is available through
+`firecrawl_find_tools`, and provider execution uses `firecrawl_scrape` with an
+`alexandria` body. The search-only profile exposes those paths and URL-mode
+Scrape, but does not expose feedback tools. Clients should use their advertised
+tool schemas and available capabilities. This change does not add tools,
+translate prose into tool calls, or submit feedback automatically.
+
+The pinned `firecrawl` 4.40.0 discards outer-envelope hints in high-level
+Scrape and Map responses and normalized SDK errors. The adapter captures hints
+from the SDK HTTP response while retaining the SDK's request and retry behavior.
+Authentication recovery retains its existing guidance.
+
 ## Error Handling
 
 The server provides robust error handling:

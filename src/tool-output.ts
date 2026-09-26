@@ -83,6 +83,9 @@ const unknown = (description: string) =>
 const success = bool('Whether the API call succeeded.');
 const error = unknown('Error message or error object when the call did not succeed.');
 const warning = str('Non-fatal warning about the result.');
+const agentHints = {
+  agent_hints: z.array(z.string()).optional().describe('Optional response guidance from the Firecrawl API.'),
+};
 
 /** Keys every Alexandria-capable response can carry (see `alexandriaOutput`). */
 const alexandriaEnvelope = {
@@ -106,6 +109,7 @@ const alexandriaEnvelope = {
 
 export const scrapeOutputSchema = z
   .object({
+    ...agentHints,
     // URL mode: the scraped document, with the formats that were requested.
     markdown: str('Page content as markdown.'),
     html: str('Processed HTML of the page.'),
@@ -140,6 +144,7 @@ export const scrapeOutputSchema = z
 
 export const mapOutputSchema = z
   .object({
+    ...agentHints,
     links: unknown('URLs discovered under the website.'),
     success,
     error,
@@ -150,6 +155,7 @@ export const mapOutputSchema = z
 
 export const searchOutputSchema = z
   .object({
+    ...agentHints,
     success,
     data: unknown('Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`.'),
     error,
@@ -164,6 +170,7 @@ export const searchOutputSchema = z
 
 export const findToolsOutputSchema = z
   .object({
+    ...agentHints,
     success,
     data: unknown('Discovery page in `data.alexandria[0].data`, with `level`, `items`, `total`, and an optional `nextTool`.'),
     error,
@@ -173,6 +180,7 @@ export const findToolsOutputSchema = z
 
 export const feedbackOutputSchema = z
   .object({
+    ...agentHints,
     success,
     error,
     status: num('HTTP status when the submission was rejected.'),
@@ -193,6 +201,7 @@ export const feedbackOutputSchema = z
 
 export const crawlOutputSchema = z
   .object({
+    ...agentHints,
     success,
     error,
     warning,
@@ -210,6 +219,7 @@ export const crawlOutputSchema = z
 
 export const agentOutputSchema = z
   .object({
+    ...agentHints,
     success,
     error,
     id: str('Agent job identifier, for `firecrawl_agent_status`.'),
@@ -221,6 +231,7 @@ export const agentOutputSchema = z
 
 export const agentStatusOutputSchema = z
   .object({
+    ...agentHints,
     success,
     error,
     id: str('Agent job identifier.'),
@@ -239,6 +250,7 @@ export const agentStatusOutputSchema = z
 
 export const interactOutputSchema = z
   .object({
+    ...agentHints,
     success,
     error: unknown('Why the interaction or the session could not run.'),
     url: str('The URL the session was opened from, when opening failed.'),
@@ -256,6 +268,7 @@ export const interactOutputSchema = z
 
 export const interactStopOutputSchema = z
   .object({
+    ...agentHints,
     success,
     error,
     message: str('Confirmation that the session was stopped.'),
@@ -265,6 +278,7 @@ export const interactStopOutputSchema = z
 
 export const parseOutputSchema = z
   .object({
+    ...agentHints,
     success,
     error,
     warning,
@@ -307,6 +321,7 @@ export const deprecatedToolOutputSchema = z
 
 export const monitorOutputSchema = z
   .object({
+    ...agentHints,
     success,
     error,
     data: unknown('The monitor record: configuration, schedule, targets, and current state.'),
@@ -315,6 +330,7 @@ export const monitorOutputSchema = z
 
 export const monitorListOutputSchema = z
   .object({
+    ...agentHints,
     success,
     error,
     data: unknown('One page of monitor records.'),
@@ -324,6 +340,7 @@ export const monitorListOutputSchema = z
 
 export const monitorDeleteOutputSchema = z
   .object({
+    ...agentHints,
     success,
     error,
     data: unknown('Deletion details, when the API returns any.'),
@@ -332,6 +349,7 @@ export const monitorDeleteOutputSchema = z
 
 export const monitorRunOutputSchema = z
   .object({
+    ...agentHints,
     success,
     error,
     data: unknown('The queued check.'),
@@ -340,6 +358,7 @@ export const monitorRunOutputSchema = z
 
 export const monitorChecksOutputSchema = z
   .object({
+    ...agentHints,
     success,
     error,
     data: unknown('One page of check summaries.'),
@@ -349,6 +368,7 @@ export const monitorChecksOutputSchema = z
 
 export const monitorCheckOutputSchema = z
   .object({
+    ...agentHints,
     success,
     error,
     data: unknown('The check and its page-level results: each page reports `same`, `new`, `changed`, `removed`, or `error`, with diffs and any goal judgment.'),
@@ -378,18 +398,21 @@ const paperSchema = z.looseObject({
 
 export const researchSearchOutputSchema = z
   .object({
+    ...agentHints,
     results: z.array(paperSchema).describe('Ranked papers, in the order the text block lists them.'),
   })
   .describe('Ranked papers with canonical IDs, titles, authors, and abstracts.');
 
 export const researchPaperOutputSchema = z
   .object({
+    ...agentHints,
     paper: paperSchema.optional().describe('Canonical metadata for the requested paper, absent when it was not found.'),
   })
   .describe('Canonical metadata for one paper.');
 
 export const researchRelatedOutputSchema = z
   .object({
+    ...agentHints,
     results: z.array(paperSchema).describe('Ranked citation-graph candidates.'),
     poolSize: z.number().describe('Number of candidates evaluated before ranking.'),
     note: str('Note about how the candidates were produced.'),
@@ -398,6 +421,7 @@ export const researchRelatedOutputSchema = z
 
 export const researchReadOutputSchema = z
   .object({
+    ...agentHints,
     passages: z
       .array(z.looseObject({ text: str('Passage text.') }))
       .describe('In-body passages relevant to the question; empty when no full text is indexed.'),
@@ -406,6 +430,7 @@ export const researchReadOutputSchema = z
 
 export const developerSearchOutputSchema = z
   .object({
+    ...agentHints,
     results: z
       .array(
         z.looseObject({
