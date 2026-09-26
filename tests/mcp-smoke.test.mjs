@@ -237,6 +237,23 @@ async function startFakeFirecrawlApi() {
       return;
     }
 
+    if (
+      req.method === 'POST' &&
+      req.url === '/v2/agent' &&
+      parsedBody?.threadId === '00000000-0000-4000-8000-000000000036'
+    ) {
+      res.writeHead(409, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          success: false,
+          code: 'thread_busy',
+          error: 'This thread already has a run in progress',
+          runId: '00000000-0000-4000-8000-000000000037',
+        })
+      );
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/v2/agent') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
@@ -263,6 +280,25 @@ async function startFakeFirecrawlApi() {
           success: true,
           threadId: '00000000-0000-4000-8000-000000000031',
           threadTurn: 1,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'GET' && req.url === '/v2/agent/00000000-0000-4000-8000-000000000034') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: null,
+          expiresAt: '2026-10-01T00:00:00.000Z',
+          message: 'Kept the 2 founders.',
+          mode: 'chat',
+          model: 'spark-2',
+          status: 'completed',
+          success: true,
+          threadId: '00000000-0000-4000-8000-000000000031',
+          threadTurn: 2,
+          suggestions: [{ label: 'Only founders', prompt: 'Only keep the founders' }],
         })
       );
       return;
@@ -3894,4 +3930,90 @@ test('firecrawl_agent forwards effort, maxCredits and strictConstrainToURLs to /
     /maxCredits/
   );
   assert.equal(fakeApi.requests.filter((request) => request.url === '/v2/agent').length, sentBefore);
+});
+
+test('firecrawl_agent continues a thread', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-agent-thread', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const threadId = '00000000-0000-4000-8000-000000000031';
+
+  const { tools } = await client.request('tools/list');
+  const agentTool = tools.find((tool) => tool.name === 'firecrawl_agent');
+  const props = agentTool.inputSchema.properties;
+  assert.equal(props.threadId.format, 'uuid');
+  assert.deepEqual(props.mode.enum, ['extract', 'chat']);
+  assert.equal('model' in props, false);
+  assert.ok(agentTool.description.length <= CLAUDE_CODE_TEXT_CAP, `description is ${agentTool.description.length} chars`);
+  assert.match(agentTool.description, /To continue that thread, pass it with a follow-up `prompt`/);
+
+  const call = (args) => client.request('tools/call', { arguments: args, name: 'firecrawl_agent' });
+
+  // A follow-up turn on the same thread, and a turn that only sets the mode.
+  const followUp = await call({ prompt: 'Only keep the founders', threadId, mode: 'chat' });
+  assert.notEqual(followUp.isError, true);
+  assert.equal(followUp.structuredContent.threadId, threadId);
+  assert.equal(followUp.structuredContent.threadTurn, 1);
+  const inherited = await call({ prompt: 'Add their LinkedIn URLs', threadId });
+  assert.notEqual(inherited.isError, true);
+
+  const bodies = fakeApi.requests
+    .filter((request) => request.method === 'POST' && request.url === '/v2/agent')
+    .map(({ body }) => {
+      const { origin, ...rest } = body;
+      assert.equal(typeof origin, 'string');
+      return rest;
+    });
+  assert.deepEqual(bodies, [
+    { prompt: 'Only keep the founders', threadId, mode: 'chat' },
+    { prompt: 'Add their LinkedIn URLs', threadId },
+  ]);
+  // Nothing invents a model: the gateway runs every request on spark-2.
+  for (const body of bodies) assert.equal('model' in body, false);
+
+  // Invalid values fail parameter validation before anything is sent.
+  for (const [args, pattern] of [
+    [{ prompt: 'x', threadId: 'not-a-uuid' }, /threadId/],
+    [{ prompt: 'x', mode: 'research' }, /mode/],
+  ]) {
+    await assert.rejects(call(args), pattern, JSON.stringify(args));
+  }
+  assert.equal(
+    fakeApi.requests.filter((request) => request.method === 'POST' && request.url === '/v2/agent').length,
+    bodies.length
+  );
+
+  // A thread error from the API reaches the caller with its message.
+  const busy = await call({ prompt: 'x', threadId: '00000000-0000-4000-8000-000000000036' }).then(
+    (result) => JSON.stringify(result),
+    (error) => String(error?.message ?? error)
+  );
+  assert.match(busy, /This thread already has a run in progress/);
+
+  // Status keeps the thread fields, the chat reply and the suggestions.
+  const status = await client.request('tools/call', {
+    arguments: { id: '00000000-0000-4000-8000-000000000034' },
+    name: 'firecrawl_agent_status',
+  });
+  assert.notEqual(status.isError, true);
+  const structured = status.structuredContent;
+  assert.equal(structured.threadId, threadId);
+  assert.equal(structured.threadTurn, 2);
+  assert.equal(structured.mode, 'chat');
+  assert.equal(structured.message, 'Kept the 2 founders.');
+  assert.deepEqual(structured.suggestions, [{ label: 'Only founders', prompt: 'Only keep the founders' }]);
 });

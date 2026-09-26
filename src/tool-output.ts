@@ -234,6 +234,8 @@ export const agentStatusOutputSchema = z
     mode: str('Agent mode the job ran in.'),
     threadId: str('Research thread this job belongs to.'),
     threadTurn: num('Turn number of this job within its thread.'),
+    message: unknown('The agent\'s reply; in chat mode, the short answer to a follow-up.'),
+    suggestions: unknown('Follow-ups the agent offers; send one as the prompt of the next turn with this threadId.'),
   })
   .describe('Progress or final result of a research agent job.');
 

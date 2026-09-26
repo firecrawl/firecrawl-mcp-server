@@ -3527,6 +3527,9 @@ server.addTool({
 Run web research that returns structured data when the URLs are not known or the answer spans several sites. Describe the fields you need in \`prompt\`, optionally pass a JSON \`schema\` and seed \`urls\`, and the research agent searches, navigates, reads pages, and returns JSON assembled across sources. Use it to research an entity plus its fields (founders, pricing, contact details), to build lists and datasets (companies, people, products, jobs, papers), and for pages that need navigation or interaction to reach the data. Optional \`effort\` sets the reasoning budget, \`maxCredits\` caps spend, and \`strictConstrainToURLs\` keeps the agent to the supplied \`urls\`.
 
 This call returns only a job ID, not the research result. Read the job with \`firecrawl_agent_status\` until it reaches \`completed\` or \`failed\`; a typical research run takes one to three minutes. For one known URL use \`firecrawl_scrape\` (with formats: ["json"] for structured output); for a plain lookup that a results page answers, use \`firecrawl_search\`.
+
+The job also returns a \`threadId\`. To continue that thread, pass it with a follow-up \`prompt\`; omitted \`mode\`, \`urls\` and \`schema\` carry over from the previous turn.
+
 `,
   outputSchema: agentOutputSchema,
   parameters: z.object({
@@ -3551,6 +3554,19 @@ This call returns only a job ID, not the research result. Read the job with \`fi
       .describe(
         'If true, agent will only visit URLs provided in the urls array.'
       ),
+    threadId: z
+      .string()
+      .uuid()
+      .optional()
+      .describe(
+        'Continue this thread: the threadId from an earlier firecrawl_agent or firecrawl_agent_status result. Omit to start a new thread.'
+      ),
+    mode: z
+      .enum(['extract', 'chat'])
+      .optional()
+      .describe(
+        '"extract" (default) returns the complete structured result every turn. "chat" lets a follow-up that asks no new data get a short reply in message instead of a re-run. Omitted on a follow-up keeps the previous turn\'s mode.'
+      ),
   }),
   execute: async (
     args: unknown,
@@ -3561,6 +3577,7 @@ This call returns only a job ID, not the research result. Read the job with \`fi
     log.info('Starting agent', {
       prompt: (a.prompt as string).substring(0, 100),
       urlCount: Array.isArray(a.urls) ? a.urls.length : 0,
+      threadId: (a.threadId as string | undefined) ?? null,
     });
     const agentBody = removeEmptyTopLevel({
       prompt: a.prompt as string,
@@ -3569,6 +3586,8 @@ This call returns only a job ID, not the research result. Read the job with \`fi
       effort: a.effort as 'low' | 'medium' | 'high' | undefined,
       maxCredits: a.maxCredits as number | undefined,
       strictConstrainToURLs: a.strictConstrainToURLs as boolean | undefined,
+      threadId: a.threadId as string | undefined,
+      mode: a.mode as 'extract' | 'chat' | undefined,
     });
     const res = await (client as any).startAgent({
       ...agentBody,
