@@ -13,7 +13,7 @@ jobs:
     name: Publish
     runs-on: ubuntu-latest
     permissions:
-      id-token: write  # Required for OIDC authentication with MCP registry
+      id-token: write  # Required for OIDC authentication with npm and MCP registry
       contents: read
 
     steps:
@@ -25,15 +25,17 @@ jobs:
           version: 10
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: "20"
-          cache: "pnpm"
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false  # Never use caching in release builds
 
-      - name: Authenticate
-        run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
 
       - name: Read the version
         id: version
@@ -69,10 +71,7 @@ jobs:
 
       - name: Publish to NPM
         if: steps.npm.outputs.on_npm != 'true'
-        run: |
-          pnpm install
-          pnpm run build
-          pnpm publish --access public --no-git-checks
+        run: npm publish --provenance --access public
 
       # npm takes a few minutes to serve a new version, and the MCP registry checks npm for the
       # version before it accepts a server.json; publishing to it straight after npm fails with
