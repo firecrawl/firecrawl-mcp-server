@@ -26,5 +26,19 @@
         }
       ]
     }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.firecrawl.dev/v2/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Optional. Bearer <FIRECRAWL_API_KEY>. Omit for the keyless tier.",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
   ]
 }
