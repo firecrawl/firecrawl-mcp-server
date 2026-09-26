@@ -3518,7 +3518,6 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
 // Mirrors agentExchangeSchema in firecrawl/firecrawl
 // apps/api/src/controllers/v2/types.ts: the gateway forwards it verbatim to
 // the agent service, which owns every default and the per-thread inheritance.
-const agentOnTermsRequiredSchema = z.enum(['skip', 'ask']).optional();
 const agentExchangeSchema = z
   .strictObject({
     enabled: z
@@ -3558,9 +3557,12 @@ const agentExchangeSchema = z
       .describe(
         'Answer no to that pendingApproval. Needs threadId. A declined terms offer keeps those providers out of the rest of the thread.'
       ),
-    onTermsRequired: agentOnTermsRequiredSchema.describe(
-      'Same as the top-level onTermsRequired.'
-    ),
+    onTermsRequired: z
+      .enum(['skip', 'ask'])
+      .optional()
+      .describe(
+        'What to do when a provider the agent would use needs data terms the team has not accepted. Gated providers are never called. "skip" (default): answer with accepted providers and list the rest in exchange.skippedProviders. "ask": the same, plus a terms pendingApproval and exchange.requiresAction with the terms/show and terms/accept calls. Each provider digest is string | null and always present; when null, terms/show returns it. There is no auto-accept. Omitted on a follow-up keeps the previous turn\'s value.'
+      ),
   })
   .describe(
     'Alexandria provider settings for this turn, forwarded as the request\'s exchange object.'
@@ -3581,7 +3583,7 @@ This call returns only a job ID, not the research result. Read the job with \`fi
 
 The job also returns a \`threadId\`. To continue that thread, pass it with a follow-up \`prompt\`; omitted \`mode\`, \`urls\`, \`schema\` and exchange settings carry over from the previous turn.
 
-The agent only calls Alexandria providers whose data terms the team has accepted. The status result's \`exchange.skippedProviders\` lists gated providers that would have helped. With \`onTermsRequired\` "ask", a terms offer ends the turn: \`pendingApproval\` (kind "terms") and \`exchange.requiresAction\` carry the \`approvalId\` and the exact terms/show and terms/accept calls. Show the user the terms, get their EXPLICIT consent, run terms/accept through \`firecrawl_scrape\`, then call \`firecrawl_agent\` with the same \`threadId\` and \`exchange.approve: {approvalId}\`. If they decline, send \`exchange.decline: {approvalId}\` instead. Never call terms/accept without that consent; a data request is not consent.
+The agent only calls Alexandria providers whose data terms the team has accepted. The status result's \`exchange.skippedProviders\` lists gated providers that would have helped. With \`exchange.onTermsRequired\` "ask", a terms offer ends the turn: \`pendingApproval\` (kind "terms") and \`exchange.requiresAction\` carry the \`approvalId\` and the exact terms/show and terms/accept calls. Show the user the terms, get their EXPLICIT consent, run terms/accept through \`firecrawl_scrape\`, then call \`firecrawl_agent\` with the same \`threadId\` and \`exchange.approve: {approvalId}\`. If they decline, send \`exchange.decline: {approvalId}\` instead. Never call terms/accept without that consent; a data request is not consent.
 `,
   outputSchema: agentOutputSchema,
   parameters: z.object({
@@ -3606,9 +3608,6 @@ The agent only calls Alexandria providers whose data terms the team has accepted
       .describe(
         'If true, agent will only visit URLs provided in the urls array.'
       ),
-    onTermsRequired: agentOnTermsRequiredSchema.describe(
-      'What to do when a provider the agent would use needs data terms the team has not accepted. Gated providers are never called. "skip" (default): answer with accepted providers and list the rest in exchange.skippedProviders. "ask": the same, plus exchange.requiresAction with the terms/show and terms/accept calls. Each provider digest is string | null and always present; when null, terms/show returns it. There is no auto-accept. Same as exchange.onTermsRequired; omitted on a follow-up keeps the previous turn\'s value.'
-    ),
     threadId: z
       .string()
       .uuid()
@@ -3641,17 +3640,6 @@ The agent only calls Alexandria providers whose data terms the team has accepted
         'exchange.approve and exchange.decline answer a pending approval on an existing thread: pass that thread\'s threadId.',
       path: ['threadId'],
     }
-  )
-  .refine(
-    (data) =>
-      !data.onTermsRequired ||
-      !data.exchange?.onTermsRequired ||
-      data.onTermsRequired === data.exchange.onTermsRequired,
-    {
-      message:
-        'onTermsRequired and exchange.onTermsRequired disagree; send one of them.',
-      path: ['onTermsRequired'],
-    }
   ),
   execute: async (
     args: unknown,
@@ -3664,15 +3652,6 @@ The agent only calls Alexandria providers whose data terms the team has accepted
       urlCount: Array.isArray(a.urls) ? a.urls.length : 0,
       threadId: (a.threadId as string | undefined) ?? null,
     });
-    const onTermsRequired = a.onTermsRequired as 'skip' | 'ask' | undefined;
-    // The top-level onTermsRequired is shorthand for exchange.onTermsRequired;
-    // the refine above rejects the two disagreeing. Everything else in
-    // exchange is forwarded verbatim: the agent service owns the defaults and
-    // the per-thread inheritance.
-    const exchange = {
-      ...((a.exchange as Record<string, unknown> | undefined) ?? {}),
-      ...(onTermsRequired ? { onTermsRequired } : {}),
-    };
     const agentBody = removeEmptyTopLevel({
       prompt: a.prompt as string,
       urls: a.urls as string[] | undefined,
@@ -3682,7 +3661,9 @@ The agent only calls Alexandria providers whose data terms the team has accepted
       strictConstrainToURLs: a.strictConstrainToURLs as boolean | undefined,
       threadId: a.threadId as string | undefined,
       mode: a.mode as 'extract' | 'chat' | undefined,
-      exchange,
+      // Forwarded verbatim: the agent service owns the defaults and the
+      // per-thread inheritance.
+      exchange: a.exchange as Record<string, unknown> | undefined,
     });
     const res = await (client as any).startAgent({
       ...agentBody,

@@ -735,14 +735,13 @@ The agent performs web searches, follows links, reads pages, and gathers data au
 - `prompt`: Natural language description of the data you want (required, max 10,000 characters)
 - `urls`: Optional array of URLs to focus the agent on specific pages
 - `schema`: Optional JSON schema for structured output
-- `onTermsRequired`: Optional. What to do when an Alexandria provider the agent would use needs data terms your team has not accepted. Gated providers are never called in any mode.
-  - `"skip"` (default): answer with accepted providers only. `exchange.skippedProviders` on the status result lists the gated providers that would have helped.
-  - `"ask"`: the same, plus `exchange.requiresAction` with the exact `terms/show` and `terms/accept` calls for each provider. Each provider's `digest` is always present and is `string | null`; when it is `null`, `terms/show` returns the current digest to send.
-
 - `threadId`: Optional. Continue an existing thread: the `threadId` from an earlier `firecrawl_agent` or `firecrawl_agent_status` result. Omit to start a new thread. On a follow-up, omitted `mode`, `urls`, `schema` and `exchange` settings carry over from the previous turn.
 - `mode`: Optional. `"extract"` (default) returns the complete structured result every turn. `"chat"` lets a follow-up that asks for no new data get a short reply in `message` instead of a re-run; `exchange.requireApproval` needs it.
 - `exchange`: Optional. Alexandria provider settings for this turn, forwarded as-is to `POST /v2/agent`:
-  - `enabled`, `toolkits` (provider slugs), `maxCalls` (1 to 30), `requireApproval` (paid calls end the turn with a `pendingApproval`; needs `mode: "chat"`), `onTermsRequired` (same as the top-level argument; send one or the other)
+  - `enabled`, `toolkits` (provider slugs), `maxCalls` (1 to 30), `requireApproval` (paid calls end the turn with a `pendingApproval`; needs `mode: "chat"`)
+  - `onTermsRequired`: what to do when an Alexandria provider the agent would use needs data terms your team has not accepted. Gated providers are never called in any mode. Omitted on a follow-up keeps the previous turn's value.
+    - `"skip"` (default): answer with accepted providers only. `exchange.skippedProviders` on the status result lists the gated providers that would have helped.
+    - `"ask"`: the same, plus a terms `pendingApproval` and `exchange.requiresAction` with the exact `terms/show` and `terms/accept` calls for each provider. Each provider's `digest` is always present and is `string | null`; when it is `null`, `terms/show` returns the current digest to send.
   - `approve`: `{ approvalId, callIds?, always? }` answers yes to the `pendingApproval` the previous turn ended on. `callIds` and `always` apply to paid-call approvals only.
   - `decline`: `{ approvalId }` answers no. A declined terms offer keeps those providers out of the rest of the thread.
   - `approve` and `decline` need `threadId`, and only one of them can be sent.

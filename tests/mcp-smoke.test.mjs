@@ -4010,13 +4010,14 @@ test('firecrawl_agent forwards onTermsRequired and status keeps the terms-requir
 
   const { tools } = await client.request('tools/list');
   const agentTool = tools.find((tool) => tool.name === 'firecrawl_agent');
-  assert.deepEqual(agentTool.inputSchema.properties.onTermsRequired.enum, ['skip', 'ask']);
+  assert.equal('onTermsRequired' in agentTool.inputSchema.properties, false);
+  assert.deepEqual(agentTool.inputSchema.properties.exchange.properties.onTermsRequired.enum, ['skip', 'ask']);
   assert.match(agentTool.description, /exchange\.skippedProviders/);
   assert.match(agentTool.description, /exchange\.requiresAction/);
   assert.match(agentTool.description, /get their EXPLICIT consent.*Never call terms\/accept without that consent/);
 
   const asked = await client.request('tools/call', {
-    arguments: { prompt: 'Find the key business contact at exa.ai', onTermsRequired: 'ask' },
+    arguments: { prompt: 'Find the key business contact at exa.ai', exchange: { onTermsRequired: 'ask' } },
     name: 'firecrawl_agent',
   });
   assert.notEqual(asked.isError, true);
@@ -4034,7 +4035,7 @@ test('firecrawl_agent forwards onTermsRequired and status keeps the terms-requir
   // There is no auto-accept mode: any other value fails parameter validation.
   await assert.rejects(
     client.request('tools/call', {
-      arguments: { prompt: 'Find the key business contact at exa.ai', onTermsRequired: 'fail' },
+      arguments: { prompt: 'Find the key business contact at exa.ai', exchange: { onTermsRequired: 'fail' } },
       name: 'firecrawl_agent',
     }),
     /onTermsRequired/
@@ -4141,14 +4142,12 @@ test('firecrawl_agent continues a thread and answers a pending approval', async 
   });
   assert.notEqual(paid.isError, true);
 
-  // The top-level shorthand merges into exchange.
-  const merged = await call({
+  const asked = await call({
     prompt: 'Keep asking about terms.',
     threadId,
-    onTermsRequired: 'ask',
-    exchange: { maxCalls: 2 },
+    exchange: { maxCalls: 2, onTermsRequired: 'ask' },
   });
-  assert.notEqual(merged.isError, true);
+  assert.notEqual(asked.isError, true);
 
   const bodies = fakeApi.requests
     .filter((request) => request.method === 'POST' && request.url === '/v2/agent')
@@ -4194,10 +4193,6 @@ test('firecrawl_agent continues a thread and answers a pending approval', async 
     [
       { prompt: 'x', threadId, exchange: { approve: { approvalId }, decline: { approvalId } } },
       /not both/,
-    ],
-    [
-      { prompt: 'x', threadId, onTermsRequired: 'skip', exchange: { onTermsRequired: 'ask' } },
-      /disagree/,
     ],
   ];
   for (const [args, pattern] of rejects) {
