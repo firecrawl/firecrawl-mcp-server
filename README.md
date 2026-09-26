@@ -733,8 +733,8 @@ The agent performs web searches, follows links, reads pages, and gathers data au
 **Arguments:**
 
 - `prompt`: Natural language description of the data you want (required, max 10,000 characters)
-- `urls`: Optional array of URLs to focus the agent on specific pages. On a follow-up, `[]` clears the previous turn's URLs.
-- `schema`: Optional JSON schema for structured output. On a follow-up, `null` clears the previous turn's schema.
+- `urls`: Optional array of URLs to focus the agent on specific pages
+- `schema`: Optional JSON schema for structured output
 - `effort`: Optional. `"low"`, `"medium"` or `"high"` reasoning budget for the agent task.
 - `maxCredits`: Optional positive integer. Spending limit in credits for this run. The API defaults to 2,500 when omitted, and caps a free request at 2,500.
 - `strictConstrainToURLs`: Optional boolean. If `true`, the agent only visits the URLs in `urls`.

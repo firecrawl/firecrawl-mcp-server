@@ -6,7 +6,7 @@ import {
   alexandriaSessionFeedbackSchema,
   withAlexandriaFeedbackHint,
 } from './alexandria-feedback.js';
-import FirecrawlApp, { SdkError } from 'firecrawl';
+import FirecrawlApp from 'firecrawl';
 import dotenv from 'dotenv';
 import { type ContentResult, FastMCP, type Logger, UserError } from 'fastmcp';
 import type { IncomingHttpHeaders } from 'http';
@@ -3569,49 +3569,6 @@ const agentExchangeSchema = z
     'Alexandria provider settings for this turn, forwarded as the request\'s exchange object.'
   );
 
-function isEmptyPlainObject(value: unknown): boolean {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    Object.keys(value).length === 0
-  );
-}
-
-/**
- * POST /v2/agent with the body exactly as built. The SDK's startAgent drops a
- * null `schema`, which is how a follow-up clears an inherited one, so this
- * posts directly and reports errors the way startAgent does.
- */
-async function postAgent(
-  client: unknown,
-  body: Record<string, unknown>
-): Promise<unknown> {
-  try {
-    const res = await (client as any).http.post('/v2/agent', body);
-    if (res.status !== 200) {
-      const data = res.data || {};
-      throw new SdkError(
-        data.error || data.message || `Request failed (${res.status}) while trying to agent`,
-        res.status,
-        data.code,
-        data.details
-      );
-    }
-    return res.data;
-  } catch (err: any) {
-    if (!err?.isAxiosError) throw err;
-    const status = err.response?.status;
-    const data = err.response?.data;
-    throw new SdkError(
-      data?.error || err.message || `Request failed${status ? ` (${status})` : ''} while trying to agent`,
-      status,
-      data?.code || err.code,
-      data?.details ?? data
-    );
-  }
-}
-
 server.addTool({
   name: 'firecrawl_agent',
   annotations: {
@@ -3632,19 +3589,8 @@ The agent only calls Alexandria providers whose data terms the team has accepted
   outputSchema: agentOutputSchema,
   parameters: z.object({
     prompt: z.string().min(1).max(10000),
-    urls: z
-      .array(z.string().url())
-      .optional()
-      .describe(
-        'Seed URLs. On a follow-up, omitted keeps the previous turn\'s urls and [] clears them.'
-      ),
-    schema: z
-      .record(z.string(), z.any())
-      .nullable()
-      .optional()
-      .describe(
-        'JSON schema for the result. On a follow-up, omitted keeps the previous turn\'s schema and null clears it.'
-      ),
+    urls: z.array(z.string().url()).optional(),
+    schema: z.record(z.string(), z.any()).optional(),
     effort: z
       .enum(['low', 'medium', 'high'])
       .optional()
@@ -3717,8 +3663,7 @@ The agent only calls Alexandria providers whose data terms the team has accepted
       urlCount: Array.isArray(a.urls) ? a.urls.length : 0,
       threadId: (a.threadId as string | undefined) ?? null,
     });
-    const threadId = a.threadId as string | undefined;
-    const agentBody: Record<string, unknown> = removeEmptyTopLevel({
+    const agentBody = removeEmptyTopLevel({
       prompt: a.prompt as string,
       urls: a.urls as string[] | undefined,
       schema: (a.schema as Record<string, unknown>) || undefined,
@@ -3731,16 +3676,7 @@ The agent only calls Alexandria providers whose data terms the team has accepted
       // per-thread inheritance.
       exchange: a.exchange as Record<string, unknown> | undefined,
     });
-    // On a follow-up, `urls: []` and `schema: null` (or `{}`) replace what the
-    // thread would otherwise inherit, so they are sent as given rather than
-    // dropped as empty. A new thread has nothing to clear.
-    if (threadId) {
-      if (Array.isArray(a.urls) && a.urls.length === 0) agentBody.urls = [];
-      if (a.schema === null || isEmptyPlainObject(a.schema)) {
-        agentBody.schema = a.schema;
-      }
-    }
-    const res = await postAgent(client, {
+    const res = await (client as any).startAgent({
       ...agentBody,
       origin: requestOrigin(mcpClient, session),
     });

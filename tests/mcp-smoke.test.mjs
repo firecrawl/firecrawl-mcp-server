@@ -4167,15 +4167,6 @@ test('firecrawl_agent continues a thread and answers a pending approval', async 
   });
   assert.notEqual(asked.isError, true);
 
-  // On a follow-up, explicit clears replace what the thread would inherit.
-  const cleared = await call({ prompt: 'Search the whole web now.', threadId, urls: [], schema: null });
-  assert.notEqual(cleared.isError, true);
-  const emptySchema = await call({ prompt: 'Any shape is fine.', threadId, schema: {} });
-  assert.notEqual(emptySchema.isError, true);
-  // A new thread has nothing to clear, so the same values stay off the wire.
-  const fresh = await call({ prompt: 'Start over.', urls: [], schema: null });
-  assert.notEqual(fresh.isError, true);
-
   const bodies = fakeApi.requests
     .filter((request) => request.method === 'POST' && request.url === '/v2/agent')
     .map(({ body }) => {
@@ -4200,9 +4191,6 @@ test('firecrawl_agent continues a thread and answers a pending approval', async 
       mode: 'chat',
     },
     { prompt: 'Keep asking about terms.', threadId, exchange: { maxCalls: 2, onTermsRequired: 'ask' } },
-    { prompt: 'Search the whole web now.', threadId, urls: [], schema: null },
-    { prompt: 'Any shape is fine.', threadId, schema: {} },
-    { prompt: 'Start over.' },
   ]);
   // Nothing invents a model: the gateway runs every request on spark-2.
   for (const body of bodies) assert.equal('model' in body, false);
