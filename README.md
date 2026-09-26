@@ -237,11 +237,12 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 #### Required for Cloud API
 
 - `FIRECRAWL_API_KEY`: Your Firecrawl API key
-  - Required when using cloud API (default)
+  - Required for most tools when using cloud API (default)
+  - If neither `FIRECRAWL_API_KEY` nor `FIRECRAWL_API_URL` is set, the local stdio server starts in keyless mode: `firecrawl_scrape` and `firecrawl_search` work for free (rate-limited per IP) against the Firecrawl cloud, and every other tool returns Unauthorized
   - Optional when using self-hosted instance with `FIRECRAWL_API_URL`
 - `FIRECRAWL_API_URL` (Optional): Custom API endpoint for self-hosted instances
   - Example: `https://firecrawl.your-domain.com`
-  - If not provided, the cloud API will be used (requires API key)
+  - If not provided, the cloud API will be used (an API key is needed for anything beyond keyless scrape and search)
 
 #### MCP OAuth (Bearer access tokens)
 
