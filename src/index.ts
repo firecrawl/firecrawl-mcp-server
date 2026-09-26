@@ -9,6 +9,7 @@ import {
 import FirecrawlApp from 'firecrawl';
 import dotenv from 'dotenv';
 import { type ContentResult, FastMCP, type Logger, UserError } from 'fastmcp';
+import type { SerializableValue } from 'fastmcp';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -53,10 +54,18 @@ import { alexandriaOutput } from './alexandria-output';
 import { registerDeveloperTools } from './developer';
 import { extractSingleTrustedClientIp } from './keyless-client-ip';
 import { registerMonitorTools } from './monitor';
-import { registerResearchTools } from './research';
+import {
+  registerResearchTools,
+  searchPapersForRouting,
+} from './research';
 import { registerUsageTools } from './usage';
 import { escapeWWWAuthenticateValue } from './www-authenticate';
 import { originHeaders, requestOrigin, type McpClient } from './origin';
+import {
+  applyQueryRouting,
+  routedPaperResponse,
+  routerConfigFromEnv,
+} from './query-router';
 import {
   credentialForOutboundRequest,
   copyManagedOAuthApiKey,
@@ -955,6 +964,93 @@ const searchToolBaseFields = {
     ),
   enterprise: z.array(z.enum(['default', 'anon', 'zdr'])).optional(),
 };
+
+/**
+ * Realtime index routing for untargeted searches, resolved once at startup.
+ * Null unless FIRECRAWL_QUERY_ROUTER=true and a classifier key is present, in
+ * which case every search path below behaves exactly as it did before.
+ */
+const queryRouter = routerConfigFromEnv();
+
+type RouteContext = {
+  session?: SessionData;
+  mcpClient?: McpClient;
+  /**
+   * The paper index needs an authenticated account, and a domain-scoped
+   * search (includeDomains / excludeDomains) is asking about specific sites
+   * rather than about the literature. Neither should be retargeted.
+   */
+  allowPaperIndex: boolean;
+  /** Whether the caller named `sources` or `domainTools` on the request. */
+  callerTargeted: boolean;
+  keyless: boolean;
+  domainScoped: boolean;
+};
+
+/**
+ * Route one outbound /v2/search body and log what happened. Shared by both
+ * `firecrawl_search` surfaces so they cannot drift: a search reaching the API
+ * from either registration gets the same treatment.
+ *
+ * Returns a finished response when the search was retargeted to the paper
+ * index, or null to carry on with the normal /v2/search call. A developer
+ * verdict is applied to `searchBody` in place and also returns null.
+ */
+async function routeSearchBody(
+  searchBody: Record<string, unknown>,
+  log: { info: (message: string, data?: SerializableValue) => void },
+  context: RouteContext
+): Promise<ContentResult | null> {
+  const decision = await applyQueryRouting(searchBody, queryRouter, {
+    allowPaperIndex: context.allowPaperIndex,
+    callerTargeted: context.callerTargeted,
+  });
+  if (decision.reason === 'disabled') return null;
+  // One line per routed search, and per classifier failure. Every field is a
+  // fixed token or a number and none carries the query, so this stays safe
+  // under zero data retention.
+  log.info(
+    decision.routed
+      ? 'Routed search to a specialized index'
+      : 'Search left untargeted',
+    {
+      reason: decision.reason,
+      callerTargeted: context.callerTargeted,
+      label: decision.label ?? null,
+      probability: decision.probability ?? null,
+      confidence: decision.confidence ?? null,
+      target: decision.target ?? null,
+      category: decision.category ?? null,
+      keyless: context.keyless,
+      domainScoped: context.domainScoped,
+      latencyMs: decision.latencyMs,
+    }
+  );
+  if (decision.target !== 'research_paper_index') return null;
+
+  const query = typeof searchBody.query === 'string' ? searchBody.query : '';
+  const limit =
+    typeof searchBody.limit === 'number' ? searchBody.limit : undefined;
+  try {
+    const papers = await searchPapersForRouting(
+      getClient(context.session),
+      query,
+      limit,
+      originHeaders(requestOrigin(context.mcpClient, context.session))
+    );
+    // structuredCompact, not asText: every other search response carries
+    // structuredContent, and clients that read it would otherwise see a
+    // retargeted search as empty.
+    return structuredCompact(routedPaperResponse(query, papers));
+  } catch (error) {
+    // Fail open the same way the classifier does: if the paper index cannot
+    // answer, the agent still gets the web search it originally asked for.
+    log.info('Paper-index retarget failed; falling back to web search', {
+      reason: error instanceof Error ? error.name : 'Error',
+    });
+    return null;
+  }
+}
 
 // Both surfaces forbid specifying includeDomains and excludeDomains together.
 function searchDomainsAreExclusive(args: {
@@ -2627,10 +2723,32 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       ...(cleaned as any),
       origin: requestOrigin(mcpClient, session),
     };
+    // Credential guard first: it is cheap and fails fast, where routing
+    // makes a network call.
     const exchangeSource = hasAlexandria(searchBody.sources);
     if (exchangeSource || searchBody.domainTools)
       assertExchangeCredential(session);
-    if (isKeylessMode(session)) {
+    const keyless = isKeylessMode(session);
+    // From the caller's own arguments, not searchBody: sources and domainTools
+    // are defaulted above, so the body no longer shows what was asked for.
+    const domainScoped = Boolean(
+      (opts.includeDomains as string[] | undefined)?.length ||
+        (opts.excludeDomains as string[] | undefined)?.length
+    );
+    const callerTargeted = Boolean(
+      (opts.sources as unknown[] | undefined)?.length ||
+        opts.domainTools != null
+    );
+    const routed = await routeSearchBody(searchBody, log, {
+      session,
+      mcpClient,
+      allowPaperIndex: !keyless && !domainScoped,
+      callerTargeted,
+      keyless,
+      domainScoped,
+    });
+    if (routed !== null) return routed;
+    if (keyless) {
       const json = await keylessPost('/v2/search', searchBody, session);
       // Search feedback requires an authenticated account. Do not expose its
       // identifier to keyless clients, where it would invite an unusable call.
@@ -3937,9 +4055,24 @@ Returns result groups in \`data\` and an operation \`id\`.
       };
 
       log.info('Searching', { query: searchQuery });
+      // Credential guard first: it is cheap and fails fast, where routing
+      // makes a network call. `exchangeSource` is read again below.
       const exchangeSource = hasAlexandria(searchBody.sources);
       if (exchangeSource || searchBody.domainTools)
         assertExchangeCredential(session);
+      const domainScoped = Boolean(
+        includeDomains?.length || excludeDomains?.length
+      );
+      const callerTargeted = Boolean(sources?.length || domainTools != null);
+      const routed = await routeSearchBody(searchBody, log, {
+        session,
+        mcpClient,
+        allowPaperIndex: !domainScoped,
+        callerTargeted,
+        keyless: false,
+        domainScoped,
+      });
+      if (routed !== null) return routed;
       const client = getClientFn(session);
       const postSearch = () =>
         postSearchWithFallback(

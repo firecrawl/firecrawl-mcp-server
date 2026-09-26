@@ -23,6 +23,26 @@
 - `firecrawl_scrape` executes one or up to ten calls using `alexandria: [{ provider, capability, options }]` instead of `url`. Results are returned as `{ success, scrape_id, requestId, data: { alexandria, creditsCost } }`. Errors preserve their code and available charge ID. Keyless sessions receive `Alexandria requires an API key on a team with Alexandria access`.
 - Provider terms are read and accepted through nested `firecrawl_scrape` capabilities after a blocked request. Acceptance requires the reviewed version and digest, explicit user authorization and `confirmed: true`.
 - Successful large Alexandria results use a retained-result handoff above 20,000 estimated tokens when remote access is verified.
+- Optional automatic index routing for `firecrawl_search`. When
+  `FIRECRAWL_QUERY_ROUTER=true` and a classifier key is set, a search that
+  names neither `categories` nor `sources` is classified at request time and
+  routed when the winning option's probability exceeds
+  `FIRECRAWL_QUERY_ROUTER_THRESHOLD` (default `0.8`). A developer verdict sets
+  `categories: ["developer"]` on the same call. A research verdict retargets
+  to the research paper index and returns papers under
+  `{ routedTo: "research_paper_index", data: { papers } }` rather than web
+  results, in a body that conforms to the tool's declared `outputSchema`; that
+  retarget is skipped for keyless sessions, for searches scoped with
+  `includeDomains`/`excludeDomains`, and for calls passing `scrapeOptions`,
+  which the paper index has no pages to attach content to. A retargeted
+  response carries `data.searchFeedback.available: false`, because a
+  paper-index request issues no `/v2/search` id for
+  `firecrawl_search_feedback`. Targeting is read from the caller's arguments,
+  so the server's own `sources`/`domainTools` defaults do not suppress
+  routing. A call that already targets an index is never
+  overridden, and any classifier or paper-index failure leaves the search on
+  its original path. Off by default; both `firecrawl_search` surfaces share
+  the same path.
 
 ## [3.21.4] - 2026-06-23
 

@@ -196,6 +196,54 @@ function deprecatedGithubPayload() {
   };
 }
 
+/** One paper, trimmed for the query router's retargeted search response. */
+export type RoutedPaper = {
+  id: string;
+  title: string;
+  authors: string | null;
+  abstract: string;
+  categories?: string[];
+  createdDate?: string;
+  updateDate?: string;
+};
+
+/**
+ * Query the paper index directly, for the query router's research retarget.
+ *
+ * Returns the same ranked hits `firecrawl_research_search_papers` shows, but
+ * as structured data rather than the markdown block that tool renders: a
+ * retargeted `firecrawl_search` still answers with JSON, so an agent parsing
+ * the search response keeps getting JSON.
+ */
+export async function searchPapersForRouting(
+  client: unknown,
+  query: string,
+  k: number | undefined,
+  headers: Record<string, string>
+): Promise<RoutedPaper[]> {
+  const params = new URLSearchParams();
+  appendParam(params, 'query', query);
+  appendParam(params, 'k', k);
+  const res = await (client as ClientLike).http.get<{ results?: PaperHit[] }>(
+    withQuery(`${BASE}/papers`, params),
+    headers
+  );
+  return (res.data?.results ?? []).map((paper) => {
+    const authors = fmtAuthors(paper.authors);
+    return {
+      id: displayId(paper),
+      title: paper.title ?? '(untitled)',
+      authors: authors ? authors.replace(/^Authors: /, '') : null,
+      abstract: (paper.abstract || '')
+        .replace(/\s+/g, ' ')
+        .slice(0, MAX_ABSTRACT_CHARS),
+      ...(paper.categories?.length ? { categories: paper.categories } : {}),
+      ...(paper.createdDate ? { createdDate: paper.createdDate } : {}),
+      ...(paper.updateDate ? { updateDate: paper.updateDate } : {}),
+    };
+  });
+}
+
 export function registerResearchTools(
   server: Pick<FastMCP<SessionData>, 'addTool'>,
   getClient: GetClient

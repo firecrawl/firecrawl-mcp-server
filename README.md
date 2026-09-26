@@ -252,6 +252,32 @@ Hosted Firecrawl can issue OAuth **access tokens** (`fco_…`) via the authoriza
 
 Use **access** tokens (`fco_…`) only. Refresh tokens (`fcr_…`) must be exchanged at the token endpoint, not passed to the scrape/search API.
 
+#### Automatic index routing (opt-in)
+
+Agents mostly call `firecrawl_search` with no `categories`, so a question whose answer lives in the developer index or in the research paper index gets answered from the general web index instead. With routing enabled, a search that names no target is classified at request time and sent where it belongs.
+
+The two routes behave differently, and the difference matters:
+
+- **Developer** stays on `/v2/search`: the router sets `categories: ["developer"]` and the response shape you get back is unchanged.
+- **Research** retargets to the paper index (`/v2/search/research/papers`), the same corpus `firecrawl_research_search_papers` searches. The response is **papers, not web pages**. It conforms to the tool's declared `outputSchema` — `{ success, warning, data }` at the top level, with `data: { routedTo: "research_paper_index", query, papers, searchFeedback }` — and carries `structuredContent` like every other search response. Every paper has `id`, `title`, `abstract`, and `authors` — `abstract` is an empty string and `authors` is `null` when the paper has none. `categories`, `createdDate`, and `updateDate` appear only when the paper carries them, so do not rely on their presence. A retargeted search has no `/v2/search` id, so `firecrawl_search_feedback` does not apply to it; `data.searchFeedback.available` is `false` and says why. An agent that must have web results should set `sources` or `categories` explicitly.
+
+Configuration:
+
+- `FIRECRAWL_QUERY_ROUTER`: set to `true` to enable. Off by default.
+- `FIRECRAWL_QUERY_ROUTER_API_KEY` or `TYPESAFE_API_KEY`: the classifier credential ([TypeSafe](https://docs.typesafe.ai)). Required — without it the router stays off.
+- `FIRECRAWL_QUERY_ROUTER_THRESHOLD` (default `0.8`): the winning option's **probability** must be strictly greater than this for the call to be routed. A value outside `(0, 1]` falls back to the default.
+- `FIRECRAWL_QUERY_ROUTER_TIMEOUT_MS` (default `4000`, floored at `250`), `FIRECRAWL_QUERY_ROUTER_MODEL` (default `jev-latest`), and `FIRECRAWL_QUERY_ROUTER_ENDPOINT` for tuning and tests.
+
+Rules the router holds to:
+
+- A call where the **caller** sets `categories`, `sources`, or `domainTools` is never overridden, and the classifier is not even consulted. The server's own defaults for `sources` and `domainTools` do not count as targeting.
+- Anything short of a confident developer or research verdict leaves the call exactly as written, including a confident general-web verdict.
+- The research retarget is skipped, and the search runs normally, when the paper index is not applicable: **keyless sessions** (it needs an account), **domain-scoped searches** that set `includeDomains` or `excludeDomains`, and calls passing **`scrapeOptions`** (the paper index has no pages to attach content to, so retargeting would drop what was asked for). The developer route still applies in all three cases.
+- It fails open throughout. A classifier timeout, error, or unparseable answer leaves the search unrouted, and a paper-index request that fails falls back to the web search that was originally asked for. Routing never fails a search.
+- Log lines record the verdict, its probability and confidence, and latency — never the query text.
+
+**Latency cost.** One classifier round trip on untargeted searches only, bounded by the timeout. Measured against the production TypeSafe endpoint at ~576 input tokens per call: **p50 837 ms, p90 1.0 s, max 1.05 s** (n=12, from a developer laptop; expect lower from a server closer to the endpoint). A research retarget replaces the `/v2/search` call rather than adding to it; a developer route adds the classifier round trip on top of the normal search. Targeted searches and every non-search tool are untouched.
+
 #### Search-only surface (hosted)
 
 In hosted mode (`CLOUD_SERVICE=true`) a second in-process instance serves the [search-only endpoint](#search-only-endpoint). The bundled service has a fixed deployment contract: nginx routes `/v2/mcp-search` to the instance on local port `3001`, and the OAuth protected-resource identifier is `https://mcp.firecrawl.dev/v2/mcp-search`.
