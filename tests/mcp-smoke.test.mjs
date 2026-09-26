@@ -4131,13 +4131,17 @@ test('firecrawl_agent answers a pending approval on a thread', async (t) => {
   assert.equal(followUp.structuredContent.threadId, threadId);
   assert.equal(followUp.structuredContent.threadTurn, 1);
 
-  // 2. Accepting a terms offer after terms/accept, and declining one.
+  // 2. Answering a pending approval on the thread: forwarding of approve and
+  // decline only. terms/accept itself goes through firecrawl_scrape and is
+  // covered by the Alexandria terms tests; this does not run it.
   const approved = await call({
     prompt: 'I accepted the Apollo terms. Continue.',
     threadId,
     exchange: { approve: { approvalId } },
   });
   assert.notEqual(approved.isError, true);
+  assert.equal(approved.structuredContent.threadId, threadId);
+  assert.equal(typeof approved.structuredContent.threadTurn, 'number');
   const declined = await call({
     prompt: 'Do not use Apollo.',
     threadId,
