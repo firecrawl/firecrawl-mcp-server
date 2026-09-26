@@ -57,6 +57,7 @@ import { registerResearchTools } from './research';
 import { registerUsageTools } from './usage';
 import { escapeWWWAuthenticateValue } from './www-authenticate';
 import { originHeaders, requestOrigin, type McpClient } from './origin';
+import { parseRootFromEnv, resolveParseFile } from './parse-path';
 import {
   credentialForOutboundRequest,
   copyManagedOAuthApiKey,
@@ -2115,7 +2116,7 @@ const localParseParamsSchema = parseOptionParamsSchema.extend({
     .string()
     .min(1)
     .describe(
-      'Absolute or relative path to a local file to parse. Supported: .html, .htm, .pdf, .docx, .doc, .odt, .rtf, .xlsx, .xls'
+      'Path to a local file to parse. The file must stay inside FIRECRAWL_PARSE_ROOT, or the server working directory when that variable is unset. Supported: .html, .htm, .pdf, .docx, .doc, .odt, .rtf, .xlsx, .xls.'
     ),
   contentType: z
     .string()
@@ -3789,9 +3790,12 @@ Set \`redactPII\` to request redaction of personally identifiable information in
       contentType?: string;
     } & Record<string, unknown>;
 
-    const absPath = path.resolve(filePath);
+    const absPath = await resolveParseFile(
+      filePath,
+      parseRootFromEnv(process.env, process.cwd())
+    );
     const buffer = await readFile(absPath);
-    const filename = path.basename(absPath);
+    const filename = path.basename(filePath);
     const fileContentType =
       overrideContentType && overrideContentType.length > 0
         ? overrideContentType

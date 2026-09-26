@@ -242,6 +242,9 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 - `FIRECRAWL_API_URL` (Optional): Custom API endpoint for self-hosted instances
   - Example: `https://firecrawl.your-domain.com`
   - If not provided, the cloud API will be used (requires API key)
+- `FIRECRAWL_PARSE_ROOT` (Optional): Directory local `firecrawl_parse` may read
+  - Defaults to the server working directory
+  - The file must stay inside this directory. A leading `~` is not expanded.
 
 #### MCP OAuth (Bearer access tokens)
 
@@ -276,6 +279,9 @@ export FIRECRAWL_API_URL=https://firecrawl.your-domain.com
 
 # Optional authentication for self-hosted
 export FIRECRAWL_API_KEY=your-api-key  # If your instance requires auth
+
+# Optional directory local parse may read. Defaults to the working directory.
+export FIRECRAWL_PARSE_ROOT=/var/lib/firecrawl/docs
 ```
 
 ### Usage with Claude Desktop
@@ -658,7 +664,7 @@ Parse local files or hosted upload references with Firecrawl's `/v2/parse` endpo
 
 **Not recommended for:** Remote URLs (use scrape), multiple files in one call (call parse once per file), or browser-only actions such as screenshots and clicks.
 
-**Hosted MCP flow:** Hosted MCP cannot read the caller's filesystem directly. Call `firecrawl_parse` with `filePath` to receive a short-lived upload command and `nextToolCall`, upload the file locally, then call `firecrawl_parse` again with the returned `uploadRef`. Minting the hosted upload URL requires Firecrawl auth or keyless eligibility. In local `npx firecrawl-mcp` mode, direct file parsing currently requires `FIRECRAWL_API_URL` pointing to a self-hosted Firecrawl API; a plain cloud API-key-only local server cannot read and upload files through this tool.
+**Hosted MCP flow:** Hosted MCP cannot read the caller's filesystem directly. Call `firecrawl_parse` with `filePath` to receive a short-lived upload command and `nextToolCall`, upload the file locally, then call `firecrawl_parse` again with the returned `uploadRef`. Minting the hosted upload URL requires Firecrawl auth or keyless eligibility. In local `npx firecrawl-mcp` mode, direct file parsing requires `FIRECRAWL_API_URL` pointing to a self-hosted Firecrawl API. The file must stay inside `FIRECRAWL_PARSE_ROOT`, or the server working directory when that variable is unset.
 
 **Usage Example:**
 
@@ -666,7 +672,7 @@ Parse local files or hosted upload references with Firecrawl's `/v2/parse` endpo
 {
   "name": "firecrawl_parse",
   "arguments": {
-    "filePath": "/absolute/path/to/document.pdf",
+    "filePath": "./document.pdf",
     "formats": ["markdown"],
     "parsers": ["pdf"],
     "zeroDataRetention": true
