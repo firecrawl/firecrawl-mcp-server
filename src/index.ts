@@ -3672,7 +3672,11 @@ This acts on the live site, so actions such as form submission can create persis
     const openedFromUrl = !scrapeId;
     if (openedFromUrl) {
       log.info('Opening interact session from url', { url });
-      const cleanedScrapeOptions = removeEmptyTopLevel(scrapeOptions ?? {});
+      // Same conversion as firecrawl_scrape: jsonOptions, queryOptions,
+      // screenshotOptions and pdfOptions become format/parser objects.
+      const cleanedScrapeOptions = removeEmptyTopLevel(
+        transformScrapeParams(scrapeOptions ?? {})
+      );
       const scraped = await client.scrape(String(url), {
         ...cleanedScrapeOptions,
         origin,
