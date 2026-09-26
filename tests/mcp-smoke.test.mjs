@@ -237,6 +237,23 @@ async function startFakeFirecrawlApi() {
       return;
     }
 
+    if (
+      req.method === 'POST' &&
+      req.url === '/v2/agent' &&
+      parsedBody?.threadId === '00000000-0000-4000-8000-000000000036'
+    ) {
+      res.writeHead(409, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          success: false,
+          code: 'thread_busy',
+          error: 'This thread already has a run in progress',
+          runId: '00000000-0000-4000-8000-000000000037',
+        })
+      );
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/v2/agent') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
@@ -4100,7 +4117,7 @@ test('firecrawl_agent continues a thread and answers a pending approval', async 
   assert.equal(props.exchange.properties.maxCalls.minimum, 1);
   assert.equal(props.exchange.properties.maxCalls.maximum, 30);
   assert.equal('model' in props, false);
-  assert.ok(agentTool.description.length <= 2048, `description is ${agentTool.description.length} chars`);
+  assert.ok(agentTool.description.length <= CLAUDE_CODE_TEXT_CAP, `description is ${agentTool.description.length} chars`);
   assert.match(agentTool.description, /same `threadId` and `exchange\.approve: \{approvalId\}`/);
   assert.match(agentTool.description, /`exchange\.decline: \{approvalId\}`/);
   assert.match(agentTool.description, /EXPLICIT consent/);
@@ -4139,6 +4156,7 @@ test('firecrawl_agent continues a thread and answers a pending approval', async 
       requireApproval: true,
       enabled: true,
     },
+    mode: 'chat',
   });
   assert.notEqual(paid.isError, true);
 
@@ -4148,6 +4166,15 @@ test('firecrawl_agent continues a thread and answers a pending approval', async 
     exchange: { maxCalls: 2, onTermsRequired: 'ask' },
   });
   assert.notEqual(asked.isError, true);
+
+  // On a follow-up, explicit clears replace what the thread would inherit.
+  const cleared = await call({ prompt: 'Search the whole web now.', threadId, urls: [], schema: null });
+  assert.notEqual(cleared.isError, true);
+  const emptySchema = await call({ prompt: 'Any shape is fine.', threadId, schema: {} });
+  assert.notEqual(emptySchema.isError, true);
+  // A new thread has nothing to clear, so the same values stay off the wire.
+  const fresh = await call({ prompt: 'Start over.', urls: [], schema: null });
+  assert.notEqual(fresh.isError, true);
 
   const bodies = fakeApi.requests
     .filter((request) => request.method === 'POST' && request.url === '/v2/agent')
@@ -4170,8 +4197,12 @@ test('firecrawl_agent continues a thread and answers a pending approval', async 
         requireApproval: true,
         enabled: true,
       },
+      mode: 'chat',
     },
     { prompt: 'Keep asking about terms.', threadId, exchange: { maxCalls: 2, onTermsRequired: 'ask' } },
+    { prompt: 'Search the whole web now.', threadId, urls: [], schema: null },
+    { prompt: 'Any shape is fine.', threadId, schema: {} },
+    { prompt: 'Start over.' },
   ]);
   // Nothing invents a model: the gateway runs every request on spark-2.
   for (const body of bodies) assert.equal('model' in body, false);
@@ -4194,6 +4225,12 @@ test('firecrawl_agent continues a thread and answers a pending approval', async 
       { prompt: 'x', threadId, exchange: { approve: { approvalId }, decline: { approvalId } } },
       /not both/,
     ],
+    [{ prompt: 'x', threadId, exchange: { toolkits: ['a', 'b', 'c', 'd', 'e', 'f'] } }, /toolkits/],
+    // The agent service checks the mode on the request itself, so an inherited
+    // chat mode is not enough.
+    [{ prompt: 'x', exchange: { requireApproval: true } }, /requireApproval needs mode/],
+    [{ prompt: 'x', mode: 'extract', exchange: { requireApproval: true } }, /requireApproval needs mode/],
+    [{ prompt: 'x', threadId, exchange: { requireApproval: true } }, /requireApproval needs mode/],
   ];
   for (const [args, pattern] of rejects) {
     await assert.rejects(call(args), pattern, JSON.stringify(args));
@@ -4202,6 +4239,13 @@ test('firecrawl_agent continues a thread and answers a pending approval', async 
     fakeApi.requests.filter((request) => request.method === 'POST' && request.url === '/v2/agent').length,
     sent
   );
+
+  // A thread error from the API reaches the caller with its message.
+  const busy = await call({ prompt: 'x', threadId: '00000000-0000-4000-8000-000000000036' }).then(
+    (result) => JSON.stringify(result),
+    (error) => String(error?.message ?? error)
+  );
+  assert.match(busy, /This thread already has a run in progress/);
 
   // 3. Status keeps the thread and both pendingApproval shapes in structuredContent.
   const status = async (id) => {

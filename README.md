@@ -733,12 +733,15 @@ The agent performs web searches, follows links, reads pages, and gathers data au
 **Arguments:**
 
 - `prompt`: Natural language description of the data you want (required, max 10,000 characters)
-- `urls`: Optional array of URLs to focus the agent on specific pages
-- `schema`: Optional JSON schema for structured output
+- `urls`: Optional array of URLs to focus the agent on specific pages. On a follow-up, `[]` clears the previous turn's URLs.
+- `schema`: Optional JSON schema for structured output. On a follow-up, `null` clears the previous turn's schema.
+- `effort`: Optional. `"low"`, `"medium"` or `"high"` reasoning budget for the agent task.
+- `maxCredits`: Optional positive integer. Spending limit in credits for this run. The API defaults to 2,500 when omitted, and caps a free request at 2,500.
+- `strictConstrainToURLs`: Optional boolean. If `true`, the agent only visits the URLs in `urls`.
 - `threadId`: Optional. Continue an existing thread: the `threadId` from an earlier `firecrawl_agent` or `firecrawl_agent_status` result. Omit to start a new thread. On a follow-up, omitted `mode`, `urls`, `schema` and `exchange` settings carry over from the previous turn.
 - `mode`: Optional. `"extract"` (default) returns the complete structured result every turn. `"chat"` lets a follow-up that asks for no new data get a short reply in `message` instead of a re-run; `exchange.requireApproval` needs it.
 - `exchange`: Optional. Alexandria provider settings for this turn, forwarded as-is to `POST /v2/agent`:
-  - `enabled`, `toolkits` (provider slugs), `maxCalls` (1 to 30), `requireApproval` (paid calls end the turn with a `pendingApproval`; needs `mode: "chat"`)
+  - `enabled`, `toolkits` (up to 5 provider slugs), `maxCalls` (1 to 30), `requireApproval` (paid calls end the turn with a `pendingApproval`; needs `mode: "chat"` on the same call, even on a follow-up)
   - `onTermsRequired`: what to do when an Alexandria provider the agent would use needs data terms your team has not accepted. Gated providers are never called in any mode. Omitted on a follow-up keeps the previous turn's value.
     - `"skip"` (default): answer with accepted providers only. `exchange.skippedProviders` on the status result lists the gated providers that would have helped.
     - `"ask"`: the same, plus a terms `pendingApproval` and `exchange.requiresAction` with the exact `terms/show` and `terms/accept` calls for each provider. Each provider's `digest` is always present and is `string | null`; when it is `null`, `terms/show` returns the current digest to send.
