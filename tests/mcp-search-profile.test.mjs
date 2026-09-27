@@ -8,6 +8,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
 import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
 import { assertAlexandriaMetadata } from './helpers/alexandria-metadata.mjs';
+import { assertInstructionsMatchTools } from './helpers/instructions.mjs';
 
 const { version: serverVersion } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
@@ -1066,7 +1067,8 @@ test('primary search profile agent language satisfies metadata policy gates', as
   const initialize = await initializeProfile(port, SEARCH_ENDPOINT, headers);
   const tools = await listToolDefinitions(port, SEARCH_ENDPOINT, headers);
 
-  assertAlexandriaMetadata(tools, initialize.instructions);
+  assertAlexandriaMetadata(tools, initialize.instructions, { hosted: true });
+  assertInstructionsMatchTools(initialize.instructions, tools, 'hosted profile');
   assertAgentMetadataPolicy(
     [initialize.instructions, ...tools.map((tool) => tool.description ?? '')],
     assert
@@ -1074,14 +1076,17 @@ test('primary search profile agent language satisfies metadata policy gates', as
 });
 
 test('keyless full-surface instructions satisfy the same metadata policy gates', async (t) => {
-  // FASTMCP_ENDPOINT '/v2/mcp' (not '/v2/mcp-oauth') makes this the keyless
-  // profile, whose instructions must stay descriptive rather than becoming an
-  // imperative routing playbook.
+  // FASTMCP_ENDPOINT '/v2/mcp' (not '/v2/mcp-oauth') allows keyless
+  // sessions; a request without a credential gets the keyless instructions,
+  // whose wording must stay descriptive rather than becoming an imperative
+  // routing playbook.
   const { fullPort } = await startHostedServer(t);
-  const headers = { 'x-api-key': 'fc-keyless-metadata' };
+  const headers = { 'x-forwarded-for': '8.8.8.8' };
   const initialize = await initializeProfile(fullPort, '/v2/mcp', headers);
   const tools = await listToolDefinitions(fullPort, '/v2/mcp', headers);
 
+  assert.match(initialize.instructions, /^Firecrawl keyless access is usage-limited/);
+  assertInstructionsMatchTools(initialize.instructions, tools, 'hosted keyless');
   assertAgentMetadataPolicy(
     [initialize.instructions, ...tools.map((tool) => tool.description ?? '')],
     assert
@@ -1114,7 +1119,8 @@ test('account (mcp-oauth) full-surface instructions satisfy the same metadata po
     assert.equal(tool?._meta?.['anthropic/alwaysLoad'], true, name);
   }
 
-  assertAlexandriaMetadata(tools, initialize.instructions);
+  assertAlexandriaMetadata(tools, initialize.instructions, { hosted: true });
+  assertInstructionsMatchTools(initialize.instructions, tools, 'hosted profile');
   assertAgentMetadataPolicy(
     [initialize.instructions, ...tools.map((tool) => tool.description ?? '')],
     assert
@@ -1309,7 +1315,7 @@ test('search surface registers the two Alexandria tools with surface-scoped copy
   const headers = { 'x-api-key': 'fc-test' };
   const initialize = await initializeProfile(searchPort, SEARCH_ENDPOINT, headers);
   const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, headers);
-  assertAlexandriaMetadata(tools, initialize.instructions);
+  assertAlexandriaMetadata(tools, initialize.instructions, { hosted: true });
   // Claude Code truncates tool descriptions at CLAUDE_CODE_TEXT_CAP characters.
   for (const tool of tools) {
     assert.ok((tool.description ?? '').length <= CLAUDE_CODE_TEXT_CAP, `${tool.name} description is ${(tool.description ?? '').length} chars`);

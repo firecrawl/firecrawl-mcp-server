@@ -37,7 +37,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Use `firecrawl_credit_usage` to check credits left or monthly consumption, optionally broken down by API key.
 - Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control — the session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
 
-This server lists 26 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 — `firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse` — and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 8 tools (search, developer and research search, plus Alexandria catalogue lookup and execution).
+This server lists 27 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 8 tools (search, developer and research search, plus Alexandria catalogue lookup and execution).
 
 ## Installation
 
@@ -416,6 +416,7 @@ Scrape content from a single URL with advanced options.
 
 **Branding format:** Extracts comprehensive brand identity (colors, fonts, typography, spacing, logo, UI components) for design analysis or style replication.
 **Privacy:** Set `redactPII: true` to return content with personally identifiable information redacted.
+**Hosted server:** On the hosted server (`CLOUD_SERVICE=true`) scrape is read-only. It takes no browser `actions`, and a named `profile` loads saved browser state without saving changes to it. To save browser state to a profile, open the page with `firecrawl_interact` (see below).
 
 **Returns:**
 
@@ -834,6 +835,7 @@ Interact with a fresh URL or with a page that was already opened by `firecrawl_s
 - Pass `url` to scrape and open a page for interaction in one MCP call.
 - Pass `scrapeId` to continue interacting with an existing scraped page.
 - Pass exactly one of `url` or `scrapeId`, plus either `prompt` or `code`.
+- To save browser state (cookies, localStorage) to a named profile, pass `url` with `scrapeOptions: { "profile": { "name": "my-profile", "saveChanges": true } }`. The state is saved when `firecrawl_interact_stop` ends the session.
 
 **Usage Example:**
 
@@ -1080,16 +1082,14 @@ HTTP 403 and this body:
 The tool result relays it as an error with `structuredContent` carrying `code`,
 `status: 403`, `requestId`, the `requiresAction` object unchanged, and
 `next_actions` (`human_action_required` then `retry_same_request`). Accepting
-terms is a legal act. Use the returned `nextTool` call to read the agreement through `firecrawl_scrape`
-with `alexandria: [{provider: "firecrawl", capability: "terms/show", options: {provider: "<provider>"}}]`.
-Present it to the user and obtain explicit authorization to bind their organization
-before calling `firecrawl_scrape` with capability `terms/accept` under provider `firecrawl`.
-Its options are `provider`, the exact reviewed `version`
-and 64-character lowercase hexadecimal `digest`, and `confirmed: true`. A request
-for data is not consent. Authority or eligibility errors may require an organization
-admin to use `requiresAction.url`. No automatic acceptance or uncertain retries occur.
-Send terms calls separately from execution. These are nested capabilities, not top-level MCP tools.
-No credits are charged for the blocked retrieval. After confirmed acceptance, call the same
+terms is a legal act, so an organization admin accepts them in the Firecrawl dashboard, not
+through MCP. Use the returned `nextTool` call to read the agreement through `firecrawl_scrape`
+with `alexandria: [{provider: "firecrawl", capability: "terms/show", options: {provider: "<provider>"}}]`,
+sent separately from provider execution, and present it to the user. An organization admin then
+accepts it at `requiresAction.url`, or at https://www.firecrawl.dev/app/settings?tab=data-sources.
+`firecrawl_scrape` refuses every other `terms/*` capability, so it makes no account changes. A request
+for data is not consent, and no automatic acceptance or uncertain retries occur.
+No credits are charged for the blocked retrieval. After the admin confirms acceptance, call the same
 tool again with the identical payload and `requestId`.
 
 ### 16. Credit Usage Tool

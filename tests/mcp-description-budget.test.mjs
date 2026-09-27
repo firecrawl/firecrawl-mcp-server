@@ -12,7 +12,7 @@ import { assertAlexandriaMetadata } from './helpers/alexandria-metadata.mjs';
 test('every tool description fits the 2,048-character cap and keeps the routing copy inside it', async (t) => {
   const { client, init } = await startStdioWithApi(t);
   const { tools } = await client.request('tools/list', {});
-  assertAlexandriaMetadata(tools, init.instructions);
+  assertAlexandriaMetadata(tools, init.instructions, { hosted: false });
   for (const tool of tools) {
     assert.ok((tool.description ?? '').length <= CAP, `${tool.name} description is ${(tool.description ?? '').length} chars`);
   }

@@ -9,6 +9,9 @@
 
 ### Changed
 
+- Server instructions are one short string per surface (full, search, keyless). Each stays under 1,024 characters, routes search and scrape within its first 512, and names only tools that session lists. Hosted `/v2/mcp` now selects them per session, so a session with an API key or OAuth token gets the full-surface instructions instead of the keyless ones. Locally, only stdio without an API key, OAuth token, or `FIRECRAWL_API_URL` gets the keyless instructions; a self-hosted `FIRECRAWL_API_URL` and the local HTTP transport, which requires credentials or `FIRECRAWL_API_URL`, get the full-surface instructions.
+- An organization admin now accepts Alexandria provider terms in the Firecrawl dashboard. `firecrawl_scrape` refuses `terms/accept` and every other `terms/*` capability except `terms/show`, and terms errors link to `requiresAction.url` or the data sources settings page. Reading terms with `terms/show` is unchanged.
+- On the hosted server, `firecrawl_scrape` is annotated `readOnlyHint: true` again. There, `firecrawl_scrape` and `firecrawl_search` `scrapeOptions` load a named `profile` without saving changes to it; save browser state with `firecrawl_interact` and `scrapeOptions.profile`. Local `firecrawl_scrape` keeps browser actions and writable profiles and stays `readOnlyHint: false`.
 - The search surface (`/v2/mcp-search`) now exposes `firecrawl_find_tools` and `firecrawl_scrape` alongside its six search tools, so agents can execute the Alexandria providers that `firecrawl_search` already returns. Both carry surface-scoped descriptions that name only tools registered on that surface, and Alexandria results there omit the `firecrawl_feedback` pointer. See docs/search-profile.md.
 
 ### Fixed

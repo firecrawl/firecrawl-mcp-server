@@ -7,6 +7,7 @@ import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
 import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
+import { ROUTING_HEAD_CHARS } from './helpers/instructions.mjs';
 
 const { version: serverVersion } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
@@ -852,9 +853,10 @@ test('HTTP cloud keyless transport preserves app challenge without advertising O
   assert.match(initialize.headers.get('content-type') ?? '', /text\/event-stream/);
   const initializeMessage = parseSseJson(await initialize.text());
   assert.equal(initializeMessage.result.serverInfo.name, 'firecrawl-fastmcp');
+  // A keyed session lists the full tool set, so it gets the full instructions.
   assert.match(
     initializeMessage.result.instructions,
-    /An Authorization bearer API key can provide higher usage limits and expose additional tools/i
+    /^Firecrawl gives agents live web data.*firecrawl_map/
   );
   assert.doesNotMatch(initializeMessage.result.instructions, /\bOAuth\b/i);
 
@@ -1158,26 +1160,17 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
       .description,
     'Break historical usage down by API key. When view is omitted, true selects the historical view; it cannot be combined with view "current".'
   );
-  // A stdio session with an API key gets the Alexandria-aware instructions,
-  // not the keyless wording.
-  assert.match(init.instructions, /firecrawl_scrape retrieves one supplied page/i);
-  // Keep Alexandria routing within the truncated server instructions. The search
-  // description also carries developer and research routing (asserted below).
-  const instructionsHead = init.instructions.slice(0, CLAUDE_CODE_TEXT_CAP);
-  assert.match(instructionsHead, /Alexandria is Firecrawl's catalogue of data providers/);
-  assert.match(instructionsHead, /For the same fields across multiple pages/);
-  assert.match(instructionsHead, /sources: \["web"\] omits semantic provider discovery/);
+  // A stdio session with an API key gets the full instructions, not the
+  // keyless wording, and the routing map sits inside OpenAI's first 512
+  // characters.
+  assert.match(init.instructions, /^Firecrawl gives agents live web data/);
+  const routingHead = init.instructions.slice(0, ROUTING_HEAD_CHARS);
+  for (const name of ['firecrawl_search', 'firecrawl_scrape', 'firecrawl_map', 'firecrawl_crawl', 'firecrawl_interact', 'firecrawl_agent', 'firecrawl_parse']) {
+    assert.ok(routingHead.includes(name), `${name} is routed in the first ${ROUTING_HEAD_CHARS} characters`);
+  }
   assert.match(
     init.instructions,
-    /Alexandria is Firecrawl's catalogue of data providers and workflows.*firecrawl_scrape with alexandria.*executes up to ten capabilities/is
-  );
-  assert.match(
-    init.instructions,
-    /sources: \["web"\] omits semantic provider discovery; domainTools: true can still return website-matched tools. Web-only results use domainTools: false/
-  );
-  assert.match(
-    init.instructions,
-    /For the same fields across multiple pages, firecrawl_find_tools offers free provider discovery/
+    /firecrawl_search also returns matching Alexandria data providers in data\.tools; firecrawl_find_tools reads a provider's contract and firecrawl_scrape with alexandria runs it/
   );
   assert.match(
     byName.get('firecrawl_scrape').description,
@@ -1289,12 +1282,8 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     /data\.developer/i
   );
   assert.match(
-    init.instructions,
-    /firecrawl_search with categories: \["research"\] is a website filter over ordinary web results and reaches different sources/i
-  );
-  assert.match(
-    init.instructions,
-    /firecrawl_research_\* tools search a paper index of abstracts and full text/i
+    byName.get('firecrawl_search').description,
+    /`categories: \["research"\]` restricts web results to research-affiliated websites; the `firecrawl_research_\*` tools are a separate surface over paper abstracts and full text/
   );
   assert.match(
     byName.get('firecrawl_research_related_papers').description,
@@ -1422,42 +1411,16 @@ test('local keyless stdio keeps profile guidance keyless-scoped and omits feedba
     clientInfo: { name: 'firecrawl-local-keyless', version: '0.0.0' },
     protocolVersion: '2025-06-18',
   });
-  const apiKeyBoundary = 'An Authorization bearer API key';
-  const apiKeyBoundaryIndex = init.instructions.indexOf(apiKeyBoundary);
-  assert.notEqual(apiKeyBoundaryIndex, -1);
-  const keylessGuidance = init.instructions.slice(0, apiKeyBoundaryIndex);
-  const apiKeyGuidance = init.instructions.slice(apiKeyBoundaryIndex);
-  assert.match(
-    keylessGuidance,
-    /Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits/i
+  // Keyless instructions name only the keyless tools and describe what an
+  // API key adds without naming tools this session cannot call.
+  assert.match(init.instructions, /^Firecrawl keyless access is usage-limited/);
+  assert.deepEqual(
+    [...new Set(init.instructions.match(/firecrawl_[a-z_*]+/g))].sort(),
+    ['firecrawl_parse', 'firecrawl_scrape', 'firecrawl_search']
   );
-  assert.match(
-    keylessGuidance,
-    /firecrawl_search with categories: \["developer"\].*code documentation/i
-  );
-  assert.match(
-    keylessGuidance,
-    /firecrawl_search with categories: \["research"\].*research-affiliated websites/i
-  );
-  assert.match(keylessGuidance, /firecrawl_scrape retrieves one supplied page/i);
-  assert.match(keylessGuidance, /firecrawl_parse processes supported local files/i);
-  assert.doesNotMatch(
-    keylessGuidance,
-    /firecrawl_(?:map|agent|agent_status|research_)/i
-  );
+  assert.match(init.instructions, /firecrawl_search \(categories: \["developer"\] for programming questions\)/);
+  assert.match(init.instructions, /An API key adds site mapping, crawling, interaction, and the research agent, with higher limits/);
   assert.doesNotMatch(init.instructions, /\bOAuth\b/i);
-  assert.match(
-    apiKeyGuidance,
-    /higher usage limits.*additional tools.*subject to plan, deployment, and team policy/is
-  );
-  for (const name of [
-    'firecrawl_map',
-    'firecrawl_agent',
-    'firecrawl_agent_status',
-    'firecrawl_research_*',
-  ]) {
-    assert.ok(apiKeyGuidance.includes(name), `${name} must be API-key qualified`);
-  }
   client.notify('notifications/initialized');
   const tools = await client.request('tools/list');
   const toolNames = tools.tools.map((tool) => tool.name);
