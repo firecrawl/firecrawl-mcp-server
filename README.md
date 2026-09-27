@@ -735,6 +735,11 @@ The agent performs web searches, follows links, reads pages, and gathers data au
 - `prompt`: Natural language description of the data you want (required, max 10,000 characters)
 - `urls`: Optional array of URLs to focus the agent on specific pages
 - `schema`: Optional JSON schema for structured output
+- `effort`: Optional. `"low"`, `"medium"` or `"high"` reasoning budget for the agent task.
+- `maxCredits`: Optional positive integer. Spending limit in credits for this run. The API defaults to 2,500 when omitted, and caps a free request at 2,500.
+- `strictConstrainToURLs`: Optional boolean. If `true`, the agent only visits the URLs in `urls`.
+- `threadId`: Optional. Continue an existing thread: the `threadId` from an earlier `firecrawl_agent` or `firecrawl_agent_status` result. Omit to start a new thread. On a follow-up, omitted `mode`, `urls` and `schema` carry over from the previous turn.
+- `mode`: Optional. `"extract"` (default) returns the complete structured result every turn. `"chat"` lets a follow-up that asks for no new data get a short reply in `message` instead of a re-run.
 
 **Prompt Example:**
 
@@ -781,9 +786,21 @@ Then poll with `firecrawl_agent_status` using the returned job ID.
 }
 ```
 
+**Usage Example (follow-up on the same thread):**
+
+```json
+{
+  "name": "firecrawl_agent",
+  "arguments": {
+    "prompt": "Only keep the startups based in Europe",
+    "threadId": "0199a1b2-0000-7000-8000-000000000031"
+  }
+}
+```
+
 **Returns:**
 
-- Job ID for status checking. Use `firecrawl_agent_status` to poll for results.
+- Job ID for status checking, plus `threadId` and `threadTurn`. Use `firecrawl_agent_status` to poll for results.
 
 ### 9. Check Agent Status (`firecrawl_agent_status`)
 
