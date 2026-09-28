@@ -6,7 +6,6 @@ export default defineConfig({
     'src/www-authenticate.ts',
     'src/agent-hints.ts',
     'src/origin.ts',
-    'src/introspection-cache.ts',
     'src/query-router.ts',
   ],
   format: ['esm'],
