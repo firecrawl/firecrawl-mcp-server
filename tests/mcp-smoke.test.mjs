@@ -1915,6 +1915,10 @@ async function startIntrospectCacheServer(t, env = {}) {
     ...env,
   });
   t.after(() => stopChild(child));
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
   await waitForHealth(port, child);
   const search = (id) =>
     httpToolCall(port, {
@@ -1924,11 +1928,11 @@ async function startIntrospectCacheServer(t, env = {}) {
     });
   const introspectCount = () =>
     backend.requests.filter((r) => r.url === '/api/oauth/introspect').length;
-  return { introspectCount, search };
+  return { introspectCount, search, stderr: () => stderr };
 }
 
 test('HTTP cloud transport reuses a recent introspection answer across requests', async (t) => {
-  const { introspectCount, search } = await startIntrospectCacheServer(t);
+  const { introspectCount, search, stderr } = await startIntrospectCacheServer(t);
 
   for (const id of [20, 21, 22]) {
     const response = await search(id);
@@ -1936,10 +1940,11 @@ test('HTTP cloud transport reuses a recent introspection answer across requests'
     assert.notEqual(parseSseJson(await response.text()).result.isError, true);
   }
   assert.equal(introspectCount(), 1, 'repeat requests with one token must hit the cache');
+  assert.equal(stderr().includes('TypeError'), false, stderr());
 });
 
 test('FIRECRAWL_OAUTH_INTROSPECT_CACHE_TTL_MS=0 introspects every request', async (t) => {
-  const { introspectCount, search } = await startIntrospectCacheServer(t, {
+  const { introspectCount, search, stderr } = await startIntrospectCacheServer(t, {
     FIRECRAWL_OAUTH_INTROSPECT_CACHE_TTL_MS: '0',
   });
 
@@ -1947,6 +1952,7 @@ test('FIRECRAWL_OAUTH_INTROSPECT_CACHE_TTL_MS=0 introspects every request', asyn
     assert.equal((await search(id)).status, 200);
   }
   assert.equal(introspectCount(), 2);
+  assert.equal(stderr().includes('TypeError'), false, stderr());
 });
 
 test('an edge-mitigated introspection is logged, not cached, and retried next request', async (t) => {
@@ -2018,6 +2024,7 @@ test('an edge-mitigated introspection is logged, not cached, and retried next re
   const recovered = await search(31);
   assert.equal(recovered.status, 200);
   assert.equal(introspections, 2, 'the failed answer must not be served from cache');
+  assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
 test('HTTP cloud keyless transport rejects inactive OAuth without advertising login', async (t) => {

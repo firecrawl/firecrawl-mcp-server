@@ -29,7 +29,8 @@ export function createIntrospectionCache<T>(
     if (!(ttl > 0)) return;
     entries.delete(key);
     entries.set(key, { expiresAt: at + ttl, value });
-    // Map iteration is insertion order, so the first key is the oldest write.
+    // Map iteration is insertion order, and hits re-insert, so the first key is
+    // the least recently used.
     while (entries.size > options.maxEntries) {
       const oldest = entries.keys().next().value;
       if (oldest === undefined) break;
@@ -42,8 +43,11 @@ export function createIntrospectionCache<T>(
       const key = createHash('sha256').update(parts.join('\0')).digest('hex');
       const hit = entries.get(key);
       if (hit) {
-        if (hit.expiresAt > now()) return hit.value;
         entries.delete(key);
+        if (hit.expiresAt > now()) {
+          entries.set(key, hit);
+          return hit.value;
+        }
       }
       const pending = inflight.get(key);
       if (pending) return pending;
@@ -87,8 +91,8 @@ export function introspectionTtlMs(
   inactiveTtlMs = INTROSPECTION_INACTIVE_TTL_MS
 ): number {
   if (!value.active) return inactiveTtlMs;
-  if (typeof value.exp === 'number' && Number.isFinite(value.exp)) {
-    return Math.min(activeTtlMs, value.exp * 1000 - now);
-  }
-  return activeTtlMs;
+  if (value.exp === undefined) return activeTtlMs;
+  // A malformed exp cannot bound the reuse, so the answer is not cached.
+  if (typeof value.exp !== 'number' || !Number.isFinite(value.exp)) return 0;
+  return Math.min(activeTtlMs, value.exp * 1000 - now);
 }

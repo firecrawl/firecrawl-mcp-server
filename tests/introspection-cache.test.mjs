@@ -174,3 +174,73 @@ test('TTL: inactive answers use the short TTL', () => {
   );
   assert.ok(INTROSPECTION_INACTIVE_TTL_MS < INTROSPECTION_ACTIVE_TTL_MS);
 });
+
+test('a hit refreshes recency, so eviction drops the least recently used', async () => {
+  const cache = createIntrospectionCache({
+    maxEntries: 2,
+    ttlMs: () => 60_000,
+  });
+  const load = countingLoader({ active: true });
+
+  await cache.get(['fco_hot', 'r'], load);
+  await cache.get(['fco_cold', 'r'], load);
+  await cache.get(['fco_hot', 'r'], load);
+  await cache.get(['fco_new', 'r'], load);
+  assert.equal(load.calls, 3);
+
+  await cache.get(['fco_hot', 'r'], load);
+  assert.equal(load.calls, 3, 'the recently used key survives eviction');
+  await cache.get(['fco_cold', 'r'], load);
+  assert.equal(load.calls, 4, 'the least recently used key was evicted');
+});
+
+test('TTL: a malformed exp is not cached', () => {
+  assert.equal(introspectionTtlMs({ active: true, exp: '9999999999' }, 0), 0);
+  assert.equal(introspectionTtlMs({ active: true, exp: Number.NaN }, 0), 0);
+  assert.equal(introspectionTtlMs({ active: true, exp: null }, 0), 0);
+});
+
+test('the cache honours introspectionTtlMs for exp and inactive answers', async () => {
+  const clock = fakeClock();
+  const start = clock.now();
+  const cache = createIntrospectionCache({
+    maxEntries: 10,
+    now: clock.now,
+    ttlMs: introspectionTtlMs,
+  });
+  const active = countingLoader({ active: true, exp: (start + 2_000) / 1000 });
+  const inactive = countingLoader({ active: false });
+
+  await cache.get(['fco_active', 'r'], active);
+  await cache.get(['fco_inactive', 'r'], inactive);
+
+  clock.advance(1_000);
+  await cache.get(['fco_active', 'r'], active);
+  assert.equal(active.calls, 1, 'reused before exp');
+
+  clock.advance(2_000);
+  await cache.get(['fco_active', 'r'], active);
+  assert.equal(active.calls, 2, 'not reused past exp');
+
+  clock.advance(INTROSPECTION_INACTIVE_TTL_MS - 3_001);
+  await cache.get(['fco_inactive', 'r'], inactive);
+  assert.equal(inactive.calls, 1, 'inactive answer reused inside its window');
+
+  clock.advance(1);
+  await cache.get(['fco_inactive', 'r'], inactive);
+  assert.equal(inactive.calls, 2, 'inactive answer expires after its window');
+});
+
+test('clear drops every entry', async () => {
+  const cache = createIntrospectionCache({
+    maxEntries: 10,
+    ttlMs: () => 60_000,
+  });
+  const load = countingLoader({ active: true });
+
+  await cache.get(['fco_a', 'r'], load);
+  cache.clear();
+  assert.equal(cache.size, 0);
+  await cache.get(['fco_a', 'r'], load);
+  assert.equal(load.calls, 2);
+});
