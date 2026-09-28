@@ -1903,135 +1903,6 @@ test('HTTP cloud transport swaps an fco_ OAuth token for its introspected API ke
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
-async function startIntrospectCacheServer(t, env = {}) {
-  const backend = await startFakeFirecrawlBackend({
-    apiKeyFromIntrospection: 'fc-introspected-key',
-  });
-  t.after(() => backend.close());
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp',
-    FIRECRAWL_API_URL: backend.url,
-    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
-    FIRECRAWL_OAUTH_ISSUER: backend.url,
-    HTTP_STREAMABLE_SERVER: 'true',
-    PORT: String(port),
-    ...env,
-  });
-  t.after(() => stopChild(child));
-  let stderr = '';
-  child.stderr.on('data', (chunk) => {
-    stderr += chunk;
-  });
-  await waitForHealth(port, child);
-  const search = (id) =>
-    httpToolCall(port, {
-      id,
-      headers: { authorization: 'Bearer fco_live_access_token' },
-      params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
-    });
-  const introspectCount = () =>
-    backend.requests.filter((r) => r.url === '/api/oauth/introspect').length;
-  return { introspectCount, search, stderr: () => stderr };
-}
-
-test('HTTP cloud transport reuses a recent introspection answer across requests', async (t) => {
-  const { introspectCount, search, stderr } = await startIntrospectCacheServer(t);
-
-  for (const id of [20, 21, 22]) {
-    const response = await search(id);
-    assert.equal(response.status, 200);
-    assert.notEqual(parseSseJson(await response.text()).result.isError, true);
-  }
-  assert.equal(introspectCount(), 1, 'repeat requests with one token must hit the cache');
-  assert.equal(stderr().includes('TypeError'), false, stderr());
-});
-
-test('FIRECRAWL_OAUTH_INTROSPECT_CACHE_TTL_MS=0 introspects every request', async (t) => {
-  const { introspectCount, search, stderr } = await startIntrospectCacheServer(t, {
-    FIRECRAWL_OAUTH_INTROSPECT_CACHE_TTL_MS: '0',
-  });
-
-  for (const id of [23, 24]) {
-    assert.equal((await search(id)).status, 200);
-  }
-  assert.equal(introspectCount(), 2);
-  assert.equal(stderr().includes('TypeError'), false, stderr());
-});
-
-test('an edge-mitigated introspection is logged, not cached, and retried next request', async (t) => {
-  const backend = await startFakeFirecrawlBackend();
-  t.after(() => backend.close());
-
-  let blocked = true;
-  let introspections = 0;
-  const issuerPort = await getFreePort();
-  const issuer = createServer(async (req, res) => {
-    req.setEncoding('utf8');
-    for await (const chunk of req) void chunk;
-    if (req.method === 'POST' && req.url === '/api/oauth/introspect') {
-      introspections += 1;
-      if (blocked) {
-        res.writeHead(403, { 'content-type': 'text/plain', 'x-vercel-mitigated': 'deny' });
-        res.end('Forbidden');
-        return;
-      }
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(
-        JSON.stringify({
-          active: true,
-          api_key: 'fc-introspected-key',
-          aud: 'https://mcp.firecrawl.dev/v2/mcp',
-          credential_purpose: 'general',
-          scope: 'firecrawl:global',
-        })
-      );
-      return;
-    }
-    res.writeHead(404, { 'content-type': 'application/json' });
-    res.end('{}');
-  });
-  await new Promise((resolve) => issuer.listen(issuerPort, '127.0.0.1', resolve));
-  t.after(() => issuer.close());
-
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp',
-    FIRECRAWL_API_URL: backend.url,
-    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
-    FIRECRAWL_OAUTH_ISSUER: `http://127.0.0.1:${issuerPort}`,
-    HTTP_STREAMABLE_SERVER: 'true',
-    PORT: String(port),
-  });
-  t.after(() => stopChild(child));
-  let stderr = '';
-  child.stderr.on('data', (chunk) => {
-    stderr += chunk;
-  });
-  await waitForHealth(port, child);
-
-  const search = (id) =>
-    httpToolCall(port, {
-      id,
-      headers: { authorization: 'Bearer fco_live_access_token' },
-      params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
-    });
-
-  await assertCredentialValidationUnavailable(await search(30), 'edge-mitigated introspection');
-  const record = await waitForCredentialValidationLog(() => stderr);
-  assert.equal(record.reason, 'introspect_http_status');
-  assert.equal(record.introspect_status, 403);
-  assert.equal(record.edge_mitigation, 'deny');
-
-  blocked = false;
-  const recovered = await search(31);
-  assert.equal(recovered.status, 200);
-  assert.equal(introspections, 2, 'the failed answer must not be served from cache');
-  assert.equal(stderr.includes('TypeError'), false, stderr);
-});
-
 test('HTTP cloud keyless transport rejects inactive OAuth without advertising login', async (t) => {
   const backend = await startFakeFirecrawlBackend();
   t.after(() => backend.close());
@@ -2767,8 +2638,8 @@ test('HTTP cloud authenticated Parse forwards ZDR for API-key and managed OAuth 
   );
   assert.deepEqual(
     introspectedTokens,
-    ['fco_parse'],
-    'only OAuth access tokens are introspected, and a repeat request reuses the cached answer'
+    ['fco_parse', 'fco_parse'],
+    'only OAuth access tokens may be introspected on the account route'
   );
   assert.equal(uploads[0].headers.authorization, 'Bearer fc-parse-api-key');
   assert.equal(parses[0].headers.authorization, 'Bearer fc-parse-api-key');
