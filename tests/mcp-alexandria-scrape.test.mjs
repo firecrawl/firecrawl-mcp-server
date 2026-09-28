@@ -133,3 +133,18 @@ test('below-budget results, errors, utility calls and URL scrapes bypass retenti
     assert.equal(api.requests.length, 1);
   }
 });
+
+test('alexandria execution ignores URL-mode discovery options instead of rejecting the call', async (t) => {
+  const { api, client } = await startStdioWithApi(t);
+  const result = await client.request('tools/call', {
+    name: 'firecrawl_scrape',
+    arguments: { alexandria: EXCHANGE_CALL, toolDetail: 'full', domainTools: true },
+  });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  const payload = toolText(result);
+  assert.equal(payload.success, true);
+  const sent = api.requests.find((request) => request.url === '/v2/scrape').body;
+  assert.equal('toolDetail' in sent, false);
+  assert.equal('domainTools' in sent, false);
+  assert.deepEqual(Object.keys(sent).sort(), ['alexandria', 'origin']);
+});

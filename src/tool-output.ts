@@ -89,7 +89,7 @@ const agentHints = {
 
 /** Keys every Alexandria-capable response can carry (see `alexandriaOutput`). */
 const alexandriaEnvelope = {
-  requestId: str('Identifier of this logical execution; reuse it only for a retry of the identical payload.'),
+  requestId: str('Identifier of this Alexandria execution.'),
   scrape_id: str('Identifier of the underlying scrape.'),
   receipt: unknown('Billing receipt for the execution.'),
   creditsCost: num('Credits this call consumed.'),
@@ -245,6 +245,14 @@ export const agentStatusOutputSchema = z
     mode: str('Agent mode the job ran in.'),
     threadId: str('Research thread this job belongs to.'),
     threadTurn: num('Turn number of this job within its thread.'),
+    message: unknown('The agent\'s reply; in chat mode, the short answer to a follow-up.'),
+    suggestions: unknown('Follow-ups the agent offers; send one as the prompt of the next turn with this threadId.'),
+    exchange: unknown(
+      'What the job did with Alexandria providers: onTermsRequired, paidCalls, creditsUsed, skippedProviders (gated providers that would have helped), and requiresAction (approvalId plus the terms/show and terms/accept calls, each provider digest string | null and always present; call accept only with the user\'s explicit consent, then continue the thread with exchange.approve: {approvalId}).'
+    ),
+    pendingApproval: unknown(
+      'Set when the job ended waiting on the caller. Answer it by calling firecrawl_agent with this threadId and exchange.approve or exchange.decline carrying its id. kind "terms" lists providers whose data terms need accepting; otherwise calls lists paid calls waiting for approval.'
+    ),
   })
   .describe('Progress or final result of a research agent job.');
 
