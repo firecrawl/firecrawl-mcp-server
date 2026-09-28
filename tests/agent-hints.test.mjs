@@ -294,6 +294,12 @@ test('MCP transport preserves hints on empty, readable, crawl and error results'
     assert.equal(request.headers['x-firecrawl-agent-hints'], 'true');
   }
 
+  // stderr arrives on its own pipe and can trail the HTTP responses.
+  const hintLines = () =>
+    getStderr().split('\n').filter((line) => line.startsWith('[MCP_AGENT_HINTS] '));
+  for (let waited = 0; hintLines().length < cases.length && waited < 5_000; waited += 25) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
   const hintLogs = getStderr()
     .split('\n')
     .filter((line) => line.startsWith('[MCP_AGENT_HINTS] '))

@@ -1629,7 +1629,8 @@ function emitAgentHintsLog(
   session: SessionData,
   requestId: string
 ): void {
-  if (process.env.CLOUD_SERVICE !== 'true' || !hints?.length) return;
+  // An empty array is still an API hints response, logged as hint_count 0.
+  if (process.env.CLOUD_SERVICE !== 'true' || !hints) return;
   console.error(
     '[MCP_AGENT_HINTS]',
     JSON.stringify({
@@ -1637,7 +1638,8 @@ function emitAgentHintsLog(
       status,
       request_id: requestId,
       auth_type: session.authType ?? 'none',
-      profile: primaryProfile.id,
+      // The companion search server shares this process and wrapper.
+      profile: session.profile ?? primaryProfile.id,
       hint_count: hints.length,
       hints: hints.map((hint) => hint.slice(0, AGENT_HINT_LOG_MAX_CHARS)),
     })
