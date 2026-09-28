@@ -6,6 +6,7 @@ export default defineConfig({
     'src/www-authenticate.ts',
     'src/agent-hints.ts',
     'src/origin.ts',
+    'src/introspection-cache.ts',
   ],
   format: ['esm'],
   platform: 'node',
