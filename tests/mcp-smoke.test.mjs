@@ -1428,10 +1428,9 @@ test('local keyless stdio keeps profile guidance keyless-scoped and exposes shar
   assert.equal(toolNames.includes('firecrawl_feedback'), true);
   const search = tools.tools.find((tool) => tool.name === 'firecrawl_search');
   assert.ok(search);
-  assert.match(
-    search.description,
-    /Keyless responses include an `id`; if a result is wrong, incomplete, blocked, or an error, optional feedback via `firecrawl_feedback` helps improve Firecrawl\./i
-  );
+  // Tool descriptions are shared by every session; keyless feedback is
+  // pointed to in keyless results and the feedback tool instead.
+  assert.doesNotMatch(search.description, /Keyless responses include/i);
 });
 
 test('monitor create gives queries precedence over page targets', async (t) => {

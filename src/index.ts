@@ -2438,7 +2438,7 @@ const scrapeTool: RegisteredTool = {
   description: `
 Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields. Use \`firecrawl_search\` when additional web sources are needed; on an authenticated session, \`firecrawl_map\` lists a site's URLs and \`firecrawl_crawl\` collects a set of pages.
 
-Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch or a smaller \`maxAge\` to bound staleness. A successful response does not by itself confirm the page is still current. Browser actions can change the live page when interactive actions are enabled. Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback. Keyless responses include \`metadata.jobId\`; if a result is wrong, incomplete, blocked, or an error, optional feedback via \`firecrawl_feedback\` helps improve Firecrawl.
+Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch or a smaller \`maxAge\` to bound staleness. A successful response does not by itself confirm the page is still current. Browser actions can change the live page when interactive actions are enabled. Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback.
 
 On an authenticated session with Alexandria access, if you are about to scrape the same fields from several pages, first run \`firecrawl_search\` with \`sources\` unset (or \`firecrawl_find_tools\`): a matching Alexandria provider returns those fields as typed records in one call. Keyless sessions have no provider matches; scrape directly.
 
@@ -2554,7 +2554,7 @@ ${ALEXANDRIA_SEARCH_LEAD}
 
 On an authenticated session, tool matches are discovery, not executed data: execute one through \`firecrawl_scrape\` with an \`alexandria\` body, or read its full contract with \`firecrawl_find_tools\`; after an Alexandria task, call firecrawl_feedback once per website with endpoint "alexandria" (free, no job ID). Keyless sessions get no Alexandria matches in data.tools.
 
-For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`. \`categories: ["research"]\` restricts web results to research-affiliated websites; the \`firecrawl_research_*\` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Query operators, domain filters, \`categories\`, \`toolDetail\` and \`scrapeOptions\` are described on their parameters. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback. Keyless responses include an \`id\`; if a result is wrong, incomplete, blocked, or an error, optional feedback via \`firecrawl_feedback\` helps improve Firecrawl.
+For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`. \`categories: ["research"]\` restricts web results to research-affiliated websites; the \`firecrawl_research_*\` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Query operators, domain filters, \`categories\`, \`toolDetail\` and \`scrapeOptions\` are described on their parameters. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
 `,
   parameters: z
     .object({
@@ -3788,8 +3788,6 @@ server.addTool({
     destructiveHint: false, // Read-only parsing; no deletion or writes to the source file.
   },
   description: `
-Keyless responses include \`metadata.jobId\`; if a result is wrong, incomplete, blocked, or an error, optional feedback via \`firecrawl_feedback\` helps improve Firecrawl. Invitations appear in result metadata. Report only observations already available; feedback never requires additional investigation.
-
 Parse one supported document into markdown, HTML, links, summary, targeted answers, or JSON matching a schema. Supported inputs include common HTML, PDF, Word, RTF, OpenDocument, and spreadsheet files; PDF parsing can be bounded with \`pdfOptions.maxPages\`.
 
 Local MCP requires an explicitly configured \`FIRECRAWL_API_URL\` before reading \`filePath\` from the server filesystem and uploading it. Parsing happens on that API server. Hosted MCP uses two calls: first provide \`filePath\` to receive upload instructions, upload locally, then call again with the returned \`uploadRef\`; do not send both fields together. Remote web URLs belong in \`firecrawl_scrape\`.
