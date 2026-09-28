@@ -1430,7 +1430,7 @@ test('local keyless stdio keeps profile guidance keyless-scoped and exposes shar
   assert.ok(search);
   assert.match(
     search.description,
-    /Keyless responses include an `id`; free keyless use requests feedback on it through `firecrawl_feedback`/i
+    /Keyless responses include an `id`; if a result is wrong, incomplete, blocked, or an error, optional feedback via `firecrawl_feedback` helps improve Firecrawl\./i
   );
 });
 

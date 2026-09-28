@@ -555,7 +555,7 @@ Feedback is optional. If submitting, use only observations already available aft
 ### 3c. Generic Feedback Tool (`firecrawl_feedback`)
 
 Sends evidence through `/v2/feedback`. Feedback on keyless Search, Scrape, and
-Parse jobs is requested in exchange for free keyless access. These jobs require `endpoint`, `jobId`, `rating`, `task`, `assessment`, and 1-20
+Parse jobs is optional and helps improve Firecrawl when a result is wrong, incomplete, blocked, or an error. These jobs require `endpoint`, `jobId`, `rating`, `task`, `assessment`, and 1-20
 `observations`. Each observation has `kind`, `detail`, and `basis`: `output`,
 `source_comparison`, or `expectation`. Source comparisons also require
 `comparison: {reference, detail}`.
