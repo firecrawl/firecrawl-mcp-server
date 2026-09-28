@@ -5,9 +5,9 @@ description: Find documentation and repository evidence for library behavior, AP
 
 # Developer research
 
-Use the connected `firecrawl_developer_search` tool. If it is deferred, discover
-it with the host's tool search. Include the library, version, and exact error or
-symbol when known. Read the returned matched passages and source URLs.
+Use `firecrawl_developer_search` through the Firecrawl MCP connection. If it is
+deferred, discover it with the host's tool search. Include the library, version,
+and exact error or symbol when known. Read the matched passages and source URLs.
 
 Distinguish official documentation from issues, proposals, and merged pull
 requests. A merged fix does not establish that it shipped in the user's version.
@@ -17,5 +17,4 @@ does not resolve the question.
 
 Answer from the retrieved evidence, cite the relevant sources, and state any
 unverified version or release boundary. Respect the user's source and tool
-choices. If the connection is unavailable, report the limitation; this skill
-does not require a CLI.
+choices. Report connection or authentication errors.

@@ -1,15 +1,14 @@
 ---
 name: firecrawl
-description: Search the web, read pages and documents, collect structured data, and track website changes through connected Firecrawl tools. Use for current sources, website content, research papers, and library or API research.
+description: Search the web, read pages and documents, collect structured data, and track website changes with Firecrawl. Use for current sources, website content, research papers, and library or API research.
 ---
 
 # Firecrawl
 
-Use the connected Firecrawl MCP tools for the requested web or document task.
-Respect the user's source, scope, and tool choices. Tool names below identify
-Firecrawl operations; use their connected equivalents in this host. If a tool
-is deferred, discover it with the host's tool search. If the connection is
-unavailable, report that limitation rather than installing or invoking a CLI.
+Use Firecrawl MCP tools for the requested web or document task. Respect the
+user's source, scope, and tool choices. Resolve the tool names below through
+the host's MCP connection, using its tool search for deferred tools. Report
+connection or authentication errors.
 
 ## Choose the operation
 

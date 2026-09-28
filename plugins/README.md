@@ -1,8 +1,7 @@
 # MCP plugin packages
 
-These packages pair Firecrawl MCP connections with instructions for search,
-retrieval, and related workflows. They use connected tools and do not require
-the Firecrawl CLI.
+Plugin packages for web search, content retrieval, developer research, and
+scientific literature with Firecrawl.
 
 | Package | Connection | Skills |
 | --- | --- | --- |
@@ -12,7 +11,7 @@ the Firecrawl CLI.
 The OpenAI package covers the full authenticated tool set. Its `.app.json`
 preserves the registered app connection and authentication. The Claude package
 uses the [search endpoint's eight-tool contract](../docs/search-profile.md) and
-its account-connection flow. It is a separate MCP package from the CLI plugin.
+its account-connection flow.
 
 ## Maintain the packages
 
@@ -49,9 +48,8 @@ directory at the archive root. Include dotfiles such as `.app.json`, `.mcp.json`
 `.codex-plugin/`, and `.claude-plugin/` as applicable. A skill-only upload contains
 that skill's folder, including its `SKILL.md` and references.
 
-Merging these files does not update an installed plugin or publish a directory
-release. Update the packaged version and publish through the relevant plugin
-distribution flow. Keep these MCP assets separate from CLI skill syncs.
+Maintain these packages in this repository. Update the packaged version and
+publish through the relevant plugin distribution flow.
 
 See the [OpenAI packaging guide](https://developers.openai.com/plugins/build/plugins)
 and [Claude plugin reference](https://code.claude.com/docs/en/plugins-reference)

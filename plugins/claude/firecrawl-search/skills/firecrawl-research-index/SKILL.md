@@ -5,7 +5,7 @@ description: Find scientific papers, follow citations, and verify claims against
 
 # Paper research
 
-Use the connected paper-index tools for scientific literature, including
+Use Firecrawl's paper-index MCP tools for scientific literature, including
 biomedical and arXiv papers. If a tool is deferred, discover it with the host's
 tool search. Ordinary `firecrawl_search` with the research category filters web
 sources; it does not query the same paper index.
@@ -27,5 +27,5 @@ or metadata and use `firecrawl_scrape` on an accessible source URL when helpful.
 
 Cite paper URLs or persistent identifiers. Distinguish a paper's claims from
 your synthesis and do not describe a partial search as an exhaustive review.
-Respect the user's source and tool choices. If the connection is unavailable,
-report the limitation; this skill does not require a CLI.
+Respect the user's source and tool choices. Report connection or authentication
+errors.

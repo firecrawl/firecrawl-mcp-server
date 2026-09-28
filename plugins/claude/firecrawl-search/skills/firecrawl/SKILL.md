@@ -1,14 +1,13 @@
 ---
 name: firecrawl
-description: Search the web, read source pages, and retrieve structured records through connected Firecrawl tools. Use for current information, finding sources, reading a supplied URL, or looking up data-provider capabilities.
+description: Search the web, read source pages, and retrieve structured records with Firecrawl. Use for current information, finding sources, reading a supplied URL, or looking up data-provider capabilities.
 ---
 
 # Firecrawl
 
-Use the connected Firecrawl MCP tools for the requested search or retrieval.
-Respect the user's source, scope, and tool choices. If a tool is deferred,
-discover it with the host's tool search. If the connection is unavailable,
-report that limitation rather than installing or invoking a CLI.
+Use Firecrawl MCP tools for the requested search or retrieval. Respect the
+user's source, scope, and tool choices. Use the host's tool search for deferred
+tools. Report connection or authentication errors.
 
 - **Find sources:** `firecrawl_search` returns ranked results and excerpts.
   This connection's search does not accept `scrapeOptions` or fetch page content.
