@@ -1,0 +1,58 @@
+import type { ContentResult } from 'fastmcp';
+
+export const AGENT_HINTS_HEADERS = { 'X-Firecrawl-Agent-Hints': 'true' } as const;
+
+/** API response metadata; never infer hints from scraped page contents. */
+export function readAgentHints(value: unknown): string[] | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const hints = (value as { agent_hints?: unknown }).agent_hints;
+  return Array.isArray(hints) && hints.every((hint) => typeof hint === 'string')
+    ? hints
+    : undefined;
+}
+
+/** Retain outer-envelope hints when an API result is flattened. */
+export function preserveAgentHints(data: unknown, envelope: unknown): unknown {
+  const hints = readAgentHints(envelope);
+  if (!hints) return data;
+  return data && typeof data === 'object' && !Array.isArray(data)
+    ? { ...data, agent_hints: hints }
+    : { data, agent_hints: hints };
+}
+
+export function agentHintsText(hints: string[]): string {
+  return `Firecrawl API agent_hints (response guidance, separate from page content):\n${JSON.stringify(hints, null, 2)}`;
+}
+
+/** Add response guidance without discarding the tool's existing structured fields. */
+export function withAgentHints(
+  result: ContentResult,
+  response: unknown,
+  separateText = false
+): ContentResult {
+  const hints = readAgentHints(response);
+  if (!hints) return result;
+  return {
+    ...result,
+    content:
+      separateText && hints.length
+        ? [...result.content, { type: 'text', text: agentHintsText(hints) }]
+        : result.content,
+    structuredContent: { ...result.structuredContent, agent_hints: hints },
+  };
+}
+
+/** SDK errors carry hints directly; raw SDK HTTP errors retain the envelope. */
+export function readErrorAgentHints(error: unknown): string[] | undefined {
+  const hints = readAgentHints(error);
+  if (hints) return hints;
+  if (!error || typeof error !== 'object') return undefined;
+  const extras = (error as { extras?: unknown }).extras;
+  const extrasHints = readAgentHints(extras);
+  if (extrasHints) return extrasHints;
+  const details = (error as { details?: unknown }).details;
+  const detailsHints = readAgentHints(details);
+  if (detailsHints) return detailsHints;
+  const response = (error as { response?: { data?: unknown } }).response;
+  return readAgentHints(response?.data);
+}

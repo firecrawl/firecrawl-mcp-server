@@ -94,7 +94,8 @@ export function withFindToolsNavigation(envelope: any) {
     ? { name: 'firecrawl_find_tools', arguments: next.options } : undefined;
   for (const item of page.items) {
     if (page.level === 'providers' && link(item.next)) {
-      const { expand, ...selectors } = item.next.options;
+      const selectors = { ...item.next.options };
+      delete selectors.expand;
       item.next = { ...item.next, options: { ...selectors, level: 'tools' } };
     }
     const nextTool = link(item.next);

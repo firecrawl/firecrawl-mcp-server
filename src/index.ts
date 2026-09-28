@@ -16,6 +16,13 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { z } from 'zod';
 import {
+  AGENT_HINTS_HEADERS,
+  agentHintsText,
+  preserveAgentHints,
+  readAgentHints,
+  readErrorAgentHints,
+} from './agent-hints';
+import {
   agentOutputSchema,
   agentStatusOutputSchema,
   crawlOutputSchema,
@@ -1038,7 +1045,8 @@ function termsRequiredAction(body: unknown): TermsRequiredAction | undefined {
 
 function termsRequiredError(
   action: TermsRequiredAction,
-  context: ExchangeErrorContext
+  context: ExchangeErrorContext,
+  hints?: string[]
 ): UserError {
   const requestId = context.requestId;
   const retryIdentity = requestId ? ` and requestId ${requestId}` : '';
@@ -1049,6 +1057,7 @@ function termsRequiredError(
       code: TERMS_REQUIRED_CODE,
       status: 403,
       message,
+      ...(hints ? { agent_hints: hints } : {}),
       ...(requestId ? { requestId } : {}),
       requiresAction: action,
       nextTool: {
@@ -1086,7 +1095,8 @@ function throwIfTermsRequired(
     | null
     | undefined;
   const action = termsRequiredAction(source?.response?.data ?? source?.details);
-  if (action) throw termsRequiredError(action, context);
+  if (action)
+    throw termsRequiredError(action, context, readErrorAgentHints(error));
 }
 
 async function relayTermsRequired<T>(
@@ -1119,6 +1129,7 @@ async function relayExchangeError(
     if (!response || response.status === 401) throw error;
     const data = response.data as
       { error?: unknown; code?: unknown; chargeId?: unknown } | undefined;
+    const hints = readErrorAgentHints(error);
     const message =
       typeof data?.error === 'string'
         ? data.error
@@ -1133,6 +1144,7 @@ async function relayExchangeError(
           code: typeof data?.code === 'string' ? data.code : 'exchange_error',
           status: 403,
           message,
+          ...(hints ? { agent_hints: hints } : {}),
           nextTool: {
             name: 'firecrawl_scrape',
             arguments: {
@@ -1146,6 +1158,7 @@ async function relayExchangeError(
       code: typeof data?.code === 'string' ? data.code : 'exchange_error',
       status: response.status,
       message,
+      ...(hints ? { agent_hints: hints } : {}),
       ...(typeof data?.chargeId === 'string'
         ? { chargeId: data.chargeId }
         : {}),
@@ -1461,6 +1474,18 @@ async function runWithCredentialRecovery<T>(
     // different fault and keeps its own reconnect guidance; a keyless session
     // never sent an account credential at all.
     if (session?.authType !== 'api-key' || !isCoreCredentialRejection(error)) {
+      const hints = readErrorAgentHints(error);
+      if (hints) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new UserError(
+          hints.length ? `${message}\n\n${agentHintsText(hints)}` : message,
+          {
+            ...(error instanceof UserError ? error.extras : {}),
+            error: message,
+            agent_hints: hints,
+          }
+        );
+      }
       throw error;
     }
     const payload = recoveryPayload('CREDENTIAL_INVALID', requestId);
@@ -1589,6 +1614,44 @@ function emitActionLog(
   }).catch(() => undefined);
 }
 
+const AGENT_HINT_LOG_MAX_CHARS = 1000;
+
+/**
+ * One `[MCP_AGENT_HINTS]` line per tool call that surfaced API agent hints.
+ * The strings come from the Firecrawl API, never from page content, so they
+ * are logged verbatim (capped) to count each hint; `request_id` joins the line
+ * to the call's `[MCP_ACTION]` records for account-level breakdowns.
+ */
+function emitAgentHintsLog(
+  toolName: string,
+  status: Exclude<ActionStatus, 'started'>,
+  hints: string[] | undefined,
+  session: SessionData,
+  requestId: string
+): void {
+  // An empty array is still an API hints response, logged as hint_count 0.
+  if (process.env.CLOUD_SERVICE !== 'true' || !hints) return;
+  console.error(
+    '[MCP_AGENT_HINTS]',
+    JSON.stringify({
+      tool_name: toolName,
+      status,
+      request_id: requestId,
+      auth_type: session.authType ?? 'none',
+      // The companion search server shares this process and wrapper.
+      profile: session.profile ?? primaryProfile.id,
+      hint_count: hints.length,
+      hints: hints.map((hint) => hint.slice(0, AGENT_HINT_LOG_MAX_CHARS)),
+    })
+  );
+}
+
+function resultAgentHints(result: unknown): string[] | undefined {
+  return result && typeof result === 'object'
+    ? readAgentHints((result as { structuredContent?: unknown }).structuredContent)
+    : undefined;
+}
+
 function guardHostedTool(
   tool: RegisteredTool,
   { logActions }: { logActions: boolean }
@@ -1674,12 +1737,26 @@ function guardHostedTool(
         if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
         throw new UserError(String(payload.message), payload);
       }
-      const runTool = () =>
-        runWithCredentialRecovery(
-          () => execute(args, invocationContext),
-          requestId,
-          invocationSession
-        );
+      const runTool = async () => {
+        try {
+          const result = await runWithCredentialRecovery(
+            () => execute(args, invocationContext),
+            requestId,
+            invocationSession
+          );
+          emitAgentHintsLog(
+            tool.name,
+            (result as { isError?: boolean } | undefined)?.isError ? 'error' : 'success',
+            resultAgentHints(result),
+            invocationSession,
+            requestId
+          );
+          return result;
+        } catch (error) {
+          emitAgentHintsLog(tool.name, 'error', readErrorAgentHints(error), invocationSession, requestId);
+          throw error;
+        }
+      };
       if (!logActions) return runTool();
 
       emitActionLog(tool.name, 'started', invocationSession, undefined, requestId);
@@ -1763,6 +1840,8 @@ server.getApp().get('/ready', (context) => {
     : context.json({ ok: true }, 200);
 });
 
+let warnedMissingAgentHintsInterceptor = false;
+
 function createClient(apiKey?: string): FirecrawlApp {
   const config: any = {
     ...(process.env.FIRECRAWL_API_URL && {
@@ -1775,7 +1854,55 @@ function createClient(apiKey?: string): FirecrawlApp {
     config.apiKey = apiKey;
   }
 
-  return new FirecrawlApp(config);
+  const client = new FirecrawlApp(config);
+  const axiosInstance = (client as any).http?.instance;
+  if (axiosInstance?.interceptors?.request?.use) {
+    axiosInstance.interceptors.request.use((request: any) => {
+      if (typeof request.headers?.set === 'function') {
+        request.headers.set('X-Firecrawl-Agent-Hints', 'true');
+      } else {
+        request.headers = { ...(request.headers ?? {}), ...AGENT_HINTS_HEADERS };
+      }
+      return request;
+    });
+  } else if (!warnedMissingAgentHintsInterceptor) {
+    warnedMissingAgentHintsInterceptor = true;
+    console.warn(
+      '[firecrawl-mcp] SDK request interceptor unavailable; API agent hints may be absent.'
+    );
+  }
+  return client;
+}
+
+/** Keep SDK validation, retries, and result shaping while retaining response metadata. */
+async function sdkResultWithAgentHints<T>(
+  client: FirecrawlApp,
+  execute: () => Promise<T>
+): Promise<T> {
+  const responseInterceptors = (client as any).http?.instance?.interceptors
+    ?.response;
+  if (!responseInterceptors?.use) return execute();
+  let hints: string[] | undefined;
+  const interceptor = responseInterceptors.use((response: any) => {
+    hints = readAgentHints(response?.data) ?? hints;
+    return response;
+  });
+  try {
+    const result = await execute();
+    return preserveAgentHints(result, { agent_hints: hints }) as T;
+  } catch (error) {
+    if (
+      hints &&
+      error &&
+      typeof error === 'object' &&
+      !readErrorAgentHints(error)
+    ) {
+      (error as { agent_hints?: string[] }).agent_hints = hints;
+    }
+    throw error;
+  } finally {
+    responseInterceptors.eject?.(interceptor);
+  }
 }
 
 // Safe mode is enabled by default for cloud service to comply with ChatGPT safety requirements
@@ -1812,10 +1939,14 @@ function getClient(session?: SessionData): FirecrawlApp {
         reason: 'delegated_credential_unavailable',
       });
     }
-    config.headers = {
-      ...(config.headers ?? {}),
-      Authorization: `Bearer ${credential}`,
-    };
+    if (typeof config.headers?.set === 'function') {
+      config.headers.set('Authorization', `Bearer ${credential}`);
+    } else {
+      config.headers = {
+        ...(config.headers ?? {}),
+        Authorization: `Bearer ${credential}`,
+      };
+    }
     return config;
   });
   return client;
@@ -2258,6 +2389,7 @@ async function apiPostJson(
   const response = await fetch(`${resolveApiBaseUrl()}${pathName}`, {
     method: 'POST',
     headers: {
+      ...AGENT_HINTS_HEADERS,
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
       ...(origin ? originHeaders(origin) : {}),
@@ -2276,7 +2408,8 @@ async function apiPostJson(
       parsed?.error ||
         parsed?.message ||
         `Firecrawl request failed (HTTP ${response.status})`,
-      response.status
+      response.status,
+      readAgentHints(parsed)
     );
   }
   return parsed;
@@ -2394,6 +2527,7 @@ async function executeHostedParse(
       session,
       origin
     );
+    const uploadHints = readAgentHints(uploadJson);
     const upload = parseApiData(uploadJson) as ParseUploadUrlData;
     if (!upload?.uploadUrl || !upload?.uploadRef) {
       throw new Error(
@@ -2410,6 +2544,7 @@ async function executeHostedParse(
 
     return asText({
       success: true,
+      ...(uploadHints ? { agent_hints: uploadHints } : {}),
       mode: 'hosted-upload-ref-awaiting-upload',
       message:
         'Hosted MCP cannot read local files. Run the local upload command, then call firecrawl_parse again with uploadRef. No Firecrawl API key is included in this command.',
@@ -2508,15 +2643,17 @@ Alexandria mode, on an authenticated session with Alexandria access: \`alexandri
         },
         session
       );
-      return structuredText(json?.data ?? json);
+      return structuredText(preserveAgentHints(json?.data ?? json, json));
     }
     const client = getClient(session);
     const res = await relayTermsRequired(
       () =>
-        client.scrape(String(url), {
-          ...cleaned,
-          origin,
-        } as any),
+        sdkResultWithAgentHints(client, () =>
+          client.scrape(String(url), {
+            ...cleaned,
+            origin,
+          } as any)
+        ),
       { tool: 'firecrawl_scrape' }
     );
     return structuredText(res);
@@ -2560,10 +2697,12 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
     const client = getClient(session);
     const cleaned = removeEmptyTopLevel(options as Record<string, unknown>);
     log.info('Mapping URL', { url: String(url) });
-    const res = await client.map(String(url), {
-      ...cleaned,
-      origin: requestOrigin(mcpClient, session),
-    } as any);
+    const res = await sdkResultWithAgentHints(client, () =>
+      client.map(String(url), {
+        ...cleaned,
+        origin: requestOrigin(mcpClient, session),
+      } as any)
+    );
     return structuredText(res);
   },
 });
@@ -2887,6 +3026,7 @@ async function keylessPost(
     }
   }
   const headers: Record<string, string> = {
+    ...AGENT_HINTS_HEADERS,
     ...originHeaders(origin),
     'Content-Type': 'application/json',
   };
@@ -2916,10 +3056,14 @@ async function keylessPost(
             ? json.retry_after_seconds
             : undefined,
       });
+      const hints = readAgentHints(json);
+      if (hints) payload.agent_hints = hints;
       throw new UserError(String(payload.message), payload);
     }
-    throw new Error(
-      json?.error || `Firecrawl request failed (HTTP ${response.status})`
+    throw new CoreHttpError(
+      json?.error || `Firecrawl request failed (HTTP ${response.status})`,
+      response.status,
+      readAgentHints(json)
     );
   }
   return json;
@@ -2947,6 +3091,7 @@ async function getCrawlStatusWithOrigin(
       expiresAt: body.expiresAt,
       next: body.next ?? null,
       data: initialDocs,
+      ...(readAgentHints(body) ? { agent_hints: readAgentHints(body) } : {}),
     };
   }
 
@@ -2979,6 +3124,7 @@ async function getCrawlStatusWithOrigin(
     expiresAt: body.expiresAt,
     next: null,
     data: docs,
+    ...(readAgentHints(body) ? { agent_hints: readAgentHints(body) } : {}),
   };
 }
 
@@ -3138,6 +3284,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
       if (querySuggestions) body.querySuggestions = querySuggestions;
 
       const headers: Record<string, string> = {
+        ...AGENT_HINTS_HEADERS,
         ...originHeaders(origin),
         'Content-Type': 'application/json',
       };
@@ -3186,6 +3333,9 @@ Eligibility is limited to successful searches within the feedback age window. Th
           feedbackErrorCode: parsed?.feedbackErrorCode,
           error: parsed?.error ?? `HTTP ${response.status}`,
           retryable: response.status >= 500,
+          ...(readAgentHints(parsed)
+            ? { agent_hints: readAgentHints(parsed) }
+            : {}),
         });
       }
 
@@ -3292,6 +3442,7 @@ Returns submission status, feedback ID, and accounting fields.
 
       const apiBase = resolveApiBaseUrl();
       const headers: Record<string, string> = {
+        ...AGENT_HINTS_HEADERS,
         ...originHeaders(origin),
         'Content-Type': 'application/json',
       };
@@ -3355,6 +3506,9 @@ Returns submission status, feedback ID, and accounting fields.
           feedbackErrorCode: parsed?.feedbackErrorCode,
           error: parsed?.error ?? `HTTP ${response.status}`,
           retryable: response.status >= 500,
+          ...(readAgentHints(parsed)
+            ? { agent_hints: readAgentHints(parsed) }
+            : {}),
         });
       }
 
@@ -3515,6 +3669,60 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
   },
 });
 
+// Mirrors agentExchangeSchema in firecrawl/firecrawl
+// apps/api/src/controllers/v2/types.ts: the gateway forwards it verbatim to
+// the agent service, which owns every default and the per-thread inheritance.
+const agentExchangeSchema = z
+  .strictObject({
+    enabled: z
+      .boolean()
+      .optional()
+      .describe('Let the agent call Alexandria providers. On by default.'),
+    toolkits: z
+      .array(z.string())
+      .max(5)
+      .optional()
+      .describe('Pin up to 5 providers the agent may use, by slug. Omitted means the whole catalog.'),
+    maxCalls: z
+      .number()
+      .int()
+      .min(1)
+      .max(30)
+      .optional()
+      .describe('Most provider calls the agent may make in this turn.'),
+    requireApproval: z
+      .boolean()
+      .optional()
+      .describe(
+        'End the turn with a paid-call pendingApproval before any paid provider call. Requires mode "chat" on the same request, even on a follow-up.'
+      ),
+    approve: z
+      .strictObject({
+        approvalId: z.string().uuid(),
+        callIds: z.array(z.string()).optional(),
+        always: z.boolean().optional(),
+      })
+      .optional()
+      .describe(
+        'Answer yes to the pendingApproval the previous turn of this thread ended on (its id, also exchange.requiresAction.approvalId). Needs threadId. For a terms offer, send it only after the user explicitly agreed and terms/accept succeeded; callIds and always are ignored on terms offers. For paid calls, callIds picks a subset (default all) and always stops asking for the rest of the thread.'
+      ),
+    decline: z
+      .strictObject({ approvalId: z.string().uuid() })
+      .optional()
+      .describe(
+        'Answer no to that pendingApproval. Needs threadId. A declined terms offer keeps those providers out of the rest of the thread.'
+      ),
+    onTermsRequired: z
+      .enum(['skip', 'ask'])
+      .optional()
+      .describe(
+        'What to do when a provider the agent would use needs data terms the team has not accepted. Gated providers are never called. "skip" (default): answer with accepted providers and list the rest in exchange.skippedProviders. "ask": the same, plus a terms pendingApproval and exchange.requiresAction with the terms/show and terms/accept calls. Each provider digest is string | null and always present; when null, terms/show returns it. There is no auto-accept. Omitted on a follow-up keeps the previous turn\'s value.'
+      ),
+  })
+  .describe(
+    'Alexandria provider settings for this turn, forwarded as the request\'s exchange object.'
+  );
+
 server.addTool({
   name: 'firecrawl_agent',
   annotations: {
@@ -3528,8 +3736,9 @@ Run web research that returns structured data when the URLs are not known or the
 
 This call returns only a job ID, not the research result. Read the job with \`firecrawl_agent_status\` until it reaches \`completed\` or \`failed\`; a typical research run takes one to three minutes. For one known URL use \`firecrawl_scrape\` (with formats: ["json"] for structured output); for a plain lookup that a results page answers, use \`firecrawl_search\`.
 
-The job also returns a \`threadId\`. To continue that thread, pass it with a follow-up \`prompt\`; omitted \`mode\`, \`urls\` and \`schema\` carry over from the previous turn.
+The job also returns a \`threadId\`. To continue that thread, pass it with a follow-up \`prompt\`; omitted \`mode\`, \`urls\`, \`schema\` and exchange settings carry over from the previous turn.
 
+The agent only calls Alexandria providers whose data terms the team has accepted. The status result's \`exchange.skippedProviders\` lists gated providers that would have helped. With \`exchange.onTermsRequired\` "ask", a terms offer ends the turn: \`pendingApproval\` (kind "terms") and \`exchange.requiresAction\` carry the \`approvalId\` and the exact terms/show and terms/accept calls. Show the user the terms, get their EXPLICIT consent, run terms/accept through \`firecrawl_scrape\`, then call \`firecrawl_agent\` with the same \`threadId\` and \`exchange.approve: {approvalId}\`. If they decline, send \`exchange.decline: {approvalId}\` instead. Never call terms/accept without that consent; a data request is not consent.
 `,
   outputSchema: agentOutputSchema,
   parameters: z.object({
@@ -3565,9 +3774,38 @@ The job also returns a \`threadId\`. To continue that thread, pass it with a fol
       .enum(['extract', 'chat'])
       .optional()
       .describe(
-        '"extract" (default) returns the complete structured result every turn. "chat" lets a follow-up that asks no new data get a short reply in message instead of a re-run. Omitted on a follow-up keeps the previous turn\'s mode.'
+        '"extract" (default) returns the complete structured result every turn. "chat" lets a follow-up that asks no new data get a short reply in message instead of a re-run; required for exchange.requireApproval. Omitted on a follow-up keeps the previous turn\'s mode.'
       ),
-  }),
+    exchange: agentExchangeSchema.optional(),
+  })
+  .refine(
+    (data) => !(data.exchange?.approve && data.exchange?.decline),
+    {
+      message:
+        'Send exchange.approve or exchange.decline, not both: each answers the pending approval one way.',
+      path: ['exchange'],
+    }
+  )
+  .refine(
+    (data) =>
+      !(data.exchange?.approve || data.exchange?.decline) ||
+      Boolean(data.threadId),
+    {
+      message:
+        'exchange.approve and exchange.decline answer a pending approval on an existing thread: pass that thread\'s threadId.',
+      path: ['threadId'],
+    }
+  )
+  .refine(
+    (data) => !data.exchange?.requireApproval || data.mode === 'chat',
+    {
+      // The agent service checks the mode sent on this request, not the
+      // thread's inherited one, and the gateway turns its 400 into a 500.
+      message:
+        'exchange.requireApproval needs mode: "chat" on the same request, including on a follow-up.',
+      path: ['mode'],
+    }
+  ),
   execute: async (
     args: unknown,
     { session, log, client: mcpClient }
@@ -3588,6 +3826,9 @@ The job also returns a \`threadId\`. To continue that thread, pass it with a fol
       strictConstrainToURLs: a.strictConstrainToURLs as boolean | undefined,
       threadId: a.threadId as string | undefined,
       mode: a.mode as 'extract' | 'chat' | undefined,
+      // Forwarded verbatim: the agent service owns the defaults and the
+      // per-thread inheritance.
+      exchange: a.exchange as Record<string, unknown> | undefined,
     });
     const res = await (client as any).startAgent({
       ...agentBody,
@@ -3828,7 +4069,10 @@ Set \`redactPII\` to request redaction of personally identifiable information in
     form.append('file', blob, filename);
     form.append('options', JSON.stringify(optionsPayload));
 
-    const headers: Record<string, string> = { ...originHeaders(origin) };
+    const headers: Record<string, string> = {
+      ...AGENT_HINTS_HEADERS,
+      ...originHeaders(origin),
+    };
     const credential = credentialForOutboundRequest(session);
     if (credential) {
       headers['Authorization'] = `Bearer ${credential}`;
@@ -3849,8 +4093,16 @@ Set \`redactPII\` to request redaction of personally identifiable information in
 
     const responseText = await response.text();
     if (!response.ok) {
-      throw new Error(
-        `Parse request failed with status ${response.status}: ${responseText}`
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(responseText);
+      } catch {
+        // Keep the original non-JSON error text.
+      }
+      throw new CoreHttpError(
+        `Parse request failed with status ${response.status}: ${responseText}`,
+        response.status,
+        readAgentHints(parsed)
       );
     }
 
