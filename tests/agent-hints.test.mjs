@@ -127,7 +127,7 @@ async function startTransport(t, backendPort) {
     try {
       await waitForHealth(port, child);
       t.after(() => stopChild(child));
-      return port;
+      return { port, getStderr: () => stderr };
     } catch (error) {
       await stopChild(child);
       if (!stderr.includes('EADDRINUSE') || attempt === 3) {
@@ -227,7 +227,7 @@ test('MCP transport preserves hints on empty, readable, crawl and error results'
   });
   const backendPort = await listen(backend);
   t.after(() => close(backend));
-  const port = await startTransport(t, backendPort);
+  const { port, getStderr } = await startTransport(t, backendPort);
 
   const cases = [
     { name: 'firecrawl_search', arguments: { query: 'empty' } },
@@ -293,4 +293,27 @@ test('MCP transport preserves hints on empty, readable, crawl and error results'
   for (const request of requests) {
     assert.equal(request.headers['x-firecrawl-agent-hints'], 'true');
   }
+
+  // stderr arrives on its own pipe and can trail the HTTP responses.
+  const hintLines = () =>
+    getStderr().split('\n').filter((line) => line.startsWith('[MCP_AGENT_HINTS] '));
+  for (let waited = 0; hintLines().length < cases.length && waited < 5_000; waited += 25) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  const hintLogs = getStderr()
+    .split('\n')
+    .filter((line) => line.startsWith('[MCP_AGENT_HINTS] '))
+    .map((line) => JSON.parse(line.slice('[MCP_AGENT_HINTS] '.length)));
+  assert.equal(hintLogs.length, cases.length, 'one hint log per tool call');
+  for (const [index, log] of hintLogs.entries()) {
+    assert.equal(log.tool_name, cases[index].name);
+    assert.equal(log.hint_count, hints.length);
+    assert.deepEqual(log.hints, hints);
+    assert.equal(log.auth_type, 'api-key');
+    assert.match(log.request_id, /^[0-9a-f-]{36}$/);
+  }
+  assert.deepEqual(
+    hintLogs.map((log) => log.status),
+    ['success', 'error', 'success', 'success', 'success', 'success', 'error', 'success', 'success', 'error']
+  );
 });

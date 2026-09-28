@@ -1,0 +1,8 @@
+{
+  "name": "firecrawl-search",
+  "version": "1.0.0",
+  "description": "Search the web, developer sources, and scientific papers with Firecrawl.",
+  "author": {
+    "name": "Firecrawl"
+  }
+}

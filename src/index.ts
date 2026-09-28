@@ -67,6 +67,12 @@ import {
 } from './research';
 import { registerUsageTools } from './usage';
 import { escapeWWWAuthenticateValue } from './www-authenticate';
+import {
+  createIntrospectionCache,
+  INTROSPECTION_ACTIVE_TTL_MS,
+  INTROSPECTION_INACTIVE_TTL_MS,
+  introspectionTtlMs,
+} from './introspection-cache';
 import { originHeaders, requestOrigin, type McpClient } from './origin';
 import {
   applyQueryRouting,
@@ -432,6 +438,7 @@ type OAuthIntrospectionResponse = {
   sub?: string;
   api_key_id?: string;
   client_id?: string;
+  exp?: number;
 };
 
 type CredentialMetadata = Pick<
@@ -489,7 +496,62 @@ function credentialMetadata(data: OAuthIntrospectionResponse): CredentialMetadat
   };
 }
 
-async function introspectToken(
+/**
+ * `FIRECRAWL_OAUTH_INTROSPECT_CACHE_TTL_MS=0` turns the cache off. Unset keeps
+ * the default; any other value caps how long an active answer is reused.
+ */
+function introspectionActiveTtlMs(): number {
+  const raw = normalizeHeader(
+    process.env.FIRECRAWL_OAUTH_INTROSPECT_CACHE_TTL_MS
+  );
+  if (raw === undefined) return INTROSPECTION_ACTIVE_TTL_MS;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0
+    ? parsed
+    : INTROSPECTION_ACTIVE_TTL_MS;
+}
+
+const introspectionCache = createIntrospectionCache({
+  maxEntries: 50_000,
+  ttlMs: (value: OAuthIntrospectionResponse, now: number) => {
+    const activeTtlMs = introspectionActiveTtlMs();
+    if (activeTtlMs === 0) return 0;
+    return introspectionTtlMs(
+      value,
+      now,
+      activeTtlMs,
+      Math.min(activeTtlMs, INTROSPECTION_INACTIVE_TTL_MS)
+    );
+  },
+});
+
+/**
+ * Every MCP request authenticates, and every pod on a node shares one egress IP
+ * against the issuer's per-IP rate limit. Reusing recent answers keeps that
+ * volume flat as traffic grows.
+ */
+function introspectToken(
+  token: string,
+  expectedResource: string
+): Promise<OAuthIntrospectionResponse> {
+  return introspectionCache.get([token, expectedResource], () =>
+    fetchIntrospection(token, expectedResource)
+  );
+}
+
+/** Known `x-vercel-mitigated` values; anything else reports as other. */
+const EDGE_MITIGATIONS = new Set(['deny', 'challenge', 'rate_limit']);
+
+function edgeMitigation(response: Response): string | undefined {
+  const value = response.headers
+    .get('x-vercel-mitigated')
+    ?.trim()
+    .toLowerCase();
+  if (!value) return undefined;
+  return EDGE_MITIGATIONS.has(value) ? value : 'other';
+}
+
+async function fetchIntrospection(
   token: string,
   expectedResource: string
 ): Promise<OAuthIntrospectionResponse> {
@@ -534,6 +596,7 @@ async function introspectToken(
   }
   if (!response.ok) {
     throw credentialValidationUnavailable({
+      edgeMitigation: edgeMitigation(response),
       elapsedMs: elapsedMs(),
       reason: 'introspect_http_status',
       resource: expectedResource,
@@ -1710,6 +1773,44 @@ function emitActionLog(
   }).catch(() => undefined);
 }
 
+const AGENT_HINT_LOG_MAX_CHARS = 1000;
+
+/**
+ * One `[MCP_AGENT_HINTS]` line per tool call that surfaced API agent hints.
+ * The strings come from the Firecrawl API, never from page content, so they
+ * are logged verbatim (capped) to count each hint; `request_id` joins the line
+ * to the call's `[MCP_ACTION]` records for account-level breakdowns.
+ */
+function emitAgentHintsLog(
+  toolName: string,
+  status: Exclude<ActionStatus, 'started'>,
+  hints: string[] | undefined,
+  session: SessionData,
+  requestId: string
+): void {
+  // An empty array is still an API hints response, logged as hint_count 0.
+  if (process.env.CLOUD_SERVICE !== 'true' || !hints) return;
+  console.error(
+    '[MCP_AGENT_HINTS]',
+    JSON.stringify({
+      tool_name: toolName,
+      status,
+      request_id: requestId,
+      auth_type: session.authType ?? 'none',
+      // The companion search server shares this process and wrapper.
+      profile: session.profile ?? primaryProfile.id,
+      hint_count: hints.length,
+      hints: hints.map((hint) => hint.slice(0, AGENT_HINT_LOG_MAX_CHARS)),
+    })
+  );
+}
+
+function resultAgentHints(result: unknown): string[] | undefined {
+  return result && typeof result === 'object'
+    ? readAgentHints((result as { structuredContent?: unknown }).structuredContent)
+    : undefined;
+}
+
 function guardHostedTool(
   tool: RegisteredTool,
   { logActions }: { logActions: boolean }
@@ -1795,12 +1896,26 @@ function guardHostedTool(
         if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
         throw new UserError(String(payload.message), payload);
       }
-      const runTool = () =>
-        runWithCredentialRecovery(
-          () => execute(args, invocationContext),
-          requestId,
-          invocationSession
-        );
+      const runTool = async () => {
+        try {
+          const result = await runWithCredentialRecovery(
+            () => execute(args, invocationContext),
+            requestId,
+            invocationSession
+          );
+          emitAgentHintsLog(
+            tool.name,
+            (result as { isError?: boolean } | undefined)?.isError ? 'error' : 'success',
+            resultAgentHints(result),
+            invocationSession,
+            requestId
+          );
+          return result;
+        } catch (error) {
+          emitAgentHintsLog(tool.name, 'error', readErrorAgentHints(error), invocationSession, requestId);
+          throw error;
+        }
+      };
       if (!logActions) return runTool();
 
       emitActionLog(tool.name, 'started', invocationSession, undefined, requestId);

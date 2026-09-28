@@ -83,6 +83,9 @@ https://mcp.firecrawl.dev/v2/mcp-search
 
 It exposes a fixed set of eight tools: `firecrawl_search`, `firecrawl_developer_search`, the four `firecrawl_research_*` tools, and the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`. Its `firecrawl_search` fetches no page content, and the surface has its own OAuth identity; the full endpoint above is unchanged. It backs a published connector listing, so its tool set is a contract rather than a profile to tune. See [docs/search-profile.md](docs/search-profile.md) for the full contract and what a change to it involves.
 
+For packaged MCP workflows in ChatGPT, Codex, or Claude Code, see
+[MCP plugin packages](plugins/README.md).
+
 ### Running with npx
 
 ```bash

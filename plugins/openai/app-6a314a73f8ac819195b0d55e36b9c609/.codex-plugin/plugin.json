@@ -1,0 +1,26 @@
+{
+  "apps": "./.app.json",
+  "author": {
+    "name": "SideGuide Technologies, Inc."
+  },
+  "description": "Firecrawl helps users search the web, extract page and document content, discover structured data providers, and research developer documentation and scientific papers. It also supports browser interactions, multi-page crawls, structured research jobs, website change monitoring, and account credit-usage checks.",
+  "interface": {
+    "capabilities": ["Read", "Write"],
+    "category": "Productivity",
+    "defaultPrompt": [
+      "Find current sources for a topic and summarize them",
+      "Read a webpage and extract its main points",
+      "Find research papers and verify their key claims"
+    ],
+    "developerName": "SideGuide Technologies, Inc.",
+    "displayName": "Firecrawl",
+    "longDescription": "Firecrawl helps users search the web, extract page and document content, discover structured data providers, and research developer documentation and scientific papers. It also supports browser interactions, multi-page crawls, structured research jobs, website change monitoring, and account credit-usage checks.",
+    "privacyPolicyURL": "https://www.firecrawl.dev/privacy-policy",
+    "shortDescription": "Search and extract web data",
+    "termsOfServiceURL": "https://www.firecrawl.dev/terms-of-service",
+    "websiteURL": "https://firecrawl.dev"
+  },
+  "name": "app-6a314a73f8ac819195b0d55e36b9c609",
+  "skills": "./skills",
+  "version": "2.1.1"
+}
