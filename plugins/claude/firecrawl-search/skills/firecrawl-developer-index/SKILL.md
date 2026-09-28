@@ -8,6 +8,7 @@ description: Find documentation and repository evidence for library behavior, AP
 Use `firecrawl_developer_search` through the Firecrawl MCP connection. If it is
 deferred, discover it with the host's tool search. Include the library, version,
 and exact error or symbol when known. Read the matched passages and source URLs.
+Developer searches are billed per request.
 
 Distinguish official documentation from issues, proposals, and merged pull
 requests. A merged fix does not establish that it shipped in the user's version.

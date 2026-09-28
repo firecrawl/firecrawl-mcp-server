@@ -24,8 +24,8 @@ export function instructionFiles(directory) {
 export function assertPluginToolCoverage(plugin, tools) {
   const mentioned = new Set(
     instructionFiles(join(plugin, 'skills')).flatMap((path) =>
-      [...readFileSync(path, 'utf8').matchAll(/\bfirecrawl_[a-z_]+\b/g)].map(
-        (match) => match[0]
+      [...readFileSync(path, 'utf8').matchAll(/`(firecrawl_[a-z0-9_]+)`/g)].map(
+        (match) => match[1]
       )
     )
   );
@@ -34,6 +34,6 @@ export function assertPluginToolCoverage(plugin, tools) {
     assert.ok(available.has(name), `${plugin} references unavailable tool ${name}`);
   }
   for (const name of available) {
-    assert.ok(mentioned.has(name), `${plugin} has no guidance for ${name}`);
+    assert.ok(mentioned.has(name), `${plugin} has no tool reference for ${name}`);
   }
 }

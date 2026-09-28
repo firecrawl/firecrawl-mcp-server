@@ -1,8 +1,19 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import test from 'node:test';
 import {
+  assertPluginToolCoverage,
   claudePlugin,
   instructionFiles,
   openaiPlugin,
@@ -11,6 +22,38 @@ import {
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
+
+test('tool coverage ignores incidental mentions and checks explicit references', (t) => {
+  const plugin = mkdtempSync(join(tmpdir(), 'plugin-contract-'));
+  t.after(() => rmSync(plugin, { recursive: true, force: true }));
+  const skills = join(plugin, 'skills');
+  mkdirSync(skills);
+  const entrypoint = join(skills, 'SKILL.md');
+  const tools = [{ name: 'firecrawl_search' }];
+
+  writeFileSync(
+    entrypoint,
+    'Use `firecrawl_search`. See https://example.com/firecrawl_hidden.\n' +
+      'Do not use firecrawl_hidden.\n'
+  );
+  assert.doesNotThrow(() => assertPluginToolCoverage(plugin, tools));
+
+  writeFileSync(
+    entrypoint,
+    'See [documentation](https://example.com/firecrawl_search) and ' +
+      '`https://example.com/firecrawl_search`. Mentioning firecrawl_search is insufficient.\n'
+  );
+  assert.throws(
+    () => assertPluginToolCoverage(plugin, tools),
+    /has no tool reference for firecrawl_search/
+  );
+
+  writeFileSync(entrypoint, 'Use `firecrawl_search` and `firecrawl_hidden`.\n');
+  assert.throws(
+    () => assertPluginToolCoverage(plugin, tools),
+    /references unavailable tool firecrawl_hidden/
+  );
+});
 
 test('OpenAI package uses the registered Firecrawl app connection', () => {
   const manifest = readJson(join(openaiPlugin, '.codex-plugin/plugin.json'));

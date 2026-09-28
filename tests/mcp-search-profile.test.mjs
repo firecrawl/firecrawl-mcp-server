@@ -392,7 +392,6 @@ test('search surface lists exactly the eight contracted tools', async (t) => {
     'x-api-key': 'fc-test',
   });
   const names = tools.map((tool) => tool.name);
-  assertPluginToolCoverage(claudePlugin, tools);
   const search = tools.find((tool) => tool.name === 'firecrawl_search');
   assert.ok(search);
   for (const name of ['firecrawl_search', 'firecrawl_scrape']) {
@@ -426,6 +425,7 @@ test('search surface lists exactly the eight contracted tools', async (t) => {
   for (const excluded of EXCLUDED_TOOLS) {
     assert.equal(names.includes(excluded), false, `${excluded} must not appear`);
   }
+  assertPluginToolCoverage(claudePlugin, tools);
   assert.equal(getStderr().includes('TypeError'), false, getStderr());
 });
 

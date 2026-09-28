@@ -41,7 +41,11 @@ Read only the reference relevant to the operation. The live tool schema is
 the authority for accepted parameters and limits.
 
 For account questions, `firecrawl_credit_usage` reports current or historical
-usage. `firecrawl_search_feedback` and `firecrawl_feedback` submit feedback
+usage. Web, developer, and paper searches are billed per request. Provider-only
+discovery is free. Page retrieval is billed per URL; provider execution uses
+the capability's listed price.
+
+`firecrawl_search_feedback` and `firecrawl_feedback` submit feedback
 when requested; use identifiers from the relevant tool result.
 
 ## Complete the request

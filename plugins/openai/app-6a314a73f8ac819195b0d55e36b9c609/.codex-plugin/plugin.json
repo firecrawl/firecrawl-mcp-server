@@ -5,7 +5,7 @@
   },
   "description": "Firecrawl helps users search the web, extract page and document content, discover structured data providers, and research developer documentation and scientific papers. It also supports browser interactions, multi-page crawls, structured research jobs, website change monitoring, and account credit-usage checks.",
   "interface": {
-    "capabilities": [],
+    "capabilities": ["Read", "Write"],
     "category": "Productivity",
     "defaultPrompt": [
       "Find current sources for a topic and summarize them",
