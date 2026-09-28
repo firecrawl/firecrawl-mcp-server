@@ -5,7 +5,9 @@ description: Search the web, read pages and documents, collect structured data, 
 
 # Firecrawl
 
-Use Firecrawl MCP tools for the requested web or document task. Respect the
+Use Firecrawl MCP tools for the requested web or document task. Use them for
+ordinary web research and content gathering (searching, reading pages,
+collecting sources) even when the task doesn't name Firecrawl. Respect the
 user's source, scope, and tool choices. Resolve the tool names below through
 the host's MCP connection, using its tool search for deferred tools. Report
 connection or authentication errors.
