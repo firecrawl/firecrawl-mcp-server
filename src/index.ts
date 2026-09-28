@@ -67,6 +67,12 @@ import {
 } from './research';
 import { registerUsageTools } from './usage';
 import { escapeWWWAuthenticateValue } from './www-authenticate';
+import {
+  createIntrospectionCache,
+  INTROSPECTION_ACTIVE_TTL_MS,
+  INTROSPECTION_INACTIVE_TTL_MS,
+  introspectionTtlMs,
+} from './introspection-cache';
 import { originHeaders, requestOrigin, type McpClient } from './origin';
 import {
   applyQueryRouting,
@@ -432,6 +438,7 @@ type OAuthIntrospectionResponse = {
   sub?: string;
   api_key_id?: string;
   client_id?: string;
+  exp?: number;
 };
 
 type CredentialMetadata = Pick<
@@ -489,7 +496,62 @@ function credentialMetadata(data: OAuthIntrospectionResponse): CredentialMetadat
   };
 }
 
-async function introspectToken(
+/**
+ * `FIRECRAWL_OAUTH_INTROSPECT_CACHE_TTL_MS=0` turns the cache off. Unset keeps
+ * the default; any other value caps how long an active answer is reused.
+ */
+function introspectionActiveTtlMs(): number {
+  const raw = normalizeHeader(
+    process.env.FIRECRAWL_OAUTH_INTROSPECT_CACHE_TTL_MS
+  );
+  if (raw === undefined) return INTROSPECTION_ACTIVE_TTL_MS;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0
+    ? parsed
+    : INTROSPECTION_ACTIVE_TTL_MS;
+}
+
+const introspectionCache = createIntrospectionCache({
+  maxEntries: 50_000,
+  ttlMs: (value: OAuthIntrospectionResponse, now: number) => {
+    const activeTtlMs = introspectionActiveTtlMs();
+    if (activeTtlMs === 0) return 0;
+    return introspectionTtlMs(
+      value,
+      now,
+      activeTtlMs,
+      Math.min(activeTtlMs, INTROSPECTION_INACTIVE_TTL_MS)
+    );
+  },
+});
+
+/**
+ * Every MCP request authenticates, and every pod on a node shares one egress IP
+ * against the issuer's per-IP rate limit. Reusing recent answers keeps that
+ * volume flat as traffic grows.
+ */
+function introspectToken(
+  token: string,
+  expectedResource: string
+): Promise<OAuthIntrospectionResponse> {
+  return introspectionCache.get([token, expectedResource], () =>
+    fetchIntrospection(token, expectedResource)
+  );
+}
+
+/** Known `x-vercel-mitigated` values; anything else reports as other. */
+const EDGE_MITIGATIONS = new Set(['deny', 'challenge', 'rate_limit']);
+
+function edgeMitigation(response: Response): string | undefined {
+  const value = response.headers
+    .get('x-vercel-mitigated')
+    ?.trim()
+    .toLowerCase();
+  if (!value) return undefined;
+  return EDGE_MITIGATIONS.has(value) ? value : 'other';
+}
+
+async function fetchIntrospection(
   token: string,
   expectedResource: string
 ): Promise<OAuthIntrospectionResponse> {
@@ -534,6 +596,7 @@ async function introspectToken(
   }
   if (!response.ok) {
     throw credentialValidationUnavailable({
+      edgeMitigation: edgeMitigation(response),
       elapsedMs: elapsedMs(),
       reason: 'introspect_http_status',
       resource: expectedResource,
