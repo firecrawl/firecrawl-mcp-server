@@ -1,0 +1,22 @@
+{
+  "name": "firecrawl",
+  "version": "3.25.5",
+  "description": "Official Firecrawl MCP for web search, scraping, crawling, and structured data extraction.",
+  "mcpServers": {
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "${FIRECRAWL_API_KEY}"
+      }
+    }
+  },
+  "settings": [
+    {
+      "name": "Firecrawl API Key",
+      "description": "Your Firecrawl API key. Get one at https://firecrawl.dev/app/api-keys",
+      "envVar": "FIRECRAWL_API_KEY",
+      "sensitive": true
+    }
+  ]
+}
