@@ -11,6 +11,7 @@
 
 import { z } from 'zod';
 import { type ContentResult, type FastMCP, UserError } from 'fastmcp';
+import { AGENT_HINTS_HEADERS, withAgentHints } from './agent-hints';
 import { originHeaders, requestOrigin } from './origin';
 import {
   deprecatedToolOutputSchema,
@@ -43,6 +44,10 @@ type ClientLike = {
 type GetClient = (session?: SessionData) => unknown;
 
 const BASE = '/v2/search/research';
+
+function researchHeaders(origin: string): Record<string, string> {
+  return { ...originHeaders(origin), ...AGENT_HINTS_HEADERS };
+}
 
 /** Append a value (or repeated array values) to a URLSearchParams instance. */
 function appendParam(
@@ -327,10 +332,10 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ results?: PaperHit[] }>(
         withQuery(`${BASE}/papers`, params),
-        originHeaders(requestOrigin(mcpClient, session))
+        researchHeaders(requestOrigin(mcpClient, session))
       );
       const results = res.data?.results ?? [];
-      return withStructured(fmtHits(results), { results });
+      return withAgentHints(withStructured(fmtHits(results), { results }), res.data, true);
     },
   });
 
@@ -363,13 +368,13 @@ Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DO
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ paper?: PaperHit }>(
         `${BASE}/papers/${encodeURIComponent(paperId)}`,
-        originHeaders(requestOrigin(mcpClient, session))
+        researchHeaders(requestOrigin(mcpClient, session))
       );
       const paper = res.data?.paper;
-      return withStructured(
+      return withAgentHints(withStructured(
         fmtPaperMetadata(paper),
         paper ? { paper } : {}
-      );
+      ), res.data, true);
     },
   });
 
@@ -428,15 +433,15 @@ Returns ranked candidates and the evaluated pool size.
           `${BASE}/papers/${encodeURIComponent(primary)}/similar`,
           params
         ),
-        originHeaders(requestOrigin(mcpClient, session))
+        researchHeaders(requestOrigin(mcpClient, session))
       );
       const results = res.data?.results ?? [];
       const poolSize = res.data?.poolSize ?? 0;
       const note = res.data?.note ? `\nnote: ${res.data.note}` : '';
-      return withStructured(
+      return withAgentHints(withStructured(
         `${fmtHits(results)}\n(poolSize=${poolSize})${note}`,
         { results, poolSize, ...(res.data?.note ? { note: res.data.note } : {}) }
-      );
+      ), res.data, true);
     },
   });
 
@@ -486,15 +491,15 @@ Returns matching passages or a notice when full text is unavailable.
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ passages?: { text: string }[] }>(
         withQuery(`${BASE}/papers/${encodeURIComponent(paperId)}`, params),
-        originHeaders(requestOrigin(mcpClient, session))
+        researchHeaders(requestOrigin(mcpClient, session))
       );
       const passages = res.data?.passages ?? [];
-      return withStructured(
+      return withAgentHints(withStructured(
         passages.length
           ? passages.map((p) => p.text).join('\n---\n')
           : '(no full-text passages available for this paper)',
         { passages }
-      );
+      ), res.data, true);
     },
   });
 

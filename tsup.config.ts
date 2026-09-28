@@ -4,6 +4,7 @@ export default defineConfig({
   entry: [
     'src/index.ts',
     'src/www-authenticate.ts',
+    'src/agent-hints.ts',
     'src/origin.ts',
     'src/query-router.ts',
   ],

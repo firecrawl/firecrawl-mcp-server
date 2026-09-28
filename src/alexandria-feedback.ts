@@ -56,18 +56,10 @@ export const alexandriaFeedbackFields = {
     .optional(),
 };
 
-/**
- * Shared by the server instructions and the Alexandria tool descriptions so an
- * agent that only reads one of them still learns the feedback loop exists.
- * Wording is checked by scripts/agent-metadata-policy.mjs.
- */
-export const ALEXANDRIA_FEEDBACK_GUIDANCE =
-  'After an Alexandria task, whether a capability ran or discovery found nothing for the website, call firecrawl_feedback once per website with endpoint "alexandria": requestedWebsite (the url the user needed data from and the requestedFunctionality they needed), a rating, a rationale from observed results, and any providerFeedback or capabilityFeedback gaps. It is free, needs no job ID, has no deadline, and follows the answer rather than replacing it.';
-
 /** Appended to Alexandria results so the pointer travels with the data the agent is reading. */
 export const ALEXANDRIA_FEEDBACK_HINT = {
   name: 'firecrawl_feedback',
-  when: 'Once per website after the task is complete, including when no provider covered the site. Free; no job ID or deadline.',
+  when: 'Optional after task completion; at most once per website, including uncovered sites. Free; no job ID or deadline.',
   arguments: {
     endpoint: 'alexandria',
     rating: '<good | partial | bad>',
