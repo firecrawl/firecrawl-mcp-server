@@ -1614,6 +1614,42 @@ function emitActionLog(
   }).catch(() => undefined);
 }
 
+const AGENT_HINT_LOG_MAX_CHARS = 1000;
+
+/**
+ * One `[MCP_AGENT_HINTS]` line per tool call that surfaced API agent hints.
+ * The strings come from the Firecrawl API, never from page content, so they
+ * are logged verbatim (capped) to count each hint; `request_id` joins the line
+ * to the call's `[MCP_ACTION]` records for account-level breakdowns.
+ */
+function emitAgentHintsLog(
+  toolName: string,
+  status: Exclude<ActionStatus, 'started'>,
+  hints: string[] | undefined,
+  session: SessionData,
+  requestId: string
+): void {
+  if (process.env.CLOUD_SERVICE !== 'true' || !hints?.length) return;
+  console.error(
+    '[MCP_AGENT_HINTS]',
+    JSON.stringify({
+      tool_name: toolName,
+      status,
+      request_id: requestId,
+      auth_type: session.authType ?? 'none',
+      profile: primaryProfile.id,
+      hint_count: hints.length,
+      hints: hints.map((hint) => hint.slice(0, AGENT_HINT_LOG_MAX_CHARS)),
+    })
+  );
+}
+
+function resultAgentHints(result: unknown): string[] | undefined {
+  return result && typeof result === 'object'
+    ? readAgentHints((result as { structuredContent?: unknown }).structuredContent)
+    : undefined;
+}
+
 function guardHostedTool(
   tool: RegisteredTool,
   { logActions }: { logActions: boolean }
@@ -1699,12 +1735,26 @@ function guardHostedTool(
         if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
         throw new UserError(String(payload.message), payload);
       }
-      const runTool = () =>
-        runWithCredentialRecovery(
-          () => execute(args, invocationContext),
-          requestId,
-          invocationSession
-        );
+      const runTool = async () => {
+        try {
+          const result = await runWithCredentialRecovery(
+            () => execute(args, invocationContext),
+            requestId,
+            invocationSession
+          );
+          emitAgentHintsLog(
+            tool.name,
+            (result as { isError?: boolean } | undefined)?.isError ? 'error' : 'success',
+            resultAgentHints(result),
+            invocationSession,
+            requestId
+          );
+          return result;
+        } catch (error) {
+          emitAgentHintsLog(tool.name, 'error', readErrorAgentHints(error), invocationSession, requestId);
+          throw error;
+        }
+      };
       if (!logActions) return runTool();
 
       emitActionLog(tool.name, 'started', invocationSession, undefined, requestId);
