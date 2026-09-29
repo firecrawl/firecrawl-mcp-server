@@ -10,6 +10,7 @@
 
 ### Changed
 
+- `tools/list` now sends each tool's top-level `title` (MCP 2025-06-18), copied from `annotations.title`. Codex ranks deferred MCP tools for `tool_search` from the top-level `title`, `description` and server instructions, and ignores `annotations.title`. The `firecrawl_search`, `firecrawl_scrape`, `firecrawl_map` and `firecrawl_crawl` titles now name what each tool does in the words agents search with ("web search", "fetch", "web page", "URL", "website").
 - The search surface (`/v2/mcp-search`) now exposes `firecrawl_find_tools` and `firecrawl_scrape` alongside its six search tools, so agents can execute the Alexandria providers that `firecrawl_search` already returns. Both carry surface-scoped descriptions that name only tools registered on that surface, and Alexandria results there omit the `firecrawl_feedback` pointer. See docs/search-profile.md.
 
 ### Fixed

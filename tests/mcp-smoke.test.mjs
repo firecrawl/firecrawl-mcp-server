@@ -1208,6 +1208,11 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.ok(toolNames.includes('firecrawl_credit_usage'));
   assert.equal(toolNames.includes('firecrawl_credit_usage_historical'), false);
   assert.equal(toolNames.includes('firecrawl_extract'), false);
+  // Codex tool search indexes the top-level Tool.title, not annotations.title.
+  for (const tool of tools.tools) {
+    assert.ok(tool.annotations?.title, `${tool.name} needs annotations.title`);
+    assert.equal(tool.title, tool.annotations.title, `${tool.name} top-level title`);
+  }
 
   const deprecatedExtract = await client.request('tools/call', {
     // beforeValidate must intercept before the legacy required `urls` schema.

@@ -2650,7 +2650,7 @@ async function executeHostedParse(
 const scrapeTool: RegisteredTool = {
   name: 'firecrawl_scrape',
   annotations: {
-    title: 'Firecrawl scrape',
+    title: 'Firecrawl scrape: fetch and read a web page URL as markdown',
     readOnlyHint: false, // Alexandria capabilities can record provider agreement acceptance.
     openWorldHint: true, // Accepts any user-supplied URL on the public web.
     destructiveHint: false, // Does not modify, delete, or write to external websites.
@@ -2730,7 +2730,7 @@ server.addTool({
 server.addTool({
   name: 'firecrawl_map',
   annotations: {
-    title: 'Firecrawl website map',
+    title: 'Firecrawl map: list all URLs on a website',
     readOnlyHint: true, // Discovers and returns indexed URLs; does not modify the target site.
     openWorldHint: true, // Operates against arbitrary user-supplied web domains.
     destructiveHint: false, // Read-only discovery; no deletion or destructive updates.
@@ -2774,7 +2774,7 @@ server.addTool({
   name: 'firecrawl_search',
   _meta: { 'anthropic/alwaysLoad': true },
   annotations: {
-    title: 'Firecrawl web search',
+    title: 'Firecrawl web search: search the internet, news, and images',
     readOnlyHint: true, // Runs a web search and returns results; does not modify external sites.
     openWorldHint: true, // Searches the open web across arbitrary domains and sources.
     destructiveHint: false, // Query-only; no destructive side effects on external entities.
@@ -3583,7 +3583,7 @@ Returns submission status, feedback ID, and accounting fields.
 server.addTool({
   name: 'firecrawl_crawl',
   annotations: {
-    title: 'Firecrawl site crawl',
+    title: 'Firecrawl crawl: fetch every page on a website',
     readOnlyHint: false, // Starts a server-side crawl job and polls until the job reaches a terminal state.
     openWorldHint: true, // Crawls user-specified URLs across the public web.
     destructiveHint: false, // Reads pages from target sites; does not delete or alter external websites.
@@ -4189,7 +4189,7 @@ function registerMarketplaceSearchTool(
     name: 'firecrawl_search',
     _meta: { 'anthropic/alwaysLoad': true },
     annotations: {
-      title: 'Firecrawl web search',
+      title: 'Firecrawl web search: search the internet, news, and images',
       readOnlyHint: true,
       openWorldHint: true,
       destructiveHint: false,
