@@ -27,9 +27,16 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "dotenv": "^17.2.2",
     "fastmcp": "4.3.2",
     "firecrawl": "4.42.0",
+    "fuse.js": "^7.1.0",
+    "hono": "^4.12.27",
+    "mcp-proxy": "^6.5.1",
+    "undici": "^7.28.0",
+    "uri-templates": "^0.2.0",
+    "xsschema": "^0.4.4",
     "zod": "^4.2.1"
   },
   "engines": {
