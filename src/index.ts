@@ -2650,7 +2650,7 @@ async function executeHostedParse(
 const scrapeTool: RegisteredTool = {
   name: 'firecrawl_scrape',
   annotations: {
-    title: 'Firecrawl scrape: fetch and read a web page URL as markdown',
+    title: 'Firecrawl scrape: fetch and read a web page URL as markdown, HTML, or JSON',
     readOnlyHint: false, // Alexandria capabilities can record provider agreement acceptance.
     openWorldHint: true, // Accepts any user-supplied URL on the public web.
     destructiveHint: false, // Does not modify, delete, or write to external websites.
@@ -2730,7 +2730,7 @@ server.addTool({
 server.addTool({
   name: 'firecrawl_map',
   annotations: {
-    title: 'Firecrawl map: list all URLs on a website',
+    title: 'Firecrawl map: list indexed URLs on a website',
     readOnlyHint: true, // Discovers and returns indexed URLs; does not modify the target site.
     openWorldHint: true, // Operates against arbitrary user-supplied web domains.
     destructiveHint: false, // Read-only discovery; no deletion or destructive updates.
@@ -3583,7 +3583,7 @@ Returns submission status, feedback ID, and accounting fields.
 server.addTool({
   name: 'firecrawl_crawl',
   annotations: {
-    title: 'Firecrawl crawl: fetch every page on a website',
+    title: 'Firecrawl crawl: fetch pages across a website',
     readOnlyHint: false, // Starts a server-side crawl job and polls until the job reaches a terminal state.
     openWorldHint: true, // Crawls user-specified URLs across the public web.
     destructiveHint: false, // Reads pages from target sites; does not delete or alter external websites.
