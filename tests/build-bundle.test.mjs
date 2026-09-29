@@ -16,9 +16,18 @@ test('every package the bundled fastmcp imports is a direct dependency', async (
   const pkg = JSON.parse(
     await readFile(new URL('../package.json', import.meta.url), 'utf8')
   );
+  // Static `from`, side-effect `import "x"`, dynamic `import("x")` and
+  // esbuild's `__require("x")` shims all resolve at runtime.
+  const specifiers = [
+    ...dist.matchAll(/\bfrom\s+["']([^"'./][^"']*)["']/g),
+    ...dist.matchAll(/\bimport\s+["']([^"'./][^"']*)["']/g),
+    ...dist.matchAll(/\bimport\(\s*["']([^"'./][^"']*)["']\s*\)/g),
+    ...dist.matchAll(/\b(?:__)?require\(\s*["']([^"'./][^"']*)["']\s*\)/g),
+  ].map(([, spec]) => spec);
+  assert.ok(specifiers.length > 0, 'expected to find bare imports in dist');
   const imported = new Set(
-    [...dist.matchAll(/from\s+["']([^"'./][^"']*)["']/g)]
-      .map(([, spec]) => spec.match(/^(@[^/]+\/[^/]+|[^/]+)/)[1])
+    specifiers
+      .map((spec) => spec.match(/^(@[^/]+\/[^/]+|[^/]+)/)[1])
       .filter((name) => !name.startsWith('node:'))
   );
   const builtins = new Set((await import('node:module')).builtinModules);
