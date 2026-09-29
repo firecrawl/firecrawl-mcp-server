@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { EXCHANGE_KEY_REQUIRED_MESSAGE, KEYLESS_TOOL_MESSAGE, getFreePort, waitForHealth, parseSseJson, spawnServer, stopChild, startStdio, startStdioWithApi, toolText, httpToolCall } from './helpers/exchange-mcp.mjs';
+import { withoutPromptDate } from './helpers/keyless-prompt-date.mjs';
 import { EXCHANGE_CALL, startFakeExchangeApi } from './helpers/exchange-api.mjs';
 
 test('local keyless stdio refuses every Exchange path with the explanatory error and no network call', async (t) => {
@@ -91,7 +92,7 @@ test('hosted keyless sessions never reach the Exchange; an API key header does',
   ).result;
   assert.equal(discover.isError, true);
   assert.equal(discover.structuredContent.code, 'KEYLESS_TOOL_NOT_AVAILABLE');
-  assert.equal(discover.content[0].text, KEYLESS_TOOL_MESSAGE);
+  assert.equal(withoutPromptDate(discover.content[0].text), KEYLESS_TOOL_MESSAGE);
 
   for (const params of [
     { arguments: { alexandria: [EXCHANGE_CALL] }, name: 'firecrawl_scrape' },

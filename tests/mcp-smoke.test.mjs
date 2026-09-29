@@ -7,6 +7,7 @@ import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
 import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
+import { withoutPromptDate } from './helpers/keyless-prompt-date.mjs';
 import {
   assertPluginToolCoverage,
   openaiPlugin,
@@ -116,16 +117,17 @@ function assertKeylessAccountRecovery(
 ) {
   assert.equal(result.isError, true);
   assert.equal(result.content[0].type, 'text');
+  const text = withoutPromptDate(result.content[0].text);
   if (hints) {
-    assert.ok(result.content[0].text.startsWith(message));
+    assert.ok(text.startsWith(message));
     assert.match(result.content[0].text, /Firecrawl API agent_hints/);
     assert.deepEqual(result.structuredContent.agent_hints, hints);
   } else {
-    assert.equal(result.content[0].text, message);
+    assert.equal(text, message);
   }
   assert.equal(result.structuredContent.code, code);
   assert.equal(result.structuredContent.auth_mode, 'keyless');
-  assert.equal(result.structuredContent.message, message);
+  assert.equal(withoutPromptDate(result.structuredContent.message), message);
   assert.equal(
     result.structuredContent.docs_url,
     'https://docs.firecrawl.dev/mcp-server'

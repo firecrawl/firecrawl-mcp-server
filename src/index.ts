@@ -1458,8 +1458,9 @@ function isLocalKeylessStartup(): boolean {
 // FastMCP copies UserError.message onto both content[0].text and
 // structuredContent.message. Hosts forward the text block, not
 // structured next_actions, so bearer and OAuth recovery strings live here.
-const KEYLESS_ACCOUNT_FIX =
-  'Fix: Create an API key at https://www.firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp&redirect=%2Fapp%2Fapi-keys and then:\n- Set the header: Authorization: Bearer YOUR_API_KEY on https://mcp.firecrawl.dev/v2/mcp\nThen start a new session.';
+const KEYLESS_SIGNUP_URL =
+  'https://www.firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp';
+const KEYLESS_ACCOUNT_FIX = `Fix: Create an API key at ${KEYLESS_SIGNUP_URL}&redirect=%2Fapp%2Fapi-keys and then:\n- Set the header: Authorization: Bearer YOUR_API_KEY on https://mcp.firecrawl.dev/v2/mcp\nThen start a new session.`;
 const KEYLESS_QUOTA_MESSAGE = `You've hit Firecrawl's free MCP rate limit. To continue using without limits, create a Firecrawl API key.\n\n${KEYLESS_ACCOUNT_FIX}`;
 const KEYLESS_TOOL_MESSAGE = `This tool needs a Firecrawl account.\n\n${KEYLESS_ACCOUNT_FIX}`;
 const KEYLESS_ACCESS_MESSAGE = `Anonymous keyless access is unavailable for this request.\n\n${KEYLESS_ACCOUNT_FIX}`;
@@ -1467,6 +1468,19 @@ const INVALID_API_KEY_MESSAGE =
   'The Firecrawl API key is invalid or revoked.\nFix: Replace the key on the existing Firecrawl MCP server, then start a new session. Get an API key at https://www.firecrawl.dev/app/api-keys';
 const INVALID_OAUTH_MESSAGE =
   'This Firecrawl account connection is no longer valid.\nFix: Reconnect the existing Firecrawl server in the client, or set that existing server URL to https://mcp.firecrawl.dev/v2/mcp-oauth, then start a new session.';
+
+/**
+ * Stamps the keyless signup link in a recovery message with the UTC date the
+ * prompt is shown (utm_content=YYYY-MM-DD), so a signup can be measured against
+ * the prompt that led to it. Messages without the link are returned unchanged.
+ */
+function withKeylessPromptDate(message: string, now = new Date()): string {
+  if (message.includes(`${KEYLESS_SIGNUP_URL}&utm_content=`)) return message;
+  return message.replaceAll(
+    KEYLESS_SIGNUP_URL,
+    `${KEYLESS_SIGNUP_URL}&utm_content=${now.toISOString().slice(0, 10)}`
+  );
+}
 
 function connectionRecoveryPayload(params: {
   code: string;
@@ -1574,7 +1588,7 @@ function recoveryPayload(
     code,
     request_id: requestId,
     auth_mode: code === 'CREDENTIAL_INVALID' ? 'credential_error' : 'keyless',
-    message:
+    message: withKeylessPromptDate(
       code === 'CREDENTIAL_INVALID'
         ? INVALID_API_KEY_MESSAGE
         : isQuotaExhausted
@@ -1585,7 +1599,8 @@ function recoveryPayload(
               ? KEYLESS_ACCESS_MESSAGE
               : isKeylessEligibilityUnavailable
                 ? 'The anonymous keyless eligibility check is temporarily unavailable. Retry shortly.'
-                : 'This tool requires a Firecrawl account or API key.',
+                : 'This tool requires a Firecrawl account or API key.'
+    ),
     // CREDENTIAL_INVALID sessions gate every tool call (including keyless
     // tools) on the credentialError check before the keyless branch ever
     // runs, so none of KEYLESS_TOOL_NAMES are actually callable here. Listing
