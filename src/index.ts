@@ -3169,7 +3169,11 @@ async function getCrawlStatusWithOrigin(
   );
   const body = (res?.data ?? {}) as any;
   if (body.success === false) {
-    throw new Error(body.error || 'Failed to get crawl status');
+    throw new CoreHttpError(
+      body.error || 'Failed to get crawl status',
+      res?.status ?? 200,
+      readAgentHints(body)
+    );
   }
   const initialDocs = Array.isArray(body.data) ? body.data : [];
 
@@ -3194,7 +3198,11 @@ async function getCrawlStatusWithOrigin(
     const payload = (pageRes?.data ?? {}) as any;
     // Returning the pages read so far would report a partial crawl as complete.
     if (!payload.success) {
-      throw new Error(payload.error || 'Failed to get crawl results page');
+      throw new CoreHttpError(
+        payload.error || 'Failed to get crawl results page',
+        pageRes?.status ?? 200,
+        readAgentHints(payload)
+      );
     }
 
     const pageData = Array.isArray(payload.data)

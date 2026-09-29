@@ -7,6 +7,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 const JOB = '00000000-0000-4000-8000-000000000050';
 const MISSING = '00000000-0000-4000-8000-000000000051';
 const BROKEN_PAGE = '00000000-0000-4000-8000-000000000052';
+const FAILED_START = '00000000-0000-4000-8000-000000000053';
+const HINT = 'Retry the crawl from the start.';
 
 async function startFakeApi() {
   const server = createServer((req, res) => {
@@ -17,6 +19,13 @@ async function startFakeApi() {
     const origin = `http://${req.headers.host}`;
     if (req.url === `/v2/crawl/${MISSING}`) {
       return json(404, { success: false, error: 'Job not found' });
+    }
+    if (req.url === `/v2/crawl/${FAILED_START}`) {
+      return json(200, {
+        success: false,
+        error: 'Crawl unavailable',
+        agent_hints: [HINT],
+      });
     }
     if (req.url === `/v2/crawl/${BROKEN_PAGE}`) {
       return json(200, {
@@ -29,7 +38,11 @@ async function startFakeApi() {
       });
     }
     if (req.url === `/v2/crawl/${BROKEN_PAGE}?skip=1`) {
-      return json(200, { success: false, error: 'Page expired' });
+      return json(200, {
+        success: false,
+        error: 'Page expired',
+        agent_hints: [HINT],
+      });
     }
     if (req.url === `/v2/crawl/${JOB}`) {
       return json(200, {
@@ -66,6 +79,11 @@ async function startMcp(t, apiUrl) {
   let buffer = '';
   const pending = new Map();
   let nextId = 0;
+  child.once('exit', (code, signal) => {
+    const error = new Error(`MCP server exited: code=${code} signal=${signal}`);
+    for (const { reject } of pending.values()) reject(error);
+    pending.clear();
+  });
   child.stdout.on('data', (chunk) => {
     buffer += chunk;
     let newline;
@@ -85,8 +103,20 @@ async function startMcp(t, apiUrl) {
     const id = ++nextId;
     child.stdin.write(`${JSON.stringify({ id, jsonrpc: '2.0', method, params })}\n`);
     return new Promise((resolve, reject) => {
-      pending.set(id, { resolve, reject });
-      setTimeout(() => reject(new Error(`timeout: ${method}`)), 10_000).unref();
+      const timeout = setTimeout(() => {
+        pending.delete(id);
+        reject(new Error(`timeout: ${method}`));
+      }, 10_000);
+      pending.set(id, {
+        reject: (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        },
+        resolve: (value) => {
+          clearTimeout(timeout);
+          resolve(value);
+        },
+      });
     });
   };
   await request('initialize', {
@@ -130,4 +160,16 @@ test('firecrawl_check_crawl_status fails when a result page cannot be read', asy
   const result = await check(BROKEN_PAGE);
   assert.equal(result.isError, true);
   assert.match(result.content[0].text, /Page expired/);
+  assert.match(result.content.map((c) => c.text).join('\n'), new RegExp(HINT));
+});
+
+test('firecrawl_check_crawl_status reports a failure in the first response', async (t) => {
+  const api = await startFakeApi();
+  t.after(() => api.close());
+  const check = await startMcp(t, api.url);
+
+  const result = await check(FAILED_START);
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /Crawl unavailable/);
+  assert.match(result.content.map((c) => c.text).join('\n'), new RegExp(HINT));
 });
