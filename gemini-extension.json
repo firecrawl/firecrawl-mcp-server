@@ -1,6 +1,6 @@
 {
   "name": "firecrawl",
-  "version": "3.25.5",
+  "version": "3.26.0",
   "description": "Official Firecrawl MCP for web search, scraping, crawling, and structured data extraction.",
   "mcpServers": {
     "firecrawl": {
