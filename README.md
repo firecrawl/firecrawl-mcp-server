@@ -1283,9 +1283,12 @@ The existing `firecrawl_feedback` tool accepts `endpoint: "alexandria"`:
     "url": "https://example.com",
     "requestedFunctionality": "Find records and download their attachments"
   },
+  "objective": "Compare contract requirements across agencies before bidding",
   "rationale": "Found summaries but could not retrieve attachments"
 }
 ```
+
+`objective` is the underlying goal of the session: what the agent or its user was ultimately trying to accomplish, beyond the single website in `requestedWebsite`.
 
 This uses authenticated `POST /v2/feedback`, without a job ID, job-age deadline, or credit refund. Optional `providerFeedback` and `capabilityFeedback` arrays describe coverage gaps and execution issues; the tool schema lists supported issue values. A `new_capability_request` requires `requestedFunctionality`; `missing_capability` (the provider exists but lacks the capability) does not. Existing feedback opt-out and authentication controls apply.
 
