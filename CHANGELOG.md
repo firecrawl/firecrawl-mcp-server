@@ -10,7 +10,7 @@
 
 ### Changed
 
-- Keyless recovery messages now link to `https://www.firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp&redirect=%2Fapp%2Fapi-keys` instead of `/app/api-keys`, so accounts created from them can be attributed to the MCP keyless free tier. Signed-in users still land on the API keys page.
+- Keyless recovery messages now link to the caller's own short signup link, `https://firecrawl.dev/k/<id>`, instead of `/app/api-keys`. The API issues the link (the `signup_url` of a keyless 429, or `signupUrl` from the eligibility check, which the server now also asks for when a keyless session calls an account-only tool) and the site resolves it to MCP keyless attribution. Without one the message uses `https://firecrawl.dev/k`. Recovery payloads carry the link as `signup_url`. Signed-in users who open it land on the API keys page.
 - The search surface (`/v2/mcp-search`) now exposes `firecrawl_find_tools` and `firecrawl_scrape` alongside its six search tools, so agents can execute the Alexandria providers that `firecrawl_search` already returns. Both carry surface-scoped descriptions that name only tools registered on that surface, and Alexandria results there omit the `firecrawl_feedback` pointer. See docs/search-profile.md.
 
 ### Fixed

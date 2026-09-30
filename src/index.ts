@@ -1458,11 +1458,31 @@ function isLocalKeylessStartup(): boolean {
 // FastMCP copies UserError.message onto both content[0].text and
 // structuredContent.message. Hosts forward the text block, not
 // structured next_actions, so bearer and OAuth recovery strings live here.
-const KEYLESS_ACCOUNT_FIX =
-  'Fix: Create an API key at https://www.firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp&redirect=%2Fapp%2Fapi-keys and then:\n- Set the header: Authorization: Bearer YOUR_API_KEY on https://mcp.firecrawl.dev/v2/mcp\nThen start a new session.';
-const KEYLESS_QUOTA_MESSAGE = `You've hit Firecrawl's free MCP rate limit. To continue using without limits, create a Firecrawl API key.\n\n${KEYLESS_ACCOUNT_FIX}`;
-const KEYLESS_TOOL_MESSAGE = `This tool needs a Firecrawl account.\n\n${KEYLESS_ACCOUNT_FIX}`;
-const KEYLESS_ACCESS_MESSAGE = `Anonymous keyless access is unavailable for this request.\n\n${KEYLESS_ACCOUNT_FIX}`;
+//
+// The signup link is the caller's own opaque firecrawl.dev/k/<id> link, issued
+// by the API (the 429 body's signup_url, or signupUrl from the eligibility
+// check), which resolves to keyless/mcp attribution on the site. Without one,
+// the bare /k link still tags the signup as keyless.
+const KEYLESS_SIGNUP_FALLBACK_URL = 'https://firecrawl.dev/k';
+const KEYLESS_SIGNUP_URL_PATTERN =
+  /^https:\/\/(?:www\.)?firecrawl\.dev\/k(?:\/[0-9abcdefghjkmnpqrstvwxyz]{8})?$/;
+
+/** An API-issued keyless signup link, or undefined for anything else. */
+function keylessSignupUrlFrom(value: unknown): string | undefined {
+  return typeof value === 'string' && KEYLESS_SIGNUP_URL_PATTERN.test(value)
+    ? value
+    : undefined;
+}
+
+function keylessAccountFix(signupUrl: string): string {
+  return `Fix: Create an API key at ${signupUrl} and then:\n- Set the header: Authorization: Bearer YOUR_API_KEY on https://mcp.firecrawl.dev/v2/mcp\nThen start a new session.`;
+}
+const keylessQuotaMessage = (signupUrl: string) =>
+  `You've hit Firecrawl's free MCP rate limit. To continue using without limits, create a Firecrawl API key.\n\n${keylessAccountFix(signupUrl)}`;
+const keylessToolMessage = (signupUrl: string) =>
+  `This tool needs a Firecrawl account.\n\n${keylessAccountFix(signupUrl)}`;
+const keylessAccessMessage = (signupUrl: string) =>
+  `Anonymous keyless access is unavailable for this request.\n\n${keylessAccountFix(signupUrl)}`;
 const INVALID_API_KEY_MESSAGE =
   'The Firecrawl API key is invalid or revoked.\nFix: Replace the key on the existing Firecrawl MCP server, then start a new session. Get an API key at https://www.firecrawl.dev/app/api-keys';
 const INVALID_OAUTH_MESSAGE =
@@ -1559,9 +1579,10 @@ async function runWithCredentialRecovery<T>(
 function recoveryPayload(
   code: string,
   requestId: string = randomUUID(),
-  options: { retryAfterSeconds?: number } = {}
+  options: { retryAfterSeconds?: number; signupUrl?: string } = {}
 ): Record<string, unknown> {
   const retryAfterSeconds = options.retryAfterSeconds;
+  const signupUrl = options.signupUrl ?? KEYLESS_SIGNUP_FALLBACK_URL;
   const isQuotaExhausted =
     code === 'KEYLESS_QUOTA_EXHAUSTED' || code === 'KEYLESS_LIMIT_REACHED';
   const isToolUnavailable = code === 'KEYLESS_TOOL_NOT_AVAILABLE';
@@ -1578,11 +1599,11 @@ function recoveryPayload(
       code === 'CREDENTIAL_INVALID'
         ? INVALID_API_KEY_MESSAGE
         : isQuotaExhausted
-          ? KEYLESS_QUOTA_MESSAGE
+          ? keylessQuotaMessage(signupUrl)
           : isToolUnavailable
-            ? KEYLESS_TOOL_MESSAGE
+            ? keylessToolMessage(signupUrl)
             : isKeylessAccessUnavailable
-              ? KEYLESS_ACCESS_MESSAGE
+              ? keylessAccessMessage(signupUrl)
               : isKeylessEligibilityUnavailable
                 ? 'The anonymous keyless eligibility check is temporarily unavailable. Retry shortly.'
                 : 'This tool requires a Firecrawl account or API key.',
@@ -1596,6 +1617,7 @@ function recoveryPayload(
     ...(isKeylessConversion || code === 'CREDENTIAL_INVALID'
       ? {}
       : { available_tools: [...KEYLESS_TOOL_NAMES] }),
+    ...(isKeylessConversion ? { signup_url: signupUrl } : {}),
     docs_url: MCP_CONNECTION_GUIDE_URL,
     ...(retryAfterSeconds ? { retry_after_seconds: retryAfterSeconds } : {}),
     ...(isKeylessEligibilityUnavailable
@@ -1745,7 +1767,12 @@ function guardHostedTool(
           : undefined;
       if (code) {
         const requestId = randomUUID();
-        const payload = recoveryPayload(code, requestId);
+        const payload = recoveryPayload(code, requestId, {
+          signupUrl:
+            code === 'KEYLESS_TOOL_NOT_AVAILABLE'
+              ? await hostedKeylessSignupUrl(session)
+              : undefined,
+        });
         if (logActions) {
           emitActionLog(tool.name, 'error', session, new UserError(String(payload.message), payload), requestId, code);
         }
@@ -1796,7 +1823,9 @@ function guardHostedTool(
       }
       if (isHostedKeylessSession(invocationSession) && !keylessTool) {
         const code = 'KEYLESS_TOOL_NOT_AVAILABLE';
-        const payload = recoveryPayload(code, requestId);
+        const payload = recoveryPayload(code, requestId, {
+          signupUrl: await hostedKeylessSignupUrl(invocationSession),
+        });
         if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
         throw new UserError(String(payload.message), payload);
       }
@@ -3011,6 +3040,7 @@ type KeylessEligibility = {
   reason?: string;
   retryAfterSeconds?: number;
   unavailable?: boolean;
+  signupUrl?: string;
 };
 
 function keylessQuotaReason(reason: unknown): reason is 'requests' | 'credits' {
@@ -3019,13 +3049,14 @@ function keylessQuotaReason(reason: unknown): reason is 'requests' | 'credits' {
 
 async function keylessEligible(
   clientIp: string,
-  origin: string
+  origin: string,
+  { signupLink = false }: { signupLink?: boolean } = {}
 ): Promise<KeylessEligibility> {
   const secret = process.env.KEYLESS_PROXY_SECRET;
   if (!secret) return { eligible: false, unavailable: true };
   try {
     const response = await fetch(
-      `${resolveApiBaseUrl()}/v2/keyless/eligibility`,
+      `${resolveApiBaseUrl()}/v2/keyless/eligibility${signupLink ? '?signup_link=1' : ''}`,
       {
         headers: {
           ...originHeaders(origin),
@@ -3045,10 +3076,29 @@ async function keylessEligible(
       ...(Number.isFinite(json?.retryAfterSeconds) && json.retryAfterSeconds > 0
         ? { retryAfterSeconds: json.retryAfterSeconds }
         : {}),
+      ...(keylessSignupUrlFrom(json?.signupUrl)
+        ? { signupUrl: json.signupUrl }
+        : {}),
     };
   } catch {
     return { eligible: false, unavailable: true };
   }
+}
+
+/**
+ * The hosted keyless caller's own signup link, for recovery the API did not
+ * produce (a tool keyless sessions cannot use). Undefined falls back to /k.
+ */
+async function hostedKeylessSignupUrl(
+  session?: SessionData
+): Promise<string | undefined> {
+  if (!session?.keylessClientIp) return undefined;
+  const eligibility = await keylessEligible(
+    session.keylessClientIp,
+    requestOrigin(undefined, session),
+    { signupLink: true }
+  );
+  return eligibility.signupUrl;
 }
 function isKeylessMode(session?: SessionData): boolean {
   if (hasCredential(session) || session?.credentialError) return false;
@@ -3084,6 +3134,7 @@ async function keylessPost(
           : 'KEYLESS_ACCESS_NOT_AVAILABLE';
       const payload = recoveryPayload(code, session?.requestId, {
         retryAfterSeconds: eligibility.retryAfterSeconds,
+        signupUrl: eligibility.signupUrl,
       });
       throw new UserError(String(payload.message), payload);
     }
@@ -3118,6 +3169,7 @@ async function keylessPost(
           json.retry_after_seconds > 0
             ? json.retry_after_seconds
             : undefined,
+        signupUrl: keylessSignupUrlFrom(json?.signup_url),
       });
       const hints = readAgentHints(json);
       if (hints) payload.agent_hints = hints;
