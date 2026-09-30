@@ -1810,6 +1810,7 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
   const sessionFeedback = {
     endpoint: 'alexandria', rating: 'partial',
     requestedWebsite: { url: 'https://example.com', requestedFunctionality: 'Download attachments' },
+    objective: 'Compare contract requirements across agencies',
     rationale: 'Only summaries available',
     capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'new_capability_request', why: 'Missing attachments', requestedFunctionality: 'Return document links' }],
   };
@@ -1829,6 +1830,8 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
   for (const invalid of [
     { endpoint: 'scrape', rating: 'good' },
     { endpoint: 'alexandria', rating: 'good' },
+    { ...sessionFeedback, objective: undefined },
+    { ...sessionFeedback, objective: ' ' },
     { ...sessionFeedback, jobId: '00000000-0000-4000-8000-000000000010' },
     { ...sessionFeedback, capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'new_capability_request', why: 'Missing attachments' }] },
     { ...sessionFeedback, capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'unknown_issue', why: 'Not a supported issue code' }] },
@@ -1841,6 +1844,7 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
     for (const [field, value] of Object.entries({
       requestedWebsite: sessionFeedback.requestedWebsite,
       rationale: sessionFeedback.rationale,
+      objective: sessionFeedback.objective,
       providerFeedback: [],
       capabilityFeedback: sessionFeedback.capabilityFeedback,
     })) {
