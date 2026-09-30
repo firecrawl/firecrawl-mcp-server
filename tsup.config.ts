@@ -12,6 +12,7 @@ export default defineConfig({
     'src/agent-hints.ts',
     'src/origin.ts',
     'src/introspection-cache.ts',
+    'src/keyless-signup-link.ts',
   ],
   format: ['esm'],
   platform: 'node',
