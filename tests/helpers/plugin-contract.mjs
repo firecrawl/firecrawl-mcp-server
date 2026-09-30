@@ -12,6 +12,9 @@ export const openaiPlugin = fileURLToPath(
 export const claudePlugin = fileURLToPath(
   new URL('../../plugins/claude/firecrawl-search/', import.meta.url)
 );
+export const codexPlugin = fileURLToPath(
+  new URL('../../plugins/codex/firecrawl/', import.meta.url)
+);
 
 export function instructionFiles(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

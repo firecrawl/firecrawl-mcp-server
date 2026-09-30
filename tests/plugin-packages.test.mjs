@@ -12,9 +12,11 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import {
   assertPluginToolCoverage,
   claudePlugin,
+  codexPlugin,
   instructionFiles,
   openaiPlugin,
 } from './helpers/plugin-contract.mjs';
@@ -87,6 +89,42 @@ test('Claude package connects to the search endpoint without embedded credential
       },
     },
   });
+});
+
+// Codex hides MCP tools behind tool_search unless omit_tools_from drops the
+// deferred surface, and it loads a plugin's skills/ directory whenever the
+// manifest lists none, so this package ships the server and nothing else.
+test('Codex package is MCP-only: hosted OAuth server listed directly', () => {
+  const manifest = readJson(join(codexPlugin, '.codex-plugin/plugin.json'));
+  assert.equal(manifest.name, 'firecrawl');
+  assert.equal(manifest.mcpServers, './.mcp.json');
+  assert.equal(manifest.skills, undefined);
+  assert.equal(manifest.apps, undefined);
+  assert.equal(existsSync(join(codexPlugin, 'skills')), false);
+  assert.equal(existsSync(join(codexPlugin, '.app.json')), false);
+  assert.deepEqual(readJson(join(codexPlugin, '.mcp.json')), {
+    mcpServers: {
+      firecrawl: {
+        url: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+        omit_tools_from: ['deferred'],
+      },
+    },
+  });
+});
+
+test('Codex marketplace lists the MCP-only package', () => {
+  const marketplace = readJson(
+    new URL('../.agents/plugins/marketplace.json', import.meta.url)
+  );
+  assert.deepEqual(
+    marketplace.plugins.map((plugin) => [plugin.name, plugin.source]),
+    [['firecrawl', { source: 'local', path: './plugins/codex/firecrawl' }]]
+  );
+  const root = fileURLToPath(new URL('../', import.meta.url));
+  assert.equal(
+    realpathSync(resolve(root, marketplace.plugins[0].source.path)),
+    realpathSync(codexPlugin)
+  );
 });
 
 for (const plugin of [openaiPlugin, claudePlugin]) {

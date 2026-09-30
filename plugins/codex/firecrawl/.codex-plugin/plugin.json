@@ -1,0 +1,20 @@
+{
+  "name": "firecrawl",
+  "version": "1.0.0",
+  "description": "Firecrawl MCP tools for Codex: search the web, read pages and documents, crawl and map sites, research developer sources and papers, and run structured research jobs.",
+  "author": {
+    "name": "SideGuide Technologies, Inc."
+  },
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Firecrawl",
+    "shortDescription": "Search and extract web data",
+    "longDescription": "Connects Codex to the hosted Firecrawl MCP server with your Firecrawl account. Sign in once with OAuth; no API key is needed. Firecrawl tools are listed to the model directly rather than behind tool search.",
+    "developerName": "SideGuide Technologies, Inc.",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "websiteURL": "https://firecrawl.dev",
+    "privacyPolicyURL": "https://www.firecrawl.dev/privacy-policy",
+    "termsOfServiceURL": "https://www.firecrawl.dev/terms-of-service"
+  }
+}
