@@ -12,6 +12,7 @@
 
 - `tools/list` now sends each tool's top-level `title` (MCP 2025-06-18), copied from `annotations.title`. The title wording is unchanged. Clients that read only the top-level field, such as Codex's tool search, now see the same display names.
 - The npm package now bundles the pnpm-patched fastmcp. npm does not apply pnpm patches, so `npx firecrawl-mcp` installs were loading unpatched fastmcp from the registry, without the top-level titles or the `canList` and `beforeValidate` hooks. fastmcp's runtime imports (`@modelcontextprotocol/sdk`, `fuse.js`, `hono`, `mcp-proxy`, `undici`, `uri-templates`, `xsschema`) are now direct dependencies so they resolve under pnpm's non-hoisted layout too.
+- Keyless recovery messages now link to `https://www.firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp&redirect=%2Fapp%2Fapi-keys` instead of `/app/api-keys`, so accounts created from them can be attributed to the MCP keyless free tier. Signed-in users still land on the API keys page.
 - The search surface (`/v2/mcp-search`) now exposes `firecrawl_find_tools` and `firecrawl_scrape` alongside its six search tools, so agents can execute the Alexandria providers that `firecrawl_search` already returns. Both carry surface-scoped descriptions that name only tools registered on that surface, and Alexandria results there omit the `firecrawl_feedback` pointer. See docs/search-profile.md.
 
 ### Fixed
