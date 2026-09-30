@@ -70,12 +70,12 @@ function assertServerGeneratedRequestId(payload, untrustedValues = []) {
   return payload.request_id;
 }
 
-// Without an API-issued link, recovery falls back to the bare /k link.
+// Without an API-issued link, recovery falls back to the regular MCP signin link.
 const KEYLESS_SIGNUP_FALLBACK_URL =
   'https://www.firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp&redirect=%2Fapp%2Fapi-keys';
 const API_REGULAR_SIGNUP_URL =
   'https://www.firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp';
-const OWN_SIGNUP_URL = 'https://firecrawl.dev/k/7fq2xab9';
+const OWN_SIGNUP_URL = 'https://firecrawl.dev/k/hrxch5c20tcs';
 const keylessAccountFix = (signupUrl = KEYLESS_SIGNUP_FALLBACK_URL) =>
   `Fix: Create an API key at ${signupUrl} and then:\n- Set the header: Authorization: Bearer YOUR_API_KEY on https://mcp.firecrawl.dev/v2/mcp\nThen start a new session.`;
 const keylessQuotaMessage = (signupUrl) =>
@@ -2558,7 +2558,7 @@ test('HTTP cloud keyless recovery relays the API\'s regular signup link when it 
 });
 
 test('HTTP cloud keyless recovery ignores a signup link that is not a firecrawl.dev/k link', async (t) => {
-  const untrustedUrl = 'https://evil.example/k/7fq2xab9';
+  const untrustedUrl = 'https://evil.example/k/hrxch5c20tcs';
   for (const [label, backendOptions] of [
     [
       'eligibility-exhausted',
@@ -2654,6 +2654,87 @@ test('HTTP cloud keyless account-only tool asks the API for the caller\'s own li
   assert.equal(linkRequest.headers['x-firecrawl-keyless-ip'], '8.8.8.7');
   assert.equal(linkRequest.headers['x-firecrawl-keyless-secret'], 'keyless-secret');
   assert.equal(backend.requests.some((r) => r.url === '/v2/crawl'), false);
+});
+
+test("HTTP cloud keyless account-only tool relays the API's regular link and drops an untrusted one", async (t) => {
+  for (const [label, signupUrl, expected] of [
+    ['regular-link', API_REGULAR_SIGNUP_URL, API_REGULAR_SIGNUP_URL],
+    [
+      'regular-link-bare-host',
+      'https://firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp',
+      'https://firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp',
+    ],
+    [
+      'untrusted-host',
+      'https://evil.example/k/hrxch5c20tcs',
+      KEYLESS_SIGNUP_FALLBACK_URL,
+    ],
+    [
+      'legacy-short-id',
+      'https://firecrawl.dev/k/7fq2xab9',
+      KEYLESS_SIGNUP_FALLBACK_URL,
+    ],
+  ]) {
+    // The link comes only from the signup_link=1 check, so a relay here can
+    // only be the account-only path's.
+    const backend = await startFakeFirecrawlBackend({
+      keylessEligibilityResponse: (url) => ({
+        status: 200,
+        body: url.includes('signup_link=1')
+          ? { eligible: true, signupUrl }
+          : { eligible: true },
+      }),
+    });
+    const port = await getFreePort();
+    const child = spawnServer({
+      CLOUD_SERVICE: 'true',
+      FASTMCP_ENDPOINT: '/v2/mcp',
+      FIRECRAWL_API_URL: backend.url,
+      HTTP_STREAMABLE_SERVER: 'true',
+      KEYLESS_PROXY_SECRET: 'keyless-secret',
+      PORT: String(port),
+    });
+    let cleanedUp = false;
+    const cleanup = async () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      await stopChild(child);
+      await backend.close();
+    };
+    t.after(cleanup);
+    await waitForHealth(port, child);
+    const response = await httpToolCall(port, {
+      id: `keyless-account-only-${label}`,
+      headers: { 'x-forwarded-for': '8.8.8.7' },
+      params: {
+        arguments: { url: 'https://example.com/' },
+        name: 'firecrawl_crawl',
+      },
+    });
+    const result = parseSseJson(await response.text()).result;
+    assertKeylessAccountRecovery(result, {
+      code: 'KEYLESS_TOOL_NOT_AVAILABLE',
+      message: keylessToolMessage(expected),
+    });
+    assert.equal(result.structuredContent.signup_url, expected, label);
+    assert.ok(
+      backend.requests.some(
+        (r) => r.url === '/v2/keyless/eligibility?signup_link=1'
+      ),
+      label
+    );
+    assert.doesNotMatch(
+      result.content[0].text,
+      /evil\.example|7fq2xab9/,
+      label
+    );
+    assert.equal(
+      backend.requests.some((r) => r.url === '/v2/crawl'),
+      false,
+      label
+    );
+    await cleanup();
+  }
 });
 
 test('HTTP cloud keyless Parse completes both phases without credentials and forwards redactPII', async (t) => {

@@ -1459,15 +1459,15 @@ function isLocalKeylessStartup(): boolean {
 // structuredContent.message. Hosts forward the text block, not
 // structured next_actions, so bearer and OAuth recovery strings live here.
 //
-// The signup link is the caller's own opaque firecrawl.dev/k/<id> link, issued
-// by the API (the 429 body's signup_url, or signupUrl from the eligibility
-// check), which resolves to keyless/mcp attribution on the site. When the API
-// can't give one it sends the regular keyless signup link, which is relayed as
-// is; without any API link, the regular MCP signup link is used.
+// The signup link is the caller's own firecrawl.dev/k/<token> link, issued by
+// the API (the 429 body's signup_url, or signupUrl from the eligibility check):
+// a 12-character encrypted token the site decrypts to keyless attribution.
+// When the API has no token to give it sends the regular keyless signin link,
+// which is relayed as is; without any API link, the regular MCP signin link is used.
 const KEYLESS_SIGNUP_FALLBACK_URL =
   'https://www.firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp&redirect=%2Fapp%2Fapi-keys';
 const KEYLESS_SIGNUP_URL_PATTERN =
-  /^https:\/\/(?:(?:www\.)?firecrawl\.dev\/k(?:\/[0-9abcdefghjkmnpqrstvwxyz]{8})?|www\.firecrawl\.dev\/signin\?utm_source=keyless&utm_medium=(?:api|mcp|cli)(?:&redirect=%2Fapp%2Fapi-keys)?)$/;
+  /^https:\/\/(?:www\.)?firecrawl\.dev\/(?:k\/[0-9abcdefghjkmnpqrstvwxyz]{12}|signin\?utm_source=keyless&utm_medium=(?:api|mcp|cli)(?:&redirect=%2Fapp%2Fapi-keys)?)$/;
 
 /** An API-issued keyless signup link, or undefined for anything else. */
 function keylessSignupUrlFrom(value: unknown): string | undefined {
@@ -3089,7 +3089,8 @@ async function keylessEligible(
 
 /**
  * The hosted keyless caller's own signup link, for recovery the API did not
- * produce (a tool keyless sessions cannot use). Undefined falls back to /k.
+ * produce (a tool keyless sessions cannot use). Undefined falls back to the
+ * regular MCP signin link.
  */
 async function hostedKeylessSignupUrl(
   session?: SessionData
