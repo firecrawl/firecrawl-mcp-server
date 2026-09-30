@@ -1461,11 +1461,13 @@ function isLocalKeylessStartup(): boolean {
 //
 // The signup link is the caller's own opaque firecrawl.dev/k/<id> link, issued
 // by the API (the 429 body's signup_url, or signupUrl from the eligibility
-// check), which resolves to keyless/mcp attribution on the site. Without one,
-// the bare /k link still tags the signup as keyless.
-const KEYLESS_SIGNUP_FALLBACK_URL = 'https://firecrawl.dev/k';
+// check), which resolves to keyless/mcp attribution on the site. When the API
+// can't give one it sends the regular keyless signup link, which is relayed as
+// is; without any API link, the regular MCP signup link is used.
+const KEYLESS_SIGNUP_FALLBACK_URL =
+  'https://www.firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp&redirect=%2Fapp%2Fapi-keys';
 const KEYLESS_SIGNUP_URL_PATTERN =
-  /^https:\/\/(?:www\.)?firecrawl\.dev\/k(?:\/[0-9abcdefghjkmnpqrstvwxyz]{8})?$/;
+  /^https:\/\/(?:(?:www\.)?firecrawl\.dev\/k(?:\/[0-9abcdefghjkmnpqrstvwxyz]{8})?|www\.firecrawl\.dev\/signin\?utm_source=keyless&utm_medium=(?:api|mcp|cli)(?:&redirect=%2Fapp%2Fapi-keys)?)$/;
 
 /** An API-issued keyless signup link, or undefined for anything else. */
 function keylessSignupUrlFrom(value: unknown): string | undefined {
