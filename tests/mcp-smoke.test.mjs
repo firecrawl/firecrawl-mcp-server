@@ -2499,41 +2499,61 @@ test('HTTP cloud keyless recovery relays the caller\'s own /k link from the API'
 });
 
 test('HTTP cloud keyless recovery ignores a signup link that is not a firecrawl.dev/k link', async (t) => {
-  const backend = await startFakeFirecrawlBackend({
-    keylessEligible: true,
-    searchResponse: {
-      status: 429,
-      body: {
-        error: 'limit',
-        reason: 'credits',
-        signup_url: 'https://evil.example/k/7fq2xab9',
+  const untrustedUrl = 'https://evil.example/k/7fq2xab9';
+  for (const [label, backendOptions] of [
+    [
+      'eligibility-exhausted',
+      {
+        keylessEligibilityResponse: () => ({
+          status: 200,
+          body: { eligible: false, reason: 'requests', signupUrl: untrustedUrl },
+        }),
       },
-    },
-  });
-  t.after(() => backend.close());
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp',
-    FIRECRAWL_API_URL: backend.url,
-    HTTP_STREAMABLE_SERVER: 'true',
-    KEYLESS_PROXY_SECRET: 'keyless-secret',
-    PORT: String(port),
-  });
-  t.after(() => stopChild(child));
-  await waitForHealth(port, child);
-
-  const response = await httpToolCall(port, {
-    id: 'keyless-untrusted-link',
-    headers: { 'x-forwarded-for': '8.8.8.7' },
-    params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
-  });
-  const result = parseSseJson(await response.text()).result;
-  assertKeylessAccountRecovery(result, {
-    code: 'KEYLESS_QUOTA_EXHAUSTED',
-    message: KEYLESS_QUOTA_MESSAGE,
-  });
-  assert.equal(result.structuredContent.signup_url, KEYLESS_SIGNUP_FALLBACK_URL);
+    ],
+    [
+      'core-429',
+      {
+        keylessEligible: true,
+        searchResponse: {
+          status: 429,
+          body: { error: 'limit', reason: 'credits', signup_url: untrustedUrl },
+        },
+      },
+    ],
+  ]) {
+    const backend = await startFakeFirecrawlBackend(backendOptions);
+    const port = await getFreePort();
+    const child = spawnServer({
+      CLOUD_SERVICE: 'true',
+      FASTMCP_ENDPOINT: '/v2/mcp',
+      FIRECRAWL_API_URL: backend.url,
+      HTTP_STREAMABLE_SERVER: 'true',
+      KEYLESS_PROXY_SECRET: 'keyless-secret',
+      PORT: String(port),
+    });
+    let cleanedUp = false;
+    const cleanup = async () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      await stopChild(child);
+      await backend.close();
+    };
+    t.after(cleanup);
+    await waitForHealth(port, child);
+    const response = await httpToolCall(port, {
+      id: `keyless-untrusted-link-${label}`,
+      headers: { 'x-forwarded-for': '8.8.8.7' },
+      params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
+    });
+    const result = parseSseJson(await response.text()).result;
+    assertKeylessAccountRecovery(result, {
+      code: 'KEYLESS_QUOTA_EXHAUSTED',
+      message: KEYLESS_QUOTA_MESSAGE,
+    });
+    assert.equal(result.structuredContent.signup_url, KEYLESS_SIGNUP_FALLBACK_URL, label);
+    assert.doesNotMatch(result.content[0].text, /evil\.example/, label);
+    await cleanup();
+  }
 });
 
 test('HTTP cloud keyless account-only tool asks the API for the caller\'s own link', async (t) => {
