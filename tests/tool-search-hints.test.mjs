@@ -16,6 +16,15 @@ test('every listed tool carries a short, neutral search hint', async (t) => {
     assert.equal(hint, hint.replace(/\s+/g, ' ').trim(), tool.name);
     assert.ok(hint.length <= 120, `${tool.name} hint is ${hint.length} chars`);
     assert.doesNotMatch(hint, /firecrawl/i, tool.name);
+    const words = hint.split(' ');
+    assert.ok(words.length >= 3, `${tool.name} hint has ${words.length} words`);
+    const listed = new Set(
+      `${tool.name} ${tool.description ?? ''}`.toLowerCase().split(/[^a-z0-9]+/)
+    );
+    assert.ok(
+      words.some((word) => !listed.has(word.toLowerCase())),
+      `${tool.name} hint adds no words beyond its name and description`
+    );
   }
   assertAgentMetadataPolicy(
     tools.map((tool) => tool._meta['anthropic/searchHint']),
