@@ -59,6 +59,7 @@ import {
 import { alexandriaOutput } from './alexandria-output';
 import { registerDeveloperTools } from './developer';
 import { extractSingleTrustedClientIp } from './keyless-client-ip';
+import { checkKeylessSignupUrl } from './keyless-signup-link';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
 import { registerUsageTools } from './usage';
@@ -1466,14 +1467,29 @@ function isLocalKeylessStartup(): boolean {
 // which is relayed as is; without any API link, the regular MCP signin link is used.
 const KEYLESS_SIGNUP_FALLBACK_URL =
   'https://www.firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp&redirect=%2Fapp%2Fapi-keys';
-const KEYLESS_SIGNUP_URL_PATTERN =
-  /^https:\/\/(?:www\.)?firecrawl\.dev\/(?:k\/[0-9abcdefghjkmnpqrstvwxyz]{12}|signin\?utm_source=keyless&utm_medium=(?:api|mcp|cli)(?:&redirect=%2Fapp%2Fapi-keys)?)$/;
+// Firecrawl-hosted links that fail the check are logged once each, so a change
+// in the API's link format shows up instead of silently falling back.
+const droppedKeylessSignupUrls = new Set<string>();
 
 /** An API-issued keyless signup link, or undefined for anything else. */
 function keylessSignupUrlFrom(value: unknown): string | undefined {
-  return typeof value === 'string' && KEYLESS_SIGNUP_URL_PATTERN.test(value)
-    ? value
-    : undefined;
+  const check = checkKeylessSignupUrl(value);
+  if (check.ok) return check.url;
+  if (
+    check.firecrawlHost &&
+    typeof value === 'string' &&
+    droppedKeylessSignupUrls.size < 50 &&
+    !droppedKeylessSignupUrls.has(value)
+  ) {
+    droppedKeylessSignupUrls.add(value);
+    console.warn(
+      '[WARN]',
+      new Date().toISOString(),
+      'Ignoring an unrecognized Firecrawl keyless signup link from the API; using the fallback',
+      { signupUrl: value }
+    );
+  }
+  return undefined;
 }
 
 function keylessAccountFix(signupUrl: string): string {
