@@ -1065,6 +1065,35 @@ test('primary search profile uses the strict marketplace search tool, not the fu
   );
 });
 
+test('primary search profile forwards optional task context without content fetching', async (t) => {
+  const { port, backendRequests } = await startPrimarySearchServer(t);
+  const headers = { authorization: 'Bearer fco_primary_task_context' };
+  const response = await jsonRpc(port, SEARCH_ENDPOINT, {
+    id: 14,
+    method: 'tools/call',
+    params: {
+      arguments: {
+        query: 'React memo docs',
+        objective: 'Find official guidance on preventing unnecessary rerenders',
+        sessionId: 'task_123',
+        clientModel: 'claude-sonnet-4-6',
+        sources: ['web'],
+      },
+      name: 'firecrawl_search',
+    },
+    headers,
+  });
+  assert.equal(response.status, 200);
+  const message = parseSseJson(await response.text());
+  assert.equal(message.result?.isError, undefined, JSON.stringify(message));
+  const search = backendRequests.find((request) => request.url === '/v2/search');
+  assert.ok(search);
+  assert.equal(search.body.objective, 'Find official guidance on preventing unnecessary rerenders');
+  assert.equal(search.body.sessionId, 'task_123');
+  assert.equal(search.body.clientModel, 'claude-sonnet-4-6');
+  assert.equal(search.body.scrapeOptions, undefined);
+});
+
 test('primary search profile agent language satisfies metadata policy gates', async (t) => {
   const { port } = await startPrimarySearchServer(t);
   const headers = { authorization: 'Bearer fco_primary_search_metadata' };
