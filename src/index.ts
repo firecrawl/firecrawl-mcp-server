@@ -61,6 +61,7 @@ import { registerDeveloperTools } from './developer';
 import { extractSingleTrustedClientIp } from './keyless-client-ip';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
+import { withToolSearchHint } from './tool-search-hints';
 import { registerUsageTools } from './usage';
 import { escapeWWWAuthenticateValue } from './www-authenticate';
 import {
@@ -1724,7 +1725,7 @@ function guardHostedTool(
   const canList = tool.canList;
   const beforeValidate = tool.beforeValidate;
   return {
-    ...tool,
+    ...withToolSearchHint(tool),
     canList: (session: SessionData) =>
       // A credentialError session lists the keyless tool surface (same as a
       // real keyless session, not the full authenticated schema) so the

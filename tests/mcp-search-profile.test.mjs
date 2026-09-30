@@ -402,6 +402,9 @@ test('search surface lists exactly the eight contracted tools', async (t) => {
     tools.find((tool) => tool.name === 'firecrawl_find_tools')?._meta?.['anthropic/alwaysLoad'],
     undefined
   );
+  for (const tool of tools) {
+    assert.equal(typeof tool._meta?.['anthropic/searchHint'], 'string', tool.name);
+  }
   assert.match(
     search.description,
     /categories: \["developer"\].*data\.web.*category.*developer/is
