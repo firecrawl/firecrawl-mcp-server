@@ -962,6 +962,40 @@ test('full surface still exposes its complete tool set alongside the search surf
   assert.equal(prm.status, 404);
 });
 
+test('full surface forwards optional search context only when supplied', async (t) => {
+  const { backendRequests, fullPort } = await startHostedServer(t);
+  const headers = { 'x-api-key': 'fc-test' };
+  const call = async (arguments_) => {
+    const response = await jsonRpc(fullPort, '/v2/mcp', {
+      id: 15,
+      method: 'tools/call',
+      params: { name: 'firecrawl_search', arguments: arguments_ },
+      headers,
+    });
+    assert.equal(response.status, 200);
+    const message = parseSseJson(await response.text());
+    assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+  };
+
+  await call({ query: 'React memo docs', sources: ['web'] });
+  await call({
+    query: 'React memo docs',
+    sources: ['web'],
+    objective: 'Find official rerender guidance',
+    sessionId: 'task_123',
+    clientModel: 'claude-sonnet-4-6',
+  });
+
+  const searches = backendRequests.filter((request) => request.url === '/v2/search');
+  assert.equal(searches.length, 2);
+  for (const field of ['objective', 'sessionId', 'clientModel']) {
+    assert.equal(field in searches[0].body, false);
+  }
+  assert.equal(searches[1].body.objective, 'Find official rerender guidance');
+  assert.equal(searches[1].body.sessionId, 'task_123');
+  assert.equal(searches[1].body.clientModel, 'claude-sonnet-4-6');
+});
+
 test('primary search profile is OAuth-only, eight-tool frozen, and ready without keyless configuration', async (t) => {
   const { backendRequests, port, issuerUrl } = await startPrimarySearchServer(t);
 
