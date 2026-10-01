@@ -9,7 +9,9 @@ test('terms are disclosed after a blocked provider and use scrape instead of top
   assert.ok(!listing.tools.some(tool => /^firecrawl_terms_/.test(tool.name)));
   const blocked = await callExpectingError(client, { name: 'firecrawl_scrape', arguments: { alexandria: [{ provider: 'benzinga', capability: 'news/search' }] } });
   assert.equal(api.requests.length, 1, 'blocked requests never auto-accept');
-  assert.match(blocked.content[0].text, /explicit authorization/);
+  assert.match(blocked.content[0].text, /explicit authorization to accept that exact version and digest/);
+  assert.match(blocked.content[0].text, /Never infer acceptance from a data request/);
+  assert.match(blocked.content[0].text, /Reuse this ID only with the identical payload/);
   const { code, status, requiresAction, requestId, next_actions } = blocked.structuredContent;
   assert.equal(code, TERMS_REQUIRED_BODY.code);
   assert.equal(status, 403);

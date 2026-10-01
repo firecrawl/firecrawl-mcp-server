@@ -10,8 +10,17 @@
  */
 
 import { z } from 'zod';
-import { type FastMCP, UserError } from 'fastmcp';
+import { type ContentResult, type FastMCP, UserError } from 'fastmcp';
+import { AGENT_HINTS_HEADERS, withAgentHints } from './agent-hints';
 import { originHeaders, requestOrigin } from './origin';
+import {
+  deprecatedToolOutputSchema,
+  researchPaperOutputSchema,
+  researchReadOutputSchema,
+  researchRelatedOutputSchema,
+  researchSearchOutputSchema,
+  withStructured,
+} from './tool-output';
 
 interface SessionData {
   firecrawlApiKey?: string;
@@ -35,6 +44,10 @@ type ClientLike = {
 type GetClient = (session?: SessionData) => unknown;
 
 const BASE = '/v2/search/research';
+
+function researchHeaders(origin: string): Record<string, string> {
+  return { ...originHeaders(origin), ...AGENT_HINTS_HEADERS };
+}
 
 /** Append a value (or repeated array values) to a URLSearchParams instance. */
 function appendParam(
@@ -208,6 +221,7 @@ Several distinct framings of the same question surface different papers than a s
 
 Returns ranked papers with canonical IDs, titles, authors, and abstracts.
 `,
+    outputSchema: researchSearchOutputSchema,
     parameters: z.object({
       query: z
         .string()
@@ -251,7 +265,7 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<string> => {
+    ): Promise<ContentResult> => {
       const { query, k, authors, categories, from, to } = args as {
         query: string;
         k?: number;
@@ -270,9 +284,10 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ results?: PaperHit[] }>(
         withQuery(`${BASE}/papers`, params),
-        originHeaders(requestOrigin(mcpClient, session))
+        researchHeaders(requestOrigin(mcpClient, session))
       );
-      return fmtHits(res.data?.results);
+      const results = res.data?.results ?? [];
+      return withAgentHints(withStructured(fmtHits(results), { results }), res.data, true);
     },
   });
 
@@ -288,6 +303,7 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
     description: `
 Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DOI identifier. Returns the title, abstract, authors, categories, source IDs, and dates as markdown.
 `,
+    outputSchema: researchPaperOutputSchema,
     parameters: z.object({
       paperId: z
         .string()
@@ -299,14 +315,18 @@ Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DO
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<string> => {
+    ): Promise<ContentResult> => {
       const { paperId } = args as { paperId: string };
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ paper?: PaperHit }>(
         `${BASE}/papers/${encodeURIComponent(paperId)}`,
-        originHeaders(requestOrigin(mcpClient, session))
+        researchHeaders(requestOrigin(mcpClient, session))
       );
-      return fmtPaperMetadata(res.data?.paper);
+      const paper = res.data?.paper;
+      return withAgentHints(withStructured(
+        fmtPaperMetadata(paper),
+        paper ? { paper } : {}
+      ), res.data, true);
     },
   });
 
@@ -324,6 +344,7 @@ Find citation-graph candidates from one to ten \`seed_ids\`; the first ID is the
 
 Returns ranked candidates and the evaluated pool size.
 `,
+    outputSchema: researchRelatedOutputSchema,
     parameters: z.object({
       seed_ids: z.array(z.string()).min(1).max(10),
       intent: z.string().min(1),
@@ -337,7 +358,7 @@ Returns ranked candidates and the evaluated pool size.
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<string> => {
+    ): Promise<ContentResult> => {
       const { seed_ids, intent, mode, k, rerank } = args as {
         seed_ids: string[];
         intent: string;
@@ -364,10 +385,15 @@ Returns ranked candidates and the evaluated pool size.
           `${BASE}/papers/${encodeURIComponent(primary)}/similar`,
           params
         ),
-        originHeaders(requestOrigin(mcpClient, session))
+        researchHeaders(requestOrigin(mcpClient, session))
       );
+      const results = res.data?.results ?? [];
+      const poolSize = res.data?.poolSize ?? 0;
       const note = res.data?.note ? `\nnote: ${res.data.note}` : '';
-      return `${fmtHits(res.data?.results)}\n(poolSize=${res.data?.poolSize ?? 0})${note}`;
+      return withAgentHints(withStructured(
+        `${fmtHits(results)}\n(poolSize=${poolSize})${note}`,
+        { results, poolSize, ...(res.data?.note ? { note: res.data.note } : {}) }
+      ), res.data, true);
     },
   });
 
@@ -385,6 +411,7 @@ Retrieve in-body passages from one paper that are relevant to a specific questio
 
 Returns matching passages or a notice when full text is unavailable.
 `,
+    outputSchema: researchReadOutputSchema,
     parameters: z.object({
       paperId: z
         .string()
@@ -404,7 +431,7 @@ Returns matching passages or a notice when full text is unavailable.
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<string> => {
+    ): Promise<ContentResult> => {
       const { paperId, question, k } = args as {
         paperId: string;
         question: string;
@@ -416,12 +443,15 @@ Returns matching passages or a notice when full text is unavailable.
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ passages?: { text: string }[] }>(
         withQuery(`${BASE}/papers/${encodeURIComponent(paperId)}`, params),
-        originHeaders(requestOrigin(mcpClient, session))
+        researchHeaders(requestOrigin(mcpClient, session))
       );
       const passages = res.data?.passages ?? [];
-      return passages.length
-        ? passages.map((p) => p.text).join('\n---\n')
-        : '(no full-text passages available for this paper)';
+      return withAgentHints(withStructured(
+        passages.length
+          ? passages.map((p) => p.text).join('\n---\n')
+          : '(no full-text passages available for this paper)',
+        { passages }
+      ), res.data, true);
     },
   });
 
@@ -442,6 +472,7 @@ Returns matching passages or a notice when full text is unavailable.
     description: `
 Deprecated compatibility entry point. Use firecrawl_developer_search for GitHub issues, pull requests, and READMEs, plus code documentation, returned as matched passages.
 `,
+    outputSchema: deprecatedToolOutputSchema,
     parameters: z.object({
       query: z.string().min(1),
       k: z.number().int().min(1).max(100).optional(),

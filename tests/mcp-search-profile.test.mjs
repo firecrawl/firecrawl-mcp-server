@@ -7,6 +7,11 @@ import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
 import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
+import { assertAlexandriaMetadata } from './helpers/alexandria-metadata.mjs';
+import {
+  assertPluginToolCoverage,
+  claudePlugin,
+} from './helpers/plugin-contract.mjs';
 
 const { version: serverVersion } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
@@ -391,6 +396,14 @@ test('search surface lists exactly the eight contracted tools', async (t) => {
   const names = tools.map((tool) => tool.name);
   const search = tools.find((tool) => tool.name === 'firecrawl_search');
   assert.ok(search);
+  for (const name of ['firecrawl_search', 'firecrawl_scrape']) {
+    const tool = tools.find((item) => item.name === name);
+    assert.equal(tool?._meta?.['anthropic/alwaysLoad'], true, name);
+  }
+  assert.equal(
+    tools.find((tool) => tool.name === 'firecrawl_find_tools')?._meta?.['anthropic/alwaysLoad'],
+    undefined
+  );
   assert.match(
     search.description,
     /categories: \["developer"\].*data\.web.*category.*developer/is
@@ -414,6 +427,7 @@ test('search surface lists exactly the eight contracted tools', async (t) => {
   for (const excluded of EXCLUDED_TOOLS) {
     assert.equal(names.includes(excluded), false, `${excluded} must not appear`);
   }
+  assertPluginToolCoverage(claudePlugin, tools);
   assert.equal(getStderr().includes('TypeError'), false, getStderr());
 });
 
@@ -1059,6 +1073,7 @@ test('primary search profile agent language satisfies metadata policy gates', as
   const initialize = await initializeProfile(port, SEARCH_ENDPOINT, headers);
   const tools = await listToolDefinitions(port, SEARCH_ENDPOINT, headers);
 
+  assertAlexandriaMetadata(tools, initialize.instructions);
   assertAgentMetadataPolicy(
     [initialize.instructions, ...tools.map((tool) => tool.description ?? '')],
     assert
@@ -1101,7 +1116,12 @@ test('account (mcp-oauth) full-surface instructions satisfy the same metadata po
   const headers = { authorization: 'Bearer fco_account_metadata' };
   const initialize = await initializeProfile(port, '/v2/mcp-oauth', headers);
   const tools = await listToolDefinitions(port, '/v2/mcp-oauth', headers);
+  for (const name of ['firecrawl_search', 'firecrawl_scrape']) {
+    const tool = tools.find((item) => item.name === name);
+    assert.equal(tool?._meta?.['anthropic/alwaysLoad'], true, name);
+  }
 
+  assertAlexandriaMetadata(tools, initialize.instructions);
   assertAgentMetadataPolicy(
     [initialize.instructions, ...tools.map((tool) => tool.description ?? '')],
     assert
@@ -1307,9 +1327,10 @@ test('ordinary search profile enables semantic and domain tools by default', asy
 
 test('search surface registers the two Alexandria tools with surface-scoped copy', async (t) => {
   const { searchPort } = await startHostedServer(t);
-  const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, {
-    'x-api-key': 'fc-test',
-  });
+  const headers = { 'x-api-key': 'fc-test' };
+  const initialize = await initializeProfile(searchPort, SEARCH_ENDPOINT, headers);
+  const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, headers);
+  assertAlexandriaMetadata(tools, initialize.instructions);
   // Claude Code truncates tool descriptions at CLAUDE_CODE_TEXT_CAP characters.
   for (const tool of tools) {
     assert.ok((tool.description ?? '').length <= CLAUDE_CODE_TEXT_CAP, `${tool.name} description is ${(tool.description ?? '').length} chars`);

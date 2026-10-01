@@ -11,8 +11,10 @@
  */
 
 import { z } from 'zod';
-import type { FastMCP } from 'fastmcp';
+import type { ContentResult, FastMCP } from 'fastmcp';
+import { withAgentHints } from './agent-hints';
 import { originHeaders, requestOrigin } from './origin';
+import { developerSearchOutputSchema, withStructured } from './tool-output';
 
 interface SessionData {
   firecrawlApiKey?: string;
@@ -94,6 +96,7 @@ Search an index of public repositories, GitHub issues, merged pull requests, rep
 
 Returns ranked results with an ID, source type, URL, title, and the matched passages in markdown.
 `,
+    outputSchema: developerSearchOutputSchema,
     parameters: z.object({
       query: z
         .string()
@@ -116,7 +119,7 @@ Returns ranked results with an ID, source type, URL, title, and the matched pass
     execute: async (
       args: unknown,
       { session, client: mcpClient }
-    ): Promise<string> => {
+    ): Promise<ContentResult> => {
       const { query, k, skills } = args as {
         query: string;
         k?: number;
@@ -130,7 +133,8 @@ Returns ranked results with an ID, source type, URL, title, and the matched pass
       const res = await client.http.get<{
         results?: DeveloperHit[];
       }>(`${BASE}?${params.toString()}`, originHeaders(requestOrigin(mcpClient, session)));
-      return fmtDeveloper(res.data?.results);
+      const results = res.data?.results ?? [];
+      return withAgentHints(withStructured(fmtDeveloper(results), { results }), res.data, true);
     },
   });
 }
