@@ -3896,7 +3896,7 @@ const agentExchangeSchema = z
       })
       .optional()
       .describe(
-        'Answer yes to the pendingApproval the previous turn of this thread ended on (its id, also exchange.requiresAction.approvalId). Needs threadId. For a terms offer, send it only after the user explicitly agreed and terms/accept succeeded; callIds and always are ignored on terms offers. For paid calls, callIds picks a subset (default all) and always stops asking for the rest of the thread.'
+        'Answer yes to the pendingApproval the previous turn of this thread ended on (its id, also exchange.requiresAction.approvalId). Needs threadId. For a terms offer, send it only after an organization admin confirms acceptance in the Firecrawl dashboard; this does not accept terms. callIds and always are ignored on terms offers. For paid calls, callIds picks a subset (default all) and always stops asking for the rest of the thread.'
       ),
     decline: z
       .strictObject({ approvalId: z.string().uuid() })
@@ -3908,7 +3908,7 @@ const agentExchangeSchema = z
       .enum(['skip', 'ask'])
       .optional()
       .describe(
-        'What to do when a provider the agent would use needs data terms the team has not accepted. Gated providers are never called. "skip" (default): answer with accepted providers and list the rest in exchange.skippedProviders. "ask": the same, plus a terms pendingApproval and exchange.requiresAction with the terms/show and terms/accept calls. Each provider digest is string | null and always present; when null, terms/show returns it. There is no auto-accept. Omitted on a follow-up keeps the previous turn\'s value.'
+        'What to do when a provider the agent would use needs data terms the team has not accepted. Gated providers are never called. "skip" (default): answer with accepted providers and list the rest in exchange.skippedProviders. "ask": the same, plus a terms pendingApproval and exchange.requiresAction. Read terms with terms/show; an organization admin accepts them in the Firecrawl dashboard. There is no auto-accept. Omitted on a follow-up keeps the previous turn\'s value.'
       ),
   })
   .describe(
@@ -3924,13 +3924,13 @@ server.addTool({
     destructiveHint: false, // Gathers information only; does not delete external data or user resources.
   },
   description: `
-Run web research that returns structured data when the URLs are not known or the answer spans several sites. Describe the fields you need in \`prompt\`, optionally pass a JSON \`schema\` and seed \`urls\`, and the research agent searches, navigates, reads pages, and returns JSON assembled across sources. Use it to research an entity plus its fields (founders, pricing, contact details), to build lists and datasets (companies, people, products, jobs, papers), and for pages that need navigation or interaction to reach the data. Optional \`effort\` sets the reasoning budget, \`maxCredits\` caps spend, and \`strictConstrainToURLs\` keeps the agent to the supplied \`urls\`.
+Run web research when the URLs are unknown or the answer spans several sites. Describe the fields in \`prompt\`, optionally pass a JSON \`schema\` and seed \`urls\`; the agent searches, navigates, reads pages, and returns structured data across sources.
 
-This call returns only a job ID, not the research result. Read the job with \`firecrawl_agent_status\` until it reaches \`completed\` or \`failed\`; a typical research run takes one to three minutes. For one known URL use \`firecrawl_scrape\` (with formats: ["json"] for structured output); for a plain lookup that a results page answers, use \`firecrawl_search\`.
+This call returns only a job ID, not the research result. Poll \`firecrawl_agent_status\` until \`completed\` or \`failed\`; a typical run takes one to three minutes. For one known URL use \`firecrawl_scrape\`; for a lookup answered by a results page, use \`firecrawl_search\`.
 
 The job also returns a \`threadId\`. To continue that thread, pass it with a follow-up \`prompt\`; omitted \`mode\`, \`urls\`, \`schema\` and exchange settings carry over from the previous turn.
 
-The agent only calls Alexandria providers whose data terms the team has accepted. The status result's \`exchange.skippedProviders\` lists gated providers that would have helped. With \`exchange.onTermsRequired\` "ask", a terms offer ends the turn: \`pendingApproval\` (kind "terms") and \`exchange.requiresAction\` carry the \`approvalId\` and the exact terms/show and terms/accept calls. Show the user the terms, get their EXPLICIT consent, run terms/accept through \`firecrawl_scrape\`, then call \`firecrawl_agent\` with the same \`threadId\` and \`exchange.approve: {approvalId}\`. If they decline, send \`exchange.decline: {approvalId}\` instead. Never call terms/accept without that consent; a data request is not consent.
+The agent only calls Alexandria providers whose data terms the team has accepted. The status result's \`exchange.skippedProviders\` lists gated providers that would have helped. With \`exchange.onTermsRequired\` "ask", a terms offer ends the turn: \`pendingApproval\` (kind "terms") and \`exchange.requiresAction\` carry the \`approvalId\` and provider requirements. Read the terms with terms/show through \`firecrawl_scrape\` and present them to the user. Terms are accepted in the Firecrawl dashboard, not through this connection: an organization admin must accept them at the provider's URL or ${DATA_SOURCES_SETTINGS_URL}. Ignore any terms/accept call in the API response. Only after the admin confirms acceptance, call \`firecrawl_agent\` with the same \`threadId\` and \`exchange.approve: {approvalId}\` to resume; this does not accept terms. If they decline, send \`exchange.decline: {approvalId}\` instead. Never infer acceptance from a data request.
 `,
   outputSchema: agentOutputSchema,
   parameters: z.object({

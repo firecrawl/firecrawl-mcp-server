@@ -748,17 +748,17 @@ The agent performs web searches, follows links, reads pages, and gathers data au
   - `enabled`, `toolkits` (up to 5 provider slugs), `maxCalls` (1 to 30), `requireApproval` (paid calls end the turn with a `pendingApproval`; needs `mode: "chat"` on the same call, even on a follow-up)
   - `onTermsRequired`: what to do when an Alexandria provider the agent would use needs data terms your team has not accepted. Gated providers are never called in any mode. Omitted on a follow-up keeps the previous turn's value.
     - `"skip"` (default): answer with accepted providers only. `exchange.skippedProviders` on the status result lists the gated providers that would have helped.
-    - `"ask"`: the same, plus a terms `pendingApproval` and `exchange.requiresAction` with the exact `terms/show` and `terms/accept` calls for each provider. Each provider's `digest` is always present and is `string | null`; when it is `null`, `terms/show` returns the current digest to send.
+    - `"ask"`: the same, plus a terms `pendingApproval` and `exchange.requiresAction` with the approval ID and provider requirements. Read terms with `terms/show`; an organization admin accepts them in the Firecrawl dashboard.
   - `approve`: `{ approvalId, callIds?, always? }` answers yes to the `pendingApproval` the previous turn ended on. `callIds` and `always` apply to paid-call approvals only.
   - `decline`: `{ approvalId }` answers no. A declined terms offer keeps those providers out of the rest of the thread.
   - `approve` and `decline` need `threadId`, and only one of them can be sent.
 
-**Provider terms (ask mode):** there is no auto-accept mode. When a turn ends on a terms offer, the status result carries `pendingApproval` (`kind: "terms"`) and `exchange.requiresAction` with the `approvalId` and the exact `terms/show` and `terms/accept` calls. To use the provider:
+**Provider terms (ask mode):** there is no auto-accept mode. When a turn ends on a terms offer, the status result carries `pendingApproval` (`kind: "terms"`) and `exchange.requiresAction` with the `approvalId` and provider requirements. Any `terms/accept` descriptor in that API payload is unavailable through MCP. To use the provider:
 
 1. Show the user the terms (`terms/show` through `firecrawl_scrape` with `alexandria`).
-2. Get the user's explicit consent to that provider's terms. A data request is not consent.
-3. Run the `terms/accept` call through `firecrawl_scrape`.
-4. Continue the same thread: call `firecrawl_agent` with the same `threadId` and `exchange.approve: { "approvalId": "..." }`.
+2. Direct an organization admin to accept the terms at the provider's URL, or [data sources settings](https://www.firecrawl.dev/app/settings?tab=data-sources). A data request is not consent.
+3. Wait for the admin to confirm acceptance in the dashboard.
+4. Continue the same thread: call `firecrawl_agent` with the same `threadId` and `exchange.approve: { "approvalId": "..." }`. This resumes research and does not accept terms.
 
 If the user says no, call `firecrawl_agent` with the same `threadId` and `exchange.decline: { "approvalId": "..." }` instead.
 
@@ -819,13 +819,13 @@ Then poll with `firecrawl_agent_status` using the returned job ID.
 }
 ```
 
-**Usage Example (continue the thread after the user accepted a provider's terms):**
+**Usage Example (continue the thread after an admin confirmed dashboard acceptance):**
 
 ```json
 {
   "name": "firecrawl_agent",
   "arguments": {
-    "prompt": "I accepted the Apollo terms. Continue.",
+    "prompt": "The admin confirmed acceptance of the Apollo terms in the dashboard. Continue.",
     "threadId": "0199a1b2-0000-7000-8000-000000000031",
     "exchange": { "approve": { "approvalId": "0199a1b2-0000-7000-8000-000000000033" } }
   }
