@@ -5,6 +5,7 @@ import { createServer } from 'node:http';
 import net from 'node:net';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
+import { Script } from 'node:vm';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
 import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
 import {
@@ -873,7 +874,12 @@ test('HTTP cloud keyless transport preserves app challenge without advertising O
   const anonymousTools = parseSseJson(await unauthenticated.text()).result.tools;
   assert.deepEqual(
     anonymousTools.map((tool) => tool.name).sort(),
-    ['firecrawl_parse', 'firecrawl_scrape', 'firecrawl_search']
+    [
+      'firecrawl_parse',
+      'firecrawl_scrape',
+      'firecrawl_search',
+      'firecrawl_workspace',
+    ]
   );
   const anonymousParse = anonymousTools.find(
     (tool) => tool.name === 'firecrawl_parse'
@@ -1208,6 +1214,59 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.ok(toolNames.includes('firecrawl_credit_usage'));
   assert.equal(toolNames.includes('firecrawl_credit_usage_historical'), false);
   assert.equal(toolNames.includes('firecrawl_extract'), false);
+
+  const workspace = tools.tools.find((tool) => tool.name === 'firecrawl_workspace');
+  assert.equal(workspace?._meta?.ui?.resourceUri, 'ui://firecrawl/workspace-v3.html');
+  assert.equal(
+    workspace?._meta?.['openai/outputTemplate'],
+    'ui://firecrawl/workspace-v3.html'
+  );
+  const resources = await client.request('resources/list');
+  assert.ok(
+    resources.resources.some(
+      (resource) =>
+        resource.uri === 'ui://firecrawl/workspace-v3.html' &&
+        resource.mimeType === 'text/html;profile=mcp-app'
+    )
+  );
+  const ui = await client.request('resources/read', {
+    uri: 'ui://firecrawl/workspace-v3.html',
+  });
+  assert.match(ui.contents[0].text, /Search the live web\./);
+  assert.match(ui.contents[0].text, /name: "firecrawl_search"/);
+  assert.match(ui.contents[0].text, /name: "firecrawl_find_tools"/);
+  assert.match(ui.contents[0].text, /name: "firecrawl_credit_usage"/);
+  assert.match(ui.contents[0].text, />Providers</);
+  assert.match(ui.contents[0].text, />Results</);
+  assert.match(ui.contents[0].text, />Usage</);
+  assert.match(ui.contents[0].text, /sendFollowUpMessage/);
+  assert.match(ui.contents[0].text, /setWidgetState/);
+  const componentScript = ui.contents[0].text.match(
+    /<script>([\s\S]*)<\/script>/
+  )?.[1];
+  assert.ok(componentScript);
+  assert.doesNotThrow(() => new Script(componentScript));
+  assert.equal(ui.contents[0]._meta.ui.prefersBorder, true);
+  assert.deepEqual(ui.contents[0]._meta['openai/ui'].availableDisplayModes, [
+    'inline',
+    'fullscreen',
+  ]);
+
+  const opened = await client.request('tools/call', {
+    name: 'firecrawl_workspace',
+    arguments: { view: 'read', url: 'https://example.com/' },
+  });
+  assert.deepEqual(opened.structuredContent, {
+    view: 'read',
+    url: 'https://example.com/',
+  });
+  assert.deepEqual(workspace.inputSchema.properties.view.enum, [
+    'search',
+    'read',
+    'providers',
+    'results',
+    'usage',
+  ]);
 
   const deprecatedExtract = await client.request('tools/call', {
     // beforeValidate must intercept before the legacy required `urls` schema.

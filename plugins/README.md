@@ -5,11 +5,11 @@ scientific literature with Firecrawl.
 
 | Package | Connection | Skills |
 | --- | --- | --- |
-| [OpenAI](openai/app-6a314a73f8ac819195b0d55e36b9c609) | Existing registered Firecrawl app in ChatGPT and Codex | `firecrawl`, with workflow references |
+| [OpenAI](openai/app-6a314a73f8ac819195b0d55e36b9c609) | Existing Firecrawl plugin in OpenAI Platform | `firecrawl`, with workflow references and interactive UI |
 | [Claude](claude/firecrawl-search) | `https://mcp.firecrawl.dev/v2/mcp-search` | `firecrawl`, `firecrawl-developer-index`, `firecrawl-research-index` |
 
-The OpenAI package covers the full authenticated tool set. Its `.app.json`
-preserves the registered app connection and authentication. The Claude package
+The OpenAI package preserves the existing Platform plugin identity and covers
+the full authenticated tool set. The Claude package
 uses the [search endpoint's eight-tool contract](../docs/search-profile.md) and
 its account-connection flow.
 
@@ -37,11 +37,10 @@ Complete the Firecrawl account connection in the client before using tools.
 Check a web lookup, a supplied URL, a programming question, and a paper question.
 Inspect the requested source and scope as well as whether the tool call succeeds.
 
-For the OpenAI package, load the package directory through a supported local
-plugin installation flow in Codex. For distribution, use the existing Firecrawl
-plugin submission and registered app mapping. Replace the previous skill set
-with the package's `skills/` contents, preserving the reference directories.
-Test the draft in ChatGPT and Codex before submitting it for publication.
+For the OpenAI package, run `pnpm package:openai-plugin`, upload the generated
+archive from `artifacts/` to OpenAI Platform, then test the draft in ChatGPT and
+Codex before submitting it for publication. The server hosts the MCP Apps UI;
+the ZIP contains the existing plugin manifest and its skills.
 
 For a plugin archive, include the manifest, connection file, and `skills/`
 directory at the archive root. Include dotfiles such as `.app.json`, `.mcp.json`,

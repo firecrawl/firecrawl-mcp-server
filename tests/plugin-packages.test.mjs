@@ -61,17 +61,14 @@ test('tool coverage ignores incidental mentions and checks explicit references',
   );
 });
 
-test('OpenAI package uses the registered Firecrawl app connection', () => {
+test('OpenAI package preserves the existing Platform plugin identity', () => {
   const manifest = readJson(join(openaiPlugin, '.codex-plugin/plugin.json'));
   assert.equal(manifest.skills, './skills');
-  assert.equal(manifest.apps, './.app.json');
-  assert.deepEqual(readJson(join(openaiPlugin, manifest.apps)), {
-    apps: {
-      'app-6a314a73f8ac819195b0d55e36b9c609': {
-        id: 'asdk_app_6a314a73f8ac819195b0d55e36b9c609',
-      },
-    },
-  });
+  assert.equal(manifest.name, 'app-6a314a73f8ac819195b0d55e36b9c609');
+  assert.equal(manifest.version, '2.4.0');
+  assert.equal(manifest.apps, undefined);
+  assert.equal(manifest.interface.supportURL, 'https://www.firecrawl.dev/support');
+  assert.match(manifest.interface.longDescription, /visual workspace.*credit usage/i);
   assert.equal(manifest.mcpServers, undefined);
   assert.equal(existsSync(join(openaiPlugin, '.mcp.json')), false);
 });

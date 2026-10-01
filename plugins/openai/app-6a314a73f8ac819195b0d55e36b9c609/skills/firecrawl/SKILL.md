@@ -14,6 +14,11 @@ connection or authentication errors.
 
 ## Choose the operation
 
+- **Open the visual workspace:** `firecrawl_workspace` opens an interactive UI
+  for web search, page reading, Alexandria provider discovery, session results,
+  and account usage. Use its `providers` view to browse, inspect, and select
+  providers for chat; `results` to revisit temporary results from that widget;
+  and `usage` to show credit balance and history.
 - **Find sources:** `firecrawl_search` returns ranked results and relevant
   excerpts. Use `firecrawl_scrape` on a result when the answer needs more of
   the page. If the results already answer the question, no extra fetch is needed.

@@ -82,6 +82,7 @@ import {
   setManagedOAuthApiKey,
   type CredentialSession,
 } from './session-credential';
+import { FIRECRAWL_UI_URI, registerFirecrawlUi } from './firecrawl-ui';
 
 dotenv.config({ debug: false, quiet: true });
 
@@ -1399,7 +1400,7 @@ function makePrimaryProfile(): ServerProfile {
 }
 
 function createServer(profile: ServerProfile): FastMCP<SessionData> {
-  return new FastMCP<SessionData>({
+  const instance = new FastMCP<SessionData>({
     name: 'firecrawl-fastmcp',
     version: packageVersion as `${number}.${number}.${number}`,
     instructions: profile.instructions,
@@ -1424,6 +1425,8 @@ function createServer(profile: ServerProfile): FastMCP<SessionData> {
       status: 200,
     },
   });
+  registerFirecrawlUi(instance);
+  return instance;
 }
 
 const primaryProfile = makePrimaryProfile();
@@ -1431,6 +1434,7 @@ const server = createServer(primaryProfile);
 type RegisteredTool = Parameters<typeof server.addTool>[0];
 
 const KEYLESS_TOOL_NAMES = new Set([
+  'firecrawl_workspace',
   'firecrawl_scrape',
   'firecrawl_search',
   'firecrawl_parse',
@@ -2646,6 +2650,56 @@ async function executeHostedParse(
   );
   return asText(parseJson);
 }
+
+server.addTool({
+  name: 'firecrawl_workspace',
+  _meta: {
+    ui: { resourceUri: FIRECRAWL_UI_URI },
+    'openai/outputTemplate': FIRECRAWL_UI_URI,
+    'openai/widgetAccessible': true,
+    'openai/toolInvocation/invoking': 'Opening Firecrawl…',
+    'openai/toolInvocation/invoked': 'Firecrawl is ready.',
+  },
+  annotations: {
+    title: 'Open Firecrawl workspace',
+    readOnlyHint: true,
+    openWorldHint: false,
+    destructiveHint: false,
+  },
+  description:
+    'Open the interactive Firecrawl workspace when the user asks to search or read visually, explore and select Alexandria providers, revisit session results, or inspect Firecrawl credit usage. The workspace calls the existing data and account tools directly; those tools remain independently useful without the UI.',
+  parameters: z.object({
+    view: z.enum(['search', 'read', 'providers', 'results', 'usage']).optional(),
+    query: z.string().optional(),
+    url: z.string().url().optional(),
+  }),
+  outputSchema: z.object({
+    view: z.enum(['search', 'read', 'providers', 'results', 'usage']),
+    query: z.string().optional(),
+    url: z.string().url().optional(),
+  }),
+  execute: async (args: unknown): Promise<ContentResult> => {
+    const input = args as {
+      view?: 'search' | 'read' | 'providers' | 'results' | 'usage';
+      query?: string;
+      url?: string;
+    };
+    const payload = {
+      view: input.url ? ('read' as const) : (input.view ?? 'search'),
+      ...(input.query ? { query: input.query } : {}),
+      ...(input.url ? { url: input.url } : {}),
+    };
+    return {
+      content: [
+        {
+          type: 'text',
+          text: 'Opened the Firecrawl workspace for visual web search and page reading.',
+        },
+      ],
+      structuredContent: payload,
+    };
+  },
+});
 
 const scrapeTool: RegisteredTool = {
   name: 'firecrawl_scrape',

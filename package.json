@@ -23,7 +23,8 @@
     "format": "prettier --write .",
     "prepare": "npm run build",
     "publish-prod": "npm run build && npm publish",
-    "publish-beta": "npm run build && npm publish --tag beta"
+    "publish-beta": "npm run build && npm publish --tag beta",
+    "package:openai-plugin": "node scripts/package-openai-plugin.mjs"
   },
   "license": "MIT",
   "dependencies": {
