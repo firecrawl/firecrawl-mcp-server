@@ -1,15 +1,13 @@
 import assert from 'node:assert/strict';
 
-export function assertAlexandriaMetadata(tools, instructions, { hosted }) {
+export function assertAlexandriaMetadata(tools, instructions) {
   assert.ok(instructions, 'Alexandria server instructions are required');
   const scrape = tools.find((tool) => tool.name === 'firecrawl_scrape');
   assert.ok(scrape, 'firecrawl_scrape must be registered');
   const { requestId, alexandria } = scrape.inputSchema?.properties ?? {};
   assert.ok(requestId?.description, 'firecrawl_scrape.requestId needs a description');
   assert.ok(alexandria?.description, 'firecrawl_scrape.alexandria needs a description');
-  // Hosted (safe mode) scrape has no browser actions, loads profiles
-  // read-only, and refuses terms acceptance, which happens in the dashboard.
-  assert.equal(scrape.annotations.readOnlyHint, hosted);
+  assert.equal(scrape.annotations.readOnlyHint, false);
   assert.match(requestId.description, /idempotency key.*payload/i);
   assert.match(requestId.description, /generated when omitted and returned with the result/i);
   assert.match(alexandria.description, /mutually exclusive with url/);

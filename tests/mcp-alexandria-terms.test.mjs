@@ -3,19 +3,16 @@ import test from 'node:test';
 import { TERMS_REQUIRED_BODY } from './helpers/exchange-api.mjs';
 import { startStdioWithApi, callExpectingError, toolText } from './helpers/exchange-mcp.mjs';
 
-test('terms are read through scrape and accepted by an organization admin in the dashboard', async (t) => {
+test('terms are disclosed after a blocked provider and use scrape instead of top-level tools', async (t) => {
   const { api, client } = await startStdioWithApi(t);
   const listing = await client.request('tools/list', {});
-  assert.ok(!listing.tools.some(tool => /terms/.test(tool.name)), 'no tool accepts terms');
-
+  assert.ok(!listing.tools.some(tool => /^firecrawl_terms_/.test(tool.name)));
   const blocked = await callExpectingError(client, { name: 'firecrawl_scrape', arguments: { alexandria: [{ provider: 'benzinga', capability: 'news/search' }] } });
   assert.equal(api.requests.length, 1, 'blocked requests never auto-accept');
-  const { code, status, requiresAction, requestId, next_actions } = blocked.structuredContent;
-  assert.match(blocked.content[0].text, /Terms are accepted in the Firecrawl dashboard, not through this connection: ask an organization admin to accept them at /);
-  assert.ok(blocked.content[0].text.includes(requiresAction.url), 'names the admin accept page');
+  assert.match(blocked.content[0].text, /explicit authorization to accept that exact version and digest/);
   assert.match(blocked.content[0].text, /Never infer acceptance from a data request/);
   assert.match(blocked.content[0].text, /Reuse this ID only with the identical payload/);
-  assert.doesNotMatch(blocked.content[0].text, /terms\/accept|confirmed: ?true/);
+  const { code, status, requiresAction, requestId, next_actions } = blocked.structuredContent;
   assert.equal(code, TERMS_REQUIRED_BODY.code);
   assert.equal(status, 403);
   assert.deepEqual(requiresAction, TERMS_REQUIRED_BODY.requiresAction);
@@ -33,18 +30,13 @@ test('terms are read through scrape and accepted by an organization admin in the
   assert.equal(next.arguments.alexandria[0].capability, 'terms/show');
   const read = toolText(await client.request('tools/call', next)).data.alexandria[0].data;
   assert.equal(read.terms.document, 'Review this agreement.');
-  assert.equal(api.requests.length, 2);
-
   const options = { provider: 'benzinga', version: read.terms.version, digest: read.terms.digest, confirmed: true };
-  for (const call of [
-    { provider: 'firecrawl', capability: 'terms/accept', options },
-    { provider: ' Firecrawl ', capability: 'Terms/Accept', options },
-    { provider: 'firecrawl', capability: 'terms/revoke', options: { provider: 'benzinga' } },
-  ]) {
-    const refused = await callExpectingError(client, { name: 'firecrawl_scrape', arguments: { alexandria: [call] } });
-    assert.match(refused.content[0].text, /Provider terms are accepted in the Firecrawl dashboard, not through this connection/, call.capability);
-  }
-  assert.equal(api.requests.length, 2, 'scrape forwards no terms command other than terms/show');
+  const accepted = toolText(await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { alexandria: [{ provider: 'firecrawl', capability: 'terms/accept', options }] } }));
+  assert.ok(accepted.data.alexandria[0].data.acceptedAt);
+  assert.equal(api.requests.length, 3);
+  assert.ok(api.requests.every(request => request.url === '/v2/scrape'));
+  assert.deepEqual(api.requests[2].body.alexandria[0].options, options);
+  assert.equal(api.requests[2].headers.authorization, 'Bearer fc-exchange-test');
 });
 
 test('firecrawl_scrape relays a reserved 409 billing error with its code and chargeId', async (t) => {
@@ -84,8 +76,7 @@ test('disabled provider offers read-only terms recovery without treating other r
     assert.equal(blocked.structuredContent.status, 403);
     assert.equal(Boolean(blocked.structuredContent.nextTool), expected, message);
     if (expected) {
-      assert.match(blocked.content[0].text, /Terms are accepted in the Firecrawl dashboard, not through this connection/);
-      assert.doesNotMatch(blocked.content[0].text, /terms\/accept/);
+      assert.match(blocked.content[0].text, /explicit authorization/);
       const shown = toolText(await client.request('tools/call', blocked.structuredContent.nextTool));
       assert.equal(shown.data.alexandria[0].data.status.accepted, false);
       assert.equal(api.requests.length, 2);

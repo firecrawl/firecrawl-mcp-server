@@ -67,14 +67,6 @@ names only tools this surface exposes. `firecrawl_find_tools` is registered the
 same way. Alexandria results on this surface carry no `feedbackTool` pointer,
 since `firecrawl_feedback` is not registered here.
 
-`firecrawl_scrape` is read-only here (`readOnlyHint: true`): the surface runs in
-hosted safe mode, so it takes no browser `actions`, and a named `profile` loads
-saved browser state without saving changes to it. Provider terms can be read
-with the nested `terms/show` capability. As on the full surface, an organization
-admin accepts them in the dashboard: `firecrawl_scrape` refuses every other
-`terms/*` capability, and terms errors link to `requiresAction.url` or
-https://www.firecrawl.dev/app/settings?tab=data-sources.
-
 ## Alexandria source
 
 `sources` entries are source names (`web`, `news`, `images`, `alexandria`) or

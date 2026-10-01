@@ -248,10 +248,10 @@ export const agentStatusOutputSchema = z
     message: unknown('The agent\'s reply; in chat mode, the short answer to a follow-up.'),
     suggestions: unknown('Follow-ups the agent offers; send one as the prompt of the next turn with this threadId.'),
     exchange: unknown(
-      'What the job did with Alexandria providers: onTermsRequired, paidCalls, creditsUsed, skippedProviders (gated providers that would have helped), and requiresAction (approvalId and provider requirements). Read terms with terms/show. Ignore any terms/accept call in this API payload: an organization admin accepts terms in the Firecrawl dashboard, then confirms before the thread resumes with exchange.approve: {approvalId}.'
+      'What the job did with Alexandria providers: onTermsRequired, paidCalls, creditsUsed, skippedProviders (gated providers that would have helped), and requiresAction (approvalId plus the terms/show and terms/accept calls, each provider digest string | null and always present; call accept only with the user\'s explicit consent, then continue the thread with exchange.approve: {approvalId}).'
     ),
     pendingApproval: unknown(
-      'Set when the job ended waiting on the caller. Answer it by calling firecrawl_agent with this threadId and exchange.approve or exchange.decline carrying its id. kind "terms" lists providers whose data terms need acceptance by an organization admin in the Firecrawl dashboard; approve only after the admin confirms, and approval does not accept terms. Otherwise calls lists paid calls waiting for approval.'
+      'Set when the job ended waiting on the caller. Answer it by calling firecrawl_agent with this threadId and exchange.approve or exchange.decline carrying its id. kind "terms" lists providers whose data terms need accepting; otherwise calls lists paid calls waiting for approval.'
     ),
   })
   .describe('Progress or final result of a research agent job.');
