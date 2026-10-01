@@ -982,16 +982,12 @@ test('full surface forwards optional search context only when supplied', async (
     query: 'React memo docs',
     sources: ['web'],
     objective: 'Find official rerender guidance',
-    clientModel: 'claude-sonnet-4-6',
   });
 
   const searches = backendRequests.filter((request) => request.url === '/v2/search');
   assert.equal(searches.length, 2);
-  for (const field of ['objective', 'clientModel']) {
-    assert.equal(field in searches[0].body, false);
-  }
+  assert.equal('objective' in searches[0].body, false);
   assert.equal(searches[1].body.objective, 'Find official rerender guidance');
-  assert.equal(searches[1].body.clientModel, 'claude-sonnet-4-6');
 });
 
 test('primary search profile is OAuth-only, eight-tool frozen, and ready without keyless configuration', async (t) => {
@@ -1107,7 +1103,6 @@ test('primary search profile forwards optional task context without content fetc
       arguments: {
         query: 'React memo docs',
         objective: 'Find official guidance on preventing unnecessary rerenders',
-        clientModel: 'claude-sonnet-4-6',
         sources: ['web'],
       },
       name: 'firecrawl_search',
@@ -1120,7 +1115,6 @@ test('primary search profile forwards optional task context without content fetc
   const search = backendRequests.find((request) => request.url === '/v2/search');
   assert.ok(search);
   assert.equal(search.body.objective, 'Find official guidance on preventing unnecessary rerenders');
-  assert.equal(search.body.clientModel, 'claude-sonnet-4-6');
   assert.equal(search.body.scrapeOptions, undefined);
 });
 
