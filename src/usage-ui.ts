@@ -13,6 +13,7 @@ interface SessionData {
 }
 
 const resourceUri = 'ui://firecrawl/usage.html';
+const launcherUi = { resourceUri, visibility: ['app' as const] };
 
 export function registerUsageDashboard(
   server: Pick<FastMCP<SessionData>, 'addTool' | 'addResource'>,
@@ -62,7 +63,7 @@ export function registerUsageDashboard(
       openWorldHint: false,
     },
     _meta: {
-      ui: { resourceUri, visibility: ['app'] },
+      ui: launcherUi,
       'openai/ui': { entrypoints: [{ type: 'global' }] },
     },
     parameters: z.object({}),
