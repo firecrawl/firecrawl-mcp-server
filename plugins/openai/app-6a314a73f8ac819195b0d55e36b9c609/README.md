@@ -48,8 +48,14 @@ identity, preserved metadata and skill files, icon paths/dimensions, and the
 absence of app references or development files in the generated directory.
 
 Preparing this directory does not enable the UI at the production endpoint.
-The server build still needs staging deployment and a real sidebar/composer
-check in ChatGPT Developer Mode. Final ZIP assembly, reviewer cases, credentials,
+The branch has been deployed to the private staging service, with the running
+image and UI bytes verified against the build. Read-only live checks cover the
+launcher metadata/icon, resource CSP, current credits, historical usage,
+provider discovery, and invalid-credential recovery. See
+[staging testing](../../../staging-testing.md) for the deployment command,
+repeatable live checks, and the manual sidebar/composer acceptance flow.
+The real ChatGPT Developer Mode check remains a user-run acceptance step.
+Final ZIP assembly, reviewer cases, credentials,
 and video preparation are separate release steps. No review/publication settings
 or test credentials are fabricated in this package.
 
