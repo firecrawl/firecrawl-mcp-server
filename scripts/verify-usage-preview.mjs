@@ -71,7 +71,8 @@ async function verify() {
       () => doc() !== previous && get('remaining')?.textContent === '8,750',
       'usage'
     );
-    get('providers-tab').click();
+    check(!get('providers-view').hidden && get('usage-view').hidden, 'Providers opens by default');
+    check(get('providers-tab').getAttribute('aria-pressed') === 'true' && get('usage-tab').getAttribute('aria-pressed') === 'false', 'Default tab matches visible view');
     await wait(
       () =>
         !get('catalog-error').hidden ||
@@ -305,6 +306,7 @@ async function verify() {
       () => doc() !== previous && get('balance-section')?.getAttribute('aria-busy') === 'false',
       'usage scenario ' + mode
     );
+    get('usage-tab').click();
   };
   for (const [mode, remaining, columns, balanceError, historyError] of [
     ['normal', '8,750', 3, false, false],
@@ -369,6 +371,7 @@ async function verify() {
   return {
     passed: true,
     checks: [
+      'providers opens by default',
       'pagination and search',
       'category races',
       'mixed named context annotations',

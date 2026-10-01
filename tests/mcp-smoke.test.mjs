@@ -1485,7 +1485,7 @@ test('credit usage tool exposes current balance and both historical request shap
     preferredDisplayMode: 'fullscreen',
     availableDisplayModes: ['fullscreen'],
   });
-  assert.match(loaded.contents[0].text, /<h1 id="page-title">Usage<\/h1>/);
+  assert.match(loaded.contents[0].text, /<h1 id="page-title">Explore providers<\/h1>/);
   assert.match(loaded.contents[0].text, /id="providers-view"/);
   assert.doesNotMatch(loaded.contents[0].text, /id="results-(?:tab|view)"|firecrawl_results_/);
   assert.match(loaded.contents[0].text, /id="selection-status"/);

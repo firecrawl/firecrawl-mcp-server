@@ -20,7 +20,7 @@ const month = new Intl.DateTimeFormat(undefined, {
 let connected = false;
 let loading = false;
 let connection: Promise<void> | undefined;
-let view: 'usage' | 'providers' = 'usage';
+let view: 'usage' | 'providers' = 'providers';
 const providers = providersBrowser(app, ready);
 
 function ready(): Promise<void> {
@@ -253,4 +253,5 @@ dashboardButton.addEventListener('click', async () => {
   }
 });
 theme({});
+navigate('providers');
 void update();

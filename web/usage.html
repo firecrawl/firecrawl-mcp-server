@@ -7,7 +7,7 @@
     <!--STYLES-->
   </head>
   <body>
-    <main class="dashboard">
+    <main class="dashboard" data-view="providers">
       <header class="page-header">
         <div class="brand">
           <span class="brand-icon"><!--ICON--></span>Firecrawl
@@ -17,7 +17,7 @@
             type="button"
             id="providers-tab"
             aria-controls="providers-view"
-            aria-pressed="false"
+            aria-pressed="true"
           >
             Providers
           </button>
@@ -25,13 +25,13 @@
             type="button"
             id="usage-tab"
             aria-controls="usage-view"
-            aria-pressed="true"
+            aria-pressed="false"
           >
             Usage
           </button>
         </nav>
         <div class="heading-row">
-          <h1 id="page-title">Usage</h1>
+          <h1 id="page-title">Explore providers</h1>
           <button id="refresh" type="button" disabled>
             <svg
               width="16"
@@ -50,9 +50,9 @@
             ><span>Refresh</span>
           </button>
         </div>
-        <p id="page-description">Your credits and recent usage.</p>
+        <p id="page-description">Choose data providers and bring their tools into your chat.</p>
       </header>
-      <div id="providers-view" hidden>
+      <div id="providers-view">
         <section class="catalog-section" aria-label="Alexandria providers">
           <div class="catalog-toolbar">
             <label class="search-field"
@@ -155,7 +155,7 @@
           <p id="provider-empty" class="empty" hidden></p>
         </section>
       </div>
-      <div id="usage-view">
+      <div id="usage-view" hidden>
         <section
           class="balance-section"
           aria-labelledby="balance-heading"
