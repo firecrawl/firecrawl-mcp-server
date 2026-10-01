@@ -102,5 +102,3 @@ do not substitute for this acceptance step.
 The published production package remains on the production OAuth endpoint.
 Do not replace the published Firecrawl connection with this staging test.
 ZIP assembly, reviewer cases, review credentials, and video are separate steps.
-
-The Day / Week / Month UI requires the Core API rolling-range endpoint. MCP staging currently uses the production Core API; publishing the MCP image alone does not deploy the Core API dependency. The separate Core staging API uses different credentials, so a production Firecrawl key cannot be used there unchanged.

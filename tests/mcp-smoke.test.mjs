@@ -470,43 +470,6 @@ async function startFakeFirecrawlApi() {
 
     if (
       req.method === 'GET' &&
-      /^\/v2\/team\/credit-usage\/historical\?timeRange=(day|week|month)$/.test(
-        req.url
-      )
-    ) {
-      const timeRange = new URL(req.url, 'http://fixture').searchParams.get(
-        'timeRange'
-      );
-      const end = Date.parse('2026-10-02T12:30:00Z');
-      const start = end - { day: 1, week: 7, month: 30 }[timeRange] * 86400000;
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(
-        JSON.stringify({
-          success: true,
-          periods: [
-            {
-              startDate: new Date(start).toISOString(),
-              endDate: new Date(end).toISOString(),
-              creditsUsed: 123,
-            },
-          ],
-          ...(req.headers.authorization === 'Bearer fc-legacy-ranges-test'
-            ? {}
-            : {
-                window: {
-                  timeRange,
-                  binSize: timeRange === 'day' ? 'hour' : 'day',
-                  startDate: new Date(start).toISOString(),
-                  endDate: new Date(end).toISOString(),
-                },
-              }),
-        })
-      );
-      return;
-    }
-
-    if (
-      req.method === 'GET' &&
       req.url === '/v2/team/credit-usage/historical?byApiKey=true'
     ) {
       res.writeHead(200, { 'content-type': 'application/json' });
@@ -1561,48 +1524,6 @@ test('credit usage tool exposes current balance and both historical request shap
     success: true,
   });
 
-  const listed = await client.request('tools/list');
-  assert.deepEqual(
-    listed.tools.find((t) => t.name === 'firecrawl_credit_usage').inputSchema
-      .properties.timeRange.enum,
-    ['day', 'week', 'month']
-  );
-  for (const timeRange of ['day', 'week', 'month']) {
-    const ranged = await client.request('tools/call', {
-      name: 'firecrawl_credit_usage',
-      arguments: { timeRange },
-    });
-    assert.notEqual(ranged.isError, true);
-    assert.equal(ranged.structuredContent.window.timeRange, timeRange);
-    assert.equal(
-      ranged.structuredContent.window.binSize,
-      timeRange === 'day' ? 'hour' : 'day'
-    );
-    assert.equal(
-      Date.parse(ranged.structuredContent.window.endDate) -
-        Date.parse(ranged.structuredContent.window.startDate),
-      { day: 1, week: 7, month: 30 }[timeRange] * 86400000
-    );
-    assert.equal(ranged.structuredContent.periods[0].creditsUsed, 123);
-  }
-  const beforeInvalid = fakeApi.requests.length;
-  for (const args of [
-    { timeRange: 'day', view: 'current' },
-    { timeRange: 'week', byApiKey: true },
-  ]) {
-    const invalid = await client.request('tools/call', {
-      name: 'firecrawl_credit_usage',
-      arguments: args,
-    });
-    assert.equal(invalid.isError, true);
-  }
-  await assert.rejects(client.request('tools/call', { name: 'firecrawl_credit_usage', arguments: {timeRange:'year'} }), /parameter validation failed/);
-  assert.equal(
-    fakeApi.requests.length,
-    beforeInvalid,
-    'Invalid ranges are rejected before HTTP'
-  );
-
   const contradictory = await client.request('tools/call', {
     arguments: { byApiKey: true, view: 'current' },
     name: 'firecrawl_credit_usage',
@@ -1617,7 +1538,6 @@ test('credit usage tool exposes current balance and both historical request shap
     '/v2/team/credit-usage',
     '/v2/team/credit-usage/historical',
     '/v2/team/credit-usage/historical?byApiKey=true',
-    ...['day', 'week', 'month'].map(range => '/v2/team/credit-usage/historical?timeRange=' + range),
   ]) {
     const request = fakeApi.requests.find((candidate) => candidate.url === path);
     assert.ok(request, path);
@@ -4936,28 +4856,4 @@ test('firecrawl_agent continues a thread', async (t) => {
   assert.equal(structured.mode, 'chat');
   assert.equal(structured.message, 'Kept the 2 founders.');
   assert.deepEqual(structured.suggestions, [{ label: 'Only founders', prompt: 'Only keep the founders' }]);
-});
-
-
-test('rolling credit usage rejects an API that ignores the requested range', async (t) => {
-  const fakeApi = await startFakeFirecrawlApi();
-  t.after(() => fakeApi.close());
-  const child = spawnServer({
-    FIRECRAWL_API_KEY: 'fc-legacy-ranges-test',
-    FIRECRAWL_API_URL: fakeApi.url,
-  });
-  t.after(() => stopChild(child));
-  const client = new StdioMcpClient(child);
-  await client.request('initialize', {
-    capabilities: {},
-    clientInfo: { name: 'usage-range-compatibility', version: '1' },
-    protocolVersion: '2025-06-18',
-  });
-  client.notify('notifications/initialized');
-  const result = await client.request('tools/call', {
-    name: 'firecrawl_credit_usage',
-    arguments: { timeRange: 'day' },
-  });
-  assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /Rolling usage is not available/);
 });

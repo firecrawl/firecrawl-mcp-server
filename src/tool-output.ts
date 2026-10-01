@@ -467,15 +467,6 @@ export const creditUsageOutputSchema = z
     // Historical view.
     success,
     error,
-    window: z
-      .object({
-        timeRange: z.enum(['day', 'week', 'month']),
-        binSize: z.enum(['hour', 'day']),
-        startDate: z.string(),
-        endDate: z.string(),
-      })
-      .optional()
-      .describe('Exact UTC bounds of a rolling historical range.'),
     periods: unknown('Historical periods sorted by start date, each with `startDate`, `endDate`, `creditsUsed`, and `apiKey` when broken down by key.'),
   })
   .describe('The team credit balance, or historical credit consumption by period.');

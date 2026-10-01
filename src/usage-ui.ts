@@ -23,7 +23,7 @@ export function registerUsageDashboard(
     uri: resourceUri,
     name: 'Firecrawl usage dashboard',
     description:
-      'Alexandria provider browser, account credit balance, and usage over the last day, week, or month in the Firecrawl design system.',
+      'Alexandria provider browser, account credit balance, and monthly usage in the Firecrawl design system.',
     mimeType: 'text/html;profile=mcp-app',
     load: async () => ({
       text: await readFile(new URL('./usage.html', import.meta.url), 'utf8'),
@@ -33,7 +33,7 @@ export function registerUsageDashboard(
           csp: { connectDomains: [], resourceDomains: [] },
         },
         'openai/widgetDescription':
-          'Browse Alexandria providers, select their tools for the native chat composer, and view Firecrawl account credits and usage over the last day, week, or month.',
+          'Browse Alexandria providers, select their tools for the native chat composer, and view Firecrawl account credits and monthly usage.',
         'openai/widgetCSP': {
           redirect_domains: ['https://www.firecrawl.dev'],
         },
@@ -55,7 +55,7 @@ export function registerUsageDashboard(
       },
     ],
     description:
-      'Open the Firecrawl sidebar app to browse Alexandria providers, select tools for a chat, and see credits remaining, plan credits, billing dates, and credit usage over the last day, week, or month. Requires a connected Firecrawl account. Use firecrawl_credit_usage for data-only reporting.',
+      'Open the Firecrawl sidebar app to browse Alexandria providers, select tools for a chat, and see credits remaining, plan credits, billing dates, and monthly credit usage. Requires a connected Firecrawl account. Use firecrawl_credit_usage for data-only reporting.',
     annotations: {
       title: 'Firecrawl usage',
       readOnlyHint: true,

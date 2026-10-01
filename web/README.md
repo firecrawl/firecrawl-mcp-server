@@ -35,9 +35,9 @@ Providers and Usage share the same 1120px app width.
 `usage.tsx` uses the standard MCP Apps SDK bridge for initialization, theme changes,
 read-only tool calls, and external links. All balance and usage data comes from
 `firecrawl_credit_usage`, using the host's authenticated server connection.
-Rolling usage is not inferred from the current balance or plan allowance.
+Calendar-month usage is not inferred from the current balance or plan allowance.
 A failed refresh clears the affected values; another section can still succeed.
-The first and last chart bars can be partial because ranges end at the request time.
+The earliest month can be partial because the API returns recent history.
 
 `pnpm build` generates one self-contained `dist/usage.html`, including an initial Providers shell, fonts,
 styles, React, and the SDK. `pnpm typecheck:ui` checks the browser source.
@@ -111,4 +111,4 @@ are omitted. Successful responses are accepted based on MIME type and size; the 
 transient failures. Firecrawl and Data Legion use the same brand overrides as
 firecrawl-web. No credentials enter the generated JSON or HTML.
 
-Usage ranges are rolling windows: Day is the last 24 hours with hourly bars, Week is the last 7 days, and Month is the last 30 days with daily bars. Labels use UTC and edge bars may be partial. Usage is loaded when its tab opens; range changes fetch only history. The Core API must support `timeRange` on `/v2/team/credit-usage/historical`; older responses are rejected rather than displayed under an incorrect range.
+Balance and monthly history are loaded when the Usage tab first opens. Refresh updates both independently; opening Providers does not immediately repeat the launcher's balance request.

@@ -420,21 +420,20 @@ async function verify() {
     );
   };
   for (const [mode, remaining, columns, balanceError, historyError] of [
-    ['normal', '8,750', 31, false, false],
-    ['extra', '1,250', 31, false, false],
-    ['zero', '0', 31, false, false],
+    ['normal', '8,750', 3, false, false],
+    ['extra', '1,250', 3, false, false],
+    ['zero', '0', 3, false, false],
     ['empty', '8,750', 0, false, false],
-    ['metadata', '8,750', 31, false, false],
-    ['balance-error', '—', 31, true, false],
+    ['metadata', '8,750', 3, false, false],
+    ['balance-error', '—', 3, true, false],
     ['history-error', '8,750', 0, false, true],
-    ['legacy-history', '8,750', 0, false, true],
     ['error', '—', 0, true, true],
   ]) {
     await usageMode(mode);
     check(get('remaining').textContent === remaining, mode + ' balance');
     check(
-      get('history').querySelectorAll('.period').length === columns,
-      mode + ' rolling month usage'
+      get('history').querySelectorAll('.month').length === columns,
+      mode + ' monthly usage'
     );
     check(
       get('balance-error').hidden === !balanceError,
@@ -466,87 +465,6 @@ async function verify() {
       );
   }
   await usageMode('normal');
-  const balanceCalls = () =>
-    window.calls.filter(
-      (c) =>
-        c.name === 'firecrawl_credit_usage' && c.arguments.view === 'current'
-    ).length;
-  const originalBalanceCalls = balanceCalls();
-  for (const [range, columns, total, label] of [
-    ['day', 25, '3,250', 'Last 24 hours'],
-    ['week', 8, '720', 'Last 7 days'],
-    ['month', 31, '14,880', 'Last 30 days'],
-  ]) {
-    get(`usage-${range}-tab`).click();
-    await wait(
-      () =>
-        get(`usage-${range}-tab`).getAttribute('aria-selected') === 'true' &&
-        get('usage-section').getAttribute('aria-busy') === 'false',
-      range + ' range'
-    );
-    check(
-      get(`usage-${range}-tab`).getAttribute('aria-selected') === 'true',
-      range + ' selected'
-    );
-    check(
-      get('history').querySelectorAll('.period').length === columns &&
-        get('usage-total').textContent.includes(total),
-      range + ' bins and total'
-    );
-    check(
-      get('usage-section').textContent.includes(label),
-      range + ' range label'
-    );
-    check(
-      window.calls.some((c) => c.arguments.timeRange === range),
-      range + ' passed to MCP'
-    );
-  }
-  check(
-    balanceCalls() === originalBalanceCalls,
-    'Range changes do not fetch balance again'
-  );
-  get('usage-month-tab').focus();
-  get('usage-month-tab').dispatchEvent(
-    new KeyboardEvent('keydown', { key: 'Home', bubbles: true })
-  );
-  await wait(() => get('usage-section').getAttribute('aria-busy') === 'false');
-  check(
-    doc().activeElement === get('usage-day-tab') &&
-      get('usage-day-tab').getAttribute('aria-selected') === 'true',
-    'Range tabs support keyboard navigation'
-  );
-  await usageMode('history-slow');
-  get('usage-day-tab').click();
-  get('usage-week-tab').click();
-  await wait(() => get('usage-section').getAttribute('aria-busy') === 'false');
-  await new Promise((resolve) => setTimeout(resolve, 900));
-  check(
-    get('usage-week-tab').getAttribute('aria-selected') === 'true' &&
-      get('history').querySelectorAll('.period').length === 8 &&
-      get('usage-total').textContent.includes('720'),
-    'Slow old range cannot overwrite current range'
-  );
-  document.getElementById('scenario').value = 'history-error';
-  get('usage-day-tab').click();
-  await wait(() => !get('history-error').hidden);
-  check(
-    get('remaining').textContent === '8,750' &&
-      !get('history').querySelector('.period'),
-    'Range error clears the old chart without clearing balance'
-  );
-  document.getElementById('scenario').value = 'normal';
-  get('usage-month-tab').click();
-  await wait(
-    () =>
-      get('usage-month-tab').getAttribute('aria-selected') === 'true' &&
-      get('usage-section').getAttribute('aria-busy') === 'false'
-  );
-  check(
-    get('history-error').hidden &&
-      get('history').querySelectorAll('.period').length === 31,
-    'Range switching recovers from errors'
-  );
   await usageMode('normal');
   document.getElementById('scenario').value = 'error';
   get('refresh').click();
@@ -556,7 +474,7 @@ async function verify() {
   );
   check(
     get('remaining').textContent === '—' &&
-      !get('history').querySelector('.period'),
+      !get('history').querySelector('.month'),
     'Failed refresh clears stale data'
   );
   document.getElementById('scenario').value = 'normal';
@@ -568,7 +486,11 @@ async function verify() {
   const previousWidth = document.getElementById('width').value;
   document.getElementById('width').value = '320';
   document.getElementById('width').dispatchEvent(new Event('change'));
-  check(get('usage-section').scrollWidth <= get('usage-section').clientWidth && get('history').scrollWidth <= get('history').clientWidth, 'Rolling chart fits narrow screens');
+  check(
+    get('usage-section').scrollWidth <= get('usage-section').clientWidth &&
+      get('history').scrollWidth <= get('history').clientWidth,
+    'Monthly chart fits narrow screens'
+  );
   document.getElementById('width').value = previousWidth;
   document.getElementById('width').dispatchEvent(new Event('change'));
   get('open-dashboard').click();
@@ -658,7 +580,6 @@ async function verify() {
   return {
     passed: true,
     checks: [
-      'rolling usage ranges, independent balance, keyboard navigation, stale responses and recovery',
       'zero-tool and empty-tool providers',
       'reversed category responses',
       'providers opens by default',
