@@ -1476,6 +1476,11 @@ test('credit usage tool exposes current balance and both historical request shap
   assert.deepEqual(loaded.contents[0]._meta.ui.csp, {
     connectDomains: [], resourceDomains: [],
   });
+  assert.equal(loaded.contents[0]._meta.ui.domain, 'https://mcp.firecrawl.dev');
+  assert.deepEqual(loaded.contents[0]._meta['openai/widgetCSP'], {
+    redirect_domains: ['https://www.firecrawl.dev'],
+  });
+  assert.match(loaded.contents[0]._meta['openai/widgetDescription'], /Alexandria.*composer.*credits/);
   assert.deepEqual(loaded.contents[0]._meta['openai/ui'], {
     preferredDisplayMode: 'fullscreen',
     availableDisplayModes: ['fullscreen'],

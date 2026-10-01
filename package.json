@@ -26,7 +26,8 @@
     "publish-prod": "npm run build && npm publish",
     "publish-beta": "npm run build && npm publish --tag beta",
     "typecheck:ui": "tsc -p web/tsconfig.json",
-    "preview:usage": "npm run build && node scripts/preview-usage-ui.mjs"
+    "preview:usage": "npm run build && node scripts/preview-usage-ui.mjs",
+    "plugin:prepare:openai": "node scripts/prepare-openai-plugin.mjs"
   },
   "license": "MIT",
   "dependencies": {

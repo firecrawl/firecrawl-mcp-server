@@ -32,5 +32,5 @@ await writeFile(new URL('dist/usage.html', root), html);
 // MCP launcher icons must travel in tools/list, independently of package logos.
 await writeFile(
   new URL('dist/firecrawl-sidebar.svg', root),
-  await read('plugins/openai/firecrawl-usage-dev/assets/firecrawl.svg')
+  await read('plugins/openai/app-6a314a73f8ac819195b0d55e36b9c609/assets/firecrawl.svg')
 );

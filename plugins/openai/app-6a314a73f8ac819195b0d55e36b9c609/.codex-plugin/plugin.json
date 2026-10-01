@@ -3,24 +3,28 @@
   "author": {
     "name": "SideGuide Technologies, Inc."
   },
-  "description": "Firecrawl helps users search the web, extract page and document content, discover structured data providers, and research developer documentation and scientific papers. It also supports browser interactions, multi-page crawls, structured research jobs, website change monitoring, and account credit-usage checks.",
+  "description": "Search the web and access data providers and specialized indexes through Alexandria. Research companies, compare products, and find the data you need for your work. Access any page into clean content, and explore scientific papers and code repositories from your conversation.",
   "interface": {
-    "capabilities": ["Read", "Write"],
+    "capabilities": [],
     "category": "Productivity",
     "defaultPrompt": [
-      "Find current sources for a topic and summarize them",
-      "Read a webpage and extract its main points",
-      "Find research papers and verify their key claims"
+      "Search the web for this week's biggest AI announcements and link to the original sources.",
+      "Scrape Stripe's API changelog and summarize the changes from the last 30 days.",
+      "Find sources in Alexandria for US inflation data and pull the latest available figures."
     ],
     "developerName": "SideGuide Technologies, Inc.",
     "displayName": "Firecrawl",
-    "longDescription": "Firecrawl helps users search the web, extract page and document content, discover structured data providers, and research developer documentation and scientific papers. It also supports browser interactions, multi-page crawls, structured research jobs, website change monitoring, and account credit-usage checks.",
+    "longDescription": "Search the web and access data providers and specialized indexes through Alexandria. Research companies, compare products, and find the data you need for your work. Access any page into clean content, and explore scientific papers and code repositories from your conversation.",
     "privacyPolicyURL": "https://www.firecrawl.dev/privacy-policy",
-    "shortDescription": "Search and extract web data",
+    "shortDescription": "Search and access more data",
+    "supportURL": "https://www.firecrawl.dev/support",
     "termsOfServiceURL": "https://www.firecrawl.dev/terms-of-service",
-    "websiteURL": "https://firecrawl.dev"
+    "websiteURL": "https://firecrawl.dev",
+    "logo": "./assets/firecrawl.svg",
+    "composerIcon": "./assets/firecrawl.svg",
+    "brandColor": "#fa5d19"
   },
   "name": "app-6a314a73f8ac819195b0d55e36b9c609",
   "skills": "./skills",
-  "version": "2.1.1"
+  "version": "2.2.1"
 }

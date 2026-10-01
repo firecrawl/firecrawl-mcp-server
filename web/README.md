@@ -80,6 +80,9 @@ With that preview running, execute `node scripts/verify-usage-preview.mjs`
 filter races, mixed provider/tool selection, contracts, retries, context
 replacement and clearing, and unsupported host capabilities. This uses
 `agent-browser`.
+The same suite checks normal/empty/zero/extra-credit usage, missing billing
+metadata, partial failures, refresh recovery, the production dashboard link,
+consistent tab widths, mobile overflow, and light/dark modal backdrops.
 
 Provider logos follow `components/shared/provider-logo.tsx` and the exchange
 provider card: a 24px image in the existing 40px mark, with a white surface and

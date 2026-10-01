@@ -296,6 +296,74 @@ async function verify() {
     window.modelContexts.length === 0,
     'Unsupported hosts never receive context writes'
   );
+
+  const usageMode = async (mode) => {
+    document.getElementById('scenario').value = mode;
+    const previous = doc();
+    document.getElementById('reload').click();
+    await wait(
+      () => doc() !== previous && get('balance-section')?.getAttribute('aria-busy') === 'false',
+      'usage scenario ' + mode
+    );
+  };
+  for (const [mode, remaining, columns, balanceError, historyError] of [
+    ['normal', '8,750', 3, false, false],
+    ['extra', '1,250', 3, false, false],
+    ['zero', '0', 3, false, false],
+    ['empty', '8,750', 0, false, false],
+    ['metadata', '8,750', 3, false, false],
+    ['balance-error', '—', 3, true, false],
+    ['history-error', '8,750', 0, false, true],
+    ['error', '—', 0, true, true],
+  ]) {
+    await usageMode(mode);
+    check(get('remaining').textContent === remaining, mode + ' balance');
+    check(get('history').querySelectorAll('.month').length === columns, mode + ' monthly usage');
+    check(get('balance-error').hidden === !balanceError, mode + ' balance error');
+    check(get('history-error').hidden === !historyError, mode + ' history error');
+    if (mode === 'extra') check(get('plan').textContent === '1,000', 'Top-ups do not inflate plan allowance');
+    if (mode === 'zero') check(get('history').querySelectorAll('.bar[hidden]').length === 1, 'Zero usage has no filled bar');
+    if (mode === 'empty') check(get('history').textContent.includes('No usage history yet'), 'Empty history');
+    if (mode === 'metadata') check(get('billing').textContent === 'Unavailable', 'Missing billing dates');
+  }
+  await usageMode('normal');
+  document.getElementById('scenario').value = 'error';
+  get('refresh').click();
+  await wait(() => !get('balance-error').hidden && !get('history-error').hidden, 'failed refresh');
+  check(get('remaining').textContent === '—' && !get('history').querySelector('.month'), 'Failed refresh clears stale data');
+  document.getElementById('scenario').value = 'normal';
+  get('refresh').click();
+  await wait(() => get('remaining').textContent === '8,750', 'refresh recovery');
+  get('open-dashboard').click();
+  await wait(() => window.lastOpenedUrl, 'dashboard link');
+  check(window.lastOpenedUrl === 'https://www.firecrawl.dev/app/usage', 'Production dashboard destination');
+  const usageWidth = doc().querySelector('.dashboard').getBoundingClientRect().width;
+  get('providers-tab').click();
+  await wait(() => get('provider-count').textContent === '6 providers', 'providers for visual checks');
+  check(doc().querySelector('.dashboard').getBoundingClientRect().width === usageWidth, 'Consistent Providers and Usage width');
+  inspect('allbirds-com');
+  await wait(() => get('provider-dialog').open, 'provider modal');
+  for (const mode of ['dark', 'light']) {
+    const control = document.getElementById('theme');
+    control.value = mode;
+    control.dispatchEvent(new Event('change'));
+    await wait(() => doc().documentElement.dataset.theme === mode, 'live theme change');
+    const style = doc().defaultView.getComputedStyle(get('provider-dialog'), '::backdrop');
+    const canvas = doc().createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const context = canvas.getContext('2d');
+    context.fillStyle = style.backgroundColor;
+    context.fillRect(0, 0, 1, 1);
+    const [red, , , alpha] = context.getImageData(0, 0, 1, 1).data;
+    check(mode === 'dark' ? red < 30 : red > 230, mode + ' modal backdrop');
+    check(alpha > 195 && alpha < 210 && style.backdropFilter === 'blur(12px)', 'Firecrawl modal overlay');
+  }
+  get('close-provider-dialog').click();
+  document.getElementById('width').value = '320';
+  document.getElementById('width').dispatchEvent(new Event('change'));
+  check(doc().documentElement.scrollWidth <= 320, 'No horizontal page overflow on mobile');
+  get('usage-tab').click();
+  check(doc().documentElement.scrollWidth <= 320, 'Usage fits mobile width');
   safeCalls();
   check(window.previewErrors.length === 0, 'No preview JavaScript errors');
   return {
@@ -311,6 +379,11 @@ async function verify() {
       'host capability gates',
       'no message or paid execution',
       'no custom chatbox or sticky tray',
+      'all usage states and partial failures',
+      'refresh clearing and recovery',
+      'production dashboard link',
+      'consistent tab widths and mobile layout',
+      'live theme changes and modal backdrops',
     ],
   };
 }

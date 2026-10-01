@@ -27,7 +27,15 @@ export function registerUsageDashboard(
     load: async () => ({
       text: await readFile(new URL('./usage.html', import.meta.url), 'utf8'),
       _meta: {
-        ui: { csp: { connectDomains: [], resourceDomains: [] } },
+        ui: {
+          domain: 'https://mcp.firecrawl.dev',
+          csp: { connectDomains: [], resourceDomains: [] },
+        },
+        'openai/widgetDescription':
+          'Browse Alexandria providers, select their tools for the native chat composer, and view Firecrawl account credits and monthly usage.',
+        'openai/widgetCSP': {
+          redirect_domains: ['https://www.firecrawl.dev'],
+        },
         'openai/ui': {
           preferredDisplayMode: 'fullscreen',
           availableDisplayModes: ['fullscreen'],
