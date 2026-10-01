@@ -405,8 +405,12 @@ async function verify() {
     document.getElementById('scenario').value = mode;
     const previous = doc();
     document.getElementById('reload').click();
+    // Catalog results confirm React is ready; the initial shell has inert tabs.
     await wait(
-      () => doc() !== previous && get('usage-tab'),
+      () =>
+        doc() !== previous &&
+        get('usage-tab') &&
+        get('provider-count')?.textContent === '6 providers',
       'usage scenario ' + mode
     );
     get('usage-tab').click();
