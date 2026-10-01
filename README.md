@@ -515,9 +515,9 @@ For scientific papers, see [Research Tools](#12-research-tools-firecrawl_researc
 
 ### 3b. Search Feedback Tool (`firecrawl_search_feedback`)
 
-This authenticated tool sends structured feedback on a previous `firecrawl_search` result. Its request fields, eligibility, and refund policy are unchanged. It is idempotent per search ID. Keyless callers must use `firecrawl_feedback`; this legacy tool does not accept keyless jobs.
+Sends structured feedback on a previous `firecrawl_search` result. The first feedback per search id refunds 1 credit and improves Firecrawl's search quality. Idempotent per search id.
 
-Feedback is optional. If submitting, use only observations already available after processing the results; no user interview or additional investigation is required.
+**Call this after every search you actually use** (or that didn't help). Bad/partial feedback with `missingContent` is just as valuable as good feedback.
 
 **Opt out:** set `FIRECRAWL_NO_SEARCH_FEEDBACK=1` (or `FIRECRAWL_DISABLE_SEARCH_FEEDBACK=1`) in the environment when starting the MCP server. The `firecrawl_search_feedback` tool will not be registered, so agents can't call it. Team admins can also disable feedback server-side; in that case the tool is registered but always returns `feedbackErrorCode: "TEAM_OPTED_OUT"`.
 
@@ -558,7 +558,7 @@ Feedback is optional. If submitting, use only observations already available aft
 ### 3c. Generic Feedback Tool (`firecrawl_feedback`)
 
 Sends evidence through `/v2/feedback`. Feedback on keyless Search, Scrape, and
-Parse jobs is optional and helps improve Firecrawl when a result is wrong, incomplete, blocked, or an error. These jobs require `endpoint`, `jobId`, `rating`, `task`, `assessment`, and 1-20
+Parse jobs is optional. Consider submitting feedback through `firecrawl_feedback`, especially if this result is wrong, incomplete, blocked, or an error. Include specific evidence to help improve Firecrawl. These jobs require `endpoint`, `jobId`, `rating`, `task`, `assessment`, and 1-20
 `observations`. Each observation has `kind`, `detail`, and `basis`: `output`,
 `source_comparison`, or `expectation`. Source comparisons also require
 `comparison: {reference, detail}`.
@@ -630,7 +630,7 @@ Reason definitions:
 - proxy_error: The operation explicitly reported a proxy failure.
 - other: Another operation failure was reported; describe the returned error without guessing its cause.
 
-**Authenticated feedback preference:** set `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` (or `FIRECRAWL_DISABLE_ENDPOINT_FEEDBACK=1`) to hide `firecrawl_feedback` from authenticated sessions. Keyless sessions retain the tool and server-issued invitations regardless of these flags. The API includes a pointer on every eligible keyless job response. Feedback is requested in exchange for free keyless access; continued keyless access does not depend on it.
+**Authenticated feedback preference:** set `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` (or `FIRECRAWL_DISABLE_ENDPOINT_FEEDBACK=1`) to hide `firecrawl_feedback` from authenticated sessions. Keyless sessions retain the tool and server-issued invitations regardless of these flags. The API includes a pointer on every eligible keyless job response. Feedback is optional; continued keyless access does not depend on it.
 
 **Authenticated usage example:**
 

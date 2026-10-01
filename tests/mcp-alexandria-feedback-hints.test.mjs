@@ -23,7 +23,7 @@ test('Alexandria selection metadata omits feedback workflow', async (t) => {
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
   assert(byName.has('firecrawl_feedback'));
   for (const name of ['firecrawl_scrape', 'firecrawl_find_tools', 'firecrawl_search']) {
-    assert.doesNotMatch(byName.get(name).description, /firecrawl_feedback|feedbackTool|Alexandria quality feedback/i, name);
+    assert.doesNotMatch(byName.get(name).description, /feedbackTool|Alexandria quality feedback/i, name);
   }
 });
 

@@ -787,7 +787,7 @@ async function authenticateRequest(
       'No FIRECRAWL_API_KEY or FIRECRAWL_API_URL set. Running in keyless mode. ' +
         'firecrawl_scrape and firecrawl_search use the Firecrawl cloud with usage limits. ' +
         'Local firecrawl_parse requires FIRECRAWL_API_URL to be explicitly configured before reading or uploading files. ' +
-        'If a keyless result is wrong, incomplete, blocked, or an error, optional feedback via firecrawl_feedback helps improve Firecrawl. ' +
+        'Consider submitting feedback through firecrawl_feedback, especially if a keyless result is wrong, incomplete, blocked, or an error. Include specific evidence to help improve Firecrawl. ' +
         'Other tools require an API key (get one free at https://firecrawl.dev).'
     );
   }
@@ -2706,7 +2706,7 @@ const scrapeTool: RegisteredTool = {
   description: `
 Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields. Use \`firecrawl_search\` when additional web sources are needed; on an authenticated session, \`firecrawl_map\` lists a site's URLs and \`firecrawl_crawl\` collects a set of pages.
 
-Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch or a smaller \`maxAge\` to bound staleness. A successful response does not by itself confirm the page is still current. Browser actions can change the live page when interactive actions are enabled. Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback.
+Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch or a smaller \`maxAge\` to bound staleness. A successful response does not by itself confirm the page is still current. Browser actions can change the live page when interactive actions are enabled. Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback. Keyless results include a job reference. Consider submitting feedback through firecrawl_feedback, especially if this result is wrong, incomplete, blocked, or an error. Include specific evidence to help improve Firecrawl.
 
 On an authenticated session with Alexandria access, \`firecrawl_search\` with \`sources\` unset and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching provider returns typed records in one call. Keyless sessions have no provider matches.
 
@@ -2834,7 +2834,7 @@ ${ALEXANDRIA_SEARCH_LEAD}
 
 On an authenticated session, tool matches describe available capabilities; \`firecrawl_find_tools\` returns their contracts and \`firecrawl_scrape\` with an \`alexandria\` body executes a selected capability. Keyless sessions get no Alexandria matches in data.tools.
 
-For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`. \`categories: ["research"]\` restricts web results to research-affiliated websites; the \`firecrawl_research_*\` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Query operators, domain filters, \`categories\`, \`toolDetail\` and \`scrapeOptions\` are described on their parameters. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
+For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`. \`categories: ["research"]\` restricts web results to research-affiliated websites; the \`firecrawl_research_*\` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Query operators, domain filters, \`categories\`, \`toolDetail\` and \`scrapeOptions\` are described on their parameters. Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback. Keyless results include a job reference. Consider submitting feedback through firecrawl_feedback, especially if this result is wrong, incomplete, blocked, or an error. Include specific evidence to help improve Firecrawl.
 `,
   outputSchema: searchOutputSchema,
   parameters: z
@@ -3563,13 +3563,13 @@ if (
       destructiveHint: false, // Additive only; submits ratings and notes, does not delete jobs or external content.
     },
     description: `
-Submit quality feedback for a search, scrape, parse, or map job. Authenticated callers can provide issue codes or small contextual fields with the endpoint, job ID, and rating. Omit large page contents and raw outputs.
+Submit job quality feedback through /v2/feedback. Authenticated jobs use existing issue/note fields. Omit full page contents and raw outputs.
 
 For an Alexandria session, set endpoint to \`alexandria\`, omit jobId, and provide requestedWebsite (url and requestedFunctionality), objective, rationale, and rating. objective is the underlying goal behind the session: what you or your user were ultimately trying to accomplish (for example, "shortlist federal IT contracts to bid on this quarter"), not only what was needed from this website. Optional providerFeedback and capabilityFeedback describe gaps or errors. Capability issues: new_capability_request (requires requestedFunctionality), missing_capability, insufficient_functionality, incorrect_result, execution_error, other. Alexandria feedback has no job-age deadline and no credit refund.
 
-Keyless Search, Scrape, and Parse feedback is optional and helps improve Firecrawl when a result is wrong, incomplete, blocked, or an error. It requires task, assessment, rating, and 1-20 observations. Task, assessment, and each detail contain 10-2000 characters. Each observation includes kind, detail, and basis: output, source_comparison, or expectation. A source_comparison also requires comparison: {reference, detail}. The observations parameter describes each category's fields and reason codes.
+Consider submitting keyless Search, Scrape, and Parse feedback, especially if this result is wrong, incomplete, blocked, or an error. Include specific evidence to help improve Firecrawl. It requires task, assessment, rating, and 1-20 observations. Task, assessment, and each detail contain 10-2000 characters. Each observation includes kind, detail, and basis: output, source_comparison, or expectation. A source_comparison also requires comparison: {reference, detail}. The observations parameter describes each category's fields and reason codes.
 
-Use only evidence already available. Do not guess missing content, diagnose causes, or investigate further. The stored keyless submission must fit within 8 KiB (8192 UTF-8 bytes), including server defaults and verification flags. Each job accepts one submission, and retrying returns the original feedback ID. Submission attempts are rate limited. Submit within 24 hours from the same caller IP. Contract and example: https://docs.firecrawl.dev/api-reference/endpoint/feedback. Feedback remains available after operation quota exhaustion and does not restore quota. Returns submission status and feedback ID. Authenticated feedback retains its existing fields.
+Use evidence already available; no extra investigation. The stored submission must fit within 8 KiB, including server defaults. Submit within 24 hours from the same caller IP. One submission per job; retries return the original feedback ID. Attempts are rate limited. Feedback remains available after operation quota exhaustion and does not consume or restore quota. Contract: https://docs.firecrawl.dev/api-reference/endpoint/feedback.
 `,
     outputSchema: feedbackOutputSchema,
     parameters: z.object({
@@ -3577,8 +3577,8 @@ Use only evidence already available. Do not guess missing content, diagnose caus
       jobId: z.string().uuid('jobId must be the UUID returned by Firecrawl').optional(),
       ...alexandriaFeedbackFields,
       rating: z.enum(['good', 'bad', 'partial']),
-      task: z.string().min(10).max(2000).optional(),
-      assessment: z.string().min(10).max(2000).optional(),
+      task: z.string().trim().min(10).max(2000).optional(),
+      assessment: z.string().trim().min(10).max(2000).optional(),
       docClass: z
         .enum(['born_digital', 'scanned', 'mixed', 'unknown'])
         .optional()
@@ -3670,7 +3670,7 @@ Use only evidence already available. Do not guess missing content, diagnose caus
         headers['Authorization'] = `Bearer ${credential}`;
       } else if (isHostedKeylessSession(session)) {
         if (!session?.keylessClientIp || !process.env.KEYLESS_PROXY_SECRET) {
-          return asText({
+          return structuredText({
             success: false,
             error: 'Feedback requires a trusted client identity.',
             retryable: false,
@@ -3737,7 +3737,11 @@ Use only evidence already available. Do not guess missing content, diagnose caus
           status: response.status,
           feedbackErrorCode: parsed?.feedbackErrorCode,
           error: parsed?.error ?? `HTTP ${response.status}`,
-          retryable: response.status >= 500,
+          retryable: response.status >= 500 || (!credential && response.status === 429),
+          ...(!credential ? {
+            details: parsed?.details,
+            retry_after_seconds: parsed?.retry_after_seconds,
+          } : {}),
           ...(readAgentHints(parsed)
             ? { agent_hints: readAgentHints(parsed) }
             : {}),
@@ -4250,7 +4254,7 @@ Parse one supported document into markdown, HTML, links, summary, targeted answe
 
 Local MCP requires an explicitly configured \`FIRECRAWL_API_URL\` before reading \`filePath\` from the server filesystem and uploading it. Parsing happens on that API server. Hosted MCP uses two calls: first provide \`filePath\` to receive upload instructions, upload locally, then call again with the returned \`uploadRef\`; do not send both fields together. Remote web URLs belong in \`firecrawl_scrape\`.
 
-Set \`redactPII\` to request redaction of personally identifiable information in the returned content. \`zeroDataRetention\` requires an eligible authenticated account; omit it for anonymous keyless use. Returns upload instructions for hosted phase one or parsed document content for the final call. Authenticated final responses can include a \`data.metadata.scrapeId\` for optional parse feedback.
+Set \`redactPII\` to request redaction of personally identifiable information in the returned content. \`zeroDataRetention\` requires an eligible authenticated account; omit it for anonymous keyless use. Returns upload instructions for hosted phase one or parsed document content for the final call. Authenticated final responses can include a \`data.metadata.scrapeId\` for optional parse feedback. Keyless results include a job reference. Consider submitting feedback through firecrawl_feedback, especially if this result is wrong, incomplete, blocked, or an error. Include specific evidence to help improve Firecrawl.
 `,
   outputSchema: parseOutputSchema,
   parameters: parseParamsSchema,

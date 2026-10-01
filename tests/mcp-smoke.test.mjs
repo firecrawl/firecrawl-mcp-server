@@ -1561,7 +1561,7 @@ test('local keyless stdio keeps profile guidance keyless-scoped and exposes shar
   const apiKeyGuidance = init.instructions.slice(apiKeyBoundaryIndex);
   assert.match(
     keylessGuidance,
-    /Keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits/i
+    /Keyless sessions expose firecrawl_search, firecrawl_scrape, firecrawl_parse, and firecrawl_feedback with usage limits/i
   );
   assert.match(
     keylessGuidance,
@@ -1574,7 +1574,7 @@ test('local keyless stdio keeps profile guidance keyless-scoped and exposes shar
   assert.match(keylessGuidance, /firecrawl_scrape retrieves one supplied page/i);
   assert.match(
     keylessGuidance,
-    /In local MCP, firecrawl_parse requires FIRECRAWL_API_URL.*before reading or uploading files.*Hosted MCP uses a two-phase upload flow/i
+    /Hosted firecrawl_parse.*two-phase upload flow.*Local firecrawl_parse requires FIRECRAWL_API_URL.*before reading or uploading files/i
   );
   assert.doesNotMatch(
     keylessGuidance,
@@ -4381,7 +4381,8 @@ test('hosted keyless feedback bypasses exhausted operation allowance and preserv
       assert.equal(result.success, status === 200);
       if (status !== 200) {
         assert.equal(result.feedbackErrorCode, body.feedbackErrorCode);
-        assert.equal(result.retryable, status >= 500);
+        assert.equal(result.retryable, status >= 500 || status === 429);
+        if (status === 429) assert.equal(result.retry_after_seconds, 60);
       }
       const submission = backend.requests.find(
         (req) => req.url === '/v2/feedback'
@@ -4493,11 +4494,10 @@ for (const disabled of [false, true]) {
         arguments: { query: 'retry behavior' },
       },
     });
-    assert.deepEqual(
-      JSON.parse(parseSseJson(await response.text()).result.content[0].text)
-        .metadata,
-      metadata
-    );
+    const result = parseSseJson(await response.text()).result;
+    assert.deepEqual(JSON.parse(result.content[0].text).metadata, metadata);
+    assert.deepEqual(result.structuredContent.metadata, metadata);
+    assert.equal(result.structuredContent.id, metadata.jobId);
     const call = backend.requests.find((req) => req.url === '/v2/search');
     assert.equal(
       call.headers['x-firecrawl-no-feedback'],
@@ -4687,6 +4687,8 @@ test('keyless Search failure preserves the feedback reference', async (t) => {
   const result = parseSseJson(await response.text()).result;
   assert.equal(result.isError, true);
   assert.deepEqual(result.structuredContent.metadata, metadata);
+});
+
 test('every listed tool declares an output schema and returns structured content', async (t) => {
   const fakeApi = await startFakeFirecrawlApi();
   t.after(() => fakeApi.close());
