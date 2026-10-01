@@ -37,7 +37,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Use `firecrawl_credit_usage` to check credits left or monthly consumption, optionally broken down by API key.
 - Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control — the session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
 
-This server lists 26 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding authenticated feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes 4 tools: `firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`, and `firecrawl_feedback`. The dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 8 tools (search, developer and research search, plus Alexandria catalogue lookup and execution).
+Authenticated sessions expose the full tool set. Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` hides the corresponding authenticated feedback tools. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes 4 tools: `firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`, and `firecrawl_feedback`. The dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 8 tools (search, developer and research search, plus Alexandria catalogue lookup and execution).
 
 ## Installation
 
@@ -578,57 +578,11 @@ job's authentication; adding credentials does not convert a keyless job.
 Keep feedback concise: use issue codes, tags, short notes, URLs, page numbers,
 and small metadata objects. Do not include raw scrape/parse outputs.
 
-**Keyless observation fields**
+Search observations identify delivered result positions or missing information. Scrape and Parse observations describe the requested output formats. Failed jobs use a `failure` observation based on the returned error. Parse additionally requires `docClass`: `born_digital`, `scanned`, `mixed`, or `unknown`.
 
-Search: useful and irrelevant require a one-based position within the delivered group. source names the response group the position refers to: web, images, or news. It is required for multi-source jobs. Omission defaults to web, so images-only and news-only jobs must explicitly name their source. The position must exist in that requested group. irrelevant requires reason: aggregator_over_official, off_topic, stale, wrong_content_type, snippet_misleading, or blocked_or_paywalled. vertical is required on missing and optional on useful/irrelevant: web_general, social, business, research, developer, news, government, finance, or other. missing may include topic (up to 200 characters). missing and irrelevant may include knownSources (up to 20 HTTP(S) URLs): where absent content lives or the source that should have ranked instead. Unmentioned results are unassessed; a full ranking is not required. Do not submit engine attribution.
+Task, assessment, and observation detail each require 10-2000 characters after trimming whitespace. Stored keyless feedback must fit within 8 KiB, including server defaults and verification flags. Submit from the same caller IP; attempts are rate limited.
 
-Scrape: kind correct, wrong_success, incomplete, or incorrect. wrong_success requires reason: blocked_shell, login_required, paywall, empty, wrong_page, stale, or wrong_locale. incomplete requires reason: partial_content, dynamic_content, pagination, main_content_stripped, or format_lost. incorrect requires reason: wrong, hallucinated, or missing_fields. correct has no reason. Optional location is up to 200 characters. No retryOutcome. hallucinated applies only to json, deterministicJson, summary, question, highlights, and changeTracking in json mode; missing_fields applies only to json and deterministicJson. For incomplete and incorrect, prefer source_comparison when the source is already available.
-
-Parse: docClass is required once per submission: born_digital, scanned, mixed, or unknown. Observation kind: correct, text_ocr, table, formula, chart_figure, reading_order, headers_footers, headings_formatting, completeness, images_dropped, or incorrect. text_ocr requires reason: misread_chars, garbled, or missing_text. table requires reason: structure, cells_glued, or digits. completeness requires reason: pages_missing, truncated_at_max_pages, or sections_dropped. incorrect requires reason: wrong, hallucinated, or missing_fields. Other kinds have no reason subtype. Optional page is a one-based positive integer. incorrect applies to json and summary outputs. For text_ocr and table, include the correct text or cell values in comparison.detail when already known. Parse feedback does not automatically retain the document, extracted output, page images, or layout blocks; submitted observations and corrections are retained.
-
-Scrape and Parse observations other than failure: format must be a format type the job requested. It is required for output and source_comparison observations when multiple formats were requested; optional for expectation observations and single-format jobs. All observations retain detail and basis; source_comparison requires comparison: {reference, detail}. comparison.detail contains the correct content from the inspected source.
-
-Failed Search, Scrape, or Parse jobs: use kind failure with reason timeout, transport_error, proxy_error, or other. Accepted only for a failed job. Include detail and basis; do not supply position, source, format, location, or page. Parse still requires docClass (unknown is allowed).
-
-The stored keyless submission must fit within 8 KiB (8192 UTF-8 bytes), including server defaults and verification flags. Each job accepts one submission, and retrying returns the original feedback ID. Submission attempts are rate limited. Submit within 24 hours from the same caller IP. Contract and example: https://docs.firecrawl.dev/api-reference/endpoint/feedback.
-
-If the saved Search response is unavailable, otherwise valid observations are accepted and stored with metadata.unverified: true because their positions could not be checked. Job ownership and requested sources are still checked. Available results must contain every referenced position.
-
-Reason definitions:
-
-- aggregator_over_official: An intermediary was returned where the task needed an available official or primary source.
-- off_topic: The result addresses a different topic from the task.
-- stale: The content is outdated for the time or version the task requires.
-- wrong_content_type: The destination has the wrong content type for the task, such as a discussion instead of a reference.
-- snippet_misleading: The returned description misrepresents source content already inspected.
-- blocked_or_paywalled: Access to the destination was observed to be blocked or require a subscription; do not infer this from its URL or snippet.
-- blocked_shell: The successful response contains a bot challenge or access-blocking shell instead of the requested content.
-- login_required: The successful response contains a login requirement instead of the requested content.
-- paywall: The successful response contains a subscription barrier instead of the requested content.
-- empty: The successful response contains no meaningful requested content.
-- wrong_page: The successful response contains a different page or resource.
-- wrong_locale: The response uses the wrong language or region for the task.
-- partial_content: Only part of the expected content was returned, without a more specific known cause.
-- dynamic_content: Content loaded by client-side rendering or interaction is missing.
-- pagination: Expected content on additional pages is missing.
-- main_content_stripped: Content filtering removed requested primary content.
-- format_lost: Text is present, but meaningful structure such as headings, lists, or code formatting was lost.
-- wrong: Returned facts or values conflict with the inspected source.
-- hallucinated: The output asserts content unsupported by the inspected source.
-- missing_fields: Requested fields are absent from the structured output.
-- misread_chars: Characters were recognized incorrectly.
-- garbled: Extracted text is corrupted or unreadable.
-- missing_text: Visible source text was omitted.
-- structure: Table rows, columns, or header relationships were reconstructed incorrectly.
-- cells_glued: Distinct table cells were merged.
-- digits: Numeric table values were recognized incorrectly.
-- pages_missing: Source pages are absent from the output.
-- truncated_at_max_pages: Extraction ended at the configured page limit; this does not by itself imply a parser error.
-- sections_dropped: Sections within processed pages were omitted.
-- timeout: The operation explicitly reported a timeout.
-- transport_error: The operation explicitly reported a network, connection, or TLS failure.
-- proxy_error: The operation explicitly reported a proxy failure.
-- other: Another operation failure was reported; describe the returned error without guessing its cause.
+The tool's `observations` parameter lists the endpoint-specific categories, fields, and reason codes. See the [API feedback contract](https://docs.firecrawl.dev/api-reference/endpoint/feedback) for examples, format constraints, and Parse retention behavior.
 
 **Authenticated feedback preference:** set `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` (or `FIRECRAWL_DISABLE_ENDPOINT_FEEDBACK=1`) to hide `firecrawl_feedback` from authenticated sessions. Keyless sessions retain the tool and server-issued invitations regardless of these flags. The API includes a pointer on every eligible keyless job response. Feedback is optional; continued keyless access does not depend on it.
 

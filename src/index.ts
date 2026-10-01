@@ -1292,7 +1292,7 @@ const openAiAppsChallengeToken = normalizeHeader(
 
 const FULL_PROFILE_INSTRUCTIONS =
   `Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. Authenticated firecrawl_search returns web results together with matching Alexandria providers in data.tools. ${ALEXANDRIA_CATALOGUE_SENTENCE} A matching provider can return the same fields across several entities, provenance, exact figures or timestamps, or a large set of records through firecrawl_scrape with its published contract. If web results already answer the question, use them. For the same fields across multiple pages, firecrawl_find_tools offers free provider discovery. Use firecrawl_find_tools to read a contract that was not returned in full or to browse the catalogue by category. ${ALEXANDRIA_SOURCES_OPT_OUT} If no provider fits, continue with web search or firecrawl_agent. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question (code behaviour, a library or framework, an API contract, an error message, or a known bug), firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of public repositories, GitHub issues, merged pull requests, READMEs, and code documentation. firecrawl_search with sources: [{type: "alexandria"}] returns compact tool summaries in data.tools; toolDetail: "full" includes contracts, firecrawl_find_tools starts with categories, lists providers, then compact tools, and expands the selected full contract, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities and returns their results. Alexandria access needs an API key on a team with it enabled. Provide only the required inputs and account for stated network or external side effects.`;
-const KEYLESS_PROFILE_INSTRUCTIONS = `Keyless sessions expose firecrawl_search, firecrawl_scrape, firecrawl_parse, and firecrawl_feedback with usage limits. Consider submitting feedback through firecrawl_feedback, especially if this result is wrong, incomplete, blocked, or an error. Include specific evidence to help improve Firecrawl. Feedback does not consume operation quota. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. Hosted firecrawl_parse processes supported local files through its two-phase upload flow. Local firecrawl_parse requires FIRECRAWL_API_URL to be explicitly configured before reading or uploading files. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index and repository research, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.`;
+const KEYLESS_PROFILE_INSTRUCTIONS = `Keyless sessions can use firecrawl_search, firecrawl_scrape, firecrawl_parse, and firecrawl_feedback with usage limits. Consider submitting feedback through firecrawl_feedback, especially if this result is wrong, incomplete, blocked, or an error. Include specific evidence to help improve Firecrawl. Feedback does not consume operation quota. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. Hosted firecrawl_parse processes supported local files through its two-phase upload flow. Local firecrawl_parse requires FIRECRAWL_API_URL to be explicitly configured before reading or uploading files. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index and repository research, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.`;
 
 // The search surface exposes web/developer/research search plus the two Alexandria
 // tools (catalogue lookup and provider execution). Its instructions
@@ -1576,6 +1576,13 @@ async function runWithCredentialRecovery<T>(
     // different fault and keeps its own reconnect guidance; a keyless session
     // never sent an account credential at all.
     if (session?.authType !== 'api-key' || !isCoreCredentialRejection(error)) {
+      // Job failures already expose the full API envelope in text and extras.
+      if (!hasCredential(session) && error instanceof UserError) {
+        const metadata = error.extras?.metadata;
+        if (metadata && typeof metadata === 'object' && 'jobId' in metadata) {
+          throw error;
+        }
+      }
       const hints = readErrorAgentHints(error);
       if (hints) {
         const message = error instanceof Error ? error.message : String(error);
@@ -3172,7 +3179,7 @@ async function keylessPost(
     body: JSON.stringify(body),
   });
   const json: any = await response.json().catch(() => ({}));
-  if (!response.ok) {
+  if (!response.ok || json?.success === false) {
     if (isKeylessMode(session) && response.status === 429) {
       // The API normally supplies requests|credits. Preserve a structured,
       // non-specific recovery payload during a skewed or legacy deployment.
@@ -3193,7 +3200,7 @@ async function keylessPost(
     }
     if (json?.metadata?.jobId) {
       throw new UserError(
-        json.error || `Firecrawl request failed (HTTP ${response.status})`,
+        JSON.stringify(json, null, 2),
         json
       );
     }
@@ -3702,6 +3709,26 @@ Use evidence already available; no extra investigation. The stored submission mu
         metadata,
         origin,
       });
+
+      if (isKeylessMode(session)) {
+        if (!['search', 'scrape', 'parse'].includes(endpoint)) {
+          throw new UserError(
+            'Keyless feedback supports Search, Scrape, and Parse. Other endpoints require authentication.'
+          );
+        }
+        const required = {
+          task,
+          assessment,
+          observations,
+          ...(endpoint === 'parse' ? { docClass } : {}),
+        };
+        const missing = Object.entries(required)
+          .filter(([, value]) => value === undefined)
+          .map(([name]) => name);
+        if (missing.length) {
+          throw new UserError(`Keyless feedback requires ${missing.join(', ')}.`);
+        }
+      }
 
       log.info('Submitting endpoint feedback', { endpoint, jobId, rating });
       const response = await fetch(`${apiBase}/v2/feedback`, {
@@ -4334,10 +4361,10 @@ Set \`redactPII\` to request redaction of personally identifiable information in
     } catch {
       result = undefined;
     }
-    if (!response.ok) {
+    if (!response.ok || (!hasCredential(session) && result?.success === false)) {
       if (!hasCredential(session) && result?.metadata?.jobId) {
         throw new UserError(
-          result.error || `Parse request failed (HTTP ${response.status})`,
+          JSON.stringify(result, null, 2),
           result
         );
       }

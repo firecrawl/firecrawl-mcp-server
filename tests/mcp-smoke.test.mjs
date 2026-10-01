@@ -703,7 +703,7 @@ async function startFakeFirecrawlBackend(options = {}) {
         status: 200,
         body: {
           success: true,
-          feedbackId: '00000000-0000-4000-8000-000000000001',
+          feedbackId: '00000000-0000-4000-8000-000000000102',
           creditsRefunded: 0,
         },
       };
@@ -806,18 +806,6 @@ async function startFakeFirecrawlBackend(options = {}) {
               scrapeId: '00000000-0000-4000-8000-000000000030',
             },
           },
-          success: true,
-        })
-      );
-      return;
-    }
-
-    if (req.method === 'POST' && req.url === '/v2/feedback') {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(
-        JSON.stringify({
-          creditsRefunded: 0,
-          feedbackId: '00000000-0000-4000-8000-000000000102',
           success: true,
         })
       );
@@ -1561,7 +1549,7 @@ test('local keyless stdio keeps profile guidance keyless-scoped and exposes shar
   const apiKeyGuidance = init.instructions.slice(apiKeyBoundaryIndex);
   assert.match(
     keylessGuidance,
-    /Keyless sessions expose firecrawl_search, firecrawl_scrape, firecrawl_parse, and firecrawl_feedback with usage limits/i
+    /Keyless sessions can use firecrawl_search, firecrawl_scrape, firecrawl_parse, and firecrawl_feedback with usage limits/i
   );
   assert.match(
     keylessGuidance,
@@ -1600,9 +1588,9 @@ test('local keyless stdio keeps profile guidance keyless-scoped and exposes shar
   assert.equal(toolNames.includes('firecrawl_feedback'), true);
   const search = tools.tools.find((tool) => tool.name === 'firecrawl_search');
   assert.ok(search);
-  // Tool descriptions are shared by every session; keyless feedback is
-  // pointed to in keyless results and the feedback tool instead.
-  assert.doesNotMatch(search.description, /Keyless responses include/i);
+  for (const name of ['firecrawl_search', 'firecrawl_scrape', 'firecrawl_parse']) {
+    assert.match(tools.tools.find(tool => tool.name === name).description, /Keyless results.*Consider submitting feedback through firecrawl_feedback/);
+  }
 });
 
 test('monitor create gives queries precedence over page targets', async (t) => {
@@ -4422,6 +4410,19 @@ test('hosted keyless feedback bypasses exhausted operation allowance and preserv
         }
       }
 
+      if (status === 200) {
+        for (const field of ['task', 'assessment', 'observations', 'docClass']) {
+          const args = { endpoint: 'parse', jobId: '00000000-0000-4000-8000-000000000000', rating: 'partial', task: 'Read the retry reference', assessment: 'The retry interval was omitted from the output.', observations: [{kind: 'correct', basis: 'output', detail: 'The output contains the retry heading.'}], docClass: 'unknown' };
+          delete args[field];
+          const before = backend.requests.length;
+          const response = await httpToolCall(port, { id: `missing-${field}`, headers: {'x-forwarded-for': '203.0.113.71'}, params: {name: 'firecrawl_feedback', arguments: args} });
+          const result = parseSseJson(await response.text()).result;
+          assert.equal(result.isError, true);
+          assert.match(result.content[0].text, new RegExp(`requires.*${field}`));
+          assert.equal(backend.requests.length, before);
+        }
+      }
+
       assert.equal(
         backend.requests.some((req) => req.url === '/v2/keyless/eligibility'),
         false
@@ -4511,9 +4512,9 @@ test('local Parse preserves job evidence on success and failure and retains invi
   t.after(() => rm(directory, { recursive: true, force: true }));
   const filePath = join(directory, 'fixture.html');
   await writeFile(filePath, '<h1>Parsed fixture</h1>');
-  for (const status of [200, 500]) {
+  for (const [status, success] of [[200, true], [500, false], [200, false]]) {
     for (const disabled of [false, true]) {
-      await t.test(`HTTP ${status}, disabled ${disabled}`, async (t) => {
+      await t.test(`HTTP ${status}, success ${success}, disabled ${disabled}`, async (t) => {
         const metadata = {
           jobId: '00000000-0000-4000-8000-000000000000',
           feedback: {
@@ -4522,7 +4523,7 @@ test('local Parse preserves job evidence on success and failure and retains invi
           },
         };
         const body =
-          status === 200
+          success
             ? {
                 success: true,
                 data: { markdown: '# Parsed fixture', metadata },
@@ -4557,8 +4558,13 @@ test('local Parse preserves job evidence on success and failure and retains invi
         const returnedMetadata = payload.data?.metadata ?? payload.metadata;
         assert.equal(returnedMetadata.jobId, metadata.jobId);
         assert.equal(Boolean(returnedMetadata.feedback), true);
-        assert.equal(result.isError === true, status !== 200);
-        if (status !== 200) assert.equal(result.content[0].text, 'Parsing failed');
+        assert.equal(result.isError === true, !success);
+        if (!success) {
+          const textPayload = JSON.parse(result.content[0].text);
+          assert.equal(textPayload.error, 'Parsing failed');
+          assert.equal(textPayload.metadata.jobId, metadata.jobId);
+          assert.equal(payload.error, 'Parsing failed');
+        }
         const call = backend.requests.find((req) => req.url === '/v2/parse');
         assert.equal(call.headers.authorization, undefined);
         assert.equal(
@@ -4669,7 +4675,7 @@ test('keyless Search failure preserves the feedback reference', async (t) => {
   };
   const backend = await startFakeFirecrawlBackend({
     keylessEligible: true,
-    searchResponse: { status: 500, body: { success: false, error: 'Search transport failed', metadata } },
+    searchResponse: { status: 200, body: { success: false, error: 'Search transport failed', metadata } },
   });
   t.after(() => backend.close());
   const port = await getFreePort();
@@ -4687,6 +4693,7 @@ test('keyless Search failure preserves the feedback reference', async (t) => {
   const result = parseSseJson(await response.text()).result;
   assert.equal(result.isError, true);
   assert.deepEqual(result.structuredContent.metadata, metadata);
+  assert.equal(JSON.parse(result.content[0].text).metadata.jobId, metadata.jobId);
 });
 
 test('every listed tool declares an output schema and returns structured content', async (t) => {
