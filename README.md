@@ -83,6 +83,9 @@ https://mcp.firecrawl.dev/v2/mcp-search
 
 It exposes a fixed set of eight tools: `firecrawl_search`, `firecrawl_developer_search`, the four `firecrawl_research_*` tools, and the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`. Its `firecrawl_search` fetches no page content, and the surface has its own OAuth identity; the full endpoint above is unchanged. It backs a published connector listing, so its tool set is a contract rather than a profile to tune. See [docs/search-profile.md](docs/search-profile.md) for the full contract and what a change to it involves.
 
+For packaged MCP workflows in ChatGPT, Codex, or Claude Code, see
+[MCP plugin packages](plugins/README.md).
+
 ### Running with npx
 
 ```bash
@@ -739,8 +742,25 @@ The agent performs web searches, follows links, reads pages, and gathers data au
 - `effort`: Optional. `"low"`, `"medium"` or `"high"` reasoning budget for the agent task.
 - `maxCredits`: Optional positive integer. Spending limit in credits for this run. The API defaults to 2,500 when omitted, and caps a free request at 2,500.
 - `strictConstrainToURLs`: Optional boolean. If `true`, the agent only visits the URLs in `urls`.
-- `threadId`: Optional. Continue an existing thread: the `threadId` from an earlier `firecrawl_agent` or `firecrawl_agent_status` result. Omit to start a new thread. On a follow-up, omitted `mode`, `urls` and `schema` carry over from the previous turn.
-- `mode`: Optional. `"extract"` (default) returns the complete structured result every turn. `"chat"` lets a follow-up that asks for no new data get a short reply in `message` instead of a re-run.
+- `threadId`: Optional. Continue an existing thread: the `threadId` from an earlier `firecrawl_agent` or `firecrawl_agent_status` result. Omit to start a new thread. On a follow-up, omitted `mode`, `urls`, `schema` and `exchange` settings carry over from the previous turn.
+- `mode`: Optional. `"extract"` (default) returns the complete structured result every turn. `"chat"` lets a follow-up that asks for no new data get a short reply in `message` instead of a re-run; `exchange.requireApproval` needs it.
+- `exchange`: Optional. Alexandria provider settings for this turn, forwarded as-is to `POST /v2/agent`:
+  - `enabled`, `toolkits` (up to 5 provider slugs), `maxCalls` (1 to 30), `requireApproval` (paid calls end the turn with a `pendingApproval`; needs `mode: "chat"` on the same call, even on a follow-up)
+  - `onTermsRequired`: what to do when an Alexandria provider the agent would use needs data terms your team has not accepted. Gated providers are never called in any mode. Omitted on a follow-up keeps the previous turn's value.
+    - `"skip"` (default): answer with accepted providers only. `exchange.skippedProviders` on the status result lists the gated providers that would have helped.
+    - `"ask"`: the same, plus a terms `pendingApproval` and `exchange.requiresAction` with the exact `terms/show` and `terms/accept` calls for each provider. Each provider's `digest` is always present and is `string | null`; when it is `null`, `terms/show` returns the current digest to send.
+  - `approve`: `{ approvalId, callIds?, always? }` answers yes to the `pendingApproval` the previous turn ended on. `callIds` and `always` apply to paid-call approvals only.
+  - `decline`: `{ approvalId }` answers no. A declined terms offer keeps those providers out of the rest of the thread.
+  - `approve` and `decline` need `threadId`, and only one of them can be sent.
+
+**Provider terms (ask mode):** there is no auto-accept mode. When a turn ends on a terms offer, the status result carries `pendingApproval` (`kind: "terms"`) and `exchange.requiresAction` with the `approvalId` and the exact `terms/show` and `terms/accept` calls. To use the provider:
+
+1. Show the user the terms (`terms/show` through `firecrawl_scrape` with `alexandria`).
+2. Get the user's explicit consent to that provider's terms. A data request is not consent.
+3. Run the `terms/accept` call through `firecrawl_scrape`.
+4. Continue the same thread: call `firecrawl_agent` with the same `threadId` and `exchange.approve: { "approvalId": "..." }`.
+
+If the user says no, call `firecrawl_agent` with the same `threadId` and `exchange.decline: { "approvalId": "..." }` instead.
 
 **Prompt Example:**
 
@@ -795,6 +815,19 @@ Then poll with `firecrawl_agent_status` using the returned job ID.
   "arguments": {
     "prompt": "Only keep the startups based in Europe",
     "threadId": "0199a1b2-0000-7000-8000-000000000031"
+  }
+}
+```
+
+**Usage Example (continue the thread after the user accepted a provider's terms):**
+
+```json
+{
+  "name": "firecrawl_agent",
+  "arguments": {
+    "prompt": "I accepted the Apollo terms. Continue.",
+    "threadId": "0199a1b2-0000-7000-8000-000000000031",
+    "exchange": { "approve": { "approvalId": "0199a1b2-0000-7000-8000-000000000033" } }
   }
 }
 ```
@@ -1116,6 +1149,33 @@ Example log messages:
 [ERROR] Rate limit exceeded
 ```
 
+## API response hints
+
+The MCP server explicitly enables Firecrawl API response hints on its outbound
+requests with `X-Firecrawl-Agent-Hints: true`; the API leaves them disabled for
+ordinary callers. When Firecrawl returns an optional `agent_hints` array of
+strings, JSON tool results preserve it in their existing text and
+`structuredContent` alongside the tool's other structured fields. Readable
+Developer and Research outputs keep their existing text and show hints in a
+separate, labeled text block. Empty results can include hints. Error hints
+remain visible with `isError: true`.
+Responses without hints keep their existing output format. Guidance is API
+metadata, separate from the scraped page's content; it is not generated or
+executed by the MCP adapter.
+
+The strings are passed through unchanged. An HTTP operation mentioned in a
+hint is not necessarily an MCP tool: Alexandria discovery is available through
+`firecrawl_find_tools`, and provider execution uses `firecrawl_scrape` with an
+`alexandria` body. The search-only profile exposes those paths and URL-mode
+Scrape, but does not expose feedback tools. Clients should use their advertised
+tool schemas and available capabilities. This change does not add tools,
+translate prose into tool calls, or submit feedback automatically.
+
+The pinned `firecrawl` 4.40.0 discards outer-envelope hints in high-level
+Scrape and Map responses and normalized SDK errors. The adapter captures hints
+from the SDK HTTP response while retaining the SDK's request and retry behavior.
+Authentication recovery retains its existing guidance.
+
 ## Error Handling
 
 The server provides robust error handling:
@@ -1223,9 +1283,12 @@ The existing `firecrawl_feedback` tool accepts `endpoint: "alexandria"`:
     "url": "https://example.com",
     "requestedFunctionality": "Find records and download their attachments"
   },
+  "objective": "Compare contract requirements across agencies before bidding",
   "rationale": "Found summaries but could not retrieve attachments"
 }
 ```
+
+`objective` is the underlying goal of the session: what the agent or its user was ultimately trying to accomplish, beyond the single website in `requestedWebsite`.
 
 This uses authenticated `POST /v2/feedback`, without a job ID, job-age deadline, or credit refund. Optional `providerFeedback` and `capabilityFeedback` arrays describe coverage gaps and execution issues; the tool schema lists supported issue values. A `new_capability_request` requires `requestedFunctionality`; `missing_capability` (the provider exists but lacks the capability) does not. Existing feedback opt-out and authentication controls apply.
 

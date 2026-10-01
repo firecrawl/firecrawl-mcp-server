@@ -49,7 +49,7 @@ index 810df0c5b6511f34685a0651e6df83acd0239e7b..bd589ce87ec421a73c40b9d60def26af
      execute: (args: StandardSchemaV1.InferOutput<Params>, context: Context<T>) => Promise<AudioContent | ContentResult | ImageContent | ResourceContent | ResourceLink | StandardSchemaV1.InferOutput<OutputParams> | string | TextContent | void>;
      name: string;
 diff --git a/dist/chunk-LWU5CQGW.js b/dist/chunk-LWU5CQGW.js
-index 474670585c1fff7d9609d0f900d0743df14a7688..578399064ef064102c1d856ce593df05b170f22f 100644
+index 474670585c1fff7d9609d0f900d0743df14a7688..d1f40e99dc5a5b9138a67d589ec7aac1038bced8 100644
 --- a/dist/chunk-LWU5CQGW.js
 +++ b/dist/chunk-LWU5CQGW.js
 @@ -986,6 +986,9 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
@@ -62,7 +62,7 @@ index 474670585c1fff7d9609d0f900d0743df14a7688..578399064ef064102c1d856ce593df05
      let cachedToolsList = null;
      this.#server.setRequestHandler(ListToolsRequestSchema, async () => {
        if (cachedToolsList) {
-@@ -994,7 +997,7 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
+@@ -994,9 +997,12 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
          };
        }
        cachedToolsList = await Promise.all(
@@ -70,8 +70,13 @@ index 474670585c1fff7d9609d0f900d0743df14a7688..578399064ef064102c1d856ce593df05
 +        listedTools.map(async (tool) => {
            return {
              annotations: tool.annotations,
++            // Top-level Tool.title (MCP 2025-06-18). Clients such as Codex index this
++            // for tool search and do not read annotations.title.
++            ...tool.annotations?.title && { title: tool.annotations.title },
              description: tool.description,
-@@ -1026,6 +1029,15 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
+             inputSchema: tool.parameters ? strictJsonSchema(await toJsonSchema(tool.parameters)) : {
+               additionalProperties: false,
+@@ -1026,6 +1035,15 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
            `Unknown tool: ${request.params.name}`
          );
        }
@@ -87,7 +92,7 @@ index 474670585c1fff7d9609d0f900d0743df14a7688..578399064ef064102c1d856ce593df05
        let args = void 0;
        if (tool.parameters) {
          const parsed = await tool.parameters["~standard"].validate(
-@@ -1557,7 +1569,7 @@ var FastMCP = class extends FastMCPEventEmitter {
+@@ -1557,7 +1572,7 @@ var FastMCP = class extends FastMCPEventEmitter {
        }
        const session = new FastMCPSession({
          auth,
@@ -96,7 +101,7 @@ index 474670585c1fff7d9609d0f900d0743df14a7688..578399064ef064102c1d856ce593df05
          logger: this.#logger,
          name: this.#options.name,
          onToolCall: this.#options.onToolCall,
-@@ -1732,7 +1744,7 @@ var FastMCP = class extends FastMCPEventEmitter {
+@@ -1732,7 +1747,7 @@ var FastMCP = class extends FastMCPEventEmitter {
      ) : this.#tools;
      return new FastMCPSession({
        auth,
@@ -106,7 +111,7 @@ index 474670585c1fff7d9609d0f900d0743df14a7688..578399064ef064102c1d856ce593df05
        name: this.#options.name,
        onToolCall: this.#options.onToolCall,
 diff --git a/dist/chunk-UYG7NPM6.cjs b/dist/chunk-UYG7NPM6.cjs
-index 3b695bf493c4f54fd970e145cf14fdd8effc9c6d..1dc64ad0b08ad5bd97000f65e98b23cfbb4dcaab 100644
+index 3b695bf493c4f54fd970e145cf14fdd8effc9c6d..afa54fef7f95a764de73172eb1b0e63e9df45bfe 100644
 --- a/dist/chunk-UYG7NPM6.cjs
 +++ b/dist/chunk-UYG7NPM6.cjs
 @@ -986,6 +986,9 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
@@ -119,7 +124,7 @@ index 3b695bf493c4f54fd970e145cf14fdd8effc9c6d..1dc64ad0b08ad5bd97000f65e98b23cf
      let cachedToolsList = null;
      this.#server.setRequestHandler(_typesjs.ListToolsRequestSchema, async () => {
        if (cachedToolsList) {
-@@ -994,7 +997,7 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
+@@ -994,9 +997,12 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
          };
        }
        cachedToolsList = await Promise.all(
@@ -127,8 +132,13 @@ index 3b695bf493c4f54fd970e145cf14fdd8effc9c6d..1dc64ad0b08ad5bd97000f65e98b23cf
 +        listedTools.map(async (tool) => {
            return {
              annotations: tool.annotations,
++            // Top-level Tool.title (MCP 2025-06-18). Clients such as Codex index this
++            // for tool search and do not read annotations.title.
++            ...tool.annotations?.title && { title: tool.annotations.title },
              description: tool.description,
-@@ -1026,6 +1029,15 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
+             inputSchema: tool.parameters ? _xsschema.strictJsonSchema.call(void 0, await _xsschema.toJsonSchema.call(void 0, tool.parameters)) : {
+               additionalProperties: false,
+@@ -1026,6 +1035,15 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
            `Unknown tool: ${request.params.name}`
          );
        }
@@ -144,7 +154,7 @@ index 3b695bf493c4f54fd970e145cf14fdd8effc9c6d..1dc64ad0b08ad5bd97000f65e98b23cf
        let args = void 0;
        if (tool.parameters) {
          const parsed = await tool.parameters["~standard"].validate(
-@@ -1557,7 +1569,7 @@ var FastMCP = class extends FastMCPEventEmitter {
+@@ -1557,7 +1572,7 @@ var FastMCP = class extends FastMCPEventEmitter {
        }
        const session = new FastMCPSession({
          auth,
@@ -153,7 +163,7 @@ index 3b695bf493c4f54fd970e145cf14fdd8effc9c6d..1dc64ad0b08ad5bd97000f65e98b23cf
          logger: this.#logger,
          name: this.#options.name,
          onToolCall: this.#options.onToolCall,
-@@ -1732,7 +1744,7 @@ var FastMCP = class extends FastMCPEventEmitter {
+@@ -1732,7 +1747,7 @@ var FastMCP = class extends FastMCPEventEmitter {
      ) : this.#tools;
      return new FastMCPSession({
        auth,

@@ -1,3 +1,5 @@
+import { ALEXANDRIA_SOURCES_OPT_OUT } from './alexandria';
+
 // Server instructions, one string per tool surface. Clients read them before a
 // tool is loaded: Claude Code truncates server instructions at 2,048
 // characters, OpenAI asks for the key details in the first 512, and Codex code
@@ -8,14 +10,15 @@
 
 /** Keyed and OAuth sessions on the full surface (hosted /v2/mcp, /v2/mcp-oauth, stdio with a key). */
 export const FULL_INSTRUCTIONS =
-  'Firecrawl gives agents live web data: search the web, read pages, and collect data across sites. ' +
+  'Firecrawl gives agents live web data. ' +
   'Pick the tool by what you have: no URL, firecrawl_search; one known URL, firecrawl_scrape (formats: ["json"] for fields); ' +
   "a site's URLs, firecrawl_map; many pages of one site, firecrawl_crawl; pages behind clicks, forms, or login, firecrawl_interact; " +
   'URLs unknown or the answer spans many sites, firecrawl_agent; a local file, firecrawl_parse. ' +
   'Programming questions: firecrawl_developer_search. Research papers: firecrawl_research_search_papers, then the other firecrawl_research_* tools. ' +
   'Recurring page checks: firecrawl_monitor_*. ' +
   'firecrawl_agent returns a job ID; read the result with firecrawl_agent_status. ' +
-  "firecrawl_search also returns matching Alexandria data providers in data.tools; firecrawl_find_tools reads a provider's contract and firecrawl_scrape with alexandria runs it.";
+  "firecrawl_search also returns matching Alexandria data providers in data.tools; firecrawl_find_tools reads a provider's contract and firecrawl_scrape with alexandria runs it. " +
+  ALEXANDRIA_SOURCES_OPT_OUT;
 
 /** The search surface (/v2/mcp-search). */
 export const SEARCH_INSTRUCTIONS =
@@ -24,7 +27,8 @@ export const SEARCH_INSTRUCTIONS =
   'Programming questions (code, libraries, APIs, errors): firecrawl_developer_search. ' +
   'Research papers: firecrawl_research_search_papers, then firecrawl_research_inspect_paper, firecrawl_research_related_papers, or firecrawl_research_read_paper. ' +
   "firecrawl_search also returns matching Alexandria providers in data.tools; firecrawl_find_tools reads a provider's contract and firecrawl_scrape with alexandria runs it. " +
-  'Web, developer, and research searches and URL scrapes are billed per request, Alexandria capabilities at their listed price; provider discovery is free.';
+  'Web, developer, and research searches and URL scrapes are billed per request, Alexandria capabilities at their listed price; provider discovery is free. ' +
+  ALEXANDRIA_SOURCES_OPT_OUT;
 
 /** Keyless sessions (hosted keyless tier, stdio without a key). */
 export const KEYLESS_INSTRUCTIONS =

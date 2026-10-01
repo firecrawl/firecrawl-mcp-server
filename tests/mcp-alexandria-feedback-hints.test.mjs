@@ -12,6 +12,7 @@ function assertFeedbackHint(payload) {
   assert.equal(payload.feedbackTool?.name, 'firecrawl_feedback');
   assert.equal(payload.feedbackTool.arguments.endpoint, 'alexandria');
   assert.match(payload.feedbackTool.arguments.requestedWebsite.url, /website/i);
+  assert.match(payload.feedbackTool.arguments.objective, /goal/i);
   assert.match(payload.feedbackTool.when, /^Optional after task completion; at most once per website/i);
 }
 

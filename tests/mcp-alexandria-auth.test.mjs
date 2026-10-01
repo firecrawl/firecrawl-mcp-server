@@ -115,7 +115,8 @@ test('hosted keyless sessions never reach the Exchange; an API key header does',
   }
   assert.equal(
     backend.requests.some(
-      (request) => request.url !== '/v2/keyless/eligibility'
+      // The account-only recovery asks eligibility for the caller's signup link.
+      (request) => request.url.split('?')[0] !== '/v2/keyless/eligibility'
     ),
     false,
     'keyless sessions must not reach /v2/scrape, /v2/search, or /exchange/*'

@@ -16,6 +16,13 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { z } from 'zod';
 import {
+  AGENT_HINTS_HEADERS,
+  agentHintsText,
+  preserveAgentHints,
+  readAgentHints,
+  readErrorAgentHints,
+} from './agent-hints';
+import {
   agentOutputSchema,
   agentStatusOutputSchema,
   crawlOutputSchema,
@@ -56,10 +63,17 @@ import {
 import { alexandriaOutput } from './alexandria-output';
 import { registerDeveloperTools } from './developer';
 import { extractSingleTrustedClientIp } from './keyless-client-ip';
+import { checkKeylessSignupUrl } from './keyless-signup-link';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
 import { registerUsageTools } from './usage';
 import { escapeWWWAuthenticateValue } from './www-authenticate';
+import {
+  createIntrospectionCache,
+  INTROSPECTION_ACTIVE_TTL_MS,
+  INTROSPECTION_INACTIVE_TTL_MS,
+  introspectionTtlMs,
+} from './introspection-cache';
 import { originHeaders, requestOrigin, type McpClient } from './origin';
 import {
   credentialForOutboundRequest,
@@ -422,6 +436,7 @@ type OAuthIntrospectionResponse = {
   sub?: string;
   api_key_id?: string;
   client_id?: string;
+  exp?: number;
 };
 
 type CredentialMetadata = Pick<
@@ -479,7 +494,62 @@ function credentialMetadata(data: OAuthIntrospectionResponse): CredentialMetadat
   };
 }
 
-async function introspectToken(
+/**
+ * `FIRECRAWL_OAUTH_INTROSPECT_CACHE_TTL_MS=0` turns the cache off. Unset keeps
+ * the default; any other value caps how long an active answer is reused.
+ */
+function introspectionActiveTtlMs(): number {
+  const raw = normalizeHeader(
+    process.env.FIRECRAWL_OAUTH_INTROSPECT_CACHE_TTL_MS
+  );
+  if (raw === undefined) return INTROSPECTION_ACTIVE_TTL_MS;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0
+    ? parsed
+    : INTROSPECTION_ACTIVE_TTL_MS;
+}
+
+const introspectionCache = createIntrospectionCache({
+  maxEntries: 50_000,
+  ttlMs: (value: OAuthIntrospectionResponse, now: number) => {
+    const activeTtlMs = introspectionActiveTtlMs();
+    if (activeTtlMs === 0) return 0;
+    return introspectionTtlMs(
+      value,
+      now,
+      activeTtlMs,
+      Math.min(activeTtlMs, INTROSPECTION_INACTIVE_TTL_MS)
+    );
+  },
+});
+
+/**
+ * Every MCP request authenticates, and every pod on a node shares one egress IP
+ * against the issuer's per-IP rate limit. Reusing recent answers keeps that
+ * volume flat as traffic grows.
+ */
+function introspectToken(
+  token: string,
+  expectedResource: string
+): Promise<OAuthIntrospectionResponse> {
+  return introspectionCache.get([token, expectedResource], () =>
+    fetchIntrospection(token, expectedResource)
+  );
+}
+
+/** Known `x-vercel-mitigated` values; anything else reports as other. */
+const EDGE_MITIGATIONS = new Set(['deny', 'challenge', 'rate_limit']);
+
+function edgeMitigation(response: Response): string | undefined {
+  const value = response.headers
+    .get('x-vercel-mitigated')
+    ?.trim()
+    .toLowerCase();
+  if (!value) return undefined;
+  return EDGE_MITIGATIONS.has(value) ? value : 'other';
+}
+
+async function fetchIntrospection(
   token: string,
   expectedResource: string
 ): Promise<OAuthIntrospectionResponse> {
@@ -524,6 +594,7 @@ async function introspectToken(
   }
   if (!response.ok) {
     throw credentialValidationUnavailable({
+      edgeMitigation: edgeMitigation(response),
       elapsedMs: elapsedMs(),
       reason: 'introspect_http_status',
       resource: expectedResource,
@@ -1064,7 +1135,8 @@ function termsRequiredAction(body: unknown): TermsRequiredAction | undefined {
 
 function termsRequiredError(
   action: TermsRequiredAction,
-  context: ExchangeErrorContext
+  context: ExchangeErrorContext,
+  hints?: string[]
 ): UserError {
   const requestId = context.requestId;
   const retryIdentity = requestId ? ` and requestId ${requestId}` : '';
@@ -1075,6 +1147,7 @@ function termsRequiredError(
       code: TERMS_REQUIRED_CODE,
       status: 403,
       message,
+      ...(hints ? { agent_hints: hints } : {}),
       ...(requestId ? { requestId } : {}),
       requiresAction: action,
       nextTool: {
@@ -1112,7 +1185,8 @@ function throwIfTermsRequired(
     | null
     | undefined;
   const action = termsRequiredAction(source?.response?.data ?? source?.details);
-  if (action) throw termsRequiredError(action, context);
+  if (action)
+    throw termsRequiredError(action, context, readErrorAgentHints(error));
 }
 
 async function relayTermsRequired<T>(
@@ -1145,6 +1219,7 @@ async function relayExchangeError(
     if (!response || response.status === 401) throw error;
     const data = response.data as
       { error?: unknown; code?: unknown; chargeId?: unknown } | undefined;
+    const hints = readErrorAgentHints(error);
     const message =
       typeof data?.error === 'string'
         ? data.error
@@ -1159,6 +1234,7 @@ async function relayExchangeError(
           code: typeof data?.code === 'string' ? data.code : 'exchange_error',
           status: 403,
           message,
+          ...(hints ? { agent_hints: hints } : {}),
           nextTool: {
             name: 'firecrawl_scrape',
             arguments: {
@@ -1172,6 +1248,7 @@ async function relayExchangeError(
       code: typeof data?.code === 'string' ? data.code : 'exchange_error',
       status: response.status,
       message,
+      ...(hints ? { agent_hints: hints } : {}),
       ...(typeof data?.chargeId === 'string'
         ? { chargeId: data.chargeId }
         : {}),
@@ -1414,11 +1491,48 @@ function isLocalKeylessStartup(): boolean {
 // FastMCP copies UserError.message onto both content[0].text and
 // structuredContent.message. Hosts forward the text block, not
 // structured next_actions, so bearer and OAuth recovery strings live here.
-const KEYLESS_ACCOUNT_FIX =
-  'Fix: Create an API key at https://www.firecrawl.dev/app/api-keys, then:\n- Set the header: Authorization: Bearer YOUR_API_KEY on https://mcp.firecrawl.dev/v2/mcp\nThen start a new session.';
-const KEYLESS_QUOTA_MESSAGE = `You've hit Firecrawl's free MCP rate limit. To continue using without limits, create a Firecrawl API key.\n\n${KEYLESS_ACCOUNT_FIX}`;
-const KEYLESS_TOOL_MESSAGE = `This tool needs a Firecrawl account.\n\n${KEYLESS_ACCOUNT_FIX}`;
-const KEYLESS_ACCESS_MESSAGE = `Anonymous keyless access is unavailable for this request.\n\n${KEYLESS_ACCOUNT_FIX}`;
+//
+// The signup link is the caller's own firecrawl.dev/k/<token> link, issued by
+// the API (the 429 body's signup_url, or signupUrl from the eligibility check):
+// a 12-character encrypted token the site decrypts to keyless attribution.
+// When the API has no token to give it sends the regular keyless signin link,
+// which is relayed as is; without any API link, the regular MCP signin link is used.
+const KEYLESS_SIGNUP_FALLBACK_URL =
+  'https://www.firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp&redirect=%2Fapp%2Fapi-keys';
+// Firecrawl-hosted links that fail the check are logged once each, so a change
+// in the API's link format shows up instead of silently falling back.
+const droppedKeylessSignupUrls = new Set<string>();
+
+/** An API-issued keyless signup link, or undefined for anything else. */
+function keylessSignupUrlFrom(value: unknown): string | undefined {
+  const check = checkKeylessSignupUrl(value);
+  if (check.ok) return check.url;
+  if (
+    check.firecrawlHost &&
+    typeof value === 'string' &&
+    droppedKeylessSignupUrls.size < 50 &&
+    !droppedKeylessSignupUrls.has(value)
+  ) {
+    droppedKeylessSignupUrls.add(value);
+    console.warn(
+      '[WARN]',
+      new Date().toISOString(),
+      'Ignoring an unrecognized Firecrawl keyless signup link from the API; using the fallback',
+      { signupUrl: value }
+    );
+  }
+  return undefined;
+}
+
+function keylessAccountFix(signupUrl: string): string {
+  return `Fix: Create an API key at ${signupUrl} and then:\n- Set the header: Authorization: Bearer YOUR_API_KEY on https://mcp.firecrawl.dev/v2/mcp\nThen start a new session.`;
+}
+const keylessQuotaMessage = (signupUrl: string) =>
+  `You've hit Firecrawl's free MCP rate limit. To continue using without limits, create a Firecrawl API key.\n\n${keylessAccountFix(signupUrl)}`;
+const keylessToolMessage = (signupUrl: string) =>
+  `This tool needs a Firecrawl account.\n\n${keylessAccountFix(signupUrl)}`;
+const keylessAccessMessage = (signupUrl: string) =>
+  `Anonymous keyless access is unavailable for this request.\n\n${keylessAccountFix(signupUrl)}`;
 const INVALID_API_KEY_MESSAGE =
   'The Firecrawl API key is invalid or revoked.\nFix: Replace the key on the existing Firecrawl MCP server, then start a new session. Get an API key at https://www.firecrawl.dev/app/api-keys';
 const INVALID_OAUTH_MESSAGE =
@@ -1493,6 +1607,18 @@ async function runWithCredentialRecovery<T>(
     // different fault and keeps its own reconnect guidance; a keyless session
     // never sent an account credential at all.
     if (session?.authType !== 'api-key' || !isCoreCredentialRejection(error)) {
+      const hints = readErrorAgentHints(error);
+      if (hints) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new UserError(
+          hints.length ? `${message}\n\n${agentHintsText(hints)}` : message,
+          {
+            ...(error instanceof UserError ? error.extras : {}),
+            error: message,
+            agent_hints: hints,
+          }
+        );
+      }
       throw error;
     }
     const payload = recoveryPayload('CREDENTIAL_INVALID', requestId);
@@ -1503,9 +1629,10 @@ async function runWithCredentialRecovery<T>(
 function recoveryPayload(
   code: string,
   requestId: string = randomUUID(),
-  options: { retryAfterSeconds?: number } = {}
+  options: { retryAfterSeconds?: number; signupUrl?: string } = {}
 ): Record<string, unknown> {
   const retryAfterSeconds = options.retryAfterSeconds;
+  const signupUrl = options.signupUrl ?? KEYLESS_SIGNUP_FALLBACK_URL;
   const isQuotaExhausted =
     code === 'KEYLESS_QUOTA_EXHAUSTED' || code === 'KEYLESS_LIMIT_REACHED';
   const isToolUnavailable = code === 'KEYLESS_TOOL_NOT_AVAILABLE';
@@ -1522,11 +1649,11 @@ function recoveryPayload(
       code === 'CREDENTIAL_INVALID'
         ? INVALID_API_KEY_MESSAGE
         : isQuotaExhausted
-          ? KEYLESS_QUOTA_MESSAGE
+          ? keylessQuotaMessage(signupUrl)
           : isToolUnavailable
-            ? KEYLESS_TOOL_MESSAGE
+            ? keylessToolMessage(signupUrl)
             : isKeylessAccessUnavailable
-              ? KEYLESS_ACCESS_MESSAGE
+              ? keylessAccessMessage(signupUrl)
               : isKeylessEligibilityUnavailable
                 ? 'The anonymous keyless eligibility check is temporarily unavailable. Retry shortly.'
                 : 'This tool requires a Firecrawl account or API key.',
@@ -1540,6 +1667,7 @@ function recoveryPayload(
     ...(isKeylessConversion || code === 'CREDENTIAL_INVALID'
       ? {}
       : { available_tools: [...KEYLESS_TOOL_NAMES] }),
+    ...(isKeylessConversion ? { signup_url: signupUrl } : {}),
     docs_url: MCP_CONNECTION_GUIDE_URL,
     ...(retryAfterSeconds ? { retry_after_seconds: retryAfterSeconds } : {}),
     ...(isKeylessEligibilityUnavailable
@@ -1621,6 +1749,44 @@ function emitActionLog(
   }).catch(() => undefined);
 }
 
+const AGENT_HINT_LOG_MAX_CHARS = 1000;
+
+/**
+ * One `[MCP_AGENT_HINTS]` line per tool call that surfaced API agent hints.
+ * The strings come from the Firecrawl API, never from page content, so they
+ * are logged verbatim (capped) to count each hint; `request_id` joins the line
+ * to the call's `[MCP_ACTION]` records for account-level breakdowns.
+ */
+function emitAgentHintsLog(
+  toolName: string,
+  status: Exclude<ActionStatus, 'started'>,
+  hints: string[] | undefined,
+  session: SessionData,
+  requestId: string
+): void {
+  // An empty array is still an API hints response, logged as hint_count 0.
+  if (process.env.CLOUD_SERVICE !== 'true' || !hints) return;
+  console.error(
+    '[MCP_AGENT_HINTS]',
+    JSON.stringify({
+      tool_name: toolName,
+      status,
+      request_id: requestId,
+      auth_type: session.authType ?? 'none',
+      // The companion search server shares this process and wrapper.
+      profile: session.profile ?? primaryProfile.id,
+      hint_count: hints.length,
+      hints: hints.map((hint) => hint.slice(0, AGENT_HINT_LOG_MAX_CHARS)),
+    })
+  );
+}
+
+function resultAgentHints(result: unknown): string[] | undefined {
+  return result && typeof result === 'object'
+    ? readAgentHints((result as { structuredContent?: unknown }).structuredContent)
+    : undefined;
+}
+
 function guardHostedTool(
   tool: RegisteredTool,
   { logActions }: { logActions: boolean }
@@ -1649,7 +1815,12 @@ function guardHostedTool(
           : undefined;
       if (code) {
         const requestId = randomUUID();
-        const payload = recoveryPayload(code, requestId);
+        const payload = recoveryPayload(code, requestId, {
+          signupUrl:
+            code === 'KEYLESS_TOOL_NOT_AVAILABLE'
+              ? await hostedKeylessSignupUrl(session)
+              : undefined,
+        });
         if (logActions) {
           emitActionLog(tool.name, 'error', session, new UserError(String(payload.message), payload), requestId, code);
         }
@@ -1700,16 +1871,32 @@ function guardHostedTool(
       }
       if (isHostedKeylessSession(invocationSession) && !keylessTool) {
         const code = 'KEYLESS_TOOL_NOT_AVAILABLE';
-        const payload = recoveryPayload(code, requestId);
+        const payload = recoveryPayload(code, requestId, {
+          signupUrl: await hostedKeylessSignupUrl(invocationSession),
+        });
         if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
         throw new UserError(String(payload.message), payload);
       }
-      const runTool = () =>
-        runWithCredentialRecovery(
-          () => execute(args, invocationContext),
-          requestId,
-          invocationSession
-        );
+      const runTool = async () => {
+        try {
+          const result = await runWithCredentialRecovery(
+            () => execute(args, invocationContext),
+            requestId,
+            invocationSession
+          );
+          emitAgentHintsLog(
+            tool.name,
+            (result as { isError?: boolean } | undefined)?.isError ? 'error' : 'success',
+            resultAgentHints(result),
+            invocationSession,
+            requestId
+          );
+          return result;
+        } catch (error) {
+          emitAgentHintsLog(tool.name, 'error', readErrorAgentHints(error), invocationSession, requestId);
+          throw error;
+        }
+      };
       if (!logActions) return runTool();
 
       emitActionLog(tool.name, 'started', invocationSession, undefined, requestId);
@@ -1793,6 +1980,8 @@ server.getApp().get('/ready', (context) => {
     : context.json({ ok: true }, 200);
 });
 
+let warnedMissingAgentHintsInterceptor = false;
+
 function createClient(apiKey?: string): FirecrawlApp {
   const config: any = {
     ...(process.env.FIRECRAWL_API_URL && {
@@ -1805,7 +1994,55 @@ function createClient(apiKey?: string): FirecrawlApp {
     config.apiKey = apiKey;
   }
 
-  return new FirecrawlApp(config);
+  const client = new FirecrawlApp(config);
+  const axiosInstance = (client as any).http?.instance;
+  if (axiosInstance?.interceptors?.request?.use) {
+    axiosInstance.interceptors.request.use((request: any) => {
+      if (typeof request.headers?.set === 'function') {
+        request.headers.set('X-Firecrawl-Agent-Hints', 'true');
+      } else {
+        request.headers = { ...(request.headers ?? {}), ...AGENT_HINTS_HEADERS };
+      }
+      return request;
+    });
+  } else if (!warnedMissingAgentHintsInterceptor) {
+    warnedMissingAgentHintsInterceptor = true;
+    console.warn(
+      '[firecrawl-mcp] SDK request interceptor unavailable; API agent hints may be absent.'
+    );
+  }
+  return client;
+}
+
+/** Keep SDK validation, retries, and result shaping while retaining response metadata. */
+async function sdkResultWithAgentHints<T>(
+  client: FirecrawlApp,
+  execute: () => Promise<T>
+): Promise<T> {
+  const responseInterceptors = (client as any).http?.instance?.interceptors
+    ?.response;
+  if (!responseInterceptors?.use) return execute();
+  let hints: string[] | undefined;
+  const interceptor = responseInterceptors.use((response: any) => {
+    hints = readAgentHints(response?.data) ?? hints;
+    return response;
+  });
+  try {
+    const result = await execute();
+    return preserveAgentHints(result, { agent_hints: hints }) as T;
+  } catch (error) {
+    if (
+      hints &&
+      error &&
+      typeof error === 'object' &&
+      !readErrorAgentHints(error)
+    ) {
+      (error as { agent_hints?: string[] }).agent_hints = hints;
+    }
+    throw error;
+  } finally {
+    responseInterceptors.eject?.(interceptor);
+  }
 }
 
 // Safe mode is enabled by default for cloud service to comply with ChatGPT safety requirements
@@ -1842,10 +2079,14 @@ function getClient(session?: SessionData): FirecrawlApp {
         reason: 'delegated_credential_unavailable',
       });
     }
-    config.headers = {
-      ...(config.headers ?? {}),
-      Authorization: `Bearer ${credential}`,
-    };
+    if (typeof config.headers?.set === 'function') {
+      config.headers.set('Authorization', `Bearer ${credential}`);
+    } else {
+      config.headers = {
+        ...(config.headers ?? {}),
+        Authorization: `Bearer ${credential}`,
+      };
+    }
     return config;
   });
   return client;
@@ -2305,6 +2546,7 @@ async function apiPostJson(
   const response = await fetch(`${resolveApiBaseUrl()}${pathName}`, {
     method: 'POST',
     headers: {
+      ...AGENT_HINTS_HEADERS,
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
       ...(origin ? originHeaders(origin) : {}),
@@ -2323,7 +2565,8 @@ async function apiPostJson(
       parsed?.error ||
         parsed?.message ||
         `Firecrawl request failed (HTTP ${response.status})`,
-      response.status
+      response.status,
+      readAgentHints(parsed)
     );
   }
   return parsed;
@@ -2441,6 +2684,7 @@ async function executeHostedParse(
       session,
       origin
     );
+    const uploadHints = readAgentHints(uploadJson);
     const upload = parseApiData(uploadJson) as ParseUploadUrlData;
     if (!upload?.uploadUrl || !upload?.uploadRef) {
       throw new Error(
@@ -2457,6 +2701,7 @@ async function executeHostedParse(
 
     return asText({
       success: true,
+      ...(uploadHints ? { agent_hints: uploadHints } : {}),
       mode: 'hosted-upload-ref-awaiting-upload',
       message:
         'Hosted MCP cannot read local files. Run the local upload command, then call firecrawl_parse again with uploadRef. No Firecrawl API key is included in this command.',
@@ -2564,15 +2809,17 @@ Alexandria mode, on an authenticated session with Alexandria access: \`alexandri
         },
         session
       );
-      return structuredText(json?.data ?? json);
+      return structuredText(preserveAgentHints(json?.data ?? json, json));
     }
     const client = getClient(session);
     const res = await relayTermsRequired(
       () =>
-        client.scrape(String(url), {
-          ...cleaned,
-          origin,
-        } as any),
+        sdkResultWithAgentHints(client, () =>
+          client.scrape(String(url), {
+            ...cleaned,
+            origin,
+          } as any)
+        ),
       { tool: 'firecrawl_scrape' }
     );
     return structuredText(res);
@@ -2616,10 +2863,12 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
     const client = getClient(session);
     const cleaned = removeEmptyTopLevel(options as Record<string, unknown>);
     log.info('Mapping URL', { url: String(url) });
-    const res = await client.map(String(url), {
-      ...cleaned,
-      origin: requestOrigin(mcpClient, session),
-    } as any);
+    const res = await sdkResultWithAgentHints(client, () =>
+      client.map(String(url), {
+        ...cleaned,
+        origin: requestOrigin(mcpClient, session),
+      } as any)
+    );
     return structuredText(res);
   },
 });
@@ -2629,7 +2878,7 @@ server.addTool({
   _meta: { 'anthropic/alwaysLoad': true },
   annotations: {
     title: 'Firecrawl web search',
-    readOnlyHint: true, // Runs a web search and returns results; does not modify external sites.
+    readOnlyHint: SAFE_MODE, // Local scrapeOptions can run browser actions and save profiles.
     openWorldHint: true, // Searches the open web across arbitrary domains and sources.
     destructiveHint: false, // Query-only; no destructive side effects on external entities.
   },
@@ -2867,6 +3116,7 @@ type KeylessEligibility = {
   reason?: string;
   retryAfterSeconds?: number;
   unavailable?: boolean;
+  signupUrl?: string;
 };
 
 function keylessQuotaReason(reason: unknown): reason is 'requests' | 'credits' {
@@ -2875,13 +3125,14 @@ function keylessQuotaReason(reason: unknown): reason is 'requests' | 'credits' {
 
 async function keylessEligible(
   clientIp: string,
-  origin: string
+  origin: string,
+  { signupLink = false }: { signupLink?: boolean } = {}
 ): Promise<KeylessEligibility> {
   const secret = process.env.KEYLESS_PROXY_SECRET;
   if (!secret) return { eligible: false, unavailable: true };
   try {
     const response = await fetch(
-      `${resolveApiBaseUrl()}/v2/keyless/eligibility`,
+      `${resolveApiBaseUrl()}/v2/keyless/eligibility${signupLink ? '?signup_link=1' : ''}`,
       {
         headers: {
           ...originHeaders(origin),
@@ -2901,10 +3152,30 @@ async function keylessEligible(
       ...(Number.isFinite(json?.retryAfterSeconds) && json.retryAfterSeconds > 0
         ? { retryAfterSeconds: json.retryAfterSeconds }
         : {}),
+      ...(keylessSignupUrlFrom(json?.signupUrl)
+        ? { signupUrl: json.signupUrl }
+        : {}),
     };
   } catch {
     return { eligible: false, unavailable: true };
   }
+}
+
+/**
+ * The hosted keyless caller's own signup link, for recovery the API did not
+ * produce (a tool keyless sessions cannot use). Undefined falls back to the
+ * regular MCP signin link.
+ */
+async function hostedKeylessSignupUrl(
+  session?: SessionData
+): Promise<string | undefined> {
+  if (!session?.keylessClientIp) return undefined;
+  const eligibility = await keylessEligible(
+    session.keylessClientIp,
+    requestOrigin(undefined, session),
+    { signupLink: true }
+  );
+  return eligibility.signupUrl;
 }
 function isKeylessMode(session?: SessionData): boolean {
   if (hasCredential(session) || session?.credentialError) return false;
@@ -2940,11 +3211,13 @@ async function keylessPost(
           : 'KEYLESS_ACCESS_NOT_AVAILABLE';
       const payload = recoveryPayload(code, session?.requestId, {
         retryAfterSeconds: eligibility.retryAfterSeconds,
+        signupUrl: eligibility.signupUrl,
       });
       throw new UserError(String(payload.message), payload);
     }
   }
   const headers: Record<string, string> = {
+    ...AGENT_HINTS_HEADERS,
     ...originHeaders(origin),
     'Content-Type': 'application/json',
   };
@@ -2973,11 +3246,16 @@ async function keylessPost(
           json.retry_after_seconds > 0
             ? json.retry_after_seconds
             : undefined,
+        signupUrl: keylessSignupUrlFrom(json?.signup_url),
       });
+      const hints = readAgentHints(json);
+      if (hints) payload.agent_hints = hints;
       throw new UserError(String(payload.message), payload);
     }
-    throw new Error(
-      json?.error || `Firecrawl request failed (HTTP ${response.status})`
+    throw new CoreHttpError(
+      json?.error || `Firecrawl request failed (HTTP ${response.status})`,
+      response.status,
+      readAgentHints(json)
     );
   }
   return json;
@@ -3005,6 +3283,7 @@ async function getCrawlStatusWithOrigin(
       expiresAt: body.expiresAt,
       next: body.next ?? null,
       data: initialDocs,
+      ...(readAgentHints(body) ? { agent_hints: readAgentHints(body) } : {}),
     };
   }
 
@@ -3037,6 +3316,7 @@ async function getCrawlStatusWithOrigin(
     expiresAt: body.expiresAt,
     next: null,
     data: docs,
+    ...(readAgentHints(body) ? { agent_hints: readAgentHints(body) } : {}),
   };
 }
 
@@ -3196,6 +3476,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
       if (querySuggestions) body.querySuggestions = querySuggestions;
 
       const headers: Record<string, string> = {
+        ...AGENT_HINTS_HEADERS,
         ...originHeaders(origin),
         'Content-Type': 'application/json',
       };
@@ -3244,6 +3525,9 @@ Eligibility is limited to successful searches within the feedback age window. Th
           feedbackErrorCode: parsed?.feedbackErrorCode,
           error: parsed?.error ?? `HTTP ${response.status}`,
           retryable: response.status >= 500,
+          ...(readAgentHints(parsed)
+            ? { agent_hints: readAgentHints(parsed) }
+            : {}),
         });
       }
 
@@ -3281,7 +3565,7 @@ if (alexandriaFeedbackAvailable()) {
     description: `
 Submit concise quality feedback for a completed search, scrape, parse, or map job. Provide the endpoint, job ID, rating, and relevant issue codes or small contextual fields; omit large page contents and raw outputs.
 
-For an Alexandria session, set endpoint to \`alexandria\`, omit jobId, and provide requestedWebsite (url and requestedFunctionality), rationale, and rating. Optional providerFeedback and capabilityFeedback describe gaps or errors. Capability issues: new_capability_request (requires requestedFunctionality), missing_capability, insufficient_functionality, incorrect_result, execution_error, other. Alexandria feedback has no job-age deadline and no credit refund.
+For an Alexandria session, set endpoint to \`alexandria\`, omit jobId, and provide requestedWebsite (url and requestedFunctionality), objective, rationale, and rating. objective is the underlying goal behind the session: what you or your user were ultimately trying to accomplish (for example, "shortlist federal IT contracts to bid on this quarter"), not only what was needed from this website. Optional providerFeedback and capabilityFeedback describe gaps or errors. Capability issues: new_capability_request (requires requestedFunctionality), missing_capability, insufficient_functionality, incorrect_result, execution_error, other. Alexandria feedback has no job-age deadline and no credit refund.
 
 Returns submission status, feedback ID, and accounting fields.
 `,
@@ -3350,6 +3634,7 @@ Returns submission status, feedback ID, and accounting fields.
 
       const apiBase = resolveApiBaseUrl();
       const headers: Record<string, string> = {
+        ...AGENT_HINTS_HEADERS,
         ...originHeaders(origin),
         'Content-Type': 'application/json',
       };
@@ -3413,6 +3698,9 @@ Returns submission status, feedback ID, and accounting fields.
           feedbackErrorCode: parsed?.feedbackErrorCode,
           error: parsed?.error ?? `HTTP ${response.status}`,
           retryable: response.status >= 500,
+          ...(readAgentHints(parsed)
+            ? { agent_hints: readAgentHints(parsed) }
+            : {}),
         });
       }
 
@@ -3573,6 +3861,60 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
   },
 });
 
+// Mirrors agentExchangeSchema in firecrawl/firecrawl
+// apps/api/src/controllers/v2/types.ts: the gateway forwards it verbatim to
+// the agent service, which owns every default and the per-thread inheritance.
+const agentExchangeSchema = z
+  .strictObject({
+    enabled: z
+      .boolean()
+      .optional()
+      .describe('Let the agent call Alexandria providers. On by default.'),
+    toolkits: z
+      .array(z.string())
+      .max(5)
+      .optional()
+      .describe('Pin up to 5 providers the agent may use, by slug. Omitted means the whole catalog.'),
+    maxCalls: z
+      .number()
+      .int()
+      .min(1)
+      .max(30)
+      .optional()
+      .describe('Most provider calls the agent may make in this turn.'),
+    requireApproval: z
+      .boolean()
+      .optional()
+      .describe(
+        'End the turn with a paid-call pendingApproval before any paid provider call. Requires mode "chat" on the same request, even on a follow-up.'
+      ),
+    approve: z
+      .strictObject({
+        approvalId: z.string().uuid(),
+        callIds: z.array(z.string()).optional(),
+        always: z.boolean().optional(),
+      })
+      .optional()
+      .describe(
+        'Answer yes to the pendingApproval the previous turn of this thread ended on (its id, also exchange.requiresAction.approvalId). Needs threadId. For a terms offer, send it only after the user explicitly agreed and terms/accept succeeded; callIds and always are ignored on terms offers. For paid calls, callIds picks a subset (default all) and always stops asking for the rest of the thread.'
+      ),
+    decline: z
+      .strictObject({ approvalId: z.string().uuid() })
+      .optional()
+      .describe(
+        'Answer no to that pendingApproval. Needs threadId. A declined terms offer keeps those providers out of the rest of the thread.'
+      ),
+    onTermsRequired: z
+      .enum(['skip', 'ask'])
+      .optional()
+      .describe(
+        'What to do when a provider the agent would use needs data terms the team has not accepted. Gated providers are never called. "skip" (default): answer with accepted providers and list the rest in exchange.skippedProviders. "ask": the same, plus a terms pendingApproval and exchange.requiresAction with the terms/show and terms/accept calls. Each provider digest is string | null and always present; when null, terms/show returns it. There is no auto-accept. Omitted on a follow-up keeps the previous turn\'s value.'
+      ),
+  })
+  .describe(
+    'Alexandria provider settings for this turn, forwarded as the request\'s exchange object.'
+  );
+
 server.addTool({
   name: 'firecrawl_agent',
   annotations: {
@@ -3586,8 +3928,9 @@ Run web research that returns structured data when the URLs are not known or the
 
 This call returns only a job ID, not the research result. Read the job with \`firecrawl_agent_status\` until it reaches \`completed\` or \`failed\`; a typical research run takes one to three minutes. For one known URL use \`firecrawl_scrape\` (with formats: ["json"] for structured output); for a plain lookup that a results page answers, use \`firecrawl_search\`.
 
-The job also returns a \`threadId\`. To continue that thread, pass it with a follow-up \`prompt\`; omitted \`mode\`, \`urls\` and \`schema\` carry over from the previous turn.
+The job also returns a \`threadId\`. To continue that thread, pass it with a follow-up \`prompt\`; omitted \`mode\`, \`urls\`, \`schema\` and exchange settings carry over from the previous turn.
 
+The agent only calls Alexandria providers whose data terms the team has accepted. The status result's \`exchange.skippedProviders\` lists gated providers that would have helped. With \`exchange.onTermsRequired\` "ask", a terms offer ends the turn: \`pendingApproval\` (kind "terms") and \`exchange.requiresAction\` carry the \`approvalId\` and the exact terms/show and terms/accept calls. Show the user the terms, get their EXPLICIT consent, run terms/accept through \`firecrawl_scrape\`, then call \`firecrawl_agent\` with the same \`threadId\` and \`exchange.approve: {approvalId}\`. If they decline, send \`exchange.decline: {approvalId}\` instead. Never call terms/accept without that consent; a data request is not consent.
 `,
   outputSchema: agentOutputSchema,
   parameters: z.object({
@@ -3623,9 +3966,38 @@ The job also returns a \`threadId\`. To continue that thread, pass it with a fol
       .enum(['extract', 'chat'])
       .optional()
       .describe(
-        '"extract" (default) returns the complete structured result every turn. "chat" lets a follow-up that asks no new data get a short reply in message instead of a re-run. Omitted on a follow-up keeps the previous turn\'s mode.'
+        '"extract" (default) returns the complete structured result every turn. "chat" lets a follow-up that asks no new data get a short reply in message instead of a re-run; required for exchange.requireApproval. Omitted on a follow-up keeps the previous turn\'s mode.'
       ),
-  }),
+    exchange: agentExchangeSchema.optional(),
+  })
+  .refine(
+    (data) => !(data.exchange?.approve && data.exchange?.decline),
+    {
+      message:
+        'Send exchange.approve or exchange.decline, not both: each answers the pending approval one way.',
+      path: ['exchange'],
+    }
+  )
+  .refine(
+    (data) =>
+      !(data.exchange?.approve || data.exchange?.decline) ||
+      Boolean(data.threadId),
+    {
+      message:
+        'exchange.approve and exchange.decline answer a pending approval on an existing thread: pass that thread\'s threadId.',
+      path: ['threadId'],
+    }
+  )
+  .refine(
+    (data) => !data.exchange?.requireApproval || data.mode === 'chat',
+    {
+      // The agent service checks the mode sent on this request, not the
+      // thread's inherited one, and the gateway turns its 400 into a 500.
+      message:
+        'exchange.requireApproval needs mode: "chat" on the same request, including on a follow-up.',
+      path: ['mode'],
+    }
+  ),
   execute: async (
     args: unknown,
     { session, log, client: mcpClient }
@@ -3646,6 +4018,9 @@ The job also returns a \`threadId\`. To continue that thread, pass it with a fol
       strictConstrainToURLs: a.strictConstrainToURLs as boolean | undefined,
       threadId: a.threadId as string | undefined,
       mode: a.mode as 'extract' | 'chat' | undefined,
+      // Forwarded verbatim: the agent service owns the defaults and the
+      // per-thread inheritance.
+      exchange: a.exchange as Record<string, unknown> | undefined,
     });
     const res = await (client as any).startAgent({
       ...agentBody,
@@ -3886,7 +4261,10 @@ Set \`redactPII\` to request redaction of personally identifiable information in
     form.append('file', blob, filename);
     form.append('options', JSON.stringify(optionsPayload));
 
-    const headers: Record<string, string> = { ...originHeaders(origin) };
+    const headers: Record<string, string> = {
+      ...AGENT_HINTS_HEADERS,
+      ...originHeaders(origin),
+    };
     const credential = credentialForOutboundRequest(session);
     if (credential) {
       headers['Authorization'] = `Bearer ${credential}`;
@@ -3907,8 +4285,16 @@ Set \`redactPII\` to request redaction of personally identifiable information in
 
     const responseText = await response.text();
     if (!response.ok) {
-      throw new Error(
-        `Parse request failed with status ${response.status}: ${responseText}`
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(responseText);
+      } catch {
+        // Keep the original non-JSON error text.
+      }
+      throw new CoreHttpError(
+        `Parse request failed with status ${response.status}: ${responseText}`,
+        response.status,
+        readAgentHints(parsed)
       );
     }
 
