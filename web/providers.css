@@ -385,7 +385,10 @@ input[type='checkbox'] {
   padding: 0;
 }
 #provider-dialog::backdrop {
-  background: var(--black-alpha-48);
+  /* Match firecrawl-web's DialogOverlay: background-base/80 + blur-md.
+     black-alpha tokens become white in dark mode and wash out the page. */
+  background: color-mix(in srgb, var(--background-base) 80%, transparent);
+  backdrop-filter: blur(12px);
 }
 .dialog-header {
   display: flex;

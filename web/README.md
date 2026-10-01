@@ -48,6 +48,9 @@ The provider card layout follows
 sidebar, and `button.css` is copied from
 `components/ui/shadcn/button.css`. The interface uses the same semantic colors
 and Suisse fonts as the Usage tab. Initials act as self-contained provider marks.
+The provider dialog backdrop follows `components/ui/shadcn/dialog.tsx`:
+the theme's base background at 80% opacity with a 12px blur. It does not use
+black-alpha tokens, which become white in dark mode.
 
 Select whole providers or individual tools to attach their context directly to
 ChatGPT's native composer with `ui/update-model-context`. Text content blocks use
