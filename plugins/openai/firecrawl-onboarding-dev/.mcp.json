@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "firecrawl-onboarding": {
+      "command": "python3",
+      "args": ["./scripts/run-keychain.py"],
+      "env": {
+        "FIRECRAWL_MCP_APP_TITLE": "Firecrawl onboarding"
+      }
+    }
+  }
+}

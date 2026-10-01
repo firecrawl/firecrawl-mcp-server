@@ -1,5 +1,6 @@
 import { App, type McpUiHostContext } from '@modelcontextprotocol/ext-apps';
 import { providersBrowser } from './providers';
+import { createOnboarding } from './onboarding';
 
 const app = new App({ name: 'Firecrawl usage', version: '1.0.0' }, {});
 const element = (id: string) => document.getElementById(id)!;
@@ -21,7 +22,16 @@ let connected = false;
 let loading = false;
 let connection: Promise<void> | undefined;
 let view: 'usage' | 'providers' = 'usage';
-const providers = providersBrowser(app, ready);
+const providers = providersBrowser(app, ready, () =>
+  onboarding?.selectionChanged()
+);
+const onboarding = createOnboarding(
+  app,
+  ready,
+  providers,
+  () => navigate('providers'),
+  update
+);
 
 function ready(): Promise<void> {
   if (!connection)
@@ -41,6 +51,7 @@ function ready(): Promise<void> {
 function navigate(next: 'usage' | 'providers'): void {
   view = next;
   element('providers-view').hidden = view !== 'providers';
+  if (view === 'usage') element('saved-sources').hidden = true;
   element('usage-view').hidden = view !== 'usage';
   document.querySelector('.dashboard')!.setAttribute('data-view', view);
   element('providers-tab').setAttribute(
@@ -56,6 +67,7 @@ function navigate(next: 'usage' | 'providers'): void {
       : 'Your credits and recent usage.';
   if (view === 'providers') void providers.activate();
   else providers.deactivate();
+  onboarding?.viewChanged();
 }
 
 function theme(context: Pick<McpUiHostContext, 'theme'>): void {
@@ -253,4 +265,4 @@ dashboardButton.addEventListener('click', async () => {
   }
 });
 theme({});
-void update();
+onboarding.start();

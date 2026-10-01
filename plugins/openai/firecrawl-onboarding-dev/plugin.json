@@ -1,0 +1,17 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "firecrawl-onboarding-dev",
+  "version": "0.1.0",
+  "description": "First-open source onboarding, Alexandria providers and Firecrawl usage. Local development build with macOS Keychain authentication.",
+  "author": {
+    "name": "SideGuide Technologies, Inc."
+  },
+  "homepage": "https://firecrawl.dev",
+  "license": "MIT",
+  "skills": "./skills/",
+  "extensions": {
+    "com.openai": {
+      "onboardingSkill": "./skills/get-started/SKILL.md"
+    }
+  }
+}

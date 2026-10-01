@@ -98,3 +98,21 @@ credentials. It never executes provider capabilities. Non-success icon responses
 are omitted, including Google's generic globe on a 404. Existing artwork survives
 transient failures. Firecrawl and Data Legion use the same brand overrides as
 firecrawl-web. No credentials enter the generated JSON or HTML.
+
+First-open onboarding uses the same Firecrawl tokens, Suisse typography, buttons
+and provider cards. Welcome checks the Firecrawl connection through read-only
+credit usage. The source picker reuses live discovery, category tabs, logos and
+contract inspection. Selection is a draft until the final explicit attachment.
+Host failures retain the draft; completion is saved only after a successful
+attachment or an explicit skip/finish without attachment.
+
+Local preferences contain only completion and exact provider/tool IDs. Storage
+failures use an in-memory draft and display a notice. Saved IDs are re-resolved
+against the current catalog; preference storage does not grant account access,
+accept provider terms or attach context to future chats. Manage sources reopens
+the picker, and Add to this chat explicitly attaches saved sources.
+
+The separate Firecrawl Onboarding Dev package declares an onboardingSkill.
+Use `node scripts/install-onboarding-plugin.mjs` to test it without repointing
+the existing Usage Dev installation. Automatic installation-time opening is
+unverified; first-open detection belongs to the app.

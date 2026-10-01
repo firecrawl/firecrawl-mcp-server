@@ -11,6 +11,9 @@
       <header class="page-header">
         <div class="brand">
           <span class="brand-icon"><!--ICON--></span>Firecrawl
+          <button id="manage-sources" type="button" class="text-button" hidden>
+            Manage sources
+          </button>
         </div>
         <nav class="app-tabs" aria-label="Firecrawl app">
           <button
@@ -52,6 +55,165 @@
         </div>
         <p id="page-description">Your credits and recent usage.</p>
       </header>
+      <section id="onboarding-view" aria-label="Firecrawl setup" hidden>
+        <div class="onboarding-progress">
+          <ol aria-label="Setup progress">
+            <li data-step="1"><span>1</span> Welcome</li>
+            <li data-step="2"><span>2</span> Your sources</li>
+            <li data-step="3"><span>3</span> Start exploring</li>
+          </ol>
+          <button id="onboarding-skip" type="button" class="text-button">
+            Skip for now
+          </button>
+        </div>
+        <div id="onboarding-welcome" class="onboarding-panel">
+          <div
+            id="onboarding-art"
+            class="onboarding-art"
+            aria-hidden="true"
+          ></div>
+          <p class="onboarding-eyebrow">THE WEB, READY FOR YOUR CHAT</p>
+          <h1 id="onboarding-title" tabindex="-1">
+            Your sources. One conversation.
+          </h1>
+          <p class="onboarding-lede">
+            Bring the tools and data you need into ChatGPT.<br />Choose your
+            sources, then ask away.
+          </p>
+          <div class="onboarding-benefits">
+            <div>
+              <span>01</span><strong>Find your sources</strong>
+              <p>Discover providers for research, shopping, travel and more.</p>
+            </div>
+            <div>
+              <span>02</span><strong>Choose what matters</strong>
+              <p>Select a provider or pick the individual tools you need.</p>
+            </div>
+            <div>
+              <span>03</span><strong>Ask in your chat</strong>
+              <p>
+                Your selected tools travel with you into the native composer.
+              </p>
+            </div>
+          </div>
+          <div class="onboarding-account">
+            <span
+              id="onboarding-connection-indicator"
+              class="connection-indicator"
+              aria-hidden="true"
+            ></span>
+            <div>
+              <strong
+                id="onboarding-connection"
+                role="status"
+                aria-live="polite"
+                >Checking your Firecrawl connection…</strong
+              >
+              <p id="onboarding-credit-note">
+                Your account powers all of your sources.
+              </p>
+            </div>
+            <button
+              id="onboarding-retry"
+              type="button"
+              class="text-button"
+              hidden
+            >
+              Retry connection
+            </button>
+          </div>
+          <button
+            id="onboarding-start"
+            type="button"
+            class="button button-primary onboarding-primary"
+            disabled
+          >
+            Choose your sources →
+          </button>
+          <p class="onboarding-fine-print">
+            Browsing sources is free. Running tools uses Firecrawl credits.
+          </p>
+        </div>
+        <div id="onboarding-sources" class="onboarding-sources" hidden>
+          <div>
+            <p class="onboarding-eyebrow">MAKE IT YOURS</p>
+            <h1 tabindex="-1">What would you like to work with?</h1>
+            <p class="onboarding-lede">
+              Pick a few sources to get started. You can change them anytime.
+            </p>
+          </div>
+          <div class="onboarding-source-actions">
+            <button
+              id="onboarding-back-welcome"
+              type="button"
+              class="text-button"
+            >
+              ← Back</button
+            ><span id="onboarding-source-count" class="label" role="status"
+              >No sources selected</span
+            ><button
+              id="onboarding-next"
+              type="button"
+              class="button button-primary onboarding-primary"
+            >
+              Continue →
+            </button>
+          </div>
+        </div>
+        <div id="onboarding-finish" class="onboarding-panel" hidden>
+          <p class="onboarding-eyebrow">READY WHEN YOU ARE</p>
+          <h1 tabindex="-1">A good question starts here.</h1>
+          <p class="onboarding-lede">
+            Add your sources to this chat, then type your request in the chat
+            composer.
+          </p>
+          <div
+            id="onboarding-selected"
+            class="onboarding-selected"
+            aria-label="Your selected sources"
+          ></div>
+          <div class="onboarding-examples">
+            <p class="label">TRY ASKING</p>
+            <div id="onboarding-examples"></div>
+          </div>
+          <p id="onboarding-host-note" class="onboarding-fine-print"></p>
+          <div class="onboarding-finish-actions">
+            <button
+              id="onboarding-back-sources"
+              type="button"
+              class="text-button"
+            >
+              ← Change sources</button
+            ><button
+              id="onboarding-attach"
+              type="button"
+              class="button button-primary onboarding-primary"
+            >
+              Add sources to chat →
+            </button>
+          </div>
+        </div>
+        <p
+          id="onboarding-feedback"
+          class="onboarding-feedback"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <p id="onboarding-storage-note" class="onboarding-fine-print" hidden>
+          Your host cannot remember setup between visits. You can still use your
+          sources in this chat.
+        </p>
+      </section>
+      <div id="saved-sources" class="saved-sources" hidden>
+        <div>
+          <strong>Your sources, ready to go</strong>
+          <p id="saved-sources-count"></p>
+        </div>
+        <button id="add-saved-sources" type="button" class="secondary-button">
+          Add to this chat
+        </button>
+        <p id="saved-sources-status" role="status" aria-live="polite"></p>
+      </div>
       <div id="providers-view" hidden>
         <section class="catalog-section" aria-label="Alexandria providers">
           <div class="catalog-toolbar">

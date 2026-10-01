@@ -21,7 +21,7 @@ const fonts = await Promise.all(
   })
 );
 const icon = await read('web/firecrawl-icon.svg');
-const styles = `<style>${fonts.join('\n')}\n${await read('web/firecrawl.css')}\n${await read('web/usage.css')}\n${await read('web/button.css')}\n${await read('web/providers.css')}</style>`;
+const styles = `<style>${fonts.join('\n')}\n${await read('web/firecrawl.css')}\n${await read('web/usage.css')}\n${await read('web/button.css')}\n${await read('web/providers.css')}\n${await read('web/onboarding.css')}</style>`;
 const script = `<script>${result.outputFiles[0].text.replaceAll('</script', '<\\/script')}</script>`;
 // Function replacements preserve literal dollar sequences in bundled code.
 const html = (await read('web/usage.html'))

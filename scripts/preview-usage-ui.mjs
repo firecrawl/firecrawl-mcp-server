@@ -6,10 +6,12 @@ import { previewCatalog } from './usage-preview-fixtures.mjs';
 const preview = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Firecrawl usage preview</title>
 <style>body{margin:0;background:#eee;font:13px system-ui;color:#262626}header{padding:12px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}select,button{font:inherit}iframe{display:block;width:1120px;max-width:100%;height:940px;margin:16px auto;border:1px solid #ddd;background:#f9f9f9}label{display:flex;gap:5px}</style>
 <header><strong>Local preview · Sample data</strong><label>State <select id="scenario"><option value="normal">Normal</option><option value="catalog-error">Catalog error</option><option value="categories-error">Categories error</option><option value="tools-error">Tools error</option><option value="context-error">Context error</option><option value="context-slow">Slow context updates</option><option value="unsupported-message">No message support</option><option value="unsupported-context">No context support</option><option value="extra">Extra credits</option><option value="empty">No usage</option><option value="history-error">History error</option><option value="balance-error">Balance error</option><option value="error">Account disconnected</option><option value="metadata">No billing dates</option><option value="zero">Zero credits</option></select></label><label>Theme <select id="theme"><option>light</option><option>dark</option></select></label><label>Width <select id="width"><option>480</option><option>320</option><option>760</option><option selected>1120</option></select></label><button id="reload">Reload</button></header>
-<iframe id="view" title="Firecrawl usage" src="/usage.html"></iframe>
+<iframe id="view" title="Firecrawl usage" src="/usage.html?fixture=returning"></iframe>
 <script>
 const frame=document.getElementById('view');
 const scenario=document.getElementById('scenario');
+const firstVisit=new URL(location.href).searchParams.has('onboarding');
+if(firstVisit) frame.src='/usage.html?fixture=fresh';
 const theme=document.getElementById('theme');
 window.calls=[];window.messages=[];window.modelContexts=[];window.previewErrors=[];
 const catalogFixture=${previewCatalog.toString()};
@@ -42,7 +44,7 @@ window.addEventListener('message',event=>{
 });
 theme.addEventListener('change',()=>frame.contentWindow.postMessage({jsonrpc:'2.0',method:'ui/notifications/host-context-changed',params:{theme:theme.value}},location.origin));
 document.getElementById('width').addEventListener('change',event=>frame.style.width=event.target.value+'px');
-document.getElementById('reload').addEventListener('click',()=>{window.calls=[];window.messages=[];window.modelContexts=[];frame.src='/usage.html?t='+Date.now();});
+document.getElementById('reload').addEventListener('click',()=>{window.calls=[];window.messages=[];window.modelContexts=[];frame.src='/usage.html?fixture='+(firstVisit?'persist':'returning')+'&t='+Date.now();});
 </script></html>`;
 const server = createServer(async (request, response) => {
   try {
@@ -62,11 +64,33 @@ const server = createServer(async (request, response) => {
         'Content-Security-Policy',
         "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src data:; connect-src 'none'; frame-ancestors 'self'"
       );
-    response.end(
+    let html =
       path === '/'
         ? preview
-        : await readFile(new URL('../dist/usage.html', import.meta.url), 'utf8')
-    );
+        : await readFile(
+            new URL('../dist/usage.html', import.meta.url),
+            'utf8'
+          );
+    if (path === '/usage.html') {
+      const fixture = new URL(request.url, 'http://localhost').searchParams.get(
+        'fixture'
+      );
+      const key = 'firecrawl.provider-onboarding.v1';
+      const boot =
+        fixture === 'fresh'
+          ? `localStorage.removeItem('${key}')`
+          : fixture === 'blocked'
+            ? `Object.defineProperty(window,'localStorage',{get(){throw new DOMException('Storage blocked','SecurityError')}})`
+            : fixture === 'persist'
+              ? ''
+              : `localStorage.setItem('${key}',JSON.stringify({version:1,completed:true,sources:[]}))`;
+      // Fixture state is injected only by this development host.
+      html = html.replace(
+        '<script>',
+        `<script>try{${boot}}catch{};</script><script>`
+      );
+    }
+    response.end(html);
   } catch {
     response.writeHead(500).end('Build the usage interface first.');
   }

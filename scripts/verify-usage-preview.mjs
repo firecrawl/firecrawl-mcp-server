@@ -86,7 +86,7 @@ async function verify() {
     );
   };
   await load();
-  const logos = [...doc().querySelectorAll('.provider-logo')];
+  const logos = [...get('provider-grid').querySelectorAll('.provider-logo')];
   logos.forEach((image) => {
     image.loading = 'eager';
   });

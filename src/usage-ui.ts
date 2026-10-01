@@ -48,7 +48,7 @@ export function registerUsageDashboard(
     description:
       'Open the Firecrawl sidebar app to browse Alexandria providers, select tools for a chat, and see credits remaining, plan credits, billing dates, and monthly credit usage. Requires a connected Firecrawl account. Use firecrawl_credit_usage for data-only reporting.',
     annotations: {
-      title: 'Firecrawl usage',
+      title: process.env.FIRECRAWL_MCP_APP_TITLE || 'Firecrawl usage',
       readOnlyHint: true,
       destructiveHint: false,
       openWorldHint: false,

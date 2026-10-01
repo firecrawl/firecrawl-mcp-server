@@ -1,0 +1,26 @@
+{
+  "name": "firecrawl-onboarding-dev",
+  "version": "0.1.0",
+  "description": "First-open source onboarding, Alexandria providers and Firecrawl usage. Local development build with macOS Keychain authentication.",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Firecrawl Onboarding Dev",
+    "shortDescription": "Choose your sources and start exploring",
+    "longDescription": "Browse and select Alexandria providers, pass tool context to a chat, and view credits and usage using the Firecrawl design system.",
+    "developerName": "SideGuide Technologies, Inc.",
+    "category": "Productivity",
+    "capabilities": ["Read"],
+    "brandColor": "#fa5d19",
+    "logo": "./assets/firecrawl.svg",
+    "composerIcon": "./assets/firecrawl.svg",
+    "websiteURL": "https://firecrawl.dev",
+    "privacyPolicyURL": "https://www.firecrawl.dev/privacy-policy",
+    "termsOfServiceURL": "https://www.firecrawl.dev/terms-of-service"
+  },
+  "skills": "./skills/",
+  "extensions": {
+    "com.openai": {
+      "onboardingSkill": "./skills/get-started/SKILL.md"
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "firecrawl-onboarding": {
+      "type": "stdio",
+      "command": "python3",
+      "args": ["./scripts/run-keychain.py"],
+      "env": {
+        "FIRECRAWL_MCP_APP_TITLE": "Firecrawl onboarding"
+      }
+    }
+  }
+}

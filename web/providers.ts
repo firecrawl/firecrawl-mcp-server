@@ -1,5 +1,6 @@
 import { providerMark } from './provider-logo';
 import type { App } from '@modelcontextprotocol/ext-apps';
+import type { SourcePreference } from './preferences';
 import {
   buildSelectionContext,
   capabilityFrom,
@@ -27,7 +28,11 @@ const text = (tag: string, value: string, className = '') => {
   return e;
 };
 
-export function providersBrowser(app: App, ready: () => Promise<void>) {
+export function providersBrowser(
+  app: App,
+  ready: () => Promise<void>,
+  onSelectionChange: () => void = () => undefined
+) {
   const search = el('provider-search') as HTMLInputElement;
   const categoryNav = el('provider-categories');
   let category = '';
@@ -50,6 +55,8 @@ export function providersBrowser(app: App, ready: () => Promise<void>) {
     dialogTools: Capability[] = [],
     dialogGeneration = 0;
   let canContext = false;
+  let draftMode = false;
+  let activation: Promise<void> | undefined;
 
   async function call(args: JsonRecord, level: string) {
     await ready();
@@ -131,7 +138,7 @@ export function providersBrowser(app: App, ready: () => Promise<void>) {
     const label = text('label', '', 'provider-select');
     const input = document.createElement('input');
     input.type = 'checkbox';
-    input.disabled = !canContext;
+    input.disabled = !canContext && !draftMode;
     input.checked = selected.has(provider.id);
     input.indeterminate = selected.get(provider.id)?.tools != null;
     input.setAttribute('aria-label', `Select ${provider.name}`);
@@ -299,7 +306,11 @@ export function providersBrowser(app: App, ready: () => Promise<void>) {
   }
   function changed() {
     renderSelection();
-    void syncSelection();
+    onSelectionChange();
+    if (!draftMode) void syncSelection();
+    else
+      el('selection-status').textContent =
+        'Choose your sources. They will be added to chat when you finish setup.';
     for (const card of el('provider-grid').querySelectorAll<HTMLElement>(
       '.provider-card'
     )) {
@@ -332,7 +343,7 @@ export function providersBrowser(app: App, ready: () => Promise<void>) {
       const heading = text('label', '', 'capability-heading');
       const check = document.createElement('input');
       check.type = 'checkbox';
-      check.disabled = !canContext;
+      check.disabled = !canContext && !draftMode;
       const selection = selected.get(provider.id);
       check.checked =
         !!selection &&
@@ -406,7 +417,7 @@ export function providersBrowser(app: App, ready: () => Promise<void>) {
         )
       );
     const selectAll = el('select-provider') as HTMLButtonElement;
-    selectAll.disabled = !canContext || !dialogTools.length;
+    selectAll.disabled = (!canContext && !draftMode) || !dialogTools.length;
     selectAll.textContent =
       selected.get(provider.id)?.tools === null
         ? 'Remove provider'
@@ -518,8 +529,8 @@ export function providersBrowser(app: App, ready: () => Promise<void>) {
         'Categories unavailable. You can still search all providers.';
     }
   }
-  async function syncSelection() {
-    if (!canContext) return;
+  async function syncSelection(): Promise<boolean> {
+    if (!canContext) return false;
     const version = ++selectionVersion;
     const snapshot = [...selected.values()].map((s) => ({
       provider: s.provider,
@@ -532,7 +543,7 @@ export function providersBrowser(app: App, ready: () => Promise<void>) {
     try {
       const selections: Selection[] = [];
       for (const selection of snapshot) {
-        if (version !== selectionVersion) return;
+        if (version !== selectionVersion) return false;
         const available = await tools(selection.provider);
         const chosen = selection.tools
           ? available.filter((t) => selection.tools!.has(t.capability))
@@ -552,7 +563,7 @@ export function providersBrowser(app: App, ready: () => Promise<void>) {
           scope: selection.tools ? 'tools' : 'provider',
         });
       }
-      if (version !== selectionVersion) return;
+      if (version !== selectionVersion) return false;
       const { content } = buildSelectionContext(selections);
       // Serialize host writes and discard stale preparation when selection changes.
       // Each provider lives in its removable native content block. A hidden
@@ -566,18 +577,20 @@ export function providersBrowser(app: App, ready: () => Promise<void>) {
         });
       contextQueue = publish;
       await publish;
-      if (version !== selectionVersion) return;
+      if (version !== selectionVersion) return false;
       el('selection-status').textContent = content.length
         ? 'Added to chat. Type your request in the chat composer.'
         : 'Select providers to add their tools to your chat.';
+      return true;
     } catch (error) {
-      if (version !== selectionVersion) return;
+      if (version !== selectionVersion) return false;
       retrySelection.hidden = false;
       el('selection-status').textContent =
         error instanceof Error &&
         /selection|selected|large/i.test(error.message)
           ? error.message
           : 'Could not update chat context. Your selection is saved here; retry.';
+      return false;
     }
   }
   search.addEventListener('input', renderProviders);
@@ -595,7 +608,7 @@ export function providersBrowser(app: App, ready: () => Promise<void>) {
   });
   el('close-provider-dialog').addEventListener('click', () => dialog.close());
   el('select-provider').addEventListener('click', () => {
-    if (!dialogProvider || !canContext) return;
+    if (!dialogProvider || (!canContext && !draftMode)) return;
     if (selected.get(dialogProvider.id)?.tools === null)
       selected.delete(dialogProvider.id);
     else
@@ -609,7 +622,7 @@ export function providersBrowser(app: App, ready: () => Promise<void>) {
     void syncSelection();
   });
   renderSelection();
-  async function activate() {
+  async function initialize() {
     if (initialized) return;
     try {
       await ready();
@@ -626,7 +639,67 @@ export function providersBrowser(app: App, ready: () => Promise<void>) {
         'Could not connect. Open the app through the Firecrawl plugin and retry.';
     }
   }
+  function activate(): Promise<void> {
+    if (!activation)
+      activation = initialize().finally(() => {
+        activation = undefined;
+      });
+    return activation;
+  }
   return {
+    selection: () =>
+      [...selected.values()].map(({ provider, tools }) => ({
+        provider,
+        tools: tools === null ? null : [...tools],
+      })),
+    preferences: (): SourcePreference[] =>
+      [...selected.values()].map(({ provider, tools }) => ({
+        id: provider.id,
+        tools: tools === null ? null : [...tools],
+      })),
+    setDraftMode(draft: boolean) {
+      draftMode = draft;
+      selectionVersion++;
+      retrySelection.hidden = true;
+      if (draft)
+        el('selection-status').textContent =
+          'Choose your sources. They will be added to chat when you finish setup.';
+      else if (!selected.size || !canContext)
+        el('selection-status').textContent = canContext
+          ? 'Select providers to add their tools to your chat.'
+          : 'This host cannot attach selections. Open the app in ChatGPT with a chat composer available.';
+      renderProviders();
+    },
+    async restore(sources: SourcePreference[]) {
+      await activate();
+      if (category) {
+        category = '';
+        renderCategories();
+        await loadProviders();
+      }
+      // Resolve stored IDs against the current authenticated catalog.
+      if (!el('catalog-error').hidden) throw new Error('Catalog unavailable');
+      selected.clear();
+      for (const source of sources) {
+        const provider = providers.find((p) => p.id === source.id);
+        if (provider)
+          selected.set(source.id, {
+            provider,
+            tools: source.tools === null ? null : new Set(source.tools),
+          });
+      }
+      search.value = '';
+      renderProviders();
+      renderSelection();
+      onSelectionChange();
+      return sources.length - selected.size;
+    },
+    publish: syncSelection,
+    resetSelection() {
+      selected.clear();
+      renderProviders();
+      renderSelection();
+    },
     async refresh() {
       toolCache.clear();
       contractCache.clear();

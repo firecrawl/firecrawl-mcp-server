@@ -1327,3 +1327,20 @@ To enable the interface in ChatGPT, deploy this server build behind the register
 Firecrawl account connection and refresh the connection's tools/resources in
 developer mode. The existing OpenAI package keeps its registered app reference;
 this change does not publish a plugin or change marketplace/submission settings.
+
+### First-open source onboarding
+
+New app visits start with a guided Welcome → Your sources → Start exploring
+flow. It checks the Firecrawl connection, supports provider and individual-tool
+draft selections, and attaches them to the native composer only after an explicit
+action. Setup does not send a message or execute paid provider capabilities.
+Returning visits show saved sources with an explicit **Add to this chat** action;
+**Manage sources** revisits the picker. Completion and exact source/tool IDs are
+saved locally when the host allows storage; blocked storage is disclosed.
+
+To test this experiment as a separate local plugin without changing Usage Dev,
+run `node scripts/install-onboarding-plugin.mjs`, optionally setting
+`FIRECRAWL_KEYCHAIN_ACCOUNT`. Open **Firecrawl Onboarding Dev** from Plugins.
+See [onboarding setup](plugins/openai/firecrawl-onboarding-dev/README.md).
+The package includes an `onboardingSkill`; the app implements first-open
+detection. Installation-time automatic opening remains unverified.
