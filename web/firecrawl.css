@@ -1,0 +1,31 @@
+/* Snapshot of firecrawl-web/colors.ts. See web/README.md. */
+:root {
+  --heat-8: #fa5d1914;
+  --heat-12: #fa5d191f;
+  --heat-100: #fa5d19ff;
+  --accent-black: #262626ff;
+  --accent-crimson: #eb3424ff;
+  --black-alpha-4: #0000000a;
+  --black-alpha-6: #0000000f;
+  --black-alpha-48: #2626267a;
+  --black-alpha-56: #2626268f;
+  --black-alpha-64: #262626a3;
+  --black-alpha-72: #262626b8;
+  --border-faint: #edededff;
+  --background-base: #f9f9f9ff;
+}
+:root[data-theme='dark'] {
+  --heat-8: #fa5d1914;
+  --heat-12: #fa5d191f;
+  --heat-100: #fa5d19ff;
+  --accent-black: #f5f5f5ff;
+  --accent-crimson: #f05545ff;
+  --black-alpha-4: #ffffff0a;
+  --black-alpha-6: #ffffff0f;
+  --black-alpha-48: #ffffff7a;
+  --black-alpha-56: #ffffff8f;
+  --black-alpha-64: #ffffffa3;
+  --black-alpha-72: #ffffffb8;
+  --border-faint: #2a2a2aff;
+  --background-base: #0a0a0aff;
+}

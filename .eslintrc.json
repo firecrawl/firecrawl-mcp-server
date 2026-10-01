@@ -20,7 +20,9 @@
     "@typescript-eslint/no-explicit-any": "off",
     "@typescript-eslint/no-unused-vars": [
       "error",
-      { "argsIgnorePattern": "^_" }
+      {
+        "argsIgnorePattern": "^_"
+      }
     ]
   },
   "overrides": [
@@ -29,6 +31,15 @@
       "rules": {
         "@typescript-eslint/no-unused-vars": "off",
         "@typescript-eslint/no-explicit-any": "off"
+      }
+    },
+    {
+      "files": ["web/*.ts"],
+      "env": {
+        "browser": true
+      },
+      "parserOptions": {
+        "project": "./web/tsconfig.json"
       }
     }
   ]

@@ -39,6 +39,7 @@ const SEARCH_TOOLS = [
 
 // A representative sample of the full-surface tools that must NOT leak here.
 const EXCLUDED_TOOLS = [
+  'firecrawl_usage_dashboard',
   'firecrawl_map',
   'firecrawl_crawl',
   'firecrawl_check_crawl_status',

@@ -3,6 +3,7 @@
   "version": "3.27.2",
   "description": "MCP server for Firecrawl — search, scrape, and interact with the web, and search scientific papers. Supports both cloud and self-hosted instances. Features include web search, scraping, page interaction, batch processing, LLM-powered content analysis, and research paper search over biomedical and arXiv literature (PubMed, bioRxiv, medRxiv, arXiv) with citation-graph expansion and full-text reading.",
   "type": "module",
+  "packageManager": "pnpm@10.17.1",
   "mcpName": "io.github.firecrawl/firecrawl-mcp-server",
   "bin": {
     "firecrawl-mcp": "dist/index.js"
@@ -14,16 +15,18 @@
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && tsup && node -e \"require('fs').chmodSync('dist/index.js', '755')\"",
-    "test": "npm run build && node --test --test-concurrency=1 tests/*.test.mjs",
+    "build": "rm -rf dist && tsup && node scripts/build-usage-ui.mjs && node -e \"require('fs').chmodSync('dist/index.js', '755')\"",
+    "test": "npm run build && npm run typecheck:ui && node --test --test-concurrency=1 tests/*.test.mjs",
     "start": "node dist/index.js",
     "start:cloud": "CLOUD_SERVICE=true node dist/index.js",
-    "lint": "eslint src/**/*.ts",
-    "lint:fix": "eslint src/**/*.ts --fix",
+    "lint": "eslint src/**/*.ts web/*.ts",
+    "lint:fix": "eslint src/**/*.ts web/*.ts --fix",
     "format": "prettier --write .",
     "prepare": "npm run build",
     "publish-prod": "npm run build && npm publish",
-    "publish-beta": "npm run build && npm publish --tag beta"
+    "publish-beta": "npm run build && npm publish --tag beta",
+    "typecheck:ui": "tsc -p web/tsconfig.json",
+    "preview:usage": "npm run build && node scripts/preview-usage-ui.mjs"
   },
   "license": "MIT",
   "dependencies": {
@@ -65,9 +68,11 @@
   },
   "homepage": "https://github.com/firecrawl/firecrawl-mcp-server#readme",
   "devDependencies": {
+    "@modelcontextprotocol/ext-apps": "^2.0.3",
     "@types/node": "^24.3.1",
     "@typescript-eslint/eslint-plugin": "8.48.1",
     "@typescript-eslint/parser": "8.48.1",
+    "esbuild": "^0.27.7",
     "eslint": "8.57.1",
     "eslint-config-prettier": "10.1.8",
     "tsup": "^8.5.0",

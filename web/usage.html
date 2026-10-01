@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Firecrawl usage</title>
+    <!--STYLES-->
+  </head>
+  <body>
+    <main class="dashboard">
+      <header class="page-header">
+        <div class="brand">
+          <span class="brand-icon"><!--ICON--></span>Firecrawl
+        </div>
+        <nav class="app-tabs" aria-label="Firecrawl app">
+          <button
+            type="button"
+            id="providers-tab"
+            aria-controls="providers-view"
+            aria-pressed="false"
+          >
+            Providers
+          </button>
+          <button
+            type="button"
+            id="usage-tab"
+            aria-controls="usage-view"
+            aria-pressed="true"
+          >
+            Usage
+          </button>
+        </nav>
+        <div class="heading-row">
+          <h1 id="page-title">Usage</h1>
+          <button id="refresh" type="button" disabled>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 20 20"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M16.5 8a6.5 6.5 0 1 0 .1 4M16.5 3v5h-5"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              /></svg
+            ><span>Refresh</span>
+          </button>
+        </div>
+        <p id="page-description">Your credits and recent usage.</p>
+      </header>
+      <div id="providers-view" hidden>
+        <section class="catalog-section" aria-label="Alexandria providers">
+          <div class="catalog-toolbar">
+            <label class="search-field"
+              ><span class="sr-only">Search providers</span>
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 20 20"
+                fill="none"
+                aria-hidden="true"
+              >
+                <circle
+                  cx="8.5"
+                  cy="8.5"
+                  r="5.5"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                />
+                <path
+                  d="m13 13 4 4"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                />
+              </svg>
+              <input
+                id="provider-search"
+                type="search"
+                placeholder="Search providers"
+                autocomplete="off"
+              />
+            </label>
+          </div>
+          <nav
+            id="provider-categories"
+            class="provider-categories"
+            aria-label="Provider collections"
+          >
+            <button type="button" data-category="" aria-pressed="true">
+              All
+            </button>
+          </nav>
+          <p id="category-note" class="label"></p>
+          <div
+            id="provider-collection-heading"
+            class="provider-collection-heading"
+            hidden
+          >
+            <h2 id="provider-collection-title"></h2>
+            <button
+              type="button"
+              id="all-provider-collections"
+              class="text-button"
+            >
+              ← All collections
+            </button>
+          </div>
+          <div class="catalog-heading">
+            <span id="provider-count" class="label" role="status"
+              >Loading providers…</span
+            >
+            <div class="catalog-heading-actions">
+              <div id="selection-controls" class="selection-controls" hidden>
+                <span id="selection-count" class="label"></span
+                ><button
+                  type="button"
+                  id="clear-selection"
+                  class="text-button"
+                  disabled
+                >
+                  Clear
+                </button>
+              </div>
+              <span class="badge">Alexandria</span>
+            </div>
+          </div>
+          <div id="catalog-error" class="catalog-error" role="status" hidden>
+            <p id="catalog-error-message"></p>
+            <button type="button" id="catalog-retry" class="secondary-button">
+              Retry
+            </button>
+          </div>
+          <div class="selection-feedback">
+            <p
+              id="selection-status"
+              class="selection-note"
+              role="status"
+              aria-live="polite"
+            ></p>
+            <button
+              id="retry-selection"
+              type="button"
+              class="text-button"
+              hidden
+            >
+              Retry selection
+            </button>
+          </div>
+          <div id="provider-grid" class="provider-grid"></div>
+          <p id="provider-empty" class="empty" hidden></p>
+        </section>
+      </div>
+      <div id="usage-view">
+        <section
+          class="balance-section"
+          aria-labelledby="balance-heading"
+          aria-busy="true"
+          id="balance-section"
+        >
+          <div class="section-heading">
+            <h2 id="balance-heading">Credit balance</h2>
+            <span class="badge">Account</span>
+          </div>
+          <p class="label">Credits remaining</p>
+          <p id="remaining" class="credit-value placeholder">—</p>
+          <div class="plan-row">
+            <span>Plan credits</span><strong id="plan">—</strong>
+          </div>
+          <p class="balance-note">
+            Your balance includes available top-ups and grants.
+          </p>
+          <div class="billing-row">
+            <span class="label">Billing period</span
+            ><span id="billing">Loading…</span>
+          </div>
+          <p id="balance-error" class="error" role="status" hidden></p>
+        </section>
+        <section
+          class="usage-section"
+          aria-labelledby="usage-heading"
+          aria-busy="true"
+          id="usage-section"
+        >
+          <div class="section-heading">
+            <h2 id="usage-heading">Monthly usage</h2>
+            <span class="label">Credits</span>
+          </div>
+          <p class="usage-note">
+            Recent calendar months, separate from your billing period.
+          </p>
+          <div id="history" class="history">
+            <p class="empty">Loading usage…</p>
+          </div>
+          <p id="history-error" class="error" role="status" hidden></p>
+          <p id="history-note" class="history-note" hidden>
+            Recent history covers up to 90 days. The earliest month may be
+            partial.
+          </p>
+        </section>
+      </div>
+      <footer>
+        <span id="status" role="status" aria-live="polite"
+          >Connecting to Firecrawl…</span
+        ><button class="text-button" id="open-dashboard" type="button" disabled>
+          Open dashboard <span aria-hidden="true">↗</span>
+        </button>
+      </footer>
+    </main>
+    <dialog
+      id="provider-dialog"
+      aria-labelledby="provider-dialog-name"
+      aria-describedby="provider-dialog-description"
+    >
+      <div class="dialog-header">
+        <div>
+          <span class="label">Alexandria provider</span>
+          <h2 id="provider-dialog-name"></h2>
+        </div>
+        <button
+          type="button"
+          id="close-provider-dialog"
+          class="close-button"
+          aria-label="Close provider details"
+        >
+          ×
+        </button>
+      </div>
+      <p
+        id="provider-dialog-description"
+        class="provider-dialog-description"
+      ></p>
+      <div id="provider-tools" class="provider-tools"></div>
+      <div class="dialog-footer">
+        <button
+          type="button"
+          id="select-provider"
+          class="button button-primary"
+          disabled
+        >
+          Select provider</button
+        ><span class="label">Select all tools or choose individually.</span>
+      </div>
+    </dialog>
+    <!--SCRIPT-->
+  </body>
+</html>

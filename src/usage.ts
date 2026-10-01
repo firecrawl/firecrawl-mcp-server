@@ -59,6 +59,25 @@ function assertSuccessful(
   throw new Error(response.error || `Failed to ${operation}`);
 }
 
+export async function readCurrentUsage(
+  client: UsageClient,
+  headers: Record<string, string>
+): Promise<Record<string, unknown>> {
+  const response = await client.http.get<CreditUsageResponse>(
+    '/v2/team/credit-usage',
+    headers
+  );
+  assertSuccessful(response.status, response.data, 'get credit usage');
+  const data = response.data.data ?? response.data;
+  return {
+    remainingCredits: data.remainingCredits ?? data.remaining_credits ?? 0,
+    planCredits: data.planCredits ?? data.plan_credits,
+    billingPeriodStart:
+      data.billingPeriodStart ?? data.billing_period_start ?? null,
+    billingPeriodEnd: data.billingPeriodEnd ?? data.billing_period_end ?? null,
+  };
+}
+
 export function registerUsageTools(
   server: Pick<FastMCP<SessionData>, 'addTool'>,
   getClient: GetClient
@@ -108,7 +127,9 @@ The historical view returns periods sorted by start date with \`startDate\`, \`e
       }
 
       const client = getClient(session) as UsageClient;
-      const headers = originHeaders(requestOrigin(mcpClient as McpClient, session));
+      const headers = originHeaders(
+        requestOrigin(mcpClient as McpClient, session)
+      );
       const historical = view === 'historical' || byApiKey === true;
 
       if (historical) {
@@ -125,21 +146,7 @@ The historical view returns periods sorted by start date with \`startDate\`, \`e
         return structuredText(response.data);
       }
 
-      const response = await client.http.get<CreditUsageResponse>(
-        '/v2/team/credit-usage',
-        headers
-      );
-      assertSuccessful(response.status, response.data, 'get credit usage');
-      const data = response.data.data ?? response.data;
-      return structuredText({
-        remainingCredits:
-          data.remainingCredits ?? data.remaining_credits ?? 0,
-        planCredits: data.planCredits ?? data.plan_credits,
-        billingPeriodStart:
-          data.billingPeriodStart ?? data.billing_period_start ?? null,
-        billingPeriodEnd:
-          data.billingPeriodEnd ?? data.billing_period_end ?? null,
-      });
+      return structuredText(await readCurrentUsage(client, headers));
     },
   });
 }

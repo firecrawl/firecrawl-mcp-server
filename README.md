@@ -35,9 +35,10 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Use `firecrawl_interact` when a page needs a click, type, or navigate action before you can read it — pass a `url` for a fresh page or a `scrapeId` to continue on one you already scraped.
 - Use the `firecrawl_monitor_*` tools when the same page needs to be checked on a recurring schedule with diffs and change alerts, rather than fetched once.
 - Use `firecrawl_credit_usage` to check credits left or monthly consumption, optionally broken down by API key.
+- Use `firecrawl_usage_dashboard` to open the usage interface in an MCP Apps host; ChatGPT can also expose it as a global sidebar entrypoint.
 - Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control — the session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
 
-This server lists 26 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 — `firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse` — and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 8 tools (search, developer and research search, plus Alexandria catalogue lookup and execution).
+This server lists 27 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 — `firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse` — and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 8 tools (search, developer and research search, plus Alexandria catalogue lookup and execution).
 
 ## Installation
 
@@ -1293,3 +1294,36 @@ The existing `firecrawl_feedback` tool accepts `endpoint: "alexandria"`:
 This uses authenticated `POST /v2/feedback`, without a job ID, job-age deadline, or credit refund. Optional `providerFeedback` and `capabilityFeedback` arrays describe coverage gaps and execution issues; the tool schema lists supported issue values. A `new_capability_request` requires `requestedFunctionality`; `missing_capability` (the provider exists but lacks the capability) does not. Existing feedback opt-out and authentication controls apply.
 
 Eligible Alexandria execution and discovery results include a `feedbackTool` pointer with the tool name and a skeleton of the arguments. The pointer is omitted for Firecrawl-internal calls such as `bash` and when `firecrawl_feedback` is not registered (`FIRECRAWL_NO_ENDPOINT_FEEDBACK` or keyless startup).
+
+### Usage interface
+
+The full and account profiles expose `firecrawl_usage_dashboard`, with a global
+ChatGPT sidebar entrypoint and the `ui://firecrawl/usage.html` MCP Apps resource.
+The search-only profile and hosted anonymous keyless tool list do not include it.
+The app-only launcher opens fullscreen. The interface uses the Firecrawl web design system, including Suisse fonts and
+light/dark tokens, and refreshes balance and monthly usage through the existing
+`firecrawl_credit_usage` tool. Its Providers tab browses the complete live
+Alexandria catalog with collection tabs, category shelves and bundled provider
+logos. It searches and filters providers, and supports whole-provider
+or individual-tool selections. Selecting attaches the tool context to the native
+chat composer using MCP Apps model-context support. Type your request in the
+chat composer; the app does not send a message or provide a chatbox. Discovery
+is free; capability execution happens through the chat's Firecrawl tools under
+existing account access and pricing. Selections guide the chat without enforcing
+an exclusive provider allowlist. It never handles API keys in the browser.
+
+`pnpm build` embeds the SDK, styles, and fonts into `dist/usage.html`; no external
+asset host is needed. Run `pnpm typecheck:ui` for the browser source, and
+`pnpm preview:usage` for a local mock-host preview with explicitly labeled sample
+data. This preview does not require credentials or call the Firecrawl API.
+
+For the desktop plugin sidebar flow, build and run
+`node scripts/install-usage-plugin.mjs` on macOS. This installs **Firecrawl Usage
+Dev** from a dedicated local marketplace with a Keychain-backed MCP server.
+Restart the desktop app, open its Plugins entry, open the plugin app, and choose
+**Pin to sidebar**. See the [local plugin setup](plugins/openai/firecrawl-usage-dev/README.md).
+
+To enable the interface in ChatGPT, deploy this server build behind the registered
+Firecrawl account connection and refresh the connection's tools/resources in
+developer mode. The existing OpenAI package keeps its registered app reference;
+this change does not publish a plugin or change marketplace/submission settings.
