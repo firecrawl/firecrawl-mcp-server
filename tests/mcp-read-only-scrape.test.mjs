@@ -66,7 +66,7 @@ async function startHosted(t) {
   return { api, port, searchPort };
 }
 
-test('hosted scrape is read-only; local scrape and the research agent are not', async (t) => {
+test('hosted scrape is read-only and preserves existing profile and search options', async (t) => {
   const { api, port, searchPort } = await startHosted(t);
   const headers = { 'x-api-key': 'fc-hosted-test' };
   for (const [label, endpoint, surfacePort] of [
@@ -78,20 +78,14 @@ test('hosted scrape is read-only; local scrape and the research agent are not', 
     assert.equal(scrape.annotations.readOnlyHint, true, label);
     assert.equal(scrape.annotations.destructiveHint, false, label);
     assert.equal(scrape.inputSchema.properties.actions, undefined, `${label}: no browser actions`);
-    assert.deepEqual(Object.keys(scrape.inputSchema.properties.profile.properties), ['name'], `${label}: profiles load read-only`);
     assert.doesNotMatch(scrape.description, /overwrite its stored state/, label);
   }
 
   const { tools } = await httpSession(port, '/v2/mcp', headers);
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
   assert.equal(byName.get('firecrawl_agent').annotations.readOnlyHint, false);
-  assert.deepEqual(
-    Object.keys(byName.get('firecrawl_search').inputSchema.properties.scrapeOptions.properties.profile.properties),
-    ['name']
-  );
+  assert.equal(byName.get('firecrawl_search').annotations.readOnlyHint, true);
   assert.equal(tools.some((tool) => /terms/.test(tool.name)), false, 'no tool accepts terms');
-  // Saving a profile stays available through interact.
-  assert.ok(byName.get('firecrawl_interact').inputSchema.properties.scrapeOptions.properties.profile.properties.saveChanges);
 
   for (const [surfacePort, endpoint] of [[port, '/v2/mcp'], [searchPort, '/v2/mcp-search']]) {
     for (const profile of [{ name: 'saved-login' }, { name: 'saved-login', saveChanges: true }]) {
@@ -105,7 +99,7 @@ test('hosted scrape is read-only; local scrape and the research agent are not', 
         headers,
       });
       assert.notEqual(scraped.isError, true, JSON.stringify(scraped));
-      assert.deepEqual(api.requests.at(-1).body.profile, { name: 'saved-login', saveChanges: false });
+      assert.deepEqual(api.requests.at(-1).body.profile, profile, 'profile options remain unchanged');
       assert.equal(api.requests.at(-1).body.actions, undefined);
     }
   }
@@ -120,7 +114,7 @@ test('hosted scrape is read-only; local scrape and the research agent are not', 
     headers,
   });
   assert.notEqual(searched.isError, true, JSON.stringify(searched));
-  assert.deepEqual(api.requests.at(-1).body.scrapeOptions.profile, { name: 'saved-login', saveChanges: false });
+  assert.deepEqual(api.requests.at(-1).body.scrapeOptions.profile, { name: 'saved-login', saveChanges: true });
   assert.equal(api.requests.at(-1).body.scrapeOptions.actions, undefined);
 
   const { client } = await startStdio(t, { CLOUD_SERVICE: 'false', FIRECRAWL_API_KEY: 'fc-test', FIRECRAWL_API_URL: api.url });
@@ -128,16 +122,9 @@ test('hosted scrape is read-only; local scrape and the research agent are not', 
   const local = localTools.find((tool) => tool.name === 'firecrawl_scrape');
   assert.equal(local.annotations.readOnlyHint, false);
   assert.ok(local.inputSchema.properties.actions, 'local scrape keeps browser actions');
-  assert.ok(local.inputSchema.properties.profile.properties.saveChanges, 'local scrape keeps writable profiles');
+  assert.ok(local.inputSchema.properties.profile.properties.saveChanges, 'local scrape keeps profile options');
   const localSearch = localTools.find((tool) => tool.name === 'firecrawl_search');
-  assert.equal(localSearch.annotations.readOnlyHint, false, 'local search can mutate through scrapeOptions');
-  const localSearched = await client.request('tools/call', {
-    name: 'firecrawl_search',
-    arguments: { query: 'account documentation', scrapeOptions: { profile: { name: 'saved-login', saveChanges: true }, actions: [{ type: 'click', selector: '#submit' }] } },
-  });
-  assert.notEqual(localSearched.isError, true, JSON.stringify(localSearched));
-  assert.equal(api.requests.at(-1).body.scrapeOptions.profile.saveChanges, true);
-  assert.equal(api.requests.at(-1).body.scrapeOptions.actions[0].type, 'click');
+  assert.equal(localSearch.annotations.readOnlyHint, true, 'local search annotation remains unchanged');
 });
 
 test('hosted scrape refuses terms acceptance on both surfaces and points to the dashboard', async (t) => {

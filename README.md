@@ -419,7 +419,7 @@ Scrape content from a single URL with advanced options.
 
 **Branding format:** Extracts comprehensive brand identity (colors, fonts, typography, spacing, logo, UI components) for design analysis or style replication.
 **Privacy:** Set `redactPII: true` to return content with personally identifiable information redacted.
-**Hosted server:** On the hosted server (`CLOUD_SERVICE=true`) scrape is read-only. It takes no browser `actions`, and a named `profile` loads saved browser state without saving changes to it. To save browser state to a profile, open the page with `firecrawl_interact` (see below).
+**Hosted server:** On the hosted server (`CLOUD_SERVICE=true`) scrape is read-only. It takes no browser `actions` and cannot accept provider terms. An organization admin accepts terms in the dashboard.
 
 **Returns:**
 
@@ -868,7 +868,6 @@ Interact with a fresh URL or with a page that was already opened by `firecrawl_s
 - Pass `url` to scrape and open a page for interaction in one MCP call.
 - Pass `scrapeId` to continue interacting with an existing scraped page.
 - Pass exactly one of `url` or `scrapeId`, plus either `prompt` or `code`.
-- To save browser state (cookies, localStorage) to a named profile, pass `url` with `scrapeOptions: { "profile": { "name": "my-profile", "saveChanges": true } }`. The state is saved when `firecrawl_interact_stop` ends the session.
 
 **Usage Example:**
 

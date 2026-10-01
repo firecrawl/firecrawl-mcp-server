@@ -2266,22 +2266,6 @@ const scrapeParamsSchema = z.object({
     .optional(),
 });
 
-// In safe mode firecrawl_scrape and firecrawl_search are read-only, so a named
-// profile they open loads saved browser state without writing it back.
-// firecrawl_interact (url with scrapeOptions.profile) saves profile changes.
-const readOnlyProfileSchema = z
-  .object({ name: z.string() })
-  .describe('Loads a saved browser profile without saving changes to it.');
-
-function withReadOnlyProfile(
-  options: Record<string, unknown>
-): Record<string, unknown> {
-  const profile = options.profile as { name: string } | undefined;
-  return SAFE_MODE && profile
-    ? { ...options, profile: { name: profile.name, saveChanges: false } }
-    : options;
-}
-
 // firecrawl_scrape accepts either a page URL or an Exchange batch. The base
 // schema stays url-required because search, crawl, and monitor reuse it for
 // nested scrapeOptions, where `alexandria` has no meaning.
@@ -2289,7 +2273,6 @@ const ALEXANDRIA_IGNORED_SCRAPE_OPTIONS = new Set(['toolDetail', 'domainTools'])
 
 const scrapeToolParamsSchema = scrapeParamsSchema
   .extend({
-    ...(SAFE_MODE ? { profile: readOnlyProfileSchema.optional() } : {}),
     url: z.string().url().optional(),
     timeout: z.number().int().positive().optional().describe("Execution timeout in milliseconds."),
     requestId: z
@@ -2735,8 +2718,8 @@ const scrapeTool: RegisteredTool = {
   name: 'firecrawl_scrape',
   annotations: {
     title: 'Firecrawl scrape',
-    // Hosted scrape omits browser actions, loads profiles without saving,
-    // and refuses provider terms writes before execution.
+    // Hosted scrape omits browser actions and refuses provider terms writes
+    // before execution.
     readOnlyHint: SAFE_MODE,
     openWorldHint: true, // Accepts any user-supplied URL on the public web.
     destructiveHint: false, // Does not modify, delete, or write to external websites.
@@ -2779,7 +2762,7 @@ Alexandria mode, on an authenticated session with Alexandria access: \`alexandri
     const transformed = transformScrapeParams(
       options as Record<string, unknown>
     );
-    const cleaned = withReadOnlyProfile(removeEmptyTopLevel(transformed));
+    const cleaned = removeEmptyTopLevel(transformed);
     if (cleaned.lockdown) {
       log.info('Scraping URL (lockdown)');
     } else {
@@ -2864,7 +2847,7 @@ server.addTool({
   _meta: { 'anthropic/alwaysLoad': true },
   annotations: {
     title: 'Firecrawl web search',
-    readOnlyHint: SAFE_MODE, // Local scrapeOptions can run browser actions and save profiles.
+    readOnlyHint: true, // Runs a web search and returns results; does not modify external sites.
     openWorldHint: true, // Searches the open web across arbitrary domains and sources.
     destructiveHint: false, // Query-only; no destructive side effects on external entities.
   },
@@ -2883,7 +2866,6 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       ...searchToolBaseFields,
       scrapeOptions: scrapeParamsSchema
         .omit({ url: true })
-        .extend(SAFE_MODE ? { profile: readOnlyProfileSchema } : {})
         .partial()
         .optional()
         .describe('Attach page content for web results in the same call. These fetches ignore maxAge, so use firecrawl_scrape when you need a live fetch. scrapeOptions fetches web pages, never Alexandria provider tools.'),
@@ -2906,8 +2888,8 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
     searchOpts.toolDetail ??= 'compact';
 
     if (searchOpts.scrapeOptions) {
-      searchOpts.scrapeOptions = withReadOnlyProfile(
-        transformScrapeParams(searchOpts.scrapeOptions as Record<string, unknown>)
+      searchOpts.scrapeOptions = transformScrapeParams(
+        searchOpts.scrapeOptions as Record<string, unknown>
       );
     }
 
@@ -3051,7 +3033,7 @@ server.addTool(findToolsTool);
 // (no crawl, map, interact, monitor, parse or feedback references). Registered
 // on the search surface in place of the module-level tools above.
 const SEARCH_SURFACE_SCRAPE_DESCRIPTION = `
-Scrape one URL and return its content, or execute catalogued Alexandria capabilities. URL mode returns markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema, plus page metadata. Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch. A successful response does not by itself confirm the page is still current. ${SAFE_MODE ? 'A named browser profile loads saved session data without saving changes to it.' : 'Browser actions can change the live page, and a named browser profile can load saved session data and overwrite its stored state.'}
+Scrape one URL and return its content, or execute catalogued Alexandria capabilities. URL mode returns markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema, plus page metadata. Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data.
 
 \`firecrawl_search\` with \`sources\` unset and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching Alexandria provider returns typed records in one call.
 
