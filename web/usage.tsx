@@ -29,15 +29,29 @@ const date = new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
   timeZone: 'UTC',
 });
-const month = new Intl.DateTimeFormat(undefined, {
+type TimeRange = 'day' | 'week' | 'month';
+const rangeLabels = {
+  day: 'Last 24 hours',
+  week: 'Last 7 days',
+  month: 'Last 30 days',
+};
+const hour = new Intl.DateTimeFormat(undefined, {
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+  timeZone: 'UTC',
+});
+const day = new Intl.DateTimeFormat(undefined, {
   month: 'short',
-  year: 'numeric',
+  day: 'numeric',
   timeZone: 'UTC',
 });
 const listeners = new Set<() => void>();
 let state = {
   view: 'providers',
-  loading: true,
+  balanceLoading: false,
+  historyLoading: false,
+  timeRange: 'month' as TimeRange,
   remaining: '—',
   plan: '—',
   billing: 'Loading…',
@@ -105,53 +119,62 @@ function balance(value: Record<string, unknown>) {
         : 'Unavailable',
   });
 }
-function history(value: Record<string, unknown>) {
+function history(value: Record<string, unknown>, timeRange: TimeRange) {
   if (value.success !== true || !Array.isArray(value.periods))
     throw new Error('Missing usage history');
+  const window = record(value.window);
+  const start = parsedDate(window.startDate),
+    end = parsedDate(window.endDate);
+  if (
+    window.timeRange !== timeRange ||
+    window.binSize !== (timeRange === 'day' ? 'hour' : 'day') ||
+    !start ||
+    !end ||
+    end.getTime() - start.getTime() !==
+      { day: 1, week: 7, month: 30 }[timeRange] * 86400000
+  ) {
+    throw new Error('Missing rolling usage window');
+  }
   const periods = value.periods
     .map((raw: unknown) => {
       const period = record(raw),
-        start = parsedDate(period.startDate);
+        binStart = parsedDate(period.startDate),
+        binEnd = parsedDate(period.endDate);
       if (
-        !start ||
+        !binStart ||
+        !binEnd ||
+        binStart < start ||
+        binEnd > end ||
+        binEnd <= binStart ||
         typeof period.creditsUsed !== 'number' ||
         !Number.isFinite(period.creditsUsed) ||
         period.creditsUsed < 0
       )
-        throw new Error('Invalid monthly usage');
-      return { start, credits: period.creditsUsed };
+        throw new Error('Invalid usage period');
+      return { start: binStart, credits: period.creditsUsed };
     })
     .sort((a, b) => a.start.getTime() - b.start.getTime());
-  update({ periods, empty: 'No usage history yet.' });
+  return periods;
 }
-let loading = false;
-async function refreshUsage() {
-  if (loading) return;
-  loading = true;
-  update({
-    loading: true,
-    status: connection ? 'Updating usage…' : 'Connecting to Firecrawl…',
-  });
-  try {
-    await ready();
-    if (!app.getHostCapabilities()?.serverTools)
-      throw new Error('Host does not support tool calls');
-    const results = await Promise.allSettled([
-      app
-        .callServerTool(
-          { name: 'firecrawl_credit_usage', arguments: { view: 'current' } },
-          { timeout: 15000 }
+let historyRequest = 0;
+let usageActivated = false;
+let balanceRequest: Promise<void> | undefined;
+async function refreshBalance() {
+  if (balanceRequest) return balanceRequest;
+  balanceRequest = (async () => {
+    update({ balanceLoading: true });
+    try {
+      await ready();
+      balance(
+        data(
+          await app.callServerTool(
+            { name: 'firecrawl_credit_usage', arguments: { view: 'current' } },
+            { timeout: 20000 }
+          )
         )
-        .then((result) => balance(data(result))),
-      app
-        .callServerTool(
-          { name: 'firecrawl_credit_usage', arguments: { view: 'historical' } },
-          { timeout: 15000 }
-        )
-        .then((result) => history(data(result))),
-    ]);
-    update({ balanceError: '', historyError: '' });
-    if (results[0].status === 'rejected')
+      );
+      update({ balanceError: '' });
+    } catch {
       update({
         remaining: '—',
         plan: 'Unavailable',
@@ -159,32 +182,64 @@ async function refreshUsage() {
         balanceError:
           'Could not load your balance. Refresh to retry. If needed, reconnect your Firecrawl account.',
       });
-    if (results[1].status === 'rejected')
-      update({
-        periods: [],
-        empty: 'Usage is unavailable.',
-        historyError: 'Could not load monthly usage. Refresh to retry.',
-      });
-    update({
-      status: results.every((result) => result.status === 'fulfilled')
-        ? `Updated ${new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date())}`
-        : 'Some data is unavailable',
-    });
+    } finally {
+      balanceRequest = undefined;
+      update({ balanceLoading: false });
+    }
+  })();
+  return balanceRequest;
+}
+async function refreshHistory(timeRange = state.timeRange) {
+  const request = ++historyRequest;
+  update({
+    timeRange,
+    historyLoading: true,
+    periods: [],
+    empty: 'Loading usage…',
+    historyError: '',
+  });
+  try {
+    await ready();
+    const result = await app.callServerTool(
+      {
+        name: 'firecrawl_credit_usage',
+        arguments: { view: 'historical', timeRange },
+      },
+      { timeout: 20000 }
+    );
+    const periods = history(data(result), timeRange);
+    if (request !== historyRequest) return;
+    update({ periods, empty: 'No usage history yet.' });
   } catch {
+    if (request !== historyRequest) return;
     update({
-      remaining: '—',
-      plan: 'Unavailable',
-      billing: 'Unavailable',
       periods: [],
       empty: 'Usage is unavailable.',
-      balanceError:
-        'Could not connect. Open this interface through the Firecrawl plugin, or reconnect your account, then refresh.',
-      status: 'Connection unavailable',
+      historyError: 'Could not load this time range. Refresh to retry.',
     });
   } finally {
-    loading = false;
-    update({ loading: false });
+    if (request === historyRequest) {
+      update({ historyLoading: false });
+      usageStatus();
+    }
   }
+}
+function usageStatus() {
+  update({
+    status:
+      state.balanceLoading || state.historyLoading
+        ? 'Updating usage…'
+        : state.balanceError || state.historyError
+          ? 'Some data is unavailable'
+          : `Updated ${new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date())}`,
+  });
+}
+async function refreshUsage() {
+  update({
+    status: connection ? 'Updating usage…' : 'Connecting to Firecrawl…',
+  });
+  await Promise.all([refreshBalance(), refreshHistory()]);
+  usageStatus();
 }
 export function Dashboard() {
   const state = useSyncExternalStore(subscribe, snapshot, snapshot);
@@ -195,10 +250,12 @@ export function Dashboard() {
   );
   useEffect(() => {
     void providers.activate();
-    void refreshUsage();
   }, []);
   const maximum = Math.max(...state.periods.map((p) => p.credits), 1);
   const isProviders = state.view === 'providers';
+  const loading = state.balanceLoading || state.historyLoading;
+  const total = state.periods.reduce((sum, p) => sum + p.credits, 0);
+  const labelInterval = Math.ceil(state.periods.length / 5);
   return (
     <main className="dashboard" data-view={state.view}>
       <header className="page-header">
@@ -217,7 +274,13 @@ export function Dashboard() {
             value={state.view}
             onChange={(view) => {
               update({ view });
-              if (view !== 'providers') providers.close();
+              if (view !== 'providers') {
+                providers.close();
+                if (!usageActivated) {
+                  usageActivated = true;
+                  void refreshUsage();
+                }
+              }
             }}
             items={[
               {
@@ -240,7 +303,7 @@ export function Dashboard() {
           <Button
             id="refresh"
             variant="secondary"
-            disabled={isProviders ? providerState.loading : state.loading}
+            disabled={isProviders ? providerState.loading : loading}
             onClick={() => {
               if (isProviders) void providers.refresh();
               else void refreshUsage();
@@ -248,7 +311,7 @@ export function Dashboard() {
           >
             <RefreshCw size={16} />
             <span>
-              {(isProviders ? providerState.loading : state.loading)
+              {(isProviders ? providerState.loading : loading)
                 ? 'Refreshing…'
                 : 'Refresh'}
             </span>
@@ -277,7 +340,7 @@ export function Dashboard() {
         <section
           className="balance-section"
           aria-labelledby="balance-heading"
-          aria-busy={state.loading}
+          aria-busy={state.balanceLoading}
           id="balance-section"
         >
           <div className="section-heading">
@@ -314,43 +377,80 @@ export function Dashboard() {
         <section
           className="usage-section"
           aria-labelledby="usage-heading"
-          aria-busy={state.loading}
+          aria-busy={state.historyLoading}
           id="usage-section"
         >
           <div className="section-heading">
-            <h2 id="usage-heading">Monthly usage</h2>
-            <span className="label">Credits</span>
+            <h2 id="usage-heading">Credit usage</h2>
+            <Tabs
+              label="Usage time range"
+              value={state.timeRange}
+              onChange={(range) => void refreshHistory(range as TimeRange)}
+              items={(['day', 'week', 'month'] as const).map((range) => ({
+                value: range,
+                label: range[0].toUpperCase() + range.slice(1),
+                id: `usage-${range}-tab`,
+                panel: 'usage-chart',
+              }))}
+            />
           </div>
           <p className="usage-note">
-            Recent calendar months, separate from your billing period.
+            {rangeLabels[state.timeRange]} ·{' '}
+            {state.timeRange === 'day' ? 'Hourly' : 'Daily'} usage · UTC
           </p>
-          <div id="history" className="history">
-            {state.periods.length ? (
-              state.periods.map((period, index) => (
-                <div
-                  className="month"
-                  key={period.start.toISOString()}
-                  aria-label={`${month.format(period.start)}: ${number.format(period.credits)} credits used`}
-                >
-                  <span className="month-amount">
-                    {number.format(period.credits)}
-                  </span>
-                  <div className="bar-track" aria-hidden="true">
-                    <div
-                      className="bar"
-                      hidden={period.credits === 0}
-                      style={{ height: `${(period.credits / maximum) * 100}%` }}
-                      data-latest={index === state.periods.length - 1}
-                    />
+          <div
+            id="usage-chart"
+            role="tabpanel"
+            aria-labelledby={`usage-${state.timeRange}-tab`}
+          >
+            <p id="usage-total" className="usage-total">
+              {state.historyLoading || state.historyError
+                ? '—'
+                : number.format(total)}{' '}
+              <span>credits used</span>
+            </p>
+            <div id="history" className="history">
+              {state.periods.length ? (
+                state.periods.map((period, index) => (
+                  <div
+                    className="period"
+                    key={period.start.toISOString()}
+                    aria-label={`${date.format(period.start)} ${hour.format(period.start)} UTC: ${number.format(period.credits)} credits used`}
+                    title={`${date.format(period.start)} ${hour.format(period.start)} UTC: ${number.format(period.credits)} credits used`}
+                  >
+                    <span
+                      className={
+                        state.periods.length > 8 ? 'sr-only' : 'period-amount'
+                      }
+                    >
+                      {number.format(period.credits)}
+                    </span>
+                    <div className="bar-track" aria-hidden="true">
+                      <div
+                        className="bar"
+                        hidden={period.credits === 0}
+                        style={{
+                          height: `${(period.credits / maximum) * 100}%`,
+                        }}
+                        data-latest={index === state.periods.length - 1}
+                      />
+                    </div>
+                    {(index === 0 ||
+                      index === state.periods.length - 1 ||
+                      (index % labelInterval === 0 &&
+                        index < state.periods.length - 2)) && (
+                      <span className="period-label">
+                        {state.timeRange === 'day'
+                          ? hour.format(period.start)
+                          : day.format(period.start)}
+                      </span>
+                    )}
                   </div>
-                  <span className="month-label">
-                    {month.format(period.start)}
-                  </span>
-                </div>
-              ))
-            ) : (
-              <p className="empty">{state.empty}</p>
-            )}
+                ))
+              ) : (
+                <p className="empty">{state.empty}</p>
+              )}
+            </div>
           </div>
           <p
             id="history-error"
@@ -365,8 +465,9 @@ export function Dashboard() {
             className="history-note"
             hidden={!state.periods.length}
           >
-            Recent history covers up to 90 days. The earliest month may be
-            partial.
+            The first and last bars may cover partial{' '}
+            {state.timeRange === 'day' ? 'hours' : 'days'}. Your billing period
+            is shown above.
           </p>
         </section>
       </div>

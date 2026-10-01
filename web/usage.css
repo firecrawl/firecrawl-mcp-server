@@ -157,18 +157,20 @@ strong {
 }
 .history {
   display: flex;
-  gap: 16px;
+  gap: 4px;
   min-height: 150px;
   align-items: stretch;
 }
-.month {
+.period {
+  position: relative;
+  padding-bottom: 24px;
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.month-amount {
+.period-amount {
   font-size: 14px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
@@ -195,11 +197,16 @@ strong {
   border-bottom: 0;
   border-radius: 4px 4px 0 0;
 }
-.month:last-child .bar {
+.period:last-child .bar {
   background: var(--heat-100);
   border-color: var(--heat-100);
 }
-.month-label {
+.period-label {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
   color: var(--black-alpha-64);
   font-size: 12px;
   line-height: 18px;
@@ -244,6 +251,31 @@ footer {
     padding: 16px 20px;
   }
   .history {
-    gap: 10px;
+    gap: 2px;
   }
+}
+
+.period:first-child .period-label {
+  left: 0;
+  transform: none;
+}
+.period:last-child .period-label {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+.usage-total {
+  margin: 0 0 20px;
+  font-size: 28px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.usage-total span {
+  font-size: 13px;
+  color: var(--black-alpha-56);
+  font-weight: 400;
+}
+.usage-section .section-heading {
+  flex-wrap: wrap;
+  gap: 12px;
 }

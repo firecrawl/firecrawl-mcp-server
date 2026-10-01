@@ -82,42 +82,35 @@ const Button = forwardRef<HTMLButtonElement, Props>(
             // Hover/active only when interactive
             !isNonInteractive && "hover:bg-[color:var(--heat-90)] active:[scale:0.995]",
             // Disabled: dim a bit, no hover, dim overlay bg layer if present
-            "disabled:opacity-80",
-            "disabled:[&_.button-background]:opacity-70",
+            isNonInteractive && "opacity-80",
+            isNonInteractive && "[&_.button-background]:opacity-[0.03]",
           ],
 
-          ["secondary", "tertiary", "playground"].includes(variant) && [
-            "text-accent-black",
+          ["secondary", "tertiary"].includes(variant) && [
+            isNonInteractive ? "text-black-alpha-48" : "text-accent-black",
             !isNonInteractive && "active:[scale:0.99] active:bg-black-alpha-7",
           ],
 
           variant === "secondary" && [
-            "bg-black-alpha-4",
+            isNonInteractive ? "bg-black-alpha-3" : "bg-black-alpha-4",
             !isNonInteractive && "hover:bg-black-alpha-6",
             // Disabled: lighter fill + muted text, no hover
-            "disabled:bg-black-alpha-3",
-            "disabled:text-black-alpha-48",
-            "disabled:hover:bg-black-alpha-3",
           ],
 
           variant === "tertiary" && [
             !isNonInteractive && "hover:bg-black-alpha-4",
             // Disabled: no hover background, text muted
-            "disabled:text-black-alpha-48",
-            "disabled:hover:bg-transparent",
           ],
 
           variant === "destructive" && [
-            "bg-red-600 text-accent-white",
+            isNonInteractive ? "bg-red-600/70 text-white-alpha-72" : "bg-red-600 text-accent-white",
             !isNonInteractive && "hover:bg-red-700 active:scale-[0.98]",
             // Disabled: keep red but softer; soften text slightly
-            "disabled:bg-red-600/70",
-            "disabled:text-white-alpha-72",
-            "disabled:hover:bg-red-600/70",
           ],
 
           variant === "playground" && [
             "before:inside-border before:border-black-alpha-4",
+            !isNonInteractive && "text-accent-black active:[scale:0.99] active:bg-black-alpha-7",
             isNonInteractive
               ? "before:opacity-0 bg-black-alpha-4 text-black-alpha-24"
               : "hover:bg-black-alpha-4 hover:before:opacity-0 active:before:opacity-0",

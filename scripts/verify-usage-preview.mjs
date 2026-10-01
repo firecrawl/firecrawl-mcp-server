@@ -86,7 +86,9 @@ async function verify() {
     const previous = doc();
     document.getElementById('reload').click();
     await wait(
-      () => doc() !== previous && get('remaining')?.textContent === '8,750',
+      () =>
+        doc() !== previous &&
+        get('providers-tab')?.getAttribute('aria-selected') === 'true',
       'usage'
     );
     check(
@@ -112,6 +114,10 @@ async function verify() {
     );
   };
   await load();
+  check(
+    !window.calls.some((c) => c.name === 'firecrawl_credit_usage'),
+    'Provider landing defers usage requests'
+  );
   get('providers-tab').focus();
   get('providers-tab').dispatchEvent(
     new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })
@@ -233,6 +239,8 @@ async function verify() {
     !latest().structuredContent && get('selection-controls').hidden,
     'Clearing removes context attachment and compact controls'
   );
+  document.getElementById('scenario').value = 'category-slow';
+  window.discoveryResponses = [];
   await change('provider-category', 'shopping');
   await change('provider-category', 'research');
   await wait(
@@ -241,6 +249,18 @@ async function verify() {
       get('provider-grid').textContent.includes('PubMed'),
     'latest category response'
   );
+  await wait(
+    () => window.discoveryResponses.includes('shopping'),
+    'older category response'
+  );
+  check(
+    window.discoveryResponses.indexOf('research') <
+      window.discoveryResponses.indexOf('shopping') &&
+      get('provider-grid').textContent.includes('PubMed') &&
+      !get('provider-grid').textContent.includes('Allbirds'),
+    'Reversed category responses preserve latest filter'
+  );
+  document.getElementById('scenario').value = 'normal';
 
   await load('context-slow');
   choose('allbirds-com');
@@ -285,6 +305,29 @@ async function verify() {
       selection()?.providers.length === 1 &&
       get('selection-status').textContent.includes('Added'),
     'context retry'
+  );
+
+  await load('zero-tools');
+  check(
+    get('provider-grid').querySelector(
+      '[data-provider="allbirds-com"] [role="checkbox"]'
+    ).disabled,
+    'Known zero-tool provider cannot be selected'
+  );
+  await load('empty-tools');
+  choose('allbirds-com');
+  await wait(
+    () =>
+      get('provider-grid').querySelector(
+        '[data-provider="allbirds-com"] [role="checkbox"]'
+      ).disabled,
+    'removed provider tools'
+  );
+  check(
+    get('selection-controls').hidden &&
+      get('retry-selection').hidden &&
+      latest()?.content.length === 0,
+    'Empty tool lookup removes selection and clears context without retry'
   );
 
   await load('tools-error');
@@ -363,28 +406,35 @@ async function verify() {
     const previous = doc();
     document.getElementById('reload').click();
     await wait(
-      () =>
-        doc() !== previous &&
-        get('balance-section')?.getAttribute('aria-busy') === 'false',
+      () => doc() !== previous && get('usage-tab'),
       'usage scenario ' + mode
     );
     get('usage-tab').click();
+    await wait(
+      () =>
+        !get('usage-view').hidden &&
+        get('balance-section').getAttribute('aria-busy') === 'false' &&
+        get('usage-section').getAttribute('aria-busy') === 'false' &&
+        window.calls.some((c) => c.arguments.view === 'historical'),
+      'usage loaded'
+    );
   };
   for (const [mode, remaining, columns, balanceError, historyError] of [
-    ['normal', '8,750', 3, false, false],
-    ['extra', '1,250', 3, false, false],
-    ['zero', '0', 3, false, false],
+    ['normal', '8,750', 31, false, false],
+    ['extra', '1,250', 31, false, false],
+    ['zero', '0', 31, false, false],
     ['empty', '8,750', 0, false, false],
-    ['metadata', '8,750', 3, false, false],
-    ['balance-error', '—', 3, true, false],
+    ['metadata', '8,750', 31, false, false],
+    ['balance-error', '—', 31, true, false],
     ['history-error', '8,750', 0, false, true],
+    ['legacy-history', '8,750', 0, false, true],
     ['error', '—', 0, true, true],
   ]) {
     await usageMode(mode);
     check(get('remaining').textContent === remaining, mode + ' balance');
     check(
-      get('history').querySelectorAll('.month').length === columns,
-      mode + ' monthly usage'
+      get('history').querySelectorAll('.period').length === columns,
+      mode + ' rolling month usage'
     );
     check(
       get('balance-error').hidden === !balanceError,
@@ -416,6 +466,88 @@ async function verify() {
       );
   }
   await usageMode('normal');
+  const balanceCalls = () =>
+    window.calls.filter(
+      (c) =>
+        c.name === 'firecrawl_credit_usage' && c.arguments.view === 'current'
+    ).length;
+  const originalBalanceCalls = balanceCalls();
+  for (const [range, columns, total, label] of [
+    ['day', 25, '3,250', 'Last 24 hours'],
+    ['week', 8, '720', 'Last 7 days'],
+    ['month', 31, '14,880', 'Last 30 days'],
+  ]) {
+    get(`usage-${range}-tab`).click();
+    await wait(
+      () =>
+        get(`usage-${range}-tab`).getAttribute('aria-selected') === 'true' &&
+        get('usage-section').getAttribute('aria-busy') === 'false',
+      range + ' range'
+    );
+    check(
+      get(`usage-${range}-tab`).getAttribute('aria-selected') === 'true',
+      range + ' selected'
+    );
+    check(
+      get('history').querySelectorAll('.period').length === columns &&
+        get('usage-total').textContent.includes(total),
+      range + ' bins and total'
+    );
+    check(
+      get('usage-section').textContent.includes(label),
+      range + ' range label'
+    );
+    check(
+      window.calls.some((c) => c.arguments.timeRange === range),
+      range + ' passed to MCP'
+    );
+  }
+  check(
+    balanceCalls() === originalBalanceCalls,
+    'Range changes do not fetch balance again'
+  );
+  get('usage-month-tab').focus();
+  get('usage-month-tab').dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Home', bubbles: true })
+  );
+  await wait(() => get('usage-section').getAttribute('aria-busy') === 'false');
+  check(
+    doc().activeElement === get('usage-day-tab') &&
+      get('usage-day-tab').getAttribute('aria-selected') === 'true',
+    'Range tabs support keyboard navigation'
+  );
+  await usageMode('history-slow');
+  get('usage-day-tab').click();
+  get('usage-week-tab').click();
+  await wait(() => get('usage-section').getAttribute('aria-busy') === 'false');
+  await new Promise((resolve) => setTimeout(resolve, 900));
+  check(
+    get('usage-week-tab').getAttribute('aria-selected') === 'true' &&
+      get('history').querySelectorAll('.period').length === 8 &&
+      get('usage-total').textContent.includes('720'),
+    'Slow old range cannot overwrite current range'
+  );
+  document.getElementById('scenario').value = 'history-error';
+  get('usage-day-tab').click();
+  await wait(() => !get('history-error').hidden);
+  check(
+    get('remaining').textContent === '8,750' &&
+      !get('history').querySelector('.period'),
+    'Range error clears the old chart without clearing balance'
+  );
+  document.getElementById('scenario').value = 'normal';
+  get('usage-month-tab').click();
+  await wait(
+    () =>
+      get('usage-month-tab').getAttribute('aria-selected') === 'true' &&
+      get('usage-section').getAttribute('aria-busy') === 'false'
+  );
+  check(
+    get('history-error').hidden &&
+      get('history').querySelectorAll('.period').length === 31,
+    'Range switching recovers from errors'
+  );
+  await usageMode('normal');
   document.getElementById('scenario').value = 'error';
   get('refresh').click();
   await wait(
@@ -424,7 +556,7 @@ async function verify() {
   );
   check(
     get('remaining').textContent === '—' &&
-      !get('history').querySelector('.month'),
+      !get('history').querySelector('.period'),
     'Failed refresh clears stale data'
   );
   document.getElementById('scenario').value = 'normal';
@@ -433,6 +565,12 @@ async function verify() {
     () => get('remaining').textContent === '8,750',
     'refresh recovery'
   );
+  const previousWidth = document.getElementById('width').value;
+  document.getElementById('width').value = '320';
+  document.getElementById('width').dispatchEvent(new Event('change'));
+  check(get('usage-section').scrollWidth <= get('usage-section').clientWidth && get('history').scrollWidth <= get('history').clientWidth, 'Rolling chart fits narrow screens');
+  document.getElementById('width').value = previousWidth;
+  document.getElementById('width').dispatchEvent(new Event('change'));
   get('open-dashboard').click();
   await wait(() => window.lastOpenedUrl, 'dashboard link');
   check(
@@ -520,6 +658,9 @@ async function verify() {
   return {
     passed: true,
     checks: [
+      'rolling usage ranges, independent balance, keyboard navigation, stale responses and recovery',
+      'zero-tool and empty-tool providers',
+      'reversed category responses',
       'providers opens by default',
       'keyboard tabs, dropdown Escape and focus restoration',
       'short viewport dialog scrolling and visible actions',

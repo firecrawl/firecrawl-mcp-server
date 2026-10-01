@@ -14,7 +14,7 @@ sources were copied from `firecrawl-web` commit
 
 `web/ui/` vendors the web Button, Input, Select, Checkbox, Dialog, and ProviderLogo components,
 plus their `cn` helper, colors, and Tailwind configuration. Imports are adjusted
-for this package; Dialog also exports its trigger and close primitives. The
+for this package; Dialog also exports its trigger and close primitives. Disabled Button styles cover both native buttons and slotted links; hover effects are gated on interactivity. Dialog alignment uses one mobile position, and transition values include milliseconds. The
 Tailwind content paths target this interface; semantic colors use an alpha-aware
 `color-mix` adapter so `/80` backgrounds work with the hexadecimal tokens. `ui/tabs.tsx` adapts the segmented
 billing-settings tabs to reusable items and adds roving keyboard focus. There is
@@ -35,9 +35,9 @@ Providers and Usage share the same 1120px app width.
 `usage.tsx` uses the standard MCP Apps SDK bridge for initialization, theme changes,
 read-only tool calls, and external links. All balance and usage data comes from
 `firecrawl_credit_usage`, using the host's authenticated server connection.
-Calendar-month usage is not inferred from the current balance or plan allowance.
+Rolling usage is not inferred from the current balance or plan allowance.
 A failed refresh clears the affected values; another section can still succeed.
-The earliest month can be partial because the API returns recent history.
+The first and last chart bars can be partial because ranges end at the request time.
 
 `pnpm build` generates one self-contained `dist/usage.html`, including an initial Providers shell, fonts,
 styles, React, and the SDK. `pnpm typecheck:ui` checks the browser source.
@@ -107,6 +107,8 @@ run `FIRECRAWL_KEYCHAIN_ACCOUNT=your-account node scripts/refresh-provider-logos
 on macOS, or supply `FIRECRAWL_API_KEY` in the environment. This explicit step reads
 free discovery metadata from Firecrawl, then fetches public favicons without
 credentials. It never executes provider capabilities. Non-success icon responses
-are omitted, including Google's generic globe on a 404. Existing artwork survives
+are omitted. Successful responses are accepted based on MIME type and size; the script does not detect generic globe artwork. Existing artwork survives
 transient failures. Firecrawl and Data Legion use the same brand overrides as
 firecrawl-web. No credentials enter the generated JSON or HTML.
+
+Usage ranges are rolling windows: Day is the last 24 hours with hourly bars, Week is the last 7 days, and Month is the last 30 days with daily bars. Labels use UTC and edge bars may be partial. Usage is loaded when its tab opens; range changes fetch only history. The Core API must support `timeRange` on `/v2/team/credit-usage/historical`; older responses are rejected rather than displayed under an incorrect range.

@@ -17,7 +17,7 @@ These are shared staging services. Production deployments are separate.
 ```sh
 kubectl -n mcp-server-staging rollout status deployment/scalable
 kubectl -n mcp-server-staging rollout status deployment/sse
-kubectl -n mcp-server-staging get pods -o wide
+kubectl -n mcp-server-staging get pods -o custom-columns='NAME:.metadata.name,READY:.status.containerStatuses[*].ready,IMAGE_ID:.status.containerStatuses[*].imageID'
 ```
 
 ## Live server checks
@@ -79,6 +79,8 @@ key for upstream authorization. The values stay in process environment variables
 
 ```sh
 brew install openai/tools/tunnel-client
+read -r -s "CONTROL_PLANE_API_KEY?OpenAI runtime key: "
+export CONTROL_PLANE_API_KEY
 tunnel-client init --sample sample_mcp_with_dcr --profile firecrawl-staging \
   --tunnel-id YOUR_TUNNEL_ID \
   --mcp-server-url http://mcp-server-staging-service:8080/v2/mcp
@@ -100,3 +102,5 @@ do not substitute for this acceptance step.
 The published production package remains on the production OAuth endpoint.
 Do not replace the published Firecrawl connection with this staging test.
 ZIP assembly, reviewer cases, review credentials, and video are separate steps.
+
+The Day / Week / Month UI requires the Core API rolling-range endpoint. MCP staging currently uses the production Core API; publishing the MCP image alone does not deploy the Core API dependency. The separate Core staging API uses different credentials, so a production Firecrawl key cannot be used there unchanged.

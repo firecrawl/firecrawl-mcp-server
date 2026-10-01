@@ -154,6 +154,17 @@ export function createProvidersStore(app: App, ready: () => Promise<void>) {
       for (const selection of snapshot) {
         if (version !== selectionVersion) return;
         const available = await tools(selection.provider);
+        if (version !== selectionVersion) return;
+        if (!available.length) {
+          selected.delete(selection.provider.id);
+          update({
+            selected: new Map(selected),
+            providers: state.providers.map((p) =>
+              p.id === selection.provider.id ? { ...p, toolCount: 0 } : p
+            ),
+          });
+          continue;
+        }
         const chosen = selection.tools
           ? available.filter((t) => selection.tools!.has(t.capability))
           : available;

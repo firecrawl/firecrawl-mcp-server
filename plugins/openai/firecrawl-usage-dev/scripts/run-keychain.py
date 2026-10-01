@@ -5,8 +5,11 @@ import shutil
 import subprocess
 import sys
 
-worktree = Path(os.environ.get('FIRECRAWL_MCP_WORKTREE', Path(__file__).resolve().parents[4]))
-node = shutil.which('node') or '/opt/homebrew/bin/node'
+worktree = Path(os.environ.get('FIRECRAWL_MCP_WORKTREE', Path(__file__).resolve().parents[4])).expanduser().resolve()
+node = shutil.which('node') or next((path for path in ('/opt/homebrew/bin/node', '/usr/local/bin/node') if Path(path).is_file() and os.access(path, os.X_OK)), None)
+if not node:
+    print('Firecrawl: install Node.js 22 or newer and restart MCP servers.', file=sys.stderr)
+    sys.exit(1)
 if not (worktree / 'dist/index.js').is_file():
     print('Firecrawl: build the MCP worktree and reinstall the local plugin.', file=sys.stderr)
     sys.exit(1)

@@ -20,6 +20,9 @@ test('npm package includes the self-contained usage resource', async () => {
   assert.match(html, /firecrawl_credit_usage/);
   assert.match(html, /--heat-100: #fa5d19ff/);
   assert.doesNotMatch(html, /<script[^>]+src=|<link[^>]+href=/);
+  const styles = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map(([, css]) => css).join('\n');
+  assert.doesNotMatch(styles, /@import\s|url\(\s*["']?(?:https?:|\/\/)/i);
+  assert.doesNotMatch(html, /<(?:img|source)\b[^>]*(?:src|srcset)\s*=\s*["']?(?:https?:|\/\/)/i);
   assert.doesNotMatch(html, /Fixture account request failed|Local preview · Sample data/);
 });
 

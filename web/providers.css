@@ -405,7 +405,7 @@ summary:focus-visible {
 .provider-card {
   background: var(--surface);
 }
-.provider-dialog-content {
+#provider-dialog.provider-dialog-content {
   display: flex;
   flex-direction: column;
   max-width: 660px;

@@ -98,7 +98,7 @@ const opacities = Array.from({ length: 100 }, (_, i) => i).reduce(
 
 const transitionDurations = Array.from({ length: 60 }, (_, i) => i).reduce(
   (acc, curr) => {
-    acc[curr] = curr * 50 + "";
+    acc[curr] = `${curr * 50}ms`;
 
     return acc;
   },

@@ -27,47 +27,57 @@ test('catalog follows discovery pagination and rejects failures or executable na
   }
   assert.equal(rows.length, 6);
   assert.equal(providerFrom(rows.at(-1)).id, 'pubmed-ncbi-nlm-nih-gov');
-  assert.throws(() =>
-    catalogPage(
-      previewCatalog({ level: 'providers' }, 'catalog-error'),
-      'providers'
-    )
+  assert.throws(
+    () =>
+      catalogPage(
+        previewCatalog({ level: 'providers' }, 'catalog-error'),
+        'providers'
+      ),
+    /Catalog request failed/
   );
-  assert.throws(() =>
-    catalogPage(previewCatalog({ level: 'tools' }, 'normal'), 'providers')
+  assert.throws(
+    () =>
+      catalogPage(previewCatalog({ level: 'tools' }, 'normal'), 'providers'),
+    /Invalid catalog page/
   );
-  assert.throws(() =>
-    nextPage(
-      {
-        nextTool: {
-          name: 'firecrawl_scrape',
-          arguments: { level: 'providers', offset: 2 },
+  assert.throws(
+    () =>
+      nextPage(
+        {
+          nextTool: {
+            name: 'firecrawl_scrape',
+            arguments: { level: 'providers', offset: 2 },
+          },
         },
-      },
-      'providers'
-    )
+        'providers'
+      ),
+    /Invalid catalog navigation/
   );
-  assert.throws(() =>
-    nextPage(
-      {
-        nextTool: {
-          name: 'firecrawl_find_tools',
-          arguments: { level: 'tools', offset: 2 },
+  assert.throws(
+    () =>
+      nextPage(
+        {
+          nextTool: {
+            name: 'firecrawl_find_tools',
+            arguments: { level: 'tools', offset: 2 },
+          },
         },
-      },
-      'providers'
-    )
+        'providers'
+      ),
+    /Invalid catalog pagination/
   );
-  assert.throws(() =>
-    nextPage(
-      {
-        nextTool: {
-          name: 'firecrawl_find_tools',
-          arguments: { level: 'providers', offset: -1 },
+  assert.throws(
+    () =>
+      nextPage(
+        {
+          nextTool: {
+            name: 'firecrawl_find_tools',
+            arguments: { level: 'providers', offset: -1 },
+          },
         },
-      },
-      'providers'
-    )
+        'providers'
+      ),
+    /Invalid catalog pagination/
   );
   const textOnly = previewCatalog({ level: 'categories' }, 'normal');
   delete textOnly.structuredContent;
@@ -88,7 +98,10 @@ test('composer context preserves exact IDs, selected contracts and prices for mi
   };
   const row = catalogPage(previewCatalog(args, 'normal'), 'tools').items[0];
   const capability = capabilityFrom(row, provider.id);
-  assert.throws(() => capabilityFrom(row, 'other-provider'));
+  assert.throws(
+    () => capabilityFrom(row, 'other-provider'),
+    /Invalid capability identity/
+  );
   const all = { id: 'allbirds-com', name: 'Allbirds', description: 'Shoes' };
   const { content, context } = buildSelectionContext([
     { provider, capabilities: [capability], scope: 'tools' },
@@ -133,16 +146,43 @@ test('composer context preserves exact IDs, selected contracts and prices for mi
   assert.match(content[0].text, /selection is guidance/);
   assert.match(content[0].text, /enable\/connect Firecrawl/);
   assert.deepEqual(buildSelectionContext([]).content, []);
-  assert.throws(() =>
-    buildSelectionContext([{ provider, capabilities: [], scope: 'provider' }])
+  assert.throws(
+    () =>
+      buildSelectionContext([
+        { provider, capabilities: [], scope: 'provider' },
+      ]),
+    /Select providers with available tools/
   );
-  assert.throws(() =>
-    buildSelectionContext([
-      {
-        provider,
-        capabilities: [{ ...capability, description: 'x'.repeat(120000) }],
-        scope: 'tools',
-      },
-    ])
+  assert.throws(
+    () =>
+      buildSelectionContext([
+        {
+          provider,
+          capabilities: [{ ...capability, description: 'x'.repeat(120000) }],
+          scope: 'tools',
+        },
+      ]),
+    /This selection is too large/
+  );
+});
+
+test('preview discovery defaults match selector-derived levels and required inputs are declared', () => {
+  for (const [args, level] of [
+    [{}, 'categories'],
+    [{ categories: ['shopping'] }, 'providers'],
+    [{ providers: ['amazon-com'] }, 'tools'],
+  ]) {
+    assert.ok(catalogPage(previewCatalog(args, 'normal'), level).items.length);
+  }
+  const row = catalogPage(
+    previewCatalog(
+      { providers: ['amazon-com'], expand: ['options'] },
+      'normal'
+    ),
+    'tools'
+  ).items[0];
+  assert.deepEqual(
+    row.options.map((option) => option.name),
+    ['asin', 'url']
   );
 });

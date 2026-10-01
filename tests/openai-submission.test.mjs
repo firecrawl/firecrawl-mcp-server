@@ -17,7 +17,7 @@ const files = async (path, prefix = '') => (await Promise.all(
 test('production submission preserves Firecrawl metadata and every skill/reference', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'firecrawl-submission-'));
   t.after(() => rm(root, { recursive: true, force: true }));
-  const destination = await prepareOpenAIPlugin(join(root, 'plugin'));
+  const destination = await prepareOpenAIPlugin(join(root, 'nested', 'output', 'plugin'));
   const source = await json(join(pluginSource, '.codex-plugin/plugin.json'));
   const portable = await json(join(destination, 'plugin.json'));
   const overlay = await json(join(destination, '.codex-plugin/plugin.json'));

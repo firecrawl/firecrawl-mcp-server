@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
+import { snapshotProviders, writeLogoSnapshot } from './logo-snapshot.mjs';
 
 // Explicit maintenance step; normal builds never require credentials or network.
 // Only discovery is authenticated. Public favicon requests never receive a key.
@@ -63,12 +64,14 @@ for (const page of cohorts) {
 }
 let previous = {};
 try {
-  previous = JSON.parse(
-    await readFile(
-      new URL('../web/provider-logos.json', import.meta.url),
-      'utf8'
+  previous = snapshotProviders(
+    JSON.parse(
+      await readFile(
+        new URL('../web/provider-logos.json', import.meta.url),
+        'utf8'
+      )
     )
-  ).providers;
+  );
 } catch {
   /* Initial snapshot. */
 }
@@ -118,7 +121,7 @@ const logos = await parallel([...providers.values()], 8, async (provider) => {
   if (
     typeof embedded === 'string' &&
     embedded.length < 131072 &&
-    /^data:image\/(?:png|jpeg|webp|gif|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(
+    /^data:image\/(?:png|jpeg|webp|gif|svg\+xml|x-icon|vnd\.microsoft\.icon);base64,[A-Za-z0-9+/=]+$/.test(
       embedded
     )
   )
@@ -174,10 +177,11 @@ const snapshot = {
     logos.filter(Boolean).sort(([a], [b]) => a.localeCompare(b))
   ),
 };
-await writeFile(
+await writeLogoSnapshot(
   new URL('../web/provider-logos.json', import.meta.url),
-  JSON.stringify(snapshot, null, 2) + '\n'
+  snapshot
 );
+
 console.log(
   JSON.stringify({
     discovered: providers.size,

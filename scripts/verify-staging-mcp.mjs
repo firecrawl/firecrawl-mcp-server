@@ -10,16 +10,49 @@ const key =
   process.env.FIRECRAWL_API_KEY ||
   execFileSync(
     '/usr/bin/security',
-    ['find-generic-password', '-s', 'FIRECRAWL_API_KEY', '-w'],
+    [
+      'find-generic-password',
+      '-s',
+      'FIRECRAWL_API_KEY',
+      ...(process.env.FIRECRAWL_KEYCHAIN_ACCOUNT
+        ? ['-a', process.env.FIRECRAWL_KEYCHAIN_ACCOUNT]
+        : []),
+      '-w',
+    ],
     { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
   ).trim();
 const client = new Client(
   { name: 'firecrawl-staging-regression', version: '0.1.0' },
   { capabilities: {} }
 );
+const boundedFetch = (url, init) =>
+  fetch(url, {
+    ...init,
+    redirect: 'error',
+    signal: AbortSignal.any([
+      ...(init?.signal ? [init.signal] : []),
+      AbortSignal.timeout(20000),
+    ]),
+  });
+async function close(client) {
+  let timer;
+  try {
+    await Promise.race([
+      client.close(),
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error('MCP close timed out')),
+          5000
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 const transport = new StreamableHTTPClientTransport(new URL(endpoint), {
   requestInit: { headers: { Authorization: `Bearer ${key}` } },
-  fetch: (url, init) => fetch(url, { ...init, redirect: 'error' }),
+  fetch: boundedFetch,
 });
 const report = { endpoint };
 try {
@@ -32,7 +65,10 @@ try {
   assert.deepEqual(launcher._meta['openai/ui'].entrypoints, [
     { type: 'global' },
   ]);
-  assert.deepEqual(launcher._meta.ui.visibility, ['app']);
+  assert.deepEqual(launcher._meta.ui, {
+    resourceUri: 'ui://firecrawl/usage.html',
+    visibility: ['app'],
+  });
   assert.ok(launcher.icons[0].src.startsWith('data:image/svg+xml;base64,'));
   report.toolCount = tools.tools.length;
   report.launcherMetadata = 'passed';
@@ -73,7 +109,7 @@ try {
     requestInit: {
       headers: { Authorization: 'Bearer fc-invalid-staging-regression' },
     },
-    fetch: (url, init) => fetch(url, { ...init, redirect: 'error' }),
+    fetch: boundedFetch,
   });
   const invalidClient = new Client(
     { name: 'firecrawl-invalid-auth-regression', version: '0.1.0' },
@@ -89,7 +125,7 @@ try {
     assert.equal(rejected.structuredContent?.code, 'CREDENTIAL_INVALID');
     report.invalidAuth = 'CREDENTIAL_INVALID';
   } finally {
-    await invalidClient.close();
+    await close(invalidClient);
   }
   report.success = true;
 } catch (e) {
@@ -97,6 +133,10 @@ try {
   report.error = e.message.replaceAll(key, '[redacted]');
   process.exitCode = 1;
 } finally {
-  await client.close();
+  await close(client).catch((error) => {
+    report.success = false;
+    report.error = error.message;
+    process.exitCode = 1;
+  });
   console.log(JSON.stringify(report, null, 2));
 }

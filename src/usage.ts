@@ -47,6 +47,12 @@ interface CreditUsageResponse extends CreditUsageData {
 interface HistoricalCreditUsageResponse {
   success: boolean;
   periods?: unknown[];
+  window?: {
+    timeRange: string;
+    binSize: string;
+    startDate: string;
+    endDate: string;
+  };
   error?: string;
 }
 
@@ -59,10 +65,17 @@ function assertSuccessful(
   throw new Error(response.error || `Failed to ${operation}`);
 }
 
+interface CurrentCreditUsage {
+  remainingCredits: number;
+  planCredits?: number;
+  billingPeriodStart: string | null;
+  billingPeriodEnd: string | null;
+}
+
 export async function readCurrentUsage(
   client: UsageClient,
   headers: Record<string, string>
-): Promise<Record<string, unknown>> {
+): Promise<CurrentCreditUsage> {
   const response = await client.http.get<CreditUsageResponse>(
     '/v2/team/credit-usage',
     headers
@@ -91,11 +104,11 @@ export function registerUsageTools(
       destructiveHint: false,
     },
     description: `
-Get the authenticated Firecrawl team's current credit balance or historical credit consumption. Use the current view to answer how many credits remain or to check billing-period boundaries. Use the historical view for monthly usage reporting and trend analysis.
+Get the authenticated Firecrawl team's current credit balance or historical credit consumption. Use the current view to answer how many credits remain or to check billing-period boundaries. Use the historical view for usage reporting and trend analysis. Set \`timeRange\` to day, week, or month for the last 24 hours, 7 days, or 30 days, respectively, with hourly bins for day and daily bins otherwise. Omit it for calendar-month history.
 
 The current view returns \`remainingCredits\`, \`planCredits\`, \`billingPeriodStart\`, and \`billingPeriodEnd\`. Extra purchased or granted credits can make \`remainingCredits\` greater than \`planCredits\`. Billing-period dates may be null when the upstream billing provider has no period metadata.
 
-The historical view returns periods sorted by start date with \`startDate\`, \`endDate\`, and \`creditsUsed\`. Set \`byApiKey\` to include separate periods per API key, identified by the optional \`apiKey\` field. The newest period's \`endDate\` can be null.
+The historical view returns periods sorted by start date with \`startDate\`, \`endDate\`, and \`creditsUsed\`. Set \`byApiKey\` to include separate periods per API key, identified by the optional \`apiKey\` field. The newest calendar-month period's \`endDate\` can be null. Rolling ranges include a \`window\` with the exact UTC bounds and bin size, with partial bins at the edges. \`timeRange\` cannot be combined with \`byApiKey\`.
 `,
     outputSchema: creditUsageOutputSchema,
     parameters: z.object({
@@ -104,6 +117,12 @@ The historical view returns periods sorted by start date with \`startDate\`, \`e
         .optional()
         .describe(
           'Select current balance or historical monthly usage. Defaults to current.'
+        ),
+      timeRange: z
+        .enum(['day', 'week', 'month'])
+        .optional()
+        .describe(
+          'Rolling historical range: last 24 hours (day), 7 days (week), or 30 days (month). Selects historical when view is omitted; cannot be combined with current or byApiKey.'
         ),
       byApiKey: z
         .boolean()
@@ -116,8 +135,9 @@ The historical view returns periods sorted by start date with \`startDate\`, \`e
       args: unknown,
       { session, client: mcpClient }
     ): Promise<ContentResult> => {
-      const { view, byApiKey } = args as {
+      const { view, byApiKey, timeRange } = args as {
         view?: 'current' | 'historical';
+        timeRange?: 'day' | 'week' | 'month';
         byApiKey?: boolean;
       };
       if (view === 'current' && byApiKey) {
@@ -126,14 +146,24 @@ The historical view returns periods sorted by start date with \`startDate\`, \`e
         );
       }
 
+      if (timeRange && (view === 'current' || byApiKey)) {
+        throw new Error(
+          'timeRange requires historical usage without byApiKey.'
+        );
+      }
       const client = getClient(session) as UsageClient;
       const headers = originHeaders(
         requestOrigin(mcpClient as McpClient, session)
       );
-      const historical = view === 'historical' || byApiKey === true;
+      const historical =
+        view === 'historical' || byApiKey === true || !!timeRange;
 
       if (historical) {
-        const query = byApiKey ? '?byApiKey=true' : '';
+        const query = timeRange
+          ? `?timeRange=${timeRange}`
+          : byApiKey
+            ? '?byApiKey=true'
+            : '';
         const response = await client.http.get<HistoricalCreditUsageResponse>(
           `/v2/team/credit-usage/historical${query}`,
           headers
@@ -143,6 +173,11 @@ The historical view returns periods sorted by start date with \`startDate\`, \`e
           response.data,
           'get historical credit usage'
         );
+        if (timeRange && response.data.window?.timeRange !== timeRange) {
+          throw new Error(
+            'Rolling usage is not available on this API deployment yet.'
+          );
+        }
         return structuredText(response.data);
       }
 

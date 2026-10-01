@@ -40,8 +40,8 @@ const DialogContent = React.forwardRef<
     <DialogOverlay />
     <div
       className={cn(
-        "fixed z-[1001] inset-0 flex items-end sm:items-center justify-center p-16 sm:p-0",
-        mobilePosition === "center" && "items-center",
+        "fixed z-[1001] inset-0 flex sm:items-center justify-center p-16 sm:p-0",
+        mobilePosition === "center" ? "items-center" : "items-end",
       )}
     >
       <DialogPrimitive.Content

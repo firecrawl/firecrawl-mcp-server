@@ -5,7 +5,7 @@ import { previewCatalog } from './usage-preview-fixtures.mjs';
 // Only this local host supplies fixtures. The production HTML always calls MCP.
 const preview = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Firecrawl usage preview</title>
 <style>body{margin:0;background:#eee;font:13px system-ui;color:#262626}header{padding:12px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}select,button{font:inherit}iframe{display:block;width:1120px;max-width:100%;height:940px;margin:16px auto;border:1px solid #ddd;background:#f9f9f9}label{display:flex;gap:5px}</style>
-<header><strong>Local preview · Sample data</strong><label>State <select id="scenario"><option value="normal">Normal</option><option value="catalog-error">Catalog error</option><option value="categories-error">Categories error</option><option value="tools-error">Tools error</option><option value="context-error">Context error</option><option value="context-slow">Slow context updates</option><option value="unsupported-message">No message support</option><option value="unsupported-context">No context support</option><option value="extra">Extra credits</option><option value="empty">No usage</option><option value="history-error">History error</option><option value="balance-error">Balance error</option><option value="error">Account disconnected</option><option value="metadata">No billing dates</option><option value="zero">Zero credits</option></select></label><label>Theme <select id="theme"><option>light</option><option>dark</option></select></label><label>Width <select id="width"><option>480</option><option>320</option><option>760</option><option selected>1120</option></select></label><button id="reload">Reload</button></header>
+<header><strong>Local preview · Sample data</strong><label>State <select id="scenario"><option value="normal">Normal</option><option value="catalog-error">Catalog error</option><option value="categories-error">Categories error</option><option value="tools-error">Tools error</option><option value="zero-tools">Known zero tools</option><option value="empty-tools">Tools removed</option><option value="category-slow">Reversed category responses</option><option value="context-error">Context error</option><option value="context-slow">Slow context updates</option><option value="unsupported-message">No message support</option><option value="unsupported-context">No context support</option><option value="extra">Extra credits</option><option value="empty">No usage</option><option value="history-error">History error</option><option value="history-slow">Slow range updates</option><option value="legacy-history">API without ranges</option><option value="balance-error">Balance error</option><option value="error">Account disconnected</option><option value="metadata">No billing dates</option><option value="zero">Zero credits</option></select></label><label>Theme <select id="theme"><option>light</option><option>dark</option></select></label><label>Width <select id="width"><option>480</option><option>320</option><option>760</option><option selected>1120</option></select></label><button id="reload">Reload</button></header>
 <iframe id="view" title="Firecrawl usage" src="/usage.html"></iframe>
 <script>
 const frame=document.getElementById('view');
@@ -27,14 +27,19 @@ window.addEventListener('message',event=>{
  if(m.method==='ui/notifications/size-changed'){window.lastRequestedSize=m.params;return;}
  if(m.method==='tools/call'){
   window.calls.push(m.params);
-  if(m.params.name==='firecrawl_find_tools') return setTimeout(()=>reply(catalogFixture(m.params.arguments,scenario.value)),150);
+  if(m.params.name==='firecrawl_find_tools'){ const args=m.params.arguments, mode=scenario.value; const delay=mode==='category-slow'&&args.categories?.includes('shopping')?800:150; return setTimeout(()=>{window.discoveryResponses??=[];window.discoveryResponses.push(args.categories?.[0]||args.level);reply(catalogFixture(args,mode));},delay); }
   const historical=m.params.arguments.view==='historical';
   const mode=scenario.value;
   if(mode==='error'||(historical&&mode==='history-error')||(!historical&&mode==='balance-error')) return reply({isError:true,content:[{type:'text',text:'Fixture account request failed'}]});
   const current={remainingCredits:mode==='extra'?1250:mode==='zero'?0:8750,planCredits:mode==='extra'?1000:10000,billingPeriodStart:mode==='metadata'?null:'2026-09-15T00:00:00Z',billingPeriodEnd:mode==='metadata'?null:'2026-10-15T00:00:00Z'};
-  const periods=mode==='empty'?[]:[{startDate:'2026-07-01T00:00:00Z',endDate:'2026-08-01T00:00:00Z',creditsUsed:3210},{startDate:'2026-08-01T00:00:00Z',endDate:'2026-09-01T00:00:00Z',creditsUsed:mode==='zero'?0:6400},{startDate:'2026-09-01T00:00:00Z',endDate:null,creditsUsed:1250}];
-  const data=historical?{success:true,periods}:current;
-  return setTimeout(()=>reply({content:[{type:'text',text:JSON.stringify(data)}],structuredContent:data}),150);
+  const timeRange=m.params.arguments.timeRange || 'month';
+  const end=Date.parse('2026-10-02T12:30:00Z'),start=end-({day:1,week:7,month:30}[timeRange]*86400000);
+  const binSize=timeRange==='day'?'hour':'day',binMs=binSize==='hour'?3600000:86400000;
+  const periods=[];
+  if(mode!=='empty') for(let bucket=Math.floor(start/binMs)*binMs,i=0;bucket<end;bucket+=binMs,i++) periods.push({startDate:new Date(Math.max(bucket,start)).toISOString(),endDate:new Date(Math.min(bucket+binMs,end)).toISOString(),creditsUsed:mode==='zero'&&i===0?0:(i+1)*({day:10,week:20,month:30}[timeRange])});
+  const data=historical?{success:true,periods,...(mode==='legacy-history'?{}:{window:{timeRange,binSize,startDate:new Date(start).toISOString(),endDate:new Date(end).toISOString()}})}:current;
+  const delay=historical&&mode==='history-slow'?(timeRange==='day'?800:timeRange==='week'?50:200):150;
+  return setTimeout(()=>reply({content:[{type:'text',text:JSON.stringify(data)}],structuredContent:data}),delay);
  }
  if(m.method==='ui/message'){window.messages.push(m.params);return reply({});}
  if(m.method==='ui/update-model-context'){

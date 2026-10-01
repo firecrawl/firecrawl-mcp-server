@@ -8,7 +8,7 @@ export function providerLogoSrc(provider: Provider): string | undefined {
   if (
     embedded &&
     embedded.length < 131072 &&
-    /^data:image\/(?:png|jpeg|webp|gif|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(
+    /^data:image\/(?:png|jpeg|webp|gif|svg\+xml|x-icon|vnd\.microsoft\.icon);base64,[A-Za-z0-9+/=]+$/.test(
       embedded
     )
   )

@@ -45,11 +45,12 @@ that requires shipping the MCP server with these UI resources and extensions.
 References: [Plugin Extensions](https://developers.openai.com/plugins/build/extensions)
 and [plugin packaging](https://developers.openai.com/plugins/build/plugins).
 
-The orange Firecrawl logo is bundled in `assets/firecrawl.svg` and advertised
-in the launcher's MCP `icons` descriptor as a self-contained SVG data URI. The
-sidebar uses launcher icons independently of the package listing logo. After
-changing this metadata, restart MCP servers or the desktop app to refresh the
-cached descriptor. The existing sidebar pin identity stays the same.
+The plugin listing logo uses this package's `assets/firecrawl.svg`. The sidebar
+launcher's icon is built from the published plugin's
+`plugins/openai/app-6a314a73f8ac819195b0d55e36b9c609/assets/firecrawl.svg`, copied to
+`dist/firecrawl-sidebar.svg` by `scripts/build-usage-ui.mjs` and embedded in the
+MCP `icons` descriptor. Rebuild after changing that source, then restart MCP
+servers to refresh the cached descriptor. The sidebar pin identity stays the same.
 
 Provider logos are bundled for offline rendering, with initials for missing or
 broken artwork. The Providers directory includes collection tabs, category
