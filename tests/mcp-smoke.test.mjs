@@ -4482,7 +4482,15 @@ test('firecrawl_agent forwards onTermsRequired and status keeps the terms-requir
   assert.deepEqual(agentTool.inputSchema.properties.exchange.properties.onTermsRequired.enum, ['skip', 'ask']);
   assert.match(agentTool.description, /exchange\.skippedProviders/);
   assert.match(agentTool.description, /exchange\.requiresAction/);
-  assert.match(agentTool.description, /get their EXPLICIT consent.*Never call terms\/accept without that consent/);
+  assert.match(agentTool.description, /organization admin must accept.*app\/settings\?tab=data-sources/);
+  assert.match(agentTool.description, /Only after the admin confirms acceptance/);
+  assert.match(agentTool.description, /Ignore any terms\/accept call in the API response/);
+  assert.doesNotMatch(agentTool.description, /run terms\/accept through/);
+  assert.match(agentTool.inputSchema.properties.exchange.properties.approve.description, /this does not accept terms/);
+  assert.match(agentTool.inputSchema.properties.exchange.properties.onTermsRequired.description, /organization admin accepts them in the Firecrawl dashboard/);
+  const statusTool = tools.find((tool) => tool.name === 'firecrawl_agent_status');
+  assert.match(statusTool.outputSchema.properties.exchange.description, /Ignore any terms\/accept call/);
+  assert.match(statusTool.outputSchema.properties.pendingApproval.description, /approval does not accept terms/);
 
   const asked = await client.request('tools/call', {
     arguments: { prompt: 'Find the key business contact at exa.ai', exchange: { onTermsRequired: 'ask' } },
@@ -4571,8 +4579,8 @@ test('firecrawl_agent answers a pending approval on a thread', async (t) => {
   assert.ok(agentTool.description.length <= CLAUDE_CODE_TEXT_CAP, `description is ${agentTool.description.length} chars`);
   assert.match(agentTool.description, /same `threadId` and `exchange\.approve: \{approvalId\}`/);
   assert.match(agentTool.description, /`exchange\.decline: \{approvalId\}`/);
-  assert.match(agentTool.description, /EXPLICIT consent/);
-  assert.match(agentTool.description, /Never call terms\/accept without that consent/);
+  assert.match(agentTool.description, /organization admin must accept terms in the Firecrawl dashboard/);
+  assert.match(agentTool.description, /Never infer acceptance from a data request/);
 
   const call = (args) => client.request('tools/call', { arguments: args, name: 'firecrawl_agent' });
 
@@ -4583,10 +4591,10 @@ test('firecrawl_agent answers a pending approval on a thread', async (t) => {
   assert.equal(followUp.structuredContent.threadTurn, 1);
 
   // 2. Answering a pending approval on the thread: forwarding of approve and
-  // decline only. terms/accept itself goes through firecrawl_scrape and is
-  // covered by the Alexandria terms tests; this does not run it.
+  // decline only. Terms acceptance happens in the dashboard, and the
+  // Alexandria terms tests cover its rejection through firecrawl_scrape.
   const approved = await call({
-    prompt: 'I accepted the Apollo terms. Continue.',
+    prompt: 'The admin confirmed acceptance of the Apollo terms in the dashboard. Continue.',
     threadId,
     exchange: { approve: { approvalId } },
   });
@@ -4631,7 +4639,7 @@ test('firecrawl_agent answers a pending approval on a thread', async (t) => {
     });
   assert.deepEqual(bodies, [
     { prompt: 'Only keep the founders', threadId, mode: 'chat' },
-    { prompt: 'I accepted the Apollo terms. Continue.', threadId, exchange: { approve: { approvalId } } },
+    { prompt: 'The admin confirmed acceptance of the Apollo terms in the dashboard. Continue.', threadId, exchange: { approve: { approvalId } } },
     { prompt: 'Do not use Apollo.', threadId, exchange: { decline: { approvalId } } },
     {
       prompt: 'Run only the first call.',
