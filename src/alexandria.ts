@@ -63,8 +63,6 @@ export const findToolsSchema = z
 
 export const ALEXANDRIA_CATALOGUE_VERTICALS =
   'companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more';
-export const ALEXANDRIA_CATALOGUE_SENTENCE =
-  "Alexandria is Firecrawl's catalogue of data providers and workflows across " + ALEXANDRIA_CATALOGUE_VERTICALS + '; providers return typed, sourced records through published contracts.';
 export const ALEXANDRIA_SOURCES_OPT_OUT =
   'A search with sources: ["web"] omits semantic provider discovery; domainTools: true can still return website-matched tools. Web-only results use domainTools: false.';
 
