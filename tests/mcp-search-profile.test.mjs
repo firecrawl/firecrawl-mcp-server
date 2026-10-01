@@ -1071,7 +1071,7 @@ test('primary search profile agent language satisfies metadata policy gates', as
   const initialize = await initializeProfile(port, SEARCH_ENDPOINT, headers);
   const tools = await listToolDefinitions(port, SEARCH_ENDPOINT, headers);
 
-  assertAlexandriaMetadata(tools, initialize.instructions);
+  assertAlexandriaMetadata(tools, initialize.instructions, { hosted: true });
   assertAgentMetadataPolicy(
     [initialize.instructions, ...tools.map((tool) => tool.description ?? '')],
     assert
@@ -1119,7 +1119,7 @@ test('account (mcp-oauth) full-surface instructions satisfy the same metadata po
     assert.equal(tool?._meta?.['anthropic/alwaysLoad'], true, name);
   }
 
-  assertAlexandriaMetadata(tools, initialize.instructions);
+  assertAlexandriaMetadata(tools, initialize.instructions, { hosted: true });
   assertAgentMetadataPolicy(
     [initialize.instructions, ...tools.map((tool) => tool.description ?? '')],
     assert
@@ -1314,7 +1314,7 @@ test('search surface registers the two Alexandria tools with surface-scoped copy
   const headers = { 'x-api-key': 'fc-test' };
   const initialize = await initializeProfile(searchPort, SEARCH_ENDPOINT, headers);
   const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, headers);
-  assertAlexandriaMetadata(tools, initialize.instructions);
+  assertAlexandriaMetadata(tools, initialize.instructions, { hosted: true });
   // Claude Code truncates tool descriptions at CLAUDE_CODE_TEXT_CAP characters.
   for (const tool of tools) {
     assert.ok((tool.description ?? '').length <= CLAUDE_CODE_TEXT_CAP, `${tool.name} description is ${(tool.description ?? '').length} chars`);
