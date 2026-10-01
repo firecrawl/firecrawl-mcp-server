@@ -55,7 +55,7 @@ same index beside ordinary web results. Both are available here.
 The search surface's `firecrawl_search` takes **no `scrapeOptions`**. Its input
 schema is strict (unknown fields are rejected), and its executor builds the
 outbound `/v2/search` body from an explicit list of allowed fields
-(`query`, `objective`, `sessionId`, `clientModel`, `limit`, `includeDomains`,
+(`query`, `objective`, `clientModel`, `limit`, `includeDomains`,
 `excludeDomains`, `tbs`, `filter`, `location`, `sources`, `categories`,
 `highlights`, `enterprise`, `toolDetail`, `domainTools`) plus `origin`.
 It never spreads raw arguments, so

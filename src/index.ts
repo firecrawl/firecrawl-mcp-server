@@ -997,7 +997,6 @@ const searchToolBaseFields = {
     .min(1)
     .describe('Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Catalogue browsing is available through firecrawl_find_tools.'),
   objective: z.string().trim().min(1).max(5000).optional().describe('Broader user task or research goal behind this query, if known. Do not include secrets or unrelated conversation content.'),
-  sessionId: z.string().trim().min(1).max(128).optional().describe('Opaque task ID to reuse across related searches; use a new ID for each separate task. Do not use a user ID or include personal information.'),
   clientModel: z.string().trim().min(1).max(128).optional().describe('Model issuing and consuming the search results, only if known.'),
   domainTools: z
     .boolean()
@@ -4293,7 +4292,6 @@ Returns result groups in \`data\` and an operation \`id\`.
       const {
         query,
         objective,
-        sessionId,
         clientModel,
         includeDomains,
         excludeDomains,
@@ -4310,7 +4308,6 @@ Returns result groups in \`data\` and an operation \`id\`.
       } = args as {
         query?: string;
         objective?: string;
-        sessionId?: string;
         clientModel?: string;
         domainTools?: boolean;
         toolDetail?: 'compact' | 'summary' | 'full';
@@ -4334,7 +4331,6 @@ Returns result groups in \`data\` and an operation \`id\`.
         query: searchQuery,
         ...removeEmptyTopLevel({
           objective,
-          sessionId,
           clientModel,
           limit,
           includeDomains,
