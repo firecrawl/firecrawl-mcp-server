@@ -8,6 +8,7 @@ test('development launcher resolves relative paths and supports Intel Node witho
 import os, runpy, subprocess, tempfile
 from pathlib import Path
 from unittest.mock import patch
+secret = 'fc-synthetic-launcher-test'
 with tempfile.TemporaryDirectory() as root:
     worktree = (Path(root) / 'relative').resolve()
     (worktree / 'dist').mkdir(parents=True)
@@ -15,7 +16,7 @@ with tempfile.TemporaryDirectory() as root:
     original = Path.is_file
     def exists(path):
         return str(path) == '/usr/local/bin/node' if str(path) in ['/opt/homebrew/bin/node','/usr/local/bin/node'] else original(path)
-    with patch.dict(os.environ, {'FIRECRAWL_MCP_WORKTREE':'relative', 'FIRECRAWL_KEYCHAIN_ACCOUNT':'selected-account'}), patch('shutil.which', return_value=None), patch.object(Path,'is_file',exists), patch('os.access',return_value=True), patch('subprocess.run',return_value=subprocess.CompletedProcess([],0,stdout='fc-synthetic-launcher-test',stderr='')) as security, patch('os.execve') as execute:
+    with patch.dict(os.environ, {'FIRECRAWL_MCP_WORKTREE':'relative', 'FIRECRAWL_KEYCHAIN_ACCOUNT':'selected-account'}), patch('shutil.which', return_value=None), patch.object(Path,'is_file',exists), patch('os.access',return_value=True), patch('subprocess.run',return_value=subprocess.CompletedProcess([],0,stdout=secret,stderr='')) as security, patch('os.execve') as execute:
         os.chdir(root)
         runpy.run_path(${JSON.stringify(launcher)})
         assert execute.call_args.args[0] == '/usr/local/bin/node'
@@ -23,6 +24,12 @@ with tempfile.TemporaryDirectory() as root:
         assert os.getcwd() == str(worktree)
         assert '-a' in security.call_args.args[0]
         assert 'selected-account' in security.call_args.args[0]
+        assert all(secret not in arg for arg in security.call_args.args[0])
+        executable, argv, env = execute.call_args.args
+        assert secret not in executable
+        assert all(secret not in arg for arg in argv)
+        assert env['FIRECRAWL_API_KEY'] == secret
+        assert all(secret not in value for name, value in env.items() if name != 'FIRECRAWL_API_KEY')
 `], {stdio:'pipe'});
 });
 

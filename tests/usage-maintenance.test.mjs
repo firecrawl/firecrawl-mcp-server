@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import {
   snapshotProviders,
@@ -38,7 +38,7 @@ test('malformed logo snapshots do not break fallback and writes preserve the las
 
 test('provider logos accept embedded ICO artwork and reject malformed external inputs', async () => {
   const bundle = await build({
-    entryPoints: [new URL('../web/provider-logo.ts', import.meta.url).pathname],
+    entryPoints: [fileURLToPath(new URL('../web/provider-logo.ts', import.meta.url))],
     bundle: true,
     write: false,
     format: 'esm',
