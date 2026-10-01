@@ -34,7 +34,7 @@
       }
     },
     {
-      "files": ["web/*.ts"],
+      "files": ["web/**/*.ts", "web/**/*.tsx"],
       "env": {
         "browser": true
       },

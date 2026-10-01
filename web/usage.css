@@ -74,20 +74,6 @@ h1 {
   line-height: 24px;
   color: var(--black-alpha-72);
 }
-#refresh {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border: 0;
-  border-radius: 8px;
-  background: var(--black-alpha-4);
-  color: var(--accent-black);
-  font-weight: 450;
-}
-#refresh:hover:enabled {
-  background: var(--black-alpha-6);
-}
 .balance-section,
 .usage-section {
   padding: 24px;
@@ -244,19 +230,6 @@ footer {
   color: var(--black-alpha-56);
   font-size: 12px;
   line-height: 18px;
-}
-.text-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 0;
-  padding: 2px 0;
-  background: transparent;
-  color: var(--black-alpha-72);
-  font-size: 13px;
-}
-.text-button:hover:enabled {
-  color: var(--heat-100);
 }
 [hidden] {
   display: none !important;

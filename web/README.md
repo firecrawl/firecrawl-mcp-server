@@ -4,7 +4,7 @@ This MCP Apps interface follows the existing Firecrawl web usage page. Design
 sources were copied from `firecrawl-web` commit
 `d9fe0aeddca5fc77a6d552c327b17d0627d276da`:
 
-- `colors.ts`: semantic light/dark tokens (`firecrawl.css` contains only used tokens).
+- `colors.ts`: semantic light/dark tokens, generated from the complete snapshot in `ui/colors.ts`.
 - `public/fonts/SuisseIntl/{400,450,500}.woff2`: the actual dashboard fonts.
 - `components/shared/firecrawl-icon/firecrawl-icon-static.tsx`: the brand icon.
 - `tailwind.config.ts`, `components/ui/shadcn/button.tsx`,
@@ -12,26 +12,35 @@ sources were copied from `firecrawl-web` commit
   `components/app/app/usage/historical-chart-card.tsx`: typography, controls,
   spacing, and section borders.
 
+`web/ui/` vendors the web Button, Input, Select, Checkbox, Dialog, and ProviderLogo components,
+plus their `cn` helper, colors, and Tailwind configuration. Imports are adjusted
+for this package; Dialog also exports its trigger and close primitives. The
+Tailwind content paths target this interface; semantic colors use an alpha-aware
+`color-mix` adapter so `/80` backgrounds work with the hexadecimal tokens. `ui/tabs.tsx` adapts the segmented
+billing-settings tabs to reusable items and adds roving keyboard focus. There is
+no generic tabs component in the web repository. `providers.ts` handles discovery
+and context state; React renders it through `providers-view.tsx`.
+
 Keep token names and values aligned with these sources when updating this UI.
 The MCP repository does not depend on a neighboring web checkout at build time.
 
-Provider collection tabs, grouped horizontal rows and category grids follow
+Grouped horizontal rows and category grids follow
 `components/app/app/exchange/exchange-directory.tsx` from the same web commit.
 The All view groups providers when the catalog supplies category metadata;
 search and individual categories show a flat grid. Missing grouping metadata
-falls back to the complete provider grid. Category tabs scroll on narrow
-screens and use the web directory's active text treatment and spacing.
+falls back to the complete provider grid. The category dropdown uses the web
+Select component, including its keyboard navigation and portal.
 Providers and Usage share the same 1120px app width.
 
-`usage.ts` uses the standard MCP Apps SDK bridge for initialization, theme changes,
+`usage.tsx` uses the standard MCP Apps SDK bridge for initialization, theme changes,
 read-only tool calls, and external links. All balance and usage data comes from
 `firecrawl_credit_usage`, using the host's authenticated server connection.
 Calendar-month usage is not inferred from the current balance or plan allowance.
 A failed refresh clears the affected values; another section can still succeed.
 The earliest month can be partial because the API returns recent history.
 
-`pnpm build` generates one self-contained `dist/usage.html`, including fonts,
-styles, and the SDK. `pnpm typecheck:ui` checks the browser source.
+`pnpm build` generates one self-contained `dist/usage.html`, including an initial Providers shell, fonts,
+styles, React, and the SDK. `pnpm typecheck:ui` checks the browser source.
 `pnpm preview:usage` opens a local host at http://127.0.0.1:4173 with sample data;
 the controls exercise theme, width, missing metadata, empty usage, and failures.
 The preview host is not included in the published npm package.
@@ -45,10 +54,10 @@ demand. It never executes provider capabilities while browsing.
 
 The provider card layout follows
 `components/app/app/exchange/provider-card.tsx`; navigation follows the Alexandria
-sidebar, and `button.css` is copied from
+sidebar, and `ui/button.css` is copied from
 `components/ui/shadcn/button.css`. The interface uses the same semantic colors
 and Suisse fonts as the Usage tab. Initials act as self-contained provider marks.
-The provider dialog backdrop follows `components/ui/shadcn/dialog.tsx`:
+The provider dialog uses the actual `components/ui/shadcn/dialog.tsx` component:
 the theme's base background at 80% opacity with a 12px blur. It does not use
 black-alpha tokens, which become white in dark mode.
 

@@ -13,7 +13,12 @@ const scenario=document.getElementById('scenario');
 const theme=document.getElementById('theme');
 window.calls=[];window.messages=[];window.modelContexts=[];window.previewErrors=[];
 const catalogFixture=${previewCatalog.toString()};
-window.addEventListener('error',event=>window.previewErrors.push(event.message));
+const captureErrors=target=>{
+ target.addEventListener('error',event=>window.previewErrors.push(event.message));
+ target.addEventListener('unhandledrejection',event=>window.previewErrors.push(String(event.reason)));
+};
+captureErrors(window);
+frame.addEventListener('load',()=>captureErrors(frame.contentWindow));
 window.addEventListener('message',event=>{
  if(event.source!==frame.contentWindow) return;
  const m=event.data;if(m.jsonrpc!=='2.0'||!m.method) return;

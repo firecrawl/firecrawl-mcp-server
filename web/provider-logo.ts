@@ -15,33 +15,3 @@ export function providerLogoSrc(provider: Provider): string | undefined {
     return embedded;
   return Object.hasOwn(logos, provider.id) ? logos[provider.id].src : undefined;
 }
-
-export function providerMark(provider: Provider): HTMLElement {
-  const mark = document.createElement('span');
-  mark.className = 'provider-mark';
-  mark.setAttribute('aria-hidden', 'true');
-  const initials = document.createElement('span');
-  initials.className = 'provider-initials';
-  initials.textContent = provider.name.slice(0, 2).toUpperCase();
-  mark.append(initials);
-  const src = providerLogoSrc(provider);
-  if (!src) return mark;
-  const image = document.createElement('img');
-  image.className = 'provider-logo';
-  image.alt = '';
-  image.width = image.height = 24;
-  image.loading = 'lazy';
-  image.decoding = 'async';
-  const loaded = () => {
-    if (image.naturalWidth > 0) mark.dataset.loaded = 'true';
-  };
-  image.addEventListener('load', loaded);
-  image.addEventListener('error', () => {
-    delete mark.dataset.loaded;
-    image.remove();
-  });
-  image.src = src;
-  mark.append(image);
-  if (image.complete) loaded();
-  return mark;
-}

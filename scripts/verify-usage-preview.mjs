@@ -35,12 +35,28 @@ async function verify() {
       await new Promise((resolve) => setTimeout(resolve, 40));
     }
   };
-  const change = (id, value) => {
+  const change = async (id, value) => {
     if (id === 'provider-category') {
-      doc().querySelector(`[data-category="${value}"]`).click();
+      get('provider-category').dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+      );
+      await wait(
+        () => doc().querySelector(`[role="option"][data-category="${value}"]`),
+        'category dropdown'
+      );
+      doc().querySelector(`[role="option"][data-category="${value}"]`).click();
+      await wait(
+        () =>
+          get('provider-category').getAttribute('aria-expanded') === 'false',
+        'category selected'
+      );
       return;
     }
-    get(id).value = value;
+    const input = get(id);
+    Object.getOwnPropertyDescriptor(
+      doc().defaultView.HTMLInputElement.prototype,
+      'value'
+    ).set.call(input, value);
     get(id).dispatchEvent(
       new Event(id === 'provider-search' ? 'input' : 'change', {
         bubbles: true,
@@ -48,10 +64,12 @@ async function verify() {
     );
   };
   const choose = (id) =>
-    get('provider-grid').querySelector(`[data-provider="${id}"] input`).click();
+    get('provider-grid')
+      .querySelector(`[data-provider="${id}"] [role="checkbox"]`)
+      .click();
   const inspect = (id) =>
     get('provider-grid')
-      .querySelector(`[data-provider="${id}"] button`)
+      .querySelector(`[data-provider="${id}"] .provider-actions button.button`)
       .click();
   const safeCalls = () => {
     check(window.messages.length === 0, 'Selection must never send a message');
@@ -71,8 +89,15 @@ async function verify() {
       () => doc() !== previous && get('remaining')?.textContent === '8,750',
       'usage'
     );
-    check(!get('providers-view').hidden && get('usage-view').hidden, 'Providers opens by default');
-    check(get('providers-tab').getAttribute('aria-pressed') === 'true' && get('usage-tab').getAttribute('aria-pressed') === 'false', 'Default tab matches visible view');
+    check(
+      !get('providers-view').hidden && get('usage-view').hidden,
+      'Providers opens by default'
+    );
+    check(
+      get('providers-tab').getAttribute('aria-selected') === 'true' &&
+        get('usage-tab').getAttribute('aria-selected') === 'false',
+      'Default tab matches visible view'
+    );
     await wait(
       () =>
         !get('catalog-error').hidden ||
@@ -87,6 +112,38 @@ async function verify() {
     );
   };
   await load();
+  get('providers-tab').focus();
+  get('providers-tab').dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })
+  );
+  await wait(() => !get('usage-view').hidden, 'keyboard tab switch');
+  check(
+    doc().activeElement.id === 'usage-tab',
+    'Tabs move keyboard focus with selection'
+  );
+  get('usage-tab').dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Home', bubbles: true })
+  );
+  await wait(() => !get('providers-view').hidden, 'keyboard tabs return');
+  get('provider-category').focus();
+  get('provider-category').dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+  );
+  await wait(
+    () => doc().querySelector('[role="listbox"]'),
+    'keyboard dropdown open'
+  );
+  doc()
+    .querySelector('[role="listbox"]')
+    .dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
+  await wait(
+    () =>
+      !doc().querySelector('[role="listbox"]') &&
+      doc().activeElement.id === 'provider-category',
+    'dropdown escape restores focus'
+  );
   const logos = [...doc().querySelectorAll('.provider-logo')];
   logos.forEach((image) => {
     image.loading = 'eager';
@@ -109,10 +166,11 @@ async function verify() {
   choose('allbirds-com');
   inspect('amazon-com');
   await wait(
-    () => get('provider-tools').querySelectorAll('input').length === 2
+    () =>
+      get('provider-tools')?.querySelectorAll('[role="checkbox"]').length === 2
   );
   get('provider-tools')
-    .querySelector('[data-capability="products/offer"]')
+    .querySelector('[aria-label="Select tool Offer"]')
     .click();
   get('provider-tools').querySelector('summary').focus();
   get('provider-tools').querySelector('summary').click();
@@ -157,13 +215,13 @@ async function verify() {
     ),
     'Execution guidance reaches native chat context'
   );
-  change('provider-search', 'PubMed');
+  await change('provider-search', 'PubMed');
   check(
     get('provider-grid').children.length === 1,
     'Search finds provider from the last page'
   );
-  change('provider-search', '');
-  change('provider-category', 'finance');
+  await change('provider-search', '');
+  await change('provider-category', 'finance');
   await wait(() => get('provider-count').textContent === '1 provider');
   check(
     get('selection-count').textContent === '2 selected',
@@ -175,8 +233,8 @@ async function verify() {
     !latest().structuredContent && get('selection-controls').hidden,
     'Clearing removes context attachment and compact controls'
   );
-  change('provider-category', 'shopping');
-  change('provider-category', 'research');
+  await change('provider-category', 'shopping');
+  await change('provider-category', 'research');
   await wait(
     () =>
       get('provider-count').textContent === '1 provider' &&
@@ -237,12 +295,13 @@ async function verify() {
   );
   inspect('amtrak-com');
   await wait(() =>
-    get('provider-tools').textContent.includes('Could not load')
+    get('provider-tools')?.textContent.includes('Could not load')
   );
   document.getElementById('scenario').value = 'normal';
   get('provider-tools').querySelector('button').click();
   await wait(
-    () => get('provider-tools').querySelectorAll('input').length === 2
+    () =>
+      get('provider-tools')?.querySelectorAll('[role="checkbox"]').length === 2
   );
   document.getElementById('scenario').value = 'tools-error';
   get('provider-tools').querySelector('summary').click();
@@ -278,17 +337,18 @@ async function verify() {
   );
   await load('unsupported-context');
   check(
-    [...get('provider-grid').querySelectorAll('input')].every(
+    [...get('provider-grid').querySelectorAll('[role="checkbox"]')].every(
       (input) => input.disabled
     ),
     'Selection disabled without model-context capability'
   );
   inspect('allbirds-com');
   await wait(
-    () => get('provider-tools').querySelectorAll('input').length === 2
+    () =>
+      get('provider-tools')?.querySelectorAll('[role="checkbox"]').length === 2
   );
   check(
-    [...get('provider-tools').querySelectorAll('input')].every(
+    [...get('provider-tools')?.querySelectorAll('[role="checkbox"]')].every(
       (input) => input.disabled
     ) && get('select-provider').disabled,
     'Tool selection also capability gated'
@@ -303,7 +363,9 @@ async function verify() {
     const previous = doc();
     document.getElementById('reload').click();
     await wait(
-      () => doc() !== previous && get('balance-section')?.getAttribute('aria-busy') === 'false',
+      () =>
+        doc() !== previous &&
+        get('balance-section')?.getAttribute('aria-busy') === 'false',
       'usage scenario ' + mode
     );
     get('usage-tab').click();
@@ -320,37 +382,92 @@ async function verify() {
   ]) {
     await usageMode(mode);
     check(get('remaining').textContent === remaining, mode + ' balance');
-    check(get('history').querySelectorAll('.month').length === columns, mode + ' monthly usage');
-    check(get('balance-error').hidden === !balanceError, mode + ' balance error');
-    check(get('history-error').hidden === !historyError, mode + ' history error');
-    if (mode === 'extra') check(get('plan').textContent === '1,000', 'Top-ups do not inflate plan allowance');
-    if (mode === 'zero') check(get('history').querySelectorAll('.bar[hidden]').length === 1, 'Zero usage has no filled bar');
-    if (mode === 'empty') check(get('history').textContent.includes('No usage history yet'), 'Empty history');
-    if (mode === 'metadata') check(get('billing').textContent === 'Unavailable', 'Missing billing dates');
+    check(
+      get('history').querySelectorAll('.month').length === columns,
+      mode + ' monthly usage'
+    );
+    check(
+      get('balance-error').hidden === !balanceError,
+      mode + ' balance error'
+    );
+    check(
+      get('history-error').hidden === !historyError,
+      mode + ' history error'
+    );
+    if (mode === 'extra')
+      check(
+        get('plan').textContent === '1,000',
+        'Top-ups do not inflate plan allowance'
+      );
+    if (mode === 'zero')
+      check(
+        get('history').querySelectorAll('.bar[hidden]').length === 1,
+        'Zero usage has no filled bar'
+      );
+    if (mode === 'empty')
+      check(
+        get('history').textContent.includes('No usage history yet'),
+        'Empty history'
+      );
+    if (mode === 'metadata')
+      check(
+        get('billing').textContent === 'Unavailable',
+        'Missing billing dates'
+      );
   }
   await usageMode('normal');
   document.getElementById('scenario').value = 'error';
   get('refresh').click();
-  await wait(() => !get('balance-error').hidden && !get('history-error').hidden, 'failed refresh');
-  check(get('remaining').textContent === '—' && !get('history').querySelector('.month'), 'Failed refresh clears stale data');
+  await wait(
+    () => !get('balance-error').hidden && !get('history-error').hidden,
+    'failed refresh'
+  );
+  check(
+    get('remaining').textContent === '—' &&
+      !get('history').querySelector('.month'),
+    'Failed refresh clears stale data'
+  );
   document.getElementById('scenario').value = 'normal';
   get('refresh').click();
-  await wait(() => get('remaining').textContent === '8,750', 'refresh recovery');
+  await wait(
+    () => get('remaining').textContent === '8,750',
+    'refresh recovery'
+  );
   get('open-dashboard').click();
   await wait(() => window.lastOpenedUrl, 'dashboard link');
-  check(window.lastOpenedUrl === 'https://www.firecrawl.dev/app/usage', 'Production dashboard destination');
-  const usageWidth = doc().querySelector('.dashboard').getBoundingClientRect().width;
+  check(
+    window.lastOpenedUrl === 'https://www.firecrawl.dev/app/usage',
+    'Production dashboard destination'
+  );
+  const usageWidth = doc()
+    .querySelector('.dashboard')
+    .getBoundingClientRect().width;
   get('providers-tab').click();
-  await wait(() => get('provider-count').textContent === '6 providers', 'providers for visual checks');
-  check(doc().querySelector('.dashboard').getBoundingClientRect().width === usageWidth, 'Consistent Providers and Usage width');
+  await wait(
+    () => get('provider-count').textContent === '6 providers',
+    'providers for visual checks'
+  );
+  check(
+    doc().querySelector('.dashboard').getBoundingClientRect().width ===
+      usageWidth,
+    'Consistent Providers and Usage width'
+  );
   inspect('allbirds-com');
-  await wait(() => get('provider-dialog').open, 'provider modal');
+  await wait(
+    () => get('provider-dialog')?.getAttribute('data-state') === 'open',
+    'provider modal'
+  );
   for (const mode of ['dark', 'light']) {
     const control = document.getElementById('theme');
     control.value = mode;
     control.dispatchEvent(new Event('change'));
-    await wait(() => doc().documentElement.dataset.theme === mode, 'live theme change');
-    const style = doc().defaultView.getComputedStyle(get('provider-dialog'), '::backdrop');
+    await wait(
+      () => doc().documentElement.dataset.theme === mode,
+      'live theme change'
+    );
+    const style = doc().defaultView.getComputedStyle(
+      doc().querySelector('[data-state="open"].backdrop-blur-md')
+    );
     const canvas = doc().createElement('canvas');
     canvas.width = canvas.height = 1;
     const context = canvas.getContext('2d');
@@ -358,12 +475,44 @@ async function verify() {
     context.fillRect(0, 0, 1, 1);
     const [red, , , alpha] = context.getImageData(0, 0, 1, 1).data;
     check(mode === 'dark' ? red < 30 : red > 230, mode + ' modal backdrop');
-    check(alpha > 195 && alpha < 210 && style.backdropFilter === 'blur(12px)', 'Firecrawl modal overlay');
+    check(
+      alpha > 195 && alpha < 210 && style.backdropFilter === 'blur(12px)',
+      'Firecrawl modal overlay'
+    );
   }
-  get('close-provider-dialog').click();
+  document.getElementById('view').style.height = '420px';
+  const toolsPane = get('provider-tools');
+  await wait(
+    () => toolsPane.scrollHeight > toolsPane.clientHeight,
+    'dialog scroll region'
+  );
+  const footer = get('provider-dialog').querySelector('.dialog-footer');
+  await wait(
+    () =>
+      doc().defaultView.innerHeight === 420 &&
+      footer.getBoundingClientRect().bottom <= 420,
+    'Dialog actions fit a short viewport'
+  );
+  toolsPane.scrollTop = toolsPane.scrollHeight;
+  check(
+    footer.getBoundingClientRect().bottom <= 420,
+    'Dialog actions remain visible while scrolling'
+  );
+  get('provider-dialog').dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+  );
+  await wait(() => !get('provider-dialog'), 'dialog closes on Escape');
+  await wait(
+    () => doc().activeElement?.textContent === 'View tools',
+    'dialog restores focus'
+  );
+  document.getElementById('view').style.height = '940px';
   document.getElementById('width').value = '320';
   document.getElementById('width').dispatchEvent(new Event('change'));
-  check(doc().documentElement.scrollWidth <= 320, 'No horizontal page overflow on mobile');
+  check(
+    doc().documentElement.scrollWidth <= 320,
+    'No horizontal page overflow on mobile'
+  );
   get('usage-tab').click();
   check(doc().documentElement.scrollWidth <= 320, 'Usage fits mobile width');
   safeCalls();
@@ -372,6 +521,8 @@ async function verify() {
     passed: true,
     checks: [
       'providers opens by default',
+      'keyboard tabs, dropdown Escape and focus restoration',
+      'short viewport dialog scrolling and visible actions',
       'pagination and search',
       'category races',
       'mixed named context annotations',
