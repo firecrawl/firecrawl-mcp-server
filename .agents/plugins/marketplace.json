@@ -1,0 +1,20 @@
+{
+  "name": "firecrawl",
+  "interface": {
+    "displayName": "Firecrawl"
+  },
+  "plugins": [
+    {
+      "name": "firecrawl",
+      "source": {
+        "source": "local",
+        "path": "./plugins/codex/firecrawl"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

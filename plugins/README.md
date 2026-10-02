@@ -7,11 +7,20 @@ scientific literature with Firecrawl.
 | --- | --- | --- |
 | [OpenAI](openai/app-6a314a73f8ac819195b0d55e36b9c609) | Existing registered Firecrawl app in ChatGPT and Codex | `firecrawl`, with workflow references |
 | [Claude](claude/firecrawl-search) | `https://mcp.firecrawl.dev/v2/mcp-search` | `firecrawl`, `firecrawl-developer-index`, `firecrawl-research-index` |
+| [Codex](codex/firecrawl) | `https://mcp.firecrawl.dev/v2/mcp-oauth` (OAuth) | None |
 
 The OpenAI package covers the full authenticated tool set. Its `.app.json`
 preserves the registered app connection and authentication. The Claude package
 uses the [search endpoint's eight-tool contract](../docs/search-profile.md) and
 its account-connection flow.
+
+The Codex package is the MCP server alone: no skills, no CLI. Its `.mcp.json`
+sets `omit_tools_from = ["deferred"]`, so Codex lists the Firecrawl tools to
+the model directly instead of behind `tool_search`, which the model rarely
+opens. It must not gain a `skills/` directory: Codex loads a plugin's
+`skills/` folder whenever the manifest lists no skills. The repository-root
+`.agents/plugins/marketplace.json` publishes it as a Codex marketplace;
+Claude Code and Cursor do not read that file.
 
 ## Maintain the packages
 
@@ -36,6 +45,18 @@ claude --plugin-dir ./plugins/claude/firecrawl-search
 Complete the Firecrawl account connection in the client before using tools.
 Check a web lookup, a supplied URL, a programming question, and a paper question.
 Inspect the requested source and scope as well as whether the tool call succeeds.
+
+For the Codex package:
+
+```sh
+codex plugin marketplace add firecrawl/firecrawl-mcp-server
+codex plugin add firecrawl@firecrawl
+codex mcp login firecrawl
+```
+
+The last command signs in to Firecrawl in the browser. `codex mcp list` should
+show the server at `/v2/mcp-oauth` as logged in. Use a local checkout path in
+place of `firecrawl/firecrawl-mcp-server` to test unmerged changes.
 
 For the OpenAI package, load the package directory through a supported local
 plugin installation flow in Codex. For distribution, use the existing Firecrawl

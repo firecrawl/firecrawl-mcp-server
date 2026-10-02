@@ -83,6 +83,29 @@ https://mcp.firecrawl.dev/v2/mcp-search
 
 It exposes a fixed set of eight tools: `firecrawl_search`, `firecrawl_developer_search`, the four `firecrawl_research_*` tools, and the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`. Its `firecrawl_search` fetches no page content, and the surface has its own OAuth identity; the full endpoint above is unchanged. It backs a published connector listing, so its tool set is a contract rather than a profile to tune. See [docs/search-profile.md](docs/search-profile.md) for the full contract and what a change to it involves.
 
+#### Codex
+
+Install the Codex plugin and sign in with your Firecrawl account:
+
+```bash
+codex plugin marketplace add firecrawl/firecrawl-mcp-server
+codex plugin add firecrawl@firecrawl
+codex mcp login firecrawl
+```
+
+It connects to the hosted OAuth endpoint with the Firecrawl tools listed to the
+model directly. To configure Codex by hand instead, add this to
+`~/.codex/config.toml` and run the same `codex mcp login firecrawl`:
+
+```toml
+[mcp_servers.firecrawl]
+url = "https://mcp.firecrawl.dev/v2/mcp-oauth"
+omit_tools_from = ["deferred"]
+```
+
+Without `omit_tools_from`, Codex keeps MCP tools behind its `tool_search` tool,
+and the model often answers with its built-in web search instead.
+
 For packaged MCP workflows in ChatGPT, Codex, or Claude Code, see
 [MCP plugin packages](plugins/README.md).
 
