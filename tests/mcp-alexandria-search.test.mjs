@@ -50,6 +50,45 @@ test('default tools fall back only on discovery refusal; explicit tools and othe
   assert.equal(other.api.requests.length, 1);
 });
 
+test('self-hosted search strips cloud-only discovery keys and retries web-only', async (t) => {
+  // A self-hosted Firecrawl rejects the Alexandria/discovery keys this server
+  // injects by default, so an implicit search must fall back to a plain web
+  // search instead of surfacing the 400 (issue #471).
+  const { api, client } = await startStdioWithApi(t, { selfHosted: true });
+
+  // Default search: server injects sources: [web, alexandria] + domainTools +
+  // toolDetail, the self-hosted API rejects it, and the retry drops those keys.
+  const result = await client.request('tools/call', {
+    name: 'firecrawl_search',
+    arguments: { query: 'company news' },
+  });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  assert.equal(api.requests.length, 2);
+  const retry = api.requests[1].body;
+  assert.deepEqual(retry.sources, ['web']);
+  assert.ok(!('domainTools' in retry), 'domainTools must be dropped on retry');
+  assert.ok(!('toolDetail' in retry), 'toolDetail must be dropped on retry');
+
+  // Explicit web-only search still carries injected cloud-only keys, so it also
+  // falls back rather than failing.
+  const before = api.requests.length;
+  const webOnly = await client.request('tools/call', {
+    name: 'firecrawl_search',
+    arguments: { query: 'company news', sources: ['web'] },
+  });
+  assert.notEqual(webOnly.isError, true, JSON.stringify(webOnly));
+  assert.equal(api.requests.length, before + 2);
+  assert.ok(!('toolDetail' in api.requests.at(-1).body));
+
+  // A caller that explicitly asked for Alexandria tools gets the real error.
+  const beforeExplicit = api.requests.length;
+  await callExpectingError(client, {
+    name: 'firecrawl_search',
+    arguments: { query: 'company news', sources: ['alexandria'] },
+  });
+  assert.equal(api.requests.length, beforeExplicit + 1);
+});
+
 test('toolDetail forwards valid values and rejects invalid values before API calls', async (t) => {
   const { api, client } = await startStdioWithApi(t);
   for (const [name, args] of [
