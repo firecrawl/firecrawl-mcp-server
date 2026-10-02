@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "firecrawl-usage": {
+      "command": "python3",
+      "args": [
+        "./scripts/run-keychain.py"
+      ]
+    }
+  }
+}

@@ -15,8 +15,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Use Node.js
         uses: actions/setup-node@v3
@@ -25,10 +23,29 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm run build
 
       - name: Test
         run: pnpm test
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Install browser dependencies
+        run: npx --yes agent-browser@0.38.1 install --with-deps
+
+      - name: Browser regressions
+        run: |
+          node scripts/preview-usage-ui.mjs &
+          preview_pid=$!
+          trap 'kill "$preview_pid"' EXIT
+          ready=false
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then ready=true; break; fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then echo "Preview server did not start" >&2; exit 1; fi
+          node scripts/verify-usage-preview.mjs http://127.0.0.1:4173

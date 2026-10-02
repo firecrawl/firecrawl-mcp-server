@@ -63,6 +63,7 @@ import { checkKeylessSignupUrl } from './keyless-signup-link';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
 import { registerUsageTools } from './usage';
+import { registerUsageDashboard } from './usage-ui';
 import { escapeWWWAuthenticateValue } from './www-authenticate';
 import {
   createIntrospectionCache,
@@ -4476,6 +4477,9 @@ registerMonitorTools(server);
 registerResearchTools(server, getClient);
 registerDeveloperTools(server, getClient);
 registerUsageTools(server, getClient);
+if (primaryProfile.id !== 'search') {
+  registerUsageDashboard(server, getClient);
+}
 
 if (
   process.env.CLOUD_SERVICE === 'true' &&
