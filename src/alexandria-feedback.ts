@@ -102,5 +102,4 @@ export const alexandriaSessionFeedbackSchema = z.strictObject({
   ...alexandriaFeedbackFields,
   requestedWebsite: alexandriaFeedbackFields.requestedWebsite.unwrap(),
   rationale: detail,
-  objective: detail,
 });
