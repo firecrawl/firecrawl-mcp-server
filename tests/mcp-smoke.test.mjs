@@ -1845,6 +1845,27 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
     await assert.rejects(client.request('tools/call', { name: 'firecrawl_feedback', arguments: invalid }), /parameter validation failed/);
     assert.equal(fakeApi.requests.length, before);
   }
+  // firecrawl_feedback caps missingContent at 20, matching firecrawl_search_feedback
+  // and its documented limit; more than 20 is rejected before any API call.
+  {
+    const makeMissing = (n) =>
+      Array.from({ length: n }, (_, i) => ({ topic: `topic ${i}` }));
+    const before = fakeApi.requests.length;
+    await assert.rejects(
+      client.request('tools/call', {
+        name: 'firecrawl_feedback',
+        arguments: { endpoint: 'search', jobId: '00000000-0000-4000-8000-000000000010', rating: 'bad', missingContent: makeMissing(21) },
+      }),
+      /parameter validation failed/
+    );
+    assert.equal(fakeApi.requests.length, before);
+    const accepted = await client.request('tools/call', {
+      name: 'firecrawl_feedback',
+      arguments: { endpoint: 'search', jobId: '00000000-0000-4000-8000-000000000010', rating: 'bad', missingContent: makeMissing(20) },
+    });
+    assert.notEqual(accepted.isError, true);
+    assert.equal(fakeApi.requests.at(-1).body.missingContent.length, 20);
+  }
   for (const endpoint of ['search', 'scrape', 'parse', 'map']) {
     for (const [field, value] of Object.entries({
       requestedWebsite: sessionFeedback.requestedWebsite,
