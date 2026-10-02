@@ -388,6 +388,25 @@ async function startFakeFirecrawlApi() {
         stopReason: 'credit_limit_reached',
         success: true,
       },
+      '/v2/agent/00000000-0000-4000-8000-000000000044': {
+        creditsUsed: 100,
+        error: 'Agent reached max credits',
+        expiresAt: '2026-10-01T00:00:00.000Z',
+        partial: { companies: [{ name: 'Acme' }] },
+        partialSchemaValid: true,
+        status: 'failed',
+        stopReason: 'credit_limit_reached',
+        success: true,
+      },
+      '/v2/agent/00000000-0000-4000-8000-000000000045': {
+        creditsUsed: 100,
+        error: 'Agent reached max credits',
+        expiresAt: '2026-10-01T00:00:00.000Z',
+        partial: { companies: [{ name: 'Acme' }] },
+        status: 'failed',
+        stopReason: 'credit_limit_reached',
+        success: true,
+      },
       '/v2/agent/00000000-0000-4000-8000-000000000043': {
         error: 'Agent failed',
         expiresAt: '2026-10-01T00:00:00.000Z',
@@ -4529,7 +4548,7 @@ test('firecrawl_agent_status flags a credit-limit stop and keeps its partial', a
   const notice = text.slice(0, text.indexOf('\n\n'));
   assert.match(notice, /stopped at its credit limit \(maxCredits\)/);
   assert.match(notice, /`partial` is an INCOMPLETE best-effort result/);
-  assert.match(notice, /does not match the requested schema/);
+  assert.match(notice, /It does not match the schema this run was given\./);
   assert.match(notice, /Agent message: Only Acme was found\./);
   assert.match(notice, /firecrawl_agent with threadId "00000000-0000-4000-8000-000000000041"/);
   assert.match(notice, /higher maxCredits/);
@@ -4540,6 +4559,22 @@ test('firecrawl_agent_status flags a credit-limit stop and keeps its partial', a
   assert.equal(structured.stopReason, 'credit_limit_reached');
   assert.equal(structured.notice, notice);
   assert.equal(structured.status, 'failed');
+
+  // A schema-valid partial says so.
+  const valid = await status('00000000-0000-4000-8000-000000000044');
+  const validNotice = valid.content[0].text.slice(0, valid.content[0].text.indexOf('\n\n'));
+  assert.match(validNotice, /`partial` is an INCOMPLETE best-effort result/);
+  assert.match(validNotice, /It matches the schema this run was given\./);
+  assert.doesNotMatch(validNotice, /does not match/);
+  assert.equal(valid.structuredContent.partialSchemaValid, true);
+  assert.equal(valid.structuredContent.notice, validNotice);
+
+  // No partialSchemaValid (a run without a schema): no schema claim either way.
+  const unchecked = await status('00000000-0000-4000-8000-000000000045');
+  const uncheckedNotice = unchecked.structuredContent.notice;
+  assert.match(uncheckedNotice, /`partial` is an INCOMPLETE best-effort result/);
+  assert.doesNotMatch(uncheckedNotice, /schema/);
+  assert.equal('partialSchemaValid' in unchecked.structuredContent, false);
 
   // No partial and no thread: say so, and point at a fresh run.
   const bare = await status('00000000-0000-4000-8000-000000000042');

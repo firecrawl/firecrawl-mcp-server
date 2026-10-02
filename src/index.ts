@@ -4052,9 +4052,9 @@ function agentStatusResult(data: unknown): ContentResult {
   if (hasPartial) {
     const validity =
       run.partialSchemaValid === true
-        ? ' It matches the requested schema.'
+        ? ' It matches the schema this run was given.'
         : run.partialSchemaValid === false
-          ? ' It does not match the requested schema.'
+          ? ' It does not match the schema this run was given.'
           : '';
     lines.push(
       `\`partial\` is an INCOMPLETE best-effort result, not a finished answer; tell the user it is incomplete.${validity}`
