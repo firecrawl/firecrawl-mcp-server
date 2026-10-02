@@ -71,6 +71,22 @@ async function startFakeExchangeApi(options = {}) {
       if (options.searchRefusal && (parsedBody.domainTools || parsedBody.sources?.includes('alexandria'))) {
         return json(403, { success: false, error: options.searchRefusal });
       }
+      // Emulate a self-hosted Firecrawl: it has no Alexandria surface and
+      // rejects the cloud-only discovery keys with a 400 "Unrecognized key".
+      if (options.selfHosted) {
+        const offending = ['domainTools', 'toolDetail'].filter(
+          (key) => key in parsedBody
+        );
+        if (offending.length > 0 || parsedBody.sources?.some((source) =>
+          ['alexandria', 'exchange'].includes(typeof source === 'string' ? source : source?.type)
+        )) {
+          return json(400, {
+            success: false,
+            error: `Unrecognized key(s) in object: ${offending.map((k) => `'${k}'`).join(', ') || "'sources'"}`,
+          });
+        }
+        return json(200, { success: true, data: { web: [{ title: 'self-hosted result', url: 'https://example.com' }] }, id: '00000000-0000-4000-8000-000000000000' });
+      }
 
       return json(200, {
         success: true,

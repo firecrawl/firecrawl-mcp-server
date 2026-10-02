@@ -1252,10 +1252,37 @@ async function relayExchangeError(
   }
 }
 
+// Discovery keys the hosted API understands but a self-hosted Firecrawl does
+// not. A self-hosted /v2/search rejects them with a 400 "Unrecognized key"
+// (see issue #471), so when the caller never asked for tool discovery we strip
+// them and retry web-only rather than surfacing the rejection.
+const CLOUD_ONLY_SEARCH_KEYS = ['domainTools', 'toolDetail'] as const;
+
+/** A self-hosted instance rejecting the cloud-only discovery keys with a 400/422. */
+function isSelfHostedDiscoveryRejection(response: any): boolean {
+  const status = response?.status;
+  if (status !== 400 && status !== 422) return false;
+  const error =
+    typeof response?.data?.error === 'string'
+      ? response.data.error.toLowerCase()
+      : '';
+  return (
+    error.includes('unrecognized key') ||
+    CLOUD_ONLY_SEARCH_KEYS.some((key) => error.includes(key.toLowerCase()))
+  );
+}
+
 async function postSearchWithFallback(
   client: any,
   body: Record<string, unknown>,
-  implicitTools: boolean
+  { implicitTools, userRequestedTools }: {
+    // The caller sent no sources and did not force domainTools: true, so the
+    // Alexandria defaults were injected by this server rather than requested.
+    implicitTools: boolean;
+    // The caller explicitly asked for Alexandria/domain tools, so a rejection
+    // of the discovery keys is a real error, not one to silently work around.
+    userRequestedTools: boolean;
+  }
 ): Promise<any> {
   try {
     return await client.http.post('/v2/search', body);
@@ -1266,12 +1293,23 @@ async function postSearchWithFallback(
       'This endpoint is not enabled for this team.',
       'Exchange is not enabled for this team.',
     ].includes(response?.data?.error);
-    if (!implicitTools || response?.status !== 403 || !unavailable) throw error;
-    return client.http.post('/v2/search', {
-      ...body,
-      sources: ['web'],
-      domainTools: false,
-    });
+    if (implicitTools && response?.status === 403 && unavailable) {
+      return client.http.post('/v2/search', {
+        ...body,
+        sources: ['web'],
+        domainTools: false,
+      });
+    }
+    // Self-hosted Firecrawl has no Alexandria surface and rejects the
+    // cloud-only discovery keys outright. When the caller did not explicitly
+    // request tools, drop those keys (not just set them false — the keys
+    // themselves are unrecognized) and retry a plain web search.
+    if (isSelfHostedDiscoveryRejection(response) && !userRequestedTools) {
+      const retry: Record<string, unknown> = { ...body, sources: ['web'] };
+      for (const key of CLOUD_ONLY_SEARCH_KEYS) delete retry[key];
+      return client.http.post('/v2/search', retry);
+    }
+    throw error;
   }
 }
 
@@ -2920,11 +2958,11 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
     // supports the optional authenticated `firecrawl_search_feedback` workflow.
     const client = getClient(session);
     const postSearch = () =>
-      postSearchWithFallback(
-        client,
-        searchBody,
-        opts.sources === undefined && opts.domainTools !== true
-      );
+      postSearchWithFallback(client, searchBody, {
+        implicitTools: opts.sources === undefined && opts.domainTools !== true,
+        userRequestedTools:
+          hasAlexandria(opts.sources) || opts.domainTools === true,
+      });
     const context = { tool: 'firecrawl_search' };
     const httpRes = exchangeSource
       ? await relayExchangeError(postSearch, context)
@@ -4380,11 +4418,10 @@ Returns result groups in \`data\` and an operation \`id\`.
         assertExchangeCredential(session);
       const client = getClientFn(session);
       const postSearch = () =>
-        postSearchWithFallback(
-          client,
-          searchBody,
-          sources === undefined && domainTools !== true
-        );
+        postSearchWithFallback(client, searchBody, {
+          implicitTools: sources === undefined && domainTools !== true,
+          userRequestedTools: hasAlexandria(sources) || domainTools === true,
+        });
       const context = { tool: 'firecrawl_search' };
       const httpRes = exchangeSource
         ? await relayExchangeError(postSearch, context)
