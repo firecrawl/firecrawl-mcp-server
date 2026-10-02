@@ -4025,9 +4025,58 @@ Returns job status, progress information, and result data when completed.
       `/v2/agent/${encodeURIComponent(id)}`,
       originHeaders(requestOrigin(mcpClient, session))
     );
-    return structuredText(res?.data ?? {});
+    return agentStatusResult(res?.data ?? {});
   },
 });
+
+/**
+ * A run that hit its maxCredits ends `failed`, and the API may attach a
+ * best-effort `partial`. Lead with a plain notice so the calling model does not
+ * mistake the partial for a finished answer or miss how to continue. Any other
+ * status passes through unchanged.
+ */
+function agentStatusResult(data: unknown): ContentResult {
+  const run = data as Record<string, unknown> | null;
+  if (
+    !run ||
+    typeof run !== 'object' ||
+    run.status !== 'failed' ||
+    run.stopReason !== 'credit_limit_reached'
+  ) {
+    return structuredText(data);
+  }
+  const lines = [
+    'This agent run stopped at its credit limit (maxCredits) before finishing.',
+  ];
+  const hasPartial = run.partial !== undefined && run.partial !== null;
+  if (hasPartial) {
+    const validity =
+      run.partialSchemaValid === true
+        ? ' It matches the schema this run was given.'
+        : run.partialSchemaValid === false
+          ? ' It does not match the schema this run was given.'
+          : '';
+    lines.push(
+      `\`partial\` is an INCOMPLETE best-effort result, not a finished answer; tell the user it is incomplete.${validity}`
+    );
+  } else {
+    lines.push('No partial result was recovered.');
+  }
+  if (typeof run.message === 'string' && run.message.trim()) {
+    lines.push(`Agent message: ${run.message.trim()}`);
+  }
+  const threadId = typeof run.threadId === 'string' ? run.threadId : undefined;
+  lines.push(
+    threadId
+      ? `To continue, call firecrawl_agent with threadId "${threadId}" and a prompt to finish the task (the follow-up ${hasPartial ? 'resumes from this partial' : 'keeps this thread'}), or start a new run with a higher maxCredits.`
+      : 'To continue, start a new firecrawl_agent run with a higher maxCredits.'
+  );
+  const notice = lines.join(' ');
+  return withStructured(
+    `${notice}\n\n${JSON.stringify(data, null, 2)}`,
+    { ...run, notice }
+  );
+}
 
 // Interact tools (scrape-bound browser sessions)
 server.addTool({
