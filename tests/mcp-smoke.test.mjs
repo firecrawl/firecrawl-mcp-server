@@ -1763,6 +1763,7 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
 
   const searchFeedbackResult = await client.request('tools/call', {
     arguments: {
+      objective: 'Shortlist federal IT contracts to bid on this quarter',
       querySuggestions: 'Use a narrower query',
       rating: 'bad',
       searchId: toolPayload.id,
@@ -1793,6 +1794,10 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
       '/v2/search/00000000-0000-4000-8000-000000000000/feedback'
   );
   assert.equal(searchFeedbackRequest.body.rating, 'bad');
+  assert.equal(
+    searchFeedbackRequest.body.objective,
+    'Shortlist federal IT contracts to bid on this quarter'
+  );
   const endpointFeedbackRequests = fakeApi.requests.filter(
     (request) => request.url === '/v2/feedback'
   );

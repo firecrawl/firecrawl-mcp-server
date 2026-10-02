@@ -3370,7 +3370,7 @@ if (!SEARCH_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
       destructiveHint: false, // Additive only; records feedback and may refund credits, does not delete data.
     },
     description: `
-Records schema-validated quality feedback for a prior \`firecrawl_search\` UUID \`searchId\`. A \`good\` rating requires a valuable source, \`partial\` a valuable source or at least one \`missingContent\` entry, and \`bad\` at least one \`missingContent\` entry or a query suggestion; caps are 50 \`valuableSources\` and 20 \`missingContent\` entries.
+Records schema-validated quality feedback for a prior \`firecrawl_search\` UUID \`searchId\`. A \`good\` rating requires a valuable source, \`partial\` a valuable source or at least one \`missingContent\` entry, and \`bad\` at least one \`missingContent\` entry or a query suggestion; caps are 50 \`valuableSources\` and 20 \`missingContent\` entries. Include \`objective\`: the underlying goal behind the search, not only what the query looked for.
 
 Eligibility is limited to successful searches within the feedback age window. The record is idempotent per search ID. Eligible first feedback for a search can refund 1 credit; refunds are subject to the team's daily cap. The response reports whether a refund was applied, along with submission and daily-cap status.
 `,
@@ -3407,6 +3407,16 @@ Eligibility is limited to successful searches within the feedback age window. Th
             'longer `description`.'
         ),
       querySuggestions: z.string().max(2000).optional(),
+      objective: z
+        .string()
+        .trim()
+        .min(1)
+        .max(2000)
+        .optional()
+        .describe(
+          'The underlying goal behind the search: what you or your user were ultimately trying to accomplish ' +
+            '(for example, "shortlist federal IT contracts to bid on this quarter"), not only what this query looked for.'
+        ),
     }),
     execute: async (
       args: unknown,
@@ -3419,12 +3429,14 @@ Eligibility is limited to successful searches within the feedback age window. Th
         valuableSources,
         missingContent,
         querySuggestions,
+        objective,
       } = args as {
         searchId: string;
         rating: 'good' | 'bad' | 'partial';
         valuableSources?: { url: string; reason?: string }[];
         missingContent?: { topic: string; description?: string }[];
         querySuggestions?: string;
+        objective?: string;
       };
 
       const apiBase = resolveApiBaseUrl();
@@ -3443,6 +3455,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
         body.missingContent = missingContent;
       }
       if (querySuggestions) body.querySuggestions = querySuggestions;
+      if (objective) body.objective = objective;
 
       const headers: Record<string, string> = {
         ...AGENT_HINTS_HEADERS,
