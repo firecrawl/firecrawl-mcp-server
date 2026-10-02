@@ -1891,10 +1891,14 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
   assert.notEqual(missingCapabilityResult.isError, true);
   const sentMissingCapability = fakeApi.requests.filter(request => request.url === '/v2/feedback').at(-1).body;
   assert.deepEqual(sentMissingCapability, { ...missingCapabilityFeedback, origin: sentMissingCapability.origin });
+  const { objective: _objective, ...withoutObjective } = sessionFeedback;
+  const withoutObjectiveResult = await client.request('tools/call', { name: 'firecrawl_feedback', arguments: withoutObjective });
+  assert.notEqual(withoutObjectiveResult.isError, true);
+  const sentWithoutObjective = fakeApi.requests.filter(request => request.url === '/v2/feedback').at(-1).body;
+  assert.deepEqual(sentWithoutObjective, { ...withoutObjective, origin: sentWithoutObjective.origin });
   for (const invalid of [
     { endpoint: 'scrape', rating: 'good' },
     { endpoint: 'alexandria', rating: 'good' },
-    { ...sessionFeedback, objective: undefined },
     { ...sessionFeedback, objective: ' ' },
     { ...sessionFeedback, jobId: '00000000-0000-4000-8000-000000000010' },
     { ...sessionFeedback, capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'new_capability_request', why: 'Missing attachments' }] },
