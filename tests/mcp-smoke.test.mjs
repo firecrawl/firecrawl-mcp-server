@@ -4439,6 +4439,17 @@ test('hosted keyless feedback bypasses exhausted operation allowance and preserv
         (req) => req.url === '/v2/feedback'
       );
       assert.ok(submission);
+      assert.equal(submission.body.endpoint, 'search');
+      assert.equal(
+        submission.body.jobId,
+        '00000000-0000-4000-8000-000000000000'
+      );
+      assert.equal(submission.body.rating, 'partial');
+      assert.equal(submission.body.task, 'Read the API retry reference');
+      assert.equal(
+        submission.body.assessment,
+        'The reference explains supported retry intervals.'
+      );
       assert.equal(submission.headers.authorization, undefined);
       assert.equal(
         submission.headers['x-firecrawl-keyless-ip'],
@@ -4468,6 +4479,9 @@ test('hosted keyless feedback bypasses exhausted operation allowance and preserv
           const call = await httpToolCall(port, {id: `feedback-${endpoint}`, headers: {'x-forwarded-for': '203.0.113.71'}, params: {name: 'firecrawl_feedback', arguments: args}});
           assert.equal(JSON.parse(parseSseJson(await call.text()).result.content[0].text).success, true);
           const posted = backend.requests.filter(req => req.url === '/v2/feedback').at(-1).body;
+          for (const field of ['endpoint', 'jobId', 'rating', 'task', 'assessment']) {
+            assert.equal(posted[field], args[field]);
+          }
           assert.deepEqual(posted.observations, args.observations);
           assert.equal(posted.docClass, args.docClass);
         }
