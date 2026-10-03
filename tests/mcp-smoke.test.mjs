@@ -1250,8 +1250,14 @@ class StdioMcpClient {
 }
 
 test('stdio transport initializes and lists Firecrawl tools', async (t) => {
+  // Default settings, which the plugin coverage and README count assume: both
+  // feedback tools stay registered whatever the parent shell sets.
   const child = spawnServer({
     FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_NO_SEARCH_FEEDBACK: '',
+    FIRECRAWL_DISABLE_SEARCH_FEEDBACK: '',
+    FIRECRAWL_NO_ENDPOINT_FEEDBACK: '',
+    FIRECRAWL_DISABLE_ENDPOINT_FEEDBACK: '',
   });
   let stderr = '';
   child.stderr.on('data', (chunk) => {
