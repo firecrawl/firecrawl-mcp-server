@@ -1113,7 +1113,8 @@ HTTP 403 and this body:
 The tool result relays it as an error with `structuredContent` carrying `code`,
 `status: 403`, `requestId`, the `requiresAction` object unchanged, and
 `next_actions` (`human_action_required` then `retry_same_request`). The error asks
-the agent to stop and ask the user. Use the returned `nextTool` call to read the agreement through `firecrawl_scrape`
+the agent to stop and ask the user. If the user declines, the agent neither accepts nor retries;
+it continues without this provider and says it was not used. Use the returned `nextTool` call to read the agreement through `firecrawl_scrape`
 with `alexandria: [{provider: "firecrawl", capability: "terms/show", options: {provider: "<provider>"}}]`,
 sent separately from provider execution, and present it to the user.
 `firecrawl_scrape` refuses every other `terms/*` capability, so it stays read-only. A request

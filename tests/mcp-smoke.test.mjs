@@ -1277,6 +1277,8 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.ok(toolNames.includes('firecrawl_credit_usage'));
   assert.equal(toolNames.includes('firecrawl_credit_usage_historical'), false);
   assert.equal(toolNames.includes('firecrawl_extract'), false);
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+  assert.equal(Number(readme.match(/This server lists (\d+) tools/)?.[1]), toolNames.length, 'README tool count matches the default full listing');
   // Codex tool search indexes the top-level Tool.title, not annotations.title.
   for (const tool of tools.tools) {
     assert.ok(tool.annotations?.title, `${tool.name} needs annotations.title`);

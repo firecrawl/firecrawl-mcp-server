@@ -61,7 +61,9 @@ test('a terms block stops for the user, and only their explicit agreement is acc
 
   const changed = await callExpectingError(client, accept({ version: 'v0', digest: read.terms.digest }));
   assert.match(changed.content[0].text, /Terms changed\. Review the current version before accepting\./);
-  assert.equal(api.requests.length, 3);
+  const unrelated = await callExpectingError(client, accept({ provider: 'other-provider', version: read.terms.version, digest: read.terms.digest }));
+  assert.match(unrelated.content[0].text, /Unknown provider\./);
+  assert.equal(api.requests.length, 4);
 
   const accepted = await client.request('tools/call', accept({ version: read.terms.version, digest: read.terms.digest }));
   const acceptance = { success: true, provider: 'benzinga', version: 'v1', digest: 'a'.repeat(64), acceptedAt: '2026-10-02T00:00:00.000Z' };

@@ -81,12 +81,15 @@ async function startFakeExchangeApi(options = {}) {
       });
     }
 
-    // Mirrors the API route: a strict body, and nothing accepted when the
-    // reviewed version or digest is not the current one.
+    // Mirrors the API route: a strict body, terms only for the provider that
+    // publishes them (benzinga here), and nothing accepted when the reviewed
+    // version or digest is not the current one.
     if (req.method === 'POST' && url.pathname === '/exchange/provider-terms/accept') {
       const { provider, version, digest, confirmed, ...extra } = parsedBody;
       if (Object.keys(extra).length || confirmed !== true || !provider || !version || !/^[a-f0-9]{64}$/.test(digest ?? ''))
         return json(400, { success: false, error: 'Send { provider, version, digest, confirmed: true } for one provider.' });
+      if (provider !== 'benzinga')
+        return json(404, { success: false, error: 'Unknown provider.', code: 'unknown_provider' });
       if (version !== 'v1' || digest !== 'a'.repeat(64))
         return json(409, { success: false, error: 'Terms changed. Review the current version before accepting.', code: 'terms_changed', provider, version: 'v1', digest: 'a'.repeat(64) });
       acceptedTerms.add(provider);
