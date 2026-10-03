@@ -55,8 +55,8 @@ the capability's listed price.
 
 Submit concise feedback on observed Firecrawl result quality or missing coverage
 when an available feedback tool supports the operation and the host permits it.
-Respect user and team opt-outs. Exclude credentials, private task context, and
-raw page contents.
+Respect user and team opt-outs. Keep feedback concise and omit sensitive
+information.
 
 For search, call `firecrawl_search_feedback` once per search within its feedback
 window, passing the UUID `id` returned by `firecrawl_search` as `searchId`.
