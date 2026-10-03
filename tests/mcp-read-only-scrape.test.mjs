@@ -79,13 +79,16 @@ test('hosted scrape is read-only and preserves existing profile and search optio
     assert.equal(scrape.annotations.destructiveHint, false, label);
     assert.equal(scrape.inputSchema.properties.actions, undefined, `${label}: no browser actions`);
     assert.doesNotMatch(scrape.description, /overwrite its stored state/, label);
+    const termsTools = tools.filter((tool) => /terms/.test(tool.name));
+    assert.deepEqual(termsTools.map((tool) => tool.name), ['firecrawl_accept_provider_terms'], label);
+    assert.equal(termsTools[0].annotations.readOnlyHint, false, `${label}: terms are accepted only by a separate write tool`);
+    assert.equal(termsTools[0].annotations.destructiveHint, true, `${label}: clients confirm every acceptance`);
   }
 
   const { tools } = await httpSession(port, '/v2/mcp', headers);
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
   assert.equal(byName.get('firecrawl_agent').annotations.readOnlyHint, false);
   assert.equal(byName.get('firecrawl_search').annotations.readOnlyHint, true);
-  assert.equal(tools.some((tool) => /terms/.test(tool.name)), false, 'no tool accepts terms');
 
   for (const [surfacePort, endpoint] of [[port, '/v2/mcp'], [searchPort, '/v2/mcp-search']]) {
     for (const profile of [{ name: 'saved-login' }, { name: 'saved-login', saveChanges: true }]) {
@@ -127,9 +130,11 @@ test('hosted scrape is read-only and preserves existing profile and search optio
   assert.equal(localSearch.annotations.readOnlyHint, true, 'local search annotation remains unchanged');
 });
 
-test('hosted scrape refuses terms acceptance on both surfaces and points to the dashboard', async (t) => {
+test('hosted scrape refuses terms acceptance on both surfaces, and both accept through the write tool', async (t) => {
   const { api, port, searchPort } = await startHosted(t);
-  for (const [surfacePort, endpoint] of [[port, '/v2/mcp'], [searchPort, '/v2/mcp-search']]) {
+  const headers = { 'x-api-key': 'fc-hosted-test' };
+  const surfaces = [[port, '/v2/mcp'], [searchPort, '/v2/mcp-search']];
+  for (const [surfacePort, endpoint] of surfaces) {
     const acceptance = { provider: 'firecrawl', capability: 'terms/accept', options: { provider: 'benzinga', version: 'v1', digest: 'a'.repeat(64), confirmed: true } };
     for (const alexandria of [
       acceptance,
@@ -145,19 +150,45 @@ test('hosted scrape refuses terms acceptance on both surfaces and points to the 
           name: 'firecrawl_scrape',
           arguments: { alexandria },
         },
-        headers: { 'x-api-key': 'fc-hosted-test' },
+        headers,
       });
       assert.equal(result.isError, true, endpoint);
-      assert.match(result.content[0].text, /accepted in the Firecrawl dashboard, not through this connection.*https:\/\/www\.firecrawl\.dev\/app\/settings\?tab=data-sources/, endpoint);
+      assert.match(result.content[0].text, /firecrawl_scrape only reads provider terms.*firecrawl_accept_provider_terms.*https:\/\/www\.firecrawl\.dev\/app\/settings\?tab=data-sources/, endpoint);
       assert.equal(api.requests.length, before, 'the whole batch is refused before any API call');
     }
     const shown = await rpcResult(surfacePort, endpoint, {
       id: 6,
       method: 'tools/call',
       params: { name: 'firecrawl_scrape', arguments: { alexandria: { provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } } } },
-      headers: { 'x-api-key': 'fc-hosted-test' },
+      headers,
     });
     assert.notEqual(shown.isError, true, JSON.stringify(shown));
     assert.equal(api.requests.at(-1).body.alexandria.capability, 'terms/show');
+
+    const blocked = await rpcResult(surfacePort, endpoint, {
+      id: 7,
+      method: 'tools/call',
+      params: { name: 'firecrawl_scrape', arguments: { alexandria: [{ provider: 'benzinga', capability: 'news/search' }] } },
+      headers,
+    });
+    assert.equal(blocked.isError, true, endpoint);
+    assert.match(blocked.content[0].text, /Stop and ask the user before continuing.*call firecrawl_accept_provider_terms/s, endpoint);
+    assert.equal(blocked.structuredContent.next_actions[0].tool, 'firecrawl_accept_provider_terms', endpoint);
+  }
+
+  for (const [surfacePort, endpoint] of surfaces) {
+    const before = api.requests.length;
+    const accepted = await rpcResult(surfacePort, endpoint, {
+      id: 8,
+      method: 'tools/call',
+      params: { name: 'firecrawl_accept_provider_terms', arguments: { provider: 'benzinga', version: 'v1', digest: 'a'.repeat(64) } },
+      headers,
+    });
+    assert.notEqual(accepted.isError, true, JSON.stringify(accepted));
+    assert.equal(accepted.structuredContent.provider, 'benzinga', endpoint);
+    assert.equal(api.requests.length, before + 1);
+    assert.equal(api.requests.at(-1).url, '/exchange/provider-terms/accept');
+    assert.deepEqual(api.requests.at(-1).body, { provider: 'benzinga', version: 'v1', digest: 'a'.repeat(64), confirmed: true });
+    assert.equal(api.requests.at(-1).headers.authorization, 'Bearer fc-hosted-test', endpoint);
   }
 });

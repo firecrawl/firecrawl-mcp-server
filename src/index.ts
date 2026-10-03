@@ -23,6 +23,7 @@ import {
   readErrorAgentHints,
 } from './agent-hints';
 import {
+  acceptProviderTermsOutputSchema,
   agentOutputSchema,
   agentStatusOutputSchema,
   crawlOutputSchema,
@@ -1087,9 +1088,10 @@ type ExchangeErrorContext = { tool: string; requestId?: string; providers?: stri
 const DATA_SOURCES_SETTINGS_URL =
   'https://www.firecrawl.dev/app/settings?tab=data-sources';
 
-// An organization admin accepts provider terms in the dashboard. Through MCP,
-// agents only read them with terms/show, so firecrawl_scrape changes no
-// account state.
+const ACCEPT_TERMS_TOOL = 'firecrawl_accept_provider_terms';
+
+// firecrawl_scrape only reads terms with terms/show, so it changes no account
+// state. Acceptance goes through ACCEPT_TERMS_TOOL or the dashboard.
 function isTermsWrite(call: { provider: string; capability: string }): boolean {
   const capability = call.capability.trim().toLowerCase();
   return (
@@ -1100,7 +1102,7 @@ function isTermsWrite(call: { provider: string; capability: string }): boolean {
 }
 
 function termsWriteError(): UserError {
-  const message = `Provider terms are accepted in the Firecrawl dashboard, not through this connection. Read them with terms/show, then ask an organization admin to accept them at ${DATA_SOURCES_SETTINGS_URL}.`;
+  const message = `firecrawl_scrape only reads provider terms, with terms/show. After the user explicitly agrees to them, accept them with ${ACCEPT_TERMS_TOOL}, or ask an organization admin to accept them at ${DATA_SOURCES_SETTINGS_URL}.`;
   return new UserError(message, { code: 'invalid_option', status: 400, message });
 }
 
@@ -1136,9 +1138,9 @@ function termsRequiredError(
 ): UserError {
   const requestId = context.requestId;
   const retryIdentity = requestId ? ` and requestId ${requestId}` : '';
-  const message = `Alexandria provider terms required. An organization admin must accept the ${action.terms} provider's terms (version ${action.version}) before this request can run.`;
+  const message = `Alexandria provider terms required. The ${action.terms} provider's terms (version ${action.version}) must be accepted for this organization before this request can run.`;
   return new UserError(
-    `${message}\n\n1. Read the agreement with firecrawl_scrape using alexandria: {provider: "firecrawl", capability: "terms/show", options: {provider: "${action.terms}"}} and present it to the user. Send terms/show separately from provider execution. Terms are accepted in the Firecrawl dashboard, not through this connection: ask an organization admin to accept them at ${action.url}, or ${DATA_SOURCES_SETTINGS_URL} if that page is unavailable. Never infer acceptance from a data request.\n2. After the admin confirms, call ${context.tool} again with the identical payload${retryIdentity}. If the same terms error persists, stop and ask an organization admin to check access at ${DATA_SOURCES_SETTINGS_URL}.\n\nDo not retry until acceptance is confirmed.`,
+    `${message}\n\n1. Stop and ask the user before continuing. Read the agreement with firecrawl_scrape using alexandria: {provider: "firecrawl", capability: "terms/show", options: {provider: "${action.terms}"}} and present it to the user. Send terms/show separately from provider execution.\n2. Only if the user explicitly agrees to these terms, call ${ACCEPT_TERMS_TOOL} with provider "${action.terms}" and the version and digest that terms/show returned. Never infer acceptance from a data request. An organization admin can instead accept them at ${action.url}.\n3. After acceptance succeeds, call ${context.tool} again with the identical payload${retryIdentity}. If the user declines, continue without this provider and tell the user it was not used.\n\nDo not retry until acceptance is confirmed.`,
     {
       code: TERMS_REQUIRED_CODE,
       status: 403,
@@ -1156,7 +1158,8 @@ function termsRequiredError(
         {
           kind: 'human_action_required',
           action: 'accept_terms',
-          who: 'organization_admin',
+          who: 'user',
+          tool: ACCEPT_TERMS_TOOL,
           url: action.url,
           provider: action.terms,
           version: action.version,
@@ -1225,7 +1228,7 @@ async function relayExchangeError(
       : undefined;
     if (disabledProvider) {
       throw new UserError(
-        `${message} Read the provider terms and status using nextTool and present them to the user. Never infer acceptance from a data request. Terms are accepted in the Firecrawl dashboard, not through this connection; acceptance may not restore disabled access, and an organization admin can review access at ${DATA_SOURCES_SETTINGS_URL}. Retry the original request only after access is restored.`,
+        `${message} Read the provider terms and status using nextTool and present them to the user. Never infer acceptance from a data request. Acceptance may not restore disabled access; an organization admin can review access at ${DATA_SOURCES_SETTINGS_URL}. Retry the original request only after access is restored.`,
         {
           code: typeof data?.code === 'string' ? data.code : 'exchange_error',
           status: 403,
@@ -1316,8 +1319,8 @@ const FULL_PROFILE_INSTRUCTIONS =
   `Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. Authenticated firecrawl_search returns web results together with matching Alexandria providers in data.tools. ${ALEXANDRIA_CATALOGUE_SENTENCE} A matching provider can return the same fields across several entities, provenance, exact figures or timestamps, or a large set of records through firecrawl_scrape with its published contract. If web results already answer the question, use them. For the same fields across multiple pages, firecrawl_find_tools offers free provider discovery. Use firecrawl_find_tools to read a contract that was not returned in full or to browse the catalogue by category. ${ALEXANDRIA_SOURCES_OPT_OUT} If no provider fits, continue with web search or firecrawl_agent. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question (code behaviour, a library or framework, an API contract, an error message, or a known bug), firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of public repositories, GitHub issues, merged pull requests, READMEs, and code documentation. firecrawl_search with sources: [{type: "alexandria"}] returns compact tool summaries in data.tools; toolDetail: "full" includes contracts, firecrawl_find_tools starts with categories, lists providers, then compact tools, and expands the selected full contract, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities and returns their results. Alexandria access needs an API key on a team with it enabled. Provide only the required inputs and account for stated network or external side effects.`;
 const KEYLESS_PROFILE_INSTRUCTIONS = `Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index and repository research, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.`;
 
-// The search surface exposes web/developer/research search plus the two Alexandria
-// tools (catalogue lookup and provider execution). Its instructions
+// The search surface exposes web/developer/research search plus the Alexandria
+// tools (catalogue lookup, provider execution, and terms acceptance). Its instructions
 // and tool copy describe just those tools and stay neutral about how a client
 // uses them.
 const SEARCH_PROFILE_INSTRUCTIONS =
@@ -1341,9 +1344,10 @@ const SEARCH_PROFILE_TOOLS = new Set<string>([
   'firecrawl_research_inspect_paper',
   'firecrawl_research_related_papers',
   'firecrawl_research_read_paper',
-  // Alexandria: catalogue lookup and provider execution.
+  // Alexandria: catalogue lookup, provider execution, and terms acceptance.
   'firecrawl_find_tools',
   'firecrawl_scrape',
+  'firecrawl_accept_provider_terms',
   // Registered so cached sessions get a DEPRECATED_TOOL payload, hidden from
   // tools/list via canList. See registerResearchTools.
   'firecrawl_research_search_github',
@@ -3029,6 +3033,49 @@ const findToolsTool: RegisteredTool = {
   },
 };
 server.addTool(findToolsTool);
+
+// Accepting terms changes organization state, so it is a write tool of its own
+// and firecrawl_scrape stays read-only. Registered on both surfaces.
+const acceptProviderTermsTool: RegisteredTool = {
+  name: ACCEPT_TERMS_TOOL,
+  annotations: {
+    title: 'Accept provider terms',
+    readOnlyHint: false, // Records the organization's acceptance of a provider agreement.
+    destructiveHint: true, // Binds the organization to a legal agreement that revoking does not undo.
+    openWorldHint: false, // Acts only on the caller's Firecrawl organization.
+  },
+  description:
+    "Accept one Alexandria provider's data terms for the organization that owns this Firecrawl connection, so its requests can use that provider. Acceptance is a legal agreement recorded for the organization. Pass the exact version and digest of the terms the user reviewed, as returned by firecrawl_scrape with the firecrawl terms/show capability; if the terms have changed since, nothing is accepted. Call it only after the user has read the terms and explicitly agreed to them. A request for data is not agreement. An organization admin can also accept terms in the Firecrawl dashboard.",
+  outputSchema: acceptProviderTermsOutputSchema,
+  parameters: z.object({
+    provider: z.string().min(1).max(200).describe('Provider ID, e.g. "apollo".'),
+    version: z.string().min(1).max(200).describe('Exact terms version the user reviewed.'),
+    digest: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .describe('SHA-256 digest of the reviewed terms: 64 lowercase hexadecimal characters.'),
+  }),
+  execute: async (args, { session, client: mcpClient }) => {
+    assertExchangeCredential(session);
+    const { provider, version, digest } = args as {
+      provider: string;
+      version: string;
+      digest: string;
+    };
+    // The API's accept schema is strict and the SDK client adds `origin` to
+    // POST bodies, so post the exact fields and send origin as a header.
+    return structuredText(
+      await apiPostJsonForSession(
+        '/exchange/provider-terms/accept',
+        { provider, version, digest, confirmed: true },
+        session,
+        requestOrigin(mcpClient, session)
+      )
+    );
+  },
+};
+server.addTool(acceptProviderTermsTool);
+
 // Search-surface copies of the two Alexandria tools.
 // Same parameters and executor as the full-surface tools; only the
 // descriptions differ, so they name nothing that surface does not register
@@ -3865,7 +3912,7 @@ const agentExchangeSchema = z
       })
       .optional()
       .describe(
-        'Answer yes to the pendingApproval the previous turn of this thread ended on (its id, also exchange.requiresAction.approvalId). Needs threadId. For a terms offer, send it only after an organization admin confirms acceptance in the Firecrawl dashboard; this does not accept terms. callIds and always are ignored on terms offers. For paid calls, callIds picks a subset (default all) and always stops asking for the rest of the thread.'
+        'Answer yes to the pendingApproval the previous turn of this thread ended on (its id, also exchange.requiresAction.approvalId). Needs threadId. For a terms offer, send it only after the terms are accepted, with firecrawl_accept_provider_terms once the user explicitly agreed or by an organization admin in the Firecrawl dashboard; this does not accept terms. callIds and always are ignored on terms offers. For paid calls, callIds picks a subset (default all) and always stops asking for the rest of the thread.'
       ),
     decline: z
       .strictObject({ approvalId: z.string().uuid() })
@@ -3877,7 +3924,7 @@ const agentExchangeSchema = z
       .enum(['skip', 'ask'])
       .optional()
       .describe(
-        'What to do when a provider the agent would use needs data terms the team has not accepted. Gated providers are never called. "skip" (default): answer with accepted providers and list the rest in exchange.skippedProviders. "ask": the same, plus a terms pendingApproval and exchange.requiresAction. Read terms with terms/show; an organization admin accepts them in the Firecrawl dashboard. There is no auto-accept. Omitted on a follow-up keeps the previous turn\'s value.'
+        'What to do when a provider the agent would use needs data terms the team has not accepted. Gated providers are never called. "skip" (default): answer with accepted providers and list the rest in exchange.skippedProviders. "ask": the same, plus a terms pendingApproval and exchange.requiresAction. Read terms with terms/show; after the user explicitly agrees, accept them with firecrawl_accept_provider_terms, or an organization admin accepts them in the Firecrawl dashboard. There is no auto-accept. Omitted on a follow-up keeps the previous turn\'s value.'
       ),
   })
   .describe(
@@ -3899,7 +3946,7 @@ This call returns only a job ID, not the research result. Read the job with \`fi
 
 The job also returns a \`threadId\`. To continue that thread, pass it with a follow-up \`prompt\`; omitted \`mode\`, \`urls\`, \`schema\` and exchange settings carry over from the previous turn.
 
-The agent only calls Alexandria providers whose terms the team has accepted. \`exchange.skippedProviders\` lists gated providers. With \`exchange.onTermsRequired\` "ask", a terms \`pendingApproval\` and \`exchange.requiresAction\` carry the \`approvalId\` and provider requirements. Read terms/show through \`firecrawl_scrape\`. An organization admin must accept terms in the Firecrawl dashboard at the provider URL or ${DATA_SOURCES_SETTINGS_URL}. Ignore any terms/accept call in the API response. Only after the admin confirms acceptance, resume with the same \`threadId\` and \`exchange.approve: {approvalId}\`; this does not accept terms. To decline, use \`exchange.decline: {approvalId}\`. Never infer acceptance from a data request.
+The agent only calls Alexandria providers whose terms the team has accepted. \`exchange.skippedProviders\` lists gated providers. With \`exchange.onTermsRequired\` "ask", a terms \`pendingApproval\` and \`exchange.requiresAction\` carry the \`approvalId\` and provider requirements. Read terms/show through \`firecrawl_scrape\` and present the terms to the user. Only if the user explicitly agrees, accept them with \`firecrawl_accept_provider_terms\`, passing the version and digest terms/show returned; an organization admin can instead accept them at the provider URL or ${DATA_SOURCES_SETTINGS_URL}. After acceptance, resume with the same \`threadId\` and \`exchange.approve: {approvalId}\`; this does not accept terms. To decline, use \`exchange.decline: {approvalId}\`. Never infer acceptance from a data request.
 `,
   outputSchema: agentOutputSchema,
   parameters: z.object({
@@ -4533,6 +4580,7 @@ if (searchProfileEnabled) {
   registerMarketplaceSearchTool(searchRegistrar, getClient);
   searchRegistrar.addTool(searchSurfaceFindToolsTool);
   searchRegistrar.addTool(searchSurfaceScrapeTool);
+  searchRegistrar.addTool(acceptProviderTermsTool);
 
   // Isolate the search instance from the already-serving full instance: if it
   // fails to bind (port in use, etc.), log and carry on rather than let a

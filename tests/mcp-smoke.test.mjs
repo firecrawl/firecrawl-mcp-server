@@ -1250,8 +1250,14 @@ class StdioMcpClient {
 }
 
 test('stdio transport initializes and lists Firecrawl tools', async (t) => {
+  // Default settings, which the plugin coverage and README count assume: both
+  // feedback tools stay registered whatever the parent shell sets.
   const child = spawnServer({
     FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_NO_SEARCH_FEEDBACK: '',
+    FIRECRAWL_DISABLE_SEARCH_FEEDBACK: '',
+    FIRECRAWL_NO_ENDPOINT_FEEDBACK: '',
+    FIRECRAWL_DISABLE_ENDPOINT_FEEDBACK: '',
   });
   let stderr = '';
   child.stderr.on('data', (chunk) => {
@@ -1277,6 +1283,8 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.ok(toolNames.includes('firecrawl_credit_usage'));
   assert.equal(toolNames.includes('firecrawl_credit_usage_historical'), false);
   assert.equal(toolNames.includes('firecrawl_extract'), false);
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+  assert.equal(Number(readme.match(/This server lists (\d+) tools/)?.[1]), toolNames.length, 'README tool count matches the default full listing');
   // Codex tool search indexes the top-level Tool.title, not annotations.title.
   for (const tool of tools.tools) {
     assert.ok(tool.annotations?.title, `${tool.name} needs annotations.title`);
@@ -4629,14 +4637,14 @@ test('firecrawl_agent forwards onTermsRequired and status keeps the terms-requir
   assert.deepEqual(agentTool.inputSchema.properties.exchange.properties.onTermsRequired.enum, ['skip', 'ask']);
   assert.match(agentTool.description, /exchange\.skippedProviders/);
   assert.match(agentTool.description, /exchange\.requiresAction/);
-  assert.match(agentTool.description, /organization admin must accept.*app\/settings\?tab=data-sources/);
-  assert.match(agentTool.description, /Only after the admin confirms acceptance/);
-  assert.match(agentTool.description, /Ignore any terms\/accept call in the API response/);
+  assert.match(agentTool.description, /Only if the user explicitly agrees, accept them with `firecrawl_accept_provider_terms`, passing the version and digest terms\/show returned/);
+  assert.match(agentTool.description, /organization admin can instead accept them at the provider URL or https:\/\/www\.firecrawl\.dev\/app\/settings\?tab=data-sources/);
+  assert.match(agentTool.description, /After acceptance, resume with the same `threadId`/);
   assert.doesNotMatch(agentTool.description, /run terms\/accept through/);
   assert.match(agentTool.inputSchema.properties.exchange.properties.approve.description, /this does not accept terms/);
-  assert.match(agentTool.inputSchema.properties.exchange.properties.onTermsRequired.description, /organization admin accepts them in the Firecrawl dashboard/);
+  assert.match(agentTool.inputSchema.properties.exchange.properties.onTermsRequired.description, /after the user explicitly agrees, accept them with firecrawl_accept_provider_terms, or an organization admin accepts them in the Firecrawl dashboard/);
   const statusTool = tools.find((tool) => tool.name === 'firecrawl_agent_status');
-  assert.match(statusTool.outputSchema.properties.exchange.description, /Ignore any terms\/accept call/);
+  assert.match(statusTool.outputSchema.properties.exchange.description, /accept them with firecrawl_accept_provider_terms using the version and digest terms\/show returned, not a terms\/accept call through firecrawl_scrape/);
   assert.match(statusTool.outputSchema.properties.pendingApproval.description, /approval does not accept terms/);
 
   const asked = await client.request('tools/call', {
@@ -4726,7 +4734,7 @@ test('firecrawl_agent answers a pending approval on a thread', async (t) => {
   assert.ok(agentTool.description.length <= CLAUDE_CODE_TEXT_CAP, `description is ${agentTool.description.length} chars`);
   assert.match(agentTool.description, /same `threadId` and `exchange\.approve: \{approvalId\}`/);
   assert.match(agentTool.description, /`exchange\.decline: \{approvalId\}`/);
-  assert.match(agentTool.description, /organization admin must accept terms in the Firecrawl dashboard/);
+  assert.match(agentTool.description, /accept them with `firecrawl_accept_provider_terms`/);
   assert.match(agentTool.description, /Never infer acceptance from a data request/);
 
   const call = (args) => client.request('tools/call', { arguments: args, name: 'firecrawl_agent' });
@@ -4738,8 +4746,8 @@ test('firecrawl_agent answers a pending approval on a thread', async (t) => {
   assert.equal(followUp.structuredContent.threadTurn, 1);
 
   // 2. Answering a pending approval on the thread: forwarding of approve and
-  // decline only. Terms acceptance happens in the dashboard, and the
-  // Alexandria terms tests cover its rejection through firecrawl_scrape.
+  // decline only. The Alexandria terms tests cover acceptance through
+  // firecrawl_accept_provider_terms and its rejection through firecrawl_scrape.
   const approved = await call({
     prompt: 'The admin confirmed acceptance of the Apollo terms in the dashboard. Continue.',
     threadId,

@@ -31,6 +31,7 @@ const TERMS_REQUIRED_BODY = {
 async function startFakeExchangeApi(options = {}) {
   const { keylessEligible = false } = options;
   const requests = [];
+  const acceptedTerms = new Set();
   const server = createServer(async (req, res) => {
     try {
     let raw = '';
@@ -80,14 +81,26 @@ async function startFakeExchangeApi(options = {}) {
       });
     }
 
+    // Mirrors the API route: a strict body, terms only for the provider that
+    // publishes them (benzinga here), and nothing accepted when the reviewed
+    // version or digest is not the current one.
+    if (req.method === 'POST' && url.pathname === '/exchange/provider-terms/accept') {
+      const { provider, version, digest, confirmed, ...extra } = parsedBody;
+      if (Object.keys(extra).length || confirmed !== true || !provider || !version || !/^[a-f0-9]{64}$/.test(digest ?? ''))
+        return json(400, { success: false, error: 'Send { provider, version, digest, confirmed: true } for one provider.' });
+      if (provider !== 'benzinga')
+        return json(404, { success: false, error: 'Unknown provider.', code: 'unknown_provider' });
+      if (version !== 'v1' || digest !== 'a'.repeat(64))
+        return json(409, { success: false, error: 'Terms changed. Review the current version before accepting.', code: 'terms_changed', provider, version: 'v1', digest: 'a'.repeat(64) });
+      acceptedTerms.add(provider);
+      return json(200, { success: true, provider, version, digest, acceptedAt: '2026-10-02T00:00:00.000Z' });
+    }
+
     if (req.method === 'POST' && url.pathname === '/v2/scrape') {
       const termsCall = Array.isArray(parsedBody.alexandria) ? parsedBody.alexandria[0] : parsedBody.alexandria;
-      if (termsCall?.provider === 'firecrawl' && ['terms/show', 'terms/accept'].includes(termsCall.capability)) {
-        if (termsCall.capability === 'terms/accept' && (!termsCall.options?.version || !termsCall.options?.digest || termsCall.options?.confirmed !== true)) return json(400, { success: false, error: 'Reviewed terms and confirmation are required.', code: 'invalid_option' });
-        const data = termsCall.capability === 'terms/show'
-          ? { provider: 'benzinga', terms: { version: 'v1', digest: 'a'.repeat(64), document: 'Review this agreement.' }, status: { accepted: false } }
-          : { provider: 'benzinga', version: termsCall.options.version, digest: termsCall.options.digest, acceptedAt: '2026-09-20T00:00:00Z' };
-        return json(200, { success: true, data: { alexandria: [{ provider: 'firecrawl', capability: termsCall.capability, creditsCost: 0, data }] } });
+      if (termsCall?.provider === 'firecrawl' && termsCall.capability === 'terms/show') {
+        const data = { provider: 'benzinga', terms: { version: 'v1', digest: 'a'.repeat(64), document: 'Review this agreement.' }, status: { accepted: acceptedTerms.has('benzinga') } };
+        return json(200, { success: true, data: { alexandria: [{ provider: 'firecrawl', capability: 'terms/show', creditsCost: 0, data }] } });
       }
 
       if (options.bashRecovery && parsedBody.alexandria?.capability === 'bash') {
@@ -105,6 +118,8 @@ async function startFakeExchangeApi(options = {}) {
         });
       }
       if (parsedBody?.alexandria?.[0]?.provider === 'benzinga') {
+        if (acceptedTerms.has('benzinga') && !options.providerRefusal)
+          return json(200, { success: true, data: { creditsCost: 1, alexandria: [{ provider: 'benzinga', capability: parsedBody.alexandria[0].capability, creditsCost: 1, data: { stories: [] } }] } });
         return json(403, options.providerRefusal ? { success: false, error: options.providerRefusal } : TERMS_REQUIRED_BODY);
       }
       if (parsedBody?.alexandria?.[0]?.provider === 'inflight') {

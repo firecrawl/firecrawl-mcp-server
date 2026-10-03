@@ -178,6 +178,18 @@ export const findToolsOutputSchema = z
   })
   .describe('One page of the Alexandria catalogue: categories, providers, tools, or one contract.');
 
+export const acceptProviderTermsOutputSchema = z
+  .object({
+    ...agentHints,
+    success,
+    error,
+    provider: str('Provider whose terms were accepted.'),
+    version: str('Accepted terms version.'),
+    digest: str('Digest of the accepted terms.'),
+    acceptedAt: str('When the acceptance was recorded.'),
+  })
+  .describe("The organization's recorded acceptance of one provider's data terms.");
+
 export const feedbackOutputSchema = z
   .object({
     ...agentHints,
@@ -252,10 +264,10 @@ export const agentStatusOutputSchema = z
     message: unknown('The agent\'s reply; in chat mode, the short answer to a follow-up.'),
     suggestions: unknown('Follow-ups the agent offers; send one as the prompt of the next turn with this threadId.'),
     exchange: unknown(
-      'What the job did with Alexandria providers: onTermsRequired, paidCalls, creditsUsed, skippedProviders (gated providers that would have helped), and requiresAction (approvalId and provider requirements). Read terms with terms/show. Ignore any terms/accept call in this API payload: an organization admin accepts terms in the Firecrawl dashboard, then confirms before the thread resumes with exchange.approve: {approvalId}.'
+      'What the job did with Alexandria providers: onTermsRequired, paidCalls, creditsUsed, skippedProviders (gated providers that would have helped), and requiresAction (approvalId and provider requirements). Read terms with terms/show. After the user explicitly agrees, accept them with firecrawl_accept_provider_terms using the version and digest terms/show returned, not a terms/accept call through firecrawl_scrape, or an organization admin accepts them in the Firecrawl dashboard; then resume the thread with exchange.approve: {approvalId}.'
     ),
     pendingApproval: unknown(
-      'Set when the job ended waiting on the caller. Answer it by calling firecrawl_agent with this threadId and exchange.approve or exchange.decline carrying its id. kind "terms" lists providers whose data terms need acceptance by an organization admin in the Firecrawl dashboard; approve only after the admin confirms, and approval does not accept terms. Otherwise calls lists paid calls waiting for approval.'
+      'Set when the job ended waiting on the caller. Answer it by calling firecrawl_agent with this threadId and exchange.approve or exchange.decline carrying its id. kind "terms" lists providers whose data terms need acceptance, with firecrawl_accept_provider_terms after the user explicitly agrees or by an organization admin in the Firecrawl dashboard; approve only after acceptance, and approval does not accept terms. Otherwise calls lists paid calls waiting for approval.'
     ),
   })
   .describe('Progress or final result of a research agent job.');

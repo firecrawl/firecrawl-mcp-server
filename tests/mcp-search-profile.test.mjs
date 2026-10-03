@@ -32,9 +32,10 @@ const SEARCH_TOOLS = [
   'firecrawl_research_inspect_paper',
   'firecrawl_research_related_papers',
   'firecrawl_research_read_paper',
-  // Alexandria: catalogue lookup and provider execution.
+  // Alexandria: catalogue lookup, provider execution, and terms acceptance.
   'firecrawl_find_tools',
   'firecrawl_scrape',
+  'firecrawl_accept_provider_terms',
 ];
 
 // A representative sample of the full-surface tools that must NOT leak here.
@@ -385,7 +386,7 @@ async function listTools(port, endpoint, headers) {
   return tools.map((tool) => tool.name);
 }
 
-test('search surface lists exactly the eight contracted tools', async (t) => {
+test('search surface lists exactly the nine contracted tools', async (t) => {
   const { searchPort, getStderr } = await startHostedServer(t);
 
   const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, {
@@ -994,7 +995,7 @@ test('full surface forwards optional search context only when supplied', async (
   assert.equal(searches[1].body.clientModel, 'claude-sonnet-4-6');
 });
 
-test('primary search profile is OAuth-only, eight-tool frozen, and ready without keyless configuration', async (t) => {
+test('primary search profile is OAuth-only, nine-tool frozen, and ready without keyless configuration', async (t) => {
   const { backendRequests, port, issuerUrl } = await startPrimarySearchServer(t);
 
   const ready = await fetch(`http://127.0.0.1:${port}/ready`);
