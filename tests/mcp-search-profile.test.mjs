@@ -962,6 +962,38 @@ test('full surface still exposes its complete tool set alongside the search surf
   assert.equal(prm.status, 404);
 });
 
+test('full surface forwards optional search context only when supplied', async (t) => {
+  const { backendRequests, fullPort } = await startHostedServer(t);
+  const headers = { 'x-api-key': 'fc-test' };
+  const call = async (arguments_) => {
+    const response = await jsonRpc(fullPort, '/v2/mcp', {
+      id: 15,
+      method: 'tools/call',
+      params: { name: 'firecrawl_search', arguments: arguments_ },
+      headers,
+    });
+    assert.equal(response.status, 200);
+    const message = parseSseJson(await response.text());
+    assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+  };
+
+  await call({ query: 'React memo docs', sources: ['web'] });
+  await call({
+    query: 'React memo docs',
+    sources: ['web'],
+    objective: 'Find official rerender guidance',
+    clientModel: 'claude-sonnet-4-6',
+  });
+
+  const searches = backendRequests.filter((request) => request.url === '/v2/search');
+  assert.equal(searches.length, 2);
+  for (const field of ['objective', 'clientModel']) {
+    assert.equal(field in searches[0].body, false);
+  }
+  assert.equal(searches[1].body.objective, 'Find official rerender guidance');
+  assert.equal(searches[1].body.clientModel, 'claude-sonnet-4-6');
+});
+
 test('primary search profile is OAuth-only, eight-tool frozen, and ready without keyless configuration', async (t) => {
   const { backendRequests, port, issuerUrl } = await startPrimarySearchServer(t);
 
@@ -1065,13 +1097,40 @@ test('primary search profile uses the strict marketplace search tool, not the fu
   );
 });
 
+test('primary search profile forwards optional task context without content fetching', async (t) => {
+  const { port, backendRequests } = await startPrimarySearchServer(t);
+  const headers = { authorization: 'Bearer fco_primary_task_context' };
+  const response = await jsonRpc(port, SEARCH_ENDPOINT, {
+    id: 14,
+    method: 'tools/call',
+    params: {
+      arguments: {
+        query: 'React memo docs',
+        objective: 'Find official guidance on preventing unnecessary rerenders',
+        clientModel: 'claude-sonnet-4-6',
+        sources: ['web'],
+      },
+      name: 'firecrawl_search',
+    },
+    headers,
+  });
+  assert.equal(response.status, 200);
+  const message = parseSseJson(await response.text());
+  assert.equal(message.result?.isError, undefined, JSON.stringify(message));
+  const search = backendRequests.find((request) => request.url === '/v2/search');
+  assert.ok(search);
+  assert.equal(search.body.objective, 'Find official guidance on preventing unnecessary rerenders');
+  assert.equal(search.body.clientModel, 'claude-sonnet-4-6');
+  assert.equal(search.body.scrapeOptions, undefined);
+});
+
 test('primary search profile agent language satisfies metadata policy gates', async (t) => {
   const { port } = await startPrimarySearchServer(t);
   const headers = { authorization: 'Bearer fco_primary_search_metadata' };
   const initialize = await initializeProfile(port, SEARCH_ENDPOINT, headers);
   const tools = await listToolDefinitions(port, SEARCH_ENDPOINT, headers);
 
-  assertAlexandriaMetadata(tools, initialize.instructions);
+  assertAlexandriaMetadata(tools, initialize.instructions, { hosted: true });
   assertAgentMetadataPolicy(
     [initialize.instructions, ...tools.map((tool) => tool.description ?? '')],
     assert
@@ -1119,7 +1178,7 @@ test('account (mcp-oauth) full-surface instructions satisfy the same metadata po
     assert.equal(tool?._meta?.['anthropic/alwaysLoad'], true, name);
   }
 
-  assertAlexandriaMetadata(tools, initialize.instructions);
+  assertAlexandriaMetadata(tools, initialize.instructions, { hosted: true });
   assertAgentMetadataPolicy(
     [initialize.instructions, ...tools.map((tool) => tool.description ?? '')],
     assert
@@ -1314,7 +1373,7 @@ test('search surface registers the two Alexandria tools with surface-scoped copy
   const headers = { 'x-api-key': 'fc-test' };
   const initialize = await initializeProfile(searchPort, SEARCH_ENDPOINT, headers);
   const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, headers);
-  assertAlexandriaMetadata(tools, initialize.instructions);
+  assertAlexandriaMetadata(tools, initialize.instructions, { hosted: true });
   // Claude Code truncates tool descriptions at CLAUDE_CODE_TEXT_CAP characters.
   for (const tool of tools) {
     assert.ok((tool.description ?? '').length <= CLAUDE_CODE_TEXT_CAP, `${tool.name} description is ${(tool.description ?? '').length} chars`);

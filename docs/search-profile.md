@@ -55,8 +55,10 @@ same index beside ordinary web results. Both are available here.
 The search surface's `firecrawl_search` takes **no `scrapeOptions`**. Its input
 schema is strict (unknown fields are rejected), and its executor builds the
 outbound `/v2/search` body from an explicit list of allowed fields
-(`query`, `limit`, `tbs`, `filter`, `location`, `sources`, `categories`,
-`highlights`, `enterprise`) plus `origin`. It never spreads raw arguments, so
+(`query`, `objective`, `clientModel`, `limit`, `includeDomains`,
+`excludeDomains`, `tbs`, `filter`, `location`, `sources`, `categories`,
+`highlights`, `enterprise`, `toolDetail`, `domainTools`) plus `origin`.
+It never spreads raw arguments, so
 no request from this surface can ask the API to fetch third-party page content.
 The schema and body construction enforce this directly, and contract tests guard
 the behavior. No runtime filter is involved.
@@ -66,6 +68,13 @@ the behavior. No runtime filter is involved.
 names only tools this surface exposes. `firecrawl_find_tools` is registered the
 same way. Alexandria results on this surface carry no `feedbackTool` pointer,
 since `firecrawl_feedback` is not registered here.
+
+`firecrawl_scrape` is read-only here (`readOnlyHint: true`): the surface runs in
+hosted safe mode, so it takes no browser `actions`. Provider terms can be read
+with the nested `terms/show` capability. As on the full surface, an organization
+admin accepts them in the dashboard: `firecrawl_scrape` refuses every other
+`terms/*` capability, and terms errors link to `requiresAction.url` or
+https://www.firecrawl.dev/app/settings?tab=data-sources.
 
 ## Alexandria source
 

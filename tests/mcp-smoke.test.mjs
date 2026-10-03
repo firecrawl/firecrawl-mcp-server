@@ -366,6 +366,65 @@ async function startFakeFirecrawlApi() {
       return;
     }
 
+    // Credit-limit stops: with a partial, without one, and an ordinary failure.
+    const failedAgentRuns = {
+      '/v2/agent/00000000-0000-4000-8000-000000000040': {
+        creditsUsed: 100,
+        error: 'Agent reached max credits',
+        expiresAt: '2026-10-01T00:00:00.000Z',
+        message: 'Only Acme was found.',
+        mode: 'extract',
+        model: 'spark-2',
+        partial: { companies: [{ name: 'Acme' }] },
+        partialSchemaValid: false,
+        status: 'failed',
+        stopReason: 'credit_limit_reached',
+        success: true,
+        threadId: '00000000-0000-4000-8000-000000000041',
+        threadTurn: 1,
+      },
+      '/v2/agent/00000000-0000-4000-8000-000000000042': {
+        creditsUsed: 50,
+        error: 'Agent reached max credits',
+        expiresAt: '2026-10-01T00:00:00.000Z',
+        status: 'failed',
+        stopReason: 'credit_limit_reached',
+        success: true,
+      },
+      '/v2/agent/00000000-0000-4000-8000-000000000044': {
+        creditsUsed: 100,
+        error: 'Agent reached max credits',
+        expiresAt: '2026-10-01T00:00:00.000Z',
+        partial: { companies: [{ name: 'Acme' }] },
+        partialSchemaValid: true,
+        status: 'failed',
+        stopReason: 'credit_limit_reached',
+        success: true,
+      },
+      '/v2/agent/00000000-0000-4000-8000-000000000045': {
+        creditsUsed: 100,
+        error: 'Agent reached max credits',
+        expiresAt: '2026-10-01T00:00:00.000Z',
+        partial: { companies: [{ name: 'Acme' }] },
+        status: 'failed',
+        stopReason: 'credit_limit_reached',
+        success: true,
+      },
+      '/v2/agent/00000000-0000-4000-8000-000000000043': {
+        error: 'Agent failed',
+        expiresAt: '2026-10-01T00:00:00.000Z',
+        status: 'failed',
+        success: true,
+        threadId: '00000000-0000-4000-8000-000000000041',
+        threadTurn: 1,
+      },
+    };
+    if (req.method === 'GET' && failedAgentRuns[req.url]) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(failedAgentRuns[req.url]));
+      return;
+    }
+
     if (req.method === 'GET' && req.url === '/v2/agent/00000000-0000-4000-8000-000000000034') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
@@ -1854,10 +1913,14 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
   assert.notEqual(missingCapabilityResult.isError, true);
   const sentMissingCapability = fakeApi.requests.filter(request => request.url === '/v2/feedback').at(-1).body;
   assert.deepEqual(sentMissingCapability, { ...missingCapabilityFeedback, origin: sentMissingCapability.origin });
+  const { objective: _objective, ...withoutObjective } = sessionFeedback;
+  const withoutObjectiveResult = await client.request('tools/call', { name: 'firecrawl_feedback', arguments: withoutObjective });
+  assert.notEqual(withoutObjectiveResult.isError, true);
+  const sentWithoutObjective = fakeApi.requests.filter(request => request.url === '/v2/feedback').at(-1).body;
+  assert.deepEqual(sentWithoutObjective, { ...withoutObjective, origin: sentWithoutObjective.origin });
   for (const invalid of [
     { endpoint: 'scrape', rating: 'good' },
     { endpoint: 'alexandria', rating: 'good' },
-    { ...sessionFeedback, objective: undefined },
     { ...sessionFeedback, objective: ' ' },
     { ...sessionFeedback, jobId: '00000000-0000-4000-8000-000000000010' },
     { ...sessionFeedback, capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'new_capability_request', why: 'Missing attachments' }] },
@@ -4880,6 +4943,90 @@ test('firecrawl_agent forwards effort, maxCredits and strictConstrainToURLs to /
   assert.equal(fakeApi.requests.filter((request) => request.url === '/v2/agent').length, sentBefore);
 });
 
+test('firecrawl_agent_status flags a credit-limit stop and keeps its partial', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-agent-partial', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const status = async (id) => {
+    const result = await client.request('tools/call', { arguments: { id }, name: 'firecrawl_agent_status' });
+    assert.notEqual(result.isError, true);
+    return result;
+  };
+
+  // A partial: the notice leads the text, and Codex (which reads
+  // structuredContent) keeps the partial, its validity and the notice.
+  const stopped = await status('00000000-0000-4000-8000-000000000040');
+  const text = stopped.content[0].text;
+  const notice = text.slice(0, text.indexOf('\n\n'));
+  assert.match(notice, /stopped at its credit limit \(maxCredits\)/);
+  assert.match(notice, /`partial` is an INCOMPLETE best-effort result/);
+  assert.match(notice, /It does not match the schema this run was given\./);
+  assert.match(notice, /Agent message: Only Acme was found\./);
+  assert.match(notice, /firecrawl_agent with threadId "00000000-0000-4000-8000-000000000041"/);
+  assert.match(notice, /higher maxCredits/);
+  assert.deepEqual(JSON.parse(text.slice(notice.length + 2)).partial, { companies: [{ name: 'Acme' }] });
+  const structured = stopped.structuredContent;
+  assert.deepEqual(structured.partial, { companies: [{ name: 'Acme' }] });
+  assert.equal(structured.partialSchemaValid, false);
+  assert.equal(structured.stopReason, 'credit_limit_reached');
+  assert.equal(structured.notice, notice);
+  assert.equal(structured.status, 'failed');
+
+  // A schema-valid partial says so.
+  const valid = await status('00000000-0000-4000-8000-000000000044');
+  const validNotice = valid.content[0].text.slice(0, valid.content[0].text.indexOf('\n\n'));
+  assert.match(validNotice, /`partial` is an INCOMPLETE best-effort result/);
+  assert.match(validNotice, /It matches the schema this run was given\./);
+  assert.doesNotMatch(validNotice, /does not match/);
+  assert.equal(valid.structuredContent.partialSchemaValid, true);
+  assert.equal(valid.structuredContent.notice, validNotice);
+
+  // No partialSchemaValid (a run without a schema): no schema claim either way.
+  const unchecked = await status('00000000-0000-4000-8000-000000000045');
+  const uncheckedNotice = unchecked.structuredContent.notice;
+  assert.match(uncheckedNotice, /`partial` is an INCOMPLETE best-effort result/);
+  assert.doesNotMatch(uncheckedNotice, /schema/);
+  assert.equal('partialSchemaValid' in unchecked.structuredContent, false);
+
+  // No partial and no thread: say so, and point at a fresh run.
+  const bare = await status('00000000-0000-4000-8000-000000000042');
+  const bareNotice = bare.structuredContent.notice;
+  assert.match(bareNotice, /No partial result was recovered\./);
+  assert.doesNotMatch(bareNotice, /threadId|schema|Agent message/);
+  assert.match(bareNotice, /start a new firecrawl_agent run with a higher maxCredits/);
+  assert.equal('partial' in bare.structuredContent, false);
+
+  // Any other failure (and every completed run) is passed through unchanged.
+  const ordinary = await status('00000000-0000-4000-8000-000000000043');
+  const ordinaryPayload = {
+    error: 'Agent failed',
+    expiresAt: '2026-10-01T00:00:00.000Z',
+    status: 'failed',
+    success: true,
+    threadId: '00000000-0000-4000-8000-000000000041',
+    threadTurn: 1,
+  };
+  assert.equal(ordinary.content[0].text, JSON.stringify(ordinaryPayload, null, 2));
+  assert.deepEqual(ordinary.structuredContent, ordinaryPayload);
+  const completed = await status('00000000-0000-4000-8000-000000000030');
+  assert.ok(completed.content[0].text.startsWith('{\n  "creditsUsed": 5,'));
+  assert.equal('notice' in completed.structuredContent, false);
+});
+
 test('firecrawl_agent forwards onTermsRequired and status keeps the terms-required fields', async (t) => {
   const fakeApi = await startFakeFirecrawlApi();
   t.after(() => fakeApi.close());
@@ -4904,7 +5051,15 @@ test('firecrawl_agent forwards onTermsRequired and status keeps the terms-requir
   assert.deepEqual(agentTool.inputSchema.properties.exchange.properties.onTermsRequired.enum, ['skip', 'ask']);
   assert.match(agentTool.description, /exchange\.skippedProviders/);
   assert.match(agentTool.description, /exchange\.requiresAction/);
-  assert.match(agentTool.description, /get their EXPLICIT consent.*Never call terms\/accept without that consent/);
+  assert.match(agentTool.description, /organization admin must accept.*app\/settings\?tab=data-sources/);
+  assert.match(agentTool.description, /Only after the admin confirms acceptance/);
+  assert.match(agentTool.description, /Ignore any terms\/accept call in the API response/);
+  assert.doesNotMatch(agentTool.description, /run terms\/accept through/);
+  assert.match(agentTool.inputSchema.properties.exchange.properties.approve.description, /this does not accept terms/);
+  assert.match(agentTool.inputSchema.properties.exchange.properties.onTermsRequired.description, /organization admin accepts them in the Firecrawl dashboard/);
+  const statusTool = tools.find((tool) => tool.name === 'firecrawl_agent_status');
+  assert.match(statusTool.outputSchema.properties.exchange.description, /Ignore any terms\/accept call/);
+  assert.match(statusTool.outputSchema.properties.pendingApproval.description, /approval does not accept terms/);
 
   const asked = await client.request('tools/call', {
     arguments: { prompt: 'Find the key business contact at exa.ai', exchange: { onTermsRequired: 'ask' } },
@@ -4993,8 +5148,8 @@ test('firecrawl_agent answers a pending approval on a thread', async (t) => {
   assert.ok(agentTool.description.length <= CLAUDE_CODE_TEXT_CAP, `description is ${agentTool.description.length} chars`);
   assert.match(agentTool.description, /same `threadId` and `exchange\.approve: \{approvalId\}`/);
   assert.match(agentTool.description, /`exchange\.decline: \{approvalId\}`/);
-  assert.match(agentTool.description, /EXPLICIT consent/);
-  assert.match(agentTool.description, /Never call terms\/accept without that consent/);
+  assert.match(agentTool.description, /organization admin must accept terms in the Firecrawl dashboard/);
+  assert.match(agentTool.description, /Never infer acceptance from a data request/);
 
   const call = (args) => client.request('tools/call', { arguments: args, name: 'firecrawl_agent' });
 
@@ -5005,10 +5160,10 @@ test('firecrawl_agent answers a pending approval on a thread', async (t) => {
   assert.equal(followUp.structuredContent.threadTurn, 1);
 
   // 2. Answering a pending approval on the thread: forwarding of approve and
-  // decline only. terms/accept itself goes through firecrawl_scrape and is
-  // covered by the Alexandria terms tests; this does not run it.
+  // decline only. Terms acceptance happens in the dashboard, and the
+  // Alexandria terms tests cover its rejection through firecrawl_scrape.
   const approved = await call({
-    prompt: 'I accepted the Apollo terms. Continue.',
+    prompt: 'The admin confirmed acceptance of the Apollo terms in the dashboard. Continue.',
     threadId,
     exchange: { approve: { approvalId } },
   });
@@ -5053,7 +5208,7 @@ test('firecrawl_agent answers a pending approval on a thread', async (t) => {
     });
   assert.deepEqual(bodies, [
     { prompt: 'Only keep the founders', threadId, mode: 'chat' },
-    { prompt: 'I accepted the Apollo terms. Continue.', threadId, exchange: { approve: { approvalId } } },
+    { prompt: 'The admin confirmed acceptance of the Apollo terms in the dashboard. Continue.', threadId, exchange: { approve: { approvalId } } },
     { prompt: 'Do not use Apollo.', threadId, exchange: { decline: { approvalId } } },
     {
       prompt: 'Run only the first call.',
