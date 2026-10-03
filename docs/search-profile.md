@@ -71,10 +71,13 @@ since `firecrawl_feedback` is not registered here.
 
 `firecrawl_scrape` is read-only here (`readOnlyHint: true`): the surface runs in
 hosted safe mode, so it takes no browser `actions`. Provider terms can be read
-with the nested `terms/show` capability. As on the full surface, an organization
-admin accepts them in the dashboard: `firecrawl_scrape` refuses every other
-`terms/*` capability, and terms errors link to `requiresAction.url` or
-https://www.firecrawl.dev/app/settings?tab=data-sources.
+with the nested `terms/show` capability. An organization admin accepts them in
+the dashboard: `firecrawl_scrape` refuses every other `terms/*` capability, and
+terms errors link to `requiresAction.url` or
+https://www.firecrawl.dev/app/settings?tab=data-sources. The full surface also
+has `firecrawl_accept_provider_terms`, a write tool for accepting terms after the
+user agrees. It is not part of this surface's fixed tool set, so errors here
+never name it.
 
 ## Alexandria source
 
