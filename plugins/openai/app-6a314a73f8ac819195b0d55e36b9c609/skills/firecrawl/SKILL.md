@@ -58,10 +58,11 @@ when the feedback tool is available and the host permits it. Respect user and
 team opt-outs. Report observed quality or coverage; exclude credentials,
 private task context, and raw page contents.
 
-For search, use `firecrawl_search_feedback` with the `id` returned by
-`firecrawl_search`, once per search within its feedback window. Include useful
-source URLs, specific missing content, or query suggestions that support the
-rating. Skip searches without a returned ID or whose feedback window has expired.
+For search, call `firecrawl_search_feedback` once per search within its feedback
+window, passing the UUID `id` returned by `firecrawl_search` as `searchId`.
+Include useful source URLs, specific missing content, or query suggestions that
+support the rating. Skip searches without a returned ID or whose feedback window
+has expired.
 
 After a data-provider task, use `firecrawl_feedback` to report results or missing
 coverage. See [structured data](references/structured-data.md) for the payload.
