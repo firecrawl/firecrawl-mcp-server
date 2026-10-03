@@ -567,7 +567,8 @@ Parse jobs is optional. Consider submitting feedback through `firecrawl_feedback
 The tool's `observations` parameter lists the category fields below. Use only available evidence
 and keep unverified expectations distinct from source comparisons.
 
-Keyless job references are valid for 24 hours. Each job accepts one submission;
+Submit before the invitation's `expiresAt` deadline, which provides a 24-hour
+feedback window for the job. Each job accepts one submission;
 retrying it returns the original feedback ID. Feedback remains available after
 operation allowance is exhausted and does not consume or restore that allowance.
 

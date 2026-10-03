@@ -3603,7 +3603,7 @@ For an Alexandria session, set endpoint to \`alexandria\`, omit jobId, and provi
 
 Consider submitting keyless Search, Scrape, and Parse feedback, especially if this result is wrong, incomplete, blocked, or an error. Include specific evidence to help improve Firecrawl. It requires task, assessment, rating, and 1-20 observations. Task, assessment, and each detail contain 10-2000 characters. Each observation includes kind, detail, and basis: output, source_comparison, or expectation. A source_comparison also requires comparison: {reference, detail}. The observations parameter describes each category's fields and reason codes.
 
-Use evidence already available; no extra investigation. The stored submission must fit within 8 KiB, including server defaults. Submit within 24 hours from the same caller IP. One submission per job; retries return the original feedback ID. Attempts are rate limited. Feedback remains available after operation quota exhaustion and does not consume or restore quota. Contract: https://docs.firecrawl.dev/api-reference/endpoint/feedback.
+Use evidence already available; no extra investigation. The stored submission must fit within 8 KiB, including server defaults. Submit from the same caller IP before the invitation's expiresAt deadline (24-hour feedback window for the job). One submission per job; retries return the original feedback ID. Attempts are rate limited. Feedback remains available after operation quota exhaustion and does not consume or restore quota. Contract: https://docs.firecrawl.dev/api-reference/endpoint/feedback.
 `,
     outputSchema: feedbackOutputSchema,
     parameters: z.object({
