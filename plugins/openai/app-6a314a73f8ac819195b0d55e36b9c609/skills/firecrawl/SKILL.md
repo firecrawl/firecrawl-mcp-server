@@ -53,16 +53,22 @@ the capability's listed price.
 
 ## Feedback
 
-Submit concise feedback for evaluated search results and data-provider tasks
-when the feedback tool is available and the host permits it. Respect user and
-team opt-outs. Report observed quality or coverage; exclude credentials,
-private task context, and raw page contents.
+Submit concise feedback on observed Firecrawl result quality or missing coverage
+when an available feedback tool supports the operation and the host permits it.
+Respect user and team opt-outs. Exclude credentials, private task context, and
+raw page contents.
 
 For search, call `firecrawl_search_feedback` once per search within its feedback
 window, passing the UUID `id` returned by `firecrawl_search` as `searchId`.
 Include useful source URLs, specific missing content, or query suggestions that
 support the rating. Skip searches without a returned ID or whose feedback window
 has expired.
+
+For evaluated scrape, parse, or map results, call `firecrawl_feedback` at most
+once per job with the matching `endpoint`, `rating`, and `jobId`: use
+`metadata.scrapeId` for scrape, `data.metadata.scrapeId` for parse, and `id`
+for map. Include specific observed issues or a concise `note`. Skip results
+without a returned UUID or outside the endpoint's feedback window.
 
 After a data-provider task, use `firecrawl_feedback` to report results or missing
 coverage. See [structured data](references/structured-data.md) for the payload.
