@@ -3548,7 +3548,9 @@ Returns submission status, feedback ID, and accounting fields.
       tags: z.array(feedbackIssueSchema).max(20).optional(),
       note: z.string().max(4000).optional(),
       valuableSources: z.array(valuableSourceSchema).max(50).optional(),
-      missingContent: z.array(missingContentSchema).max(50).optional(),
+      // Match firecrawl_search_feedback, which caps missingContent at 20 and
+      // documents that limit; both tools feed the same quality-feedback system.
+      missingContent: z.array(missingContentSchema).max(20).optional(),
       querySuggestions: z.string().max(2000).optional(),
       url: z.string().url().optional(),
       pageNumbers: z.array(z.number().int().positive()).max(100).optional(),
