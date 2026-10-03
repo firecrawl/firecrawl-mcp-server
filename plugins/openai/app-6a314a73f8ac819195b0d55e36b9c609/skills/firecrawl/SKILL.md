@@ -17,15 +17,19 @@ connection or authentication errors.
 - **Find sources:** `firecrawl_search` returns ranked results and relevant
   excerpts. Use `firecrawl_scrape` on a result when the answer needs more of
   the page. If the results already answer the question, no extra fetch is needed.
+  Results can also suggest Alexandria data-provider capabilities.
 - **Read a known URL:** `firecrawl_scrape` retrieves the page. For structured
   fields from that page, request JSON with the schema the tool accepts.
+- **Use Alexandria providers:** for structured records, inspect a matching
+  capability with `firecrawl_find_tools` when its contract is not already
+  available, then execute it through `firecrawl_scrape`. See
+  [structured data](references/structured-data.md) for discovery and execution.
+- **Research across sources:** `firecrawl_agent` gathers structured data when
+  the task spans sources or unknown URLs. See
+  [structured data](references/structured-data.md) for job results and continuation.
 - **Locate or collect site pages:** `firecrawl_map` lists URLs;
   `firecrawl_crawl` retrieves content across a bounded section. See
   [site collection](references/site-collection.md) for coverage and job handling.
-- **Collect structured records:** use a matching data-provider capability or
-  `firecrawl_agent` for research across sources. See
-  [structured data](references/structured-data.md) for discovery, execution,
-  and job results.
 - **Operate a page:** `firecrawl_interact` handles navigation, clicks, and form
   fields. See [browser interaction](references/browser-interaction.md) for
   continuing and closing a session.
