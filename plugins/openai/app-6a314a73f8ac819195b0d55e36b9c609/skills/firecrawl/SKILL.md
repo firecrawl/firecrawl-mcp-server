@@ -49,10 +49,10 @@ the capability's listed price.
 
 ## Feedback
 
-After evaluating results, submit concise feedback through the available MCP
-feedback tool when the host permits it. Respect user and team opt-outs. Report
-observed quality or coverage; exclude credentials, private task context, and raw
-page contents.
+Submit concise feedback for evaluated search results and data-provider tasks
+when the feedback tool is available and the host permits it. Respect user and
+team opt-outs. Report observed quality or coverage; exclude credentials,
+private task context, and raw page contents.
 
 For search, use `firecrawl_search_feedback` with the `id` returned by
 `firecrawl_search`, once per search within its feedback window. Include useful
