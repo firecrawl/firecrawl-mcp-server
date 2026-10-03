@@ -37,7 +37,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Use `firecrawl_credit_usage` to check credits left or monthly consumption, optionally broken down by API key.
 - Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control — the session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
 
-This server lists 28 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 8 tools (search, developer and research search, plus Alexandria catalogue lookup and execution).
+This server lists 28 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 9 tools (search, developer and research search, plus Alexandria catalogue lookup, execution, and terms acceptance).
 
 ## Installation
 
@@ -81,7 +81,7 @@ A fixed-scope search surface is also hosted at:
 https://mcp.firecrawl.dev/v2/mcp-search
 ```
 
-It exposes a fixed set of eight tools: `firecrawl_search`, `firecrawl_developer_search`, the four `firecrawl_research_*` tools, and the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`. Its `firecrawl_search` fetches no page content, and the surface has its own OAuth identity; the full endpoint above is unchanged. It backs a published connector listing, so its tool set is a contract rather than a profile to tune. See [docs/search-profile.md](docs/search-profile.md) for the full contract and what a change to it involves.
+It exposes a fixed set of nine tools: `firecrawl_search`, `firecrawl_developer_search`, the four `firecrawl_research_*` tools, and the three Alexandria tools `firecrawl_find_tools`, `firecrawl_scrape`, and `firecrawl_accept_provider_terms`. Its `firecrawl_search` fetches no page content, and the surface has its own OAuth identity; the full endpoint above is unchanged. It backs a published connector listing, so its tool set is a contract rather than a profile to tune. See [docs/search-profile.md](docs/search-profile.md) for the full contract and what a change to it involves.
 
 For packaged MCP workflows in ChatGPT, Codex, or Claude Code, see
 [MCP plugin packages](plugins/README.md).
@@ -1122,8 +1122,8 @@ for data is not consent, and no automatic acceptance or uncertain retries occur.
 No credits are charged for the blocked retrieval.
 
 **Accept provider terms (`firecrawl_accept_provider_terms`):** accepting terms is a legal act
-for the organization, so it is a separate write tool (`readOnlyHint: false`), and clients that
-confirm write tools ask the user before it runs. Call it only after the user has read the terms
+for the organization, so it is a separate tool marked `readOnlyHint: false` and `destructiveHint: true`,
+and clients that confirm such tools ask the user before every call. Both surfaces register it. Call it only after the user has read the terms
 and explicitly agreed, with the `version` and `digest` that `terms/show` returned:
 
 ```json
@@ -1142,7 +1142,6 @@ It sends `POST /exchange/provider-terms/accept` with `confirmed: true` and retur
 read, nothing is accepted; read and present them again. An organization admin can instead accept
 them at `requiresAction.url`, or at https://www.firecrawl.dev/app/settings?tab=data-sources.
 After acceptance, call the blocked tool again with the identical payload and `requestId`.
-The search-only surface does not register this tool, so its terms errors point to the dashboard.
 
 ### 16. Credit Usage Tool
 

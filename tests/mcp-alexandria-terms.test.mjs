@@ -9,7 +9,7 @@ test('a terms block stops for the user, and only their explicit agreement is acc
   const termsTools = listing.tools.filter(tool => /terms/.test(tool.name));
   assert.deepEqual(termsTools.map(tool => tool.name), ['firecrawl_accept_provider_terms']);
   const { readOnlyHint, destructiveHint, openWorldHint } = termsTools[0].annotations;
-  assert.deepEqual({ readOnlyHint, destructiveHint, openWorldHint }, { readOnlyHint: false, destructiveHint: false, openWorldHint: false });
+  assert.deepEqual({ readOnlyHint, destructiveHint, openWorldHint }, { readOnlyHint: false, destructiveHint: true, openWorldHint: false });
   assert.deepEqual([...termsTools[0].inputSchema.required].sort(), ['digest', 'provider', 'version']);
 
   const blocked = await callExpectingError(client, { name: 'firecrawl_scrape', arguments: { alexandria: [{ provider: 'benzinga', capability: 'news/search' }] } });

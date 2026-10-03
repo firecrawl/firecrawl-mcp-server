@@ -20,7 +20,7 @@ within the hour.
 
 ## Tool contract
 
-The search surface exposes exactly these eight tools and nothing else:
+The search surface exposes exactly these nine tools and nothing else:
 
 | Tool | Purpose |
 | --- | --- |
@@ -32,19 +32,20 @@ The search surface exposes exactly these eight tools and nothing else:
 | `firecrawl_research_read_paper` | Full-text passages from one paper |
 | `firecrawl_find_tools` | Browse the Alexandria catalogue and read provider contracts (free) |
 | `firecrawl_scrape` | Execute an Alexandria capability with an `alexandria` body, or retrieve one supplied URL (billed) |
+| `firecrawl_accept_provider_terms` | Accept one Alexandria provider's data terms after the user explicitly agrees (write tool) |
 
 Registration on this instance is filtered against that allowlist, so any tool
 outside the set, including map, crawl, extract, agent, interact, parse,
 monitor, and the feedback tools, is never registered, except for one
 deprecated name kept for backward compatibility and described below.
-`tools/list` reflects only these eight tools.
+`tools/list` reflects only these nine tools.
 
 One additional name, the deprecated `firecrawl_research_search_github`, is
 also registered on this instance but hidden from `tools/list`; a `tools/call`
 for it returns a `DEPRECATED_TOOL` payload pointing callers at
 `firecrawl_developer_search`, so cached sessions that predate its removal
 still get a meaningful response instead of an unknown-tool error. Calling any
-other name not in the eight-tool set returns an unknown-tool error.
+other name not in the nine-tool set returns an unknown-tool error.
 
 `firecrawl_developer_search` queries `/v2/search/developer` and returns the
 matched passages; `firecrawl_search` with `categories: ["developer"]` reaches the
@@ -71,13 +72,11 @@ since `firecrawl_feedback` is not registered here.
 
 `firecrawl_scrape` is read-only here (`readOnlyHint: true`): the surface runs in
 hosted safe mode, so it takes no browser `actions`. Provider terms can be read
-with the nested `terms/show` capability. An organization admin accepts them in
-the dashboard: `firecrawl_scrape` refuses every other `terms/*` capability, and
-terms errors link to `requiresAction.url` or
-https://www.firecrawl.dev/app/settings?tab=data-sources. The full surface also
-has `firecrawl_accept_provider_terms`, a write tool for accepting terms after the
-user agrees. It is not part of this surface's fixed tool set, so errors here
-never name it.
+with the nested `terms/show` capability, and `firecrawl_scrape` refuses every
+other `terms/*` capability. As on the full surface, `firecrawl_accept_provider_terms`
+(`readOnlyHint: false`, `destructiveHint: true`) accepts them after the user
+explicitly agrees, and an organization admin can instead accept them at
+`requiresAction.url` or https://www.firecrawl.dev/app/settings?tab=data-sources.
 
 ## Alexandria source
 
@@ -90,7 +89,7 @@ access; keyless sessions get an explanatory error before any request.
 Search requires a query and does not accept catalogue browse mode; use
 `firecrawl_find_tools` to browse the catalogue or read a full contract, and
 `firecrawl_scrape` with `alexandria` to execute a capability. Both are part of
-the eight-tool surface.
+the nine-tool surface.
 
 ## OAuth
 
@@ -130,7 +129,7 @@ or the authorization server allowlist.
 
 ## Tests
 
-`tests/mcp-search-profile.test.mjs` asserts the eight-tool contract, unknown-tool
+`tests/mcp-search-profile.test.mjs` asserts the nine-tool contract, unknown-tool
 rejection, `scrapeOptions` rejection, the clean outbound body, authenticated
 `tools/list`, the path-scoped metadata document, audience acceptance/rejection,
 and that the full surface is unaffected. It runs in CI via `pnpm test`.
