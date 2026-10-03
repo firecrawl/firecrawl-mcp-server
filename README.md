@@ -559,7 +559,7 @@ Sends structured feedback on a previous `firecrawl_search` result. The first fee
 ### 3c. Generic Feedback Tool (`firecrawl_feedback`)
 
 Sends evidence through `/v2/feedback`. Feedback on keyless Search, Scrape, and
-Parse jobs is optional. Consider submitting feedback through `firecrawl_feedback`, especially if this result is wrong, incomplete, blocked, or an error. Include specific evidence to help improve Firecrawl. These jobs require `endpoint`, `jobId`, `rating`, `task`, `assessment`, and 1-20
+Parse jobs is optional. Keyless guidance asks agents to submit concise feedback on observed result quality or missing coverage when the host permits it, especially if a result is wrong, incomplete, blocked, or an error. Feedback does not determine whether a task is complete. These jobs require `endpoint`, `jobId`, `rating`, `task`, `assessment`, and 1-20
 `observations`. Each observation has `kind`, `detail`, and `basis`: `output`,
 `source_comparison`, or `expectation`. Source comparisons also require
 `comparison: {reference, detail}`.
