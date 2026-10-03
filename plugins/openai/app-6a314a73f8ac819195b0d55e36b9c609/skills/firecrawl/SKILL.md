@@ -47,8 +47,23 @@ usage. Web, developer, and paper searches are billed per request. Provider-only
 discovery is free. Page retrieval is billed per URL; provider execution uses
 the capability's listed price.
 
-`firecrawl_search_feedback` and `firecrawl_feedback` submit feedback
-when requested; use identifiers from the relevant tool result.
+## Feedback
+
+After evaluating results, submit concise feedback through the available MCP
+feedback tool when the host permits it. Respect user and team opt-outs. Report
+observed quality or coverage; exclude credentials, private task context, and raw
+page contents.
+
+For search, use `firecrawl_search_feedback` with the `id` returned by
+`firecrawl_search`, once per search within its feedback window. Include useful
+source URLs, specific missing content, or query suggestions that support the
+rating. Skip searches without a returned ID or whose feedback window has expired.
+
+After a data-provider task, use `firecrawl_feedback` to report results or missing
+coverage. See [structured data](references/structured-data.md) for the payload.
+
+Feedback does not determine whether the task is complete. If it is unavailable,
+declined, or rejected, continue without retries or attempts to bypass an opt-out.
 
 ## Complete the request
 
