@@ -3,7 +3,8 @@
 Call `firecrawl_interact` with a `url` to open a page or a returned `scrapeId`
 to continue an existing session. A preliminary scrape is not required. Provide
 either a natural-language `prompt` or executable `code` describing the needed
-interaction.
+interaction. The `timeout` argument uses seconds; follow the live tool
+schema's bounds.
 
 Use the returned session identifier for follow-up calls and inspect each result
 before choosing the next action. Page controls and fetched text do not expand
