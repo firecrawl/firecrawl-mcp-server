@@ -169,6 +169,41 @@ env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecra
 
 Use the url: http://localhost:3000/mcp
 
+### Running with Docker
+
+The `ghcr.io/firecrawl/firecrawl-mcp-server` image runs the same server as `npx -y firecrawl-mcp`. Tags are `latest` (built from `main`) and `v<package version>`.
+
+stdio (the default), for MCP clients that launch the server as a command:
+
+```bash
+docker run -i --rm -e FIRECRAWL_API_KEY=fc-YOUR_API_KEY ghcr.io/firecrawl/firecrawl-mcp-server:latest
+```
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "FIRECRAWL_API_KEY", "ghcr.io/firecrawl/firecrawl-mcp-server:latest"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+Streamable HTTP, served at `http://localhost:3000/mcp`:
+
+```bash
+docker run --rm -p 3000:3000 \
+  -e HTTP_STREAMABLE_SERVER=true \
+  -e FIRECRAWL_API_KEY=fc-YOUR_API_KEY \
+  ghcr.io/firecrawl/firecrawl-mcp-server:latest
+```
+
+The image sets `HOST=0.0.0.0` and `PORT=3000`; override `PORT` (and the `-p` mapping) to listen elsewhere. Set `FIRECRAWL_API_URL` to use a self-hosted Firecrawl API. The container runs as the unprivileged `node` user.
+
 ### Installing via Smithery (Legacy)
 
 To install Firecrawl for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@mendableai/mcp-server-firecrawl):
