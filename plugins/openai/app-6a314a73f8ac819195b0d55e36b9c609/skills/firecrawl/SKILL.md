@@ -12,8 +12,38 @@ user's source, scope, and tool choices. Resolve the tool names below through
 the host's MCP connection, using its tool search for deferred tools. Report
 connection or authentication errors.
 
+## Personalize to the user's everyday work
+
+During onboarding or when the user asks how Firecrawl could help them, use
+relevant memories and conversation context already available to the host.
+If the host offers permitted memory retrieval, look up only context relevant
+to the user's work: recurring tasks, active projects, preferred sources,
+output formats, and constraints. Do not claim access to unavailable memories
+or past chats. The current request takes precedence over remembered context.
+
+Suggest two or three concrete ways Firecrawl fits those tasks, rather than a
+generic feature list. For example, a developer might use the developer index
+for upstream bugs; someone researching companies might use Alexandria for
+structured company records; someone comparing products might retrieve
+specifications and offers from matching providers. Ground provider suggestions
+in live discovery and explain the useful result each workflow would produce.
+Present uncertain inferences as suggestions, not facts about the user.
+
+When a concrete task is already requested, use this context to tailor the
+sources and output and continue the work. Otherwise invite the user to choose
+one relevant starting point. If context is unavailable, ask one short question
+about what they regularly work on, or offer examples if they are unsure.
+Remembered interests alone do not authorize billed data retrieval, recurring
+checks, or external actions. Keep raw memories, chat history, and unrelated
+personal details out of Firecrawl calls; send only inputs needed for the task.
+
 ## Choose the operation
 
+- **Alexandria providers:** retrieve structured records such as YC companies,
+  product details, or market data through a matching live provider. Discover
+  capabilities and their contracts with `firecrawl_find_tools`, then execute
+  with `firecrawl_scrape` using its `alexandria` input. See
+  [structured data](references/structured-data.md) for discovery and execution.
 - **Find sources:** `firecrawl_search` returns ranked results and relevant
   excerpts. Use `firecrawl_scrape` on a result when the answer needs more of
   the page. If the results already answer the question, no extra fetch is needed.
@@ -22,10 +52,9 @@ connection or authentication errors.
 - **Locate or collect site pages:** `firecrawl_map` lists URLs;
   `firecrawl_crawl` retrieves content across a bounded section. See
   [site collection](references/site-collection.md) for coverage and job handling.
-- **Collect structured records:** use a matching data-provider capability or
-  `firecrawl_agent` for research across sources. See
-  [structured data](references/structured-data.md) for discovery, execution,
-  and job results.
+- **Research across sources:** use `firecrawl_agent` when the task needs
+  structured research spanning sources. See
+  [structured data](references/structured-data.md) for job results.
 - **Operate a page:** `firecrawl_interact` handles navigation, clicks, and form
   fields. See [browser interaction](references/browser-interaction.md) for
   continuing and closing a session.

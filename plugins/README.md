@@ -5,7 +5,7 @@ scientific literature with Firecrawl.
 
 | Package | Connection | Skills |
 | --- | --- | --- |
-| [OpenAI](openai/app-6a314a73f8ac819195b0d55e36b9c609) | Existing registered Firecrawl app in ChatGPT and Codex | `firecrawl`, with workflow references |
+| [OpenAI](openai/app-6a314a73f8ac819195b0d55e36b9c609) | Existing registered Firecrawl app in ChatGPT and Codex | `firecrawl`, `get-started`, with workflow references |
 | [Claude](claude/firecrawl-search) | `https://mcp.firecrawl.dev/v2/mcp-search` | `firecrawl`, `firecrawl-developer-index`, `firecrawl-research-index` |
 
 The OpenAI package covers the full authenticated tool set. Its `.app.json`
@@ -42,6 +42,13 @@ plugin installation flow in Codex. For distribution, use the existing Firecrawl
 plugin submission and registered app mapping. Replace the previous skill set
 with the package's `skills/` contents, preserving the reference directories.
 Test the draft in ChatGPT and Codex before submitting it for publication.
+
+For a self-contained production OAuth package, run
+`pnpm plugin:prepare:openai /path/to/new-output-directory`. This preserves the
+published Firecrawl identity and onboarding metadata while excluding registered
+app-reference files and local launchers. See the
+[production onboarding guide](openai/app-6a314a73f8ac819195b0d55e36b9c609/README.md)
+for archive assembly and native acceptance checks.
 
 For a plugin archive, include the manifest, connection file, and `skills/`
 directory at the archive root. Include dotfiles such as `.app.json`, `.mcp.json`,
