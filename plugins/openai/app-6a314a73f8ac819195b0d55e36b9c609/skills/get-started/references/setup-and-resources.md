@@ -24,7 +24,7 @@ These come from the public onboarding guide and are relevant only when the user 
 
 Alexandria needs a key on a team with access. Read the actual provider contract and returned access status. A successful usage check is not a provider access grant.
 
-For `THIRD_PARTY_DATA_TERMS_REQUIRED`, show the returned action URL or terms instructions. The current MCP can expose separate terms/show and terms/accept capabilities: read and present the exact terms first, and only accept after explicit authorization for the reviewed version and digest. Some eligibility or authority steps require an organization admin in the dashboard. Keep terms acceptance separate from data execution. Retry the original request only after acceptance/access is confirmed; if the same gate remains, stop and direct the user to an admin rather than looping.
+For `THIRD_PARTY_DATA_TERMS_REQUIRED`, read and present the exact terms using `terms/show` through `firecrawl_scrape`, separately from provider execution. The MCP rejects terms acceptance, including any `terms/accept` capability returned in an API payload. Direct an organization admin to accept the terms in the dashboard using the returned action URL, or [Data-source settings](https://www.firecrawl.dev/app/settings?tab=data-sources) if that page is unavailable. Retry the original request with the identical payload only after the admin confirms acceptance and access. If the same gate remains, stop and ask an organization admin to review access rather than looping.
 
 Setup, provider selection, and an ordinary data request do not authorize terms acceptance. Do not write directly to provider-access storage or offer to bypass a gate.
 
