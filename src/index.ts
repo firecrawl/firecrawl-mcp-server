@@ -16,6 +16,11 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { z } from 'zod';
 import {
+  mcpJsonObjectOptional,
+  mcpJsonSchemaDocumentOptional,
+  mcpStringMapOptional,
+} from './mcp-json-schemas';
+import {
   AGENT_HINTS_HEADERS,
   agentHintsText,
   preserveAgentHints,
@@ -2201,7 +2206,7 @@ const scrapeParamsSchema = z.object({
   jsonOptions: z
     .object({
       prompt: z.string().optional(),
-      schema: z.record(z.string(), z.any()).optional(),
+      schema: mcpJsonSchemaDocumentOptional,
     })
     .optional(),
   queryOptions: z
@@ -2343,7 +2348,7 @@ const parseOptionParamsSchema = z.object({
   jsonOptions: z
     .object({
       prompt: z.string().optional(),
-      schema: z.record(z.string(), z.any()).optional(),
+      schema: mcpJsonSchemaDocumentOptional,
     })
     .optional(),
   queryOptions: z
@@ -2849,7 +2854,7 @@ server.addTool({
   _meta: { 'anthropic/alwaysLoad': true },
   annotations: {
     title: 'Firecrawl web search',
-    readOnlyHint: true, // Runs a web search and returns results; does not modify external sites.
+    readOnlyHint: SAFE_MODE, // Align with scrape: scrapeOptions.actions (click/write/JS) are allowed when not in cloud safe mode.
     openWorldHint: true, // Searches the open web across arbitrary domains and sources.
     destructiveHint: false, // Query-only; no destructive side effects on external entities.
   },
@@ -3552,7 +3557,7 @@ Returns submission status, feedback ID, and accounting fields.
       querySuggestions: z.string().max(2000).optional(),
       url: z.string().url().optional(),
       pageNumbers: z.array(z.number().int().positive()).max(100).optional(),
-      metadata: z.record(z.string(), z.unknown()).optional(),
+      metadata: mcpJsonObjectOptional,
     }).superRefine((value, ctx) => {
       if (value.endpoint === 'alexandria') {
         const parsed = alexandriaSessionFeedbackSchema.safeParse(value);
@@ -3708,7 +3713,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
       ? {}
       : {
           webhook: z.string().optional(),
-          webhookHeaders: z.record(z.string(), z.string()).optional(),
+          webhookHeaders: mcpStringMapOptional,
         }),
     deduplicateSimilarURLs: z.boolean().optional(),
     ignoreQueryParameters: z.boolean().optional(),
@@ -3810,7 +3815,7 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
   parameters: z.object({
     urls: z.array(z.string()),
     prompt: z.string().optional(),
-    schema: z.record(z.string(), z.any()).optional(),
+    schema: mcpJsonSchemaDocumentOptional,
     allowExternalLinks: z.boolean().optional(),
     enableWebSearch: z.boolean().optional(),
     includeSubdomains: z.boolean().optional(),
@@ -3905,7 +3910,7 @@ The agent only calls Alexandria providers whose terms the team has accepted. \`e
   parameters: z.object({
     prompt: z.string().min(1).max(10000),
     urls: z.array(z.string().url()).optional(),
-    schema: z.record(z.string(), z.any()).optional(),
+    schema: mcpJsonSchemaDocumentOptional,
     effort: z
       .enum(['low', 'medium', 'high'])
       .optional()
