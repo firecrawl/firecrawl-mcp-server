@@ -1,7 +1,7 @@
 /**
  * Firecrawl Legal and Regulatory search tool.
  *
- * Thin MCP wrapper over the `/v2/search/legal-regulatory` endpoint, called
+ * Thin MCP wrapper over the `/v2/search/gov` endpoint, called
  * through the SDK's HTTP layer (auth + retries) via `client.http.get(...)`.
  */
 
@@ -29,7 +29,7 @@ type ClientLike = {
 
 type GetClient = (session?: SessionData) => unknown;
 
-const BASE = '/v2/search/legal-regulatory';
+const BASE = '/v2/search/gov';
 
 interface LegalRegulatoryHit {
   url?: string;
