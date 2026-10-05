@@ -40,7 +40,7 @@ test('published firecrawl_scrape jsonOptions.schema admits a real JSON Schema do
 
   assert.notEqual(result.isError, true, JSON.stringify(result));
   assert.equal(api.requests.length, 1);
-  assert.deepEqual(api.requests[0].body.jsonOptions?.schema, extractionSchema);
+  assert.deepEqual(api.requests[0].body.formats?.[0]?.schema, extractionSchema);
   assert.equal(toolText(result).markdown, '# hi');
 });
 
