@@ -1,32 +1,18 @@
 import { z } from 'zod';
 
-function isJsonObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 /**
  * Arbitrary JSON object for MCP tool parameters.
  *
- * Avoid z.record(): fastmcp's strictJsonSchema turns it into an unsatisfiable
- * object schema (propertyNames + additionalProperties: false, no properties),
- * which rejects every legitimate JSON Schema document for jsonOptions.schema.
+ * The patched FastMCP strict-input conversion preserves additionalProperties
+ * for dictionary/free-form object schemas, so this stays open in tools/list
+ * while still rejecting arrays and primitives at runtime.
  */
-export const mcpJsonObject = z.json().refine(isJsonObject, {
-  message: 'Expected a JSON object',
-});
+export const mcpJsonObject = z.object({}).catchall(z.json());
 
 export const mcpJsonObjectOptional = mcpJsonObject.optional();
 
 /** JSON object whose values are all strings (e.g. webhook header maps). */
-export const mcpStringMapOptional = z
-  .json()
-  .refine(
-    (value) =>
-      isJsonObject(value) &&
-      Object.values(value).every((entry) => typeof entry === 'string'),
-    { message: 'Expected an object with string values' }
-  )
-  .optional();
+export const mcpStringMapOptional = z.object({}).catchall(z.string()).optional();
 
 /** JSON Schema document for scrape/agent jsonOptions.schema. */
 export const mcpJsonSchemaDocumentOptional = mcpJsonObjectOptional;
