@@ -1,10 +1,12 @@
-import { originHeaders, requestOrigin } from '../origin';
 import {
   keylessQuotaReason,
   keylessSignupUrlFrom,
+  originHeaders,
+  type OutboundRequest,
   recoveryPayload,
-} from '../recovery.js';
-import { UserError, type OutboundRequest } from '../server.js';
+  requestOrigin,
+  UserError,
+} from '../server.js';
 import { isHostedKeylessSession, type ServiceSession } from './session.js';
 
 const DEFAULT_CLOUD_API_URL = 'https://api.firecrawl.dev';

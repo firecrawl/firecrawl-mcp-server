@@ -1,5 +1,8 @@
-import { ALEXANDRIA_SEARCH_INSTRUCTIONS } from '../alexandria';
-import { normalizeHeader, withoutTrailingSlash } from '../headers.js';
+import {
+  ALEXANDRIA_SEARCH_INSTRUCTIONS,
+  normalizeHeader,
+  withoutTrailingSlash,
+} from '../server.js';
 
 export const DEFAULT_OAUTH_ISSUER = 'https://www.firecrawl.dev';
 export const DEFAULT_MCP_RESOURCE_URL = 'https://mcp.firecrawl.dev/v2/mcp';

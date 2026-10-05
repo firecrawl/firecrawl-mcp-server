@@ -1,6 +1,10 @@
 // Type-checks the library's declarations from a consumer's point of view.
 import {
   createFirecrawlMcpServer,
+  normalizeHeader,
+  recoveryPayload,
+  searchToolBaseFields,
+  structuredCompact,
   UserError,
   type FirecrawlMcpServerHooks,
   type Session,
@@ -18,6 +22,17 @@ const tool: ToolDefinition = {
   },
 };
 
+const searchLike: ToolDefinition = {
+  name: 'embed_search',
+  description: 'Search with the built-in search fields.',
+  execute: async (args) => structuredCompact(args),
+};
+export const queryField: typeof searchToolBaseFields.query =
+  searchToolBaseFields.query;
+export const tenantHeader: string | undefined = normalizeHeader(['acme']);
+export const recovery: Record<string, unknown> =
+  recoveryPayload('CREDENTIAL_INVALID');
+
 const hooks: FirecrawlMcpServerHooks = {
   authenticate: async (): Promise<Session> => ({
     authType: 'none',
@@ -29,6 +44,7 @@ const hooks: FirecrawlMcpServerHooks = {
   },
   registerExtraTools: (registrar, { builtInTool }) => {
     registrar.addTool(tool);
+    registrar.addTool(searchLike);
     const scrape = builtInTool('firecrawl_scrape');
     if (scrape) registrar.addTool({ ...scrape, name: 'embed_scrape' });
   },

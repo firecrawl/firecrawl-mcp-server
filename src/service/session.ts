@@ -1,4 +1,6 @@
-import type { SessionData } from '../server.js';
+import type {
+  SessionData,
+} from '../server.js';
 import type { ServerProfile } from './profiles.js';
 import type { CredentialSession } from './session-credential.js';
 

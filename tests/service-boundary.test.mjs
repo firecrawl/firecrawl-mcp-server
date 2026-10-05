@@ -64,3 +64,18 @@ test('src/service reaches fastmcp only through the core', async () => {
   }
   assert.deepEqual(offenders, []);
 });
+
+test('src/service reaches the core only through its library entry point', async () => {
+  const offenders = [];
+  for (const file of await sourceFiles()) {
+    if (!file.startsWith('service/')) continue;
+    const source = await readFile(new URL(file, SRC), 'utf8');
+    for (const specifier of importSpecifiers(source)) {
+      if (!specifier.startsWith('../')) continue;
+      if (specifier !== '../server.js') {
+        offenders.push(`${file} -> ${specifier}`);
+      }
+    }
+  }
+  assert.deepEqual(offenders, []);
+});
