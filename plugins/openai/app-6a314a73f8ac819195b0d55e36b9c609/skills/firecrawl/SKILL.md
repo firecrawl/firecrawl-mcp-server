@@ -42,7 +42,7 @@ connection or authentication errors.
   [developer research](references/developer-research.md) for source selection.
 - **Research law and regulation:** `firecrawl_legal_regulatory_search`
   searches statutes, regulations, codes, court opinions, and other US
-  government publications.
+  government publications and returns ranked results with matched snippets.
 - **Research papers:** see [paper research](references/paper-research.md) for
   paper search, metadata, citation relationships, and full-text passages.
 
