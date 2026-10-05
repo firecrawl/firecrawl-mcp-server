@@ -21,6 +21,28 @@ test('published firecrawl_scrape jsonOptions.schema admits a real JSON Schema do
   assert.ok(schemaField, 'jsonOptions.schema missing from published inputSchema');
   assertPublishedFreeFormObject(schemaField, 'firecrawl_scrape jsonOptions.schema');
 
+  const actions = scrape.inputSchema?.properties?.actions;
+  assert.equal(
+    actions?.items?.additionalProperties,
+    false,
+    'array item object schemas must stay strict'
+  );
+
+  const alexandria = scrape.inputSchema?.properties?.alexandria;
+  const variants = [...(alexandria?.anyOf ?? []), ...(alexandria?.oneOf ?? [])];
+  const objectVariant = variants.find((variant) => variant?.type === 'object');
+  const arrayVariant = variants.find((variant) => variant?.type === 'array');
+  assert.equal(
+    objectVariant?.additionalProperties,
+    false,
+    'object schemas inside composition keywords must stay strict'
+  );
+  assert.equal(
+    arrayVariant?.items?.additionalProperties,
+    false,
+    'array item schemas inside composition keywords must stay strict'
+  );
+
   const extractionSchema = {
     type: 'object',
     required: ['title'],
