@@ -123,18 +123,35 @@ after(async () => {
   await writeFile(TOOL_CATALOG_FILE, `${JSON.stringify(sorted, null, 2)}\n`);
 });
 
-async function assertToolDefinitions(name) {
+/** Tool keys by snapshot path and tool name, e.g. `sessions.apiKey/firecrawl_scrape`. */
+function toolKeysByPath(value, path = '', out = new Map()) {
+  if (!value || typeof value !== 'object') return out;
+  for (const [key, entry] of Object.entries(value)) {
+    const entryPath = path ? `${path}.${key}` : key;
+    if (key === 'tools' && Array.isArray(entry)) {
+      for (const toolKey of entry) {
+        out.set(
+          `${path}/${toolKey.slice(0, toolKey.lastIndexOf('@'))}`,
+          toolKey
+        );
+      }
+    } else {
+      toolKeysByPath(entry, entryPath, out);
+    }
+  }
+  return out;
+}
+
+// Shows the changed definition itself rather than only its new hash.
+async function assertToolDefinitions(name, actual, expected) {
   const catalog = await readCommittedCatalog();
-  for (const [key, tool] of toolCatalog) {
+  const expectedKeys = toolKeysByPath(expected);
+  for (const [path, key] of toolKeysByPath(actual)) {
     if (key in catalog) continue;
-    const toolName = key.slice(0, key.lastIndexOf('@'));
-    const previous = Object.entries(catalog).find(([entry]) =>
-      entry.startsWith(`${toolName}@`)
-    );
     assert.deepEqual(
-      tool,
-      previous?.[1],
-      `Tool definition ${toolName} changed in contract snapshot ${name}. If the change is intentional, regenerate with UPDATE_CONTRACT_SNAPSHOTS=1.`
+      toolCatalog.get(key),
+      catalog[expectedKeys.get(path)],
+      `Tool definition ${path} changed in contract snapshot ${name}. If the change is intentional, regenerate with UPDATE_CONTRACT_SNAPSHOTS=1.`
     );
   }
 }
@@ -147,7 +164,6 @@ async function matchSnapshot(name, actual) {
     await writeFile(file, `${JSON.stringify(normalized, null, 2)}\n`);
     return;
   }
-  await assertToolDefinitions(name);
   let expected;
   try {
     expected = JSON.parse(await readFile(file, 'utf8'));
@@ -159,6 +175,7 @@ async function matchSnapshot(name, actual) {
     }
     throw error;
   }
+  await assertToolDefinitions(name, normalized, expected);
   assert.deepEqual(
     normalized,
     expected,
