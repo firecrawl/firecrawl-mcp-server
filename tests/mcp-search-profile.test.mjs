@@ -946,6 +946,7 @@ test('full surface still exposes its complete tool set alongside the search surf
   assert.ok(names.includes('firecrawl_scrape'));
   assert.ok(names.includes('firecrawl_search'));
   assert.ok(names.includes('firecrawl_developer_search'));
+  assert.ok(names.includes('firecrawl_legal_regulatory_search'));
   assert.ok(names.includes('firecrawl_parse'));
   assert.ok(names.length > SEARCH_TOOLS.length);
   assert.equal(
