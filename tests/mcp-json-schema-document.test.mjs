@@ -1,16 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { z } from 'zod';
-
-// Mirror src/mcp-json-schemas.ts so the regression does not require a TS build step.
-function isJsonObject(value) {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-const mcpJsonObject = z.json().refine(isJsonObject, {
-  message: 'Expected a JSON object',
-});
-const mcpJsonSchemaDocumentOptional = mcpJsonObject.optional();
+import {
+  mcpJsonObject,
+  mcpJsonSchemaDocumentOptional,
+  mcpStringMapOptional,
+} from '../dist/mcp-json-schemas.js';
 
 test('jsonOptions.schema accepts a non-empty JSON Schema object', () => {
   const schema = {
@@ -25,4 +19,15 @@ test('jsonOptions.schema accepts a non-empty JSON Schema object', () => {
 test('jsonOptions.schema rejects non-objects', () => {
   assert.equal(mcpJsonSchemaDocumentOptional.safeParse(['title']).success, false);
   assert.equal(mcpJsonSchemaDocumentOptional.safeParse('object').success, false);
+});
+
+test('free-form MCP object rejects non-objects and accepts nested JSON', () => {
+  assert.equal(mcpJsonObject.safeParse({ nested: { ok: true }, list: [1, 2] }).success, true);
+  assert.equal(mcpJsonObject.safeParse(null).success, false);
+  assert.equal(mcpJsonObject.safeParse(['not-an-object']).success, false);
+});
+
+test('string-map MCP object publishes the same runtime constraint', () => {
+  assert.equal(mcpStringMapOptional.safeParse({ authorization: 'Bearer test' }).success, true);
+  assert.equal(mcpStringMapOptional.safeParse({ authorization: 42 }).success, false);
 });
