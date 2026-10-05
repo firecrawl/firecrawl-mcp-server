@@ -9,7 +9,8 @@ Use Firecrawl MCP tools for the requested search or retrieval. Respect the
 user's source, scope, and tool choices. Use the host's tool search for deferred
 tools. Report connection or authentication errors.
 
-Web, developer, and paper searches are billed per request. Provider-only discovery
+Web, developer, legal and regulatory, and paper searches are billed per
+request. Provider-only discovery
 is free. Page retrieval is billed per URL; provider execution uses the
 capability's listed price.
 
@@ -19,6 +20,9 @@ capability's listed price.
   result when the answer needs additional page context.
 - **Research programming questions:** `firecrawl_developer_search` retrieves
   matched passages from indexed repositories and documentation.
+- **Research law and regulation:** `firecrawl_legal_regulatory_search`
+  retrieves statutes, regulations, codes, court opinions, and other US
+  government publications.
 - **Research papers:** `firecrawl_research_search_papers` finds papers;
   `firecrawl_research_inspect_paper` retrieves metadata;
   `firecrawl_research_related_papers` expands citation relationships; and
