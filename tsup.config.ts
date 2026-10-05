@@ -21,7 +21,9 @@ export default defineConfig({
   clean: true,
   splitting: false,
   sourcemap: false,
-  dts: false,
+  // Declarations only for the library entry, whose public types do not
+  // reference fastmcp.
+  dts: { entry: { server: 'src/server.ts' } },
   // Bundle fastmcp so npm and npx installs run the pnpm-patched copy
   // (patches/fastmcp@4.3.2.patch). npm does not apply pnpm patches, so an
   // external fastmcp would load unpatched from the registry. Its own

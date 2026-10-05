@@ -7,6 +7,14 @@
   "bin": {
     "firecrawl-mcp": "dist/index.js"
   },
+  "exports": {
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    },
+    "./dist/*": "./dist/*",
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist"
   ],
