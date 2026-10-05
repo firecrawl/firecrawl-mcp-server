@@ -368,26 +368,26 @@ Scrape content from a single URL with advanced options.
 
 **Usage Example (JSON format - preferred):**
 
+Pass `formats: ["json"]` and put the extraction prompt and schema in `jsonOptions` (object entries inside `formats` are rejected by the MCP schema):
+
 ```json
 {
   "name": "firecrawl_scrape",
   "arguments": {
     "url": "https://example.com/product",
-    "formats": [
-      {
-        "type": "json",
-        "prompt": "Extract the product information",
-        "schema": {
-          "type": "object",
-          "properties": {
-            "name": { "type": "string" },
-            "price": { "type": "number" },
-            "description": { "type": "string" }
-          },
-          "required": ["name", "price"]
-        }
+    "formats": ["json"],
+    "jsonOptions": {
+      "prompt": "Extract the product information",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "price": { "type": "number" },
+          "description": { "type": "string" }
+        },
+        "required": ["name", "price"]
       }
-    ]
+    }
   }
 }
 ```
