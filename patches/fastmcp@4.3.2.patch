@@ -58,10 +58,15 @@ diff --git a/dist/chunk-LWU5CQGW.js b/dist/chunk-LWU5CQGW.js
 index 474670585c1fff7d9609d0f900d0743df14a7688..74610d15a0a9392cf286e357995847f0ff1e6db7 100644
 --- a/dist/chunk-LWU5CQGW.js
 +++ b/dist/chunk-LWU5CQGW.js
-@@ -986,6 +986,9 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
+@@ -986,6 +986,14 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
    }
    setupToolHandlers(tools) {
      const toolsMap = new Map(tools.map((tool) => [tool.name, tool]));
++    const strictToolInputSchema = (schema, nested = false) => {
++      const { additionalProperties, properties } = schema;
++      const keepOpen = Object.keys(properties ?? {}).length === 0 && (typeof additionalProperties === "object" || additionalProperties === true || (nested && additionalProperties === void 0 && !properties));
++      return { ...schema, ...keepOpen ? {} : { additionalProperties: false }, ...properties && { properties: Object.fromEntries(Object.entries(properties).map(([key, value]) => [key, typeof value === "object" && value?.type === "object" ? strictToolInputSchema(value, true) : value])) } };
++    };
 +    const listedTools = tools.filter(
 +      (tool) => tool.canList ? tool.canList(this.#auth) : true
 +    );
@@ -81,7 +86,8 @@ index 474670585c1fff7d9609d0f900d0743df14a7688..74610d15a0a9392cf286e357995847f0
 +            ...tool.annotations?.title && { title: tool.annotations.title },
 +            ...tool.icons && { icons: tool.icons },
              description: tool.description,
-             inputSchema: tool.parameters ? strictJsonSchema(await toJsonSchema(tool.parameters)) : {
+-            inputSchema: tool.parameters ? strictJsonSchema(await toJsonSchema(tool.parameters)) : {
++            inputSchema: tool.parameters ? strictToolInputSchema(await toJsonSchema(tool.parameters)) : {
                additionalProperties: false,
 @@ -1026,6 +1033,15 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
            `Unknown tool: ${request.params.name}`
@@ -103,10 +109,15 @@ diff --git a/dist/chunk-UYG7NPM6.cjs b/dist/chunk-UYG7NPM6.cjs
 index 3b695bf493c4f54fd970e145cf14fdd8effc9c6d..1b7ce74a69d3104f23da4e4a5b3218fcd84d71d5 100644
 --- a/dist/chunk-UYG7NPM6.cjs
 +++ b/dist/chunk-UYG7NPM6.cjs
-@@ -986,6 +986,9 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
+@@ -986,6 +986,14 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
    }
    setupToolHandlers(tools) {
      const toolsMap = new Map(tools.map((tool) => [tool.name, tool]));
++    const strictToolInputSchema = (schema, nested = false) => {
++      const { additionalProperties, properties } = schema;
++      const keepOpen = Object.keys(properties ?? {}).length === 0 && (typeof additionalProperties === "object" || additionalProperties === true || (nested && additionalProperties === void 0 && !properties));
++      return { ...schema, ...keepOpen ? {} : { additionalProperties: false }, ...properties && { properties: Object.fromEntries(Object.entries(properties).map(([key, value]) => [key, typeof value === "object" && value?.type === "object" ? strictToolInputSchema(value, true) : value])) } };
++    };
 +    const listedTools = tools.filter(
 +      (tool) => tool.canList ? tool.canList(this.#auth) : true
 +    );
@@ -126,7 +137,8 @@ index 3b695bf493c4f54fd970e145cf14fdd8effc9c6d..1b7ce74a69d3104f23da4e4a5b3218fc
 +            ...tool.annotations?.title && { title: tool.annotations.title },
 +            ...tool.icons && { icons: tool.icons },
              description: tool.description,
-             inputSchema: tool.parameters ? _xsschema.strictJsonSchema.call(void 0, await _xsschema.toJsonSchema.call(void 0, tool.parameters)) : {
+-            inputSchema: tool.parameters ? _xsschema.strictJsonSchema.call(void 0, await _xsschema.toJsonSchema.call(void 0, tool.parameters)) : {
++            inputSchema: tool.parameters ? strictToolInputSchema(await _xsschema.toJsonSchema.call(void 0, tool.parameters)) : {
                additionalProperties: false,
 @@ -1026,6 +1033,15 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
            `Unknown tool: ${request.params.name}`
