@@ -145,7 +145,7 @@ test('MCP transport preserves hints on empty, readable, crawl and error results'
     for await (const chunk of req) raw += chunk;
     const body = raw ? JSON.parse(raw) : {};
     requests.push({ url: req.url, body, headers: req.headers });
-    if (req.url.startsWith('/v2/search/legal-regulatory?')) {
+    if (req.url.startsWith('/v2/search/gov?')) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ success: true, data: { web: [] }, agent_hints: hints }));
       return;

@@ -195,7 +195,7 @@ async function startFakeBackend(options = {}) {
       return;
     }
 
-    if (req.method === 'GET' && req.url?.startsWith('/v2/search/legal-regulatory')) {
+    if (req.method === 'GET' && req.url?.startsWith('/v2/search/gov')) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify({
@@ -824,7 +824,7 @@ test('search firecrawl_legal_regulatory_search queries the legal and regulatory 
   assert.notEqual(message.result?.isError, true, JSON.stringify(message));
 
   const calls = backend.requests.filter((request) =>
-    request.url?.startsWith('/v2/search/legal-regulatory')
+    request.url?.startsWith('/v2/search/gov')
   );
   assert.equal(calls.length, 1);
   const query = new URL(calls[0].url, 'http://localhost').searchParams;
