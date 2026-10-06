@@ -27,7 +27,8 @@ For Alexandria feedback, set `endpoint: alexandria`, omit `jobId`, and supply
 functionality), `rating`, and a concise `rationale` grounded in observed
 results. Rate useful results `good`, incomplete coverage `partial`, and an
 unmet need or failed execution `bad`. When no provider covered the site, add
-`providerFeedback` with `issue: "missing_provider"` and rate `bad`. Add
+`providerFeedback` with `name` (the website or the provider you needed),
+`issue: "missing_provider"`, and `why`, and rate `bad`. Add
 `providerFeedback` or `capabilityFeedback` for specific gaps or errors; use
 discovered names for existing providers and capabilities. See
 [feedback](feedback.md) for when to send it and opt-outs.

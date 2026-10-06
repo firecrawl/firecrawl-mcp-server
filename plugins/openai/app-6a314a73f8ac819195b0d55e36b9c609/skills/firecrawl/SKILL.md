@@ -54,11 +54,11 @@ the capability's listed price.
 ## Feedback
 
 After you've used the results (or decided they were useless), send feedback
-once per search and once per website for Alexandria tasks. It does not block
-your main task.
+once per `firecrawl_search` and once per website for Alexandria tasks. It does
+not block your main task.
 
 - **Search:** `firecrawl_search_feedback` with the search's `id`, within about
-  2 minutes. The first feedback per search refunds 1 credit.
+  2 minutes. The first eligible feedback per search can refund 1 credit.
 - **Alexandria:** `firecrawl_feedback` with `endpoint: "alexandria"`, whether
   or not a tool ran. Alexandria coverage grows from what agents report.
 - **Scrape, parse, map:** `firecrawl_feedback` with the matching `endpoint` and

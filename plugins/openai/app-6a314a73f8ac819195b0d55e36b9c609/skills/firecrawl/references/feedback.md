@@ -7,9 +7,11 @@ work around it. If a feedback call fails, continue without retrying.
 
 ## Search
 
-Send `firecrawl_search_feedback` once per search, passing the search's `id` as
-`searchId`, within about 2 minutes. Late feedback is rejected. The first
-feedback per search refunds 1 credit.
+Send `firecrawl_search_feedback` once per `firecrawl_search`, passing the
+search's `id` as `searchId`, within about 2 minutes. Late feedback is rejected.
+Skip searches that return no `id`, such as paper-index searches. The first
+eligible feedback per search can refund 1 credit, subject to the team's daily
+cap.
 
 - `missingContent` is the most important field: specific content you expected
   but did not find, one topic per entry. Entries are `{topic, description}`
@@ -17,8 +19,8 @@ feedback per search refunds 1 credit.
 - `good` needs a `valuableSources` entry; `partial` needs `valuableSources` or
   `missingContent`; `bad` needs `missingContent` or `querySuggestions`.
   `querySuggestions` is a string.
-- When a response reports `dailyCapReached: true`, stop sending search feedback
-  for the rest of the UTC day.
+- When a response reports `dailyCapReached: true`, feedback is still recorded
+  but no longer refunds credits for the rest of the UTC day; keep sending it.
 
 ## Alexandria
 
