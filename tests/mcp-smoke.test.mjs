@@ -1275,6 +1275,8 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.ok(toolNames.includes('firecrawl_search'));
   assert.ok(toolNames.includes('firecrawl_parse'));
   assert.ok(toolNames.includes('firecrawl_credit_usage'));
+  assert.ok(toolNames.includes('firecrawl_usage_dashboard'));
+  assert.equal(toolNames.some((name) => name.startsWith('firecrawl_results_')), false);
   assert.equal(toolNames.includes('firecrawl_credit_usage_historical'), false);
   assert.equal(toolNames.includes('firecrawl_extract'), false);
   // Codex tool search indexes the top-level Tool.title, not annotations.title.
@@ -1300,6 +1302,19 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
 
   const byName = new Map(tools.tools.map((tool) => [tool.name, tool]));
+  assert.deepEqual(byName.get('firecrawl_usage_dashboard')._meta, {
+    ui: { resourceUri: 'ui://firecrawl/usage.html', visibility: ['app'] },
+    'openai/ui': { entrypoints: [{ type: 'global' }] },
+  });
+  assert.equal(byName.get('firecrawl_usage_dashboard').annotations.readOnlyHint, true);
+  const [sidebarIcon] = byName.get('firecrawl_usage_dashboard').icons;
+  assert.equal(sidebarIcon.mimeType, 'image/svg+xml');
+  assert.deepEqual(sidebarIcon.sizes, ['any']);
+  assert.match(sidebarIcon.src, /^data:image\/svg\+xml;base64,/);
+  const svg = Buffer.from(sidebarIcon.src.split(',')[1], 'base64').toString('utf8');
+  assert.match(svg, /xmlns="http:\/\/www.w3.org\/2000\/svg"/);
+  assert.match(svg, /fill="#fa5d19"/);
+  assert.match(svg, /viewBox="0 0 128 128"/);
   for (const name of ['firecrawl_search', 'firecrawl_scrape']) {
     assert.equal(byName.get(name)?._meta?.['anthropic/alwaysLoad'], true, name);
   }
@@ -1504,6 +1519,38 @@ test('credit usage tool exposes current balance and both historical request shap
     planCredits: 1000,
     remainingCredits: 1250,
   });
+
+  const dashboard = await client.request('tools/call', {
+    arguments: {},
+    name: 'firecrawl_usage_dashboard',
+  });
+  assert.notEqual(dashboard.isError, true);
+  assert.deepEqual(dashboard.structuredContent, current.structuredContent);
+
+  const resources = await client.request('resources/list');
+  const resource = resources.resources.find((item) => item.uri === 'ui://firecrawl/usage.html');
+  assert.equal(resource.mimeType, 'text/html;profile=mcp-app');
+  const loaded = await client.request('resources/read', { uri: resource.uri });
+  assert.equal(loaded.contents[0].mimeType, 'text/html;profile=mcp-app');
+  assert.deepEqual(loaded.contents[0]._meta.ui.csp, {
+    connectDomains: [], resourceDomains: [],
+  });
+  assert.equal(loaded.contents[0]._meta.ui.domain, 'https://mcp.firecrawl.dev');
+  assert.deepEqual(loaded.contents[0]._meta['openai/widgetCSP'], {
+    redirect_domains: ['https://www.firecrawl.dev'],
+  });
+  assert.match(loaded.contents[0]._meta['openai/widgetDescription'], /Alexandria.*composer.*credits/);
+  assert.deepEqual(loaded.contents[0]._meta['openai/ui'], {
+    preferredDisplayMode: 'fullscreen',
+    availableDisplayModes: ['fullscreen'],
+  });
+  assert.match(loaded.contents[0].text, /<h1 id="page-title">Explore providers<\/h1>/);
+  assert.match(loaded.contents[0].text, /id="providers-view"/);
+  assert.doesNotMatch(loaded.contents[0].text, /id="results-(?:tab|view)"|firecrawl_results_/);
+  assert.match(loaded.contents[0].text, /id="selection-status"/);
+  assert.doesNotMatch(loaded.contents[0].text, /provider-prompt|use-in-new-chat|selection-tray/);
+  assert.match(loaded.contents[0].text, /data:font\/woff2;base64,/);
+  assert.equal(/<!--(?:SCRIPT|STYLES|ICON)-->/.test(loaded.contents[0].text), false);
 
   const historical = await client.request('tools/call', {
     arguments: { view: 'historical' },
@@ -2434,6 +2481,17 @@ test('HTTP cloud keyless blocks account-only tools instead of continuing keyless
   assert.doesNotMatch(result.content[0].text, /remain available/);
   assert.doesNotMatch(result.content[0].text, /continue with those/);
   assert.equal(backend.requests.some((r) => r.url === '/v2/crawl'), false);
+
+  const dashboardResponse = await httpToolCall(port, {
+    id: 'keyless-dashboard',
+    headers: { 'x-forwarded-for': '8.8.8.7' },
+    params: { arguments: {}, name: 'firecrawl_usage_dashboard' },
+  });
+  assertKeylessAccountRecovery(parseSseJson(await dashboardResponse.text()).result, {
+    code: 'KEYLESS_TOOL_NOT_AVAILABLE',
+    message: KEYLESS_TOOL_MESSAGE,
+  });
+  assert.equal(backend.requests.some((r) => r.url === '/v2/team/credit-usage'), false);
 });
 
 test('HTTP cloud keyless quota stays 200 isError without inlining retry_after_seconds', async (t) => {

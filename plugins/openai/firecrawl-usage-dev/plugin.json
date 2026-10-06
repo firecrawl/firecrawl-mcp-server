@@ -1,0 +1,11 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "firecrawl-usage-dev",
+  "version": "0.1.0",
+  "description": "Browse Alexandria providers and Firecrawl usage in a fullscreen sidebar app. Local development build with macOS Keychain authentication.",
+  "author": {
+    "name": "SideGuide Technologies, Inc."
+  },
+  "homepage": "https://firecrawl.dev",
+  "license": "MIT"
+}

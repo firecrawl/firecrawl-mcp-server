@@ -43,6 +43,12 @@ plugin submission and registered app mapping. Replace the previous skill set
 with the package's `skills/` contents, preserving the reference directories.
 Test the draft in ChatGPT and Codex before submitting it for publication.
 
+The maintained OpenAI source preserves its registered app mapping. For the
+current remote-MCP submission format, use `pnpm plugin:prepare:openai` with a new
+output directory; it preserves the published identity, metadata and skills while
+omitting app-reference files and development launchers. See the
+[production package guide](openai/app-6a314a73f8ac819195b0d55e36b9c609/README.md).
+
 For a plugin archive, include the manifest, connection file, and `skills/`
 directory at the archive root. Include dotfiles such as `.app.json`, `.mcp.json`,
 `.codex-plugin/`, and `.claude-plugin/` as applicable. A skill-only upload contains
