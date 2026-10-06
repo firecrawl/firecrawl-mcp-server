@@ -76,7 +76,10 @@ For uncertain retries preserve the identical ID and payload with bounded attempt
 changed inputs need a new ID. Do not re-charge in-flight requests or successful
 items. Execution needs a connected account on an enabled team; stop on access,
 terms or budget restrictions. Terms require an organization admin outside this
-workflow; do not accept terms through a capability or retry these restrictions.
+workflow; do not accept terms through a capability. Do not retry unresolved
+restrictions. After an organization admin confirms acceptance, resume the requested
+retrieval with the identical payload and `requestId`, only if access and budget
+still permit.
 Use URL-mode `maxAge: 0` for requested fresh captures, without claiming liveness.
 Keep provider/capability/version, record IDs, URLs and retrieval/as-of times
 with the output; disclose unknown freshness and use authorized live search/page

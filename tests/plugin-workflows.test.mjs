@@ -132,7 +132,7 @@ test('each adapter preserves MCP access, pricing and provider contract safeguard
       /catalogue `nextTool` pages contracts, not records/,
       /connected account on an enabled team/,
       /Terms require an organization admin outside this workflow/,
-      /do not accept terms through a capability or retry these restrictions/,
+      /do not accept terms through a capability/,
       /unknown freshness/,
       /live search\/page retrieval for missing or freshness-critical facts/,
       /Retained results can expire/,
@@ -152,6 +152,19 @@ test('each adapter preserves MCP access, pricing and provider contract safeguard
         assert.match(instructions, requirement, `${name}: ${requirement}`);
       }
     }
+  }
+});
+
+test('terms recovery waits for admin confirmation and preserves payload-bound replay', () => {
+  for (const name of outcomes) {
+    const text = readSkill(name).replace(/\s+/g, ' ');
+    assert.match(text, /Do not retry unresolved restrictions/, name);
+    assert.match(
+      text,
+      /After an organization admin confirms acceptance, resume the requested retrieval with the identical payload and `requestId`, only if access and budget still permit/,
+      name
+    );
+    assert.doesNotMatch(text, /or retry these restrictions/, name);
   }
 });
 
