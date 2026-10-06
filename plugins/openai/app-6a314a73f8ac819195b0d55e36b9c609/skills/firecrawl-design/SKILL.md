@@ -112,3 +112,21 @@ output: DESIGN.md
 ```
 
 Prefer reusable design tokens over one-off observations and keep the result compact enough for another agent to build from. Preserve source URLs and actual scrape artifacts for review. Do not imply rights to third-party logos, images, trademarks, or copy; recommend licensed or original replacements unless the user has established rights. Distinguish the page's visual style from permission to reuse its assets.
+
+<!--
+ISC License
+
+Copyright (c) 2026 Firecrawl
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+-->
