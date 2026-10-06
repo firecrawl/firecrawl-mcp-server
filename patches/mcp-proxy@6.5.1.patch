@@ -1,0 +1,84 @@
+diff --git a/dist/index.d.mts b/dist/index.d.mts
+index c99e9cbc41d9bfb905710911475a12f487d25e9d..36c9a6e278b05dd40d25542234ef7aea629c3500 100644
+--- a/dist/index.d.mts
++++ b/dist/index.d.mts
+@@ -116,6 +116,7 @@ declare const startHTTPServer: <T extends ServerLike>({
+   oauth,
+   onClose,
+   onConnect,
++  onRequest,
+   onUnhandledRequest,
+   port,
+   sseEndpoint,
+@@ -135,6 +136,7 @@ declare const startHTTPServer: <T extends ServerLike>({
+   oauth?: AuthConfig["oauth"];
+   onClose?: (server: T) => Promise<void>;
+   onConnect?: (server: T) => Promise<void>;
++  onRequest?: (req: http.IncomingMessage, res: http.ServerResponse, readBody: (maxBytes?: number) => Promise<unknown>) => Promise<boolean>;
+   onUnhandledRequest?: (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void>;
+   port: number;
+   sseEndpoint?: null | string;
+diff --git a/dist/stdio-DN-u_q7a.mjs b/dist/stdio-DN-u_q7a.mjs
+index 12f05a16be0cf3089506948e2f1839fa2aac66b3..e7d17456673cffa51d9b2c4363406d83b30313e8 100644
+--- a/dist/stdio-DN-u_q7a.mjs
++++ b/dist/stdio-DN-u_q7a.mjs
+@@ -15856,22 +15856,26 @@ var StreamableHTTPServerTransport = class {
+ 
+ //#endregion
+ //#region src/startHTTPServer.ts
+-const getBody = (request) => {
+-	return new Promise((resolve$2) => {
+-		const bodyParts = [];
+-		let body;
+-		request.on("data", (chunk) => {
+-			bodyParts.push(chunk);
+-		}).on("end", () => {
+-			body = Buffer.concat(bodyParts).toString();
+-			try {
+-				resolve$2(JSON.parse(body));
+-			} catch (error$1) {
+-				console.error("[mcp-proxy] error parsing body", error$1);
+-				resolve$2(null);
+-			}
+-		});
+-	});
++const requestBodies = new WeakMap();
++const getBody = (request, maxBytes = Infinity) => {
++    if (requestBodies.has(request)) return requestBodies.get(request);
++    const promise = new Promise((resolve, reject) => {
++        const bodyParts = [];
++        let size = 0;
++        request.on("data", (chunk) => {
++            size += chunk.length;
++            if (size > maxBytes) {
++                bodyParts.length = 0;
++                reject(new RangeError("Request too large"));
++            } else bodyParts.push(chunk);
++        }).on("error", reject).on("end", () => {
++            if (size > maxBytes) return;
++            try { resolve(JSON.parse(Buffer.concat(bodyParts).toString())); }
++            catch { resolve(null); }
++        });
++    });
++    requestBodies.set(request, promise);
++    return promise;
+ };
+ const createJsonRpcErrorResponse = (code, message) => {
+ 	return JSON.stringify({
+@@ -16236,7 +16240,7 @@ const handleSSERequest = async ({ activeTransports, createServer, endpoint, onCl
+ 	}
+ 	return false;
+ };
+-const startHTTPServer = async ({ apiKey, authenticate, cors, createServer, enableJsonResponse, eventStore, host = "::", oauth, onClose, onConnect, onUnhandledRequest, port, sseEndpoint = "/sse", sslCa, sslCert, sslKey, stateless, streamEndpoint = "/mcp" }) => {
++const startHTTPServer = async ({ apiKey, authenticate, cors, createServer, enableJsonResponse, eventStore, host = "::", oauth, onClose, onConnect, onRequest, onUnhandledRequest, port, sseEndpoint = "/sse", sslCa, sslCert, sslKey, stateless, streamEndpoint = "/mcp" }) => {
+ 	const activeSSETransports = {};
+ 	const activeStreamTransports = {};
+ 	const authMiddleware = new AuthenticationMiddleware({
+@@ -16257,6 +16261,7 @@ const startHTTPServer = async ({ apiKey, authenticate, cors, createServer, enabl
+ 			res.writeHead(200).end("pong");
+ 			return;
+ 		}
++		if (onRequest && await onRequest(req, res, (maxBytes) => getBody(req, maxBytes))) return;
+ 		const requestUrl = new URL(req.url || "", "http://localhost");
+ 		const isMcpEndpoint = sseEndpoint && requestUrl.pathname === sseEndpoint || streamEndpoint && requestUrl.pathname === streamEndpoint;
+ 		if (onUnhandledRequest && !isMcpEndpoint) {

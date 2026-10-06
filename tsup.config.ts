@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs';
 import { defineConfig } from 'tsup';
 
 const fastmcpPackage = JSON.parse(
-  readFileSync(new URL('./node_modules/fastmcp/package.json', import.meta.url), 'utf8')
+  readFileSync(
+    new URL('./node_modules/fastmcp/package.json', import.meta.url),
+    'utf8'
+  )
 ) as { dependencies?: Record<string, string> };
 
 export default defineConfig({
@@ -21,10 +24,11 @@ export default defineConfig({
   splitting: false,
   sourcemap: false,
   dts: false,
-  // Bundle fastmcp so npm and npx installs run the pnpm-patched copy
-  // (patches/fastmcp@4.3.2.patch). npm does not apply pnpm patches, so an
-  // external fastmcp would load unpatched from the registry. Its own
-  // dependencies stay external and install through its package.json entry.
-  noExternal: ['fastmcp'],
-  external: Object.keys(fastmcpPackage.dependencies ?? {}),
+  // Bundle both patched transport packages so npm/npx installs include the
+  // HTTP MRTR interceptor. npm does not apply pnpm patches. The bundled
+  // proxy's AJV-generated runtime imports remain direct dependencies.
+  noExternal: ['fastmcp', 'mcp-proxy'],
+  external: Object.keys(fastmcpPackage.dependencies ?? {}).filter(
+    (name) => name !== 'mcp-proxy'
+  ),
 });

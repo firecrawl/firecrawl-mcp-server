@@ -7,8 +7,10 @@ import test from 'node:test';
 test('dist bundles the patched fastmcp instead of importing it', async () => {
   const dist = await readFile(new URL('../dist/index.js', import.meta.url), 'utf8');
   assert.doesNotMatch(dist, /from\s+["']fastmcp["']/);
+  assert.doesNotMatch(dist, /from\s+["']mcp-proxy["']/);
   assert.match(dist, /title: tool\.annotations\.title/);
   assert.match(dist, /tool\.canList/);
+  assert.match(dist, /onRequest && await onRequest\(req, res,/);
 });
 
 test('every package the bundled fastmcp imports is a direct dependency', async () => {

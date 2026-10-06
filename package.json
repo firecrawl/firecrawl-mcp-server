@@ -28,6 +28,8 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "ajv": "^8.18.0",
+    "ajv-formats": "^3.0.1",
     "dotenv": "^17.2.2",
     "fastmcp": "4.3.2",
     "firecrawl": "4.42.0",

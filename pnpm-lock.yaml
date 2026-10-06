@@ -6,8 +6,11 @@ settings:
 
 patchedDependencies:
   fastmcp@4.3.2:
-    hash: 08f77b633292d9ae4cb022c0fa5bd722dbd5c1aaaad600204f8ed38339bfd37b
+    hash: 1e20d9c78038c24f326292d7ec61f087dfa702d14382a25b9b61567a3808d304
     path: patches/fastmcp@4.3.2.patch
+  mcp-proxy@6.5.1:
+    hash: 5faa2a3eb22ba14c0365ac0fdc9e037cc3153f9e85e14c7908ae5e2a27ded5a8
+    path: patches/mcp-proxy@6.5.1.patch
 
 importers:
 
@@ -16,12 +19,18 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@4.2.1)
+      ajv:
+        specifier: ^8.18.0
+        version: 8.20.0
+      ajv-formats:
+        specifier: ^3.0.1
+        version: 3.0.1(ajv@8.20.0)
       dotenv:
         specifier: ^17.2.2
         version: 17.2.2
       fastmcp:
         specifier: 4.3.2
-        version: 4.3.2(patch_hash=08f77b633292d9ae4cb022c0fa5bd722dbd5c1aaaad600204f8ed38339bfd37b)
+        version: 4.3.2(patch_hash=1e20d9c78038c24f326292d7ec61f087dfa702d14382a25b9b61567a3808d304)
       firecrawl:
         specifier: 4.42.0
         version: 4.42.0
@@ -33,7 +42,7 @@ importers:
         version: 4.12.27
       mcp-proxy:
         specifier: ^6.5.1
-        version: 6.5.1
+        version: 6.5.1(patch_hash=5faa2a3eb22ba14c0365ac0fdc9e037cc3153f9e85e14c7908ae5e2a27ded5a8)
       undici:
         specifier: ^7.28.0
         version: 7.28.0
@@ -42,7 +51,7 @@ importers:
         version: 0.2.0
       xsschema:
         specifier: ^0.4.4
-        version: 0.4.4(zod-to-json-schema@3.25.2(zod@4.2.1))(zod@4.2.1)
+        version: 0.4.4(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.2.1)
       zod:
         specifier: ^4.2.1
         version: 4.2.1
@@ -2498,7 +2507,7 @@ snapshots:
 
   fast-uri@3.1.3: {}
 
-  fastmcp@4.3.2(patch_hash=08f77b633292d9ae4cb022c0fa5bd722dbd5c1aaaad600204f8ed38339bfd37b):
+  fastmcp@4.3.2(patch_hash=1e20d9c78038c24f326292d7ec61f087dfa702d14382a25b9b61567a3808d304):
     dependencies:
       '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
       '@standard-schema/spec': 1.0.0
@@ -2506,11 +2515,11 @@ snapshots:
       file-type: 21.3.4
       fuse.js: 7.1.0
       hono: 4.12.27
-      mcp-proxy: 6.5.1
+      mcp-proxy: 6.5.1(patch_hash=5faa2a3eb22ba14c0365ac0fdc9e037cc3153f9e85e14c7908ae5e2a27ded5a8)
       strict-event-emitter-types: 2.0.0
       undici: 7.28.0
       uri-templates: 0.2.0
-      xsschema: 0.4.4(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.4.3)
+      xsschema: 0.4.4(zod-to-json-schema@3.25.2(zod@4.2.1))(zod@4.4.3)
       yargs: 18.0.0
       zod: 4.4.3
       zod-to-json-schema: 3.25.2(zod@4.4.3)
@@ -2839,7 +2848,7 @@ snapshots:
 
   math-intrinsics@1.1.0: {}
 
-  mcp-proxy@6.5.1:
+  mcp-proxy@6.5.1(patch_hash=5faa2a3eb22ba14c0365ac0fdc9e037cc3153f9e85e14c7908ae5e2a27ded5a8):
     dependencies:
       pipenet: 1.4.2
     transitivePeerDependencies:
@@ -3297,14 +3306,14 @@ snapshots:
 
   wrappy@1.0.2: {}
 
-  xsschema@0.4.4(zod-to-json-schema@3.25.2(zod@4.2.1))(zod@4.2.1):
-    optionalDependencies:
-      zod: 4.2.1
-      zod-to-json-schema: 3.25.2(zod@4.4.3)
-
-  xsschema@0.4.4(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.4.3):
+  xsschema@0.4.4(zod-to-json-schema@3.25.2(zod@4.2.1))(zod@4.4.3):
     optionalDependencies:
       zod: 4.4.3
+      zod-to-json-schema: 3.25.2(zod@4.4.3)
+
+  xsschema@0.4.4(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.2.1):
+    optionalDependencies:
+      zod: 4.2.1
       zod-to-json-schema: 3.25.2(zod@4.4.3)
 
   y18n@5.0.8: {}

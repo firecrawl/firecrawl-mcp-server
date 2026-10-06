@@ -63,6 +63,8 @@ import { checkKeylessSignupUrl } from './keyless-signup-link';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
 import { registerUsageTools } from './usage';
+import { registerOnboardingTools } from './onboarding';
+import { modernHttpHandler } from './modern-http';
 import { escapeWWWAuthenticateValue } from './www-authenticate';
 import {
   createIntrospectionCache,
@@ -1422,6 +1424,7 @@ function makePrimaryProfile(): ServerProfile {
 }
 
 function createServer(profile: ServerProfile): FastMCP<SessionData> {
+  const authenticate = makeAuthenticate(profile);
   return new FastMCP<SessionData>({
     name: 'firecrawl-fastmcp',
     version: packageVersion as `${number}.${number}.${number}`,
@@ -1438,7 +1441,13 @@ function createServer(profile: ServerProfile): FastMCP<SessionData> {
         scopesSupported: ['firecrawl:global'],
       },
     },
-    authenticate: makeAuthenticate(profile),
+    authenticate,
+    httpRequestHandler: modernHttpHandler({
+      endpoint: profile.endpoint ?? normalizeHeader(process.env.FASTMCP_ENDPOINT) ?? '/mcp',
+      authenticate,
+      serverVersion: packageVersion,
+      instructions: profile.instructions,
+    }),
     // Lightweight health endpoint for LB checks
     health: {
       enabled: true,
@@ -4476,6 +4485,7 @@ registerMonitorTools(server);
 registerResearchTools(server, getClient);
 registerDeveloperTools(server, getClient);
 registerUsageTools(server, getClient);
+registerOnboardingTools(server);
 
 if (
   process.env.CLOUD_SERVICE === 'true' &&
