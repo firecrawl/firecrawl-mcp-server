@@ -125,6 +125,9 @@ test('adapters are MCP-only, self-contained, and share the bounded runtime contr
     /Keyless/,
     /Inline|inline/,
     /Web, developer and paper searches are\s+billed per request/,
+    /page retrieval is billed per URL/,
+    /Alexandria discovery is\s+free/,
+    /`firecrawl_scrape` execution uses the selected capability's price/,
   ]) {
     assert.match(runtime, requirement);
   }
