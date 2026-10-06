@@ -9,7 +9,7 @@ Use Firecrawl MCP tools for the requested search or retrieval. Respect the
 user's source, scope, and tool choices. Use the host's tool search for deferred
 tools. Report connection or authentication errors.
 
-Web, developer, legal and regulatory, and paper searches are billed per
+Web, developer, government, and paper searches are billed per
 request. Provider-only discovery
 is free. Page retrieval is billed per URL; provider execution uses the
 capability's listed price.

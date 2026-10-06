@@ -473,7 +473,7 @@ export const legalRegulatorySearchOutputSchema = z
       )
       .describe('Ranked results, in the order the text block lists them.'),
   })
-  .describe('Ranked legal and regulatory index results with their matched snippets.');
+  .describe('Ranked Government Index results with their matched snippets.');
 
 // --- src/usage.ts tools -----------------------------------------------------
 
