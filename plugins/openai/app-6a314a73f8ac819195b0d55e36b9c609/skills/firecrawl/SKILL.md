@@ -14,6 +14,28 @@ connection or authentication errors.
 
 ## Choose the operation
 
+For a finished outcome, select the matching bundled skill by name. Respect
+explicit source and tool preferences; these adapters do not make unavailable
+tools or account access available.
+
+- `firecrawl-deep-research`: cited, report-scale analysis of web evidence, not quick lookups.
+- `firecrawl-research-papers`: literature reviews using dedicated paper indexes.
+- `firecrawl-lead-research`: pre-meeting company and person briefs.
+- `firecrawl-lead-gen`: qualified prospect lists, not one-company briefs.
+- `firecrawl-market-research`: market sizing, financial and industry analysis.
+- `firecrawl-directories`: extraction from a named company directory.
+- `firecrawl-competitive-intel`: pricing, feature and changelog comparisons over time.
+- `firecrawl-knowledge-base`: public documentation mirrors and retrieval chunks.
+- `firecrawl-knowledge-ingest`: permitted dynamic documentation portal ingestion.
+- `firecrawl-shop`: product comparisons and shopping recommendations.
+- `firecrawl-dashboards`: authorized dashboard metrics for a defined period.
+- `firecrawl-demo-walkthrough`: observed product-flow and UX walkthroughs.
+- `firecrawl-qa`: live-site checks and reproducible bug reports.
+- `firecrawl-seo-audit`: bounded site, on-page and search-evidence audits.
+- `firecrawl-design`: evidence-based design tokens and a DESIGN.md handoff.
+
+For simple retrieval, choose the operation below rather than forcing a workflow.
+
 - **Find sources:** `firecrawl_search` returns ranked results and relevant
   excerpts. Use `firecrawl_scrape` on a result when the answer needs more of
   the page. If the results already answer the question, no extra fetch is needed.

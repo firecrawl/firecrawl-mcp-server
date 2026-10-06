@@ -2189,6 +2189,7 @@ const scrapeParamsSchema = z.object({
         'rawHtml',
         'screenshot',
         'links',
+        'images',
         'summary',
         'changeTracking',
         'branding',
