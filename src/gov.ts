@@ -9,7 +9,7 @@ import { z } from 'zod';
 import type { ContentResult, FastMCP } from 'fastmcp';
 import { withAgentHints } from './agent-hints';
 import { originHeaders, requestOrigin } from './origin';
-import { legalRegulatorySearchOutputSchema, withStructured } from './tool-output';
+import { govSearchOutputSchema, withStructured } from './tool-output';
 
 interface SessionData {
   firecrawlApiKey?: string;
@@ -31,7 +31,7 @@ type GetClient = (session?: SessionData) => unknown;
 
 const BASE = '/v2/search/gov';
 
-interface LegalRegulatoryHit {
+interface GovHit {
   url?: string;
   title?: string;
   description?: string;
@@ -39,7 +39,7 @@ interface LegalRegulatoryHit {
 }
 
 /** Render hits as `## <position>. <title>` / url / description blocks. */
-function fmtLegalRegulatory(results?: LegalRegulatoryHit[]): string {
+function fmtGov(results?: GovHit[]): string {
   if (!results || results.length === 0) return '(no results)';
   return results
     .map((r, i) => {
@@ -51,12 +51,12 @@ function fmtLegalRegulatory(results?: LegalRegulatoryHit[]): string {
     .join('\n\n');
 }
 
-export function registerLegalRegulatoryTools(
+export function registerGovTools(
   server: Pick<FastMCP<SessionData>, 'addTool'>,
   getClient: GetClient
 ): void {
   server.addTool({
-    name: 'firecrawl_legal_regulatory_search',
+    name: 'firecrawl_gov_search',
     annotations: {
       title: 'Firecrawl Government Index search',
       readOnlyHint: true,
@@ -68,7 +68,7 @@ Search an index of primary law and regulatory material from US federal, state, a
 
 Returns ranked results with a position, title, URL, and matched snippet.
 `,
-    outputSchema: legalRegulatorySearchOutputSchema,
+    outputSchema: govSearchOutputSchema,
     parameters: z.object({
       query: z
         .string()
@@ -94,10 +94,17 @@ Returns ranked results with a position, title, URL, and matched snippet.
       if (k != null) params.append('k', String(k));
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{
-        data?: { web?: LegalRegulatoryHit[] };
-      }>(`${BASE}?${params.toString()}`, originHeaders(requestOrigin(mcpClient, session)));
+        data?: { web?: GovHit[] };
+      }>(
+        `${BASE}?${params.toString()}`,
+        originHeaders(requestOrigin(mcpClient, session))
+      );
       const results = res.data?.data?.web ?? [];
-      return withAgentHints(withStructured(fmtLegalRegulatory(results), { results }), res.data, true);
+      return withAgentHints(
+        withStructured(fmtGov(results), { results }),
+        res.data,
+        true
+      );
     },
   });
 }

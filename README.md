@@ -81,7 +81,7 @@ A fixed-scope search surface is also hosted at:
 https://mcp.firecrawl.dev/v2/mcp-search
 ```
 
-It exposes a fixed set of nine tools: `firecrawl_search`, `firecrawl_developer_search`, `firecrawl_legal_regulatory_search`, the four `firecrawl_research_*` tools, and the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`. Its `firecrawl_search` fetches no page content, and the surface has its own OAuth identity; the full endpoint above is unchanged. It backs a published connector listing, so its tool set is a contract rather than a profile to tune. See [docs/search-profile.md](docs/search-profile.md) for the full contract and what a change to it involves.
+It exposes a fixed set of nine tools: `firecrawl_search`, `firecrawl_developer_search`, `firecrawl_gov_search`, the four `firecrawl_research_*` tools, and the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`. Its `firecrawl_search` fetches no page content, and the surface has its own OAuth identity; the full endpoint above is unchanged. It backs a published connector listing, so its tool set is a contract rather than a profile to tune. See [docs/search-profile.md](docs/search-profile.md) for the full contract and what a change to it involves.
 
 For packaged MCP workflows in ChatGPT, Codex, or Claude Code, see
 [MCP plugin packages](plugins/README.md).
@@ -327,7 +327,7 @@ Use this guide to select the right tool for your task:
 | search    | Web search for info                            | results[]                                        |
 | find_tools | Alexandria catalogue browsing and URL lookup | providers, tool contracts and nextTool navigation |
 | developer | Programming questions over developer sources   | results[] with passages                          |
-| legal_regulatory | US primary law and regulatory material | results[] with snippets                        |
+| gov       | US primary law and regulatory material         | results[] with snippets                          |
 | agent     | Multi-source research, unknown or many sites   | JSON (structured data)                           |
 | monitor   | Recurring page checks                          | monitor/check metadata and diffs                 |
 | research  | Paper and GitHub repository research           | research results and repo matches                |
@@ -1011,7 +1011,7 @@ Search an index built for coding agents. The index covers GitHub issues, merged 
 
 `firecrawl_search` with `categories: ["developer"]` searches the same index beside the web results. Use this tool instead when you want the matched passages, the `skills` filter, or no web results in the response. The search-only endpoint exposes both tools, and the same choice applies there.
 
-### 14b. Government Index Search Tool (`firecrawl_legal_regulatory_search`)
+### 14b. Government Index Search Tool (`firecrawl_gov_search`)
 
 Search primary law and regulatory material from US federal, state, and local government sources: statutes, regulations, codes, court opinions, and other government publications.
 
@@ -1021,7 +1021,7 @@ Search primary law and regulatory material from US federal, state, and local gov
 
 ```json
 {
-  "name": "firecrawl_legal_regulatory_search",
+  "name": "firecrawl_gov_search",
   "arguments": {
     "query": "federal food labeling requirements for allergens",
     "k": 10

@@ -238,7 +238,7 @@ test('MCP transport preserves hints on empty, readable, crawl and error results'
     { name: 'firecrawl_search', arguments: { query: 'empty' } },
     { name: 'firecrawl_search', arguments: { query: 'invalid' } },
     { name: 'firecrawl_developer_search', arguments: { query: 'empty' } },
-    { name: 'firecrawl_legal_regulatory_search', arguments: { query: 'empty' } },
+    { name: 'firecrawl_gov_search', arguments: { query: 'empty' } },
     { name: 'firecrawl_research_search_papers', arguments: { query: 'empty' } },
     { name: 'firecrawl_check_crawl_status', arguments: { id: 'crawl-1' } },
     { name: 'firecrawl_scrape', arguments: { url: 'https://example.com/' } },
@@ -265,7 +265,7 @@ test('MCP transport preserves hints on empty, readable, crawl and error results'
     assert.equal(result.isError === true, expectedError);
     if (
       params.name === 'firecrawl_developer_search' ||
-      params.name === 'firecrawl_legal_regulatory_search'
+      params.name === 'firecrawl_gov_search'
     ) {
       assert.deepEqual(result.structuredContent.results, []);
       assert.equal(result.content[0].text, '(no results)');
