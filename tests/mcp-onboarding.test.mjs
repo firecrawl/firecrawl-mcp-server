@@ -231,6 +231,44 @@ test('clients without OpenAI form capability receive persistent chat choices, ne
   }
 });
 
+test('modern HTTP requires an exact JSON Accept range with positive valid quality', async (t) => {
+  const { rpc, requests } = await httpFixture(t);
+  for (const accept of [
+    undefined,
+    'application/json;q=0',
+    'application/json;q=0.000, */*;q=1',
+    'text/event-stream, application/json; q = 0',
+    'application/json;q=NaN',
+    'application/json;q=-0.1',
+    'application/json;q=1.1',
+    'application/json;q=1;q=0',
+    'application/json-seq',
+    'text/plain; note=application/json',
+  ]) {
+    const result = await rpc('tools/list', {}, {}, { accept });
+    assert.equal(result.status, 406, String(accept));
+    assert.equal(result.body.error.code, -32600);
+    assert.equal(result.body.result, undefined);
+  }
+  assert.deepEqual(
+    requests,
+    [],
+    'unacceptable responses must be rejected before authentication'
+  );
+  for (const accept of [
+    'application/json',
+    'application/json;q=0.001',
+    'APPLICATION/JSON; Q=1.000',
+    'text/event-stream;q=1, application/json;q=0.5',
+  ]) {
+    assert.equal(
+      (await rpc('tools/list', {}, {}, { accept })).status,
+      200,
+      accept
+    );
+  }
+});
+
 test('modern HTTP validates metadata and mirrored headers and reuses authentication', async (t) => {
   const { rpc } = await httpFixture(t);
   for (const headers of [

@@ -67,9 +67,10 @@ node --test tests/mcp-onboarding.test.mjs tests/build-bundle.test.mjs
 
 The tests exercise real local HTTP and stdio MCP servers with simulated clients:
 form creation, a retry on another process, personalized choices, missing input,
-cancellation, invalid answers, capability fallback, login guards, protocol/header
-validation, and legacy compatibility. Upstream authentication is a local fixture;
-these tests do not prove rendering in an actual OpenAI client.
+cancellation, invalid answers, capability fallback, login guards, JSON Accept
+quality, protocol/header validation, and legacy compatibility. Upstream
+authentication is a local fixture; these tests do not prove rendering in an
+actual OpenAI client.
 
 Deploy the server change before expecting the registered Firecrawl connection
 to expose this tool. Uploading only the plugin ZIP does not deploy the server.

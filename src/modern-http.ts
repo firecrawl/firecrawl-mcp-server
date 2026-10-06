@@ -56,6 +56,25 @@ function decodeHeader(
   return Buffer.from(encoded, 'base64').toString('utf8');
 }
 
+function acceptsJson(accept: string | undefined): boolean {
+  return (
+    accept?.split(',').some((range) => {
+      const [mediaType, ...parameters] = range.trim().split(';');
+      if (mediaType.trim().toLowerCase() !== 'application/json') return false;
+      const qualities = parameters
+        .map((parameter) => parameter.trim())
+        .filter((parameter) => /^q\s*=/i.test(parameter));
+      if (qualities.length === 0) return true;
+      if (qualities.length !== 1) return false;
+      const value = qualities[0].slice(qualities[0].indexOf('=') + 1).trim();
+      return (
+        /^(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/.test(value) &&
+        Number(value) > 0
+      );
+    }) ?? false
+  );
+}
+
 export function modernHttpHandler<
   T extends { [key: string]: unknown },
 >(options: {
@@ -166,8 +185,12 @@ export function modernHttpHandler<
       error(415, -32600, 'Content-Type must be application/json');
       return true;
     }
-    if (!req.headers.accept?.includes('application/json')) {
-      error(406, -32600, 'Accept must include application/json');
+    if (!acceptsJson(req.headers.accept)) {
+      error(
+        406,
+        -32600,
+        'Accept must include application/json with a positive quality'
+      );
       return true;
     }
     const request = parsed.data;
