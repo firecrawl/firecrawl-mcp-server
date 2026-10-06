@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 
-export function assertAlexandriaMetadata(tools, instructions) {
+export function assertAlexandriaMetadata(tools, instructions, { hosted = false } = {}) {
   assert.ok(instructions, 'Alexandria server instructions are required');
   const scrape = tools.find((tool) => tool.name === 'firecrawl_scrape');
   assert.ok(scrape, 'firecrawl_scrape must be registered');
   const { requestId, alexandria } = scrape.inputSchema?.properties ?? {};
   assert.ok(requestId?.description, 'firecrawl_scrape.requestId needs a description');
   assert.ok(alexandria?.description, 'firecrawl_scrape.alexandria needs a description');
-  assert.equal(scrape.annotations.readOnlyHint, false);
+  assert.equal(scrape.annotations.readOnlyHint, hosted);
   assert.match(requestId.description, /idempotency key.*payload/i);
   assert.match(requestId.description, /generated when omitted and returned with the result/i);
   assert.match(alexandria.description, /mutually exclusive with url/);

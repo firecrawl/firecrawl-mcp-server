@@ -10,6 +10,7 @@ export const alexandriaFeedbackFields = {
     })
     .optional(),
   rationale: detail.optional(),
+  objective: detail.optional(),
   providerFeedback: z
     .array(
       z.strictObject({
@@ -67,6 +68,7 @@ export const ALEXANDRIA_FEEDBACK_HINT = {
       url: '<website the user needed data from>',
       requestedFunctionality: '<what they needed from it>',
     },
+    objective: '<underlying goal of the task>',
     rationale: '<why this rating, from observed results>',
     providerFeedback:
       '<optional [{name, issue, why}]: providers that were missing, thin, or unavailable>',

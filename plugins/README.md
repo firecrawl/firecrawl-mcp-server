@@ -11,7 +11,7 @@ scientific literature with Firecrawl.
 
 The OpenAI package covers the full authenticated tool set. Its `.app.json`
 preserves the registered app connection and authentication. The Claude package
-uses the [search endpoint's eight-tool contract](../docs/search-profile.md) and
+uses the [search endpoint's nine-tool contract](../docs/search-profile.md) and
 its account-connection flow.
 
 The Codex package is the MCP server alone: no skills, no CLI. Its `.mcp.json`

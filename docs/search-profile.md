@@ -20,12 +20,13 @@ within the hour.
 
 ## Tool contract
 
-The search surface exposes exactly these eight tools and nothing else:
+The search surface exposes exactly these nine tools and nothing else:
 
 | Tool | Purpose |
 | --- | --- |
 | `firecrawl_search` | Ranked web / index search results |
 | `firecrawl_developer_search` | Ranked developer-index results with matched passages |
+| `firecrawl_gov_search` | Ranked Firecrawl Government Index results with matched snippets |
 | `firecrawl_research_search_papers` | Semantic search over indexed research papers |
 | `firecrawl_research_inspect_paper` | Canonical metadata for one paper |
 | `firecrawl_research_related_papers` | Citation-graph expansion from anchor papers |
@@ -37,26 +38,31 @@ Registration on this instance is filtered against that allowlist, so any tool
 outside the set, including map, crawl, extract, agent, interact, parse,
 monitor, and the feedback tools, is never registered, except for one
 deprecated name kept for backward compatibility and described below.
-`tools/list` reflects only these eight tools.
+`tools/list` reflects only these nine tools.
 
 One additional name, the deprecated `firecrawl_research_search_github`, is
 also registered on this instance but hidden from `tools/list`; a `tools/call`
 for it returns a `DEPRECATED_TOOL` payload pointing callers at
 `firecrawl_developer_search`, so cached sessions that predate its removal
 still get a meaningful response instead of an unknown-tool error. Calling any
-other name not in the eight-tool set returns an unknown-tool error.
+other name not in the nine-tool set returns an unknown-tool error.
 
 `firecrawl_developer_search` queries `/v2/search/developer` and returns the
 matched passages; `firecrawl_search` with `categories: ["developer"]` reaches the
 same index beside ordinary web results. Both are available here.
+`firecrawl_gov_search` queries `/v2/search/gov`; `firecrawl_search`
+with `categories: ["gov"]` reaches the same sources in the web group and cannot
+be combined with other categories.
 
 ## `firecrawl_search` fetches no page content
 
 The search surface's `firecrawl_search` takes **no `scrapeOptions`**. Its input
 schema is strict (unknown fields are rejected), and its executor builds the
 outbound `/v2/search` body from an explicit list of allowed fields
-(`query`, `limit`, `tbs`, `filter`, `location`, `sources`, `categories`,
-`highlights`, `enterprise`) plus `origin`. It never spreads raw arguments, so
+(`query`, `objective`, `clientModel`, `limit`, `includeDomains`,
+`excludeDomains`, `tbs`, `filter`, `location`, `sources`, `categories`,
+`highlights`, `enterprise`, `toolDetail`, `domainTools`) plus `origin`.
+It never spreads raw arguments, so
 no request from this surface can ask the API to fetch third-party page content.
 The schema and body construction enforce this directly, and contract tests guard
 the behavior. No runtime filter is involved.
@@ -66,6 +72,14 @@ the behavior. No runtime filter is involved.
 names only tools this surface exposes. `firecrawl_find_tools` is registered the
 same way. Alexandria results on this surface carry no `feedbackTool` pointer,
 since `firecrawl_feedback` is not registered here.
+
+`firecrawl_scrape` is read-only here (`readOnlyHint: true`): the surface runs in
+hosted safe mode, so it takes no browser `actions`, and a named `profile` loads
+saved browser state without saving changes to it. Provider terms can be read
+with the nested `terms/show` capability. As on the full surface, an organization
+admin accepts them in the dashboard: `firecrawl_scrape` refuses every other
+`terms/*` capability, and terms errors link to `requiresAction.url` or
+https://www.firecrawl.dev/app/settings?tab=data-sources.
 
 ## Alexandria source
 
@@ -78,7 +92,7 @@ access; keyless sessions get an explanatory error before any request.
 Search requires a query and does not accept catalogue browse mode; use
 `firecrawl_find_tools` to browse the catalogue or read a full contract, and
 `firecrawl_scrape` with `alexandria` to execute a capability. Both are part of
-the eight-tool surface.
+the nine-tool surface.
 
 ## OAuth
 
@@ -118,7 +132,7 @@ or the authorization server allowlist.
 
 ## Tests
 
-`tests/mcp-search-profile.test.mjs` asserts the eight-tool contract, unknown-tool
+`tests/mcp-search-profile.test.mjs` asserts the nine-tool contract, unknown-tool
 rejection, `scrapeOptions` rejection, the clean outbound body, authenticated
 `tools/list`, the path-scoped metadata document, audience acceptance/rejection,
 and that the full surface is unaffected. It runs in CI via `pnpm test`.
