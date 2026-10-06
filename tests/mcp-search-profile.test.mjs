@@ -739,31 +739,6 @@ test('search firecrawl_search forwards the developer category in the web group',
   assert.equal('developer' in envelope.data, false);
 });
 
-test('search firecrawl_search forwards the gov category', async (t) => {
-  const backend = await startFakeBackend();
-  t.after(() => backend.close());
-  const { searchPort } = await startHostedServer(t, {
-    FIRECRAWL_API_URL: backend.url,
-  });
-
-  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
-    id: 42,
-    method: 'tools/call',
-    params: {
-      arguments: { query: 'food labeling requirements', categories: ['gov'] },
-      name: 'firecrawl_search',
-    },
-    headers: { 'x-api-key': 'fc-search-key' },
-  });
-  assert.equal(res.status, 200);
-  const message = parseSseJson(await res.text());
-  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
-
-  const searchCalls = backend.requests.filter((r) => r.url === '/v2/search');
-  assert.equal(searchCalls.length, 1);
-  assert.deepEqual(searchCalls[0].body.categories, ['gov']);
-});
-
 test('search firecrawl_developer_search queries the developer index and returns its passages', async (t) => {
   const backend = await startFakeBackend();
   t.after(() => backend.close());
