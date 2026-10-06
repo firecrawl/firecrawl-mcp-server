@@ -192,6 +192,7 @@ export const feedbackOutputSchema = z
     creditsRefundedToday: num("Credits refunded to the team so far this UTC day."),
     dailyRefundCap: num("The team's daily refund cap in credits."),
     dailyCapReached: bool('Whether the daily refund cap is reached; further feedback today still records but refunds nothing.'),
+    websiteCapReached: bool("Alexandria only: whether this website's daily refund cap is reached; feedback about other websites can still refund."),
     alreadySubmitted: bool('Whether feedback for this job was already recorded.'),
     warning,
     data: unknown('Payload returned with the accepted feedback.'),

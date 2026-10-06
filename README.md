@@ -593,7 +593,7 @@ and small metadata objects. Do not include raw scrape/parse outputs.
 
 **Returns:**
 
-- `{ success, feedbackId, creditsRefunded, creditsRefundedToday?, dailyRefundCap?, dailyCapReached?, alreadySubmitted?, warning? }` JSON.
+- `{ success, feedbackId, creditsRefunded, creditsRefundedToday?, dailyRefundCap?, dailyCapReached?, websiteCapReached?, alreadySubmitted?, warning? }` JSON.
 
 ### 4. Crawl Tool (`firecrawl_crawl`)
 
@@ -1317,6 +1317,6 @@ The existing `firecrawl_feedback` tool accepts `endpoint: "alexandria"`:
 
 The optional `objective` is the underlying goal of the session: what the agent or its user was ultimately trying to accomplish, beyond the single website in `requestedWebsite`.
 
-This uses authenticated `POST /v2/feedback`, without a job ID or job-age deadline. Eligible first feedback for a website each UTC day can refund 1 credit, subject to the team's daily Alexandria refund cap (default 10 credits); later feedback for the same website that day is recorded with `alreadySubmitted: true` and no refund. Optional `providerFeedback` and `capabilityFeedback` arrays describe coverage gaps and execution issues; the tool schema lists supported issue values. A `new_capability_request` requires `requestedFunctionality`; `missing_capability` (the provider exists but lacks the capability) does not. Existing feedback opt-out and authentication controls apply.
+This uses authenticated `POST /v2/feedback`, without a job ID or job-age deadline. Eligible feedback can refund 1 credit, subject to daily caps of 10 credits per website and 100 credits per team (UTC day). Past either cap, feedback is still recorded with no refund, and the response sets `websiteCapReached` or `dailyCapReached`. Optional `providerFeedback` and `capabilityFeedback` arrays describe coverage gaps and execution issues; the tool schema lists supported issue values. A `new_capability_request` requires `requestedFunctionality`; `missing_capability` (the provider exists but lacks the capability) does not. Existing feedback opt-out and authentication controls apply.
 
 Eligible Alexandria execution and discovery results include a `feedbackTool` pointer with the tool name and a skeleton of the arguments. The pointer is omitted for Firecrawl-internal calls such as `bash` and when `firecrawl_feedback` is not registered (`FIRECRAWL_NO_ENDPOINT_FEEDBACK` or keyless startup).

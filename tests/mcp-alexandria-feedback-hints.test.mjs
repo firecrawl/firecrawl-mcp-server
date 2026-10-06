@@ -24,7 +24,7 @@ test('Alexandria selection metadata omits feedback workflow', async (t) => {
   assert(byName.has('firecrawl_feedback'));
   assert.match(
     byName.get('firecrawl_feedback').description,
-    /alexandria.*eligible first feedback for a website each UTC day can refund 1 credit.*daily Alexandria cap/is
+    /alexandria.*eligible feedback can refund 1 credit.*daily caps per website and per team/is
   );
   assert.doesNotMatch(byName.get('firecrawl_feedback').description, /no credit refund/i);
   for (const name of ['firecrawl_scrape', 'firecrawl_find_tools', 'firecrawl_search']) {
