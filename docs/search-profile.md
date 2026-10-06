@@ -50,6 +50,9 @@ other name not in the nine-tool set returns an unknown-tool error.
 `firecrawl_developer_search` queries `/v2/search/developer` and returns the
 matched passages; `firecrawl_search` with `categories: ["developer"]` reaches the
 same index beside ordinary web results. Both are available here.
+`firecrawl_legal_regulatory_search` queries `/v2/search/gov`; `firecrawl_search`
+with `categories: ["gov"]` reaches the same sources in the web group and cannot
+be combined with other categories.
 
 ## `firecrawl_search` fetches no page content
 
