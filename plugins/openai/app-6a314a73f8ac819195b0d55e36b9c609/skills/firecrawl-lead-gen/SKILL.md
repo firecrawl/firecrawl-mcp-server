@@ -34,7 +34,7 @@ Capture only visible or legitimately accessible fields:
 - email, phone, and LinkedIn URL only when actually returned/visible and allowed
 - industry, company size, funding stage, notes, and profile URL
 
-Retain per-lead source URL or provider provenance, canonical IDs when supplied, and source/as-of dates if known. Leave absent values null or blank and record whether masked, unavailable, or paywalled. Never infer email patterns, phone numbers, or private details. Deduplicate by stable person/profile ID and company domain where available; name alone can merge different people. Keep conflicting fields with their sources. Return fewer qualified leads rather than padding to the requested count.
+Retain per-lead source URL or provider provenance, canonical IDs when supplied, and source/as-of dates if known. Leave absent values null or blank and record whether masked, unavailable, or paywalled. Never infer email patterns, phone numbers, or private details. Deduplicate people by stable person/profile ID or canonical profile URL where available; use company domain only for company-level grouping, never to collapse distinct contacts. Without a reliable person identifier, retain uncertain matches separately. Name alone can merge different people. Keep conflicting fields with their sources. Return fewer qualified leads rather than padding to the requested count.
 
 ## Small MCP argument examples
 

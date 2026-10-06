@@ -36,6 +36,23 @@ function assertNoSymlinks(directory) {
   }
 }
 
+function toolExamples(text, name) {
+  return [...text.matchAll(/```json\n([\s\S]*?)\n```/g)].map(([, body]) => {
+    const example = JSON.parse(body);
+    assert.ok(
+      example && typeof example.name === 'string' && example.name.length,
+      `${name}: tool name required`
+    );
+    assert.ok(
+      example.arguments &&
+        typeof example.arguments === 'object' &&
+        !Array.isArray(example.arguments),
+      `${name}: tool arguments object required`
+    );
+    return example;
+  });
+}
+
 test('OpenAI outcome inventory retains the router and has valid distinct identities', () => {
   assert.deepEqual(
     readdirSync(skills).sort(),
@@ -107,6 +124,7 @@ test('adapters are MCP-only, self-contained, and share the bounded runtime contr
     /search profile/,
     /Keyless/,
     /Inline|inline/,
+    /Web, developer and paper searches are\s+billed per request/,
   ]) {
     assert.match(runtime, requirement);
   }
@@ -126,9 +144,7 @@ test('all adapters document a tool example accepted by the actual MCP input sche
     tools.map((tool) => [tool.name, validator.getValidator(tool.inputSchema)])
   );
   for (const name of outcomes) {
-    const examples = [...readSkill(name).matchAll(/```json\n([\s\S]*?)\n```/g)]
-      .map(([, body]) => JSON.parse(body))
-      .filter((example) => example.name && example.arguments);
+    const examples = toolExamples(readSkill(name), name);
     assert.ok(examples.length, `${name}: no tool-call example`);
     for (const example of examples) {
       const validate = schemas.get(example.name);
@@ -136,6 +152,24 @@ test('all adapters document a tool example accepted by the actual MCP input sche
       const result = validate(example.arguments);
       assert.equal(result.valid, true, `${name}: ${result.errorMessage}`);
     }
+  }
+});
+
+test('malformed tool-call examples cannot be silently skipped', () => {
+  for (const example of [
+    { arguments: {} },
+    { name: 'firecrawl_search' },
+    { name: 'firecrawl_search', arguments: null },
+    { name: 'firecrawl_search', arguments: [] },
+  ]) {
+    assert.throws(
+      () =>
+        toolExamples(
+          `\`\`\`json\n${JSON.stringify(example)}\n\`\`\``,
+          'fixture'
+        ),
+      /required/
+    );
   }
 });
 
@@ -184,12 +218,15 @@ test('workflow policies retain different evidence and fallback requirements', ()
       /session|profile/i,
       /article bodies/i,
       /covered sections/i,
+      /firecrawl_map` as a navigation supplement only if exposed/,
+      /When mapping is unavailable/,
     ],
     'firecrawl-lead-gen': [
       /qualif/i,
       /deduplic/i,
       /source/i,
       /unknown|missing|blank/i,
+      /company domain only for company-level grouping, never to collapse distinct contacts/,
     ],
     'firecrawl-lead-research': [
       /meeting|brief/i,

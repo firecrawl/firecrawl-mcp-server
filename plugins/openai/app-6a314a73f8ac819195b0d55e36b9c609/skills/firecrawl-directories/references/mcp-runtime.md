@@ -21,8 +21,10 @@ Before retrieval choose a small page/record/call budget matching the request
 and a credit ceiling the user has authorized. Start with at most 5 source pages
 or 20 records and one catalogue page unless the request needs more. These are
 initial ceilings, not quotas. Stop as soon as the evidence is sufficient;
-ask before expanding costly coverage. Web search and page retrieval are billed;
-catalogue discovery is free, execution uses the selected capability's price.
+ask before expanding costly coverage. Web, developer and paper searches are
+billed per request; page retrieval is billed per URL. Alexandria discovery is
+free, and `firecrawl_scrape` execution uses the selected capability's price.
+Other operations may also consume credits; inspect their live pricing before use.
 Avoid tools with external writes unless separately authorized. No feedback,
 terms acceptance, purchase, account change or recurring monitor is required
 to complete a workflow; respect user/team opt-outs.
