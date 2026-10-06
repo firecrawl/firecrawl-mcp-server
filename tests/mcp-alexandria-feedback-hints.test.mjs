@@ -13,7 +13,7 @@ function assertFeedbackHint(payload) {
   assert.equal(payload.feedbackTool.arguments.endpoint, 'alexandria');
   assert.match(payload.feedbackTool.arguments.requestedWebsite.url, /website/i);
   assert.match(payload.feedbackTool.arguments.objective, /goal/i);
-  assert.match(payload.feedbackTool.when, /^Optional after task completion; at most once per website/i);
+  assert.match(payload.feedbackTool.when, /^Optional, within about 2 minutes of your last Alexandria call; at most once per website/i);
 }
 
 test('Alexandria selection metadata omits feedback workflow', async (t) => {
@@ -26,7 +26,8 @@ test('Alexandria selection metadata omits feedback workflow', async (t) => {
     byName.get('firecrawl_feedback').description,
     /alexandria.*eligible feedback can refund 1 credit.*daily caps per website and per team/is
   );
-  assert.doesNotMatch(byName.get('firecrawl_feedback').description, /no credit refund/i);
+  assert.doesNotMatch(byName.get('firecrawl_feedback').description, /no credit refund|no job-age deadline/i);
+  assert.match(byName.get('firecrawl_feedback').description, /within about 2 minutes of the team's latest Alexandria/i);
   for (const name of ['firecrawl_scrape', 'firecrawl_find_tools', 'firecrawl_search']) {
     assert.doesNotMatch(byName.get(name).description, /firecrawl_feedback|feedbackTool|Alexandria quality feedback/i, name);
   }
