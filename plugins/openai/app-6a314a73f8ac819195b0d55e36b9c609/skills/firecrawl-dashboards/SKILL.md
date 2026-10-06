@@ -66,7 +66,7 @@ Select only returned provider and capability identifiers, expand their input and
 
 ## Collect visible metrics
 
-1. Open the dashboard with `firecrawl_interact`. Use `url` to start or the returned `scrapeId` to continue, never both. Use a natural-language `prompt` and, when supplied, the authorized remote profile supported by the live schema. `scrapeOptions` applies only when opening with `url`; keep profile changes unsaved.
+1. Open the dashboard with `firecrawl_interact`. Use `url` to start or the returned `scrapeId` to continue, never both. Use a natural-language `prompt` and, when supplied, the authorized remote profile supported by the live schema. `scrapeOptions` applies only when opening with `url`; set `scrapeOptions.profile.saveChanges: false` for a saved profile unless profile writeback was requested.
 2. Verify the account and period. Set only the requested report filters, then read KPI cards, tables, labels, units, and comparison values. Navigate tabs, expand sections, and scroll tables as needed. Inspect each result before continuing; a session URL alone is not extracted evidence.
 3. For an authorized dashboard export, report the returned table or file and its account/period. Use the export in the report only when the host provides access to its contents.
 4. If the dashboard session has expired, request a renewed session or an export for the same account and reporting period.
