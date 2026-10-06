@@ -26,7 +26,7 @@ The search surface exposes exactly these nine tools and nothing else:
 | --- | --- |
 | `firecrawl_search` | Ranked web / index search results |
 | `firecrawl_developer_search` | Ranked developer-index results with matched passages |
-| `firecrawl_legal_regulatory_search` | Ranked Firecrawl Government Index results with matched snippets |
+| `firecrawl_gov_search` | Ranked Firecrawl Government Index results with matched snippets |
 | `firecrawl_research_search_papers` | Semantic search over indexed research papers |
 | `firecrawl_research_inspect_paper` | Canonical metadata for one paper |
 | `firecrawl_research_related_papers` | Citation-graph expansion from anchor papers |
@@ -50,7 +50,7 @@ other name not in the nine-tool set returns an unknown-tool error.
 `firecrawl_developer_search` queries `/v2/search/developer` and returns the
 matched passages; `firecrawl_search` with `categories: ["developer"]` reaches the
 same index beside ordinary web results. Both are available here.
-`firecrawl_legal_regulatory_search` queries `/v2/search/gov`; `firecrawl_search`
+`firecrawl_gov_search` queries `/v2/search/gov`; `firecrawl_search`
 with `categories: ["gov"]` reaches the same sources in the web group and cannot
 be combined with other categories.
 

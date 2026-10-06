@@ -20,7 +20,7 @@ capability's listed price.
   result when the answer needs additional page context.
 - **Research programming questions:** `firecrawl_developer_search` retrieves
   matched passages from indexed repositories and documentation.
-- **Research law and regulation:** `firecrawl_legal_regulatory_search`
+- **Research law and regulation:** `firecrawl_gov_search`
   searches statutes, regulations, codes, court opinions, and other US
   government publications and returns ranked results with matched snippets.
 - **Research papers:** `firecrawl_research_search_papers` finds papers;

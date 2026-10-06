@@ -40,7 +40,7 @@ connection or authentication errors.
 - **Research code or APIs:** `firecrawl_developer_search` searches indexed
   repositories and documentation. See
   [developer research](references/developer-research.md) for source selection.
-- **Research law and regulation:** `firecrawl_legal_regulatory_search`
+- **Research law and regulation:** `firecrawl_gov_search`
   searches statutes, regulations, codes, court opinions, and other US
   government publications and returns ranked results with matched snippets.
 - **Research papers:** see [paper research](references/paper-research.md) for

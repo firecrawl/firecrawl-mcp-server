@@ -389,7 +389,7 @@ export const monitorCheckOutputSchema = z
   })
   .describe('One monitor check with its page-level diff results.');
 
-// --- src/research.ts, src/developer.ts and src/legal-regulatory.ts tools -----
+// --- src/research.ts, src/developer.ts and src/gov.ts tools -----------------
 
 /**
  * Paper fields as the research endpoints return them. Inside an array item
@@ -459,7 +459,7 @@ export const developerSearchOutputSchema = z
   })
   .describe('Ranked developer-index results with their matched passages.');
 
-export const legalRegulatorySearchOutputSchema = z
+export const govSearchOutputSchema = z
   .object({
     ...agentHints,
     results: z

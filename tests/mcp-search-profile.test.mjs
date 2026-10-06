@@ -28,7 +28,7 @@ const { version: serverVersion } = JSON.parse(
 const SEARCH_TOOLS = [
   'firecrawl_search',
   'firecrawl_developer_search',
-  'firecrawl_legal_regulatory_search',
+  'firecrawl_gov_search',
   'firecrawl_research_search_papers',
   'firecrawl_research_inspect_paper',
   'firecrawl_research_related_papers',
@@ -803,7 +803,7 @@ test('search firecrawl_developer_search queries the developer index and returns 
   assert.equal(skillsQuery.get('query'), 'retry loop backoff');
 });
 
-test('search firecrawl_legal_regulatory_search queries the Government Index', async (t) => {
+test('search firecrawl_gov_search queries the Government Index', async (t) => {
   const backend = await startFakeBackend();
   t.after(() => backend.close());
   const { searchPort } = await startHostedServer(t, {
@@ -815,7 +815,7 @@ test('search firecrawl_legal_regulatory_search queries the Government Index', as
     method: 'tools/call',
     params: {
       arguments: { query: 'food labeling requirements', k: 1 },
-      name: 'firecrawl_legal_regulatory_search',
+      name: 'firecrawl_gov_search',
     },
     headers: { 'x-api-key': 'fc-search-key' },
   });
@@ -1003,7 +1003,7 @@ test('full surface still exposes its complete tool set alongside the search surf
   assert.ok(names.includes('firecrawl_scrape'));
   assert.ok(names.includes('firecrawl_search'));
   assert.ok(names.includes('firecrawl_developer_search'));
-  assert.ok(names.includes('firecrawl_legal_regulatory_search'));
+  assert.ok(names.includes('firecrawl_gov_search'));
   assert.ok(names.includes('firecrawl_parse'));
   assert.ok(names.length > SEARCH_TOOLS.length);
   assert.equal(
