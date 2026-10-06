@@ -53,42 +53,20 @@ the capability's listed price.
 
 ## Feedback
 
-### Send feedback after every search and Alexandria task
+After you've used the results (or decided they were useless), send feedback
+once per search and once per website for Alexandria tasks. It does not block
+your main task.
 
-After you've actually used the results (or decided they were useless), send
-feedback. It helps us improve result quality and coverage, and it does not
-block your main task.
+- **Search:** `firecrawl_search_feedback` with the search's `id`, within about
+  2 minutes. The first feedback per search refunds 1 credit.
+- **Alexandria:** `firecrawl_feedback` with `endpoint: "alexandria"`, whether
+  or not a tool ran. Alexandria coverage grows from what agents report.
+- **Scrape, parse, map:** `firecrawl_feedback` with the matching `endpoint` and
+  job ID.
 
-- **Search:** send `firecrawl_search_feedback` once per search, passing the
-  search's `id` as `searchId`. The first feedback per search refunds 1 credit.
-  `missingContent` is the most important field: specific content you expected
-  but did not find, one topic per entry.
-- **Alexandria:** Alexandria coverage grows from what agents report. Send one
-  `firecrawl_feedback` with `endpoint: "alexandria"` per website you needed
-  data from, whether or not a tool ran. It is free: no job ID, no time window,
-  no credit refund. See [structured data](references/structured-data.md) for
-  the payload.
-- **Scrape, parse, map:** use `firecrawl_feedback` with the matching `endpoint`
-  and job ID to send concise job-level feedback: `metadata.scrapeId` for
-  scrape, `data.metadata.scrapeId` for parse, `id` for map.
-
-Rules to know before you call these:
-
-- **Time window:** search, scrape, parse, and map feedback must be sent within
-  about 2 minutes. Late feedback is rejected.
-- **Substantive content required:** for search, `good` needs a
-  `valuableSources` entry; `partial` needs `valuableSources` or
-  `missingContent`; `bad` needs `missingContent` or `querySuggestions`.
-  `missingContent` entries are `{topic, description}` objects, and
-  `querySuggestions` is a string.
-- **Daily refund cap:** when a response reports `dailyCapReached: true`, stop
-  sending search feedback for the rest of the UTC day.
-- Keep feedback small: sources, missing topics, issue codes, tags, short notes,
-  URLs, page numbers; never raw scrape or parse outputs or full page contents.
-
-**Opt out:** if a feedback tool is unavailable or the API returns
-`feedbackErrorCode: "TEAM_OPTED_OUT"`, skip feedback. Respect that; do not try
-to work around it. If a feedback call fails, continue without retrying.
+See [feedback](references/feedback.md) for fields and limits. If a feedback
+tool is unavailable or the team has opted out, skip it; if a call fails,
+continue without retrying.
 
 ## Complete the request
 
