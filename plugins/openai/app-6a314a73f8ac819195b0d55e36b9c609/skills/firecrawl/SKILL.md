@@ -59,8 +59,10 @@ not block your main task.
 
 - **Search:** `firecrawl_search_feedback` with the search's `id`, within about
   2 minutes. The first eligible feedback per search can refund 1 credit.
-- **Alexandria:** `firecrawl_feedback` with `endpoint: "alexandria"`, whether
-  or not a tool ran. Alexandria coverage grows from what agents report.
+- **Alexandria:** `firecrawl_feedback` with `endpoint: "alexandria"`, within
+  20 minutes of the team's latest Alexandria search, discovery, or execution,
+  even if no provider was executed. Eligible feedback can refund 1 credit,
+  subject to daily caps.
 - **Scrape, parse, map:** `firecrawl_feedback` with the matching `endpoint` and
   job ID.
 

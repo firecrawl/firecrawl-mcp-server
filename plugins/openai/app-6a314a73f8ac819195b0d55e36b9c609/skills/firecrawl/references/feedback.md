@@ -25,9 +25,17 @@ cap.
 ## Alexandria
 
 Send one `firecrawl_feedback` with `endpoint: "alexandria"` per website you
-needed data from, whether or not a tool ran. It is free: no job ID, no time
-window, no credit refund. See [structured data](structured-data.md) for the
-payload.
+needed data from after Alexandria search, discovery, or execution, even if no
+provider was executed. No job ID is required. Submit within 20 minutes of the
+team's latest Alexandria activity; later feedback is rejected with
+`FEEDBACK_WINDOW_EXPIRED`.
+
+Eligible feedback can refund 1 credit for any rating. Rate observed results
+honestly. Alexandria has separate daily refund caps, defaulting to 10 credits
+per website per team and 100 per team, per UTC day. When a response reports
+`websiteCapReached: true` or `dailyCapReached: true`, feedback is still recorded
+but no longer refunds credits for that website or team for the rest of the UTC
+day; keep sending it. See [structured data](structured-data.md) for the payload.
 
 ## Scrape, parse, and map
 
