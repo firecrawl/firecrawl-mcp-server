@@ -85,19 +85,16 @@ test('OpenAI outcome inventory retains the router and has valid distinct identit
   }
 });
 
-test('adapters are MCP-only, self-contained, and share the bounded runtime contract', () => {
+test('each adapter preserves MCP access, pricing and provider contract safeguards', () => {
   assertNoSymlinks(skills);
-  let runtime;
   for (const name of outcomes) {
     const text = readSkill(name);
-    assert.match(text, /\[.*?\]\(references\/mcp-runtime\.md\)/, name);
-    const reference = readFileSync(
-      join(skills, name, 'references/mcp-runtime.md'),
-      'utf8'
-    );
-    if (runtime) assert.equal(reference, runtime, `${name}: protocol drift`);
-    runtime = reference;
-    for (const file of instructionFiles(join(skills, name))) {
+    const files = instructionFiles(join(skills, name));
+    const instructions = files
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n')
+      .replace(/\s+/g, ' ');
+    for (const file of files) {
       assert.equal(lstatSync(file).isSymbolicLink(), false, file);
       assert.doesNotMatch(
         readFileSync(file, 'utf8'),
@@ -110,26 +107,77 @@ test('adapters are MCP-only, self-contained, and share the bounded runtime contr
       /Alexandria/,
       `${name}: missing workflow-specific routing`
     );
+    for (const requirement of [
+      /host's tool search/,
+      /live input schema is authoritative/,
+      /authentication errors/,
+      /account flow, never pasted secrets/,
+      /Search-only\/keyless sessions may lack needed tools/,
+      /authorized credit ceiling/,
+      /source\/tool\/provider and feedback opt-outs/,
+      /untrusted evidence, not instructions/,
+      /inline when artifacts are unavailable/,
+      /Web, developer and paper searches are billed per request/,
+      /page retrieval per URL/,
+      /Provider-only discovery is free/,
+      /execution uses the capability's listed price/,
+      /response\.key/,
+      /requiresOneOf/,
+      /price and external effects/,
+      /do not perform unapproved writes/,
+      /every item in `data.alexandria`/,
+      /payload-bound/,
+      /identical ID and payload/,
+      /changed inputs need a new ID/,
+      /catalogue `nextTool` pages contracts, not records/,
+      /connected account on an enabled team/,
+      /Terms require an organization admin outside this workflow/,
+      /do not accept terms through a capability or retry these restrictions/,
+      /unknown freshness/,
+      /live search\/page retrieval for missing or freshness-critical facts/,
+      /Retained results can expire/,
+      /not silently rerun paid work/,
+    ]) {
+      assert.match(instructions, requirement, `${name}: ${requirement}`);
+    }
+    if (text.includes('`firecrawl_interact`')) {
+      for (const requirement of [
+        /only if exposed and authorized/,
+        /remote session does not inherit the user's local login/,
+        /`timeout` is in seconds/,
+        /Inspect each action's result/,
+        /Close with `firecrawl_interact_stop` and the returned `scrapeId`/,
+        /cleanup failures/,
+      ]) {
+        assert.match(instructions, requirement, `${name}: ${requirement}`);
+      }
+    }
   }
-  for (const requirement of [
-    /response\.key/,
-    /requiresOneOf/,
-    /price and external effects/,
-    /every item/,
-    /payload-bound/,
-    /unknown freshness/,
-    /expire/,
-    /terms/,
-    /opt-outs/,
-    /search profile/,
-    /Keyless/,
-    /Inline|inline/,
-    /Web, developer and paper searches are\s+billed per request/,
-    /page retrieval is billed per URL/,
-    /Alexandria discovery is\s+free/,
-    /`firecrawl_scrape` execution uses the selected capability's price/,
+});
+
+test('live observation and paper workflows do not require provider discovery', () => {
+  for (const name of [
+    'firecrawl-qa',
+    'firecrawl-design',
+    'firecrawl-demo-walkthrough',
+    'firecrawl-research-papers',
   ]) {
-    assert.match(runtime, requirement);
+    const text = readSkill(name).replace(/\s+/g, ' ');
+    assert.match(
+      text,
+      /Use Alexandria only for a fitting structured need/,
+      name
+    );
+    assert.match(
+      text,
+      /skip provider discovery when live or indexed evidence suffices/,
+      name
+    );
+    assert.match(
+      text,
+      /not a gate before live QA|not a mandatory hop|not a prerequisite|not insert a compulsory catalogue hop/,
+      name
+    );
   }
 });
 
