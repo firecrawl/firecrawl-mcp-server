@@ -66,7 +66,7 @@ async function startHosted(t) {
   return { api, port, searchPort };
 }
 
-test('hosted scrape is read-only and preserves existing profile and search options', async (t) => {
+test('hosted scrape and search are read-only and load profiles without saving', async (t) => {
   const { api, port, searchPort } = await startHosted(t);
   const headers = { 'x-api-key': 'fc-hosted-test' };
   for (const [label, endpoint, surfacePort] of [
@@ -78,13 +78,20 @@ test('hosted scrape is read-only and preserves existing profile and search optio
     assert.equal(scrape.annotations.readOnlyHint, true, label);
     assert.equal(scrape.annotations.destructiveHint, false, label);
     assert.equal(scrape.inputSchema.properties.actions, undefined, `${label}: no browser actions`);
-    assert.doesNotMatch(scrape.description, /overwrite its stored state/, label);
+    assert.doesNotMatch(scrape.description, /overwrite its stored state|Browser actions/, label);
+    assert.match(scrape.description, /without saving changes/, label);
+    assert.deepEqual(Object.keys(scrape.inputSchema.properties.profile.properties), ['name'], `${label}: profile takes only a name`);
   }
 
   const { tools } = await httpSession(port, '/v2/mcp', headers);
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
   assert.equal(byName.get('firecrawl_agent').annotations.readOnlyHint, false);
   assert.equal(byName.get('firecrawl_search').annotations.readOnlyHint, true);
+  assert.deepEqual(
+    Object.keys(byName.get('firecrawl_search').inputSchema.properties.scrapeOptions.properties.profile.properties),
+    ['name'],
+    'search scrapeOptions profile takes only a name'
+  );
   assert.equal(tools.some((tool) => /terms/.test(tool.name)), false, 'no tool accepts terms');
 
   for (const [surfacePort, endpoint] of [[port, '/v2/mcp'], [searchPort, '/v2/mcp-search']]) {
@@ -99,7 +106,8 @@ test('hosted scrape is read-only and preserves existing profile and search optio
         headers,
       });
       assert.notEqual(scraped.isError, true, JSON.stringify(scraped));
-      assert.deepEqual(api.requests.at(-1).body.profile, profile, 'profile options remain unchanged');
+      // A call shaped by an older tool definition may still send saveChanges.
+      assert.deepEqual(api.requests.at(-1).body.profile, { name: 'saved-login', saveChanges: false }, 'profile never saves');
       assert.equal(api.requests.at(-1).body.actions, undefined);
     }
   }
@@ -114,7 +122,7 @@ test('hosted scrape is read-only and preserves existing profile and search optio
     headers,
   });
   assert.notEqual(searched.isError, true, JSON.stringify(searched));
-  assert.deepEqual(api.requests.at(-1).body.scrapeOptions.profile, { name: 'saved-login', saveChanges: true });
+  assert.deepEqual(api.requests.at(-1).body.scrapeOptions.profile, { name: 'saved-login', saveChanges: false });
   assert.equal(api.requests.at(-1).body.scrapeOptions.actions, undefined);
 
   const { client } = await startStdio(t, { CLOUD_SERVICE: 'false', FIRECRAWL_API_KEY: 'fc-test', FIRECRAWL_API_URL: api.url });
