@@ -14,9 +14,7 @@ connection or authentication errors.
 
 ## Choose the operation
 
-For a finished outcome, select the matching bundled skill by name. Respect
-explicit source and tool preferences; these adapters do not make unavailable
-tools or account access available.
+For a finished outcome, select the matching bundled skill by name.
 
 - `firecrawl-deep-research`: cited, report-scale analysis of web evidence, not quick lookups.
 - `firecrawl-research-papers`: literature reviews using dedicated paper indexes.
