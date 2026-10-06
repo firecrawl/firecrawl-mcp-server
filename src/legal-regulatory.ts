@@ -1,5 +1,5 @@
 /**
- * Firecrawl Legal and Regulatory search tool.
+ * Firecrawl Government Index search tool.
  *
  * Thin MCP wrapper over the `/v2/search/gov` endpoint, called
  * through the SDK's HTTP layer (auth + retries) via `client.http.get(...)`.
@@ -58,7 +58,7 @@ export function registerLegalRegulatoryTools(
   server.addTool({
     name: 'firecrawl_legal_regulatory_search',
     annotations: {
-      title: 'Firecrawl legal and regulatory search',
+      title: 'Firecrawl Government Index search',
       readOnlyHint: true,
       openWorldHint: true,
       destructiveHint: false,

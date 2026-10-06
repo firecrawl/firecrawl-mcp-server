@@ -46,7 +46,7 @@ Read only the reference relevant to the operation. The live tool schema is
 the authority for accepted parameters and limits.
 
 For account questions, `firecrawl_credit_usage` reports current or historical
-usage. Web, developer, legal and regulatory, and paper searches are billed per
+usage. Web, developer, government, and paper searches are billed per
 request. Provider-only
 discovery is free. Page retrieval is billed per URL; provider execution uses
 the capability's listed price.

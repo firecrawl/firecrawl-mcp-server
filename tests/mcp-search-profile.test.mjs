@@ -803,7 +803,7 @@ test('search firecrawl_developer_search queries the developer index and returns 
   assert.equal(skillsQuery.get('query'), 'retry loop backoff');
 });
 
-test('search firecrawl_legal_regulatory_search queries the legal and regulatory index', async (t) => {
+test('search firecrawl_legal_regulatory_search queries the Government Index', async (t) => {
   const backend = await startFakeBackend();
   t.after(() => backend.close());
   const { searchPort } = await startHostedServer(t, {
