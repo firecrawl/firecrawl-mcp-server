@@ -16,7 +16,6 @@ connection or authentication errors.
 
 For a finished outcome, select the matching bundled skill by name.
 
-- `firecrawl-deep-research`: cited, report-scale analysis of web evidence, not quick lookups.
 - `firecrawl-research-papers`: literature reviews using dedicated paper indexes.
 - `firecrawl-lead-research`: pre-meeting company and person briefs.
 - `firecrawl-lead-gen`: qualified prospect lists, not one-company briefs.
