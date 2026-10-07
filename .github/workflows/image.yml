@@ -54,5 +54,6 @@ jobs:
           tags: |
             ghcr.io/firecrawl/firecrawl-mcp-server:latest
             ghcr.io/firecrawl/firecrawl-mcp-server:v${{ steps.version.outputs.version }}
+            ghcr.io/firecrawl/firecrawl-mcp-server:sha-${{ github.sha }}
           cache-from: type=registry,ref=ghcr.io/firecrawl/firecrawl-mcp-server:latest
           cache-to: type=inline
