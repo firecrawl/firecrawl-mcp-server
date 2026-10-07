@@ -60,6 +60,9 @@ For simple retrieval, choose the operation below rather than forcing a workflow.
 - **Research code or APIs:** `firecrawl_developer_search` searches indexed
   repositories and documentation. See
   [developer research](references/developer-research.md) for source selection.
+- **Research law and regulation:** `firecrawl_gov_search`
+  searches statutes, regulations, codes, court opinions, and other US
+  government publications and returns ranked results with matched snippets.
 - **Research papers:** see [paper research](references/paper-research.md) for
   paper search, metadata, citation relationships, and full-text passages.
 
@@ -67,7 +70,8 @@ Read only the reference relevant to the operation. The live tool schema is
 the authority for accepted parameters and limits.
 
 For account questions, `firecrawl_credit_usage` reports current or historical
-usage. Web, developer, and paper searches are billed per request. Provider-only
+usage. Web, developer, and paper searches are billed per
+request. Government search is free. Provider-only
 discovery is free. Page retrieval is billed per URL; provider execution uses
 the capability's listed price.
 
