@@ -12,6 +12,9 @@ on:
 jobs:
   push-image:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: 'Checkout GitHub Action'
         uses: actions/checkout@main
@@ -33,5 +36,17 @@ jobs:
           file: ./Dockerfile.service
           push: true
           tags: ghcr.io/firecrawl/firecrawl-mcp-server:latest
+          cache-from: type=registry,ref=ghcr.io/firecrawl/firecrawl-mcp-server:latest
+          cache-to: type=inline
+
+      - name: 'Push Service Image Package'
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: ./Dockerfile.service
+          push: true
+          tags: |
+            ghcr.io/firecrawl/firecrawl-mcp-service:latest
+            ghcr.io/firecrawl/firecrawl-mcp-service:sha-${{ github.sha }}
           cache-from: type=registry,ref=ghcr.io/firecrawl/firecrawl-mcp-server:latest
           cache-to: type=inline
