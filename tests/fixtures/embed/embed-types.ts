@@ -5,6 +5,7 @@ import {
   type FirecrawlMcpServerHooks,
   type Session,
   type ToolDefinition,
+  type ToolResult,
 } from 'firecrawl-mcp/server';
 
 const tool: ToolDefinition = {
@@ -42,3 +43,7 @@ const hooks: FirecrawlMcpServerHooks = {
 
 const server = createFirecrawlMcpServer({ unstable_hooks: hooks });
 export const stop: () => Promise<void> = server.stop;
+
+// Content items must match one of the MCP content shapes.
+// @ts-expect-error a text item needs its text
+export const missingText: ToolResult = { content: [{ type: 'text' }] };

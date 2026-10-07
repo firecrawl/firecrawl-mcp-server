@@ -113,7 +113,19 @@ export type ToolResult = {
   content: Array<
     | { type: 'text'; text: string }
     | { type: 'image' | 'audio'; data: string; mimeType: string }
-    | { type: string; [key: string]: unknown }
+    | {
+        type: 'resource';
+        resource: { uri: string; mimeType?: string; text?: string; blob?: string };
+      }
+    | {
+        type: 'resource_link';
+        uri: string;
+        name: string;
+        title?: string;
+        description?: string;
+        mimeType?: string;
+        size?: number;
+      }
   >;
   structuredContent?: Record<string, unknown>;
   isError?: boolean;
