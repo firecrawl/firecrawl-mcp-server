@@ -45,7 +45,8 @@ connection or authentication errors.
   government publications and returns ranked results with matched snippets.
 - **Research papers:** see [paper research](references/paper-research.md) for
   paper search, metadata, citation relationships, and full-text passages.
-- `firecrawl-deep-research`: cited, report-scale analysis of web evidence, not quick lookups.
+- **Deep research:** use the `firecrawl-deep-research` skill for cited,
+  report-scale web analysis, not quick lookups.
 
 Read only the reference relevant to the operation. The live tool schema is
 the authority for accepted parameters and limits.

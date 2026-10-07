@@ -17,6 +17,7 @@ test('deep research has a valid plugin identity and its own router entry', () =>
   const manifest = JSON.parse(
     readFileSync(join(openaiPlugin, '.codex-plugin/plugin.json'), 'utf8')
   );
+  assert.ok(typeof manifest.name === 'string' && manifest.name.trim());
   assert.ok(`${manifest.name}:${name}`.length <= 64);
   assert.equal(skill.match(/^name: (.+)$/m)?.[1], name);
   const description = skill.match(/^description: (.+)$/m)?.[1];
