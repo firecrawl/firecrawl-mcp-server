@@ -192,6 +192,7 @@ export const feedbackOutputSchema = z
     creditsRefundedToday: num("Credits refunded to the team so far this UTC day."),
     dailyRefundCap: num("The team's daily refund cap in credits."),
     dailyCapReached: bool('Whether the daily refund cap is reached; further feedback today still records but refunds nothing.'),
+    websiteCapReached: bool("Alexandria only: whether this website's daily refund cap is reached; feedback about other websites can still refund."),
     alreadySubmitted: bool('Whether feedback for this job was already recorded.'),
     warning,
     data: unknown('Payload returned with the accepted feedback.'),
@@ -389,7 +390,7 @@ export const monitorCheckOutputSchema = z
   })
   .describe('One monitor check with its page-level diff results.');
 
-// --- src/research.ts and src/developer.ts tools -----------------------------
+// --- src/research.ts, src/developer.ts and src/gov.ts tools -----------------
 
 /**
  * Paper fields as the research endpoints return them. Inside an array item
@@ -458,6 +459,22 @@ export const developerSearchOutputSchema = z
       .describe('Ranked results, in the order the text block lists them.'),
   })
   .describe('Ranked developer-index results with their matched passages.');
+
+export const govSearchOutputSchema = z
+  .object({
+    ...agentHints,
+    results: z
+      .array(
+        z.looseObject({
+          url: str('Source URL.'),
+          title: str('Result title.'),
+          description: str('Matched snippet.'),
+          position: num('Rank of the result, starting at 1.'),
+        })
+      )
+      .describe('Ranked results, in the order the text block lists them.'),
+  })
+  .describe('Ranked Government Index results with their matched snippets.');
 
 // --- src/usage.ts tools -----------------------------------------------------
 
