@@ -30,10 +30,11 @@ choose a duration.
 
 ## Collection budget and PDF reads
 
-Use the supplied finite credit ceiling; otherwise start with a 40-credit ceiling,
-at most 8 total searches across web/developer/paper tools and 8 URL reads.
-These are initial ceilings, not collection quotas. Expand only for unresolved
-evidence questions within the run's ceiling; ask before raising that ceiling.
+Use the supplied finite credit ceiling; otherwise start with a 40-credit ceiling.
+Initially allocate 8 total searches across web/developer/paper tools and 8 URL
+reads, not minimum targets. Expand those allocations only for unresolved evidence
+questions with bounded headroom in the run's credit ceiling. Respect tighter
+user-supplied count limits; ask before raising those limits or the credit ceiling.
 Include priced provider executions, retries and any child calls in the same run.
 
 Start URL document reads with `parsers: ["pdf"]` and `pdfOptions: {maxPages: 5}`.
