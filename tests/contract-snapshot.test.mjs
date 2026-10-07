@@ -361,6 +361,21 @@ test('contract: local HTTP against a self-hosted API URL', async (t) => {
   });
   await matchSnapshot('http-self-hosted', {
     ...(await httpSurface(port, '/mcp', {})),
+    calls: {
+      // Runs through execute and credential recovery without reaching the API.
+      alexandriaWithoutCredential: await httpCall(
+        port,
+        '/mcp',
+        {},
+        'firecrawl_scrape',
+        {
+          alexandria: { provider: 'example', capability: 'example/lookup' },
+        }
+      ),
+      deprecatedExtract: await httpCall(port, '/mcp', {}, 'firecrawl_extract', {
+        urls: ['https://example.com'],
+      }),
+    },
     routes: {
       health: await getRoute(port, '/health'),
       oauthProtectedResource: await getRoute(

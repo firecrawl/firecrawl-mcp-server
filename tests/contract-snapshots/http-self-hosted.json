@@ -42,6 +42,53 @@
     "firecrawl_gov_search@c09ed3bf8d63",
     "firecrawl_credit_usage@4202fbda2421"
   ],
+  "calls": {
+    "alexandriaWithoutCredential": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Alexandria requires an API key on a team with Alexandria access"
+        }
+      ],
+      "structuredContent": {
+        "code": "EXCHANGE_API_KEY_REQUIRED",
+        "message": "Alexandria requires an API key on a team with Alexandria access",
+        "docs_url": "https://docs.firecrawl.dev/mcp-server"
+      },
+      "isError": true
+    },
+    "deprecatedExtract": {
+      "content": [
+        {
+          "type": "text",
+          "text": "firecrawl_extract is deprecated and unavailable through MCP. For structured data from a known page, call firecrawl_scrape once per URL with formats: [\"json\"] and jsonOptions containing the prompt and schema. When the URLs are not known or the data spans several sites, use firecrawl_agent for multi-source research."
+        }
+      ],
+      "structuredContent": {
+        "code": "DEPRECATED_TOOL",
+        "message": "firecrawl_extract is deprecated and unavailable through MCP. For structured data from a known page, call firecrawl_scrape once per URL with formats: [\"json\"] and jsonOptions containing the prompt and schema. When the URLs are not known or the data spans several sites, use firecrawl_agent for multi-source research.",
+        "replacement": {
+          "name": "firecrawl_scrape",
+          "instructions": "Call once per known URL. Set formats to [\"json\"] and pass the extraction prompt and JSON schema in jsonOptions.",
+          "example_arguments": {
+            "url": "https://example.com/page",
+            "formats": [
+              "json"
+            ],
+            "jsonOptions": {
+              "prompt": "Extract the requested fields from this page.",
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "docs_url": "https://docs.firecrawl.dev/developer-guides/usage-guides/choosing-the-data-extractor"
+      },
+      "isError": true
+    }
+  },
   "routes": {
     "health": {
       "body": "ok",
