@@ -43,15 +43,3 @@ jobs:
             ghcr.io/firecrawl/firecrawl-mcp-service:sha-${{ github.sha }}
           cache-from: type=registry,ref=ghcr.io/firecrawl/firecrawl-mcp-service:staging
           cache-to: type=inline
-
-      - name: 'Push Service Image Package'
-        uses: docker/build-push-action@v2
-        with:
-          context: .
-          file: ./Dockerfile.service
-          push: true
-          tags: |
-            ghcr.io/firecrawl/firecrawl-mcp-service:staging
-            ghcr.io/firecrawl/firecrawl-mcp-service:sha-${{ github.sha }}
-          cache-from: type=registry,ref=ghcr.io/firecrawl/firecrawl-mcp-server-alpha:latest
-          cache-to: type=inline
