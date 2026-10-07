@@ -132,7 +132,11 @@ test('hosted scrape and search are read-only and load profiles without saving', 
   assert.ok(local.inputSchema.properties.actions, 'local scrape keeps browser actions');
   assert.ok(local.inputSchema.properties.profile.properties.saveChanges, 'local scrape keeps profile options');
   const localSearch = localTools.find((tool) => tool.name === 'firecrawl_search');
-  assert.equal(localSearch.annotations.readOnlyHint, true, 'local search annotation remains unchanged');
+  assert.equal(
+    localSearch.annotations.readOnlyHint,
+    false,
+    'local firecrawl_search allows scrapeOptions.actions and must not claim read-only'
+  );
 });
 
 test('hosted scrape refuses terms acceptance on both surfaces and points to the dashboard', async (t) => {

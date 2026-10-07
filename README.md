@@ -468,6 +468,8 @@ Map a website to discover all indexed URLs on the site.
 
 Search the web and optionally extract content from search results.
 
+**Annotations:** On the full tool surface, `readOnlyHint` follows cloud safe mode (same rule as `firecrawl_scrape`). When `scrapeOptions.actions` allow click/write/`executeJavascript`, the tool is not advertised as read-only so clients that honor MCP annotations can prompt before running side effects. The dedicated search-only endpoint never exposes `scrapeOptions` and stays `readOnlyHint: true`.
+
 **Best for:**
 
 - Finding specific information across multiple websites, when you don't know which website has the information.

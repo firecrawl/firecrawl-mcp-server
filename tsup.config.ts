@@ -13,6 +13,7 @@ export default defineConfig({
     'src/origin.ts',
     'src/introspection-cache.ts',
     'src/keyless-signup-link.ts',
+    'src/mcp-json-schemas.ts',
   ],
   format: ['esm'],
   platform: 'node',

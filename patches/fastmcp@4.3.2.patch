@@ -28,10 +28,44 @@ diff --git a/dist/chunk-LWU5CQGW.js b/dist/chunk-LWU5CQGW.js
 index 474670585c1fff7d9609d0f900d0743df14a7688..86d120ca21d74d6c335a8c3c9763e2f4ac835d10 100644
 --- a/dist/chunk-LWU5CQGW.js
 +++ b/dist/chunk-LWU5CQGW.js
-@@ -986,6 +986,9 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
+@@ -986,6 +986,43 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
    }
    setupToolHandlers(tools) {
      const toolsMap = new Map(tools.map((tool) => [tool.name, tool]));
++    const strictToolInputSchema = (schema, nested = false) => {
++      if (!schema || typeof schema !== "object")
++        return schema;
++      if (Array.isArray(schema))
++        return schema.map((value) => strictToolInputSchema(value, true));
++      const schemaMapKeys = new Set(["properties", "$defs", "definitions", "patternProperties", "dependentSchemas"]);
++      const schemaValueKeys = new Set(["items", "additionalProperties", "not", "if", "then", "else", "contains", "propertyNames"]);
++      const schemaArrayKeys = new Set(["anyOf", "oneOf", "allOf", "prefixItems"]);
++      const strict = Object.fromEntries(
++        Object.entries(schema).map(([key, value]) => {
++          if (schemaMapKeys.has(key) && value && typeof value === "object" && !Array.isArray(value))
++            return [key, Object.fromEntries(Object.entries(value).map(([name, child]) => [name, strictToolInputSchema(child, true)]))];
++          if (schemaValueKeys.has(key) && value && typeof value === "object")
++            return [key, strictToolInputSchema(value, true)];
++          if (schemaArrayKeys.has(key) && Array.isArray(value))
++            return [key, value.map((child) => strictToolInputSchema(child, true))];
++          return [key, value];
++        })
++      );
++      const { additionalProperties, properties } = strict;
++      const objectSchema =
++        strict.type === "object" ||
++        (Array.isArray(strict.type) && strict.type.includes("object")) ||
++        properties !== void 0 ||
++        additionalProperties !== void 0 ||
++        strict.patternProperties !== void 0;
++      if (!objectSchema)
++        return strict;
++      const keepOpen =
++        additionalProperties === true ||
++        !!additionalProperties && typeof additionalProperties === "object" ||
++        nested && additionalProperties === void 0 && properties === void 0;
++      return keepOpen ? strict : { ...strict, additionalProperties: false };
++    };
 +    const listedTools = tools.filter(
 +      (tool) => tool.canList ? tool.canList(this.#auth) : true
 +    );
@@ -50,7 +84,8 @@ index 474670585c1fff7d9609d0f900d0743df14a7688..86d120ca21d74d6c335a8c3c9763e2f4
 +            // for tool search and do not read annotations.title.
 +            ...tool.annotations?.title && { title: tool.annotations.title },
              description: tool.description,
-             inputSchema: tool.parameters ? strictJsonSchema(await toJsonSchema(tool.parameters)) : {
+-            inputSchema: tool.parameters ? strictJsonSchema(await toJsonSchema(tool.parameters)) : {
++            inputSchema: tool.parameters ? strictToolInputSchema(await toJsonSchema(tool.parameters)) : {
                additionalProperties: false,
 @@ -1026,6 +1032,15 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
            `Unknown tool: ${request.params.name}`
@@ -72,10 +107,44 @@ diff --git a/dist/chunk-UYG7NPM6.cjs b/dist/chunk-UYG7NPM6.cjs
 index 3b695bf493c4f54fd970e145cf14fdd8effc9c6d..3e17b1d1f71f3bf41eb5e589fa272e670f27c150 100644
 --- a/dist/chunk-UYG7NPM6.cjs
 +++ b/dist/chunk-UYG7NPM6.cjs
-@@ -986,6 +986,9 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
+@@ -986,6 +986,43 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
    }
    setupToolHandlers(tools) {
      const toolsMap = new Map(tools.map((tool) => [tool.name, tool]));
++    const strictToolInputSchema = (schema, nested = false) => {
++      if (!schema || typeof schema !== "object")
++        return schema;
++      if (Array.isArray(schema))
++        return schema.map((value) => strictToolInputSchema(value, true));
++      const schemaMapKeys = new Set(["properties", "$defs", "definitions", "patternProperties", "dependentSchemas"]);
++      const schemaValueKeys = new Set(["items", "additionalProperties", "not", "if", "then", "else", "contains", "propertyNames"]);
++      const schemaArrayKeys = new Set(["anyOf", "oneOf", "allOf", "prefixItems"]);
++      const strict = Object.fromEntries(
++        Object.entries(schema).map(([key, value]) => {
++          if (schemaMapKeys.has(key) && value && typeof value === "object" && !Array.isArray(value))
++            return [key, Object.fromEntries(Object.entries(value).map(([name, child]) => [name, strictToolInputSchema(child, true)]))];
++          if (schemaValueKeys.has(key) && value && typeof value === "object")
++            return [key, strictToolInputSchema(value, true)];
++          if (schemaArrayKeys.has(key) && Array.isArray(value))
++            return [key, value.map((child) => strictToolInputSchema(child, true))];
++          return [key, value];
++        })
++      );
++      const { additionalProperties, properties } = strict;
++      const objectSchema =
++        strict.type === "object" ||
++        (Array.isArray(strict.type) && strict.type.includes("object")) ||
++        properties !== void 0 ||
++        additionalProperties !== void 0 ||
++        strict.patternProperties !== void 0;
++      if (!objectSchema)
++        return strict;
++      const keepOpen =
++        additionalProperties === true ||
++        !!additionalProperties && typeof additionalProperties === "object" ||
++        nested && additionalProperties === void 0 && properties === void 0;
++      return keepOpen ? strict : { ...strict, additionalProperties: false };
++    };
 +    const listedTools = tools.filter(
 +      (tool) => tool.canList ? tool.canList(this.#auth) : true
 +    );
@@ -94,7 +163,8 @@ index 3b695bf493c4f54fd970e145cf14fdd8effc9c6d..3e17b1d1f71f3bf41eb5e589fa272e67
 +            // for tool search and do not read annotations.title.
 +            ...tool.annotations?.title && { title: tool.annotations.title },
              description: tool.description,
-             inputSchema: tool.parameters ? _xsschema.strictJsonSchema.call(void 0, await _xsschema.toJsonSchema.call(void 0, tool.parameters)) : {
+-            inputSchema: tool.parameters ? _xsschema.strictJsonSchema.call(void 0, await _xsschema.toJsonSchema.call(void 0, tool.parameters)) : {
++            inputSchema: tool.parameters ? strictToolInputSchema(await _xsschema.toJsonSchema.call(void 0, tool.parameters)) : {
                additionalProperties: false,
 @@ -1026,6 +1032,15 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
            `Unknown tool: ${request.params.name}`
