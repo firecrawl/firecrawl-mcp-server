@@ -54,10 +54,10 @@ function toolExamples(text, name) {
 
 test('OpenAI required outcome inventory retains the router and validates installed identities', () => {
   const installed = readdirSync(skills).sort();
-  for (const name of ['firecrawl', ...outcomes]) {
-    assert.ok(installed.includes(name), `${name}: required skill missing`);
-  }
-  assert.ok(!installed.includes('firecrawl-workflows'));
+  assert.deepEqual(
+    installed.filter((name) => name !== 'firecrawl-deep-research'),
+    [...outcomes, 'firecrawl'].sort()
+  );
   const manifest = JSON.parse(
     readFileSync(join(openaiPlugin, '.codex-plugin/plugin.json'), 'utf8')
   );
