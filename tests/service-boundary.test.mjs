@@ -71,8 +71,11 @@ test('src/service reaches the core only through its library entry point', async 
     if (!file.startsWith('service/')) continue;
     const source = await readFile(new URL(file, SRC), 'utf8');
     for (const specifier of importSpecifiers(source)) {
-      if (!specifier.startsWith('../')) continue;
-      if (specifier !== '../server.js') {
+      if (!specifier.startsWith('.')) continue;
+      const resolved = path.posix.normalize(
+        path.posix.join(path.posix.dirname(file), specifier)
+      );
+      if (resolved !== 'server.js' && !resolved.startsWith('service/')) {
         offenders.push(`${file} -> ${specifier}`);
       }
     }

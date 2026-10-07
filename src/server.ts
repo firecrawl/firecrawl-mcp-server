@@ -68,6 +68,7 @@ import { CoreHttpError } from './core-http-error.js';
 import { normalizeHeader } from './headers.js';
 import {
   FIRECRAWL_CREDENTIAL_REJECTED,
+  KEYLESS_TOOL_NAMES,
   keylessQuotaReason,
   keylessSignupUrlFrom,
   recoveryPayload,
@@ -360,7 +361,6 @@ export { originHeaders, requestOrigin } from './origin.js';
 export {
   invalidApiKeyRecoveryPayload,
   invalidOAuthRecoveryPayload,
-  KEYLESS_TOOL_NAMES,
   keylessQuotaReason,
   keylessSignupUrlFrom,
   recoveryPayload,
@@ -384,6 +384,13 @@ export {
   searchDomainsAreExclusive,
   searchToolBaseFields,
 } from './tool-helpers.js';
+
+/**
+ * Tools a keyless session can call. A copy, so changing it cannot change
+ * which tools the server itself treats as keyless.
+ */
+const keylessToolNames: ReadonlySet<string> = new Set(KEYLESS_TOOL_NAMES);
+export { keylessToolNames as KEYLESS_TOOL_NAMES };
 
 /** Compact JSON text of `data`, with `data` as structured content when it is an object. */
 const structuredCompactResult: (data: unknown) => ToolResult =
