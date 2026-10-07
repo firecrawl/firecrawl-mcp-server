@@ -26,7 +26,7 @@ async function sourceFiles(dir = SRC, prefix = '') {
 
 function importSpecifiers(source) {
   return [
-    ...source.matchAll(/\b(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g),
+    ...source.matchAll(/\b(?:from|import|require)\s*\(?\s*['"]([^'"]+)['"]/g),
   ].map(([, specifier]) => specifier);
 }
 
