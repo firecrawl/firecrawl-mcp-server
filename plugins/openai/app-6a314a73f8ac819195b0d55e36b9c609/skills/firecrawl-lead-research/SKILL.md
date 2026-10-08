@@ -10,7 +10,7 @@ Create a concise, actionable brief about a known lead before a meeting.
 
 Use the existing Firecrawl connection, resolving deferred tools through the host's tool search and following live schemas. Start from supplied company/person URLs and reusable evidence before discovery.
 
-Respect user-specified time, credit and source limits and returned account restrictions; do not impose default budgets, source quotas or minimum calls. Web searches, URL/PDF retrieval and provider execution can incur charges. Track structured or parsed JSON receipts including nested totals, not catalogue estimates: count aggregates and included child charges once, replace cumulative totals rather than adding polls, and exclude account-wide counters. Missing usage is unknown, not zero; stop a costly route if the user's limit cannot be respected.
+Respect user-specified time, credit and source limits and returned account restrictions; do not impose default budgets, source quotas or minimum calls. Web searches are billed per request; provider-only discovery is free; URL/PDF retrieval uses URL/page pricing and provider execution uses listed capability pricing. Track structured or parsed JSON receipts including nested totals, not catalogue estimates: count aggregates and included child charges once, replace cumulative totals rather than adding polls, and exclude account-wide counters. Missing usage is unknown, not zero; stop a costly route if the user's limit cannot be respected.
 
 ## Scope
 

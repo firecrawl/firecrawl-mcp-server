@@ -8,7 +8,7 @@ license: ISC
 
 Use this when the user needs a dashboard report, not generic public company metrics. Infer dashboard URLs, account or workspace, metrics, reporting period, and output format. Ask for clarification if these inputs or authorized access are missing.
 
-Use the existing Firecrawl connection, resolve deferred tools and follow the live schemas. Respect requested dashboard counts, metric scope, time/credit limits and account restrictions; do not impose budgets or collection quotas. URL retrieval and provider execution are billed. If reporting spend, use returned receipts, not catalogue prices: count aggregates and included child charges once, replace cumulative totals, and exclude account-wide counters. Missing usage is unknown, not zero.
+Use the existing Firecrawl connection, resolve deferred tools and follow the live schemas. Respect requested dashboard counts, metric scope, time/credit limits and account restrictions; do not impose budgets or collection quotas. Web searches are billed per request; provider-only discovery is free; URL retrieval uses URL pricing and provider execution uses listed capability pricing. If reporting spend, use returned receipts, not catalogue prices: count aggregates and included child charges once, replace cumulative totals, and exclude account-wide counters. Missing usage is unknown, not zero.
 
 Interactive collection needs `firecrawl_interact` and `firecrawl_interact_stop`; otherwise use a dashboard export or page-content report.
 
@@ -24,7 +24,7 @@ Execute returned provider/capability/options through `firecrawl_scrape` Alexandr
 
 For uncertain retries retain the identical request ID and payload; changed inputs need a new ID. Do not duplicate in-flight requests or replay successful items. Stop unresolved access, terms or budget routes, keeping successful metrics and continuing permitted dashboards/exports. Terms need an organization administrator outside this workflow; resume retained requests after confirmed acceptance only when contract, access and budget permit. Preserve returned records and supported artifact handoffs; disclose retention failures rather than silently rerunning paid work.
 
-If an external metric definition needs web evidence, use normal `firecrawl_search` and inspect matching suggestions; do not search for private dashboard data. When exposed, set `objective` to `[dashboards]` plus the consistent reporting goal, without sensitive account details; keep the focused `query` untagged and omit `objective` when unsupported.
+If an external metric definition needs web evidence, use normal `firecrawl_search` and inspect matching suggestions; do not search for private dashboard data. When exposed, set the `objective` string to the literal prefix `[dashboards]` followed by the consistent reporting goal, without sensitive account details; keep the focused `query` untagged and omit `objective` when unsupported.
 
 Optional compact discovery with `firecrawl_find_tools`:
 

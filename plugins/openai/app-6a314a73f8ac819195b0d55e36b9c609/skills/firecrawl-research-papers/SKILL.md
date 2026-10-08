@@ -10,7 +10,7 @@ Create a sourced literature review or paper synthesis. Use this rather than gene
 
 Use the existing Firecrawl connection, resolving deferred tools through the host's tool search and following live schemas. Start from supplied paper IDs, URLs, passages or reusable evidence; retrieve only what is missing for the requested review.
 
-Respect user-specified counts, time, credit and source limits and returned account restrictions; do not impose default budgets, source quotas or minimum calls. Web and paper searches are billed per request; URL/PDF retrieval and provider execution have their own pricing. Track structured or parsed JSON receipts including nested totals, not catalogue estimates: count aggregates and included child charges once, replace cumulative totals rather than adding polls, and exclude account-wide counters. Missing usage is unknown, not zero; stop a costly route if the user's limit cannot be respected.
+Respect user-specified counts, time, credit and source limits and returned account restrictions; do not impose default budgets, source quotas or minimum calls. Web and paper searches are billed per request; provider-only discovery is free; URL/PDF retrieval uses URL/page pricing and provider execution uses listed capability pricing. Track structured or parsed JSON receipts including nested totals, not catalogue estimates: count aggregates and included child charges once, replace cumulative totals rather than adding polls, and exclude account-wide counters. Missing usage is unknown, not zero; stop a costly route if the user's limit cannot be respected.
 
 If the dedicated paper tools are unavailable, disclose the limitation and offer a reduced web-source review; do not claim ordinary web search is equivalent to the paper index.
 

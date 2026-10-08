@@ -10,7 +10,7 @@ Extract legitimately accessible prospect lists, not pre-meeting briefs or unsoli
 
 Use the existing Firecrawl connection, resolving deferred tools through the host's tool search and following live schemas. Start from supplied source URLs, input rows or reusable prospect evidence before new discovery.
 
-Respect the requested lead count, criteria and user-specified time, credit and source limits and returned account restrictions; do not impose default budgets, source quotas or minimum calls. Web searches, page retrieval and provider execution can incur charges. Track structured or parsed JSON receipts including nested totals, not catalogue estimates: count aggregates and included child charges once, replace cumulative totals rather than adding polls, and exclude account-wide counters. Missing usage is unknown, not zero; stop a costly route if the user's limit cannot be respected.
+Respect the requested lead count, criteria and user-specified time, credit and source limits and returned account restrictions; do not impose default budgets, source quotas or minimum calls. Web searches are billed per request; provider-only discovery is free; URL retrieval uses URL pricing and provider execution uses listed capability pricing. Track structured or parsed JSON receipts including nested totals, not catalogue estimates: count aggregates and included child charges once, replace cumulative totals rather than adding polls, and exclude account-wide counters. Missing usage is unknown, not zero; stop a costly route if the user's limit cannot be respected.
 
 Public provider records do not grant access to a private prospect database or authorize outreach.
 

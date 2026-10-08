@@ -8,7 +8,7 @@ license: ISC
 
 Use this to document a product experience step by step. Infer the product URL, flow focus, constraints, and output format. If the URL is clear, proceed; ask for clarification only when a missing URL, flow boundary, or authorization blocks the work.
 
-Use the existing Firecrawl connection, resolve deferred tools and follow the live schemas. Respect requested flows, time/credit limits and account restrictions without imposing budgets or screen quotas. Retrieval is billed; if reporting spend, use returned receipts rather than catalogue prices. Count aggregates and included child charges once, replace cumulative totals and exclude account-wide counters; missing usage is unknown.
+Use the existing Firecrawl connection, resolve deferred tools and follow the live schemas. Respect requested flows, time/credit limits and account restrictions without imposing budgets or screen quotas. Web searches are billed per request; provider-only discovery is free; page retrieval uses URL pricing and provider execution uses listed capability pricing; if reporting spend, use returned receipts rather than catalogue prices. Count aggregates and included child charges once, replace cumulative totals and exclude account-wide counters; missing usage is unknown.
 
 A live walkthrough needs `firecrawl_interact` and `firecrawl_interact_stop`; if unavailable, offer a static content walkthrough with `firecrawl_scrape` and mark transitions and protected flows untested.
 

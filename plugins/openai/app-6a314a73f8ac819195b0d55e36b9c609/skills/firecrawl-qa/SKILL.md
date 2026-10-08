@@ -8,7 +8,7 @@ license: ISC
 
 Use this to test a live site and return a unified QA report. Infer URL, focus, output format, and permitted actions. Ask for clarification only if a missing target, test scope, or authorization blocks progress.
 
-Use the existing Firecrawl connection, resolve deferred tools and follow the live schemas. Respect requested routes, test actions, time/credit limits and account restrictions without default budgets or test quotas. Retrieval is billed; if reporting spend, use returned receipts rather than catalogue prices. Count aggregates and included child charges once, replace cumulative totals and exclude account-wide counters; missing usage is unknown.
+Use the existing Firecrawl connection, resolve deferred tools and follow the live schemas. Respect requested routes, test actions, time/credit limits and account restrictions without default budgets or test quotas. Web searches are billed per request; provider-only discovery is free; page retrieval uses URL pricing and provider execution uses listed capability pricing; if reporting spend, use returned receipts rather than catalogue prices. Count aggregates and included child charges once, replace cumulative totals and exclude account-wide counters; missing usage is unknown.
 
 `firecrawl_interact` and `firecrawl_interact_stop` are required for functional interaction tests. Use available map/scrape tools for discovery and captures; narrow the report and mark affected tests untested when tools or instrumentation are absent.
 

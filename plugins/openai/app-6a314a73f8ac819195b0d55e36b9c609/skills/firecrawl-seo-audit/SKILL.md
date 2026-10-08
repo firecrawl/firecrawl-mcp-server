@@ -8,7 +8,7 @@ license: ISC
 
 Use this to turn a website into a specific, prioritized SEO audit. Infer site, keywords, relevant pages or competitors, and output format. Proceed when the site is clear; ask for clarification only for blocking inputs, such as a required keyword set or target geography.
 
-Use the existing Firecrawl connection, resolve deferred tools and follow the live schemas. Respect requested pages, keywords/geography, time/credit limits and account restrictions without imposing source quotas or default budgets. Searches and retrieval are billed. If reporting spend, use returned receipts rather than catalogue prices, counting aggregates and included child charges once. Replace cumulative totals instead of summing repeated returns, exclude account-wide counters and mark missing usage unknown.
+Use the existing Firecrawl connection, resolve deferred tools and follow the live schemas. Respect requested pages, keywords/geography, time/credit limits and account restrictions without imposing source quotas or default budgets. Web searches are billed per request; provider-only discovery is free; page retrieval uses URL pricing and provider execution uses listed capability pricing. If reporting spend, use returned receipts rather than catalogue prices, counting aggregates and included child charges once. Replace cumulative totals instead of summing repeated returns, exclude account-wide counters and mark missing usage unknown.
 
 ## Choose structured data selectively
 

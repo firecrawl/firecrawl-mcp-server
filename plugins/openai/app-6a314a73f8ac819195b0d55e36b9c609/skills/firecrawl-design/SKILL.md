@@ -8,7 +8,7 @@ license: ISC
 
 Use this when the user wants a URL turned into a practical design system for a new site or an inspired implementation. Default output is `DESIGN.md`, not a guaranteed faithful clone or a downloaded asset bundle. Infer source URL, target stack, and whether implementation is requested. Ask for clarification only for blocking inputs. If the user asks to implement, produce or update `DESIGN.md` first and use it as the build's source of truth.
 
-Use the existing Firecrawl connection, resolve deferred tools and follow the live schemas. Respect requested pages, time/credit limits and account restrictions without default budgets or capture quotas. Retrieval is billed; if reporting spend, use returned receipts rather than catalogue prices. Count aggregates and included child charges once, replace cumulative totals and exclude account-wide counters; missing usage is unknown.
+Use the existing Firecrawl connection, resolve deferred tools and follow the live schemas. Respect requested pages, time/credit limits and account restrictions without default budgets or capture quotas. Web searches are billed per request; page retrieval uses URL pricing, provider-only discovery is free, and provider execution uses listed capability pricing. If reporting spend, use returned receipts rather than catalogue prices. Count aggregates and included child charges once, replace cumulative totals and exclude account-wide counters; missing usage is unknown.
 
 Inspect `firecrawl_scrape`'s live formats enum before capture: deployed servers may lag the skill. Do not promise unsupported image collection or measurements.
 
