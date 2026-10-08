@@ -16,7 +16,7 @@
     "tools": [
       "firecrawl_scrape@51b8baaf80c0",
       "firecrawl_map@a8a3beee6a0d",
-      "firecrawl_search@ec459bbe0c7c",
+      "firecrawl_search@96490b22500f",
       "firecrawl_find_tools@9dd2800b8610",
       "firecrawl_search_feedback@aaf6dc6f2735",
       "firecrawl_feedback@40455dbfba0d",
@@ -40,7 +40,7 @@
       "firecrawl_research_related_papers@45b2803ae1d1",
       "firecrawl_research_read_paper@231a9d429237",
       "firecrawl_developer_search@a5296368f4ff",
-      "firecrawl_gov_search@c09ed3bf8d63",
+      "firecrawl_gov_search@566d2207b9a6",
       "firecrawl_credit_usage@4202fbda2421"
     ]
   },
