@@ -8,10 +8,6 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
 import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
 import { assertAlexandriaMetadata } from './helpers/alexandria-metadata.mjs';
-import {
-  assertPluginToolCoverage,
-  claudePlugin,
-} from './helpers/plugin-contract.mjs';
 
 const { version: serverVersion } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
@@ -28,6 +24,7 @@ const { version: serverVersion } = JSON.parse(
 const SEARCH_TOOLS = [
   'firecrawl_search',
   'firecrawl_developer_search',
+  'firecrawl_gov_search',
   'firecrawl_research_search_papers',
   'firecrawl_research_inspect_paper',
   'firecrawl_research_related_papers',
@@ -189,6 +186,26 @@ async function startFakeBackend(options = {}) {
               url: 'https://github.com/firecrawl/firecrawl/issues/1',
             },
           ],
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'GET' && req.url?.startsWith('/v2/search/gov')) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          success: true,
+          data: {
+            web: [
+              {
+                description: 'The matched snippet.',
+                position: 1,
+                title: '21 CFR Part 101 -- Food Labeling',
+                url: 'https://www.ecfr.gov/current/title-21/part-101',
+              },
+            ],
+          },
         })
       );
       return;
@@ -385,7 +402,7 @@ async function listTools(port, endpoint, headers) {
   return tools.map((tool) => tool.name);
 }
 
-test('search surface lists exactly the eight contracted tools', async (t) => {
+test('search surface lists exactly the nine contracted tools', async (t) => {
   const { searchPort, getStderr } = await startHostedServer(t);
 
   const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, {
@@ -425,7 +442,6 @@ test('search surface lists exactly the eight contracted tools', async (t) => {
   for (const excluded of EXCLUDED_TOOLS) {
     assert.equal(names.includes(excluded), false, `${excluded} must not appear`);
   }
-  assertPluginToolCoverage(claudePlugin, tools);
   assert.equal(getStderr().includes('TypeError'), false, getStderr());
 });
 
@@ -659,7 +675,7 @@ test('search categories reject github on both MCP profiles before calling the AP
     const tools = await listToolDefinitions(port, endpoint, { 'x-api-key': 'fc-test' });
     const search = tools.find((tool) => tool.name === 'firecrawl_search');
     assert.deepEqual(search.inputSchema.properties.categories.items.enum, [
-      'research', 'pdf', 'developer',
+      'research', 'pdf', 'developer', 'gov',
     ]);
     const res = await jsonRpc(port, endpoint, {
       id: 40,
@@ -780,6 +796,42 @@ test('search firecrawl_developer_search queries the developer index and returns 
     .searchParams;
   assert.equal(skillsQuery.get('skills'), 'only');
   assert.equal(skillsQuery.get('query'), 'retry loop backoff');
+});
+
+test('search firecrawl_gov_search queries the Government Index', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+  });
+
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 44,
+    method: 'tools/call',
+    params: {
+      arguments: { query: 'food labeling requirements', k: 1 },
+      name: 'firecrawl_gov_search',
+    },
+    headers: { 'x-api-key': 'fc-search-key' },
+  });
+  assert.equal(res.status, 200);
+  const message = parseSseJson(await res.text());
+  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+
+  const calls = backend.requests.filter((request) =>
+    request.url?.startsWith('/v2/search/gov')
+  );
+  assert.equal(calls.length, 1);
+  const query = new URL(calls[0].url, 'http://localhost').searchParams;
+  assert.equal(query.get('query'), 'food labeling requirements');
+  assert.equal(query.get('k'), '1');
+
+  assert.equal(
+    message.result.content[0].text,
+    '## 1. 21 CFR Part 101 -- Food Labeling\nhttps://www.ecfr.gov/current/title-21/part-101\nThe matched snippet.'
+  );
+  assert.equal(message.result.structuredContent.results.length, 1);
+  assert.equal(backend.requests.some((request) => request.url === '/v2/search'), false);
 });
 
 test('search surface requires authentication for tools/list', async (t) => {
@@ -946,6 +998,7 @@ test('full surface still exposes its complete tool set alongside the search surf
   assert.ok(names.includes('firecrawl_scrape'));
   assert.ok(names.includes('firecrawl_search'));
   assert.ok(names.includes('firecrawl_developer_search'));
+  assert.ok(names.includes('firecrawl_gov_search'));
   assert.ok(names.includes('firecrawl_parse'));
   assert.ok(names.length > SEARCH_TOOLS.length);
   assert.equal(
@@ -994,7 +1047,7 @@ test('full surface forwards optional search context only when supplied', async (
   assert.equal(searches[1].body.clientModel, 'claude-sonnet-4-6');
 });
 
-test('primary search profile is OAuth-only, eight-tool frozen, and ready without keyless configuration', async (t) => {
+test('primary search profile is OAuth-only, nine-tool frozen, and ready without keyless configuration', async (t) => {
   const { backendRequests, port, issuerUrl } = await startPrimarySearchServer(t);
 
   const ready = await fetch(`http://127.0.0.1:${port}/ready`);

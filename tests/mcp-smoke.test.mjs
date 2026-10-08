@@ -10,10 +10,6 @@ import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
 import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
-import {
-  assertPluginToolCoverage,
-  openaiPlugin,
-} from './helpers/plugin-contract.mjs';
 
 const { version: serverVersion } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
@@ -1288,7 +1284,6 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
 
   client.notify('notifications/initialized');
   const tools = await client.request('tools/list');
-  assertPluginToolCoverage(openaiPlugin, tools.tools);
   const toolNames = tools.tools.map((tool) => tool.name);
   assert.ok(toolNames.includes('firecrawl_scrape'));
   assert.ok(toolNames.includes('firecrawl_search'));
@@ -1655,7 +1650,7 @@ test('local keyless stdio keeps profile guidance keyless-scoped and exposes shar
   }
   assert.match(
     keylessGuidance,
-    /Submit concise feedback through firecrawl_feedback.*Feedback does not determine whether the task is complete/i
+    /Consider submitting concise feedback through firecrawl_feedback.*Feedback does not determine whether the task is complete/i
   );
 });
 
