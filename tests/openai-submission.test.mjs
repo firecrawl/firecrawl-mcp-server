@@ -55,8 +55,9 @@ test('production submission preserves Firecrawl metadata and every skill/referen
     mcpServers: { firecrawl: { url: 'https://mcp.firecrawl.dev/v2/mcp-oauth' } },
   });
   for (const key of ['logo', 'composerIcon']) {
-    const icon = await readFile(join(destination, source.interface[key]), 'utf8');
-    assert.match(icon, /width="128" height="128" viewBox="0 0 128 128"/);
+    const icon = await readFile(join(destination, source.interface[key]));
+    assert.deepEqual([...icon.subarray(1, 4)], [...Buffer.from('PNG')]);
+    assert.equal(icon.readUInt32BE(16), icon.readUInt32BE(20), `${key} must be square`);
   }
 });
 
