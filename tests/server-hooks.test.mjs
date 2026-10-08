@@ -346,7 +346,7 @@ test('a 401 from an added tool is not treated as a Firecrawl credential rejectio
 // Feedback tools on a stdio instance that gets credentials only from hooks.
 // The stdio transport owns the process's stdin and stdout, so each case runs
 // in a child process.
-async function stdioToolNames(t, hooksSource) {
+async function startStdioEmbedder(t, hooksSource) {
   const { spawn } = await import('node:child_process');
   const serverUrl = new URL('../dist/server.js', import.meta.url).href;
   const child = spawn(
@@ -401,13 +401,13 @@ async function stdioToolNames(t, hooksSource) {
     `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`
   );
   const { tools } = await request(2, 'tools/list');
-  return tools.map((tool) => tool.name);
+  return { names: tools.map((tool) => tool.name), request };
 }
 
 const FEEDBACK_TOOLS = ['firecrawl_search_feedback', 'firecrawl_feedback'];
 
 test('a stdio embedder authenticating through authenticate lists the feedback tools', async (t) => {
-  const names = await stdioToolNames(
+  const { names } = await startStdioEmbedder(
     t,
     `{ authenticate: async () => ({ authType: 'api-key', firecrawlApiKey: 'fc-embedded' }) }`
   );
@@ -415,19 +415,30 @@ test('a stdio embedder authenticating through authenticate lists the feedback to
 });
 
 test('a stdio embedder supplying credentials through outboundRequest lists the feedback tools', async (t) => {
-  const names = await stdioToolNames(
+  const { names } = await startStdioEmbedder(
     t,
     `{ outboundRequest: () => ({ credential: 'fc-per-request' }) }`
   );
   for (const name of FEEDBACK_TOOLS) assert.ok(names.includes(name), name);
 });
 
-test('a keyless session on a hooked stdio embedder does not list the feedback tools', async (t) => {
-  const names = await stdioToolNames(
+test('a keyless session on a hooked stdio embedder neither lists nor runs the feedback tools', async (t) => {
+  const { names, request } = await startStdioEmbedder(
     t,
     `{ authenticate: async () => ({ authType: 'keyless' }) }`
   );
   assert.ok(names.includes('firecrawl_scrape'));
   for (const name of FEEDBACK_TOOLS)
     assert.equal(names.includes(name), false, name);
+  // Calling a hidden tool by name is refused before any request is made.
+  const called = await request(3, 'tools/call', {
+    name: 'firecrawl_feedback',
+    arguments: {
+      endpoint: 'scrape',
+      jobId: '00000000-0000-4000-8000-000000000000',
+      rating: 'good',
+    },
+  });
+  assert.equal(called.isError, true);
+  assert.equal(called.structuredContent?.code, 'KEYLESS_TOOL_NOT_AVAILABLE');
 });

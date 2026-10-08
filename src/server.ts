@@ -1870,6 +1870,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
         args: unknown,
         { session, log, client: mcpClient }
       ): Promise<ContentResult> => {
+        assertFeedbackAvailable(session);
         const origin = requestOrigin(mcpClient, session);
         const {
           searchId,
@@ -1965,6 +1966,16 @@ Eligibility is limited to successful searches within the feedback age window. Th
     });
   }
 
+  /**
+   * Feedback needs an account. canList hides the feedback tools from keyless
+   * sessions; this refuses a call that names them anyway.
+   */
+  function assertFeedbackAvailable(session?: SessionData): void {
+    if (!isKeylessMode(session)) return;
+    const payload = recoveryPayload('KEYLESS_TOOL_NOT_AVAILABLE', session?.requestId);
+    throw new UserError(String(payload.message), payload);
+  }
+
   /** Whether firecrawl_feedback is registered on this instance, so Alexandria results only point at a tool that exists. */
   function alexandriaFeedbackAvailable(): boolean {
     // An instance whose tool filter excludes firecrawl_feedback must not
@@ -2027,6 +2038,7 @@ Returns submission status, feedback ID, and accounting fields.
         args: unknown,
         { session, log, client: mcpClient }
       ): Promise<ContentResult> => {
+        assertFeedbackAvailable(session);
         const origin = requestOrigin(mcpClient, session);
         const {
           endpoint,
