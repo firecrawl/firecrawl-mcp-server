@@ -5,14 +5,34 @@ import test from 'node:test';
 // npm does not apply pnpm patches, so an external fastmcp import would load the
 // unpatched registry copy for `npx firecrawl-mcp` users.
 test('dist bundles the patched fastmcp instead of importing it', async () => {
-  const dist = await readFile(new URL('../dist/index.js', import.meta.url), 'utf8');
+  const dist = await readFile(
+    new URL('../dist/index.js', import.meta.url),
+    'utf8'
+  );
   assert.doesNotMatch(dist, /from\s+["']fastmcp["']/);
   assert.match(dist, /title: tool\.annotations\.title/);
   assert.match(dist, /tool\.canList/);
 });
 
+test('the library entry bundles the patched fastmcp and its types do not reference it', async () => {
+  const dist = await readFile(
+    new URL('../dist/server.js', import.meta.url),
+    'utf8'
+  );
+  assert.doesNotMatch(dist, /from\s+["']fastmcp["']/);
+  assert.match(dist, /tool\.canList/);
+  const types = await readFile(
+    new URL('../dist/server.d.ts', import.meta.url),
+    'utf8'
+  );
+  assert.doesNotMatch(types, /from\s+["']fastmcp["']/);
+});
+
 test('every package the bundled fastmcp imports is a direct dependency', async () => {
-  const dist = await readFile(new URL('../dist/index.js', import.meta.url), 'utf8');
+  const dist = await readFile(
+    new URL('../dist/index.js', import.meta.url),
+    'utf8'
+  );
   const pkg = JSON.parse(
     await readFile(new URL('../package.json', import.meta.url), 'utf8')
   );

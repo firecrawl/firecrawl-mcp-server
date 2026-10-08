@@ -6,7 +6,13 @@ import {
   withAlexandriaFeedbackHint,
 } from './alexandria-feedback.js';
 import FirecrawlApp from 'firecrawl';
-import { type ContentResult, FastMCP, type Logger, UserError } from 'fastmcp';
+import {
+  type ContentResult,
+  FastMCP,
+  type Logger,
+  UserError as FastMcpUserError,
+} from 'fastmcp';
+import type { Hono } from 'hono';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -83,9 +89,47 @@ import {
   termsWriteError,
 } from './tool-helpers.js';
 
-export { UserError };
-/** What a tool's `execute` may return. */
-export type ToolResult = ContentResult;
+/**
+ * Library entry point: `import { createFirecrawlMcpServer } from 'firecrawl-mcp/server'`.
+ *
+ * Unstable: this API, its options and the types below may change in any
+ * release, including minor and patch releases. FastMCP is bundled (with local
+ * patches), so embedders use the types exported here rather than importing
+ * `fastmcp` themselves.
+ * @packageDocumentation
+ */
+
+/**
+ * An error whose message is shown to the agent as the tool result. `extras`
+ * becomes the result's structured content.
+ */
+export const UserError: new (
+  message: string,
+  extras?: Record<string, unknown>
+) => Error & { extras?: Record<string, unknown> } = FastMcpUserError;
+
+/** What a tool's `execute` or `beforeValidate` may return. */
+export type ToolResult = {
+  content: Array<
+    | { type: 'text'; text: string }
+    | { type: 'image' | 'audio'; data: string; mimeType: string }
+    | {
+        type: 'resource';
+        resource: { uri: string; mimeType?: string; text?: string; blob?: string };
+      }
+    | {
+        type: 'resource_link';
+        uri: string;
+        name: string;
+        title?: string;
+        description?: string;
+        mimeType?: string;
+        size?: number;
+      }
+  >;
+  structuredContent?: Record<string, unknown>;
+  isError?: boolean;
+};
 
 const require = createRequire(import.meta.url);
 const { version: packageVersion } = require('../package.json') as {
@@ -115,14 +159,61 @@ export interface SessionData {
   [key: string]: unknown;
 }
 
-type ToolLogger = Pick<Logger, 'debug' | 'error' | 'info' | 'warn'>;
+/** Per-connection session state; alias of {@link SessionData}. */
+export type Session = SessionData;
 
-/** A tool definition as registered on the server. */
-export type ToolDefinition = Parameters<FastMCP<SessionData>['addTool']>[0];
-type RegisteredTool = ToolDefinition;
+/** Logs to the connected client. */
+export type ToolLogger = {
+  debug(message: string, data?: unknown): void;
+  error(message: string, data?: unknown): void;
+  info(message: string, data?: unknown): void;
+  warn(message: string, data?: unknown): void;
+};
 
-/** Registers a tool onto an instance; a subset of the FastMCP surface. */
-export type ToolRegistrar = Pick<FastMCP<SessionData>, 'addTool'>;
+/** What a tool's `execute` receives besides its arguments. */
+export type ToolContext = {
+  session?: Session;
+  log: ToolLogger;
+  /** The connected client; `version` is the clientInfo sent at initialize. */
+  client?: { version?: { name?: string; version?: string } };
+  [key: string]: unknown;
+};
+
+/** A tool as registered on the server. */
+export interface ToolDefinition {
+  name: string;
+  description?: string;
+  /** A Standard Schema (for example a zod object) for the arguments. */
+  parameters?: unknown;
+  /** JSON Schema of the structured result. */
+  outputSchema?: unknown;
+  annotations?: {
+    title?: string;
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+    idempotentHint?: boolean;
+    openWorldHint?: boolean;
+    [key: string]: unknown;
+  };
+  _meta?: Record<string, unknown>;
+  /** Hide the tool from a session's tools/list. */
+  canList?(session: Session): boolean;
+  /** Answer the call before argument validation by returning a result. */
+  beforeValidate?(
+    args: unknown,
+    session: Session
+  ): ToolResult | undefined | Promise<ToolResult | undefined>;
+  execute(
+    args: any,
+    context: ToolContext
+  ): Promise<ToolResult | string | void>;
+}
+
+/** The FastMCP shape of a tool, used inside the core. */
+type RegisteredTool = Parameters<FastMCP<SessionData>['addTool']>[0];
+
+/** Registers a tool onto an instance. */
+export type ToolRegistrar = { addTool(tool: ToolDefinition): void };
 
 /** The HTTP request `authenticate` receives; absent for stdio. */
 export type AuthenticationRequest = {
@@ -131,7 +222,7 @@ export type AuthenticationRequest = {
 };
 
 /** The HTTP application routes can be added to (Hono). */
-export type HttpApp = ReturnType<FastMCP<SessionData>['getApp']>;
+export type HttpApp = Hono;
 
 /** Reported around each tool call; `started` precedes the outcome. */
 export type ToolCallEvent = {
@@ -236,13 +327,27 @@ export interface FirecrawlMcpServerOptions {
   unstable_hooks?: FirecrawlMcpServerHooks;
 }
 
-export type FirecrawlMcpServerStartArgs = Parameters<
-  FastMCP<SessionData>['start']
->[0];
+export type FirecrawlMcpServerStartArgs =
+  | { transportType: 'stdio' }
+  | {
+      transportType: 'httpStream';
+      httpStream: {
+        port: number;
+        /**
+         * Address to listen on. Defaults to `FASTMCP_HOST`, then `localhost`,
+         * which Node binds to a single address (often `::1` only), so pass
+         * `127.0.0.1`, `::` or `0.0.0.0` to choose explicitly.
+         */
+        host?: string;
+        /** Defaults to FastMCP's endpoint (`FASTMCP_ENDPOINT` or `/mcp`). */
+        endpoint?: `/${string}`;
+        stateless?: boolean;
+      };
+    };
 
 export interface FirecrawlMcpServer {
-  server: FastMCP<SessionData>;
   start(args: FirecrawlMcpServerStartArgs): Promise<void>;
+  stop(): Promise<void>;
 }
 
 const authResultByRequest = Symbol('firecrawlMcpAuthResult');
@@ -502,7 +607,9 @@ export function createFirecrawlMcpServer(
         }
       },
     };
-    const wrapped = hooks.wrapTool ? hooks.wrapTool(instrumented) : instrumented;
+    const wrapped = hooks.wrapTool
+      ? (hooks.wrapTool(instrumented as unknown as ToolDefinition) as unknown as RegisteredTool)
+      : instrumented;
     return {
       ...wrapped,
       execute: (args, context) => {
@@ -2806,16 +2913,21 @@ Set \`redactPII\` to request redaction of personally identifiable information in
   registerUsageTools(server, getClient);
 
   hooks.registerExtraTools?.(
-    { addTool: ((tool: RegisteredTool) => addTool(prepareTool(tool))) as typeof server.addTool },
+    {
+      addTool: (tool) =>
+        addTool(prepareTool(tool as unknown as RegisteredTool)),
+    },
     {
       getClient,
       hasCredential,
-      builtInTool: (name) => builtInTools.get(name),
+      builtInTool: (name) =>
+        builtInTools.get(name) as unknown as ToolDefinition | undefined,
     }
   );
 
   return {
-    server,
-    start: (args) => server.start(args),
+    start: (args) =>
+      server.start(args as Parameters<typeof server.start>[0]),
+    stop: () => server.stop(),
   };
 }

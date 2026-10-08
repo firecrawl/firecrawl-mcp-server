@@ -1191,6 +1191,61 @@ The tool requires an authenticated Firecrawl account and is read-only.
 - `firecrawl_credit_usage` defaults to `{ "view": "current" }` and returns `remainingCredits`, `planCredits`, `billingPeriodStart`, and `billingPeriodEnd`. Remaining credits can exceed plan credits when the team has top-ups or grants.
 - Pass `{ "view": "historical" }` for calendar-month periods containing `startDate`, `endDate`, and `creditsUsed`. Passing `{ "byApiKey": true }` also selects the historical view and splits periods by API key; each row then includes `apiKey`. Do not combine `byApiKey` with `{ "view": "current" }`. The latest period's `endDate` can be null.
 
+## Programmatic use (unstable)
+
+The package also exposes a library entry point for embedding the server in another runtime. It is **unstable**: the API, its options and its types may change in any release, including minor and patch releases, so pin an exact version.
+
+```sh
+npm install --save-exact firecrawl-mcp zod
+```
+
+The example defines tool parameters with `zod`, so the embedding project installs it as its own dependency.
+
+```js
+import { createFirecrawlMcpServer } from 'firecrawl-mcp/server';
+import { z } from 'zod';
+
+const server = createFirecrawlMcpServer({
+  transport: 'httpStream',
+  apiKey: process.env.FIRECRAWL_API_KEY,
+  unstable_hooks: {
+    registerExtraTools: (registrar) => {
+      registrar.addTool({
+        name: 'my_tool',
+        description: 'An extra tool served next to the Firecrawl tools.',
+        parameters: z.object({ text: z.string() }),
+        execute: async ({ text }) => text,
+      });
+    },
+  },
+});
+
+await server.start({
+  transportType: 'httpStream',
+  httpStream: { port: 3000, host: '127.0.0.1', endpoint: '/mcp', stateless: true },
+});
+// MCP endpoint: http://127.0.0.1:3000/mcp
+```
+
+Set `host` explicitly. Without it the server listens on `localhost`, which Node binds to a single address (often only `::1`), so requests to `127.0.0.1` are refused. Use `0.0.0.0` or `::` to accept connections from other machines only behind network access controls or an `unstable_hooks.authenticate` check: without one, every caller that can reach the port is served with the configured `apiKey`.
+
+Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`, `logging`, `safeMode`, `fileAccess` (`local` or `upload`), `requireCredential`, `searchFeedback` and `endpointFeedback`. `unstable_hooks` accepts:
+
+| Hook | Purpose |
+|---|---|
+| `authenticate(request)` | Resolve the session for a request; throw a `Response` to reject it. |
+| `wrapTool(tool)` | Decorate every registered tool. |
+| `onToolResult(event)` | Observe the start and outcome of each tool call, with any API agent hints. |
+| `instructions` | Server instructions, or a function choosing from the defaults. |
+| `registerExtraTools(registrar, context)` | Add tools after the built-in ones. |
+| `outboundRequest(session)` | Credential and extra headers for each Firecrawl API request. |
+| `beforeKeylessRequest(session, origin)` | Refuse a keyless request by throwing. |
+| `toolFilter(name)` | Leave built-in tools out of the instance. |
+| `configureHttp(app)` | Add HTTP routes. |
+| `oauth.protectedResource` | Serve OAuth protected-resource metadata. |
+
+FastMCP is bundled inside the package, so use the types exported from `firecrawl-mcp/server` (`Session`, `ToolDefinition`, `ToolRegistrar`, `FirecrawlMcpServerHooks` and others) rather than importing `fastmcp` yourself.
+
 ## Logging System
 
 The server includes comprehensive logging:

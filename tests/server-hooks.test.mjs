@@ -52,7 +52,7 @@ async function startEmbedded(t, options) {
       stateless: true,
     },
   });
-  t.after(() => instance.server.stop());
+  t.after(() => instance.stop());
   return port;
 }
 
