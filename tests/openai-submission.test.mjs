@@ -54,6 +54,10 @@ test('production submission preserves Firecrawl metadata and every skill/referen
   assert.deepEqual(await json(join(destination, '.mcp.json')), {
     mcpServers: { firecrawl: { url: 'https://mcp.firecrawl.dev/v2/mcp-oauth' } },
   });
+  for (const key of ['logo', 'composerIcon']) {
+    const icon = await readFile(join(destination, source.interface[key]), 'utf8');
+    assert.match(icon, /width="128" height="128" viewBox="0 0 128 128"/);
+  }
 });
 
 test('preparation refuses to overwrite an existing directory', async (t) => {

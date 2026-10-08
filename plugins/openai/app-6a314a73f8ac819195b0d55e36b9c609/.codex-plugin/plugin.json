@@ -18,7 +18,10 @@
     "privacyPolicyURL": "https://www.firecrawl.dev/privacy-policy",
     "shortDescription": "Search and extract web data",
     "termsOfServiceURL": "https://www.firecrawl.dev/terms-of-service",
-    "websiteURL": "https://firecrawl.dev"
+    "websiteURL": "https://firecrawl.dev",
+    "logo": "./assets/firecrawl.svg",
+    "composerIcon": "./assets/firecrawl.svg",
+    "brandColor": "#fa5d19"
   },
   "name": "app-6a314a73f8ac819195b0d55e36b9c609",
   "skills": "./skills",

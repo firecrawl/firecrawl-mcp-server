@@ -38,6 +38,9 @@ export async function prepareOpenAIPlugin(output) {
   await cp(join(pluginSource, 'skills'), join(destination, 'skills'), {
     recursive: true,
   });
+  await cp(join(pluginSource, 'assets'), join(destination, 'assets'), {
+    recursive: true,
+  });
   const { apps, skills, ...compatibility } = manifest;
   await writeJson(join(destination, 'plugin.json'), {
     $schema: 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json',
