@@ -23,6 +23,7 @@
 
 - Hosted OAuth reuses a token's introspection answer for up to 60 seconds, capped by the token's expiry, and 10 seconds for an inactive answer. Concurrent requests with one token share a single introspection call, and failed introspections are never cached. This keeps each node under the issuer's per-IP rate limit, which was turning bursts into `Firecrawl credential validation is temporarily unavailable`. A revoked token can keep working for up to 60 seconds on a pod that cached it. Set `FIRECRAWL_OAUTH_INTROSPECT_CACHE_TTL_MS=0` to turn the cache off. `[MCP_CREDENTIAL_VALIDATION]` records now include `edge_mitigation` (`deny`, `challenge`, `rate_limit` or `other`) when the edge firewall blocked the introspection.
 - `firecrawl_search` on both surfaces now forwards `includeDomains` and `excludeDomains` to `/v2/search` as body fields instead of rewriting the query with `site:` operators, so the API's domain enforcement applies to MCP callers.
+- `firecrawl_feedback` and `firecrawl_search_feedback` now forward the API's `details` when a submission is rejected as `INVALID_BODY`, in both the text and structured results, so an agent can see which field to correct instead of retrying the same payload.
 
 ## [3.25.0] - Unreleased
 
