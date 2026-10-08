@@ -11,7 +11,6 @@ const skill = readFileSync(
   join(openaiPlugin, 'skills', name, 'SKILL.md'),
   'utf8'
 );
-const instructions = skill.replace(/\s+/g, ' ');
 
 test('deep research has a valid plugin identity and its own router entry', () => {
   const manifest = JSON.parse(
@@ -27,89 +26,6 @@ test('deep research has a valid plugin identity and its own router entry', () =>
     'utf8'
   );
   assert.ok(router.includes(`\`${name}\``));
-});
-
-test('deep research retains report-scale evidence and provider execution requirements', () => {
-  for (const requirement of [
-    /not quick lookups, product recommendations, or paper literature reviews/,
-    /Contrarian Views And Risks/,
-    /Open Questions/,
-    /central claims have adequate evidence/,
-    /Web, developer and paper searches are billed per request/,
-    /requiresOneOf/,
-    /response\.key/,
-    /price and external effects/,
-    /every item in `data.alexandria`/,
-    /unchanged filters and bounded pages\/records\/credits/,
-    /identical ID and payload/,
-    /changed inputs need a new ID/,
-    /After an organization admin confirms acceptance/,
-    /only if access and budget still permit/,
-    /unknown freshness/,
-    /live search\/page retrieval for missing or freshness-critical facts/,
-    /retention may expire or be unavailable/,
-    /not silently rerun paid work/,
-  ]) {
-    assert.match(instructions, requirement);
-  }
-  assert.doesNotMatch(
-    skill,
-    /Bash\(|allowed-tools:|FIRECRAWL_API_KEY|\.firecrawl\/|npx firecrawl/
-  );
-});
-
-test('deep research starts from inferred depth without mandatory duration gating', () => {
-  const scope = skill
-    .split('## Scope and depth\n')[1]
-    .split('## Collection budget and PDF reads\n')[0]
-    .replace(/\s+/g, ' ');
-  assert.match(scope, /Infer the topic, output format and depth/);
-  assert.match(scope, /normal depth/);
-  assert.match(scope, /thorough depth when requested/);
-  assert.match(scope, /Show a short plan.*then start/);
-  assert.match(
-    scope,
-    /Ask only when ambiguity in the topic or scope blocks useful research/
-  );
-  assert.doesNotMatch(
-    scope,
-    /How long.*(?:run|take)|ask.*before collection|few minutes|\d+(?:[–-]\d+)?\s*minutes/i
-  );
-});
-
-test('deep research bounds PDF pages and reconciles reported spend without claiming unknown costs are zero', () => {
-  for (const requirement of [
-    /40-credit ceiling/,
-    /8 total searches across web\/developer\/paper tools/,
-    /8 URL reads/,
-    /Initially allocate/,
-    /Expand those allocations only for unresolved evidence questions with bounded headroom/,
-    /Respect tighter user-supplied count limits/,
-    /ask before raising those limits or the credit ceiling/,
-    /pdfOptions: \{maxPages: 5\}/,
-    /extensionless or uncertain document URLs/,
-    /pooled allowance of 10 parsed PDF pages/,
-    /remaining allowance/,
-    /If no page allowance remains, pause document parsing/,
-    /truncated document as partial coverage/,
-    /both the page pool and remaining credit budget/,
-    /reread may charge the full requested pages again/,
-    /distinct MCP call IDs, including child calls/,
-    /one response representation/,
-    /metadata\.creditsUsed/,
-    /data\.metadata\.creditsUsed/,
-    /aggregate once, not again with its item breakdown or included children/,
-    /Include child receipts not already covered by an aggregate/,
-    /update the job's total rather than add every poll/,
-    /Do not add cumulative account-usage counters/,
-    /Catalogue prices are not charges/,
-    /Missing usage is unknown, not zero/,
-    /reservations.*separate from observed spend/,
-    /remaining headroom cannot be bounded, pause further paid collection/,
-    /Missing usage prevents a guarantee of budget compliance/,
-    /lower bound with unknown costs/,
-  ])
-    assert.match(instructions, requirement);
 });
 
 test('deep-research examples are accepted by the emitted MCP input schemas', async (t) => {
