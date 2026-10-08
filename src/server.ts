@@ -61,6 +61,7 @@ import { originHeaders, requestOrigin, type McpClient } from './origin';
 import { CoreHttpError } from './core-http-error.js';
 import { normalizeHeader } from './headers.js';
 import {
+  FIRECRAWL_CREDENTIAL_REJECTED,
   keylessQuotaReason,
   keylessSignupUrlFrom,
   recoveryPayload,
@@ -593,7 +594,10 @@ export function createFirecrawlMcpServer(
     }
     const outboundRequest = hooks.outboundRequest;
     if (!outboundRequest) {
-      return createClient(session?.firecrawlApiKey);
+      return markCredentialRejections(
+        createClient(session?.firecrawlApiKey),
+        session
+      );
     }
 
     // The hook may mint a short-lived credential, so it runs on every request
@@ -629,6 +633,26 @@ export function createFirecrawlMcpServer(
       }
       return request;
     });
+    return markCredentialRejections(client, session);
+  }
+
+  /** Records on the call's session that Core answered 401 to this client. */
+  function markCredentialRejections(
+    client: FirecrawlApp,
+    session: SessionData | undefined
+  ): FirecrawlApp {
+    const responses = (client as any).http?.instance?.interceptors?.response;
+    if (!session || !responses?.use) return client;
+    responses.use(
+      (response: unknown) => response,
+      (error: { response?: { status?: unknown } } | undefined) => {
+        if (error?.response?.status === 401) {
+          (session as Record<symbol, unknown>)[FIRECRAWL_CREDENTIAL_REJECTED] =
+            true;
+        }
+        return Promise.reject(error);
+      }
+    );
     return client;
   }
 

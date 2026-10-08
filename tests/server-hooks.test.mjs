@@ -314,3 +314,31 @@ test('instructions, configureHttp and oauth metadata hooks shape the instance', 
   assert.equal(body.resource, 'https://mcp.example/mcp');
   assert.deepEqual(body.authorization_servers, ['https://issuer.example']);
 });
+
+test('a 401 from an added tool is not treated as a Firecrawl credential rejection', async (t) => {
+  const port = await startEmbedded(t, {
+    apiUrl: 'http://127.0.0.1:9',
+    unstable_hooks: {
+      authenticate: async () => ({
+        authType: 'api-key',
+        firecrawlApiKey: 'fc-embedded',
+      }),
+      registerExtraTools: (registrar) => {
+        registrar.addTool(
+          extraTool('embed_other_backend', async () => {
+            throw Object.assign(
+              new Error('other backend rejected the request'),
+              {
+                status: 401,
+              }
+            );
+          })
+        );
+      },
+    },
+  });
+  const result = await callTool(port, 'embed_other_backend');
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /other backend rejected the request/);
+  assert.notEqual(result.structuredContent?.code, 'CREDENTIAL_INVALID');
+});

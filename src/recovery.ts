@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { UserError } from 'fastmcp';
+import { CoreHttpError } from './core-http-error.js';
 import { agentHintsText, readErrorAgentHints } from './agent-hints';
 import { checkKeylessSignupUrl } from './keyless-signup-link';
 
@@ -99,20 +100,41 @@ export function invalidOAuthRecoveryPayload(): Record<string, unknown> & {
 }
 
 /**
+ * Set on a tool call's session when a Firecrawl API request made through that
+ * session's client was answered with 401.
+ */
+export const FIRECRAWL_CREDENTIAL_REJECTED = Symbol('firecrawlCredentialRejected');
+
+type RecoverySession = {
+  authType?: string;
+  [FIRECRAWL_CREDENTIAL_REJECTED]?: boolean;
+};
+
+/**
  * Core rejected the credential this session forwarded. Tools reach Core by
- * several routes, the SDK helpers, the SDK's HTTP layer, and plain fetch, so
- * this reads the status rather than the error's type: every route reports one,
- * and inside a tool a 401 can only have come from Core. Only 401 is matched,
+ * several routes: the SDK helpers and the SDK's HTTP layer mark the call's
+ * session when Core answers 401, and the plain-fetch paths raise
+ * CoreHttpError. A 401 from anything else, such as a service an added tool
+ * calls, is not a verdict on the Firecrawl credential. Only 401 is matched,
  * because that is a verdict on the credential; a 403 can mean an entitlement
  * the key legitimately lacks.
  */
-function isCoreCredentialRejection(error: unknown): boolean {
+function isCoreCredentialRejection(
+  error: unknown,
+  session: RecoverySession | undefined
+): boolean {
   if (!(error instanceof Error)) return false;
   const candidate = error as {
     response?: { status?: unknown };
     status?: unknown;
   };
-  return candidate.status === 401 || candidate.response?.status === 401;
+  if (candidate.status !== 401 && candidate.response?.status !== 401) {
+    return false;
+  }
+  return (
+    error instanceof CoreHttpError ||
+    session?.[FIRECRAWL_CREDENTIAL_REJECTED] === true
+  );
 }
 
 /**
@@ -124,7 +146,7 @@ function isCoreCredentialRejection(error: unknown): boolean {
 export async function runWithCredentialRecovery<T>(
   run: () => T | Promise<T>,
   requestId: string,
-  session?: { authType?: string }
+  session?: RecoverySession
 ): Promise<T> {
   try {
     return await run();
@@ -133,7 +155,7 @@ export async function runWithCredentialRecovery<T>(
     // An OAuth session was validated at connect time, so a rejection there is a
     // different fault and keeps its own reconnect guidance; a keyless session
     // never sent an account credential at all.
-    if (session?.authType !== 'api-key' || !isCoreCredentialRejection(error)) {
+    if (session?.authType !== 'api-key' || !isCoreCredentialRejection(error, session)) {
       const hints = readErrorAgentHints(error);
       if (hints) {
         const message = error instanceof Error ? error.message : String(error);
