@@ -101,6 +101,10 @@ test('OpenAI onboarding separates goal authorization from installation and sched
     goal,
     /context is missing, stale, or ambiguous[\s\S]*one focused question/
   );
+  assert.match(
+    goal,
+    /multiple plausible goals[\s\S]*choices in that one question/
+  );
   const actionIndex = goal.indexOf('one concrete output');
   const optionsIndex = goal.indexOf('two or three concrete starting options');
   assert.ok(actionIndex >= 0 && optionsIndex >= 0);
