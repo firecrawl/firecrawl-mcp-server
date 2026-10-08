@@ -1,0 +1,79 @@
+{
+  "session": {
+    "initialize": {
+      "capabilities": {
+        "tools": {},
+        "logging": {},
+        "completions": {}
+      },
+      "instructions": "Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. Authenticated firecrawl_search returns web results together with matching Alexandria providers in data.tools. Alexandria is Firecrawl's catalogue of data providers and workflows across companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more; providers return typed, sourced records through published contracts. A matching provider can return the same fields across several entities, provenance, exact figures or timestamps, or a large set of records through firecrawl_scrape with its published contract. If web results already answer the question, use them. For the same fields across multiple pages, firecrawl_find_tools offers free provider discovery. Use firecrawl_find_tools to read a contract that was not returned in full or to browse the catalogue by category. A search with sources: [\"web\"] omits semantic provider discovery; domainTools: true can still return website-matched tools. Web-only results use domainTools: false. If no provider fits, continue with web search or firecrawl_agent. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: [\"research\"] is a website filter over ordinary web results and reaches different sources. For a programming question (code behaviour, a library or framework, an API contract, an error message, or a known bug), firecrawl_developer_search (or firecrawl_search with categories: [\"developer\"]) searches an index of public repositories, GitHub issues, merged pull requests, READMEs, and code documentation. For a legal or regulatory question, firecrawl_gov_search searches primary law and regulatory material from US federal, state, and local government sources: statutes, regulations, codes, court opinions, and other government publications; firecrawl_search with categories: [\"gov\"] reaches the same sources and cannot be combined with other categories. firecrawl_search with sources: [{type: \"alexandria\"}] returns compact tool summaries in data.tools; toolDetail: \"full\" includes contracts, firecrawl_find_tools starts with categories, lists providers, then compact tools, and expands the selected full contract, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities and returns their results. Alexandria access needs an API key on a team with it enabled. Provide only the required inputs and account for stated network or external side effects.",
+      "protocolVersion": "2025-06-18",
+      "serverInfo": {
+        "name": "firecrawl-fastmcp",
+        "version": "<version>"
+      }
+    },
+    "tools": [
+      "firecrawl_scrape@681772ab7497",
+      "firecrawl_map@a8a3beee6a0d",
+      "firecrawl_search@9037d081356b",
+      "firecrawl_find_tools@9dd2800b8610",
+      "firecrawl_search_feedback@aaf6dc6f2735",
+      "firecrawl_feedback@40455dbfba0d",
+      "firecrawl_crawl@f5baa74dcfc2",
+      "firecrawl_check_crawl_status@4408d188eb80",
+      "firecrawl_agent@be93d4a2fee4",
+      "firecrawl_agent_status@6869e1d2173c",
+      "firecrawl_interact@1fc9f08265c1",
+      "firecrawl_interact_stop@c9e73babc15f",
+      "firecrawl_parse@9738b5806dc4",
+      "firecrawl_monitor_create@413df52b5ca4",
+      "firecrawl_monitor_list@2b85d9cb26e3",
+      "firecrawl_monitor_get@8e48562986fe",
+      "firecrawl_monitor_update@98e3bb40e01f",
+      "firecrawl_monitor_delete@6158131af302",
+      "firecrawl_monitor_run@626e8468bad4",
+      "firecrawl_monitor_checks@158ef849c44c",
+      "firecrawl_monitor_check@4c95f9acea01",
+      "firecrawl_research_search_papers@64130abe8c86",
+      "firecrawl_research_inspect_paper@60bf14df18ca",
+      "firecrawl_research_related_papers@45b2803ae1d1",
+      "firecrawl_research_read_paper@231a9d429237",
+      "firecrawl_developer_search@a5296368f4ff",
+      "firecrawl_gov_search@566d2207b9a6",
+      "firecrawl_credit_usage@4202fbda2421"
+    ]
+  },
+  "unauthenticated": {
+    "body": {
+      "error": "invalid_token",
+      "error_description": "Firecrawl credentials required: OAuth access token (Authorization: Bearer fco_...) or API key (x-firecrawl-api-key)"
+    },
+    "status": 401,
+    "wwwAuthenticate": "Bearer resource_metadata=\"https://mcp.firecrawl.dev/.well-known/oauth-protected-resource/v2/mcp-oauth\", error=\"invalid_token\", error_description=\"Firecrawl credentials required: OAuth access token (Authorization: Bearer fco_...) or API key (x-firecrawl-api-key)\""
+  },
+  "routes": {
+    "oauthProtectedResource": {
+      "body": {
+        "authorization_servers": [
+          "https://www.firecrawl.dev"
+        ],
+        "bearer_methods_supported": [
+          "header"
+        ],
+        "resource": "https://mcp.firecrawl.dev/v2/mcp-oauth",
+        "resource_name": "Firecrawl MCP Account",
+        "scopes_supported": [
+          "firecrawl:global"
+        ]
+      },
+      "status": 200
+    },
+    "ready": {
+      "body": {
+        "ok": true
+      },
+      "status": 200
+    }
+  }
+}
