@@ -1025,7 +1025,7 @@ test('HTTP cloud keyless transport preserves app challenge without advertising O
     /An Authorization bearer API key can provide higher usage limits and expose additional tools/i
   );
   assert.doesNotMatch(initializeMessage.result.instructions, /\bOAuth\b/i);
-  assert.ok(initializeMessage.result.instructions.length <= 2048);
+  assert.ok(initializeMessage.result.instructions.length <= CLAUDE_CODE_TEXT_CAP);
 
   const toolsList = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({
