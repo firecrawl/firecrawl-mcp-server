@@ -333,6 +333,11 @@ export type FirecrawlMcpServerStartArgs =
       transportType: 'httpStream';
       httpStream: {
         port: number;
+        /**
+         * Address to listen on. Defaults to `FASTMCP_HOST`, then `localhost`,
+         * which Node binds to a single address (often `::1` only), so pass
+         * `127.0.0.1`, `::` or `0.0.0.0` to choose explicitly.
+         */
         host?: string;
         /** Defaults to FastMCP's endpoint (`FASTMCP_ENDPOINT` or `/mcp`). */
         endpoint?: `/${string}`;
