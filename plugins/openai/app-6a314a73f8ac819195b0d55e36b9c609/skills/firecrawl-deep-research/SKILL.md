@@ -1,10 +1,10 @@
 ---
 name: firecrawl-deep-research
 description: >
-  Investigate complex questions, competitive comparisons, prospect discovery,
-  research enrichment and historical changes with Firecrawl MCP. Retrieve web,
-  Alexandria, paper and developer evidence; produce a cross-checked, cited answer.
-  Use for deep dives and multi-hop research, not quick lookups or single-page reads.
+  Investigate questions that need multiple sources or dependent research steps
+  with Firecrawl MCP, including complex comparisons, discovery and enrichment.
+  Return a cited answer with verified evidence and clear gaps. Use when a focused
+  search or single-page read cannot adequately answer the question.
 license: ISC
 ---
 
@@ -14,23 +14,21 @@ Answer the question using retrieved evidence and the existing Firecrawl MCP conn
 
 ## Frame the investigation
 
-Infer scope, dates, geography, audience and output; ask only for decisions that materially change the investigation. Convert relative dates to explicit bounds. For substantial investigations, briefly state the main questions, evidence routes and collection budget, then begin. Revise the questions as findings reveal consequential gaps or competing explanations.
+Invocation does not require an exhaustive investigation. Start with the smallest useful retrieval and expand only for gaps that could change the answer. Do not launch parallel agents, crawls, autonomous jobs or paid enrichment merely because this skill is active. Use them when the requested scope and missing evidence justify them; keep simple answers simple.
 
-Start from supplied URLs or reusable evidence. Otherwise use the fitting dedicated method below or `firecrawl_search` with the actual question and its constraints. In authenticated sessions, omitted `sources` defaults to web, Alexandria and website-matched tools; inspect both `data.web` and `data.tools`. Narrow sources deliberately.
+Infer scope, dates, geography, audience and output; ask only for decisions that materially change the investigation. Convert relative dates to explicit bounds. For substantial investigations, briefly state the main questions, evidence routes, then begin. Revise the questions as findings reveal consequential gaps or competing explanations.
+
+Start from supplied URLs or reusable evidence. Otherwise use the fitting dedicated method below or `firecrawl_search` with the actual question and its constraints. Inspect relevant page results and matching capability suggestions returned by search.
 
 A catalogue suggestion is not retrieved data. Reuse complete contracts; expand incomplete selected suggestions through `firecrawl_find_tools`. Use targeted catalogue discovery when structured evidence is needed and search provides no fitting suggestion. Avoid catalogue walks and unnecessary discovery before known pages or paper tools.
 
-## Bound collection and costs
+## Collection and costs
 
-Use the user's finite credit ceiling, or start with 40 credits. Initially allocate 8 combined web/developer/paper searches and 8 URL reads as allowances, not targets. Expand these only for material evidence gaps within the credit ceiling. Respect tighter user limits; ask before raising user limits or credit/page ceilings. These are planning limits, not runtime-enforced caps. Include provider executions, retries and child calls.
+Respect user-specified time, credit, page and result limits and returned account/tool restrictions. Do not impose default budgets, source quotas or minimum call counts. Let evidence needs determine collection depth and stop when the requested answer is supported.
 
-For known, likely or uncertain document URLs, including extensionless URLs, use supported `parsers: ["pdf"]` and `pdfOptions: {maxPages: 5}`. Begin with a 10-page pool and reduce each request to its remaining allowance. Reserve requested pages until the response establishes actual use or non-PDF type. Stop parsing when the pool is exhausted; use HTML or targeted paper passages where suitable. Treat truncated documents as partial coverage. Rereads may charge all requested pages again.
+For PDF reads, including extensionless document URLs, use supported `parsers: ["pdf"]` and choose `pdfOptions.maxPages` for the needed evidence and any user limit. Prefer relevant passages or HTML when suitable. Treat truncated documents as partial coverage; rereads may charge the full requested pages again.
 
-After each call or batch, update one run-wide cost ledger:
-
-- Prefer structured content, otherwise parse JSON text. Record distinct call IDs and returned `creditsUsed`/`creditsCost`, including nested `data` or `metadata` totals. If no aggregate is returned, use distinct executed-item charges. Catalogue prices are estimates, not charges.
-- Count aggregates once; include only child charges they do not cover. Replace cumulative job totals rather than adding every poll. Do not add account-wide counters or duplicate confirmed replayed charges; do not assume retries are free.
-- Keep observed spend, reservations and unknown charges separate. Missing usage, including suspicious zero fields on failed runs, does not prove budget compliance. If remaining paid headroom cannot be bounded, pause paid collection and report observed spend as a lower bound.
+When tracking costs, use returned receipts rather than catalogue estimates. Prefer structured content or parse JSON text, include nested totals and count aggregates and included child charges once. Replace cumulative job totals rather than adding every poll; do not add account-wide counters. Missing usage is unknown, not zero. Disclose consequential unknown costs and stop if a user-set limit cannot be respected; do not assume retries are free.
 
 ## Choose the evidence route
 
@@ -64,7 +62,7 @@ For uncertain retries, retain identical request ID and payload; changed inputs r
 
 For papers, discover studies, inspect canonical metadata and read relevant passages. A research-category web filter is not the paper index; available full text does not prove the needed passage was returned. Disclose abstract-only support. Resolve metadata conflicts against canonical records and keep abstract, body and revisions version-specific; revision dates are not first publication. Expand citations to close material gaps.
 
-Use the async agent sparingly when broad autonomous collection materially improves coverage and fits time and credit limits. Inspect its live contract and set bounded `maxCredits` when supported. Retain returned `id`/`threadId`, poll with bounded time/attempts and returned intervals, and inspect terminal results. Preserve useful `partial` records from failed or credit-limited jobs; requested row counts do not establish completion. Reuse jobs after timeouts instead of duplicating them. If a connector rejects optional schema fields, omit them and describe the fields in the prompt when permitted; this does not enforce a schema. Do not claim background execution or durable continuation without returned support.
+Use the async agent sparingly when broad autonomous collection materially improves coverage and fits time and credit limits. Inspect its live contract and apply user-specified credit limits through `maxCredits` when supported. Retain returned `id`/`threadId`, poll with bounded time/attempts and returned intervals, and inspect terminal results. Preserve useful `partial` records from failed or credit-limited jobs; requested row counts do not establish completion. Reuse jobs after timeouts instead of duplicating them. If a connector rejects optional schema fields, omit them and describe the fields in the prompt when permitted; this does not enforce a schema. Do not claim background execution or durable continuation without returned support.
 
 ## Resolve evidence gaps
 
@@ -123,8 +121,7 @@ Arguments for `firecrawl_find_tools` only if the report needs structured observa
 
 These return evidence candidates or catalogue summaries, not executed provider records. For a selected summary, copy its returned provider and capability IDs into a targeted `firecrawl_find_tools` call with `expand: ["options", "response"]`; build execution options from that contract. Do not invent a provider, capability, or field to make an example executable.
 
-Bounded URL document reads with `firecrawl_scrape` (use a smaller `maxPages` when
-less of the pooled allowance remains):
+Example PDF read with `firecrawl_scrape`; choose `maxPages` for the evidence needed and any user limit:
 
 ```json
 {
@@ -138,7 +135,7 @@ less of the pooled allowance remains):
 }
 ```
 
-The same parser bound applies when a document URL has no file extension:
+A document URL can have no file extension:
 
 ```json
 {
