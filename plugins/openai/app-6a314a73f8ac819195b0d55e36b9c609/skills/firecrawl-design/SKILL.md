@@ -6,19 +6,15 @@ license: ISC
 
 # Firecrawl Design
 
-Use this when the user wants a URL turned into a practical design system for a new site or an inspired implementation. Default output is `DESIGN.md`, not a guaranteed faithful clone or a downloaded asset bundle. Infer source URL, target stack, and whether implementation is requested. Ask at most 1–3 concise questions only for blocking inputs. If the user asks to implement, produce or update `DESIGN.md` first and use it as the build's source of truth.
+Use this when the user wants a URL turned into a practical design system for a new site or an inspired implementation. Default output is `DESIGN.md`, not a guaranteed faithful clone or a downloaded asset bundle. Infer source URL, target stack, and whether implementation is requested. Ask for clarification only for blocking inputs. If the user asks to implement, produce or update `DESIGN.md` first and use it as the build's source of truth.
 
-Use the named Firecrawl MCP tools, resolving deferred tools through the host's tool search.
-
-Agree the capture pages and credit ceiling; start with the representative URL.
-URL scraping is billed per URL.
-Provider-only discovery is free; execution uses the selected capability’s price.
+Use the existing Firecrawl connection, resolve deferred tools and follow the live schemas. Respect requested pages, time/credit limits and account restrictions without default budgets or capture quotas. Retrieval is billed; if reporting spend, use returned receipts rather than catalogue prices. Count aggregates and included child charges once, replace cumulative totals and exclude account-wide counters; missing usage is unknown.
 
 Inspect `firecrawl_scrape`'s live formats enum before capture: deployed servers may lag the skill. Do not promise unsupported image collection or measurements.
 
 ## Capture complementary evidence
 
-Start with the supplied representative page; do not map or crawl the whole site by default. Request structured `branding`, page `images` when the live schema supports it, a full-page `screenshot`, and `markdown`. These can be combined in a supported scrape request. Keep `onlyMainContent: false` to retain navigation and section context. Use `maxAge: 0` for a current design capture.
+Start with the supplied representative URL or reusable captures whose page, state and date fit; do not map or crawl the site by default. Collect missing complementary evidence: structured `branding`, page `images` when supported, a full-page `screenshot`, and `markdown`. These can be combined in a supported scrape request. Keep `onlyMainContent: false` for navigation and section context. Use supported `maxAge: 0` for requested fresh captures, distinguishing requested freshness from returned cache/as-of evidence. After inspecting each result, choose the next unresolved token, component or layout fact needed for the requested build; do not recapture evidence already sufficient.
 
 `firecrawl_scrape` example, only after confirming `images` is accepted:
 
@@ -40,7 +36,7 @@ If the live schema lacks `images`, omit it and explicitly disclose incomplete co
 - Use structured branding as the primary evidence for colors, typography, spacing, buttons, brand assets, personality, and confidence notes. Report missing branding fields rather than fabricating tokens.
 - When returned, use the page-level `images` list to identify representative hero, product, feature, section, and decorative imagery beyond curated brand assets. A returned URL list is not proof of a complete downloaded bundle, all carousel states, or reusable asset rights.
 - Use the full-page screenshot for layout, hierarchy, density, and overall feel. Preserve its returned URL or host artifact near the top of `DESIGN.md`; disclose expiry/retention limitations. Do not invent a local path or claim an image was downloaded when the host cannot save it.
-- Use markdown for headings, CTAs, navigation, copy hierarchy, and section order. Add HTML only if needed to resolve font names, CSS variables, classes, or component structure not established by the initial evidence. Fetch related pages only when a broader site system is requested or a specific unresolved design question requires them.
+- Use markdown for headings, CTAs, navigation, copy hierarchy, and section order. Add HTML only to resolve missing font names, CSS variables, classes, or component structure. Fetch related pages only for a requested broader system or a material unresolved design question. For user-supplied PDF brand guidelines, including extensionless document URLs, use supported `parsers: ["pdf"]` and choose `pdfOptions.maxPages` for the relevant tokens and user limits; disclose truncation and possible full requested-page charges on rereads.
 
 Example supplemental `firecrawl_scrape` arguments:
 
@@ -56,44 +52,25 @@ Example supplemental `firecrawl_scrape` arguments:
 }
 ```
 
-Alexandria is not a mandatory hop for a live visual capture. Consider a discovered provider/workflow only when it explicitly supplies relevant branding or asset metadata for the exact source domain and its contract meets the requested scope and freshness. Generic company logos or profile records cannot replace page screenshots, layout evidence, or content imagery. If sufficient structured tokens are returned, avoid duplicate token collection; retain visual evidence for the page itself. Use only returned provider/capability identifiers and declared options using the execution checks in this skill, never a guessed design provider.
+Alexandria is optional, not a prerequisite for visual capture. Use a fitting contract only for relevant branding/asset metadata for the exact source domain, scope and date. Generic company logos or profiles cannot replace page screenshots, layout or content imagery. Reuse complete contracts and tokens rather than recollecting them.
 
-For a fitting contract returning branding or asset metadata, not visual state, inspect only selected identifiers
-with `expand: ["options", "response"]`: required inputs, `requiresOneOf`,
-`response.key`, declared pagination, freshness, price and external effects.
-Alexandria is not a page cache; catalogue `nextTool` pages contracts, not records.
-Execute exact returned provider/capability/options through `firecrawl_scrape`
-with `alexandria: {provider, capability, options}` or an array of 1–10 calls;
-a returned `version` can pin the workflow.
-Only payload-bound `requestId` and millisecond `timeout` accompany execution,
-not URL formats or `maxAge`. Inspect every item in `data.alexandria` despite outer
-success, keeping successful records and reporting item errors/empty/partial data.
-Page only as declared, with unchanged filters and bounded pages/records/credits.
+If an external design fact requires search, use normal `firecrawl_search` and inspect relevant pages and matching suggestions. When exposed, set `objective` to `[design]` plus the consistent design-extraction goal; keep `query` focused and untagged, omit unsupported `objective` and avoid sensitive details. Expand only a missing selected contract with `firecrawl_find_tools` or returned `nextTool.arguments`, preserving selectors. A combined catalogue ID may not be an execution selector. Inspect required inputs, `requiresOneOf`, `response.key`, pagination, freshness, price and effects; catalogue pagination is not an asset inventory.
 
-For uncertain retries preserve the identical ID and payload with bounded attempts;
-changed inputs need a new ID. Do not re-charge in-flight requests or successful
-items. Execution needs a connected account on an enabled team; stop on access,
-terms or budget restrictions. Terms require an organization admin outside this
-workflow; do not accept terms through a capability. Do not retry unresolved
-restrictions. After an organization admin confirms acceptance, resume the requested
-retrieval with the identical payload and `requestId`, only if access and budget
-still permit.
-Use URL-mode `maxAge: 0` for requested fresh captures.
-Keep provider/capability/version, record IDs, URLs and retrieval/as-of times
-with the output; disclose unknown freshness and use authorized live search/page
-retrieval for missing or freshness-critical facts, or report gaps. For large
-results, use supported artifact handoffs; retention may expire or be unavailable.
-Report retention failures and do not silently rerun paid work.
+Execute returned provider/capability/options through `firecrawl_scrape` Alexandria mode, batching or pinning `version` only as the live schema permits. Payload-bound `requestId` and millisecond `timeout` are separate from URL formats and `maxAge`. Inspect every `data.alexandria` item, retain successful metadata and use documented item-specific continuation for failures. Page only with declared inputs and unchanged filters while a needed asset/token gap remains.
+
+For uncertain retries retain identical request ID and payload; changed inputs need a new ID. Do not duplicate in-flight requests or replay successful items. Stop unresolved access, terms or budget routes while preserving tokens and continuing permitted page evidence. Terms require an organization administrator outside this workflow; resume retained requests after confirmed acceptance only when contract, access and budget permit. Preserve provider/capability/version, request/record IDs, URLs and retrieval/as-of times. Disclose unknown freshness and retention failures, using supported artifact handoffs without silently rerunning paid work.
 
 ## Extract the design language
 
 Document color roles (primary, secondary, accent, background, border, text, state); detectable font families, type scale, weights and line heights; containers, section rhythm, grid gaps, padding, density, radius and shadows; hero/nav/footer patterns; buttons, inputs, cards, badges, pricing, testimonials, feature rows and forms; imagery/icon treatment and logo constraints; CTA wording and copy rhythm.
 
-Mark unmeasured values as inferred approximations, with practical recommendations and confidence. Do not claim exact spacing from a screenshot alone. A single full-page capture does not establish responsive behavior, hover states, transitions, or animations; label these unobserved or inferred unless additional supported evidence demonstrates them. Do not promise pixel-perfect reconstruction or complete asset capture.
+Attach each material token or pattern to its branding field, HTML/CSS value, text passage or inspected screenshot region, preserving source page, state and capture time. Resolve conflicting tokens against the relevant component rather than merging unlike states. Inspect actual pixels for visual claims; screenshot captions and locators alone are not evidence. Repeated branding and page outputs from one origin are not independent corroboration.
+
+Mark unmeasured values as inferred approximations, with units, practical recommendations and confidence. Do not claim exact spacing from a screenshot alone. A single full-page capture does not establish responsive behavior, hover states, transitions, or animations; label these unobserved or inferred unless additional supported evidence demonstrates them. Do not promise pixel-perfect reconstruction or complete asset capture.
 
 ## Final deliverable
 
-Create a host artifact if supported, otherwise return inline Markdown named `DESIGN.md`. Embed the actual screenshot URL/artifact when available; if absent, retain the section with an explicit evidence gap. Preserve the structure below:
+Stop when the requested design tokens, components and page patterns have usable evidence and further targeted capture is unlikely to change build guidance, or when limits/access prevent progress; disclose gaps and stop reason. Create a host artifact if supported, otherwise return inline Markdown named `DESIGN.md`. Embed the actual screenshot URL/artifact when available; if absent, retain the section with an explicit gap. If the account and host support Intelligent UI, cited token/component comparisons may clarify the findings but must not create measurements or replace `DESIGN.md` and its evidence. Preserve the structure below:
 
 ```markdown
 # DESIGN.md: [Source Site]

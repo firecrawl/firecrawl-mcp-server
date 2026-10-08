@@ -8,52 +8,31 @@ license: ISC
 
 Create a concise, actionable brief about a known lead before a meeting.
 
-Use the named Firecrawl MCP tools, resolving deferred tools through the host's tool search.
+Use the existing Firecrawl connection, resolving deferred tools through the host's tool search and following live schemas. Start from supplied company/person URLs and reusable evidence before discovery.
 
-Bound company/person coverage, recent-event sources and credits for the brief.
-Web searches are billed per request; URL scraping is billed per URL.
-Provider-only discovery is free; execution uses the selected capability’s price.
+Respect user-specified time, credit and source limits and returned account restrictions; do not impose default budgets, source quotas or minimum calls. Web searches, URL/PDF retrieval and provider execution can incur charges. Track structured or parsed JSON receipts including nested totals, not catalogue estimates: count aggregates and included child charges once, replace cumulative totals rather than adding polls, and exclude account-wide counters. Missing usage is unknown, not zero; stop a costly route if the user's limit cannot be respected.
 
 ## Scope
 
-Infer the company, person, meeting context, and desired depth. If the company is clear, proceed. Ask at most one to three concise questions only if blocked by identity or meeting context. Resolve ambiguous companies with domain and location rather than combining similarly named entities.
+Infer the company, person, meeting context, and desired depth. If the company is clear, proceed. Ask for clarification only if blocked by identity or meeting context. Resolve ambiguous companies with domain and location rather than combining similarly named entities.
 
 ## Collection decisions
 
-1. Establish the company's canonical website and the person's identity/relationship from public evidence. Gather relevant company about, product, pricing, customer, team, and careers pages using `firecrawl_search` and selected `firecrawl_scrape` calls. Do not retrieve every page type if the brief already has sufficient evidence.
-2. If the brief needs structured company/person fields, such as company identity, stage/size signals, public role/background, or several related entities, use compact Alexandria suggestions or `firecrawl_find_tools`. Query for the known identifier and exact required fields. Expand only the best one or two contracts, checking whether company domain/ID or person identifier, disambiguation, and provenance are supported. A company contract is not evidence of a person's role unless it actually returns that relationship.
+1. Establish the company's canonical website and the person's identity/relationship from public evidence. Read supplied pages or reuse supporting passages first; otherwise use normal `firecrawl_search` and relevant `firecrawl_scrape` calls for company about, product, pricing, customer, team and careers evidence. Resolve parent/subsidiary and headquarters/local-presence distinctions; a shared name is not a shared identity.
+2. If structured company/person fields are missing, inspect matching suggestions from search and reuse complete contracts. Use targeted `firecrawl_find_tools` only for missing selected contracts or absent fitting suggestions. Check company domain/ID or person identifier, required fields, dates, disambiguation and provenance. A company contract is not evidence of a person's current role unless it returns that relationship.
 3. Execute only a fitting contract with returned provider/capability identifiers and declared options through `firecrawl_scrape` Alexandria mode. Use provider records to establish the fields they contain, not as proof of recent launches, funding, hiring, or partnerships they do not report. Follow the selected contract and execution checks below for prices, effects, item errors, and freshness.
-4. Add dated company announcements, recent news, funding, launches, hiring, partnerships, and press relevant to the meeting. Use public talks, posts, interviews, and profiles for the person's background. Current role, price, or recent-event claims require current source evidence or an explicit freshness caveat; retrieval time alone is not an as-of date.
+4. Add dated company announcements, recent news, funding, launches, hiring, partnerships, and press relevant to the meeting. Use public talks, posts, interviews, and profiles for the person's background. Current role, price, or recent-event claims require current source evidence or an explicit freshness caveat; retrieval time alone is not an as-of date. Hiring activity does not establish a particular open vacancy. Syndicated announcements sharing one origin are not independent confirmation.
 5. Collect just enough industry context to explain plausible business challenges. Label pain points as evidence-backed hypotheses and connect talking points to specific sources. Do not fabricate personal details, infer sensitive characteristics, or treat an outreach angle as permission to contact anyone.
 
-After one compact discovery pass and at most one targeted refinement without a fitting contract, continue with public web sources. Stop when the brief supports the meeting's important questions, recent activity, and useful talking points, or the agreed budget is reached. Record gaps instead of collecting irrelevant enrichment.
+Choose each next hop for the missing fact most likely to change the meeting brief, inspect the evidence, then update the brief. Change an unproductive query or source instead of repeating it. Stop when the meeting questions and useful talking points have adequate support and further targeted retrieval is unlikely to change them, or user/account limits prevent progress. Do not spend on optional enrichment after the brief is supported. If annotating supplied entities, preserve every original row, including duplicates and unmatched identities, with nulls and row-specific gaps.
 
-For a fitting contract returning known-company or person enrichment, inspect only selected identifiers
-with `expand: ["options", "response"]`: required inputs, `requiresOneOf`,
-`response.key`, declared pagination, freshness, price and external effects.
-Alexandria is not a page cache; catalogue `nextTool` pages contracts, not records.
-Execute exact returned provider/capability/options through `firecrawl_scrape`
-with `alexandria: {provider, capability, options}` or an array of 1–10 calls;
-a returned `version` can pin the workflow.
-Only payload-bound `requestId` and millisecond `timeout` accompany execution,
-not URL formats or `maxAge`. Inspect every item in `data.alexandria` despite outer
-success, keeping successful records and reporting item errors/empty/partial data.
-Page only as declared, with unchanged filters and bounded pages/records/credits.
+When ordinary `firecrawl_search` exposes `objective`, use `[lead-research]` followed by the broader meeting-research goal consistently across related searches. Keep `query` focused on the specific missing evidence without the tag; omit unsupported `objective` and sensitive information. For a relevant PDF, including an extensionless URL, use supported `parsers: ["pdf"]` and choose `pdfOptions.maxPages` for the needed evidence and any user limit; disclose truncation and possible reread charges.
 
-For uncertain retries preserve the identical ID and payload with bounded attempts;
-changed inputs need a new ID. Do not re-charge in-flight requests or successful
-items. Execution needs a connected account on an enabled team; stop on access,
-terms or budget restrictions. Terms require an organization admin outside this
-workflow; do not accept terms through a capability. Do not retry unresolved
-restrictions. After an organization admin confirms acceptance, resume the requested
-retrieval with the identical payload and `requestId`, only if access and budget
-still permit.
-Use URL-mode `maxAge: 0` for requested fresh captures.
-Keep provider/capability/version, record IDs, URLs and retrieval/as-of times
-with the output; disclose unknown freshness and use authorized live search/page
-retrieval for missing or freshness-critical facts, or report gaps. For large
-results, use supported artifact handoffs; retention may expire or be unavailable.
-Report retention failures and do not silently rerun paid work.
+For selected company/person contracts, follow returned `nextTool.arguments`, preserving selectors; expand options and responses when supported. A combined catalogue ID is not necessarily an execution selector. Inspect required inputs, `requiresOneOf`, response paths such as `response.key`, pagination, freshness, price and effects. Catalogue pages describe capabilities, not lead records. Execute returned provider/capability/options through `firecrawl_scrape` Alexandria mode, batching or pinning versions only as the live schema permits. Keep payload-bound `requestId` and millisecond `timeout` separate from URL formats and `maxAge`.
+
+Inspect every batch item, preserve successful enrichment and use documented item-specific continuation for failures. For uncertain retries retain identical ID and payload; changed inputs need a new ID. Do not duplicate in-flight requests or replay successes. Stop unresolved access, terms or budget routes while continuing permitted evidence. Terms require an organization administrator outside this workflow; resume retained requests after confirmed acceptance only when contract, access and user budget permit.
+
+Keep field-level sources/dates, provider/capability/version, request/record IDs and retrieval/as-of times. Unknown freshness remains unknown; supported URL-mode `maxAge: 0` requests a fresh capture, not proof of current content. Inspect supported retained-result/artifact handoffs before further paid work; disclose expired retention rather than silently rerunning it.
 
 ## Small MCP argument examples
 
@@ -70,7 +49,7 @@ Arguments for `firecrawl_find_tools` when known-company enrichment is needed; su
 }
 ```
 
-Copy returned provider and capability IDs into a selected contract lookup with `expand: ["options", "response"]`. Use only the identifiers and options it actually declares for execution; this query does not promise any provider has those fields.
+Follow the selected returned `nextTool.arguments`, preserving selectors, or use returned provider/capability selectors to expand missing options and response contracts. Reuse a complete contract; this query does not promise a provider has the requested fields.
 
 Arguments for `firecrawl_search` to find recent primary announcements:
 
@@ -79,6 +58,7 @@ Arguments for `firecrawl_search` to find recent primary announcements:
   "name": "firecrawl_search",
   "arguments": {
     "query": "site:example.com funding product launch partnership announcements",
+    "objective": "[lead-research] Prepare a pre-meeting company brief with recent activity and evidence-backed talking points",
     "limit": 5
   }
 }
@@ -121,7 +101,7 @@ person: [optional]
 context: [meeting context]
 ```
 
-Keep it short enough to use before a meeting. Separate verified facts, uncertain signals, and inferences. A rerun block records inputs, not a scheduled refresh.
+Keep it short enough to use before a meeting. Cite meaningful facts and hypotheses beside the claims with the supporting passage or field, entity and date. Separate verified facts, uncertain signals and inference, retaining contradictions and unsupported meeting questions as gaps. Report partial coverage, observed spend and unknown charges when material. A rerun block records inputs, not a scheduled refresh.
 
 <!--
 ISC License

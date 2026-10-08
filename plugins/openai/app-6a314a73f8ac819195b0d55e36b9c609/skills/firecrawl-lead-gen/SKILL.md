@@ -8,25 +8,25 @@ license: ISC
 
 Extract legitimately accessible prospect lists, not pre-meeting briefs or unsolicited outreach.
 
-Use the named Firecrawl MCP tools, resolving deferred tools through the host's tool search.
+Use the existing Firecrawl connection, resolving deferred tools through the host's tool search and following live schemas. Start from supplied source URLs, input rows or reusable prospect evidence before new discovery.
 
-Set the qualification criteria, maximum leads, source pages and credit ceiling.
-Web searches are billed per request; URL scraping is billed per URL.
-Provider-only discovery is free; execution uses the selected capability’s price.
+Respect the requested lead count, criteria and user-specified time, credit and source limits and returned account restrictions; do not impose default budgets, source quotas or minimum calls. Web searches, page retrieval and provider execution can incur charges. Track structured or parsed JSON receipts including nested totals, not catalogue estimates: count aggregates and included child charges once, replace cumulative totals rather than adding polls, and exclude account-wide counters. Missing usage is unknown, not zero; stop a costly route if the user's limit cannot be respected.
 
 Public provider records do not grant access to a private prospect database or authorize outreach.
 
 ## Scope
 
-Infer prospect criteria, source, maximum leads, and output format. Proceed if clear; ask at most one to three concise questions only if blocked by the prospect definition, required source/access, or count. Establish bounded record/page/time/spending limits before collection.
+Infer prospect criteria, source, maximum leads, and output format. Proceed if clear; ask for clarification only if blocked by the prospect definition, required source/access, or count. Distinguish discovering new qualified leads from annotating an existing list; the latter must retain every input row.
 
 ## Collection decisions
 
 1. Translate the request into explicit filters: role, company type/size, industry, location, funding stage, technologies, and required output fields. Separate mandatory filters from preferences. Preserve a named source; do not silently substitute a generic company or people database for its records.
-2. For multiple similarly structured leads, discover compact prospect/search capabilities with `firecrawl_find_tools` or existing search suggestions. Ask for the exact filters, entity type, source, and allowed fields. Expand only the best one or two contracts. Check whether filters, person-to-company relationships, record identifiers, profile URLs, and permitted contact fields are actually returned. A company-enrichment contract alone cannot generate a role-filtered person list.
+2. Read supplied source pages or reuse existing results first. Otherwise use normal `firecrawl_search` for the scoped prospect question and inspect matching suggestions. Reuse complete contracts; use targeted `firecrawl_find_tools` for missing selected contracts or absent fitting suggestions. Check exact filters, entity type, source, person-to-company relationships, record identifiers, profile URLs and permitted fields. A company-enrichment contract alone cannot generate a role-filtered person list.
 3. If a contract fits, execute returned provider/capability identifiers and declared options through `firecrawl_scrape` Alexandria mode. Apply server-side filters only when supported. Follow capability pagination, not catalogue pagination; stop at the requested count/budget or empty/repeated cursors. If a filter must be checked after retrieval, disclose that limitation; local filtering does not reduce upstream billing or prove completeness.
-4. If no candidate fits after one discovery pass and one targeted refinement, use `firecrawl_search` and `firecrawl_scrape` for public directories and profile pages. For filters, search forms, or pagination requiring interaction, use `firecrawl_interact` only if exposed and the session has legitimate access. For a private prospect source, use the provided authorized remote session/profile or an export; when opening with a saved profile, set `scrapeOptions.profile.saveChanges: false` unless profile writeback was requested; record any source that remains unavailable. For directory navigation, start with `url` and continue with returned `scrapeId`; interaction `timeout` uses seconds, and `scrapeOptions` applies only with `url`.
-5. Inspect a small page/result batch, validate mandatory filters, then continue within scope. With interaction, use returned `scrapeId` for continuation and call `firecrawl_interact_stop` when finished unless continued use was explicitly requested. List generation ends with the prospect export, not contact or account actions.
+4. Choose the next page, profile, contract or provider page for missing qualification evidence; inspect it before continuing. Use `firecrawl_scrape` for accessible directories/profile pages when no contract fits. For filters, search forms, or pagination requiring interaction, use `firecrawl_interact` only if exposed and the session has legitimate access. For a private prospect source, use the provided authorized remote session/profile or an export; when opening with a saved profile, set `scrapeOptions.profile.saveChanges: false` unless profile writeback was requested; record any source that remains unavailable. For directory navigation, start with `url` and continue with returned `scrapeId`; interaction `timeout` uses seconds, and `scrapeOptions` applies only with `url`.
+5. Qualify substantive evidence against mandatory criteria before paid optional enrichment. Verify consequential role, location, relationship and event dates; company hiring activity does not establish a particular open vacancy. Stop when the requested qualified count is supported, further targeted retrieval is unlikely to improve the list, or user/account limits prevent progress. With interaction, call `firecrawl_interact_stop` when finished unless continued use was explicitly requested. List generation ends with the prospect export, not contact or account actions.
+
+When ordinary `firecrawl_search` exposes `objective`, use `[lead-gen]` followed by the broader prospect-list goal consistently across related searches. Keep `query` focused on missing qualification evidence without the tag; omit unsupported `objective` and sensitive information. Do not add a search if supplied evidence or a known contract already resolves the next fact.
 
 ## Fields and validation
 
@@ -36,34 +36,15 @@ Capture only visible or legitimately accessible fields:
 - email, phone, and LinkedIn URL only when actually returned/visible and allowed
 - industry, company size, funding stage, notes, and profile URL
 
-Retain per-lead source URL or provider provenance, canonical IDs when supplied, and source/as-of dates if known. Leave absent values null or blank and record whether masked, unavailable, or paywalled. Never infer email patterns, phone numbers, or private details. Deduplicate people by stable person/profile ID or canonical profile URL where available; use company domain only for company-level grouping, never to collapse distinct contacts. Without a reliable person identifier, retain uncertain matches separately. Name alone can merge different people. Keep conflicting fields with their sources. Return fewer qualified leads rather than padding to the requested count.
+Retain field-level source URLs or provider provenance, canonical IDs and source/as-of dates when known. Leave absent values null or blank, recording masked, unavailable or paywalled fields. Never infer email patterns, phone numbers or private details; label a contact verified only when returned verification status supports it. Repeated directory records sharing one source do not independently corroborate qualification. Preserve conflicting values and their evidence.
 
-For a fitting contract returning qualified prospects from the requested source, inspect only selected identifiers
-with `expand: ["options", "response"]`: required inputs, `requiresOneOf`,
-`response.key`, declared pagination, freshness, price and external effects.
-Alexandria is not a page cache; catalogue `nextTool` pages contracts, not records.
-Execute exact returned provider/capability/options through `firecrawl_scrape`
-with `alexandria: {provider, capability, options}` or an array of 1–10 calls;
-a returned `version` can pin the workflow.
-Only payload-bound `requestId` and millisecond `timeout` accompany execution,
-not URL formats or `maxAge`. Inspect every item in `data.alexandria` despite outer
-success, keeping successful records and reporting item errors/empty/partial data.
-Page only as declared, with unchanged filters and bounded pages/records/credits.
+For newly discovered leads, deduplicate by stable person/profile ID or canonical profile URL; company domain groups companies, never distinct contacts. Shared names alone do not establish identity, and uncertain matches stay separate. For supplied lists, preserve every original row and identity, including duplicates and unmatched rows, with required fields, nulls, qualification status and row errors. Reuse enrichment across duplicate rows without deleting them. Return fewer qualified discoveries rather than padding to the requested count.
 
-For uncertain retries preserve the identical ID and payload with bounded attempts;
-changed inputs need a new ID. Do not re-charge in-flight requests or successful
-items. Execution needs a connected account on an enabled team; stop on access,
-terms or budget restrictions. Terms require an organization admin outside this
-workflow; do not accept terms through a capability. Do not retry unresolved
-restrictions. After an organization admin confirms acceptance, resume the requested
-retrieval with the identical payload and `requestId`, only if access and budget
-still permit.
-Use URL-mode `maxAge: 0` for requested fresh captures.
-Keep provider/capability/version, record IDs, URLs and retrieval/as-of times
-with the output; disclose unknown freshness and use authorized live search/page
-retrieval for missing or freshness-critical facts, or report gaps. For large
-results, use supported artifact handoffs; retention may expire or be unavailable.
-Report retention failures and do not silently rerun paid work.
+For selected prospect contracts, follow returned `nextTool.arguments`, preserving selectors; expand missing options and response contracts when supported. A combined catalogue ID is not necessarily an execution selector. Inspect required inputs, `requiresOneOf`, response paths such as `response.key`, pagination, freshness, price and effects. Catalogue pagination returns capabilities, not prospects. Execute returned provider/capability/options through `firecrawl_scrape` Alexandria mode; batch and pin versions only as the live schema permits. Keep payload-bound `requestId` and millisecond `timeout` separate from URL formats and `maxAge`.
+
+Inspect every batch item and retain successes with row provenance and paging state. Use documented item-specific continuation for failures instead of replaying successful leads. For uncertain retries retain identical ID and payload; changed inputs need a new ID. Do not duplicate in-flight work. Stop unresolved access, terms or budget routes while continuing permitted qualification sources. Terms require an organization administrator outside this workflow; resume retained requests after confirmed acceptance only when contract, access and user budget permit.
+
+Keep provider/capability/version, request/record IDs and retrieval/as-of times. Unknown freshness remains unknown; supported URL-mode `maxAge: 0` requests a fresh capture, not proof of a current role or vacancy. Inspect supported retained-result/artifact handoffs before new paid work, and report expiry rather than silently rerunning enrichment.
 
 ## Small MCP argument examples
 
@@ -80,7 +61,7 @@ Arguments for `firecrawl_find_tools` for a scoped prospect list:
 }
 ```
 
-Read the selected contract with returned provider/capability IDs and `expand: ["options", "response"]`. Construct execution options from that contract, not assumed role/location keys. Discovery describes capabilities; it is not the lead list.
+Follow returned `nextTool.arguments`, preserving selectors, or expand the selected returned provider/capability selectors when supported. Reuse complete contracts and construct execution options from their actual fields, not assumed role/location keys. Discovery is not the lead list.
 
 Arguments for `firecrawl_interact` only when a legitimately accessible public directory needs navigation; replace the example URL with the selected source:
 
@@ -99,7 +80,7 @@ The interaction timeout is in seconds. This example does not establish that inte
 
 ## Deliverable
 
-Return CRM-ready JSON/CSV or a Markdown table. Use a host-supported artifact when possible; otherwise include the data inline, along with source and gap fields. Do not require local files.
+Return CRM-ready JSON/CSV or a Markdown table. Use a host-supported artifact when possible; otherwise include data inline with source and gap fields. Produce correctly escaped CSV, using a CSV writer when available. Report actual input, qualified, discovered, duplicate and unmatched counts as appropriate; directory totals do not establish complete coverage. Do not require local files.
 
 ```markdown
 # Lead List: [Target]
@@ -108,7 +89,7 @@ Return CRM-ready JSON/CSV or a Markdown table. Use a host-supported artifact whe
 [Source, applied filters, qualified count, access/freshness caveats]
 
 ## Leads
-[Deduplicated table or supplied JSON/CSV artifact/content]
+[Deduplicated discoveries or all preserved input rows, with supplied JSON/CSV artifact/content]
 
 ## Data Gaps
 [Masked, unavailable, paywalled, unverified, or unsupported fields/filters]
@@ -121,7 +102,7 @@ max_leads: [number]
 output: [json/csv/markdown]
 ```
 
-A rerun block is a reproducible input record, not an automatic refresh or outreach schedule.
+Disclose unsupported filters, partial source coverage, unresolved row errors, observed spend and unknown charges when material. A rerun block is a reproducible input record, not an automatic refresh or outreach schedule.
 
 <!--
 ISC License

@@ -6,48 +6,25 @@ license: ISC
 
 # Firecrawl Dashboards
 
-Use this when the user needs a dashboard report, not generic public company metrics. Infer dashboard URLs, account or workspace, metrics, reporting period, and output format. Ask at most 1–3 concise questions if these inputs or authorized access are missing.
+Use this when the user needs a dashboard report, not generic public company metrics. Infer dashboard URLs, account or workspace, metrics, reporting period, and output format. Ask for clarification if these inputs or authorized access are missing.
 
-Use the named Firecrawl MCP tools, resolving deferred tools through the host's tool search.
-
-Agree the dashboard count, reporting period, metric scope and credit ceiling.
-URL scraping is billed per URL.
-Provider-only discovery is free; execution uses the selected capability’s price.
+Use the existing Firecrawl connection, resolve deferred tools and follow the live schemas. Respect requested dashboard counts, metric scope, time/credit limits and account restrictions; do not impose budgets or collection quotas. URL retrieval and provider execution are billed. If reporting spend, use returned receipts, not catalogue prices: count aggregates and included child charges once, replace cumulative totals, and exclude account-wide counters. Missing usage is unknown, not zero.
 
 Interactive collection needs `firecrawl_interact` and `firecrawl_interact_stop`; otherwise use a dashboard export or page-content report.
 
 ## Choose the collection path
 
-- Start with the specified dashboard and period, not a broad web search. Confirm the visible account/workspace, date range, timezone, currency, filters, and comparison period before recording numbers.
-- Alexandria is optional. Consider `firecrawl_find_tools` only when a published contract could return the requested analytics fields for the exact authorized account and reporting period. A public company record or generic platform statistic cannot substitute for private dashboard KPIs. Check account scoping, metric definitions, period granularity, freshness, and read/write effects in the selected contract; if any essential dimension is missing, use the dashboard or an authorized export instead.
+- Start with the supplied dashboard URL or reusable export for the requested account and period, not a broad web search. Resolve relative dates to explicit bounds and confirm the visible account/workspace, date range, timezone, currency, filters, and comparison period before recording numbers.
+- Alexandria is optional. Reuse a complete matching contract when it returns analytics fields for the exact authorized account and period. Discover or expand only a missing selected contract. A public company record or generic platform statistic cannot substitute for private dashboard KPIs. Check account scoping, definitions, period granularity, freshness, and effects; if an essential dimension is missing, use the dashboard or an authorized export instead.
 - If a matching provider returns sufficient metrics and provenance, do not repeat UI collection just to meet a scrape quota. Use live UI verification when the user requires the currently displayed values, or when filters, definitions, or freshness remain uncertain. Never merge mismatched accounts or periods.
 
-For a fitting contract returning metrics for the authorized account and reporting period, inspect only selected identifiers
-with `expand: ["options", "response"]`: required inputs, `requiresOneOf`,
-`response.key`, declared pagination, freshness, price and external effects.
-Alexandria is not a page cache; catalogue `nextTool` pages contracts, not records.
-Execute exact returned provider/capability/options through `firecrawl_scrape`
-with `alexandria: {provider, capability, options}` or an array of 1–10 calls;
-a returned `version` can pin the workflow.
-Only payload-bound `requestId` and millisecond `timeout` accompany execution,
-not URL formats or `maxAge`. Inspect every item in `data.alexandria` despite outer
-success, keeping successful records and reporting item errors/empty/partial data.
-Page only as declared, with unchanged filters and bounded pages/records/credits.
+For a missing selected contract, use `firecrawl_find_tools` or its returned `nextTool.arguments`, preserving selectors; request `expand: ["options", "response"]` when supported. A combined catalogue ID is not necessarily an execution selector. Inspect required inputs, `requiresOneOf`, `response.key`, period coverage, pagination, price and effects. Catalogue pages contain contracts, not metrics.
 
-For uncertain retries preserve the identical ID and payload with bounded attempts;
-changed inputs need a new ID. Do not re-charge in-flight requests or successful
-items. Execution needs a connected account on an enabled team; stop on access,
-terms or budget restrictions. Terms require an organization admin outside this
-workflow; do not accept terms through a capability. Do not retry unresolved
-restrictions. After an organization admin confirms acceptance, resume the requested
-retrieval with the identical payload and `requestId`, only if access and budget
-still permit.
-Use URL-mode `maxAge: 0` for requested fresh captures.
-Keep provider/capability/version, record IDs, URLs and retrieval/as-of times
-with the output; disclose unknown freshness and use authorized live search/page
-retrieval for missing or freshness-critical facts, or report gaps. For large
-results, use supported artifact handoffs; retention may expire or be unavailable.
-Report retention failures and do not silently rerun paid work.
+Execute returned provider/capability/options through `firecrawl_scrape` Alexandria mode; batch and pin `version` only as the live schema permits. Payload-bound `requestId` and millisecond `timeout` are separate from URL formats and `maxAge`. Inspect every `data.alexandria` item, retain successful account/period rows and use documented item-specific continuation for failures. Page only with declared inputs and unchanged filters while the requested metric gap remains.
+
+For uncertain retries retain the identical request ID and payload; changed inputs need a new ID. Do not duplicate in-flight requests or replay successful items. Stop unresolved access, terms or budget routes, keeping successful metrics and continuing permitted dashboards/exports. Terms need an organization administrator outside this workflow; resume retained requests after confirmed acceptance only when contract, access and budget permit. Preserve returned records and supported artifact handoffs; disclose retention failures rather than silently rerunning paid work.
+
+If an external metric definition needs web evidence, use normal `firecrawl_search` and inspect matching suggestions; do not search for private dashboard data. When exposed, set `objective` to `[dashboards]` plus the consistent reporting goal, without sensitive account details; keep the focused `query` untagged and omit `objective` when unsupported.
 
 Optional compact discovery with `firecrawl_find_tools`:
 
@@ -62,13 +39,13 @@ Optional compact discovery with `firecrawl_find_tools`:
 }
 ```
 
-Select only returned provider and capability identifiers, expand their input and response contracts, and construct execution options from those contracts using the execution checks in this skill. Discovery is not metric data.
+Use this discovery only for a missing structured route, not before every dashboard. Reuse complete contracts and construct execution options from returned execution identifiers. Discovery is not metric data.
 
 ## Collect visible metrics
 
 1. Open the dashboard with `firecrawl_interact`. Use `url` to start or the returned `scrapeId` to continue, never both. Use a natural-language `prompt` and, when supplied, the authorized remote profile supported by the live schema. `scrapeOptions` applies only when opening with `url`; set `scrapeOptions.profile.saveChanges: false` for a saved profile unless profile writeback was requested.
-2. Verify the account and period. Set only the requested report filters, then read KPI cards, tables, labels, units, and comparison values. Navigate tabs, expand sections, and scroll tables as needed. Inspect each result before continuing; a session URL alone is not extracted evidence.
-3. For an authorized dashboard export, report the returned table or file and its account/period. Use the export in the report only when the host provides access to its contents.
+2. Verify the account and period. Set only the requested report filters, then read KPI cards, tables, labels, units, and comparison values. Navigate tabs, expand sections, and scroll tables only to resolve missing requested metrics. After each result, record the value and its card/table/row or screenshot locator, then choose the next unresolved metric. A session URL alone is not extracted evidence. Use URL-mode `maxAge: 0` for requested fresh captures when supported; record actual capture/as-of times rather than assuming freshness.
+3. For an authorized dashboard export, inspect its contents and account/period before using it. For a PDF export, including extensionless document URLs, use supported `parsers: ["pdf"]` and choose `pdfOptions.maxPages` for the needed tables and user limits; disclose truncation and possible full-page charges on rereads.
 4. If the dashboard session has expired, request a renewed session or an export for the same account and reporting period.
 5. Call `firecrawl_interact_stop` with the session's returned `scrapeId` when finished, unless the user explicitly asks to keep it open. Record cleanup failures.
 
@@ -89,7 +66,7 @@ For continuation, replace `url` with the actual returned `scrapeId` and provide 
 
 ## Final deliverable
 
-Return this report as an artifact if the host can create one, otherwise inline Markdown with optional CSV/JSON tables:
+Stop when the requested metrics and material comparisons are supported, or limits/access prevent further progress; identify remaining gaps and the stop reason. Return the report as a host artifact or inline Markdown with CSV/JSON tables as requested. When the account and host support Intelligent UI, charts may clarify supported trends but must retain units, periods, sources and uncertainty, and must not replace requested tables or exports.
 
 ```markdown
 # Dashboard Report
@@ -115,7 +92,7 @@ metrics: [list]
 output: [json/markdown/csv]
 ```
 
-For JSON, preserve `reportedAt`, `dateRange`, `dashboards[]`, `metrics[]`, `tables[]`, `exports[]`, and `summary`. Each metric needs its dashboard/account, definition, value, unit, period, source URL, capture time, and caveats. Use null for unavailable numbers, not zero. Extract actual numbers rather than chart labels; label approximations and never infer precise values from an unreadable chart. Separate observed changes from explanations that the data does not establish.
+For JSON, preserve `reportedAt`, `dateRange`, `dashboards[]`, `metrics[]`, `tables[]`, `exports[]`, and `summary`. Keep each requested metric with its account, definition, unit/currency, period/timezone, filters, source URL and UI/record locator, capture/as-of times, and caveats; use null for unavailable values, not zero. Preserve provider/capability/version and request/record IDs when used. Align denominators and comparison periods before calculating changes; distinguish percentage points from percentage change. Verify meaningful numerical claims against printed values or inspected pixels, not chart captions. Label approximations, separate trends from causal explanations, and do not count an export and dashboard view of the same data as independent corroboration.
 
 <!--
 ISC License

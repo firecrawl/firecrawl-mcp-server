@@ -6,49 +6,26 @@ license: ISC
 
 # Firecrawl Competitive Intel
 
-Track specified competitors over time, rather than perform broad competitor or market analysis. Infer competitors, focus, cadence, and output format; ask at most 1–3 concise questions only if blocked. A cadence in a rerun block does not create a schedule.
+Track specified competitors over time, rather than perform broad competitor or market analysis. Infer competitors, focus, cadence, and output format; ask for clarification only if blocked. A cadence in a rerun block does not create a schedule.
 
 ## MCP collection
 
-Use the named Firecrawl MCP tools, resolving deferred tools through the host's tool search.
+Use the existing Firecrawl connection, resolve deferred tools and follow the live schema. Start with supplied competitor URLs and reusable dated baselines. Otherwise use `firecrawl_search` for the missing pricing, feature or release evidence and inspect matching structured suggestions. When exposed, set `objective` to `[competitive-intel]` plus the broader comparison goal consistently across related searches; keep `query` specific and untagged. Omit unsupported `objective` and avoid sensitive information in the goal.
 
-Bound the competitor pages, comparison periods and credits for this check.
-URL scraping is billed per URL.
-Provider-only discovery is free; execution uses the selected capability’s price.
+Respect user-specified source/tool choices, provider opt-outs, comparison periods and time/page/result/credit limits and returned account restrictions; do not impose default budgets, source quotas or minimum calls. Stop when the requested comparison/change claims are supported or limits prevent progress. Report material spend from returned receipts rather than catalogue prices, count nested/aggregate charges once, replace cumulative totals on polls, exclude account-wide counters, and mark missing usage unknown.
 
 ## Alexandria and live collection decisions
 
-1. For repeated pricing tiers or release records, use compact `firecrawl_find_tools` discovery for the named competitors and required billing periods, limits, dates, and sources. Select only contracts whose coverage and timestamps support those fields; expand the best one or two with `expand: ["options", "response"]`. Execute using returned identifiers and declared options, not guessed provider names. Stop discovery after one targeted refinement if no fit exists.
-2. Use sufficient matching records as a baseline, but verify consequential current prices on official pricing pages with `firecrawl_scrape` and `maxAge: 0`. Record currency, region, monthly versus annual billing, per-seat/unit basis, plan limits, discounts, taxes, and contact-sales or gated details where visible. Unknown data freshness must remain unknown; retrieval time is not an effective date. Search-with-scrape does not establish a live price.
+1. Choose the next hop for the missing fact that could change the brief, inspect it, then update the comparison. Reuse complete fitting pricing/release contracts; expand missing selected contracts through `firecrawl_find_tools` or use targeted discovery if structured gaps lack a suggestion. Require the named competitors, billing periods, limits, dates and source coverage to match. Follow selected `nextTool.arguments` preserving selectors, expand options/response when supported, and do not treat a combined catalogue ID as an execution selector.
+2. Reuse sufficiently current matching evidence; close consequential current-price gaps on official pages with `firecrawl_scrape`, using supported `maxAge: 0` for requested fresh captures. Record currency, region, monthly versus annual billing, per-seat/unit basis, plan limits, discounts, taxes, and contact-sales or gated details where visible. Align these bases before calculating changes. Unknown freshness remains unknown; retrieval time is not an effective date. Search-with-scrape or a fresh fetch alone does not establish a current price.
 3. Use official feature/product pages, changelogs, blogs, release notes, and docs for missing fields and live changes. Provider release records can locate releases; they cannot prove a current UI control or feature behavior. If available and needed, use `firecrawl_interact` to inspect billing toggles or expanded tables, then stop the session with `firecrawl_interact_stop` and its returned `scrapeId`. Inspect private competitor views only through a provided authorized remote session/profile; when opening with a saved profile, set `scrapeOptions.profile.saveChanges: false` unless profile writeback was requested. For billing-toggle inspection, start with `url` and continue with the returned `scrapeId`; interaction `timeout` is in seconds, and `scrapeOptions` applies only with `url`.
-4. Preserve a dated evidence baseline: source URL, competitor, observed value, acquisition time, source/as-of date when supplied, and provider/version/request provenance. Compare only against an available prior baseline. Distinguish an observed change from newly discovered information; without an earlier comparable value, label it a current snapshot, not a price increase or launch. Retain conflicts and limitations.
+4. Preserve a dated evidence baseline: source URL, competitor/plan identity, observed value, acquisition time, source/as-of date when supplied, and provider/version/request provenance. Compare only against an available prior baseline on the same basis. Distinguish an observed change from newly discovered information; without an earlier comparable value, label it a current snapshot, not a price increase or launch. Separate publication, capture and release dates; endpoint snapshots do not establish continuous stability. Retain conflicts and limitations, and do not count syndicated releases as independent corroboration.
 
-For a fitting contract returning competitor pricing or release records, inspect only selected identifiers
-with `expand: ["options", "response"]`: required inputs, `requiresOneOf`,
-`response.key`, declared pagination, freshness, price and external effects.
-Alexandria is not a page cache; catalogue `nextTool` pages contracts, not records.
-Execute exact returned provider/capability/options through `firecrawl_scrape`
-with `alexandria: {provider, capability, options}` or an array of 1–10 calls;
-a returned `version` can pin the workflow.
-Only payload-bound `requestId` and millisecond `timeout` accompany execution,
-not URL formats or `maxAge`. Inspect every item in `data.alexandria` despite outer
-success, keeping successful records and reporting item errors/empty/partial data.
-Page only as declared, with unchanged filters and bounded pages/records/credits.
+For relevant PDF release reports or product documents, including extensionless URLs, use supported `parsers: ["pdf"]` and choose `pdfOptions.maxPages` for needed evidence and any user limit. Keep page locators and truncated-document limitations; rereads may charge the requested pages again.
 
-For uncertain retries preserve the identical ID and payload with bounded attempts;
-changed inputs need a new ID. Do not re-charge in-flight requests or successful
-items. Execution needs a connected account on an enabled team; stop on access,
-terms or budget restrictions. Terms require an organization admin outside this
-workflow; do not accept terms through a capability. Do not retry unresolved
-restrictions. After an organization admin confirms acceptance, resume the requested
-retrieval with the identical payload and `requestId`, only if access and budget
-still permit.
-Use URL-mode `maxAge: 0` for requested fresh captures.
-Keep provider/capability/version, record IDs, URLs and retrieval/as-of times
-with the output; disclose unknown freshness and use authorized live search/page
-retrieval for missing or freshness-critical facts, or report gaps. For large
-results, use supported artifact handoffs; retention may expire or be unavailable.
-Report retention failures and do not silently rerun paid work.
+For selected contracts, inspect required inputs, `requiresOneOf`, `response.key`, pagination, freshness, price and effects. Execute returned provider/capability/options through `firecrawl_scrape` Alexandria mode, batching independent competitor records or pinning returned versions only as the live schema permits. Keep payload-bound `requestId` and millisecond `timeout` separate from URL formats/`maxAge`. Catalogue paging returns contracts, not release history. Inspect every `data.alexandria` item, retain successes and use documented item-specific continuation for failures; never replay successful batch items to recover others. Preserve competitor/plan IDs, filters and checkpoints across bulk comparisons.
+
+For uncertain retries retain identical request ID/payload; changed inputs need a new ID and in-flight requests must not be duplicated. Stop unresolved access, terms or budget routes while preserving usable baselines and continuing permitted evidence routes. Terms recovery requires an organization admin outside the workflow; resume retained requests after confirmation only if contract, access and user budget permit. Inspect supported retained results before another execution; disclose expired/unavailable retention and do not silently rerun paid work.
 
 ## Small argument examples
 
@@ -70,7 +47,7 @@ Default to a one-off report. Only if the user explicitly requests scheduling and
 
 ## Deliverable
 
-Return real plan names, limits, dates, a pricing table, feature matrix, recent changes, and confidence/coverage notes. Do not guess gated information. For structured output, include `generatedAt`, `competitors`, `pricing`, `recentChanges`, `features`, and `sources`, preserving baseline evidence separately. Return inline Markdown/JSON/CSV if artifacts cannot be saved.
+Return real plan names, limits, dates, a pricing table, feature matrix, recent changes, and confidence/coverage notes. Attach meaningful claims and comparison cells to the source field/passage and date; label inference. Do not guess gated information. For structured output, include `generatedAt`, `competitors`, `pricing`, `recentChanges`, `features`, and `sources`, preserving baseline evidence and provider/capability/version/request/record provenance separately. Keep supplied competitor-row identities, duplicates and unresolved matches when a row-based output is requested. Report partial coverage and stop reason. Use the host's CSV writer when available or correctly quoted inline CSV/Markdown/JSON otherwise. If the host and account support Intelligent UI, an interactive pricing/feature comparison may clarify the brief without replacing the requested export or citations.
 
 ```markdown
 # Competitive Intel: [Competitors]

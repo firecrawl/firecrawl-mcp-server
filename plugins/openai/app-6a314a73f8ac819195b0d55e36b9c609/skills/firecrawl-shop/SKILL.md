@@ -6,50 +6,25 @@ license: ISC
 
 # Firecrawl Shop
 
-Research products and recommend a purchase option. Infer product, budget, hard preferences, sites, region, and desired stopping point; ask at most 1–3 concise questions only if blocked. Default to research, not shopping-site actions.
+Research products and recommend a purchase option. Infer product, budget, hard preferences, sites, region, and desired stopping point; ask for clarification only if blocked. Default to research, not shopping-site actions.
 
 ## MCP collection
 
-Use the named Firecrawl MCP tools, resolving deferred tools through the host's tool search.
+Use the existing Firecrawl connection, resolve deferred tools and follow the live schema. Start from supplied product URLs, exact models or reusable offer/review evidence. Otherwise use `firecrawl_search` for the missing shopping evidence, inspecting matching structured suggestions. When exposed, set `objective` to `[shop]` plus the broader shopping goal consistently across searches; keep `query` focused and untagged. Omit unsupported `objective` and avoid sensitive information in the goal.
 
-Bound the models, variants, sellers, review sources and credits for this comparison.
-Web searches are billed per request; URL scraping is billed per URL.
-Provider-only discovery is free; execution uses the selected capability’s price.
+Respect source/tool choices and provider opt-outs, and keep the purchase budget separate from user-specified research time/page/result/credit limits and returned account restrictions; do not impose default budgets, source quotas or minimum calls. Stop when the recommendation and requested comparison are supported or limits prevent progress. Report research spend from returned receipts, not catalogue prices: count nested/aggregate charges once, replace cumulative poll totals, exclude account-wide counters, and mark missing usage unknown.
 
 ## Alexandria and live collection decisions
 
-1. For repeated specifications and offers, use compact `firecrawl_find_tools` discovery for catalog/offer/spec contracts matching the exact model, variant, region, currency, and requested sellers. Expand only the best one or two with `expand: ["options", "response"]`; execute returned identifiers and declared options. Do not invent a retail provider or assume regional inventory. After one targeted refinement without a fit, use product pages instead.
+1. Choose the next retrieval for the missing fact that could change product fit, price or seller choice, inspect it, then update the comparison. Reuse complete matching offer/spec contracts from search or earlier evidence. Use `firecrawl_find_tools` for missing selected contracts or targeted structured discovery only when needed. Require exact model, variant, region, currency and requested sellers; do not assume retail coverage or regional inventory. Follow selected `nextTool.arguments` preserving selectors, expand options/response when supported, and do not treat a combined catalogue ID as an execution selector.
 2. Match manufacturer model numbers, SKU/variant, condition, capacity/size, and bundle contents before comparing prices. Keep distinct variants separate. Reuse sufficient structured specs and sourced offers; collect missing decision-critical fields rather than re-fetching complete records. An undated catalogue offer is a lead, not a current purchasable price.
-3. Recheck consequential price, availability, seller, shipping, discounts, tax visibility, and delivery claims on current retailer/manufacturer evidence, using `firecrawl_scrape` with `maxAge: 0` when a live fetch is justified. Record observation time and source date when present. Search-with-scrape ignores `maxAge`; a successful fetch does not prove inventory is active. State unknown total costs or freshness and distinguish listed price from a confirmed cart total.
-4. Use `firecrawl_search` and selective `firecrawl_scrape` for trusted reviews, independent tests, Reddit/forums, and seller reputation. Catalogue ratings or aggregate metadata do not replace review text or test evidence. Separate measured findings from anecdotes; note affiliate, sponsored, incentivized, or unreliable sources when visible. Look for sufficient independent evidence of fit and drawbacks, not a minimum page quota.
+3. Reuse sufficiently current evidence and close consequential price, availability, seller, shipping, discount, tax or delivery gaps on retailer/manufacturer sources, using supported URL-mode `maxAge: 0` for requested fresh captures. Record observation time, source date and returned cache evidence when present. Search-with-scrape ignores `maxAge`; a successful fetch does not prove inventory is active. Align currency, unit/bundle, condition and region before comparing; state unknown total costs/freshness and distinguish listed price from a confirmed cart total.
+4. Use `firecrawl_search` and selective `firecrawl_scrape` for trusted reviews, independent tests, Reddit/forums, and seller reputation. Catalogue ratings or aggregate metadata do not replace review text or test evidence. Separate measured findings from anecdotes; note affiliate, sponsored, incentivized, or unreliable sources when visible. Track shared origins so syndicated reviews and repeated manufacturer claims are not independent corroboration. Collect evidence of fit and drawbacks, not a minimum page quota. For relevant PDF manuals/tests, including extensionless URLs, use supported `parsers: ["pdf"]` and choose `pdfOptions.maxPages` for needed evidence and user limits; record page locators/truncation and account for repeat-read charges.
 5. Compare price, specifications, review patterns, seller quality, shipping, and fit to hard preferences. Recommend the best supported option and explain tradeoffs. State when no option meets the budget or constraints rather than silently relaxing them.
 
-For a fitting contract returning exact-model offers or specifications, inspect only selected identifiers
-with `expand: ["options", "response"]`: required inputs, `requiresOneOf`,
-`response.key`, declared pagination, freshness, price and external effects.
-Alexandria is not a page cache; catalogue `nextTool` pages contracts, not records.
-Execute exact returned provider/capability/options through `firecrawl_scrape`
-with `alexandria: {provider, capability, options}` or an array of 1–10 calls;
-a returned `version` can pin the workflow.
-Only payload-bound `requestId` and millisecond `timeout` accompany execution,
-not URL formats or `maxAge`. Inspect every item in `data.alexandria` despite outer
-success, keeping successful records and reporting item errors/empty/partial data.
-Page only as declared, with unchanged filters and bounded pages/records/credits.
+For selected contracts inspect required inputs, `requiresOneOf`, `response.key`, offer pagination, freshness, price and effects. Execute returned provider/capability/options through `firecrawl_scrape` Alexandria mode, batching independent offer/spec requests and pinning returned versions only as the live schema permits. Keep payload-bound `requestId` and millisecond `timeout` separate from URL formats/`maxAge`. Catalogue paging returns contracts, not offers. Inspect every `data.alexandria` item; retain successes and use documented item-specific continuation for failures rather than replaying successful items. Preserve exact product/seller IDs, filters and bulk-comparison checkpoints.
 
-For uncertain retries preserve the identical ID and payload with bounded attempts;
-changed inputs need a new ID. Do not re-charge in-flight requests or successful
-items. Execution needs a connected account on an enabled team; stop on access,
-terms or budget restrictions. Terms require an organization admin outside this
-workflow; do not accept terms through a capability. Do not retry unresolved
-restrictions. After an organization admin confirms acceptance, resume the requested
-retrieval with the identical payload and `requestId`, only if access and budget
-still permit.
-Use URL-mode `maxAge: 0` for requested fresh captures.
-Keep provider/capability/version, record IDs, URLs and retrieval/as-of times
-with the output; disclose unknown freshness and use authorized live search/page
-retrieval for missing or freshness-critical facts, or report gaps. For large
-results, use supported artifact handoffs; retention may expire or be unavailable.
-Report retention failures and do not silently rerun paid work.
+For uncertain retries retain identical request ID/payload; changed inputs need a new ID and in-flight requests must not be duplicated. Stop unresolved access, terms or budget routes while preserving comparisons and continuing permitted retailer/review routes. Terms recovery requires an organization admin outside this workflow; resume retained requests after confirmation only if contract, access and user budget permit. Inspect supported retained results before another execution; disclose expired/unavailable retention rather than silently rerunning paid work.
 
 ## Small argument examples
 
@@ -68,7 +43,7 @@ For a current offer, substitute the selected retailer's product URL in `firecraw
 For independent review evidence with `firecrawl_search`, replace the model text:
 
 ```json
-{"name":"firecrawl_search","arguments":{"query":"exact product model independent review testing drawbacks","limit":3}}
+{"name":"firecrawl_search","arguments":{"query":"exact product model independent review testing drawbacks","objective":"[shop] Compare product options against the user's budget and preferences","limit":3}}
 ```
 
 ## Cart boundary
@@ -77,7 +52,7 @@ Only add an item when the user explicitly requests it, `firecrawl_interact` is e
 
 ## Deliverable
 
-Be specific about model numbers, variants, sellers, prices, currencies, observation times, and unavailable costs. Include the comparison, recommendation, review signals, provenance, and limitations. Return inline Markdown/CSV/JSON if artifacts cannot be saved.
+Be specific about model numbers, variants, sellers, prices, currencies, observation times, and unavailable costs. Attach meaningful claims/comparison cells to the inspected source field or passage, source date and provider/capability/version/request/record provenance; label inference. Preserve supplied product-row identities, duplicates and unmatched entries when row-based output is requested. Include the recommendation, review signals, partial coverage and stop reason. Use the host's CSV writer when available or correctly quoted inline CSV/Markdown/JSON otherwise. If the host and account support Intelligent UI, an interactive product comparison may clarify tradeoffs without replacing required exports, citations or cart confirmation.
 
 ```markdown
 # Shopping Research: [Product]

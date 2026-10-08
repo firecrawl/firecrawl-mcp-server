@@ -8,26 +8,24 @@ license: ISC
 
 Create a sourced literature review or paper synthesis. Use this rather than general web research when the evidence base is published papers, including clinical, drug, gene, disease, epidemiology, and public-health studies.
 
-Use the named Firecrawl MCP tools, resolving deferred tools through the host's tool search.
+Use the existing Firecrawl connection, resolving deferred tools through the host's tool search and following live schemas. Start from supplied paper IDs, URLs, passages or reusable evidence; retrieve only what is missing for the requested review.
 
-Bound the paper count, anchor expansions, passage reads and credits for the review.
-Web and paper searches are billed per request; URL scraping is billed per URL.
-Provider-only discovery is free; execution uses the selected capability’s price.
+Respect user-specified counts, time, credit and source limits and returned account restrictions; do not impose default budgets, source quotas or minimum calls. Web and paper searches are billed per request; URL/PDF retrieval and provider execution have their own pricing. Track structured or parsed JSON receipts including nested totals, not catalogue estimates: count aggregates and included child charges once, replace cumulative totals rather than adding polls, and exclude account-wide counters. Missing usage is unknown, not zero; stop a costly route if the user's limit cannot be respected.
 
 If the dedicated paper tools are unavailable, disclose the limitation and offer a reduced web-source review; do not claim ordinary web search is equivalent to the paper index.
 
 ## Scope
 
-Infer topic, source constraints, target count, and output format. Proceed if clear; ask at most one to three concise questions only when blocked by the topic, count, venue/date, or method constraints. A requested count is a scope target, not permission to pad the review with irrelevant papers.
+Infer topic, source constraints, target count, and output format. Proceed if clear; ask for clarification only when blocked by the topic, count, venue/date, or method constraints. A requested count is a scope target, not permission to pad the review with irrelevant papers.
 
 ## Dedicated paper collection
 
 The index searches paper abstracts and offers full-text retrieval per indexed paper. It includes PubMed journal literature, bioRxiv and medRxiv preprints, and arXiv preprints in computer science, physics, and mathematics. Coverage of other sources may be thinner. Check returned coverage rather than promising a complete corpus.
 
-- `firecrawl_research_search_papers`: semantic search using `query`, a small `k`, and supported `authors`, `categories`, `from`, or `to` filters when required. Author/category filters require all supplied values to match; date filters concern created/updated dates, so verify a required publication date separately.
-- `firecrawl_research_related_papers`: expand strong anchors using returned canonical IDs in `seed_ids`, an explicit `intent`, and `mode` of `similar`, `citers`, or `references`. Use small batches to find the relevant family, not only the first strong hit.
+- `firecrawl_research_search_papers`: semantic search using `query`, `k` chosen for the evidence need, and supported `authors`, `categories`, `from`, or `to` filters when required. Author/category filters require all supplied values to match; date filters concern created/updated dates, so verify a required publication date separately.
+- `firecrawl_research_related_papers`: expand strong anchors using returned canonical IDs in `seed_ids`, an explicit `intent`, and `mode` of `similar`, `citers`, or `references`. Choose anchor batches and `k` to find the relevant family, not only the first strong hit, within live schema and user limits.
 - `firecrawl_research_inspect_paper`: use `paperId` to verify canonical title, abstract, authors, source IDs, categories, and dates.
-- `firecrawl_research_read_paper`: use `paperId`, a targeted `question`, and a small passage `k` to verify methods, outcomes, scores, benchmarks, affiliations, comparisons, or limitations inside the body. Do not read every candidate merely to summarize it.
+- `firecrawl_research_read_paper`: use `paperId`, a targeted `question`, and passage `k` chosen for the missing evidence to verify methods, outcomes, scores, benchmarks, affiliations, comparisons, or limitations inside the body. Do not read every candidate merely to summarize it.
 
 Match retrieval to the question:
 
@@ -38,40 +36,23 @@ Match retrieval to the question:
 5. **Superlative or leaderboard:** find the ranking with web search/scrape, then map top entries back to canonical papers and verify the ranking's date, scope, and measurement.
 6. **Author, organization, venue, date, or methodology constraints:** inspect metadata or read the relevant body evidence before retaining a candidate.
 
-Deduplicate by canonical paper ID and reconcile versions/identifiers without discarding conflicting findings. Include the relevant family when uncertain; drop only clearly off-topic papers. Stop when the requested scope and major themes are supported, relevant anchor expansion is sufficient, and load-bearing constraints have been verified, or the agreed budget is reached. Report unresolved gaps and selection limits; do not label a partial search a completed systematic review.
+Choose the next search, anchor expansion, metadata lookup or passage read for the highest-impact missing fact; inspect the returned evidence before choosing the next hop. Resolve metadata conflicts against canonical records and keep abstract, body and revisions version-specific. A revision date is not first publication, and available full text does not prove the needed passage was returned. Align populations, interventions, endpoints, denominators and follow-up periods before comparing outcomes.
+
+Deduplicate discovered papers by canonical ID, retaining version differences and conflicting findings. If annotating a supplied paper list, preserve every input row, including duplicates and unmatched identifiers, with row-specific sources and gaps. Include the relevant family when uncertain; drop only clearly off-topic papers. Stop when the requested scope, major themes and material alternatives have support and further targeted retrieval is unlikely to change the synthesis, or user/account limits prevent progress. Report selection limits and unresolved gaps; do not label a partial search a completed systematic review.
 
 ## Web context and Alexandria decisions
 
 Use `firecrawl_search` and `firecrawl_scrape` for accessible university/ACM/IEEE source pages, unindexed reports and whitepapers, industry reports, company research blogs, technical articles, conference summaries, and leaderboards. Note inaccessible or failed PDFs. `categories: ["research"]` is ordinary web filtering to research-affiliated sites, not abstract search, citation expansion, canonical metadata, or in-body retrieval.
 
-Do not insert a compulsory catalogue hop before paper search. Consider Alexandria only for a separate structured context need, such as dated benchmark records or report metadata across several entities. Discover a compact candidate whose contract returns the exact identifiers, measurements, periods, and provenance needed; inspect only the best one or two contracts. A provider's general research label does not establish paper-corpus or full-text coverage. Use the dedicated tools for paper-family expansion and body verification even when structured context is available elsewhere. If no exact context contract fits after one discovery pass and one targeted refinement, use web context instead.
+When ordinary `firecrawl_search` exposes `objective`, use `[research-papers]` followed by the broader review goal consistently across related searches. Keep `query` focused on the missing evidence without the tag; omit unsupported `objective` and sensitive information. Reuse normal search results and complete matching contracts rather than adding discovery calls automatically.
 
-For a fitting contract returning separate structured context, not paper-family expansion or body verification, inspect only selected identifiers
-with `expand: ["options", "response"]`: required inputs, `requiresOneOf`,
-`response.key`, declared pagination, freshness, price and external effects.
-Alexandria is not a page cache; catalogue `nextTool` pages contracts, not records.
-Execute exact returned provider/capability/options through `firecrawl_scrape`
-with `alexandria: {provider, capability, options}` or an array of 1–10 calls;
-a returned `version` can pin the workflow.
-Only payload-bound `requestId` and millisecond `timeout` accompany execution,
-not URL formats or `maxAge`. Inspect every item in `data.alexandria` despite outer
-success, keeping successful records and reporting item errors/empty/partial data.
-Page only as declared, with unchanged filters and bounded pages/records/credits.
+For PDF evidence, including extensionless document URLs, use supported `parsers: ["pdf"]` and choose `pdfOptions.maxPages` for the needed passages and any user limit. Prefer suitable HTML or indexed passages when sufficient; mark truncated coverage and remember rereads may charge the requested pages again.
 
-For uncertain retries preserve the identical ID and payload with bounded attempts;
-changed inputs need a new ID. Do not re-charge in-flight requests or successful
-items. Execution needs a connected account on an enabled team; stop on access,
-terms or budget restrictions. Terms require an organization admin outside this
-workflow; do not accept terms through a capability. Do not retry unresolved
-restrictions. After an organization admin confirms acceptance, resume the requested
-retrieval with the identical payload and `requestId`, only if access and budget
-still permit.
-Use URL-mode `maxAge: 0` for requested fresh captures.
-Keep provider/capability/version, record IDs, URLs and retrieval/as-of times
-with the output; disclose unknown freshness and use authorized live search/page
-retrieval for missing or freshness-critical facts, or report gaps. For large
-results, use supported artifact handoffs; retention may expire or be unavailable.
-Report retention failures and do not silently rerun paid work.
+Do not insert a compulsory catalogue hop before paper tools. Alexandria can supply separate structured context, such as dated benchmark records or report metadata across entities, only when its contract returns the needed identifiers, measurements, periods and provenance. A research label does not establish paper-corpus or full-text coverage. Use dedicated tools for paper-family expansion and body verification. For missing selected contracts, follow returned `nextTool.arguments`, preserving selectors, or use targeted `firecrawl_find_tools`; expand options and responses when supported. A combined catalogue ID is not necessarily an execution selector, and catalogue pagination returns contracts, not records.
+
+Inspect required inputs, `requiresOneOf`, response paths such as `response.key`, pagination, freshness, price and effects before executing returned provider/capability/options through `firecrawl_scrape` Alexandria mode. Batch, pin versions and use payload-bound `requestId`/millisecond `timeout` only as the live schema permits; keep URL formats and `maxAge` separate. Inspect every item, preserve successes, and continue failed items only through documented item-specific routes. For an uncertain retry retain identical ID and payload; changed inputs need a new ID. Do not duplicate in-flight work or replay successful items.
+
+Stop unresolved access, terms or budget routes, not the entire review; continue permitted paper/web evidence and disclose missing context. Terms require an organization administrator outside this workflow; resume retained requests after confirmed acceptance only when contract, access and user budget permit. Retain provider/capability/version, request and record IDs, URLs, paging state and retrieval/as-of times. Unknown freshness remains unknown; use supported URL-mode `maxAge: 0` for requested fresh captures, without treating a fresh fetch as proof of current content. Inspect supported retained-result/artifact handoffs and report expiry rather than silently rerunning paid work.
 
 ## Small MCP argument examples
 
@@ -157,7 +138,7 @@ target_count: [number]
 output: [markdown/brief]
 ```
 
-Every major claim must trace to a source. Distinguish peer-reviewed studies, preprints, blogs, and vendor reports; distinguish authors' claims from your synthesis. Mark abstract-only conclusions when full text is unavailable and do not claim a body passage was verified without retrieving it. The rerun block does not schedule another review.
+Every meaningful claim must trace to an exact passage or field and its paper/version or source URL. Distinguish authors' claims from synthesis, and separate peer-reviewed studies, preprints, blogs and vendor reports. Papers, press releases and reports repeating the same study are not independent corroboration. Mark abstract-only support, unresolved contradictions, truncated documents and actual selection/coverage limits. Report observed spend and unknown charges when material. The rerun block does not schedule another review.
 
 <!--
 ISC License
