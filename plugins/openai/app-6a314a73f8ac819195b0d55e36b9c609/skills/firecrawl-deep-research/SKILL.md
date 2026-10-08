@@ -1,10 +1,6 @@
 ---
 name: firecrawl-deep-research
-description: >
-  Investigate questions that need multiple sources or dependent research steps
-  with Firecrawl MCP, including complex comparisons, discovery and enrichment.
-  Return a cited answer with verified evidence and clear gaps. Use when a focused
-  search or single-page read cannot adequately answer the question.
+description: Investigate questions that require multiple sources or dependent research steps, such as competitive and market analysis, company due diligence, qualified prospect discovery, research enrichment, historical changes, and reconciling conflicting evidence. Return a cited answer with verified findings and clear gaps. Use when a focused search or single-page read cannot adequately answer the question.
 license: ISC
 ---
 

@@ -19,7 +19,7 @@ test('deep research has a valid plugin identity and its own router entry', () =>
   assert.ok(typeof manifest.name === 'string' && manifest.name.trim());
   assert.ok(`${manifest.name}:${name}`.length <= 64);
   assert.equal(skill.match(/^name: (.+)$/m)?.[1], name);
-  const description = skill.match(/^description: >\n([\s\S]*?)\nlicense:/m)?.[1]?.trim();
+  const description = skill.match(/^description: (.+)$/m)?.[1];
   assert.ok(description && description.length <= 1024);
   const router = readFileSync(
     join(openaiPlugin, 'skills/firecrawl/SKILL.md'),
