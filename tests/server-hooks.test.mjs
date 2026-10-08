@@ -342,3 +342,92 @@ test('a 401 from an added tool is not treated as a Firecrawl credential rejectio
   assert.match(result.content[0].text, /other backend rejected the request/);
   assert.notEqual(result.structuredContent?.code, 'CREDENTIAL_INVALID');
 });
+
+// Feedback tools on a stdio instance that gets credentials only from hooks.
+// The stdio transport owns the process's stdin and stdout, so each case runs
+// in a child process.
+async function stdioToolNames(t, hooksSource) {
+  const { spawn } = await import('node:child_process');
+  const serverUrl = new URL('../dist/server.js', import.meta.url).href;
+  const child = spawn(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      `import { createFirecrawlMcpServer } from ${JSON.stringify(serverUrl)};
+       await createFirecrawlMcpServer({ unstable_hooks: ${hooksSource} })
+         .start({ transportType: 'stdio' });`,
+    ],
+    {
+      env: { ...process.env, FIRECRAWL_API_KEY: '', FIRECRAWL_API_URL: '' },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }
+  );
+  t.after(() => child.kill());
+  let buffer = '';
+  const responses = new Map();
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', (chunk) => {
+    buffer += chunk;
+    let newline;
+    while ((newline = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      if (!line) continue;
+      const message = JSON.parse(line);
+      responses.get(message.id)?.(message);
+    }
+  });
+  const request = (id, method, params = {}) =>
+    new Promise((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error(`timed out on ${method}`)),
+        10_000
+      );
+      responses.set(id, (message) => {
+        clearTimeout(timer);
+        resolve(message.result);
+      });
+      child.stdin.write(
+        `${JSON.stringify({ id, jsonrpc: '2.0', method, params })}\n`
+      );
+    });
+  await request(1, 'initialize', {
+    capabilities: {},
+    clientInfo: { name: 'hooks-test', version: '1.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  child.stdin.write(
+    `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`
+  );
+  const { tools } = await request(2, 'tools/list');
+  return tools.map((tool) => tool.name);
+}
+
+const FEEDBACK_TOOLS = ['firecrawl_search_feedback', 'firecrawl_feedback'];
+
+test('a stdio embedder authenticating through authenticate lists the feedback tools', async (t) => {
+  const names = await stdioToolNames(
+    t,
+    `{ authenticate: async () => ({ authType: 'api-key', firecrawlApiKey: 'fc-embedded' }) }`
+  );
+  for (const name of FEEDBACK_TOOLS) assert.ok(names.includes(name), name);
+});
+
+test('a stdio embedder supplying credentials through outboundRequest lists the feedback tools', async (t) => {
+  const names = await stdioToolNames(
+    t,
+    `{ outboundRequest: () => ({ credential: 'fc-per-request' }) }`
+  );
+  for (const name of FEEDBACK_TOOLS) assert.ok(names.includes(name), name);
+});
+
+test('a keyless session on a hooked stdio embedder does not list the feedback tools', async (t) => {
+  const names = await stdioToolNames(
+    t,
+    `{ authenticate: async () => ({ authType: 'keyless' }) }`
+  );
+  assert.ok(names.includes('firecrawl_scrape'));
+  for (const name of FEEDBACK_TOOLS)
+    assert.equal(names.includes(name), false, name);
+});
