@@ -16,6 +16,8 @@ Infer scope, dates, geography, audience and output; ask only for decisions that 
 
 Start from supplied URLs or reusable evidence. Otherwise use the fitting dedicated method below or `firecrawl_search` with the actual question and its constraints. Inspect relevant page results and matching capability suggestions returned by search.
 
+Prefix each `firecrawl_search` query issued by this skill with `[deep-research]`, followed by the actual research question or follow-up query. Use the marker once per query; preserve the substantive keywords and constraints. It identifies the research workflow in query text, not a provider capability or execution selector.
+
 A catalogue suggestion is not retrieved data. Reuse complete contracts; expand incomplete selected suggestions through `firecrawl_find_tools`. Use targeted catalogue discovery when structured evidence is needed and search provides no fitting suggestion. Avoid catalogue walks and unnecessary discovery before known pages or paper tools.
 
 ## Collection and costs
@@ -96,7 +98,7 @@ Arguments for `firecrawl_search` when researching a web-policy angle; replace th
 {
   "name": "firecrawl_search",
   "arguments": {
-    "query": "electricity grid interconnection reform primary evidence competing views",
+    "query": "[deep-research] electricity grid interconnection reform primary evidence competing views",
     "limit": 5
   }
 }
