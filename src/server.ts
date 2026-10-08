@@ -15,7 +15,6 @@ import path from 'node:path';
 import { z } from 'zod';
 import {
   AGENT_HINTS_HEADERS,
-  agentHintsText,
   preserveAgentHints,
   readAgentHints,
   readErrorAgentHints,
@@ -39,7 +38,6 @@ import {
   withStructured,
 } from './tool-output';
 import {
-  searchSourceSchema,
   findToolsSchema,
   findToolsOptions,
   withFindToolsNavigation,
@@ -52,1190 +50,238 @@ import {
   ALEXANDRIA_CATALOGUE_SENTENCE,
   ALEXANDRIA_CATALOGUE_VERTICALS,
   ALEXANDRIA_SOURCES_OPT_OUT,
-  ALEXANDRIA_SEARCH_INSTRUCTIONS,
 } from './alexandria';
 import { alexandriaOutput } from './alexandria-output';
 import { registerDeveloperTools } from './developer';
 import { registerGovTools } from './gov';
-import { extractSingleTrustedClientIp } from './keyless-client-ip';
-import { checkKeylessSignupUrl } from './keyless-signup-link';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
 import { registerUsageTools } from './usage';
-import { escapeWWWAuthenticateValue } from './www-authenticate';
-import {
-  createIntrospectionCache,
-  INTROSPECTION_ACTIVE_TTL_MS,
-  INTROSPECTION_INACTIVE_TTL_MS,
-  introspectionTtlMs,
-} from './introspection-cache';
 import { originHeaders, requestOrigin, type McpClient } from './origin';
+import { CoreHttpError } from './core-http-error.js';
+import { normalizeHeader } from './headers.js';
 import {
-  credentialForOutboundRequest,
-  copyManagedOAuthApiKey,
-  CoreHttpError,
-  credentialValidationUnavailable,
-  CredentialValidationUnavailableError,
-  hasCredential,
-  hasManagedOAuthCredential,
-  requireDelegatedCredentialSigning,
-  setManagedOAuthApiKey,
-  type CredentialSession,
-} from './session-credential';
+  FIRECRAWL_CREDENTIAL_REJECTED,
+  keylessQuotaReason,
+  keylessSignupUrlFrom,
+  recoveryPayload,
+  runWithCredentialRecovery,
+} from './recovery.js';
+import {
+  assertExchangeCredential as assertExchangeCredentialPresent,
+  DATA_SOURCES_SETTINGS_URL,
+  exchangeCallSchema,
+  exchangeCallsSchema,
+  isTermsWrite,
+  postSearchWithFallback,
+  relayExchangeError,
+  relayTermsRequired,
+  removeEmptyTopLevel,
+  SEARCH_DOMAINS_CONFLICT_MESSAGE,
+  searchDomainsAreExclusive,
+  searchToolBaseFields,
+  termsWriteError,
+} from './tool-helpers.js';
+
+export { UserError };
+/** What a tool's `execute` may return. */
+export type ToolResult = ContentResult;
 
 const require = createRequire(import.meta.url);
 const { version: packageVersion } = require('../package.json') as {
   version: string;
 };
 
-export interface SessionData extends CredentialSession {
+/**
+ * Per-connection state produced by `authenticate` and handed to every tool
+ * call. Embedders may add their own fields.
+ */
+export interface SessionData {
   /**
    * FC API key (`fc-...`) or OAuth access token (`fco_...`) sent as
    * `Authorization: Bearer ...` to the Firecrawl API.
    */
   firecrawlApiKey?: string;
   /**
-   * For keyless requests over the hosted (CLOUD_SERVICE) MCP, the end-user's
-   * real client IP, forwarded to the API so it can rate-limit per real IP
-   * instead of the shared server IP.
-   */
-  keylessClientIp?: string;
-  /**
    * The User-Agent of the HTTP request that opened the session, the only
    * client signal a stateless HTTP tool call carries (see src/origin.ts).
    */
   clientUserAgent?: string;
   authType?: 'api-key' | 'oauth' | 'env' | 'keyless' | 'none';
+  /** Admitted, but the supplied credential cannot be used. */
   credentialError?: 'CREDENTIAL_INVALID';
-  /** Internal nginx marker for the deprecated credential-in-path route. */
-  keyTransport?: 'path';
-  teamId?: string;
-  userId?: string;
-  apiKeyId?: string;
-  oauthClientId?: string;
-  resource?: string;
+  /** Set per tool call. */
   requestId?: string;
-  /** Server profile that authenticated this session. The search surface uses
-   *  it to keep results from pointing at tools it does not register. */
-  profile?: ServerProfile['id'];
   [key: string]: unknown;
 }
 
 type ToolLogger = Pick<Logger, 'debug' | 'error' | 'info' | 'warn'>;
 
-/**
- * A server profile parameterizes how a FastMCP instance is constructed. Hosted
- * deployments run one primary identity (`full` or `account`) per process. The
- * existing search profile remains an in-process companion of `full` until its
- * deployment is migrated separately.
- */
-export type ServerProfile = {
-  id: 'full' | 'account' | 'search';
-  /** OAuth protected-resource display name. */
-  resourceName: string;
-  /** Server-level instructions surfaced to clients. */
-  instructions: string;
-  /** OAuth protected-resource identifier for this surface. */
-  resourceUrl: string;
-  /** httpStream endpoint override (defaults to fastmcp's own default). */
-  endpoint?: `/${string}`;
-  /** TCP port this instance listens on. */
-  port: number;
-  /** When set, only these tool names may register on this instance. */
-  toolAllowlist?: Set<string>;
-  /** Allow the keyless free-tier fallback (no credential required). */
-  allowKeyless: boolean;
-  /** Whether ordinary Firecrawl API keys are accepted for this identity. */
-  acceptApiKeys: boolean;
-  /** Require a managed hosted-MCP OAuth grant, never a legacy/general token. */
-  requireManagedOAuth?: boolean;
-  /** Whether this process's primary listener owns this profile. */
-  primary?: boolean;
-  /** Accept tokens minted for the legacy /v2/mcp resource during migration. */
-  acceptLegacyAudience?: boolean;
-  /** Publish OAuth discovery metadata for clients configuring this surface. */
-  advertiseOAuth: boolean;
-};
+/** A tool definition as registered on the server. */
+export type ToolDefinition = Parameters<FastMCP<SessionData>['addTool']>[0];
+type RegisteredTool = ToolDefinition;
 
 /** Registers a tool onto an instance; a subset of the FastMCP surface. */
-type ToolRegistrar = Pick<FastMCP<SessionData>, 'addTool'>;
+export type ToolRegistrar = Pick<FastMCP<SessionData>, 'addTool'>;
+
+/** The HTTP request `authenticate` receives; absent for stdio. */
+export type AuthenticationRequest = {
+  headers: IncomingHttpHeaders;
+  url?: string;
+};
+
+/** The HTTP application routes can be added to (Hono). */
+export type HttpApp = ReturnType<FastMCP<SessionData>['getApp']>;
+
+/** Reported around each tool call; `started` precedes the outcome. */
+export type ToolCallEvent = {
+  tool: string;
+  session: SessionData;
+  requestId: string;
+} & (
+  | { status: 'started' }
+  | { status: 'success'; result: unknown; agentHints?: string[] }
+  | { status: 'error'; error: unknown; agentHints?: string[] }
+);
+
+/** Per-request credential and extra headers for calls to the Firecrawl API. */
+export type OutboundRequest = {
+  /** Replaces the session's API key as the bearer credential. */
+  credential?: string;
+  headers?: Record<string, string>;
+};
+
+/** OAuth 2.0 protected-resource metadata (RFC 9728) served by the instance. */
+export type ProtectedResourceMetadata = {
+  authorizationServers: string[];
+  bearerMethodsSupported?: string[];
+  resource: string;
+  resourceName?: string;
+  scopesSupported?: string[];
+};
+
+export type ExtraToolsContext = {
+  /** Firecrawl client for a session, honouring `outboundRequest`. */
+  getClient(session?: SessionData): FirecrawlApp;
+  /** Whether a session will send a credential to the Firecrawl API. */
+  hasCredential(session?: SessionData): boolean;
+  /** A built-in tool definition, including one `toolFilter` excluded. */
+  builtInTool(name: string): ToolDefinition | undefined;
+};
+
+export type InstructionDefaults = {
+  /** Instructions for sessions with a credential. */
+  authenticated: string;
+  /** Instructions for the keyless tool surface. */
+  keyless: string;
+};
+
+/**
+ * Extension points for embedding the server. Unstable: names and signatures
+ * may change in any release.
+ */
+export interface FirecrawlMcpServerHooks {
+  /** Replaces credential resolution. Throw a `Response` to reject the request. */
+  authenticate?: (
+    request: AuthenticationRequest | undefined
+  ) => Promise<SessionData>;
+  /** Decorates every registered tool, including tools from `registerExtraTools`. */
+  wrapTool?: (tool: ToolDefinition) => ToolDefinition;
+  /** Observes each tool call. Must not throw. */
+  onToolResult?: (event: ToolCallEvent) => void;
+  /** Server instructions, or a function choosing them from the defaults. */
+  instructions?: string | ((defaults: InstructionDefaults) => string);
+  /** Adds tools after the built-in ones. They bypass `toolFilter`. */
+  registerExtraTools?: (
+    registrar: ToolRegistrar,
+    context: ExtraToolsContext
+  ) => void;
+  /** Credential and headers for each Firecrawl API request of a session. */
+  outboundRequest?: (
+    session: SessionData | undefined
+  ) => OutboundRequest | undefined;
+  /** Runs before a keyless request; throw to refuse it. */
+  beforeKeylessRequest?: (
+    session: SessionData | undefined,
+    origin: string
+  ) => Promise<void>;
+  /** Built-in tools whose name fails the filter are not registered. */
+  toolFilter?: (name: string) => boolean;
+  /** Adds HTTP routes. Runs before the built-in routes, so its routes win. */
+  configureHttp?: (app: HttpApp) => void;
+  /** Serve OAuth protected-resource metadata for this instance. */
+  oauth?: { protectedResource: ProtectedResourceMetadata };
+}
+
+export interface FirecrawlMcpServerOptions {
+  /** Firecrawl API base URL. Unset targets the Firecrawl cloud. */
+  apiUrl?: string;
+  /** Credential used when a request does not carry one. */
+  apiKey?: string;
+  /** Transport the instance is started with. Defaults to `stdio`. */
+  transport?: 'stdio' | 'httpStream';
+  /** Write server logs to the console. Defaults to true for HTTP. */
+  logging?: boolean;
+  /** Restrict browser actions and webhooks, and mark scrape read-only. */
+  safeMode?: boolean;
+  /** `local` (default) reads files from this machine; `upload` uses a two-phase upload flow. */
+  fileAccess?: 'local' | 'upload';
+  /** Refuse Firecrawl API calls from sessions without a credential. */
+  requireCredential?: boolean;
+  /** Register firecrawl_search_feedback. Defaults to true. */
+  searchFeedback?: boolean;
+  /** Register firecrawl_feedback. Defaults to true. */
+  endpointFeedback?: boolean;
+  /** Extension hooks. Unstable: may change in any release. */
+  unstable_hooks?: FirecrawlMcpServerHooks;
+}
+
+export type FirecrawlMcpServerStartArgs = Parameters<
+  FastMCP<SessionData>['start']
+>[0];
+
+export interface FirecrawlMcpServer {
+  server: FastMCP<SessionData>;
+  start(args: FirecrawlMcpServerStartArgs): Promise<void>;
+}
 
 const authResultByRequest = Symbol('firecrawlMcpAuthResult');
 
-type MCPAuthRequest = {
-  headers: IncomingHttpHeaders;
-  url?: string;
+type CachedAuthRequest = AuthenticationRequest & {
   [authResultByRequest]?: Promise<SessionData>;
 };
 
-export function normalizeHeader(
-  value: string | string[] | undefined
-): string | undefined {
-  if (value == null) return undefined;
-  const v = Array.isArray(value) ? value[0] : value;
-  const trimmed = typeof v === 'string' ? v.trim() : '';
-  return trimmed || undefined;
-}
+/** Placeholder SDK key for sessions whose credential is supplied per request. */
+const REQUEST_SCOPED_CREDENTIAL = 'request-scoped-credential';
 
-function extractBearerToken(headers: IncomingHttpHeaders): string | undefined {
-  const headerAuth = normalizeHeader(headers['authorization']);
-  if (!headerAuth?.toLowerCase().startsWith('bearer ')) return undefined;
-  const raw = headerAuth.slice(7).trim();
-  return raw || undefined;
-}
-
-/** OAuth access tokens minted by Firecrawl (Authorization Server). */
-function isFirecrawlOAuthAccessToken(token: string): boolean {
-  return token.startsWith('fco_');
-}
-
-function isFirecrawlApiKey(token: string): boolean {
-  return token.startsWith('fc-');
-}
-
-function isLegacyKeyPathRequest(request: MCPAuthRequest | undefined): boolean {
-  return (
-    normalizeHeader(request?.headers?.['x-firecrawl-key-transport']) === 'path'
-  );
-}
-
-function requestShouldReceiveOAuthChallenge(
-  request: MCPAuthRequest | undefined,
-  profile: ServerProfile
-): boolean {
-  // OAuth-only profiles must challenge API-key and key-in-path attempts too;
-  // otherwise FastMCP would return a generic error instead of the resource's
-  // reconnectable OAuth challenge.
-  if (!profile.acceptApiKeys) return true;
-  if (!request?.headers) return true;
-  const headerApiKey = normalizeHeader(
-    request.headers['x-firecrawl-api-key'] ?? request.headers['x-api-key']
-  );
-  if (headerApiKey) return false;
-  const bearer = extractBearerToken(request.headers);
-  return !bearer || isFirecrawlOAuthAccessToken(bearer);
-}
-
-
-export const DEFAULT_OAUTH_ISSUER = 'https://www.firecrawl.dev';
-export const DEFAULT_MCP_RESOURCE_URL = 'https://mcp.firecrawl.dev/v2/mcp';
-export const DEFAULT_MCP_OAUTH_RESOURCE_URL = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
-export const DEFAULT_MCP_SEARCH_RESOURCE_URL = 'https://mcp.firecrawl.dev/v2/mcp-search';
-export const DEFAULT_MCP_SEARCH_ENDPOINT = '/v2/mcp-search';
-
-// Human-facing guidance values, co-located with the resource defaults above.
-// MCP_CONNECTION_GUIDE_URL stays a stable, neutral entry point even while the
-// docs routing evolves; do not bind recovery payloads to an auth-mode leaf
-// page. It is a human-facing guide, not an MCP endpoint.
-const MCP_CONNECTION_GUIDE_URL =
-  'https://docs.firecrawl.dev/mcp-server';
-
-export function withoutTrailingSlash(value: string): string {
-  return value.replace(/\/+$/, '');
-}
-
-function getOAuthIssuer(): string {
-  return withoutTrailingSlash(
-    normalizeHeader(process.env.FIRECRAWL_OAUTH_ISSUER) ?? DEFAULT_OAUTH_ISSUER
-  );
-}
-
-
-// PRM location per RFC 9728. firecrawl-fastmcp serves the document both at the
-// origin-level path and at `/.well-known/oauth-protected-resource${endpoint}`.
-// The full surface uses the origin-level document (unchanged); a path-scoped
-// surface advertises the document that sits under its own resource path, so a
-// single host can carry more than one protected resource.
-function getOAuthProtectedResourceMetadataUrl(profile: ServerProfile): string {
-  const resource = new URL(profile.resourceUrl);
-  const base = `${resource.origin}/.well-known/oauth-protected-resource`;
-  return profile.id === 'full' ? base : `${base}${resource.pathname}`;
-}
-
-function createOAuthChallengeResponse(
-  error: unknown,
-  profile: ServerProfile,
-  oauthEnabled: boolean,
-  details: Record<string, unknown> = {}
-): Response | undefined {
-  if (!oauthEnabled) {
-    return undefined;
-  }
-
-  const errorMessage =
-    error instanceof Error ? error.message : String(error || 'Unauthorized');
-  // WWW-Authenticate is one header. Flatten CR/LF so a multiline JSON
-  // message cannot split the header value.
-  const wwwAuthenticateDescription = errorMessage.replace(/[\r\n]+/g, ' ').trim();
-  const wwwAuthenticate = [
-    ...(profile.advertiseOAuth
-      ? [
-          `resource_metadata="${escapeWWWAuthenticateValue(getOAuthProtectedResourceMetadataUrl(profile))}"`,
-        ]
-      : []),
-    'error="invalid_token"',
-    `error_description="${escapeWWWAuthenticateValue(wwwAuthenticateDescription)}"`,
-  ].join(', ');
-
-  return new Response(
-    JSON.stringify({
-      error: 'invalid_token',
-      error_description: errorMessage,
-      ...details,
-    }),
-    {
-      headers: {
-        'Content-Type': 'application/json',
-        'WWW-Authenticate': `Bearer ${wwwAuthenticate}`,
-      },
-      status: 401,
-    }
-  );
-}
-
-function createInvalidCredentialResponse(_error: InvalidFirecrawlCredentialError): Response {
-  const recovery = invalidApiKeyRecoveryPayload();
-  return new Response(
-    JSON.stringify({
-      error: 'invalid_api_key',
-      error_description: recovery.message,
-      ...recovery,
-    }),
-    {
-      headers: { 'Content-Type': 'application/json' },
-      status: 401,
-    }
-  );
-}
-
-function createInvalidOAuthRecoveryResponse(
-  recovery: Record<string, unknown> & { message: string }
-): Response {
-  return new Response(
-    JSON.stringify({
-      error: 'invalid_token',
-      error_description: recovery.message,
-      ...recovery,
-    }),
-    {
-      headers: { 'Content-Type': 'application/json' },
-      status: 401,
-    }
-  );
-}
-
-/**
- * Seconds advertised to the client after a failed credential check. Short
- * enough that a working session recovers on the next attempt, long enough that
- * a client retrying immediately does not amplify an upstream outage.
- */
-const CREDENTIAL_VALIDATION_RETRY_AFTER_SECONDS = 5;
-
-/**
- * A failed credential check is a temporary server-side condition, not a verdict
- * on the client's credential, so this stays a 503 (RFC 9110 15.6.4) and carries
- * `Retry-After` to name a concrete wait. Two things are deliberately absent:
- * `WWW-Authenticate`, which would push a still-valid session into a needless
- * reauthorization, and an OAuth `error` code, which RFC 6749 reserves for 400
- * and 401 responses and which clients surface as an authentication verdict. The
- * body is the sentence alone; the reason for the failure goes to the server log.
- */
-function createCredentialValidationUnavailableResponse(
-  error: CredentialValidationUnavailableError
-): Response {
-  return new Response(error.message, {
-    headers: {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Retry-After': String(CREDENTIAL_VALIDATION_RETRY_AFTER_SECONDS),
-    },
-    status: 503,
-  });
-}
-
-function getOAuthIntrospectionEndpoint(): string {
-  return `${getOAuthIssuer()}/api/oauth/introspect`;
-}
-
-function getOAuthIntrospectionSecret(): string | undefined {
-  return normalizeHeader(process.env.FIRECRAWL_OAUTH_INTROSPECT_SECRET);
-}
-
-
-type OAuthCredentialPurpose = 'general' | 'hosted_mcp_oauth';
-
-function isOAuthCredentialPurpose(value: unknown): value is OAuthCredentialPurpose {
-  return value === 'general' || value === 'hosted_mcp_oauth';
-}
-
-type OAuthIntrospectionResponse = {
-  active?: boolean;
-  api_key?: string;
-  aud?: string | string[];
-  credential_purpose?: OAuthCredentialPurpose;
-  scope?: string | string[];
-  team_id?: string;
-  sub?: string;
-  api_key_id?: string;
-  client_id?: string;
-  exp?: number;
-};
-
-type CredentialMetadata = Pick<
-  SessionData,
-  'teamId' | 'userId' | 'apiKeyId' | 'oauthClientId' | 'resource'
->;
-
-type ResolvedCredential = {
-  credential?: string;
-  managedOAuthApiKey?: string;
-  invalid?: boolean;
-  source?: 'api-key' | 'oauth' | 'env';
-  metadata?: CredentialMetadata;
-};
-
-class InvalidFirecrawlCredentialError extends Error {
-  constructor() {
-    super('The supplied Firecrawl credential is invalid or revoked. Replace it and retry.');
-    this.name = 'InvalidFirecrawlCredentialError';
-  }
-}
-
-class InvalidOAuthCredentialError extends Error {
-  constructor() {
-    super('Invalid OAuth access token');
-    this.name = 'InvalidOAuthCredentialError';
-  }
-}
-
-const MCP_GLOBAL_SCOPE = 'firecrawl:global';
-
-function values(value: string | string[] | undefined): string[] {
-  if (typeof value === 'string') return value.split(/\s+/).filter(Boolean);
-  return Array.isArray(value)
-    ? value.flatMap((item) => item.split(/\s+/).filter(Boolean))
-    : [];
-}
-
-function audienceMatchesResource(
-  aud: string | string[] | undefined,
-  resourceUrl: string
-): boolean {
-  const target = withoutTrailingSlash(resourceUrl);
-  return values(aud).some((entry) => withoutTrailingSlash(entry) === target);
-}
-
-function credentialMetadata(data: OAuthIntrospectionResponse): CredentialMetadata {
-  return {
-    teamId: typeof data.team_id === 'string' ? data.team_id : undefined,
-    userId: typeof data.sub === 'string' ? data.sub : undefined,
-    apiKeyId: typeof data.api_key_id === 'string' ? data.api_key_id : undefined,
-    oauthClientId:
-      typeof data.client_id === 'string' ? data.client_id : undefined,
-    resource: typeof data.aud === 'string' ? data.aud : undefined,
-  };
-}
-
-/**
- * `FIRECRAWL_OAUTH_INTROSPECT_CACHE_TTL_MS=0` turns the cache off. Unset keeps
- * the default; any other value caps how long an active answer is reused.
- */
-function introspectionActiveTtlMs(): number {
-  const raw = normalizeHeader(
-    process.env.FIRECRAWL_OAUTH_INTROSPECT_CACHE_TTL_MS
-  );
-  if (raw === undefined) return INTROSPECTION_ACTIVE_TTL_MS;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed >= 0
-    ? parsed
-    : INTROSPECTION_ACTIVE_TTL_MS;
-}
-
-const introspectionCache = createIntrospectionCache({
-  maxEntries: 50_000,
-  ttlMs: (value: OAuthIntrospectionResponse, now: number) => {
-    const activeTtlMs = introspectionActiveTtlMs();
-    if (activeTtlMs === 0) return 0;
-    return introspectionTtlMs(
-      value,
-      now,
-      activeTtlMs,
-      Math.min(activeTtlMs, INTROSPECTION_INACTIVE_TTL_MS)
-    );
-  },
-});
-
-/**
- * Every MCP request authenticates, and every pod on a node shares one egress IP
- * against the issuer's per-IP rate limit. Reusing recent answers keeps that
- * volume flat as traffic grows.
- */
-function introspectToken(
-  token: string,
-  expectedResource: string
-): Promise<OAuthIntrospectionResponse> {
-  return introspectionCache.get([token, expectedResource], () =>
-    fetchIntrospection(token, expectedResource)
-  );
-}
-
-/** Known `x-vercel-mitigated` values; anything else reports as other. */
-const EDGE_MITIGATIONS = new Set(['deny', 'challenge', 'rate_limit']);
-
-function edgeMitigation(response: Response): string | undefined {
-  const value = response.headers
-    .get('x-vercel-mitigated')
-    ?.trim()
-    .toLowerCase();
-  if (!value) return undefined;
-  return EDGE_MITIGATIONS.has(value) ? value : 'other';
-}
-
-async function fetchIntrospection(
-  token: string,
-  expectedResource: string
-): Promise<OAuthIntrospectionResponse> {
-  const introspectionSecret = getOAuthIntrospectionSecret();
-  if (!introspectionSecret) {
-    throw credentialValidationUnavailable({
-      reason: 'introspect_secret_missing',
-      resource: expectedResource,
-    });
-  }
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 1500);
-  const startedAt = Date.now();
-  const elapsedMs = () => Date.now() - startedAt;
-  let response: Response;
-  try {
-    response = await fetch(getOAuthIntrospectionEndpoint(), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: `Bearer ${introspectionSecret}`,
-      },
-      body: new URLSearchParams({
-        resource: expectedResource,
-        token,
-        token_type_hint: 'access_token',
-      }),
-      signal: controller.signal,
-    });
-  } catch {
-    // Separating the budget abort from a genuine transport fault is the whole
-    // point of recording `aborted`: they need different operational responses.
-    throw credentialValidationUnavailable({
-      aborted: controller.signal.aborted,
-      elapsedMs: elapsedMs(),
-      reason: 'introspect_transport_error',
-      resource: expectedResource,
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
-  if (!response.ok) {
-    throw credentialValidationUnavailable({
-      edgeMitigation: edgeMitigation(response),
-      elapsedMs: elapsedMs(),
-      reason: 'introspect_http_status',
-      resource: expectedResource,
-      status: response.status,
-    });
-  }
-  const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
-  if (!contentType.includes('application/json')) {
-    throw credentialValidationUnavailable({
-      elapsedMs: elapsedMs(),
-      reason: 'introspect_content_type',
-      resource: expectedResource,
-      status: response.status,
-    });
-  }
-  // A body that fails to parse, or that parses to something without a boolean
-  // `active`, is an unusable answer rather than a verdict on the credential.
-  // Reading `active` off `null` would throw past every tagged error here and
-  // reach the client as an OAuth challenge carrying raw parser text.
-  const data = (await response
-    .json()
-    .catch(() => null)) as OAuthIntrospectionResponse | null;
-  if (!data || typeof data.active !== 'boolean') {
-    throw credentialValidationUnavailable({
-      elapsedMs: elapsedMs(),
-      reason: 'introspect_malformed_body',
-      resource: expectedResource,
-      status: response.status,
-    });
-  }
-  if (
-    data.active &&
-    (!data.api_key ||
-      !isOAuthCredentialPurpose(data.credential_purpose) ||
-      !values(data.scope).includes(MCP_GLOBAL_SCOPE))
-  ) {
-    // Introspection answered cleanly; the credential it described cannot be
-    // used here. Tagged apart from an outage so the two are never conflated.
-    throw credentialValidationUnavailable({
-      elapsedMs: elapsedMs(),
-      reason: 'introspect_unusable_credential',
-      resource: expectedResource,
-      status: response.status,
-    });
-  }
-  return data;
-}
-
-async function resolveCredentialFromHeaders(
-  headers: IncomingHttpHeaders,
-  profile: ServerProfile
-): Promise<ResolvedCredential | undefined> {
-  const bearer = extractBearerToken(headers);
-  const headerApiKey = normalizeHeader(
+function headerApiKey(headers: IncomingHttpHeaders): string | undefined {
+  const explicit = normalizeHeader(
     headers['x-firecrawl-api-key'] ?? headers['x-api-key']
   );
-  const token = headerApiKey ?? bearer;
-  if (!token) return undefined;
-  if (!profile.acceptApiKeys && !isFirecrawlOAuthAccessToken(token)) {
-    throw new Error(
-      `OAuth access token required for the Firecrawl MCP resource ${profile.endpoint}`
-    );
-  }
-  if (!isFirecrawlOAuthAccessToken(token) && !isFirecrawlApiKey(token)) {
-    return { invalid: true };
-  }
-
-  // An API key is already the credential Core authenticates, so introspection
-  // resolves it to itself. Forward it unchanged and let Core be the authority;
-  // a 401 becomes CREDENTIAL_INVALID at the tool boundary. OAuth access tokens
-  // keep the strict path below because Core cannot resolve them on its own.
-  if (isFirecrawlApiKey(token)) {
-    return { credential: token, source: 'api-key' };
-  }
-
-  let data = await introspectToken(token, profile.resourceUrl);
-  if (
-    isFirecrawlOAuthAccessToken(token) &&
-    !data.active &&
-    profile.acceptLegacyAudience
-  ) {
-    data = await introspectToken(token, DEFAULT_MCP_RESOURCE_URL);
-  }
-  if (!data.active || !data.api_key) {
-    throw new InvalidOAuthCredentialError();
-  }
-  const expectedAudience =
-    profile.acceptLegacyAudience &&
-    audienceMatchesResource(data.aud, DEFAULT_MCP_RESOURCE_URL)
-      ? DEFAULT_MCP_RESOURCE_URL
-      : profile.resourceUrl;
-  if (!audienceMatchesResource(data.aud, expectedAudience)) {
-    throw new Error('OAuth token audience does not match this resource');
-  }
-  if (
-    profile.requireManagedOAuth &&
-    data.credential_purpose !== 'hosted_mcp_oauth'
-  ) {
-    throw new Error('OAuth token is not a managed Firecrawl MCP credential');
-  }
-  if (data.credential_purpose === 'hosted_mcp_oauth') {
-    // expectedAudience, not profile.resourceUrl: it is the resource the token
-    // was actually validated against once the legacy fallback is applied.
-    requireDelegatedCredentialSigning(expectedAudience);
-    return {
-      managedOAuthApiKey: data.api_key,
-      source: 'oauth',
-      metadata: credentialMetadata(data),
-    };
-  }
-  return {
-    credential: data.api_key,
-    source: 'oauth',
-    metadata: credentialMetadata(data),
-  };
+  if (explicit) return explicit;
+  const authorization = normalizeHeader(headers['authorization']);
+  if (!authorization?.toLowerCase().startsWith('bearer ')) return undefined;
+  return authorization.slice(7).trim() || undefined;
 }
 
-async function authenticateRequest(
-  request: MCPAuthRequest | undefined,
-  profile: ServerProfile,
-  options: FirecrawlMcpServerOptions
-): Promise<SessionData> {
-  // FastMCP invokes `authenticate(undefined)` for the stdio transport
-  // because there is no HTTP request context. Without this null guard,
-  // accessing `request.headers` throws a TypeError, FastMCP silently
-  // swallows it, and every subsequent tool call fails with
-  // "Unauthorized: API key is required when not using a self-hosted
-  // instance" even though `FIRECRAWL_API_KEY` is set in env.
-  const resolved = request?.headers
-    ? await resolveCredentialFromHeaders(request.headers, profile)
+/**
+ * The session copy a tool call runs with. Property descriptors are copied so
+ * non-enumerable state an `authenticate` hook attached survives the copy.
+ */
+function copySession(session: SessionData | undefined): SessionData {
+  return Object.defineProperties(
+    {},
+    Object.getOwnPropertyDescriptors(session ?? {})
+  ) as SessionData;
+}
+
+function resultAgentHints(result: unknown): string[] | undefined {
+  return result && typeof result === 'object'
+    ? readAgentHints((result as { structuredContent?: unknown }).structuredContent)
     : undefined;
-
-  const headerCred = resolved?.credential;
-  const managedCred = resolved?.managedOAuthApiKey;
-  const envCred = options.apiKey;
-
-  if (options.hosted) {
-    if (!headerCred && !managedCred) {
-      if (resolved?.invalid) {
-        // A supplied-but-invalid credential must reach the *agent*, not die as a
-        // transport 401. MCP clients treat a 401 at initialize/tools-list as
-        // "server unavailable" and never surface the response body to the model,
-        // so the recovery payload in that 401 was unreachable in a real session.
-        // On the keyless+API-key endpoint, admit the session flagged with
-        // credentialError: the connection succeeds, tools list, and every tool
-        // call returns the CREDENTIAL_INVALID recovery payload as a 200 isError
-        // result — the same agent-legible path keyless quota recovery uses. No
-        // credential is forwarded and no tool executes, so this grants zero
-        // functional access. OAuth-only surfaces (e.g. /v2/mcp-search) keep the
-        // hard 401 credential-rejection contract they already advertise.
-        if (profile.allowKeyless) {
-          return {
-            authType: 'api-key',
-            credentialError: 'CREDENTIAL_INVALID',
-            firecrawlApiKey: undefined,
-            keylessClientIp: extractClientIp(request),
-          };
-        }
-        throw new InvalidFirecrawlCredentialError();
-      }
-      if (profile.allowKeyless) {
-        return {
-          authType: 'keyless',
-          firecrawlApiKey: undefined,
-          keylessClientIp: extractClientIp(request),
-        };
-      }
-      if (!profile.acceptApiKeys) {
-        throw new Error(
-          `OAuth access token required for the Firecrawl MCP resource ${profile.endpoint}`
-        );
-      }
-      throw new Error(
-        'Firecrawl credentials required: OAuth access token (Authorization: Bearer fco_...) or API key (x-firecrawl-api-key)'
-      );
-    }
-    const session: SessionData = {
-      authType: resolved?.source === 'oauth' ? 'oauth' : 'api-key',
-      firecrawlApiKey: headerCred,
-      ...(isLegacyKeyPathRequest(request) ? { keyTransport: 'path' as const } : {}),
-      ...resolved?.metadata,
-    };
-    return managedCred ? setManagedOAuthApiKey(session, managedCred) : session;
-  }
-
-  const credential = headerCred ?? managedCred ?? envCred;
-
-  // Self-hosted / stdio / HTTP streamable — headers supply MCP OAuth token when present
-  const httpStreaming = options.transport === 'httpStream';
-  if (httpStreaming && !credential && !options.apiUrl) {
-    console.error(
-      'HTTP MCP transport requires FIRECRAWL_API_URL and/or credentials (OAuth: Authorization Bearer fco_..., or FIRECRAWL_API_KEY / FIRECRAWL_OAUTH_TOKEN)'
-    );
-    process.exit(1);
-  }
-
-  const session: SessionData = {
-    authType:
-      resolved?.source === 'oauth'
-        ? 'oauth'
-        : resolved?.source === 'api-key'
-          ? 'api-key'
-          : credential
-            ? 'env'
-            : 'none',
-    firecrawlApiKey: headerCred ?? envCred,
-    ...resolved?.metadata,
-  };
-  return managedCred ? setManagedOAuthApiKey(session, managedCred) : session;
 }
 
-type SearchCompanionAuthMode = 'oauth' | 'api-key' | 'none';
-
-function searchCompanionAuthMode(
-  request?: MCPAuthRequest,
-  session?: SessionData
-): SearchCompanionAuthMode {
-  if (session?.authType === 'oauth') return 'oauth';
-  if (session?.authType === 'api-key') return 'api-key';
-  // Mirror resolveCredentialFromHeaders precedence: explicit API-key headers
-  // win over Authorization when both are present.
-  const headerApiKey = normalizeHeader(
-    request?.headers?.['x-firecrawl-api-key'] ?? request?.headers?.['x-api-key']
-  );
-  if (headerApiKey) return 'api-key';
-  const bearer = request?.headers ? extractBearerToken(request.headers) : undefined;
-  if (bearer?.startsWith('fco_')) return 'oauth';
-  if (bearer) return 'api-key';
-  return 'none';
-}
-
-/**
- * Additive, intentionally low-cardinality companion traffic telemetry. This
- * is the only reliable way to establish whether the live companion is still
- * serving API-key consumers before its explicit OAuth-only cutover. Do not add
- * identifiers, credentials, request URLs, user agents, or hashes here.
- */
-function emitSearchCompanionAuthTelemetry(
-  hosted: boolean,
-  profile: ServerProfile,
-  request: MCPAuthRequest | undefined,
-  outcome: 'accepted' | 'rejected',
-  session?: SessionData
-): void {
-  if (
-    !hosted ||
-    profile.id !== 'search' ||
-    profile.primary === true
-  ) {
-    return;
-  }
-  console.log(
-    '[MCP_SEARCH_AUTH]',
-    JSON.stringify({
-      auth_mode: searchCompanionAuthMode(request, session),
-      outcome,
-      profile: 'companion',
-      // Unique only to this telemetry record; it is not a cross-service
-      // correlation ID and does not accept client-controlled identifiers.
-      event_id: randomUUID(),
-      route: DEFAULT_MCP_SEARCH_ENDPOINT,
-    })
-  );
-}
-
-function emitLegacyKeyPathTelemetry(
-  profile: ServerProfile,
-  request: MCPAuthRequest | undefined,
-  outcome: 'accepted' | 'rejected',
-  session?: SessionData
-): void {
-  if (profile.id !== 'full' || !isLegacyKeyPathRequest(request)) return;
-  console.log(
-    '[MCP_LEGACY_KEY_PATH]',
-    JSON.stringify({
-      auth_type: session?.authType ?? 'none',
-      key_transport: 'path',
-      outcome,
-      resource: profile.resourceUrl,
-    })
-  );
-}
-
-/**
- * Builds the `authenticate` hook for one profile. FastMCP runs it on every
- * request (including `tools/list`), so a rejection here yields a 401 with the
- * profile's own OAuth challenge and no request reaches an unauthenticated tool.
- */
-function makeAuthenticate(
-  profile: ServerProfile,
-  options: FirecrawlMcpServerOptions
-) {
-  return async function authenticateWithOAuthChallenge(
-    request?: MCPAuthRequest
-  ): Promise<SessionData> {
-    if (request?.[authResultByRequest]) {
-      return request[authResultByRequest];
-    }
-
-    const authResult = authenticateRequest(request, profile, options)
-      .then((session) => {
-        session.profile = profile.id;
-        const userAgent = request?.headers?.['user-agent'];
-        if (typeof userAgent === 'string' && userAgent !== '') {
-          session.clientUserAgent = userAgent;
-        }
-        emitSearchCompanionAuthTelemetry(
-          options.hosted,
-          profile,
-          request,
-          session.credentialError ? 'rejected' : 'accepted',
-          session
-        );
-        emitLegacyKeyPathTelemetry(
-          profile,
-          request,
-          session.credentialError ? 'rejected' : 'accepted',
-          session
-        );
-        return session;
-      })
-      .catch((error) => {
-        emitSearchCompanionAuthTelemetry(
-          options.hosted,
-          profile,
-          request,
-          'rejected'
-        );
-        emitLegacyKeyPathTelemetry(profile, request, 'rejected');
-        if (error instanceof InvalidFirecrawlCredentialError) {
-          throw createInvalidCredentialResponse(error);
-        }
-        if (error instanceof InvalidOAuthCredentialError) {
-          const recovery = invalidOAuthRecoveryPayload();
-          const oauthChallenge = createOAuthChallengeResponse(
-            new Error(recovery.message),
-            profile,
-            options.hosted,
-            recovery
-          );
-          throw oauthChallenge ?? createInvalidOAuthRecoveryResponse(recovery);
-        }
-        if (error instanceof CredentialValidationUnavailableError) {
-          throw createCredentialValidationUnavailableResponse(error);
-        }
-        const shouldChallenge = requestShouldReceiveOAuthChallenge(request, profile);
-        const oauthChallenge = shouldChallenge
-          ? createOAuthChallengeResponse(error, profile, options.hosted)
-          : undefined;
-        if (oauthChallenge) {
-          throw oauthChallenge;
-        }
-        throw error;
-      });
-
-    if (request) {
-      request[authResultByRequest] = authResult;
-    }
-
-    return authResult;
-  };
-}
-
-function removeEmptyTopLevel<T extends Record<string, any>>(
-  obj: T
-): Partial<T> {
-  const out: Partial<T> = {};
-  for (const [k, v] of Object.entries(obj)) {
-    if (v == null) continue;
-    if (typeof v === 'string' && v.trim() === '') continue;
-    if (Array.isArray(v) && v.length === 0) continue;
-    if (
-      typeof v === 'object' &&
-      !Array.isArray(v) &&
-      Object.keys(v).length === 0
-    )
-      continue;
-    // @ts-expect-error dynamic assignment
-    out[k] = v;
-  }
-  return out;
-}
-
-const searchDomainSchema = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .min(1)
-  .max(253)
-  .regex(
-    /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/,
-    'Domain must be a valid hostname without protocol or path'
-  );
-
-// Parameter fields shared by both firecrawl_search surfaces. The full surface
-// adds `scrapeOptions` on top; the search surface uses these as-is (strict, no
-// scrapeOptions). Defining the field set once keeps the two surfaces from
-// drifting when a source type, category, or filter changes.
-const searchToolBaseFields = {
-  toolDetail: z.enum(['compact', 'summary', 'full']).optional().describe('Compact by default. Compact returns only provider, capability and description; full includes contracts. Inspect selected compact tools with firecrawl_find_tools providers and capabilities.'),
-  query: z
-    .string()
-    .min(1)
-    .describe('Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Catalogue browsing is available through firecrawl_find_tools.'),
-  objective: z.string().trim().min(1).max(5000).optional().describe('Optional broader goal for this search, if known. Avoid sensitive information.'),
-  clientModel: z.string().trim().min(1).max(128).optional().describe('Optional model identifier, if known.'),
-  domainTools: z
-    .boolean()
-    .optional()
-    .describe(
-      'Include domain-matched tools for result URLs. Defaults to true when Alexandria is combined with web, news or images; semantic-only search leaves domain matching off.'
-    ),
-  highlights: z
-    .boolean()
-    .optional()
-    .describe(
-      'Return query-relevant page excerpts for web and news results when available (default). Highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned. Set to false to keep the original search snippets.'
-    ),
-  limit: z.number().int().min(1).max(100).optional(),
-  tbs: z.string().optional(),
-  filter: z.string().optional(),
-  location: z.string().optional(),
-  includeDomains: z.array(searchDomainSchema).optional().describe('Hostnames to restrict results to. Mutually exclusive with excludeDomains.'),
-  excludeDomains: z.array(searchDomainSchema).optional().describe('Hostnames to leave out of results. Mutually exclusive with includeDomains.'),
-  sources: z
-    .array(searchSourceSchema)
-    .optional()
-    .describe('Search sources; authenticated sessions default to web + alexandria, keyless sessions to web only. ' + ALEXANDRIA_SOURCES_OPT_OUT + ' Use ["alexandria"] alone for provider discovery without web results.'),
-  categories: z
-    .array(z.enum(['research', 'pdf', 'developer', 'gov']))
-    .optional()
-    .describe(
-      'Limit results to specific source types. `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation; `gov` searches the Government Index of US federal, state, and local legal and regulatory sources, the index behind firecrawl_gov_search, and cannot be combined with other categories; gov hits can include historical versions, bill text, agency guidance, and third-party reproductions, so verify the issuer, jurisdiction, enacted/effective status, and version before citing current governing law, clarify a missing jurisdiction or ambiguous as-of date, and use general search for non-US questions or missing coverage (no hits does not establish that no applicable law exists). `developer` and `gov` return hits in `data.web` with `category` set to their name; the other categories also filter `data.web`.'
-    ),
-  enterprise: z.array(z.enum(['default', 'anon', 'zdr'])).optional(),
-};
-
-// Both surfaces forbid specifying includeDomains and excludeDomains together.
-function searchDomainsAreExclusive(args: {
-  includeDomains?: string[];
-  excludeDomains?: string[];
-}): boolean {
-  return !(args.includeDomains?.length && args.excludeDomains?.length);
-}
-const SEARCH_DOMAINS_CONFLICT_MESSAGE =
-  'includeDomains and excludeDomains cannot both be specified';
-
-// Alexandria execution requires authenticated team access.
-const EXCHANGE_KEY_REQUIRED_MESSAGE =
-  'Alexandria requires an API key on a team with Alexandria access';
-const EXCHANGE_MAX_CALLS = 10;
-
-const exchangeCallSchema = z.object({
-  provider: z.string().min(1).describe('Provider slug, e.g. "fred".'),
-  capability: z
-    .string()
-    .min(1)
-    .describe(
-      'Capability address as returned by search or discover, e.g. "series/observations".'
-    ),
-  version: z.string().trim().min(1).max(128).optional().describe('Optional published workflow version. Omit to use the latest version.'),
-  options: z
-    .record(z.string(), z.any())
-    .optional()
-    .describe('Capability options as declared by its contract.'),
-});
-const exchangeCallsSchema = z
-  .array(exchangeCallSchema)
-  .min(1)
-  .max(EXCHANGE_MAX_CALLS);
-
-function assertExchangeCredential(session?: SessionData): void {
-  if (hasCredential(session)) return;
-  const payload = {
-    code: 'EXCHANGE_API_KEY_REQUIRED',
-    message: EXCHANGE_KEY_REQUIRED_MESSAGE,
-    docs_url: MCP_CONNECTION_GUIDE_URL,
-  };
-  throw new UserError(payload.message, payload);
-}
-
-const TERMS_REQUIRED_CODE = 'THIRD_PARTY_DATA_TERMS_REQUIRED';
-
-type TermsRequiredAction = {
-  type: 'accept_terms';
-  terms: string;
-  version: string;
-  url: string;
-};
-
-type ExchangeErrorContext = { tool: string; requestId?: string; providers?: string[] };
-
-const DATA_SOURCES_SETTINGS_URL =
-  'https://www.firecrawl.dev/app/settings?tab=data-sources';
-
-// An organization admin accepts provider terms in the dashboard. Through MCP,
-// agents only read them with terms/show, so firecrawl_scrape changes no
-// account state.
-function isTermsWrite(call: { provider: string; capability: string }): boolean {
-  const capability = call.capability.trim().toLowerCase();
-  return (
-    call.provider.trim().toLowerCase() === 'firecrawl' &&
-    capability.startsWith('terms/') &&
-    capability !== 'terms/show'
-  );
-}
-
-function termsWriteError(): UserError {
-  const message = `Provider terms are accepted in the Firecrawl dashboard, not through this connection. Read them with terms/show, then ask an organization admin to accept them at ${DATA_SOURCES_SETTINGS_URL}.`;
-  return new UserError(message, { code: 'invalid_option', status: 400, message });
-}
-
-function termsRequiredAction(body: unknown): TermsRequiredAction | undefined {
-  const data = body as
-    | { code?: unknown; requiresAction?: unknown }
-    | null
-    | undefined;
-  if (data?.code !== TERMS_REQUIRED_CODE) return undefined;
-  const action = data.requiresAction as
-    | Partial<TermsRequiredAction>
-    | null
-    | undefined;
-  if (
-    action?.type !== 'accept_terms' ||
-    typeof action.terms !== 'string' ||
-    typeof action.version !== 'string' ||
-    typeof action.url !== 'string'
-  )
-    return undefined;
-  return {
-    type: 'accept_terms',
-    terms: action.terms,
-    version: action.version,
-    url: action.url,
-  };
-}
-
-function termsRequiredError(
-  action: TermsRequiredAction,
-  context: ExchangeErrorContext,
-  hints?: string[]
-): UserError {
-  const requestId = context.requestId;
-  const retryIdentity = requestId ? ` and requestId ${requestId}` : '';
-  const message = `Alexandria provider terms required. An organization admin must accept the ${action.terms} provider's terms (version ${action.version}) before this request can run.`;
-  return new UserError(
-    `${message}\n\n1. Read the agreement with firecrawl_scrape using alexandria: {provider: "firecrawl", capability: "terms/show", options: {provider: "${action.terms}"}} and present it to the user. Send terms/show separately from provider execution. Terms are accepted in the Firecrawl dashboard, not through this connection: ask an organization admin to accept them at ${action.url}, or ${DATA_SOURCES_SETTINGS_URL} if that page is unavailable. Never infer acceptance from a data request.\n2. After the admin confirms, call ${context.tool} again with the identical payload${retryIdentity}. If the same terms error persists, stop and ask an organization admin to check access at ${DATA_SOURCES_SETTINGS_URL}.\n\nDo not retry until acceptance is confirmed.`,
-    {
-      code: TERMS_REQUIRED_CODE,
-      status: 403,
-      message,
-      ...(hints ? { agent_hints: hints } : {}),
-      ...(requestId ? { requestId } : {}),
-      requiresAction: action,
-      nextTool: {
-        name: 'firecrawl_scrape',
-        arguments: {
-          alexandria: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: action.terms } }],
-        },
-      },
-      next_actions: [
-        {
-          kind: 'human_action_required',
-          action: 'accept_terms',
-          who: 'organization_admin',
-          url: action.url,
-          provider: action.terms,
-          version: action.version,
-        },
-        {
-          kind: 'retry_same_request',
-          tool: context.tool,
-          ...(requestId ? { requestId } : {}),
-          after: 'human_action_required',
-        },
-      ],
-    }
-  );
-}
-
-function throwIfTermsRequired(
-  error: unknown,
-  context: ExchangeErrorContext
-): void {
-  const source = error as
-    | { response?: { data?: unknown }; details?: unknown }
-    | null
-    | undefined;
-  const action = termsRequiredAction(source?.response?.data ?? source?.details);
-  if (action)
-    throw termsRequiredError(action, context, readErrorAgentHints(error));
-}
-
-async function relayTermsRequired<T>(
-  run: () => Promise<T>,
-  context: ExchangeErrorContext
-): Promise<T> {
-  try {
-    return await run();
-  } catch (error) {
-    throwIfTermsRequired(error, context);
-    const response = (error as { response?: { status?: number; data?: unknown; headers?: Record<string, unknown> } } | null)?.response;
-    if (context.tool === 'firecrawl_search' && response?.status && response.status !== 401) {
-      const data = response.data as { error?: unknown } | null;
-      const message = typeof data?.error === 'string'
-        ? data.error
-        : `Search request failed (HTTP ${response.status})`;
-      const retryAfter = response.headers?.['retry-after'];
-      const retryAfterSeconds = typeof retryAfter === 'string' && /^\d+$/.test(retryAfter)
-        ? Number(retryAfter)
-        : undefined;
-      const hints = readErrorAgentHints(error);
-      throw new UserError(message, {
-        status: response.status,
-        error: message,
-        ...(Number.isSafeInteger(retryAfterSeconds) ? { retryAfterSeconds } : {}),
-        ...(hints ? { agent_hints: hints } : {}),
-      });
-    }
-    throw error;
-  }
-}
-
-// Exchange errors arrive as {success:false, error, code?, chargeId?} with the
-// upstream status (403 without the team flag, 402/409 once billing lands, 5xx
-// when the Exchange is unreachable). Relay the message, code, and any chargeId
-// so the agent can act on them; a 401 is left to the credential recovery path.
-async function relayExchangeError(
-  run: () => Promise<any>,
-  context: ExchangeErrorContext
-): Promise<any> {
-  try {
-    return await run();
-  } catch (error) {
-    throwIfTermsRequired(error, context);
-    const response = (
-      error as { response?: { status?: number; data?: unknown } } | null
-    )?.response;
-    if (!response || response.status === 401) throw error;
-    const data = response.data as
-      { error?: unknown; code?: unknown; chargeId?: unknown } | undefined;
-    const hints = readErrorAgentHints(error);
-    const message =
-      typeof data?.error === 'string'
-        ? data.error
-        : `Alexandria request failed (HTTP ${response.status})`;
-    const disabledProvider = response.status === 403
-      ? context.providers?.find(provider => message === `Access to ${provider} is disabled for this organization.`)
-      : undefined;
-    if (disabledProvider) {
-      throw new UserError(
-        `${message} Read the provider terms and status using nextTool and present them to the user. Never infer acceptance from a data request. Terms are accepted in the Firecrawl dashboard, not through this connection; acceptance may not restore disabled access, and an organization admin can review access at ${DATA_SOURCES_SETTINGS_URL}. Retry the original request only after access is restored.`,
-        {
-          code: typeof data?.code === 'string' ? data.code : 'exchange_error',
-          status: 403,
-          message,
-          ...(hints ? { agent_hints: hints } : {}),
-          nextTool: {
-            name: 'firecrawl_scrape',
-            arguments: {
-              alexandria: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: disabledProvider } }],
-            },
-          },
-        }
-      );
-    }
-    throw new UserError(message, {
-      code: typeof data?.code === 'string' ? data.code : 'exchange_error',
-      status: response.status,
-      message,
-      ...(hints ? { agent_hints: hints } : {}),
-      ...(typeof data?.chargeId === 'string'
-        ? { chargeId: data.chargeId }
-        : {}),
-    });
-  }
-}
-
-async function postSearchWithFallback(
-  client: any,
-  body: Record<string, unknown>,
-  implicitTools: boolean
-): Promise<any> {
-  try {
-    return await client.http.post('/v2/search', body);
-  } catch (error) {
-    const response = (error as any)?.response;
-    const unavailable = [
-      'Provider discovery requires access and does not support zero data retention.',
-      'This endpoint is not enabled for this team.',
-      'Exchange is not enabled for this team.',
-    ].includes(response?.data?.error);
-    if (!implicitTools || response?.status !== 403 || !unavailable) throw error;
-    return client.http.post('/v2/search', {
-      ...body,
-      sources: ['web'],
-      domainTools: false,
-    });
-  }
-}
+let warnedMissingAgentHintsInterceptor = false;
 
 class ConsoleLogger implements Logger {
   constructor(private readonly shouldLog: boolean) {}
@@ -1268,287 +314,9 @@ class ConsoleLogger implements Logger {
 }
 
 
-export const FULL_PROFILE_INSTRUCTIONS =
+const FULL_PROFILE_INSTRUCTIONS =
   `Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. Authenticated firecrawl_search returns web results together with matching Alexandria providers in data.tools. ${ALEXANDRIA_CATALOGUE_SENTENCE} A matching provider can return the same fields across several entities, provenance, exact figures or timestamps, or a large set of records through firecrawl_scrape with its published contract. If web results already answer the question, use them. For the same fields across multiple pages, firecrawl_find_tools offers free provider discovery. Use firecrawl_find_tools to read a contract that was not returned in full or to browse the catalogue by category. ${ALEXANDRIA_SOURCES_OPT_OUT} If no provider fits, continue with web search or firecrawl_agent. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question (code behaviour, a library or framework, an API contract, an error message, or a known bug), firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of public repositories, GitHub issues, merged pull requests, READMEs, and code documentation. For a legal or regulatory question, firecrawl_gov_search searches primary law and regulatory material from US federal, state, and local government sources: statutes, regulations, codes, court opinions, and other government publications; firecrawl_search with categories: ["gov"] reaches the same sources and cannot be combined with other categories. firecrawl_search with sources: [{type: "alexandria"}] returns compact tool summaries in data.tools; toolDetail: "full" includes contracts, firecrawl_find_tools starts with categories, lists providers, then compact tools, and expands the selected full contract, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities and returns their results. Alexandria access needs an API key on a team with it enabled. Provide only the required inputs and account for stated network or external side effects.`;
-export const KEYLESS_PROFILE_INSTRUCTIONS = `Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: ["gov"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index and repository research, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.`;
-
-// The search surface exposes web/developer/government/research search plus the two Alexandria
-// tools (catalogue lookup and provider execution). Its instructions
-// and tool copy describe just those tools and stay neutral about how a client
-// uses them.
-export const SEARCH_PROFILE_INSTRUCTIONS =
-  ALEXANDRIA_SEARCH_INSTRUCTIONS +
-  ` Firecrawl provides web, developer, government, and research search, and executes catalogued Alexandria data providers. Use firecrawl_search to find relevant results across the web and specialized indexes; authenticated searches also return matching Alexandria providers in data.tools. firecrawl_find_tools provides catalogue browsing and provider contracts; firecrawl_scrape with an alexandria body executes a selected capability; firecrawl_scrape with a url retrieves one supplied page. For a programming question, firecrawl_developer_search searches indexed public repositories, GitHub issues, merged pull requests, READMEs, and code documentation and returns the matched passages, and skills: "only" narrows it to agent-skill files; firecrawl_search with categories: ["developer"] reaches the same index beside ordinary web results, returning the hits in the web group rather than as passages and offering no skills filter. For a legal or regulatory question, firecrawl_gov_search searches primary law and regulatory material from US federal, state, and local government sources: statutes, regulations, codes, court opinions, and other government publications; firecrawl_search with categories: ["gov"] reaches the same sources in the web group and cannot be combined with other categories. For a biomedical, life-science, clinical, or arXiv literature question, the firecrawl_research_* tools search the paper index, while categories: ["research"] on firecrawl_search filters ordinary web results to research-affiliated websites. Use the firecrawl_research_* tools to search academic and research literature, expand from anchor papers via the citation graph, and read full-text passages from a specific paper. Search and discovery tools are read-only and return ranked results. Billing: web, developer, and research search are billed per request; government search is free; Alexandria discovery (firecrawl_search with sources ["alexandria"] alone, and firecrawl_find_tools) is free; firecrawl_scrape is billed, as a page retrieval in url mode or at each executed capability's listed price in alexandria mode.`;
-
-// The exact set of tools the search surface exposes. Registration is filtered
-// against this set, so anything not listed here can never appear on that
-// instance's tools/list or be called through it.
-//
-// Why this set is frozen: /v2/mcp-search backs a published connector listing
-// that declares these tool names to users. Editing this set changes what that
-// listing advertises and leaves it wrong until the listing is updated by hand.
-// Before adding, removing, renaming, or hiding anything here, tell partnerships
-// so the listing and the server move at the same time. See
-// docs/search-profile.md, "Why the tool set is fixed".
-export const SEARCH_PROFILE_TOOLS = new Set<string>([
-  'firecrawl_search',
-  'firecrawl_developer_search',
-  'firecrawl_gov_search',
-  'firecrawl_research_search_papers',
-  'firecrawl_research_inspect_paper',
-  'firecrawl_research_related_papers',
-  'firecrawl_research_read_paper',
-  // Alexandria: catalogue lookup and provider execution.
-  'firecrawl_find_tools',
-  'firecrawl_scrape',
-  // Registered so cached sessions get a DEPRECATED_TOOL payload, hidden from
-  // tools/list via canList. See registerResearchTools.
-  'firecrawl_research_search_github',
-]);
-
-// Tools whose search-surface registration is a variant with surface-scoped
-// copy. Their module-level registration is suppressed on a primary search
-// process and the variant is registered explicitly at startup.
-const SEARCH_SURFACE_VARIANT_TOOLS = new Set<string>([
-  'firecrawl_search',
-  'firecrawl_scrape',
-  'firecrawl_find_tools',
-]);
-
-
-function createServer(
-  profile: ServerProfile,
-  options: FirecrawlMcpServerOptions
-): FastMCP<SessionData> {
-  return new FastMCP<SessionData>({
-    name: 'firecrawl-fastmcp',
-    version: packageVersion as `${number}.${number}.${number}`,
-    instructions: profile.instructions,
-    logger: new ConsoleLogger(options.logging),
-    roots: { enabled: false },
-    oauth: {
-      enabled: options.hosted && profile.advertiseOAuth,
-      protectedResource: {
-        authorizationServers: [getOAuthIssuer()],
-        bearerMethodsSupported: ['header'],
-        resource: profile.resourceUrl,
-        resourceName: profile.resourceName,
-        scopesSupported: ['firecrawl:global'],
-      },
-    },
-    authenticate: makeAuthenticate(profile, options),
-    // Lightweight health endpoint for LB checks
-    health: {
-      enabled: true,
-      message: 'ok',
-      path: '/health',
-      status: 200,
-    },
-  });
-}
-
-/** Best-effort end-user client IP from the incoming MCP request headers. */
-function extractClientIp(request?: {
-  headers: IncomingHttpHeaders;
-}): string | undefined {
-  return extractSingleTrustedClientIp(request?.headers?.['x-forwarded-for']);
-}
-
-const KEYLESS_TOOL_NAMES = new Set([
-  'firecrawl_scrape',
-  'firecrawl_search',
-  'firecrawl_parse',
-]);
-
-let warnedMissingAgentHintsInterceptor = false;
-
-// FastMCP copies UserError.message onto both content[0].text and
-// structuredContent.message. Hosts forward the text block, not
-// structured next_actions, so bearer and OAuth recovery strings live here.
-//
-// The signup link is the caller's own firecrawl.dev/k/<token> link, issued by
-// the API (the 429 body's signup_url, or signupUrl from the eligibility check):
-// a 12-character encrypted token the site decrypts to keyless attribution.
-// When the API has no token to give it sends the regular keyless signin link,
-// which is relayed as is; without any API link, the regular MCP signin link is used.
-const KEYLESS_SIGNUP_FALLBACK_URL =
-  'https://www.firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp&redirect=%2Fapp%2Fapi-keys';
-// Firecrawl-hosted links that fail the check are logged once each, so a change
-// in the API's link format shows up instead of silently falling back.
-const droppedKeylessSignupUrls = new Set<string>();
-
-/** An API-issued keyless signup link, or undefined for anything else. */
-function keylessSignupUrlFrom(value: unknown): string | undefined {
-  const check = checkKeylessSignupUrl(value);
-  if (check.ok) return check.url;
-  if (
-    check.firecrawlHost &&
-    typeof value === 'string' &&
-    droppedKeylessSignupUrls.size < 50 &&
-    !droppedKeylessSignupUrls.has(value)
-  ) {
-    droppedKeylessSignupUrls.add(value);
-    console.warn(
-      '[WARN]',
-      new Date().toISOString(),
-      'Ignoring an unrecognized Firecrawl keyless signup link from the API; using the fallback',
-      { signupUrl: value }
-    );
-  }
-  return undefined;
-}
-
-function keylessAccountFix(signupUrl: string): string {
-  return `Fix: Create an API key at ${signupUrl} and then:\n- Set the header: Authorization: Bearer YOUR_API_KEY on https://mcp.firecrawl.dev/v2/mcp\nThen start a new session.`;
-}
-const keylessQuotaMessage = (signupUrl: string) =>
-  `You've hit Firecrawl's free MCP rate limit. To continue using without limits, create a Firecrawl API key.\n\n${keylessAccountFix(signupUrl)}`;
-const keylessToolMessage = (signupUrl: string) =>
-  `This tool needs a Firecrawl account.\n\n${keylessAccountFix(signupUrl)}`;
-const keylessAccessMessage = (signupUrl: string) =>
-  `Anonymous keyless access is unavailable for this request.\n\n${keylessAccountFix(signupUrl)}`;
-const INVALID_API_KEY_MESSAGE =
-  'The Firecrawl API key is invalid or revoked.\nFix: Replace the key on the existing Firecrawl MCP server, then start a new session. Get an API key at https://www.firecrawl.dev/app/api-keys';
-const INVALID_OAUTH_MESSAGE =
-  'This Firecrawl account connection is no longer valid.\nFix: Reconnect the existing Firecrawl server in the client, or set that existing server URL to https://mcp.firecrawl.dev/v2/mcp-oauth, then start a new session.';
-
-function connectionRecoveryPayload(params: {
-  code: string;
-  authMode: string;
-  message: string;
-}): Record<string, unknown> & { message: string } {
-  return {
-    code: params.code,
-    auth_mode: params.authMode,
-    message: params.message,
-    docs_url: MCP_CONNECTION_GUIDE_URL,
-  };
-}
-
-function invalidApiKeyRecoveryPayload(): Record<string, unknown> & {
-  message: string;
-} {
-  return connectionRecoveryPayload({
-    code: 'CREDENTIAL_INVALID',
-    authMode: 'api_key',
-    message: INVALID_API_KEY_MESSAGE,
-  });
-}
-
-function invalidOAuthRecoveryPayload(): Record<string, unknown> & {
-  message: string;
-} {
-  return connectionRecoveryPayload({
-    code: 'OAUTH_CONNECTION_INVALID',
-    authMode: 'oauth',
-    message: INVALID_OAUTH_MESSAGE,
-  });
-}
-
-/**
- * Core rejected the credential this session forwarded. Tools reach Core by
- * several routes, the SDK helpers, the SDK's HTTP layer, and plain fetch, so
- * this reads the status rather than the error's type: every route reports one,
- * and inside a tool a 401 can only have come from Core. Only 401 is matched,
- * because that is a verdict on the credential; a 403 can mean an entitlement
- * the key legitimately lacks.
- */
-function isCoreCredentialRejection(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const candidate = error as {
-    response?: { status?: unknown };
-    status?: unknown;
-  };
-  return candidate.status === 401 || candidate.response?.status === 401;
-}
-
-/**
- * API keys reach Core unresolved, so an invalid one is discovered when a tool
- * runs rather than at connect time. Translate that rejection into the same
- * CREDENTIAL_INVALID recovery the agent already knows how to act on, so the
- * guidance does not depend on having introspected the key first.
- */
-async function runWithCredentialRecovery<T>(
-  run: () => T | Promise<T>,
-  requestId: string,
-  session?: SessionData
-): Promise<T> {
-  try {
-    return await run();
-  } catch (error) {
-    // Only an API-key session hands Core a credential nothing resolved first.
-    // An OAuth session was validated at connect time, so a rejection there is a
-    // different fault and keeps its own reconnect guidance; a keyless session
-    // never sent an account credential at all.
-    if (session?.authType !== 'api-key' || !isCoreCredentialRejection(error)) {
-      const hints = readErrorAgentHints(error);
-      if (hints) {
-        const message = error instanceof Error ? error.message : String(error);
-        throw new UserError(
-          hints.length ? `${message}\n\n${agentHintsText(hints)}` : message,
-          {
-            ...(error instanceof UserError ? error.extras : {}),
-            error: message,
-            agent_hints: hints,
-          }
-        );
-      }
-      throw error;
-    }
-    const payload = recoveryPayload('CREDENTIAL_INVALID', requestId);
-    throw new UserError(String(payload.message), payload);
-  }
-}
-
-function recoveryPayload(
-  code: string,
-  requestId: string = randomUUID(),
-  options: { retryAfterSeconds?: number; signupUrl?: string } = {}
-): Record<string, unknown> {
-  const retryAfterSeconds = options.retryAfterSeconds;
-  const signupUrl = options.signupUrl ?? KEYLESS_SIGNUP_FALLBACK_URL;
-  const isQuotaExhausted =
-    code === 'KEYLESS_QUOTA_EXHAUSTED' || code === 'KEYLESS_LIMIT_REACHED';
-  const isToolUnavailable = code === 'KEYLESS_TOOL_NOT_AVAILABLE';
-  const isKeylessAccessUnavailable = code === 'KEYLESS_ACCESS_NOT_AVAILABLE';
-  const isKeylessEligibilityUnavailable =
-    code === 'KEYLESS_ELIGIBILITY_UNAVAILABLE';
-  const isKeylessConversion =
-    isQuotaExhausted || isToolUnavailable || isKeylessAccessUnavailable;
-  return {
-    code,
-    request_id: requestId,
-    auth_mode: code === 'CREDENTIAL_INVALID' ? 'credential_error' : 'keyless',
-    message:
-      code === 'CREDENTIAL_INVALID'
-        ? INVALID_API_KEY_MESSAGE
-        : isQuotaExhausted
-          ? keylessQuotaMessage(signupUrl)
-          : isToolUnavailable
-            ? keylessToolMessage(signupUrl)
-            : isKeylessAccessUnavailable
-              ? keylessAccessMessage(signupUrl)
-              : isKeylessEligibilityUnavailable
-                ? 'The anonymous keyless eligibility check is temporarily unavailable. Retry shortly.'
-                : 'This tool requires a Firecrawl account or API key.',
-    // CREDENTIAL_INVALID sessions gate every tool call (including keyless
-    // tools) on the credentialError check before the keyless branch ever
-    // runs, so none of KEYLESS_TOOL_NAMES are actually callable here. Listing
-    // them as available_tools would send the agent into a retry loop against
-    // tools that will just return this same recovery payload. Quota, blocked
-    // tools, and ineligible access omit available_tools and next_actions for
-    // the same reason: those fields retry tools that cannot clear the error.
-    ...(isKeylessConversion || code === 'CREDENTIAL_INVALID'
-      ? {}
-      : { available_tools: [...KEYLESS_TOOL_NAMES] }),
-    ...(isKeylessConversion ? { signup_url: signupUrl } : {}),
-    docs_url: MCP_CONNECTION_GUIDE_URL,
-    ...(retryAfterSeconds ? { retry_after_seconds: retryAfterSeconds } : {}),
-    ...(isKeylessEligibilityUnavailable
-      ? { next_actions: [{ kind: 'retry_later', after_seconds: 30 }] }
-      : {}),
-  };
-}
+const KEYLESS_PROFILE_INSTRUCTIONS = `Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: ["gov"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index and repository research, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.`;
 
 function deprecatedExtractPayload() {
   return {
@@ -1574,299 +342,183 @@ function deprecatedExtractPayload() {
     docs_url: 'https://docs.firecrawl.dev/developer-guides/usage-guides/choosing-the-data-extractor',
   };
 }
-export interface FirecrawlMcpServerOptions {
-  /** Surface this instance serves: identity, instructions, endpoint and tool set. */
-  profile: ServerProfile;
-  /** Firecrawl API base URL. Unset targets the Firecrawl cloud. */
-  apiUrl?: string;
-  /** Credential used when a request does not carry one. */
-  apiKey?: string;
-  /** Transport the instance is started with. */
-  transport: 'stdio' | 'httpStream';
-  /** Write server logs to the console. */
-  logging: boolean;
-  /** Restrict browser actions and webhooks, and mark scrape read-only. */
-  safeMode: boolean;
-  /** `local` reads files from this machine; `upload` uses a two-phase upload flow. */
-  fileAccess: 'local' | 'upload';
-  /** Refuse Firecrawl API calls from sessions without a credential. */
-  requireCredential: boolean;
-  /** Register firecrawl_search_feedback. */
-  searchFeedback: boolean;
-  /** Register firecrawl_feedback. */
-  endpointFeedback: boolean;
-  /** Deployment-specific behaviour of the hosted service. */
-  hosted: boolean;
-}
-
-export type FirecrawlMcpServerStartArgs = Parameters<FastMCP<SessionData>['start']>[0];
-
-export interface FirecrawlMcpServer {
-  server: FastMCP<SessionData>;
-  start(args: FirecrawlMcpServerStartArgs): Promise<void>;
-}
 
 export function createFirecrawlMcpServer(
-  config: FirecrawlMcpServerOptions
+  options: FirecrawlMcpServerOptions = {}
 ): FirecrawlMcpServer {
-  const primaryProfile = config.profile;
-  const server = createServer(primaryProfile, config);
-  type RegisteredTool = Parameters<typeof server.addTool>[0];
+  const hooks = options.unstable_hooks ?? {};
+  const config = {
+    apiUrl: options.apiUrl,
+    apiKey: options.apiKey,
+    transport: options.transport ?? 'stdio',
+    safeMode: options.safeMode ?? false,
+    fileAccess: options.fileAccess ?? 'local',
+    requireCredential: options.requireCredential ?? false,
+    searchFeedback: options.searchFeedback ?? true,
+    endpointFeedback: options.endpointFeedback ?? true,
+  };
+  const logging = options.logging ?? config.transport === 'httpStream';
 
-  function isHostedKeylessSession(session?: SessionData): boolean {
-    return (
-      config.hosted &&
-      session?.authType === 'keyless' &&
-      !session.firecrawlApiKey
+  const instructionDefaults: InstructionDefaults = {
+    authenticated: FULL_PROFILE_INSTRUCTIONS,
+    keyless: KEYLESS_PROFILE_INSTRUCTIONS,
+  };
+  const instructions =
+    typeof hooks.instructions === 'function'
+      ? hooks.instructions(instructionDefaults)
+      : (hooks.instructions ??
+        (config.apiKey
+          ? instructionDefaults.authenticated
+          : instructionDefaults.keyless));
+
+  async function defaultAuthenticate(
+    request: AuthenticationRequest | undefined
+  ): Promise<SessionData> {
+    // Header credentials apply only to Firecrawl API keys; anything else is
+    // ignored in favour of the configured credential.
+    const supplied = request?.headers ? headerApiKey(request.headers) : undefined;
+    const headerCredential = supplied?.startsWith('fc-') ? supplied : undefined;
+    const credential = headerCredential ?? config.apiKey;
+    if (config.transport === 'httpStream' && !credential && !config.apiUrl) {
+      throw new Error(
+        'HTTP MCP transport requires an API URL or a Firecrawl API key'
+      );
+    }
+    return {
+      authType: headerCredential ? 'api-key' : credential ? 'env' : 'none',
+      firecrawlApiKey: credential,
+    };
+  }
+
+  const authenticateSession = hooks.authenticate ?? defaultAuthenticate;
+
+  // FastMCP may authenticate one HTTP request more than once; resolve it once.
+  function authenticate(request?: CachedAuthRequest): Promise<SessionData> {
+    const cached = request?.[authResultByRequest];
+    if (cached) return cached;
+    const authResult = authenticateSession(request).then((session) => {
+      const userAgent = request?.headers?.['user-agent'];
+      if (typeof userAgent === 'string' && userAgent !== '') {
+        session.clientUserAgent = userAgent;
+      }
+      return session;
+    });
+    if (request) request[authResultByRequest] = authResult;
+    return authResult;
+  }
+
+  const server = new FastMCP<SessionData>({
+    name: 'firecrawl-fastmcp',
+    version: packageVersion as `${number}.${number}.${number}`,
+    instructions,
+    logger: new ConsoleLogger(logging),
+    roots: { enabled: false },
+    ...(hooks.oauth
+      ? { oauth: { enabled: true, protectedResource: hooks.oauth.protectedResource } }
+      : {}),
+    authenticate,
+    // Lightweight health endpoint for LB checks
+    health: {
+      enabled: true,
+      message: 'ok',
+      path: '/health',
+      status: 200,
+    },
+  });
+
+  hooks.configureHttp?.(server.getApp());
+
+  function resolveOutbound(session?: SessionData): {
+    credential?: string;
+    headers: Record<string, string>;
+  } {
+    const outbound = hooks.outboundRequest?.(session);
+    return {
+      credential: outbound?.credential ?? session?.firecrawlApiKey,
+      headers: outbound?.headers ?? {},
+    };
+  }
+
+  function hasCredential(session?: SessionData): boolean {
+    return Boolean(
+      session?.firecrawlApiKey || hooks.outboundRequest?.(session)?.credential
     );
+  }
+
+  function assertExchangeCredential(session?: SessionData): void {
+    assertExchangeCredentialPresent(hasCredential(session));
   }
 
   // A stdio client without a cloud credential can use only the keyless tools.
-  // Do this at registration time so unsupported feedback tools are not advertised.
+  // Do this at registration time so unsupported feedback tools are not
+  // advertised. Credentials an authenticate or outboundRequest hook supplies
+  // are only known per session, so those instances register the feedback
+  // tools and hide them from keyless sessions instead.
   function isLocalKeylessStartup(): boolean {
     return (
-      !config.hosted &&
       config.transport !== 'httpStream' &&
       !config.apiKey &&
-      !normalizeHeader(config.apiUrl)
+      !normalizeHeader(config.apiUrl) &&
+      !hooks.authenticate &&
+      !hooks.outboundRequest
     );
   }
-
-  type ActionStatus = 'started' | 'success' | 'error';
-
-  function emitActionLog(
-    toolName: string,
-    status: ActionStatus,
-    session?: SessionData,
-    error?: unknown,
-    requestId = randomUUID(),
-    code?: string
-  ): void {
-    if (!config.hosted) return;
-    const payload = {
-      team_id: session?.teamId,
-      user_id: session?.userId,
-      api_key_id: session?.apiKeyId,
-      oauth_client_id: session?.oauthClientId,
-      auth_type: session?.authType ?? 'none',
-      tool_name: toolName,
-      status,
-      request_id: requestId,
-      resource: primaryProfile.resourceUrl,
-      ...(error
-        ? { error_class: error instanceof Error ? error.name : typeof error }
-        : {}),
-      ...(code ? { code } : {}),
-    };
-    console.error('[MCP_ACTION]', JSON.stringify(payload));
-
-    const secret = normalizeHeader(process.env.FIRECRAWL_MCP_ACTION_LOG_SECRET);
-    const apiUrl = normalizeHeader(config.apiUrl);
-    const endpoint =
-      normalizeHeader(process.env.FIRECRAWL_MCP_ACTION_LOG_URL) ??
-      (apiUrl ? `${withoutTrailingSlash(apiUrl)}/v2/mcp/action-logs` : undefined);
-    if (!secret || !endpoint || !payload.team_id || status === 'started') return;
-    // `code` is an MCP console-log discriminator, not part of the account-scoped
-    // action-log API contract.
-    const actionLogPayload = { ...payload };
-    delete actionLogPayload.code;
-    void fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${secret}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(actionLogPayload),
-      signal: AbortSignal.timeout(1500),
-    }).catch(() => undefined);
-  }
-
-  const AGENT_HINT_LOG_MAX_CHARS = 1000;
 
   /**
-   * One `[MCP_AGENT_HINTS]` line per tool call that surfaced API agent hints.
-   * The strings come from the Firecrawl API, never from page content, so they
-   * are logged verbatim (capped) to count each hint; `request_id` joins the line
-   * to the call's `[MCP_ACTION]` records for account-level breakdowns.
+   * Every tool runs inside this pipeline: a per-call session copy carrying a
+   * request ID, then `wrapTool`'s decoration, then call reporting and
+   * credential recovery around the tool itself.
    */
-  function emitAgentHintsLog(
-    toolName: string,
-    status: Exclude<ActionStatus, 'started'>,
-    hints: string[] | undefined,
-    session: SessionData,
-    requestId: string
-  ): void {
-    // An empty array is still an API hints response, logged as hint_count 0.
-    if (!config.hosted || !hints) return;
-    console.error(
-      '[MCP_AGENT_HINTS]',
-      JSON.stringify({
-        tool_name: toolName,
-        status,
-        request_id: requestId,
-        auth_type: session.authType ?? 'none',
-        // The companion search server shares this process and wrapper.
-        profile: session.profile ?? primaryProfile.id,
-        hint_count: hints.length,
-        hints: hints.map((hint) => hint.slice(0, AGENT_HINT_LOG_MAX_CHARS)),
-      })
-    );
-  }
-
-  function resultAgentHints(result: unknown): string[] | undefined {
-    return result && typeof result === 'object'
-      ? readAgentHints((result as { structuredContent?: unknown }).structuredContent)
-      : undefined;
-  }
-
-  function guardHostedTool(
-    tool: RegisteredTool,
-    { logActions }: { logActions: boolean }
-  ): RegisteredTool {
-    const keylessTool = KEYLESS_TOOL_NAMES.has(tool.name);
+  function prepareTool(tool: RegisteredTool): RegisteredTool {
     const execute = tool.execute;
-    const canList = tool.canList;
-    const beforeValidate = tool.beforeValidate;
-    return {
+    const instrumented: RegisteredTool = {
       ...tool,
-      canList: (session: SessionData) =>
-        // A credentialError session lists the keyless tool surface (same as a
-        // real keyless session, not the full authenticated schema) so the
-        // client proceeds past tools/list and calling any listed tool returns
-        // the CREDENTIAL_INVALID recovery payload (below). An empty list would
-        // leave MCP clients that stop after tools/list unable to ever surface
-        // the recovery guidance; the full non-keyless schema would over-disclose
-        // to a request carrying an unrecognized or invalid credential.
-        (session?.credentialError || isHostedKeylessSession(session)
-          ? keylessTool
-          : true) &&
-        (canList?.(session) ?? true),
-      beforeValidate: async (args: unknown, session: SessionData) => {
-        const code = session?.credentialError
-          ? 'CREDENTIAL_INVALID'
-          : isHostedKeylessSession(session) && !keylessTool
-            ? 'KEYLESS_TOOL_NOT_AVAILABLE'
-            : undefined;
-        if (code) {
-          const requestId = randomUUID();
-          const payload = recoveryPayload(code, requestId, {
-            signupUrl:
-              code === 'KEYLESS_TOOL_NOT_AVAILABLE'
-                ? await hostedKeylessSignupUrl(session)
-                : undefined,
-          });
-          if (logActions) {
-            emitActionLog(tool.name, 'error', session, new UserError(String(payload.message), payload), requestId, code);
-          }
-          return {
-            content: [{ type: 'text' as const, text: String(payload.message) }],
-            isError: true,
-            structuredContent: payload,
-          };
-        }
-        const earlyResult = await beforeValidate?.(args, session);
-        const payload = earlyResult?.structuredContent;
-        const recoveryCode =
-          payload &&
-          typeof payload === 'object' &&
-          'code' in payload &&
-          typeof payload.code === 'string'
-            ? payload.code
-            : undefined;
-        if (logActions && earlyResult?.isError && recoveryCode) {
-          emitActionLog(
-            tool.name,
-            'error',
-            session,
-            new UserError(`Tool validation failed: ${recoveryCode}`, payload),
-            randomUUID(),
-            recoveryCode
-          );
-        }
-        return earlyResult;
-      },
       execute: async (args, context) => {
-        const requestId = randomUUID();
-        const invocationSession: SessionData = {
-          ...context.session,
-          requestId,
-        };
-        copyManagedOAuthApiKey(context.session, invocationSession);
-        const invocationContext = {
-          ...context,
-          session: invocationSession,
-        };
-
-        if (invocationSession.credentialError) {
-          const code = 'CREDENTIAL_INVALID';
-          const payload = recoveryPayload(code, requestId);
-          if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
-          throw new UserError(String(payload.message), payload);
-        }
-        if (isHostedKeylessSession(invocationSession) && !keylessTool) {
-          const code = 'KEYLESS_TOOL_NOT_AVAILABLE';
-          const payload = recoveryPayload(code, requestId, {
-            signupUrl: await hostedKeylessSignupUrl(invocationSession),
-          });
-          if (logActions) emitActionLog(tool.name, 'error', invocationSession, new UserError(String(payload.message), payload), requestId, code);
-          throw new UserError(String(payload.message), payload);
-        }
-        const runTool = async () => {
-          try {
-            const result = await runWithCredentialRecovery(
-              () => execute(args, invocationContext),
-              requestId,
-              invocationSession
-            );
-            emitAgentHintsLog(
-              tool.name,
-              (result as { isError?: boolean } | undefined)?.isError ? 'error' : 'success',
-              resultAgentHints(result),
-              invocationSession,
-              requestId
-            );
-            return result;
-          } catch (error) {
-            emitAgentHintsLog(tool.name, 'error', readErrorAgentHints(error), invocationSession, requestId);
-            throw error;
-          }
-        };
-        if (!logActions) return runTool();
-
-        emitActionLog(tool.name, 'started', invocationSession, undefined, requestId);
+        const session = context.session as SessionData;
+        const requestId = session.requestId as string;
+        const call = { tool: tool.name, session, requestId };
+        hooks.onToolResult?.({ ...call, status: 'started' });
         try {
-          const result = await runTool();
-          emitActionLog(tool.name, 'success', invocationSession, undefined, requestId);
+          const result = await runWithCredentialRecovery(
+            () => execute(args, context),
+            requestId,
+            session
+          );
+          hooks.onToolResult?.({
+            ...call,
+            status: 'success',
+            result,
+            agentHints: resultAgentHints(result),
+          });
           return result;
         } catch (error) {
-          emitActionLog(tool.name, 'error', invocationSession, error, requestId);
+          hooks.onToolResult?.({
+            ...call,
+            status: 'error',
+            error,
+            agentHints: readErrorAgentHints(error),
+          });
           throw error;
         }
       },
     };
+    const wrapped = hooks.wrapTool ? hooks.wrapTool(instrumented) : instrumented;
+    return {
+      ...wrapped,
+      execute: (args, context) => {
+        const session = copySession(context.session);
+        session.requestId = randomUUID();
+        return wrapped.execute(args, { ...context, session });
+      },
+    };
   }
 
+  const builtInTools = new Map<string, RegisteredTool>();
   const addTool = server.addTool.bind(server);
   server.addTool = ((tool: RegisteredTool) => {
-    // A dedicated search process registers through the same module-level tool
-    // setup as full MCP. Filter at the server boundary so an accidental future
-    // registration cannot widen its frozen public contract.
-    if (
-      primaryProfile.toolAllowlist &&
-      !primaryProfile.toolAllowlist.has(tool.name)
-    ) {
-      return;
-    }
-    // The module registers the full `firecrawl_search`, `firecrawl_scrape` and
-    // `firecrawl_find_tools` before startup. A primary search profile must
-    // instead receive the search-surface variants registered at startup: strict
-    // search without scrapeOptions, and copies of the two Alexandria tools whose
-    // descriptions name only tools that exist on this surface. Keep the name
-    // filter here so the full registrations cannot leak into the frozen surface.
-    if (primaryProfile.id === 'search' && SEARCH_SURFACE_VARIANT_TOOLS.has(tool.name)) {
-      return;
-    }
-    addTool(guardHostedTool(tool, { logActions: primaryProfile.id !== 'search' }));
+    builtInTools.set(tool.name, tool);
+    if (hooks.toolFilter && !hooks.toolFilter(tool.name)) return;
+    addTool(prepareTool(tool));
   }) as typeof server.addTool;
 
   function createClient(apiKey?: string): FirecrawlApp {
@@ -1932,7 +584,8 @@ export function createFirecrawlMcpServer(
     }
   }
 
-  // Safe mode is enabled by default for cloud service to comply with ChatGPT safety requirements
+  // Safe mode restricts browser actions and webhooks for deployments that
+  // must not drive interactive page changes.
   const SAFE_MODE = config.safeMode;
 
   function getClient(session?: SessionData): FirecrawlApp {
@@ -1944,38 +597,67 @@ export function createFirecrawlMcpServer(
         'Unauthorized: API key is required when not using a self-hosted instance'
       );
     }
-    if (!hasManagedOAuthCredential(session)) {
-      return createClient(credentialForOutboundRequest(session));
+    const outboundRequest = hooks.outboundRequest;
+    if (!outboundRequest) {
+      return markCredentialRejections(
+        createClient(session?.firecrawlApiKey),
+        session
+      );
     }
 
-    const client = createClient('request-scoped-hosted-oauth');
+    // The hook may mint a short-lived credential, so it runs on every request
+    // the client makes rather than once here.
+    const perRequestCredential = Boolean(outboundRequest(session)?.credential);
+    const client = createClient(
+      session?.firecrawlApiKey ??
+        (perRequestCredential ? REQUEST_SCOPED_CREDENTIAL : undefined)
+    );
     const axiosInstance = (client as any).http?.instance;
     if (!axiosInstance?.interceptors?.request?.use) {
-      throw credentialValidationUnavailable({
-        reason: 'outbound_client_uninstrumented',
-      });
+      if (perRequestCredential) {
+        throw new Error(
+          'Firecrawl client cannot apply a per-request credential'
+        );
+      }
+      return client;
     }
-    axiosInstance.interceptors.request.use((config: any) => {
-      const credential = credentialForOutboundRequest(session);
-      // Unreachable in practice: this interceptor is installed only for a session
-      // holding a managed key, and that always signs to a non-empty credential or
-      // throws while signing. Kept because the signature is `string | undefined`,
-      // so removing it would mean asserting instead of checking.
-      if (!credential) {
-        throw credentialValidationUnavailable({
-          reason: 'delegated_credential_unavailable',
-        });
+    axiosInstance.interceptors.request.use((request: any) => {
+      const outbound = outboundRequest(session);
+      const headers: Record<string, string> = {
+        ...(outbound?.headers ?? {}),
+        ...(outbound?.credential
+          ? { Authorization: `Bearer ${outbound.credential}` }
+          : {}),
+      };
+      for (const [name, value] of Object.entries(headers)) {
+        if (typeof request.headers?.set === 'function') {
+          request.headers.set(name, value);
+        } else {
+          request.headers = { ...(request.headers ?? {}), [name]: value };
+        }
       }
-      if (typeof config.headers?.set === 'function') {
-        config.headers.set('Authorization', `Bearer ${credential}`);
-      } else {
-        config.headers = {
-          ...(config.headers ?? {}),
-          Authorization: `Bearer ${credential}`,
-        };
-      }
-      return config;
+      return request;
     });
+    return markCredentialRejections(client, session);
+  }
+
+  /** Records on the call's session that Core answered 401 to this client. */
+  function markCredentialRejections(
+    client: FirecrawlApp,
+    session: SessionData | undefined
+  ): FirecrawlApp {
+    const responses = (client as any).http?.instance?.interceptors?.response;
+    if (!session || !responses?.use) return client;
+    responses.use(
+      (response: unknown) => response,
+      (error: { response?: { status?: unknown } } | undefined) => {
+        if (error?.response?.status === 401) {
+          (session as Record<symbol, unknown>)[FIRECRAWL_CREDENTIAL_REJECTED] =
+            true;
+        }
+        return Promise.reject(error);
+      }
+    );
     return client;
   }
 
@@ -2429,13 +1111,15 @@ export function createFirecrawlMcpServer(
     pathName: string,
     body: Record<string, unknown>,
     apiKey: string,
-    origin?: string
+    origin?: string,
+    extraHeaders: Record<string, string> = {}
   ): Promise<any> {
     const response = await fetch(`${resolveApiBaseUrl()}${pathName}`, {
       method: 'POST',
       headers: {
         ...AGENT_HINTS_HEADERS,
         'Content-Type': 'application/json',
+        ...extraHeaders,
         Authorization: `Bearer ${apiKey}`,
         ...(origin ? originHeaders(origin) : {}),
       },
@@ -2466,9 +1150,9 @@ export function createFirecrawlMcpServer(
     session: SessionData | undefined,
     origin: string
   ): Promise<any> {
-    const credential = credentialForOutboundRequest(session);
+    const { credential, headers } = resolveOutbound(session);
     if (credential) {
-      return apiPostJson(pathName, body, credential, origin);
+      return apiPostJson(pathName, body, credential, origin, headers);
     }
 
     if (isKeylessMode(session)) {
@@ -2541,7 +1225,11 @@ export function createFirecrawlMcpServer(
       });
     }
 
-    if (isHostedKeylessSession(session) && args.zeroDataRetention === true) {
+    if (
+      session?.authType === 'keyless' &&
+      !session.firecrawlApiKey &&
+      args.zeroDataRetention === true
+    ) {
       const payload = {
         ...recoveryPayload('KEYLESS_OPTION_NOT_AVAILABLE', session?.requestId),
         option: 'zeroDataRetention',
@@ -2888,7 +1576,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
           return result?.data;
         },
         randomUUID(),
-        alexandriaFeedbackAvailable(session) && alexandriaCallsWarrantFeedback(calls)
+        alexandriaFeedbackAvailable() && alexandriaCallsWarrantFeedback(calls)
           ? { feedbackTool: ALEXANDRIA_FEEDBACK_HINT }
           : {}
       );
@@ -2936,39 +1624,13 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         }));
         const page: any = { level: 'categories', items, total: rows.length };
         if (offset + options.limit < rows.length) page.nextTool = { name: 'firecrawl_find_tools', arguments: { level: 'categories', limit: options.limit, offset: offset + options.limit } };
-        return structuredCompact(withAlexandriaFeedbackHint(withFindToolsNavigation({ success: true, data: { creditsCost: 0, alexandria: [{ provider: 'firecrawl', capability: 'find-tools', creditsCost: 0, data: page }] } }), alexandriaFeedbackAvailable(session)));
+        return structuredCompact(withAlexandriaFeedbackHint(withFindToolsNavigation({ success: true, data: { creditsCost: 0, alexandria: [{ provider: 'firecrawl', capability: 'find-tools', creditsCost: 0, data: page }] } }), alexandriaFeedbackAvailable()));
       }
       const result = await executeExchangeCalls(session, { provider: 'firecrawl', capability: 'find-tools', options }, undefined, undefined, origin);
       return structuredCompact(withFindToolsNavigation(JSON.parse(result)));
     },
   };
   server.addTool(findToolsTool);
-  // Search-surface copies of the two Alexandria tools.
-  // Same parameters and executor as the full-surface tools; only the
-  // descriptions differ, so they name nothing that surface does not register
-  // (no crawl, map, interact, monitor, parse or feedback references). Registered
-  // on the search surface in place of the module-level tools above.
-  const SEARCH_SURFACE_SCRAPE_DESCRIPTION = `
-Scrape one URL and return its content, or execute catalogued Alexandria capabilities. URL mode returns markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema, plus page metadata. Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch. A successful response does not by itself confirm the page is still current. ${SAFE_MODE ? 'A named browser profile loads saved session data without saving changes to it.' : 'Browser actions can change the live page, and a named browser profile can load saved session data and overwrite its stored state.'}
-
-\`firecrawl_search\` with \`sources\` unset and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching Alexandria provider returns typed records in one call.
-
-Alexandria mode: \`alexandria\` selects catalogued capability execution and is mutually exclusive with \`url\`. Alexandria execution is billed at the capability's listed price and needs a team with Alexandria enabled.
-`;
-  const searchSurfaceScrapeTool: RegisteredTool = {
-    ...scrapeTool,
-    _meta: { 'anthropic/alwaysLoad': true },
-    description: SEARCH_SURFACE_SCRAPE_DESCRIPTION,
-  };
-
-  const SEARCH_SURFACE_FIND_TOOLS_DESCRIPTION =
-    'Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers ' + ALEXANDRIA_CATALOGUE_VERTICALS + ': typed, sourced records through published contracts. Prefer normal firecrawl_search for a data task; it already returns matching providers. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Use query for semantic discovery or urls to find providers for a website. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.';
-  const searchSurfaceFindToolsTool: RegisteredTool = {
-    ...findToolsTool,
-    description: SEARCH_SURFACE_FIND_TOOLS_DESCRIPTION,
-  };
-
-
   const DEFAULT_CLOUD_API_URL = 'https://api.firecrawl.dev';
 
   function resolveApiBaseUrl(): string {
@@ -2979,87 +1641,16 @@ Alexandria mode: \`alexandria\` selects catalogued capability execution and is m
   }
 
   // Keyless free tier: when no credential is configured and we're targeting the
-  // Firecrawl cloud (not self-hosted via FIRECRAWL_API_URL, not the multi-tenant
-  // CLOUD_SERVICE deployment), scrape and search are free, rate-limited per IP.
-  // The cloud only grants this when NO Authorization header is sent, so we bypass
-  // the SDK — which always attaches a Bearer header — and post directly.
-  /**
-   * Read-only keyless check. MCP tool failures are returned in-band, not as an
-   * OAuth transport challenge, so preserve only the quota details needed for recovery.
-   */
-  type KeylessEligibility = {
-    eligible: boolean;
-    reason?: string;
-    retryAfterSeconds?: number;
-    unavailable?: boolean;
-    signupUrl?: string;
-  };
-
-  function keylessQuotaReason(reason: unknown): reason is 'requests' | 'credits' {
-    return reason === 'requests' || reason === 'credits';
-  }
-
-  async function keylessEligible(
-    clientIp: string,
-    origin: string,
-    { signupLink = false }: { signupLink?: boolean } = {}
-  ): Promise<KeylessEligibility> {
-    const secret = process.env.KEYLESS_PROXY_SECRET;
-    if (!secret) return { eligible: false, unavailable: true };
-    try {
-      const response = await fetch(
-        `${resolveApiBaseUrl()}/v2/keyless/eligibility${signupLink ? '?signup_link=1' : ''}`,
-        {
-          headers: {
-            ...originHeaders(origin),
-            'x-firecrawl-keyless-ip': clientIp,
-            'x-firecrawl-keyless-secret': secret,
-          },
-        }
-      );
-      if (!response.ok) return { eligible: false, unavailable: true };
-      const json: any = await response.json().catch(() => null);
-      if (typeof json?.eligible !== 'boolean') {
-        return { eligible: false, unavailable: true };
-      }
-      return {
-        eligible: json?.eligible === true,
-        ...(typeof json?.reason === 'string' ? { reason: json.reason } : {}),
-        ...(Number.isFinite(json?.retryAfterSeconds) && json.retryAfterSeconds > 0
-          ? { retryAfterSeconds: json.retryAfterSeconds }
-          : {}),
-        ...(keylessSignupUrlFrom(json?.signupUrl)
-          ? { signupUrl: json.signupUrl }
-          : {}),
-      };
-    } catch {
-      return { eligible: false, unavailable: true };
-    }
-  }
-
-  /**
-   * The hosted keyless caller's own signup link, for recovery the API did not
-   * produce (a tool keyless sessions cannot use). Undefined falls back to the
-   * regular MCP signin link.
-   */
-  async function hostedKeylessSignupUrl(
-    session?: SessionData
-  ): Promise<string | undefined> {
-    if (!session?.keylessClientIp) return undefined;
-    const eligibility = await keylessEligible(
-      session.keylessClientIp,
-      requestOrigin(undefined, session),
-      { signupLink: true }
-    );
-    return eligibility.signupUrl;
-  }
+  // Firecrawl cloud (not a self-hosted API URL), scrape and search are free,
+  // rate-limited per IP. The cloud only grants this when NO Authorization
+  // header is sent, so we bypass the SDK — which always attaches a Bearer
+  // header — and post directly. A deployment that requires credentials admits
+  // keyless use only for sessions its `authenticate` marked as keyless.
   function isKeylessMode(session?: SessionData): boolean {
     if (hasCredential(session) || session?.credentialError) return false;
-    if (config.hosted) {
-      return session?.authType === 'keyless';
-    }
+    if (session?.authType === 'keyless') return true;
     // Local/stdio against the cloud (not a self-hosted FIRECRAWL_API_URL).
-    return !config.apiUrl;
+    return !config.requireCredential && !config.apiUrl;
   }
 
   async function keylessPost(
@@ -3075,34 +1666,13 @@ Alexandria mode: \`alexandria\` selects catalogued capability execution and is m
       (typeof body.origin === 'string' && body.origin.length > 0
         ? body.origin
         : requestOrigin(undefined, session));
-    if (isHostedKeylessSession(session)) {
-      const eligibility = session?.keylessClientIp
-        ? await keylessEligible(session.keylessClientIp, origin)
-        : { eligible: false };
-      if (!eligibility.eligible) {
-        const code = eligibility.unavailable
-          ? 'KEYLESS_ELIGIBILITY_UNAVAILABLE'
-          : keylessQuotaReason(eligibility.reason)
-            ? 'KEYLESS_QUOTA_EXHAUSTED'
-            : 'KEYLESS_ACCESS_NOT_AVAILABLE';
-        const payload = recoveryPayload(code, session?.requestId, {
-          retryAfterSeconds: eligibility.retryAfterSeconds,
-          signupUrl: eligibility.signupUrl,
-        });
-        throw new UserError(String(payload.message), payload);
-      }
-    }
+    await hooks.beforeKeylessRequest?.(session, origin);
     const headers: Record<string, string> = {
       ...AGENT_HINTS_HEADERS,
       ...originHeaders(origin),
       'Content-Type': 'application/json',
+      ...resolveOutbound(session).headers,
     };
-    // Forward the real client IP (secret-authenticated) when proxying keyless
-    // requests through the hosted MCP, so the API rate-limits per real IP.
-    if (session?.keylessClientIp && process.env.KEYLESS_PROXY_SECRET) {
-      headers['x-firecrawl-keyless-ip'] = session.keylessClientIp;
-      headers['x-firecrawl-keyless-secret'] = process.env.KEYLESS_PROXY_SECRET;
-    }
     const response = await fetch(`${resolveApiBaseUrl()}${path}`, {
       method: 'POST',
       headers,
@@ -3250,6 +1820,7 @@ Alexandria mode: \`alexandria\` selects catalogued capability execution and is m
   if (!SEARCH_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
     server.addTool({
       name: 'firecrawl_search_feedback',
+      canList: (session: SessionData) => !isKeylessMode(session),
       annotations: {
         title: 'Firecrawl search feedback',
         readOnlyHint: false, // POSTs structured feedback to the API, creating a server-side record.
@@ -3299,6 +1870,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
         args: unknown,
         { session, log, client: mcpClient }
       ): Promise<ContentResult> => {
+        assertFeedbackAvailable(session);
         const origin = requestOrigin(mcpClient, session);
         const {
           searchId,
@@ -3336,7 +1908,9 @@ Eligibility is limited to successful searches within the feedback age window. Th
           ...originHeaders(origin),
           'Content-Type': 'application/json',
         };
-        const credential = credentialForOutboundRequest(session);
+        const outbound = resolveOutbound(session);
+        Object.assign(headers, outbound.headers);
+        const credential = outbound.credential;
         if (credential) {
           headers['Authorization'] = `Bearer ${credential}`;
         } else if (config.requireCredential) {
@@ -3392,20 +1966,31 @@ Eligibility is limited to successful searches within the feedback age window. Th
     });
   }
 
-  /** Whether firecrawl_feedback is registered on this process, so Alexandria results only point at a tool that exists. */
-  function alexandriaFeedbackAvailable(session?: SessionData): boolean {
-    // The search surface does not register firecrawl_feedback, so its results
-    // must not point callers at it.
+  /**
+   * Feedback needs an account. canList hides the feedback tools from keyless
+   * sessions; this refuses a call that names them anyway.
+   */
+  function assertFeedbackAvailable(session?: SessionData): void {
+    if (!isKeylessMode(session)) return;
+    const payload = recoveryPayload('KEYLESS_TOOL_NOT_AVAILABLE', session?.requestId);
+    throw new UserError(String(payload.message), payload);
+  }
+
+  /** Whether firecrawl_feedback is registered on this instance, so Alexandria results only point at a tool that exists. */
+  function alexandriaFeedbackAvailable(): boolean {
+    // An instance whose tool filter excludes firecrawl_feedback must not
+    // point callers at it.
     return (
       !ENDPOINT_FEEDBACK_DISABLED &&
       !isLocalKeylessStartup() &&
-      session?.profile !== 'search'
+      (hooks.toolFilter?.('firecrawl_feedback') ?? true)
     );
   }
 
   if (alexandriaFeedbackAvailable()) {
     server.addTool({
       name: 'firecrawl_feedback',
+      canList: (session: SessionData) => !isKeylessMode(session),
       annotations: {
         title: 'Firecrawl feedback',
         readOnlyHint: false, // POSTs structured feedback for a completed job to /v2/feedback.
@@ -3453,6 +2038,7 @@ Returns submission status, feedback ID, and accounting fields.
         args: unknown,
         { session, log, client: mcpClient }
       ): Promise<ContentResult> => {
+        assertFeedbackAvailable(session);
         const origin = requestOrigin(mcpClient, session);
         const {
           endpoint,
@@ -3488,7 +2074,9 @@ Returns submission status, feedback ID, and accounting fields.
           ...originHeaders(origin),
           'Content-Type': 'application/json',
         };
-        const credential = credentialForOutboundRequest(session);
+        const outbound = resolveOutbound(session);
+        Object.assign(headers, outbound.headers);
+        const credential = outbound.credential;
         if (credential) {
           headers['Authorization'] = `Bearer ${credential}`;
         } else if (config.requireCredential) {
@@ -4094,8 +2682,9 @@ Stop the live interact session associated with a \`scrapeId\` and release its re
     },
   });
 
-  // Parse a local file directly in non-cloud mode, or orchestrate a hosted two-call
-  // uploadRef flow in CLOUD_SERVICE mode without reading the caller's filesystem.
+  // Parse a local file directly with local file access, or orchestrate a
+  // two-call uploadRef flow with upload file access without reading the
+  // caller's filesystem.
   server.addTool({
     name: 'firecrawl_parse',
     annotations: {
@@ -4164,7 +2753,9 @@ Set \`redactPII\` to request redaction of personally identifiable information in
         ...AGENT_HINTS_HEADERS,
         ...originHeaders(origin),
       };
-      const credential = credentialForOutboundRequest(session);
+      const outbound = resolveOutbound(session);
+      Object.assign(headers, outbound.headers);
+      const credential = outbound.credential;
       if (credential) {
         headers['Authorization'] = `Bearer ${credential}`;
       }
@@ -4205,149 +2796,23 @@ Set \`redactPII\` to request redaction of personally identifiable information in
     },
   });
 
-  // Search-surface variant of firecrawl_search. It takes no scrapeOptions and
-  // builds the outbound /v2/search body from an explicit set of fields, so the
-  // surface never asks the API to fetch page content. The omission is enforced
-  // by the schema and the body construction, not a runtime filter.
-  function registerMarketplaceSearchTool(
-    registrar: ToolRegistrar,
-    getClientFn: typeof getClient
-  ): void {
-    registrar.addTool({
-      name: 'firecrawl_search',
-      _meta: { 'anthropic/alwaysLoad': true },
-      annotations: {
-        title: 'Firecrawl web search',
-        readOnlyHint: true,
-        openWorldHint: true,
-        destructiveHint: false,
-      },
-      description: `
-Search web and specialized indexes, returning ranked results with query-relevant highlights. Each web result is a title, URL, and description. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit result types to \`research\`, \`pdf\`, \`developer\`, or \`gov\`.
-
-For a programming question, add \`categories: ["developer"]\`. It searches an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and returns the results in \`data.web\` with \`category: "developer"\`.
-
-For a legal or regulatory question, \`categories: ["gov"]\` returns results in \`data.web\` with \`category: "gov"\` and cannot be combined with other categories; \`firecrawl_gov_search\` is the dedicated tool. Verify gov results' issuer, jurisdiction, status, and version before citing current law.
-
-${ALEXANDRIA_SEARCH_INSTRUCTIONS}
-
-Returns result groups in \`data\` and an operation \`id\`.
-`,
-      outputSchema: searchOutputSchema,
-      parameters: z
-        .object({ ...searchToolBaseFields })
-        // Reject unknown fields (notably scrapeOptions): this surface exposes no
-        // way to request page-content fetching, and an unexpected field is an
-        // error rather than being silently dropped.
-        .strict()
-        .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE)
-        .refine(
-          searchQueryIsValid,
-          'A query is required. Use firecrawl_find_tools to browse the catalogue.'
-        ),
-      execute: async (args: unknown, { session, log, client: mcpClient }): Promise<ContentResult> => {
-        const {
-          query,
-          objective,
-          clientModel,
-          includeDomains,
-          excludeDomains,
-          limit,
-          tbs,
-          filter,
-          location,
-          sources,
-          categories,
-          highlights,
-          enterprise,
-          domainTools,
-          toolDetail,
-        } = args as {
-          query?: string;
-          objective?: string;
-          clientModel?: string;
-          domainTools?: boolean;
-          toolDetail?: 'compact' | 'summary' | 'full';
-          includeDomains?: string[];
-          excludeDomains?: string[];
-          limit?: number;
-          tbs?: string;
-          filter?: string;
-          location?: string;
-          sources?: Array<string | { type: string }>;
-          categories?: string[];
-          highlights?: boolean;
-          enterprise?: string[];
-        };
-
-        const searchQuery = query ?? '';
-
-        // Build the outbound body from allowed fields only. Never spread the raw
-        // arguments, so no scrape/content-fetch options can reach the API.
-        const searchBody = {
-          query: searchQuery,
-          ...removeEmptyTopLevel({
-            objective,
-            clientModel,
-            limit,
-            includeDomains,
-            excludeDomains,
-            tbs,
-            filter,
-            location,
-            sources: normalizeSearchSources(sources ?? ['web', 'alexandria']),
-            categories,
-            highlights,
-            enterprise,
-            toolDetail: toolDetail ?? 'compact',
-            domainTools:
-              domainTools ?? defaultDomainTools(sources ?? ['web', 'alexandria']),
-          }),
-          origin: requestOrigin(mcpClient, session),
-        };
-
-        log.info('Searching', { query: searchQuery });
-        const exchangeSource = hasAlexandria(searchBody.sources);
-        if (exchangeSource || searchBody.domainTools)
-          assertExchangeCredential(session);
-        const client = getClientFn(session);
-        const postSearch = () =>
-          postSearchWithFallback(
-            client,
-            searchBody,
-            sources === undefined && domainTools !== true
-          );
-        const context = { tool: 'firecrawl_search' };
-        const httpRes = exchangeSource
-          ? await relayExchangeError(postSearch, context)
-          : await relayTermsRequired(postSearch, context);
-        return structuredCompact(httpRes?.data ?? {});
-      },
-    });
-  }
-
-  registerMonitorTools(server);
+  registerMonitorTools(server, {
+    apiUrl: config.apiUrl,
+    resolveOutbound,
+  });
   registerResearchTools(server, getClient);
   registerDeveloperTools(server, getClient);
   registerGovTools(server, getClient);
   registerUsageTools(server, getClient);
 
-  if (primaryProfile.id === 'search') {
-    // The strict marketplace search tool intentionally replaces the full
-    // surface's same-named registration above. Register through the original
-    // bound method so the name-level guard cannot suppress this replacement.
-    const primarySearchRegistrar: ToolRegistrar = {
-      addTool: ((tool: { name: string }) => {
-        if (primaryProfile.toolAllowlist?.has(tool.name)) {
-          addTool(guardHostedTool(tool as RegisteredTool, { logActions: false }));
-        }
-      }) as FastMCP<SessionData>['addTool'],
-    };
-    registerMarketplaceSearchTool(primarySearchRegistrar, getClient);
-    primarySearchRegistrar.addTool(searchSurfaceFindToolsTool);
-    primarySearchRegistrar.addTool(searchSurfaceScrapeTool);
-  }
-
+  hooks.registerExtraTools?.(
+    { addTool: ((tool: RegisteredTool) => addTool(prepareTool(tool))) as typeof server.addTool },
+    {
+      getClient,
+      hasCredential,
+      builtInTool: (name) => builtInTools.get(name),
+    }
+  );
 
   return {
     server,
