@@ -22,16 +22,24 @@ import {
   monitorRunOutputSchema,
   structuredText,
 } from './tool-output';
-import {
-  CoreHttpError,
-  credentialForOutboundRequest,
-  type CredentialSession,
-} from './session-credential';
+import { CoreHttpError } from './core-http-error.js';
 
-interface SessionData extends CredentialSession {
+interface SessionData {
+  firecrawlApiKey?: string;
   /** The User-Agent the session was authenticated with (see src/origin.ts). */
   clientUserAgent?: string;
   [key: string]: unknown;
+}
+
+/** How monitor requests reach the Firecrawl API. */
+export interface MonitorApiConfig {
+  /** Firecrawl API base URL. Unset targets the Firecrawl cloud. */
+  apiUrl?: string;
+  /** The bearer credential and extra headers for a session's request. */
+  resolveOutbound(session?: SessionData): {
+    credential?: string;
+    headers: Record<string, string>;
+  };
 }
 
 const DEFAULT_API_URL = 'https://api.firecrawl.dev';
@@ -42,32 +50,19 @@ interface MonitorRequestInit {
   query?: Record<string, string | number | undefined>;
 }
 
-function resolveAuth(session?: SessionData): {
-  apiKey?: string;
-  baseUrl: string;
-} {
-  // A request-scoped session is authoritative. In particular, managed OAuth
-  // credentials must become short-lived delegated assertions and must never
-  // fall through to a process-wide API key.
-  const apiKey =
-    session === undefined
-      ? process.env.FIRECRAWL_API_KEY
-      : credentialForOutboundRequest(session);
-  const baseUrl = (process.env.FIRECRAWL_API_URL ?? DEFAULT_API_URL).replace(
-    /\/$/,
-    ''
-  );
-  return { apiKey, baseUrl };
-}
-
 async function monitorRequest(
+  api: MonitorApiConfig,
   session: SessionData | undefined,
   origin: string,
   path: string,
   init: MonitorRequestInit = {}
 ): Promise<unknown> {
-  const { apiKey, baseUrl } = resolveAuth(session);
-  if (!apiKey && !process.env.FIRECRAWL_API_URL) {
+  // A request-scoped session is authoritative: a per-request credential from
+  // the embedding runtime must never fall through to a process-wide key.
+  const { credential: apiKey, headers: extraHeaders } =
+    api.resolveOutbound(session);
+  const baseUrl = (api.apiUrl ?? DEFAULT_API_URL).replace(/\/$/, '');
+  if (!apiKey && !api.apiUrl) {
     throw new Error('Unauthorized: API key is required for monitor requests');
   }
 
@@ -84,6 +79,7 @@ async function monitorRequest(
   const headers: Record<string, string> = {
     ...originHeaders(origin),
     ...AGENT_HINTS_HEADERS,
+    ...extraHeaders,
   };
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   if (init.body !== undefined) headers['Content-Type'] = 'application/json';
@@ -232,7 +228,10 @@ function buildMonitorCreateBody(
   };
 }
 
-export function registerMonitorTools(server: FastMCP<SessionData>): void {
+export function registerMonitorTools(
+  server: Pick<FastMCP<SessionData>, 'addTool'>,
+  api: MonitorApiConfig
+): void {
   server.addTool({
     name: 'firecrawl_monitor_create',
     annotations: {
@@ -271,6 +270,7 @@ In the simple form, a \`goal\` is required. If \`queries\` contains one or more 
       const body = buildMonitorCreateBody(args as Record<string, unknown>);
       log.info('Creating monitor', { name: String(body.name) });
       const res = await monitorRequest(
+        api,
         session,
         requestOrigin(mcpClient, session), '/monitor', {
         method: 'POST',
@@ -302,6 +302,7 @@ List monitors for the authenticated account with optional pagination controls. R
     ): Promise<ContentResult> => {
       const { limit, offset } = args as { limit?: number; offset?: number };
       const res = await monitorRequest(
+        api,
         session,
         requestOrigin(mcpClient, session), '/monitor', {
         query: { limit, offset },
@@ -329,6 +330,7 @@ Retrieve one monitor by ID, including its configuration and current state. This 
     ): Promise<ContentResult> => {
       const { id } = args as { id: string };
       const res = await monitorRequest(
+        api,
         session,
         requestOrigin(mcpClient, session),
         `/monitor/${encodeURIComponent(id)}`
@@ -364,6 +366,7 @@ Returns the updated monitor.
         body: Record<string, unknown>;
       };
       const res = await monitorRequest(
+        api,
         session,
         requestOrigin(mcpClient, session),
         `/monitor/${encodeURIComponent(id)}`,
@@ -393,6 +396,7 @@ Permanently delete a monitor by ID and stop its future schedule. This operation 
       const { id } = args as { id: string };
       log.info('Deleting monitor', { id });
       const res = await monitorRequest(
+        api,
         session,
         requestOrigin(mcpClient, session),
         `/monitor/${encodeURIComponent(id)}`,
@@ -421,6 +425,7 @@ Queue an immediate check for a monitor outside its normal schedule. This starts 
     ): Promise<ContentResult> => {
       const { id } = args as { id: string };
       const res = await monitorRequest(
+        api,
         session,
         requestOrigin(mcpClient, session),
         `/monitor/${encodeURIComponent(id)}/run`,
@@ -459,6 +464,7 @@ List historical checks for a monitor, optionally filtered by status and bounded 
         status?: z.infer<typeof checkStatusSchema>;
       };
       const res = await monitorRequest(
+        api,
         session,
         requestOrigin(mcpClient, session),
         `/monitor/${encodeURIComponent(id)}/checks`,
@@ -501,6 +507,7 @@ Markdown tracking returns a unified text diff, JSON tracking returns field paths
         pageStatus?: z.infer<typeof pageStatusSchema>;
       };
       const res = await monitorRequest(
+        api,
         session,
         requestOrigin(mcpClient, session),
         `/monitor/${encodeURIComponent(id)}/checks/${encodeURIComponent(checkId)}`,
