@@ -76,6 +76,68 @@ test('OpenAI package uses the registered Firecrawl app connection', () => {
   assert.equal(existsSync(join(openaiPlugin, '.mcp.json')), false);
 });
 
+test('OpenAI onboarding separates goal authorization from installation and scheduling', () => {
+  const manifest = readJson(join(openaiPlugin, '.codex-plugin/plugin.json'));
+  assert.equal(
+    manifest.extensions['com.openai'].onboardingSkill,
+    './skills/get-started/SKILL.md'
+  );
+  const text = readFileSync(
+    join(openaiPlugin, manifest.extensions['com.openai'].onboardingSkill),
+    'utf8'
+  );
+  const goal = text
+    .split('## Understand the goal with minimal effort\n')[1]
+    .split('\n## ')[0];
+  assert.match(
+    goal,
+    /explicit request[\s\S]*execute[\s\S]*target and required inputs are clear/
+  );
+  assert.match(
+    goal,
+    /installation or onboarding alone[\s\S]*native question and wait for the answer/
+  );
+  assert.match(
+    goal,
+    /context is missing, stale, or ambiguous[\s\S]*one focused question/
+  );
+  assert.match(
+    goal,
+    /multiple plausible goals[\s\S]*choices in that one question/
+  );
+  const actionIndex = goal.indexOf('one concrete output');
+  const optionsIndex = goal.indexOf('two or three concrete starting options');
+  assert.ok(actionIndex >= 0 && optionsIndex >= 0);
+  assert.ok(actionIndex < optionsIndex);
+
+  const result = text
+    .split('## Deliver the first useful result\n')[1]
+    .split('\n## ')[0];
+  assert.match(
+    result,
+    /explicit goal-first request[\s\S]*remembered interests or installation alone do not/
+  );
+  const recurring = result
+    .split('\n\n')
+    .find((paragraph) => paragraph.includes('recurring follow-up'));
+  assert.match(
+    recurring,
+    /After delivering a useful first result[\s\S]*ongoing goal/
+  );
+  assert.match(
+    recurring,
+    /recommendation, not permission[\s\S]*only after explicit user acceptance/
+  );
+  assert.match(
+    recurring,
+    /actually available native scheduling tool[\s\S]*schedule or timezone/
+  );
+  assert.match(
+    recurring,
+    /do not substitute a Firecrawl monitor[\s\S]*scheduling is unavailable[\s\S]*without claiming a schedule was created/
+  );
+});
+
 test('Claude package connects to the search endpoint without embedded credentials', () => {
   const manifest = readJson(join(claudePlugin, '.claude-plugin/plugin.json'));
   assert.equal(manifest.name, 'firecrawl-search');

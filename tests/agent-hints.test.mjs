@@ -145,6 +145,11 @@ test('MCP transport preserves hints on empty, readable, crawl and error results'
     for await (const chunk of req) raw += chunk;
     const body = raw ? JSON.parse(raw) : {};
     requests.push({ url: req.url, body, headers: req.headers });
+    if (req.url.startsWith('/v2/search/gov?')) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ success: true, data: { web: [] }, agent_hints: hints }));
+      return;
+    }
     if (req.url.startsWith('/v2/search/developer?')) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ results: [], agent_hints: hints }));
@@ -233,6 +238,7 @@ test('MCP transport preserves hints on empty, readable, crawl and error results'
     { name: 'firecrawl_search', arguments: { query: 'empty' } },
     { name: 'firecrawl_search', arguments: { query: 'invalid' } },
     { name: 'firecrawl_developer_search', arguments: { query: 'empty' } },
+    { name: 'firecrawl_gov_search', arguments: { query: 'empty' } },
     { name: 'firecrawl_research_search_papers', arguments: { query: 'empty' } },
     { name: 'firecrawl_check_crawl_status', arguments: { id: 'crawl-1' } },
     { name: 'firecrawl_scrape', arguments: { url: 'https://example.com/' } },
@@ -257,7 +263,10 @@ test('MCP transport preserves hints on empty, readable, crawl and error results'
       Boolean(params.arguments.alexandria) ||
       params.arguments.url === 'https://locked.example/';
     assert.equal(result.isError === true, expectedError);
-    if (params.name === 'firecrawl_developer_search') {
+    if (
+      params.name === 'firecrawl_developer_search' ||
+      params.name === 'firecrawl_gov_search'
+    ) {
       assert.deepEqual(result.structuredContent.results, []);
       assert.equal(result.content[0].text, '(no results)');
       assert.match(result.content[1].text, /Firecrawl API agent_hints/);
@@ -314,6 +323,6 @@ test('MCP transport preserves hints on empty, readable, crawl and error results'
   }
   assert.deepEqual(
     hintLogs.map((log) => log.status),
-    ['success', 'error', 'success', 'success', 'success', 'success', 'error', 'success', 'success', 'error']
+    ['success', 'error', 'success', 'success', 'success', 'success', 'success', 'error', 'success', 'success', 'error']
   );
 });
