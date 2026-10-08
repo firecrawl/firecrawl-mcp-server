@@ -1195,6 +1195,12 @@ The tool requires an authenticated Firecrawl account and is read-only.
 
 The package also exposes a library entry point for embedding the server in another runtime. It is **unstable**: the API, its options and its types may change in any release, including minor and patch releases, so pin an exact version.
 
+```sh
+npm install --save-exact firecrawl-mcp zod
+```
+
+The example defines tool parameters with `zod`, so the embedding project installs it as its own dependency.
+
 ```js
 import { createFirecrawlMcpServer } from 'firecrawl-mcp/server';
 import { z } from 'zod';
