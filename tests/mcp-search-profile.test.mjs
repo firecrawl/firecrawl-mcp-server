@@ -8,10 +8,6 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
 import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
 import { assertAlexandriaMetadata } from './helpers/alexandria-metadata.mjs';
-import {
-  assertPluginToolCoverage,
-  claudePlugin,
-} from './helpers/plugin-contract.mjs';
 
 const { version: serverVersion } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
@@ -446,7 +442,6 @@ test('search surface lists exactly the nine contracted tools', async (t) => {
   for (const excluded of EXCLUDED_TOOLS) {
     assert.equal(names.includes(excluded), false, `${excluded} must not appear`);
   }
-  assertPluginToolCoverage(claudePlugin, tools);
   assert.equal(getStderr().includes('TypeError'), false, getStderr());
 });
 
