@@ -354,7 +354,14 @@ async function startStdioEmbedder(t, hooksSource) {
     [
       '--input-type=module',
       '-e',
-      `import { createFirecrawlMcpServer } from ${JSON.stringify(serverUrl)};
+      // Every outbound request is reported on stderr so a test can assert
+      // that none was made.
+      `const realFetch = globalThis.fetch;
+       globalThis.fetch = (input, init) => {
+         process.stderr.write('FETCH ' + (input?.url ?? input) + '\\n');
+         return realFetch(input, init);
+       };
+       const { createFirecrawlMcpServer } = await import(${JSON.stringify(serverUrl)});
        await createFirecrawlMcpServer({ unstable_hooks: ${hooksSource} })
          .start({ transportType: 'stdio' });`,
     ],
@@ -364,6 +371,11 @@ async function startStdioEmbedder(t, hooksSource) {
     }
   );
   t.after(() => child.kill());
+  let stderr = '';
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
   let buffer = '';
   const responses = new Map();
   child.stdout.setEncoding('utf8');
@@ -401,7 +413,12 @@ async function startStdioEmbedder(t, hooksSource) {
     `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`
   );
   const { tools } = await request(2, 'tools/list');
-  return { names: tools.map((tool) => tool.name), request };
+  return {
+    names: tools.map((tool) => tool.name),
+    request,
+    outboundRequests: () =>
+      stderr.split('\n').filter((line) => line.startsWith('FETCH ')),
+  };
 }
 
 const FEEDBACK_TOOLS = ['firecrawl_search_feedback', 'firecrawl_feedback'];
@@ -423,7 +440,7 @@ test('a stdio embedder supplying credentials through outboundRequest lists the f
 });
 
 test('a keyless session on a hooked stdio embedder neither lists nor runs the feedback tools', async (t) => {
-  const { names, request } = await startStdioEmbedder(
+  const { names, request, outboundRequests } = await startStdioEmbedder(
     t,
     `{ authenticate: async () => ({ authType: 'keyless' }) }`
   );
@@ -441,4 +458,5 @@ test('a keyless session on a hooked stdio embedder neither lists nor runs the fe
   });
   assert.equal(called.isError, true);
   assert.equal(called.structuredContent?.code, 'KEYLESS_TOOL_NOT_AVAILABLE');
+  assert.deepEqual(outboundRequests(), []);
 });
