@@ -71,8 +71,8 @@ not block your main task.
   job ID.
 
 See [feedback](references/feedback.md) for fields and limits. If a feedback
-tool is unavailable or the team has opted out, skip it; if a call fails,
-continue without retrying.
+tool is unavailable or the team has opted out, skip it. If a call fails, retry
+once only when it returns `retryable: true`, then continue.
 
 ## Complete the request
 

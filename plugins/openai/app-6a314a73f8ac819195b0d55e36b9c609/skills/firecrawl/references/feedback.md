@@ -3,7 +3,9 @@
 Send feedback after you've used the results (or decided they were useless). It
 does not block your main task. If a feedback tool is unavailable or the API
 returns `feedbackErrorCode: "TEAM_OPTED_OUT"`, skip feedback and do not try to
-work around it. If a feedback call fails, continue without retrying.
+work around it. If a feedback call fails, retry once only when it returns
+`retryable: true`, then continue. Omit sensitive information from every
+feedback field.
 
 ## Search
 
