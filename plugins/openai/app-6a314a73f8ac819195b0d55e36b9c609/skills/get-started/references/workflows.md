@@ -1,6 +1,6 @@
 # Firecrawl paths and first results
 
-Adapted from `firecrawl-web/public/agent-onboarding/SKILL.md` (Choose Your Path, Paths A-C, and Alexandria), `public/skills.md`, and `workflows-content/*/skill.md`. Use this guide to tailor tool choice and deliver a first result. The agent owns discovery and execution; these examples are work patterns, not prompts the user must copy or instructions to browse providers.
+Adapted from Firecrawl's public onboarding guide and workflow resources. Use this guide to tailor tool choice and deliver a first result. The agent owns discovery and execution; these examples are work patterns, not prompts the user must copy or instructions to browse providers.
 
 ## Route by the outcome
 
