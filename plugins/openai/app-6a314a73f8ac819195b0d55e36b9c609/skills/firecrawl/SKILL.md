@@ -46,7 +46,7 @@ connection or authentication errors.
 - **Research papers:** see [paper research](references/paper-research.md) for
   paper search, metadata, citation relationships, and full-text passages.
 - **Deep research:** use the `firecrawl-deep-research` skill for cited,
-+  multi-source investigations, comparisons, prospect discovery and research enrichment, not quick lookups.
+  multi-source investigations, comparisons, prospect discovery and research enrichment, not quick lookups.
 
 Read only the reference relevant to the operation. The live tool schema is
 the authority for accepted parameters and limits.
