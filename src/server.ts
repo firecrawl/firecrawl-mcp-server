@@ -550,12 +550,17 @@ export function createFirecrawlMcpServer(
   }
 
   // A stdio client without a cloud credential can use only the keyless tools.
-  // Do this at registration time so unsupported feedback tools are not advertised.
+  // Do this at registration time so unsupported feedback tools are not
+  // advertised. Credentials an authenticate or outboundRequest hook supplies
+  // are only known per session, so those instances register the feedback
+  // tools and hide them from keyless sessions instead.
   function isLocalKeylessStartup(): boolean {
     return (
       config.transport !== 'httpStream' &&
       !config.apiKey &&
-      !normalizeHeader(config.apiUrl)
+      !normalizeHeader(config.apiUrl) &&
+      !hooks.authenticate &&
+      !hooks.outboundRequest
     );
   }
 
@@ -1917,6 +1922,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
   if (!SEARCH_FEEDBACK_DISABLED && !isLocalKeylessStartup()) {
     server.addTool({
       name: 'firecrawl_search_feedback',
+      canList: (session: SessionData) => !isKeylessMode(session),
       annotations: {
         title: 'Firecrawl search feedback',
         readOnlyHint: false, // POSTs structured feedback to the API, creating a server-side record.
@@ -2075,6 +2081,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
   if (alexandriaFeedbackAvailable()) {
     server.addTool({
       name: 'firecrawl_feedback',
+      canList: (session: SessionData) => !isKeylessMode(session),
       annotations: {
         title: 'Firecrawl feedback',
         readOnlyHint: false, // POSTs structured feedback for a completed job to /v2/feedback.
