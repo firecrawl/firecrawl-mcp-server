@@ -22,16 +22,16 @@ request before execution. If access is unavailable or no capability fits,
 continue with suitable web sources without representing a catalogue entry as
 retrieved data.
 
-After completing the task, send at most one `firecrawl_feedback` report per
-website, including when no provider or capability covered the need. Set
-`endpoint: alexandria`, omit `jobId`, and supply `requestedWebsite` (the website
-URL and requested functionality), `rating`, and a concise `rationale` grounded
-in observed results. Rate useful results `good`, incomplete coverage `partial`,
-and an unmet need or failed execution `bad`. Add `providerFeedback` or
-`capabilityFeedback` only for specific gaps or errors; use discovered names for
-existing providers and capabilities. `objective` is optional. Alexandria
-feedback has no job-age deadline. Follow the umbrella's feedback permissions
-and opt-out guidance.
+For Alexandria feedback, set `endpoint: alexandria`, omit `jobId`, and supply
+`requestedWebsite` (the website URL the user needed data from and the requested
+functionality), `rating`, and a concise `rationale` grounded in observed
+results. Rate useful results `good`, incomplete coverage `partial`, and an
+unmet need or failed execution `bad`. When no provider covered the site, add
+`providerFeedback` with `name` (the website or the provider you needed),
+`issue: "missing_provider"`, and `why`, and rate `bad`. Add
+`providerFeedback` or `capabilityFeedback` for specific gaps or errors; use
+discovered names for existing providers and capabilities. See
+[feedback](feedback.md) for when to send it and opt-outs.
 
 ## Research jobs
 

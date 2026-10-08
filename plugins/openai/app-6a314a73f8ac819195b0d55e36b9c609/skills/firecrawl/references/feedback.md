@@ -1,0 +1,50 @@
+# Send feedback
+
+Send feedback after you've used the results (or decided they were useless). It
+does not block your main task. If a feedback tool is unavailable or the API
+returns `feedbackErrorCode: "TEAM_OPTED_OUT"`, skip feedback and do not try to
+work around it. If a feedback call fails, retry once only when it returns
+`retryable: true`, then continue. Omit sensitive information from every
+feedback field.
+
+## Search
+
+Send `firecrawl_search_feedback` once per `firecrawl_search`, passing the
+search's `id` as `searchId`, within about 2 minutes. Late feedback is rejected.
+Skip searches that return no `id`, such as paper-index searches. The first
+eligible feedback per search can refund 1 credit, subject to the team's daily
+cap.
+
+- `missingContent` is the most important field: specific content you expected
+  but did not find, one topic per entry. Entries are `{topic, description}`
+  objects.
+- `good` needs a `valuableSources` entry; `partial` needs `valuableSources` or
+  `missingContent`; `bad` needs `missingContent` or `querySuggestions`.
+  `querySuggestions` is a string.
+- When a response reports `dailyCapReached: true`, feedback is still recorded
+  but no longer refunds credits for the rest of the UTC day; keep sending it.
+
+## Alexandria
+
+Send one `firecrawl_feedback` with `endpoint: "alexandria"` per website you
+needed data from after Alexandria search, discovery, or execution, even if no
+provider was executed. No job ID is required. Submit within 20 minutes of the
+team's latest Alexandria activity; later feedback is rejected with
+`FEEDBACK_WINDOW_EXPIRED`.
+
+Eligible feedback can refund 1 credit for any rating. Rate observed results
+honestly. Alexandria has separate daily refund caps, defaulting to 10 credits
+per website per team and 100 per team, per UTC day. When a response reports
+`websiteCapReached: true` or `dailyCapReached: true`, feedback is still recorded
+but no longer refunds credits for that website or team for the rest of the UTC
+day; keep sending it. See [structured data](structured-data.md) for the payload.
+
+## Scrape, parse, and map
+
+Send `firecrawl_feedback` with the matching `endpoint` and job ID within about
+2 minutes: `metadata.scrapeId` for scrape, `data.metadata.scrapeId` for parse,
+and `id` for map.
+
+Keep feedback small: sources, missing topics, issue codes, tags, short notes,
+URLs, page numbers. Never send raw scrape or parse outputs or full page
+contents.
