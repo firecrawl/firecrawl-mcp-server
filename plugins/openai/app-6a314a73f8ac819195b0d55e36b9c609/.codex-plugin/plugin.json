@@ -22,7 +22,7 @@
   },
   "name": "app-6a314a73f8ac819195b0d55e36b9c609",
   "skills": "./skills",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "extensions": {
     "com.openai": {
       "onboardingSkill": "./skills/get-started/SKILL.md"
