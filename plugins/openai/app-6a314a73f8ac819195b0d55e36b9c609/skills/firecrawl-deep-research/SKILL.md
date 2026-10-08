@@ -1,12 +1,12 @@
 ---
 name: firecrawl-deep-research
-description: Investigate questions that require multiple sources or dependent research steps, such as competitive and market analysis, company due diligence, qualified prospect discovery, research enrichment, historical changes, and reconciling conflicting evidence. Return a cited answer with verified findings and clear gaps. Use when a focused search or single-page read cannot adequately answer the question.
+description: Research complex questions and synthesize relevant evidence into a clear, cited answer. Useful for competitive and market analysis, company research, prospect discovery, enrichment, historical comparisons, and evaluating conflicting claims. Adapt the depth and format to the question; use when a focused search or single-page read is insufficient.
 license: ISC
 ---
 
 # Firecrawl Deep Research
 
-Answer the question using retrieved evidence and the existing Firecrawl MCP connection. Resolve deferred tools when needed and follow the live schema: host availability and accepted arguments can differ. Never invent tools or translate CLI flags into MCP arguments.
+Adapt the investigation to the question and the evidence available. Use the existing Firecrawl connection, resolve deferred tools when needed and follow the live schema; tool availability and accepted arguments can vary by host. Never invent tools or translate CLI flags into tool arguments.
 
 ## Frame the investigation
 
