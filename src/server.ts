@@ -3372,7 +3372,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
             status: response.status,
             feedbackErrorCode: parsed?.feedbackErrorCode,
             error: parsed?.error ?? `HTTP ${response.status}`,
-              retryable: response.status >= 500,
+            retryable: response.status >= 500,
             ...(readAgentHints(parsed)
               ? { agent_hints: readAgentHints(parsed) }
               : {}),
@@ -3652,11 +3652,14 @@ Use evidence already available; no extra investigation. The stored submission mu
             status: response.status,
             feedbackErrorCode: parsed?.feedbackErrorCode,
             error: parsed?.error ?? `HTTP ${response.status}`,
-          retryable: response.status >= 500 || (!credential && response.status === 429),
-          ...(!credential ? {
-            details: parsed?.details,
-            retry_after_seconds: parsed?.retry_after_seconds,
-          } : {}),
+            retryable:
+              response.status >= 500 || (!credential && response.status === 429),
+            ...(!credential
+              ? {
+                  details: parsed?.details,
+                  retry_after_seconds: parsed?.retry_after_seconds,
+                }
+              : {}),
             ...(readAgentHints(parsed)
               ? { agent_hints: readAgentHints(parsed) }
               : {}),
