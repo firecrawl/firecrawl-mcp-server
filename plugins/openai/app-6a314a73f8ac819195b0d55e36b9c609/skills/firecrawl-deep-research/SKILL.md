@@ -39,7 +39,7 @@ Choose the method most likely to resolve the highest-impact missing fact. Retrie
 | Scientific findings | `firecrawl_research_search_papers`, `firecrawl_research_inspect_paper`, `firecrawl_research_read_paper` |
 | Primary legal/regulatory text | `firecrawl_gov_search`, when exposed |
 | Site URLs or bounded multi-page content | `firecrawl_map` or `firecrawl_crawl` and its status method |
-| Documents or evidence missing from static text | `firecrawl_parse`, supported scrape formats or read-only `firecrawl_interact`; release its session |
+| Documents or evidence missing from static text | `firecrawl_parse`, supported scrape formats or `firecrawl_interact`; release its session |
 | Broad collection poorly served by targeted tools | Occasionally `firecrawl_agent` and `firecrawl_agent_status`, when exposed |
 
 Reuse returned full text and directly supporting passages. Search excerpts guide discovery; inspect evidence before relying on consequential claims. Change an unproductive query or source rather than repeating it. Collect background only when it could change the answer.
