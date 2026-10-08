@@ -24,7 +24,7 @@ Respect user-specified time, credit, page and result limits and returned account
 
 For PDF reads, including extensionless document URLs, use supported `parsers: ["pdf"]` and choose `pdfOptions.maxPages` for the needed evidence and any user limit. Prefer relevant passages or HTML when suitable. Treat truncated documents as partial coverage; rereads may charge the full requested pages again.
 
-When tracking costs, use returned receipts rather than catalogue estimates. Prefer structured content or parse JSON text, include nested totals and count aggregates and included child charges once. Replace cumulative job totals rather than adding every poll; do not add account-wide counters. Missing usage is unknown, not zero. Disclose consequential unknown costs and stop if a user-set limit cannot be respected; do not assume retries are free.
+Web, developer and paper searches are billed per request; provider-only discovery is free; URL scraping uses URL pricing (PDF parsing may charge per page), and Alexandria execution uses listed capability pricing. When tracking costs, use returned receipts rather than catalogue estimates. Prefer structured content or parse JSON text, include nested totals and count aggregates and included child charges once. Replace cumulative job totals rather than adding every poll; do not add account-wide counters. Missing usage is unknown, not zero. Disclose consequential unknown costs and stop if a user-set limit cannot be respected; do not assume retries are free.
 
 ## Choose the evidence route
 
