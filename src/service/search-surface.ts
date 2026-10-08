@@ -70,7 +70,7 @@ Search web and specialized indexes, returning ranked results with query-relevant
 
 For a programming question, add \`categories: ["developer"]\`. It searches an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and returns the results in \`data.web\` with \`category: "developer"\`.
 
-For a legal or regulatory question, \`categories: ["gov"]\` returns results in \`data.web\` with \`category: "gov"\` and cannot be combined with other categories; \`firecrawl_gov_search\` is the dedicated tool.
+For a legal or regulatory question, \`categories: ["gov"]\` returns results in \`data.web\` with \`category: "gov"\` and cannot be combined with other categories; \`firecrawl_gov_search\` is the dedicated tool. Verify gov results' issuer, jurisdiction, status, and version before citing current law.
 
 ${ALEXANDRIA_SEARCH_INSTRUCTIONS}
 
