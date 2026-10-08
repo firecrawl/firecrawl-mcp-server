@@ -64,9 +64,9 @@ export function registerGovTools(
       destructiveHint: false,
     },
     description: `
-Search an index of primary law and regulatory material from US federal, state, and local government sources (statutes, regulations, codes, court opinions, and other government publications) for legal or regulatory questions that need the governing text or an official source.
+Search US federal, state, and local statutes, regulations, codes, court opinions, and other government publications for legal or regulatory questions that need primary text.
 
-Returns ranked results with a position, title, URL, and matched snippet.
+Returns ranked results with a position, title, URL, and matched snippet. Results may include historical versions, bill text, agency guidance, and third-party reproductions. Verify the issuer, jurisdiction, enacted/effective status, and version before citing current governing law. Read a known URL or additional page context with firecrawl_scrape. Use general search for non-US questions or missing coverage; no hits does not establish that no applicable law exists.
 `,
     outputSchema: govSearchOutputSchema,
     parameters: z.object({

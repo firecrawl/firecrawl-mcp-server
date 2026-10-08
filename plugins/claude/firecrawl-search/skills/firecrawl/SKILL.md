@@ -23,6 +23,13 @@ capability's listed price.
 - **Research law and regulation:** `firecrawl_gov_search`
   searches statutes, regulations, codes, court opinions, and other US
   government publications and returns ranked results with matched snippets.
+  Include the jurisdiction and relevant date in the query. If the user supplies
+  a source URL, read it directly with `firecrawl_scrape`. Ask for a missing
+  jurisdiction before identifying the governing rule. Verify the source's
+  issuer, enacted/effective status, and version before citing current law;
+  results can include bill text, historical versions, guidance, and mirrors.
+  Use general search for non-US questions or missing coverage; no hits does
+  not establish that no applicable law exists.
 - **Research papers:** `firecrawl_research_search_papers` finds papers;
   `firecrawl_research_inspect_paper` retrieves metadata;
   `firecrawl_research_related_papers` expands citation relationships; and

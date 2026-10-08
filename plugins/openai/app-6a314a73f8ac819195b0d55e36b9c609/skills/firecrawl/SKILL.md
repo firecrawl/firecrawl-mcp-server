@@ -43,6 +43,13 @@ connection or authentication errors.
 - **Research law and regulation:** `firecrawl_gov_search`
   searches statutes, regulations, codes, court opinions, and other US
   government publications and returns ranked results with matched snippets.
+  Include the jurisdiction and relevant date in the query. If the user supplies
+  a source URL, read it directly with `firecrawl_scrape`. Ask for a missing
+  jurisdiction before identifying the governing rule. Verify the source's
+  issuer, enacted/effective status, and version before citing current law;
+  results can include bill text, historical versions, guidance, and mirrors.
+  Use general search for non-US questions or missing coverage; no hits does
+  not establish that no applicable law exists.
 - **Research papers:** see [paper research](references/paper-research.md) for
   paper search, metadata, citation relationships, and full-text passages.
 - **Deep research:** use the `firecrawl-deep-research` skill for cited,
