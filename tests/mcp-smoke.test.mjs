@@ -4363,6 +4363,35 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
 });
 
 
+test('custom API feedback preserves existing error behavior without credentials', async (t) => {
+  const backend = await startFakeFirecrawlBackend({
+    feedbackResponse: { status: 429, body: {
+      success: false, error: 'Too many attempts',
+      details: [{ message: 'Keyless validation detail' }], retry_after_seconds: 60,
+    } },
+  });
+  t.after(() => backend.close());
+  const child = spawnServer({ FIRECRAWL_API_URL: backend.url });
+  t.after(() => stopChild(child));
+  const client = new StdioMcpClient(child);
+  const init = await client.request('initialize', {
+    capabilities: {}, clientInfo: { name: 'feedback-custom-api', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  assert.doesNotMatch(init.instructions, /Keyless sessions can use/);
+  client.notify('notifications/initialized');
+  const result = await client.request('tools/call', {
+    name: 'firecrawl_feedback', arguments: {
+      endpoint: 'search', jobId: '00000000-0000-4000-8000-000000000000', rating: 'good',
+    },
+  });
+  const payload = JSON.parse(result.content[0].text);
+  assert.equal(payload.status, 429);
+  assert.equal(payload.retryable, false);
+  assert.equal(payload.details, undefined);
+  assert.equal(payload.retry_after_seconds, undefined);
+});
+
 test('hosted keyless feedback bypasses exhausted operation allowance and preserves rejection details', async (t) => {
   for (const status of [200, 400, 429, 503]) {
     await t.test(`HTTP ${status}`, async (t) => {
@@ -4530,80 +4559,87 @@ test('hosted keyless feedback bypasses exhausted operation allowance and preserv
   }
 });
 
-for (const disabled of [false, true]) {
-  test(`keyless Search preserves references and retains invitations regardless of client feedback flags: ${disabled}`, async (t) => {
-    const metadata = {
-      jobId: '00000000-0000-4000-8000-000000000000',
-      feedback: {
-        endpoint: 'search',
-        message: 'Optional feedback is available.',
-      },
-    };
-    const backend = await startFakeFirecrawlBackend({
-      keylessEligible: true,
-      searchResponse: {
-        status: 200,
-        body: { success: true, id: metadata.jobId, data: { web: [] }, metadata },
-      },
-    });
-    t.after(() => backend.close());
-    const port = await getFreePort();
-    const child = spawnServer({
-      CLOUD_SERVICE: 'true',
-      FIRECRAWL_NO_ENDPOINT_FEEDBACK: disabled ? 'true' : '',
-      FASTMCP_ENDPOINT: '/v2/mcp',
-      FIRECRAWL_API_URL: backend.url,
-      FIRECRAWL_OAUTH_ISSUER: backend.url,
-      HTTP_STREAMABLE_SERVER: 'true',
-      PORT: String(port),
-      KEYLESS_PROXY_SECRET: 'feedback-test-secret',
-    });
-    t.after(() => stopChild(child));
-    await waitForHealth(port, child);
-    for (const authenticated of [false, true]) {
-      const listed = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
-        method: 'POST',
-        headers: {
-          accept: 'application/json, text/event-stream',
-          'content-type': 'application/json',
-          'x-forwarded-for': '203.0.113.71',
-          ...(authenticated ? { Authorization: 'Bearer fc-feedback-test' } : {}),
+for (const endpoint of ['search', 'scrape']) {
+  for (const disabled of [false, true]) {
+    test(`keyless ${endpoint} preserves references and retains invitations regardless of client feedback flags: ${disabled}`, async (t) => {
+      const metadata = {
+        jobId: '00000000-0000-4000-8000-000000000000',
+        feedback: {
+          endpoint,
+          message: 'Optional feedback is available.',
         },
-        body: JSON.stringify({ id: 'feedback-tools', jsonrpc: '2.0', method: 'tools/list', params: {} }),
+      };
+      const backend = await startFakeFirecrawlBackend({
+        keylessEligible: true,
+        [`${endpoint}Response`]: {
+          status: 200,
+          body: endpoint === 'search'
+            ? { success: true, id: metadata.jobId, data: { web: [] }, metadata }
+            : { success: true, data: { markdown: 'Example content', metadata: { scrapeId: metadata.jobId, ...metadata } } },
+        },
       });
-      const names = parseSseJson(await listed.text()).result.tools.map(tool => tool.name);
-      assert.equal(names.includes('firecrawl_feedback'), !authenticated || !disabled);
-      assert.equal(names.includes('firecrawl_search_feedback'), authenticated);
-    }
-    if (disabled) {
-      const blocked = await httpToolCall(port, {
-        id: 'disabled-authenticated-feedback',
-        headers: { Authorization: 'Bearer fc-feedback-test' },
-        params: { name: 'firecrawl_feedback', arguments: {
-          endpoint: 'search', jobId: metadata.jobId, rating: 'good',
-        } },
+      t.after(() => backend.close());
+      const port = await getFreePort();
+      const child = spawnServer({
+        CLOUD_SERVICE: 'true',
+        FIRECRAWL_NO_ENDPOINT_FEEDBACK: disabled ? 'true' : '',
+        FASTMCP_ENDPOINT: '/v2/mcp',
+        FIRECRAWL_API_URL: backend.url,
+        FIRECRAWL_OAUTH_ISSUER: backend.url,
+        HTTP_STREAMABLE_SERVER: 'true',
+        PORT: String(port),
+        KEYLESS_PROXY_SECRET: 'feedback-test-secret',
       });
-      assert.equal(parseSseJson(await blocked.text()).result.isError, true);
-      assert.equal(backend.requests.some(req => req.url === '/v2/feedback'), false);
-    }
-    const response = await httpToolCall(port, {
-      id: 'feedback-invitation',
-      headers: { 'x-forwarded-for': '203.0.113.71' },
-      params: {
-        name: 'firecrawl_search',
-        arguments: { query: 'retry behavior' },
-      },
+      t.after(() => stopChild(child));
+      await waitForHealth(port, child);
+      for (const authenticated of [false, true]) {
+        const listed = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
+          method: 'POST',
+          headers: {
+            accept: 'application/json, text/event-stream',
+            'content-type': 'application/json',
+            'x-forwarded-for': '203.0.113.71',
+            ...(authenticated ? { Authorization: 'Bearer fc-feedback-test' } : {}),
+          },
+          body: JSON.stringify({ id: 'feedback-tools', jsonrpc: '2.0', method: 'tools/list', params: {} }),
+        });
+        const names = parseSseJson(await listed.text()).result.tools.map(tool => tool.name);
+        assert.equal(names.includes('firecrawl_feedback'), !authenticated || !disabled);
+        assert.equal(names.includes('firecrawl_search_feedback'), authenticated);
+      }
+      if (disabled) {
+        const blocked = await httpToolCall(port, {
+          id: 'disabled-authenticated-feedback',
+          headers: { Authorization: 'Bearer fc-feedback-test' },
+          params: { name: 'firecrawl_feedback', arguments: {
+            endpoint: 'search', jobId: metadata.jobId, rating: 'good',
+          } },
+        });
+        assert.equal(parseSseJson(await blocked.text()).result.isError, true);
+        assert.equal(backend.requests.some(req => req.url === '/v2/feedback'), false);
+      }
+      const response = await httpToolCall(port, {
+        id: 'feedback-invitation',
+        headers: { 'x-forwarded-for': '203.0.113.71' },
+        params: {
+          name: `firecrawl_${endpoint}`,
+          arguments: endpoint === 'search' ? { query: 'retry behavior' } : { url: 'https://example.com/' },
+        },
+      });
+      const result = parseSseJson(await response.text()).result;
+      const expectedMetadata = endpoint === 'search' ? metadata : { scrapeId: metadata.jobId, ...metadata };
+      assert.deepEqual(JSON.parse(result.content[0].text).metadata, expectedMetadata);
+      assert.deepEqual(result.structuredContent.metadata, expectedMetadata);
+      if (endpoint === 'search') assert.equal(result.structuredContent.id, metadata.jobId);
+      const call = backend.requests.find((req) => req.url === `/v2/${endpoint}`);
+      assert.equal(call.headers['x-firecrawl-keyless-ip'], '203.0.113.71');
+      assert.equal(call.headers['x-firecrawl-keyless-secret'], 'feedback-test-secret');
+      assert.equal(
+        call.headers['x-firecrawl-no-feedback'],
+        undefined
+      );
     });
-    const result = parseSseJson(await response.text()).result;
-    assert.deepEqual(JSON.parse(result.content[0].text).metadata, metadata);
-    assert.deepEqual(result.structuredContent.metadata, metadata);
-    assert.equal(result.structuredContent.id, metadata.jobId);
-    const call = backend.requests.find((req) => req.url === '/v2/search');
-    assert.equal(
-      call.headers['x-firecrawl-no-feedback'],
-      undefined
-    );
-  });
+  }
 }
 
 test('local Parse preserves job evidence on success and failure and retains invitations regardless of client feedback flags', async (t) => {

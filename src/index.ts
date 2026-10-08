@@ -72,11 +72,12 @@ function getSearchMcpEndpoint(): `/${string}` {
 function makeFullProfile(): ServerProfile {
   const account = getPrimaryEndpoint() === '/v2/mcp-oauth';
   const hasCredential = Boolean(resolveCredentialFromEnv());
+  const customApi = !hosted && Boolean(normalizeHeader(process.env.FIRECRAWL_API_URL));
   return {
     id: account ? 'account' : 'full',
     resourceName: account ? 'Firecrawl MCP Account' : 'Firecrawl MCP',
     instructions:
-      account || hasCredential ? FULL_PROFILE_INSTRUCTIONS : KEYLESS_PROFILE_INSTRUCTIONS,
+      account || hasCredential || customApi ? FULL_PROFILE_INSTRUCTIONS : KEYLESS_PROFILE_INSTRUCTIONS,
     resourceUrl: account
       ? (normalizeHeader(process.env.FIRECRAWL_MCP_RESOURCE_URL) ??
         DEFAULT_MCP_OAUTH_RESOURCE_URL)

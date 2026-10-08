@@ -160,7 +160,7 @@ export const searchOutputSchema = z
     data: unknown('Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`.'),
     error,
     warning,
-    id: str('Search job identifier for optional feedback.'),
+    id: str('Search job identifier for optional `firecrawl_search_feedback` on authenticated sessions; keyless invitations use `firecrawl_feedback`.'),
     metadata: unknown('Job reference and optional feedback invitation.'),
     creditsUsed: num('Credits this search consumed.'),
     tools: unknown('Domain-matched Alexandria tools for the results.'),

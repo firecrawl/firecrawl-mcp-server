@@ -10,7 +10,7 @@ export const alexandriaFeedbackFields = {
     })
     .optional(),
   rationale: detail.optional(),
-  objective: detail.optional(),
+  objective: detail.optional().describe('The underlying goal behind the session: what you or your user were ultimately trying to accomplish (for example, "shortlist federal IT contracts to bid on this quarter"), not only what was needed from this website.'),
   providerFeedback: z
     .array(
       z.strictObject({

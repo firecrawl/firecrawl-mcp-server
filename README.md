@@ -598,12 +598,13 @@ Parse jobs is optional. Keyless guidance asks agents to submit concise feedback 
 `source_comparison`, or `expectation`. Source comparisons also require
 `comparison: {reference, detail}`.
 
-The tool's `observations` parameter lists the category fields below. Use only available evidence
-and keep unverified expectations distinct from source comparisons.
+Use only available evidence and keep unverified expectations distinct from source comparisons.
 
 Submit before the invitation's `expiresAt` deadline, which provides a 24-hour
 feedback window for the job. Each job accepts one submission;
-retrying it returns the original feedback ID. Feedback remains available after
+retrying a successful submission within the window returns its original feedback ID.
+Continue after a terminal rejection. For retryable errors, an optional retry must
+respect `retry_after_seconds` when provided. Feedback remains available after
 operation allowance is exhausted and does not consume or restore that allowance.
 
 Authenticated callers retain the existing issue/note fields for Search, Scrape,
