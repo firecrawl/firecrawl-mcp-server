@@ -15,10 +15,10 @@
   "tools": [
     "firecrawl_scrape@947656c18827",
     "firecrawl_map@a8a3beee6a0d",
-    "firecrawl_search@4346f322a0b9",
+    "firecrawl_search@f8fb34616246",
     "firecrawl_find_tools@9dd2800b8610",
-    "firecrawl_search_feedback@d27fdbab92d4",
-    "firecrawl_feedback@e84d0fecb355",
+    "firecrawl_search_feedback@8be846cf488c",
+    "firecrawl_feedback@2b4bfb6e1765",
     "firecrawl_crawl@8d9e7419d9b4",
     "firecrawl_check_crawl_status@4408d188eb80",
     "firecrawl_agent@be93d4a2fee4",

@@ -161,7 +161,7 @@ if (searchFeedbackDisabled) {
 }
 if (endpointFeedbackDisabled) {
   console.error(
-    '[firecrawl-mcp] Authenticated endpoint feedback tool disabled by FIRECRAWL_NO_ENDPOINT_FEEDBACK. Keyless feedback remains available.'
+    '[firecrawl-mcp] Authenticated endpoint feedback tool disabled by FIRECRAWL_NO_ENDPOINT_FEEDBACK. Hosted keyless sessions and local sessions without an API key retain feedback.'
   );
 }
 

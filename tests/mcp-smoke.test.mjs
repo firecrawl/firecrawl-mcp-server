@@ -1025,6 +1025,7 @@ test('HTTP cloud keyless transport preserves app challenge without advertising O
     /An Authorization bearer API key can provide higher usage limits and expose additional tools/i
   );
   assert.doesNotMatch(initializeMessage.result.instructions, /\bOAuth\b/i);
+  assert.ok(initializeMessage.result.instructions.length <= 2048);
 
   const toolsList = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({
@@ -4384,7 +4385,10 @@ test('hosted keyless feedback bypasses exhausted operation allowance and preserv
                 feedbackErrorCode: 'INVALID_BODY',
               };
       const backend = await startFakeFirecrawlBackend({
-        keylessEligible: false,
+        keylessEligibilityResponse: () => ({
+          status: 200,
+          body: { eligible: false, reason: 'credits' },
+        }),
         feedbackResponse: { status, body },
       });
       t.after(() => backend.close());
@@ -4401,6 +4405,22 @@ test('hosted keyless feedback bypasses exhausted operation allowance and preserv
       });
       t.after(() => stopChild(child));
       await waitForHealth(port, child);
+      const exhausted = await httpToolCall(port, {
+        id: `exhausted-${status}`,
+        headers: { 'x-forwarded-for': '203.0.113.71' },
+        params: {
+          name: 'firecrawl_search',
+          arguments: { query: 'example domain', limit: 1 },
+        },
+      });
+      assertKeylessAccountRecovery(parseSseJson(await exhausted.text()).result, {
+        code: 'KEYLESS_QUOTA_EXHAUSTED',
+        message: KEYLESS_QUOTA_MESSAGE,
+      });
+      const eligibilityRequests = backend.requests.filter(
+        (req) => req.url.startsWith('/v2/keyless/eligibility')
+      ).length;
+      assert.equal(eligibilityRequests, 1);
       const response = await httpToolCall(port, {
         id: `feedback-${status}`,
         headers: { 'x-forwarded-for': '203.0.113.71' },
@@ -4503,8 +4523,8 @@ test('hosted keyless feedback bypasses exhausted operation allowance and preserv
       }
 
       assert.equal(
-        backend.requests.some((req) => req.url === '/v2/keyless/eligibility'),
-        false
+        backend.requests.filter((req) => req.url.startsWith('/v2/keyless/eligibility')).length,
+        eligibilityRequests
       );
     });
   }
