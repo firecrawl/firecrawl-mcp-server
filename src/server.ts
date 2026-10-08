@@ -1252,7 +1252,7 @@ class ConsoleLogger implements Logger {
 
 export const FULL_PROFILE_INSTRUCTIONS =
   `Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. Authenticated firecrawl_search returns web results together with matching Alexandria providers in data.tools. ${ALEXANDRIA_CATALOGUE_SENTENCE} A matching provider can return the same fields across several entities, provenance, exact figures or timestamps, or a large set of records through firecrawl_scrape with its published contract. If web results already answer the question, use them. For the same fields across multiple pages, firecrawl_find_tools offers free provider discovery. Use firecrawl_find_tools to read a contract that was not returned in full or to browse the catalogue by category. ${ALEXANDRIA_SOURCES_OPT_OUT} If no provider fits, continue with web search or firecrawl_agent. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question (code behaviour, a library or framework, an API contract, an error message, or a known bug), firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of public repositories, GitHub issues, merged pull requests, READMEs, and code documentation. For a legal or regulatory question, firecrawl_gov_search searches primary law and regulatory material from US federal, state, and local government sources: statutes, regulations, codes, court opinions, and other government publications; firecrawl_search with categories: ["gov"] reaches the same sources and cannot be combined with other categories. firecrawl_search with sources: [{type: "alexandria"}] returns compact tool summaries in data.tools; toolDetail: "full" includes contracts, firecrawl_find_tools starts with categories, lists providers, then compact tools, and expands the selected full contract, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities and returns their results. Alexandria access needs an API key on a team with it enabled. Provide only the required inputs and account for stated network or external side effects.`;
-export const KEYLESS_PROFILE_INSTRUCTIONS = `Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: ["gov"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index and repository research, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.`;
+export const KEYLESS_PROFILE_INSTRUCTIONS = `Keyless sessions can use firecrawl_search, firecrawl_scrape, firecrawl_parse, and firecrawl_feedback with usage limits. Consider submitting concise feedback through firecrawl_feedback when an invitation is returned and the host permits it, especially if the result is wrong, incomplete, blocked, or an error. Use its job reference and evidence already available, and omit sensitive information. Feedback does not determine whether the task is complete and does not consume operation quota. If declined or terminally rejected, continue; retryable errors may be retried after retry_after_seconds. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: ["gov"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. Hosted firecrawl_parse processes supported local files through its two-phase upload flow. Local firecrawl_parse requires FIRECRAWL_API_URL to be explicitly configured before reading or uploading files. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index and repository research, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.`;
 
 // The search surface exposes web/developer/government/research search plus the two Alexandria
 // tools (catalogue lookup and provider execution). Its instructions
@@ -1340,6 +1340,7 @@ const KEYLESS_TOOL_NAMES = new Set([
   'firecrawl_scrape',
   'firecrawl_search',
   'firecrawl_parse',
+  'firecrawl_feedback',
 ]);
 
 let warnedMissingAgentHintsInterceptor = false;
@@ -1463,6 +1464,13 @@ async function runWithCredentialRecovery<T>(
     // different fault and keeps its own reconnect guidance; a keyless session
     // never sent an account credential at all.
     if (session?.authType !== 'api-key' || !isCoreCredentialRejection(error)) {
+      // Job failures already expose the full API envelope in text and extras.
+      if (!hasCredential(session) && error instanceof UserError) {
+        const metadata = error.extras?.metadata;
+        if (metadata && typeof metadata === 'object' && 'jobId' in metadata) {
+          throw error;
+        }
+      }
       const hints = readErrorAgentHints(error);
       if (hints) {
         const message = error instanceof Error ? error.message : String(error);
@@ -1604,7 +1612,7 @@ export function createFirecrawlMcpServer(
   }
 
   // A stdio client without a cloud credential can use only the keyless tools.
-  // Do this at registration time so unsupported feedback tools are not advertised.
+  // Apply the keyless tool set at registration time for local sessions.
   function isLocalKeylessStartup(): boolean {
     return (
       !config.hosted &&
@@ -2804,11 +2812,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         assertExchangeCredential(session);
       if (isKeylessMode(session)) {
         const json = await keylessPost('/v2/search', searchBody, session);
-        // Search feedback requires an authenticated account. Do not expose its
-        // identifier to keyless clients, where it would invite an unusable call.
-        const keylessResponse = { ...(json ?? {}) };
-        delete keylessResponse.id;
-        return structuredCompact(keylessResponse);
+        return structuredCompact(json);
       }
       // Call /v2/search through the SDK's HTTP layer (auth + retries) instead
       // of `client.search()` so we preserve the full response envelope. The
@@ -3091,7 +3095,7 @@ Alexandria mode: \`alexandria\` selects catalogued capability execution and is m
       body: JSON.stringify(body),
     });
     const json: any = await response.json().catch(() => ({}));
-    if (!response.ok) {
+    if (!response.ok || json?.success === false) {
       if (isKeylessMode(session) && response.status === 429) {
         // The API normally supplies requests|credits. Preserve a structured,
         // non-specific recovery payload during a skewed or legacy deployment.
@@ -3109,6 +3113,12 @@ Alexandria mode: \`alexandria\` selects catalogued capability execution and is m
         const hints = readAgentHints(json);
         if (hints) payload.agent_hints = hints;
         throw new UserError(String(payload.message), payload);
+      }
+      if (json?.metadata?.jobId) {
+        throw new UserError(
+          JSON.stringify(json, null, 2),
+          json
+        );
       }
       throw new CoreHttpError(
         json?.error || `Firecrawl request failed (HTTP ${response.status})`,
@@ -3374,6 +3384,56 @@ Eligibility is limited to successful searches within the feedback age window. Th
     });
   }
 
+  // Keyless observation rules live on the observations parameter so the tool
+  // description stays within the client's description window.
+  const KEYLESS_OBSERVATIONS_CONTRACT = `Search: useful and irrelevant require a one-based position within the delivered group. source names the response group the position refers to: web, images, or news. It is required for multi-source jobs. Omission defaults to web, so images-only and news-only jobs must explicitly name their source. The position must exist in that requested group. irrelevant requires reason: aggregator_over_official, off_topic, stale, wrong_content_type, snippet_misleading, or blocked_or_paywalled. vertical is required on missing and optional on useful/irrelevant: web_general, social, business, research, developer, news, government, finance, or other. missing may include topic (up to 200 characters). missing and irrelevant may include knownSources (up to 20 HTTP(S) URLs): where absent content lives or the source that should have ranked instead. Unmentioned results are unassessed; a full ranking is not required. Do not submit engine attribution.
+
+Scrape: kind correct, wrong_success, incomplete, or incorrect. wrong_success requires reason: blocked_shell, login_required, paywall, empty, wrong_page, stale, or wrong_locale. incomplete requires reason: partial_content, dynamic_content, pagination, main_content_stripped, or format_lost. incorrect requires reason: wrong, hallucinated, or missing_fields. correct has no reason. Optional location is up to 200 characters. No retryOutcome. hallucinated applies only to json, deterministicJson, summary, question, highlights, and changeTracking in json mode; missing_fields applies only to json and deterministicJson. For incomplete and incorrect, prefer source_comparison when the source is already available.
+
+Parse: docClass is required once per submission: born_digital, scanned, mixed, or unknown. Observation kind: correct, text_ocr, table, formula, chart_figure, reading_order, headers_footers, headings_formatting, completeness, images_dropped, or incorrect. text_ocr requires reason: misread_chars, garbled, or missing_text. table requires reason: structure, cells_glued, or digits. completeness requires reason: pages_missing, truncated_at_max_pages, or sections_dropped. incorrect requires reason: wrong, hallucinated, or missing_fields. Other kinds have no reason subtype. Optional page is a one-based positive integer. incorrect applies to json and summary outputs. For text_ocr and table, include the correct text or cell values in comparison.detail when already known. Parse feedback does not automatically retain the document, extracted output, page images, or layout blocks; submitted observations and corrections are retained.
+
+Scrape and Parse observations other than failure: format must be a format type the job requested. It is required for output and source_comparison observations when multiple formats were requested; optional for expectation observations and single-format jobs. All observations retain detail and basis; source_comparison requires comparison: {reference, detail}. comparison.detail contains the correct content from the inspected source.
+
+Failed Search, Scrape, or Parse jobs: use kind failure with reason timeout, transport_error, proxy_error, or other. Accepted only for a failed job. Include detail and basis; do not supply position, source, format, location, or page. Parse still requires docClass (unknown is allowed).
+
+If the saved Search response is unavailable, otherwise valid observations are accepted and stored with metadata.unverified: true because their positions could not be checked. Job ownership and requested sources are still checked. Available results must contain every referenced position.
+
+Reason definitions:
+- aggregator_over_official: An intermediary was returned where the task needed an available official or primary source.
+- off_topic: The result addresses a different topic from the task.
+- stale: The content is outdated for the time or version the task requires.
+- wrong_content_type: The destination has the wrong content type for the task, such as a discussion instead of a reference.
+- snippet_misleading: The returned description misrepresents source content already inspected.
+- blocked_or_paywalled: Access to the destination was observed to be blocked or require a subscription; do not infer this from its URL or snippet.
+- blocked_shell: The successful response contains a bot challenge or access-blocking shell instead of the requested content.
+- login_required: The successful response contains a login requirement instead of the requested content.
+- paywall: The successful response contains a subscription barrier instead of the requested content.
+- empty: The successful response contains no meaningful requested content.
+- wrong_page: The successful response contains a different page or resource.
+- wrong_locale: The response uses the wrong language or region for the task.
+- partial_content: Only part of the expected content was returned, without a more specific known cause.
+- dynamic_content: Content loaded by client-side rendering or interaction is missing.
+- pagination: Expected content on additional pages is missing.
+- main_content_stripped: Content filtering removed requested primary content.
+- format_lost: Text is present, but meaningful structure such as headings, lists, or code formatting was lost.
+- wrong: Returned facts or values conflict with the inspected source.
+- hallucinated: The output asserts content unsupported by the inspected source.
+- missing_fields: Requested fields are absent from the structured output.
+- misread_chars: Characters were recognized incorrectly.
+- garbled: Extracted text is corrupted or unreadable.
+- missing_text: Visible source text was omitted.
+- structure: Table rows, columns, or header relationships were reconstructed incorrectly.
+- cells_glued: Distinct table cells were merged.
+- digits: Numeric table values were recognized incorrectly.
+- pages_missing: Source pages are absent from the output.
+- truncated_at_max_pages: Extraction ended at the configured page limit; this does not by itself imply a parser error.
+- sections_dropped: Sections within processed pages were omitted.
+- timeout: The operation explicitly reported a timeout.
+- transport_error: The operation explicitly reported a network, connection, or TLS failure.
+- proxy_error: The operation explicitly reported a proxy failure.
+- other: Another operation failure was reported; describe the returned error without guessing its cause.`;
+
+
   /** Whether firecrawl_feedback is registered on this process, so Alexandria results only point at a tool that exists. */
   function alexandriaFeedbackAvailable(session?: SessionData): boolean {
     // The search surface does not register firecrawl_feedback, so its results
@@ -3385,9 +3445,11 @@ Eligibility is limited to successful searches within the feedback age window. Th
     );
   }
 
-  if (alexandriaFeedbackAvailable()) {
+  if (!ENDPOINT_FEEDBACK_DISABLED || !config.apiKey || config.hosted) {
     server.addTool({
       name: 'firecrawl_feedback',
+      canList: (session: SessionData) =>
+        !ENDPOINT_FEEDBACK_DISABLED || !hasCredential(session),
       annotations: {
         title: 'Firecrawl feedback',
         readOnlyHint: false, // POSTs structured feedback for a completed job to /v2/feedback.
@@ -3395,11 +3457,13 @@ Eligibility is limited to successful searches within the feedback age window. Th
         destructiveHint: false, // Additive only; submits ratings and notes and may refund credits, does not delete jobs or external content.
       },
       description: `
-Submit concise quality feedback for a completed search, scrape, parse, or map job. Provide the endpoint, job ID, rating, and relevant issue codes or small contextual fields; omit large page contents and raw outputs.
+Submit job quality feedback through /v2/feedback. Authenticated jobs use existing issue/note fields. Omit full page contents and raw outputs.
 
-For an Alexandria session, set endpoint to \`alexandria\`, omit jobId, and provide requestedWebsite (url and requestedFunctionality), objective, rationale, and rating. objective is the underlying goal behind the session: what you or your user were ultimately trying to accomplish (for example, "shortlist federal IT contracts to bid on this quarter"), not only what was needed from this website. Optional providerFeedback and capabilityFeedback describe gaps or errors. Capability issues: new_capability_request (requires requestedFunctionality), missing_capability, insufficient_functionality, incorrect_result, execution_error, other. Alexandria feedback must arrive within 20 minutes of the team's latest Alexandria search, discovery, or execution; later feedback is rejected. Eligible feedback can refund 1 credit; refunds are subject to daily caps per website and per team.
+For Alexandria session feedback, set endpoint to alexandria, omit jobId, and provide requestedWebsite (url and requestedFunctionality), objective (the underlying goal), rationale, and rating. Optional providerFeedback and capabilityFeedback describe gaps or errors. Submit within 20 minutes of the team's latest Alexandria search, discovery, or execution. Eligible feedback can refund 1 credit, subject to daily caps per website and per team.
 
-Returns submission status, feedback ID, and accounting fields.
+Consider submitting concise keyless Search, Scrape, or Parse feedback on observed result quality or missing coverage when the host permits it, especially if a result is wrong, incomplete, blocked, or an error. Feedback does not determine whether the task is complete. It requires task, assessment, rating, and 1-20 observations. Task, assessment, and each detail contain 10-2000 characters. Each observation includes kind, detail, and basis: output, source_comparison, or expectation. A source_comparison also requires comparison: {reference, detail}. The observations parameter describes each category's fields and reason codes.
+
+Use evidence already available; no extra investigation. The stored submission must fit within 8 KiB, including server defaults. Submit from the same caller IP before the invitation's expiresAt deadline (24-hour feedback window for the job). One submission per job; retries of successful submissions within the window return the original feedback ID. Attempts are rate limited. Feedback remains available after operation quota exhaustion and does not consume or restore quota. Contract: https://docs.firecrawl.dev/api-reference/endpoint/feedback.
 `,
       outputSchema: feedbackOutputSchema,
       parameters: z.object({
@@ -3407,6 +3471,18 @@ Returns submission status, feedback ID, and accounting fields.
         jobId: z.string().uuid('jobId must be the UUID returned by Firecrawl').optional(),
         ...alexandriaFeedbackFields,
         rating: z.enum(['good', 'bad', 'partial']),
+        task: z.string().trim().min(10).max(2000).optional(),
+        assessment: z.string().trim().min(10).max(2000).optional(),
+        docClass: z
+          .enum(['born_digital', 'scanned', 'mixed', 'unknown'])
+          .optional()
+          .describe('Required once per keyless Parse submission.'),
+        observations: z
+          .array(z.record(z.string(), z.unknown()))
+          .min(1)
+          .max(20)
+          .optional()
+          .describe(KEYLESS_OBSERVATIONS_CONTRACT),
         issues: z.array(feedbackIssueSchema).max(20).optional(),
         tags: z.array(feedbackIssueSchema).max(20).optional(),
         note: z.string().max(4000).optional(),
@@ -3436,10 +3512,19 @@ Returns submission status, feedback ID, and accounting fields.
         { session, log, client: mcpClient }
       ): Promise<ContentResult> => {
         const origin = requestOrigin(mcpClient, session);
+        if (ENDPOINT_FEEDBACK_DISABLED && hasCredential(session)) {
+          throw new UserError(
+            'Endpoint feedback is disabled for authenticated sessions.'
+          );
+        }
         const {
           endpoint,
           jobId,
           rating,
+          task,
+          assessment,
+          docClass,
+          observations,
           issues,
           tags,
           note,
@@ -3453,6 +3538,10 @@ Returns submission status, feedback ID, and accounting fields.
           endpoint: 'search' | 'scrape' | 'parse' | 'map' | 'alexandria';
           jobId: string;
           rating: 'good' | 'bad' | 'partial';
+          task?: string;
+          assessment?: string;
+          docClass?: 'born_digital' | 'scanned' | 'mixed' | 'unknown';
+          observations?: Record<string, unknown>[];
           issues?: string[];
           tags?: string[];
           note?: string;
@@ -3473,6 +3562,16 @@ Returns submission status, feedback ID, and accounting fields.
         const credential = credentialForOutboundRequest(session);
         if (credential) {
           headers['Authorization'] = `Bearer ${credential}`;
+        } else if (isHostedKeylessSession(session)) {
+          if (!session?.keylessClientIp || !process.env.KEYLESS_PROXY_SECRET) {
+            return structuredText({
+              success: false,
+              error: 'Feedback requires a trusted client identity.',
+              retryable: false,
+            });
+          }
+          headers['x-firecrawl-keyless-ip'] = session.keylessClientIp;
+          headers['x-firecrawl-keyless-secret'] = process.env.KEYLESS_PROXY_SECRET;
         } else if (config.requireCredential) {
           throw new Error('Unauthorized: missing API key for feedback.');
         }
@@ -3483,6 +3582,10 @@ Returns submission status, feedback ID, and accounting fields.
           endpoint,
           jobId,
           rating,
+          task,
+          assessment,
+          docClass,
+          observations,
           issues,
           tags,
           note,
@@ -3494,6 +3597,26 @@ Returns submission status, feedback ID, and accounting fields.
           metadata,
           origin,
         });
+
+        if (isKeylessMode(session)) {
+          if (!['search', 'scrape', 'parse'].includes(endpoint)) {
+            throw new UserError(
+              'Keyless feedback supports Search, Scrape, and Parse. Other endpoints require authentication.'
+            );
+          }
+          const required = {
+            task,
+            assessment,
+            observations,
+            ...(endpoint === 'parse' ? { docClass } : {}),
+          };
+          const missing = Object.entries(required)
+            .filter(([, value]) => value === undefined)
+            .map(([name]) => name);
+          if (missing.length) {
+            throw new UserError(`Keyless feedback requires ${missing.join(', ')}.`);
+          }
+        }
 
         log.info('Submitting endpoint feedback', { endpoint, jobId, rating });
         const response = await fetch(`${apiBase}/v2/feedback`, {
@@ -3529,7 +3652,14 @@ Returns submission status, feedback ID, and accounting fields.
             status: response.status,
             feedbackErrorCode: parsed?.feedbackErrorCode,
             error: parsed?.error ?? `HTTP ${response.status}`,
-            retryable: response.status >= 500,
+            retryable:
+              response.status >= 500 || (isKeylessMode(session) && response.status === 429),
+            ...(isKeylessMode(session)
+              ? {
+                  details: parsed?.details,
+                  retry_after_seconds: parsed?.retry_after_seconds,
+                }
+              : {}),
             ...(readAgentHints(parsed)
               ? { agent_hints: readAgentHints(parsed) }
               : {}),
@@ -4089,7 +4219,7 @@ Stop the live interact session associated with a \`scrapeId\` and release its re
     description: `
 Parse one supported document into markdown, HTML, links, summary, targeted answers, or JSON matching a schema. Supported inputs include common HTML, PDF, Word, RTF, OpenDocument, and spreadsheet files; PDF parsing can be bounded with \`pdfOptions.maxPages\`.
 
-Local MCP reads \`filePath\` from the server filesystem. Hosted MCP uses two calls: first provide \`filePath\` to receive upload instructions, upload locally, then call again with the returned \`uploadRef\`; do not send both fields together. Remote web URLs belong in \`firecrawl_scrape\`.
+Local MCP requires an explicitly configured \`FIRECRAWL_API_URL\` before reading \`filePath\` from the server filesystem and uploading it. Parsing happens on that API server. Hosted MCP uses two calls: first provide \`filePath\` to receive upload instructions, upload locally, then call again with the returned \`uploadRef\`; do not send both fields together. Remote web URLs belong in \`firecrawl_scrape\`.
 
 Set \`redactPII\` to request redaction of personally identifiable information in the returned content. \`zeroDataRetention\` requires an eligible authenticated account; omit it for anonymous keyless use. Returns upload instructions for hosted phase one or parsed document content for the final call. Authenticated final responses can include a \`data.metadata.scrapeId\` for optional parse feedback.
 `,
@@ -4108,8 +4238,8 @@ Set \`redactPII\` to request redaction of personally identifiable information in
 
       const apiUrl = config.apiUrl;
       if (!apiUrl) {
-        throw new Error(
-          'firecrawl_parse requires FIRECRAWL_API_URL to be set to a self-hosted Firecrawl API instance.'
+        throw new UserError(
+          'Local firecrawl_parse requires FIRECRAWL_API_URL to be explicitly configured before reading or uploading files.'
         );
       }
 
@@ -4165,25 +4295,28 @@ Set \`redactPII\` to request redaction of personally identifiable information in
       });
 
       const responseText = await response.text();
-      if (!response.ok) {
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(responseText);
-        } catch {
-          // Keep the original non-JSON error text.
+      let result: any;
+      try {
+        result = JSON.parse(responseText);
+      } catch {
+        result = undefined;
+      }
+      if (!response.ok || (!hasCredential(session) && result?.success === false)) {
+        if (!hasCredential(session) && result?.metadata?.jobId) {
+          throw new UserError(
+            JSON.stringify(result, null, 2),
+            result
+          );
         }
         throw new CoreHttpError(
           `Parse request failed with status ${response.status}: ${responseText}`,
           response.status,
-          readAgentHints(parsed)
+          readAgentHints(result)
         );
       }
-
-      try {
-        return structuredText(JSON.parse(responseText));
-      } catch {
-        return withStructured(responseText, { raw: responseText });
-      }
+      return result === undefined
+        ? withStructured(responseText, { raw: responseText })
+        : structuredText(result);
     },
   });
 

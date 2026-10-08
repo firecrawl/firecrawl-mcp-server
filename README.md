@@ -37,7 +37,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Use `firecrawl_credit_usage` to check credits left or monthly consumption, optionally broken down by API key.
 - Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control — the session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
 
-This server lists 27 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 — `firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse` — and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 9 tools (search, developer, government, and research search, plus Alexandria catalogue lookup and execution).
+Authenticated sessions expose the tools allowed by their plan, deployment, and team policy. Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` hides the corresponding authenticated feedback tools. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes 4 tools: `firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`, and `firecrawl_feedback`. The dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 9 tools (search, developer, government, and research search, plus Alexandria catalogue lookup and execution).
 
 ## Installation
 
@@ -542,7 +542,7 @@ For scientific papers, see [Research Tools](#12-research-tools-firecrawl_researc
 
 **Returns:**
 
-- Array of search results (with optional scraped content), plus an `id` field. Pass that `id` to `firecrawl_search_feedback` after you've used the results to refund 1 credit (search costs 2) and improve search quality.
+- Array of search results with optional scraped content, plus an `id` field. Keyless callers can use the returned job reference and feedback invitation with `firecrawl_feedback`. Authenticated callers can continue using `firecrawl_search_feedback` with its existing fields and policy.
 
 **Prompt Example:**
 
@@ -592,17 +592,38 @@ Sends structured feedback on a previous `firecrawl_search` result. The first fee
 
 ### 3c. Generic Feedback Tool (`firecrawl_feedback`)
 
-Sends structured feedback for a completed v2 endpoint job through `/v2/feedback`.
-Use this for endpoint-level feedback on `scrape`, `parse`, `map`, or `search`
-jobs. For search-result quality specifically, prefer
-`firecrawl_search_feedback` because it includes search-specific guidance.
+Sends evidence through `/v2/feedback`. Feedback on keyless Search, Scrape, and
+Parse jobs is optional. Keyless guidance asks agents to submit concise feedback on observed result quality or missing coverage when the host permits it, especially if a result is wrong, incomplete, blocked, or an error. Feedback does not determine whether a task is complete. These jobs require `endpoint`, `jobId`, `rating`, `task`, `assessment`, and 1-20
+`observations`. Each observation has `kind`, `detail`, and `basis`: `output`,
+`source_comparison`, or `expectation`. Source comparisons also require
+`comparison: {reference, detail}`.
+
+Use only available evidence and keep unverified expectations distinct from source comparisons.
+
+Submit before the invitation's `expiresAt` deadline, which provides a 24-hour
+feedback window for the job. Each job accepts one submission;
+retrying a successful submission within the window returns its original feedback ID.
+Continue after a terminal rejection. For retryable errors, an optional retry must
+respect `retry_after_seconds` when provided. Feedback remains available after
+operation allowance is exhausted and does not consume or restore that allowance.
+
+Authenticated callers retain the existing issue/note fields for Search, Scrape,
+Parse, and Map. For authenticated Search-specific feedback, continue using
+`firecrawl_search_feedback`. Choose the contract that matches the originating
+job's authentication; adding credentials does not convert a keyless job.
 
 Keep feedback concise: use issue codes, tags, short notes, URLs, page numbers,
 and small metadata objects. Do not include raw scrape/parse outputs.
 
-**Opt out:** set `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` (or `FIRECRAWL_DISABLE_ENDPOINT_FEEDBACK=1`) in the environment when starting the MCP server. The `firecrawl_feedback` tool will not be registered, so agents cannot call it.
+Search observations identify delivered result positions or missing information. Scrape and Parse observations describe the requested output formats. Failed jobs use a `failure` observation based on the returned error. Parse additionally requires `docClass`: `born_digital`, `scanned`, `mixed`, or `unknown`.
 
-**Usage Example:**
+Task, assessment, and observation detail each require 10-2000 characters after trimming whitespace. Stored keyless feedback must fit within 8 KiB, including server defaults and verification flags. Submit from the same caller IP; attempts are rate limited.
+
+The tool's `observations` parameter lists the endpoint-specific categories, fields, and reason codes. See the [API feedback contract](https://docs.firecrawl.dev/api-reference/endpoint/feedback) for examples, format constraints, and Parse retention behavior.
+
+**Authenticated feedback preference:** set `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` (or `FIRECRAWL_DISABLE_ENDPOINT_FEEDBACK=1`) to hide `firecrawl_feedback` from authenticated sessions. Keyless sessions retain the tool and server-issued invitations regardless of these flags. The API includes a pointer on every eligible keyless job response. Feedback is optional; continued keyless access does not depend on it.
+
+**Authenticated usage example:**
 
 ```json
 {
@@ -692,11 +713,11 @@ Check the status and results of an existing crawl job by ID.
 
 Parse local files or hosted upload references with Firecrawl's `/v2/parse` endpoint.
 
-**Best for:** PDFs, Word documents, spreadsheets, HTML files, and other documents that need markdown or structured JSON output. Hosted MCP supports a two-step upload-ref flow; local direct file reads require a self-hosted `FIRECRAWL_API_URL`.
+**Best for:** PDFs, Word documents, spreadsheets, HTML files, and other documents that need markdown or structured JSON output. Hosted MCP supports a two-step upload-ref flow; local MCP requires an explicit API URL before reading and uploading the requested file.
 
 **Not recommended for:** Remote URLs (use scrape), multiple files in one call (call parse once per file), or browser-only actions such as screenshots and clicks.
 
-**Hosted MCP flow:** Hosted MCP cannot read the caller's filesystem directly. Call `firecrawl_parse` with `filePath` to receive a short-lived upload command and `nextToolCall`, upload the file locally, then call `firecrawl_parse` again with the returned `uploadRef`. Minting the hosted upload URL requires Firecrawl auth or keyless eligibility. In local `npx firecrawl-mcp` mode, direct file parsing currently requires `FIRECRAWL_API_URL` pointing to a self-hosted Firecrawl API; a plain cloud API-key-only local server cannot read and upload files through this tool.
+**Hosted MCP flow:** Hosted MCP cannot read the caller's filesystem directly. Call `firecrawl_parse` with `filePath` to receive a short-lived upload command and `nextToolCall`, upload the file locally, then call `firecrawl_parse` again with the returned `uploadRef`. Minting the hosted upload URL requires Firecrawl auth or keyless eligibility. In local `npx firecrawl-mcp` mode, `FIRECRAWL_API_URL` must be explicitly configured before the server reads or uploads `filePath`. There is no default upload destination for local Parse. Both authenticated and eligible keyless calls are supported by the selected API. Running MCP locally does not perform parsing on the local machine. This configuration requirement selects the destination; it does not restrict which files the process can read.
 
 **Usage Example:**
 

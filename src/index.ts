@@ -72,11 +72,12 @@ function getSearchMcpEndpoint(): `/${string}` {
 function makeFullProfile(): ServerProfile {
   const account = getPrimaryEndpoint() === '/v2/mcp-oauth';
   const hasCredential = Boolean(resolveCredentialFromEnv());
+  const customApi = !hosted && Boolean(normalizeHeader(process.env.FIRECRAWL_API_URL));
   return {
     id: account ? 'account' : 'full',
     resourceName: account ? 'Firecrawl MCP Account' : 'Firecrawl MCP',
     instructions:
-      account || hasCredential ? FULL_PROFILE_INSTRUCTIONS : KEYLESS_PROFILE_INSTRUCTIONS,
+      account || hasCredential || customApi ? FULL_PROFILE_INSTRUCTIONS : KEYLESS_PROFILE_INSTRUCTIONS,
     resourceUrl: account
       ? (normalizeHeader(process.env.FIRECRAWL_MCP_RESOURCE_URL) ??
         DEFAULT_MCP_OAUTH_RESOURCE_URL)
@@ -161,7 +162,7 @@ if (searchFeedbackDisabled) {
 }
 if (endpointFeedbackDisabled) {
   console.error(
-    '[firecrawl-mcp] Endpoint feedback tool disabled by FIRECRAWL_NO_ENDPOINT_FEEDBACK; firecrawl_feedback will not be registered.'
+    '[firecrawl-mcp] Authenticated endpoint feedback tool disabled by FIRECRAWL_NO_ENDPOINT_FEEDBACK. Hosted keyless sessions and local sessions without an API key retain feedback.'
   );
 }
 
@@ -263,13 +264,13 @@ if (
   !process.env.FIRECRAWL_API_KEY &&
   !process.env.FIRECRAWL_API_URL
 ) {
-  // No credential and no self-hosted URL: run in keyless mode. scrape and
-  // search work for free (rate-limited per IP) against the Firecrawl cloud;
-  // every other tool needs an API key and will return Unauthorized.
+  // Without credentials or a custom API URL, use the cloud keyless tools.
   console.error(
-    'No FIRECRAWL_API_KEY or FIRECRAWL_API_URL set — running in keyless mode. ' +
-      'firecrawl_scrape and firecrawl_search are free (rate-limited per IP) against the Firecrawl cloud; ' +
-      'other tools require an API key (get one free at https://firecrawl.dev).'
+    'No FIRECRAWL_API_KEY or FIRECRAWL_API_URL set. Running in keyless mode. ' +
+      'firecrawl_scrape and firecrawl_search use the Firecrawl cloud with usage limits. ' +
+      'Local firecrawl_parse requires FIRECRAWL_API_URL to be explicitly configured before reading or uploading files. ' +
+      'Consider submitting feedback through firecrawl_feedback, especially if a keyless result is wrong, incomplete, blocked, or an error. Include specific evidence to help improve Firecrawl. ' +
+      'Other tools require an API key (get one free at https://firecrawl.dev).'
   );
 }
 

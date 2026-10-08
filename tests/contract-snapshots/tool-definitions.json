@@ -1646,7 +1646,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_feedback@40455dbfba0d": {
+  "firecrawl_feedback@ba19f483ca23": {
     "annotations": {
       "title": "Firecrawl feedback",
       "readOnlyHint": false,
@@ -1654,7 +1654,7 @@
       "destructiveHint": false
     },
     "title": "Firecrawl feedback",
-    "description": "\nSubmit concise quality feedback for a completed search, scrape, parse, or map job. Provide the endpoint, job ID, rating, and relevant issue codes or small contextual fields; omit large page contents and raw outputs.\n\nFor an Alexandria session, set endpoint to `alexandria`, omit jobId, and provide requestedWebsite (url and requestedFunctionality), objective, rationale, and rating. objective is the underlying goal behind the session: what you or your user were ultimately trying to accomplish (for example, \"shortlist federal IT contracts to bid on this quarter\"), not only what was needed from this website. Optional providerFeedback and capabilityFeedback describe gaps or errors. Capability issues: new_capability_request (requires requestedFunctionality), missing_capability, insufficient_functionality, incorrect_result, execution_error, other. Alexandria feedback must arrive within 20 minutes of the team's latest Alexandria search, discovery, or execution; later feedback is rejected. Eligible feedback can refund 1 credit; refunds are subject to daily caps per website and per team.\n\nReturns submission status, feedback ID, and accounting fields.\n",
+    "description": "\nSubmit job quality feedback through /v2/feedback. Authenticated jobs use existing issue/note fields. Omit full page contents and raw outputs.\n\nFor Alexandria session feedback, set endpoint to alexandria, omit jobId, and provide requestedWebsite (url and requestedFunctionality), objective (the underlying goal), rationale, and rating. Optional providerFeedback and capabilityFeedback describe gaps or errors. Submit within 20 minutes of the team's latest Alexandria search, discovery, or execution. Eligible feedback can refund 1 credit, subject to daily caps per website and per team.\n\nConsider submitting concise keyless Search, Scrape, or Parse feedback on observed result quality or missing coverage when the host permits it, especially if a result is wrong, incomplete, blocked, or an error. Feedback does not determine whether the task is complete. It requires task, assessment, rating, and 1-20 observations. Task, assessment, and each detail contain 10-2000 characters. Each observation includes kind, detail, and basis: output, source_comparison, or expectation. A source_comparison also requires comparison: {reference, detail}. The observations parameter describes each category's fields and reason codes.\n\nUse evidence already available; no extra investigation. The stored submission must fit within 8 KiB, including server defaults. Submit from the same caller IP before the invitation's expiresAt deadline (24-hour feedback window for the job). One submission per job; retries of successful submissions within the window return the original feedback ID. Attempts are rate limited. Feedback remains available after operation quota exhaustion and does not consume or restore quota. Contract: https://docs.firecrawl.dev/api-reference/endpoint/feedback.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1700,6 +1700,7 @@
           "maxLength": 2000
         },
         "objective": {
+          "description": "The underlying goal behind the session: what you or your user were ultimately trying to accomplish (for example, \"shortlist federal IT contracts to bid on this quarter\"), not only what was needed from this website.",
           "type": "string",
           "minLength": 1,
           "maxLength": 2000
@@ -1792,6 +1793,39 @@
             "bad",
             "partial"
           ]
+        },
+        "task": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 2000
+        },
+        "assessment": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 2000
+        },
+        "docClass": {
+          "description": "Required once per keyless Parse submission.",
+          "type": "string",
+          "enum": [
+            "born_digital",
+            "scanned",
+            "mixed",
+            "unknown"
+          ]
+        },
+        "observations": {
+          "description": "Search: useful and irrelevant require a one-based position within the delivered group. source names the response group the position refers to: web, images, or news. It is required for multi-source jobs. Omission defaults to web, so images-only and news-only jobs must explicitly name their source. The position must exist in that requested group. irrelevant requires reason: aggregator_over_official, off_topic, stale, wrong_content_type, snippet_misleading, or blocked_or_paywalled. vertical is required on missing and optional on useful/irrelevant: web_general, social, business, research, developer, news, government, finance, or other. missing may include topic (up to 200 characters). missing and irrelevant may include knownSources (up to 20 HTTP(S) URLs): where absent content lives or the source that should have ranked instead. Unmentioned results are unassessed; a full ranking is not required. Do not submit engine attribution.\n\nScrape: kind correct, wrong_success, incomplete, or incorrect. wrong_success requires reason: blocked_shell, login_required, paywall, empty, wrong_page, stale, or wrong_locale. incomplete requires reason: partial_content, dynamic_content, pagination, main_content_stripped, or format_lost. incorrect requires reason: wrong, hallucinated, or missing_fields. correct has no reason. Optional location is up to 200 characters. No retryOutcome. hallucinated applies only to json, deterministicJson, summary, question, highlights, and changeTracking in json mode; missing_fields applies only to json and deterministicJson. For incomplete and incorrect, prefer source_comparison when the source is already available.\n\nParse: docClass is required once per submission: born_digital, scanned, mixed, or unknown. Observation kind: correct, text_ocr, table, formula, chart_figure, reading_order, headers_footers, headings_formatting, completeness, images_dropped, or incorrect. text_ocr requires reason: misread_chars, garbled, or missing_text. table requires reason: structure, cells_glued, or digits. completeness requires reason: pages_missing, truncated_at_max_pages, or sections_dropped. incorrect requires reason: wrong, hallucinated, or missing_fields. Other kinds have no reason subtype. Optional page is a one-based positive integer. incorrect applies to json and summary outputs. For text_ocr and table, include the correct text or cell values in comparison.detail when already known. Parse feedback does not automatically retain the document, extracted output, page images, or layout blocks; submitted observations and corrections are retained.\n\nScrape and Parse observations other than failure: format must be a format type the job requested. It is required for output and source_comparison observations when multiple formats were requested; optional for expectation observations and single-format jobs. All observations retain detail and basis; source_comparison requires comparison: {reference, detail}. comparison.detail contains the correct content from the inspected source.\n\nFailed Search, Scrape, or Parse jobs: use kind failure with reason timeout, transport_error, proxy_error, or other. Accepted only for a failed job. Include detail and basis; do not supply position, source, format, location, or page. Parse still requires docClass (unknown is allowed).\n\nIf the saved Search response is unavailable, otherwise valid observations are accepted and stored with metadata.unverified: true because their positions could not be checked. Job ownership and requested sources are still checked. Available results must contain every referenced position.\n\nReason definitions:\n- aggregator_over_official: An intermediary was returned where the task needed an available official or primary source.\n- off_topic: The result addresses a different topic from the task.\n- stale: The content is outdated for the time or version the task requires.\n- wrong_content_type: The destination has the wrong content type for the task, such as a discussion instead of a reference.\n- snippet_misleading: The returned description misrepresents source content already inspected.\n- blocked_or_paywalled: Access to the destination was observed to be blocked or require a subscription; do not infer this from its URL or snippet.\n- blocked_shell: The successful response contains a bot challenge or access-blocking shell instead of the requested content.\n- login_required: The successful response contains a login requirement instead of the requested content.\n- paywall: The successful response contains a subscription barrier instead of the requested content.\n- empty: The successful response contains no meaningful requested content.\n- wrong_page: The successful response contains a different page or resource.\n- wrong_locale: The response uses the wrong language or region for the task.\n- partial_content: Only part of the expected content was returned, without a more specific known cause.\n- dynamic_content: Content loaded by client-side rendering or interaction is missing.\n- pagination: Expected content on additional pages is missing.\n- main_content_stripped: Content filtering removed requested primary content.\n- format_lost: Text is present, but meaningful structure such as headings, lists, or code formatting was lost.\n- wrong: Returned facts or values conflict with the inspected source.\n- hallucinated: The output asserts content unsupported by the inspected source.\n- missing_fields: Requested fields are absent from the structured output.\n- misread_chars: Characters were recognized incorrectly.\n- garbled: Extracted text is corrupted or unreadable.\n- missing_text: Visible source text was omitted.\n- structure: Table rows, columns, or header relationships were reconstructed incorrectly.\n- cells_glued: Distinct table cells were merged.\n- digits: Numeric table values were recognized incorrectly.\n- pages_missing: Source pages are absent from the output.\n- truncated_at_max_pages: Extraction ended at the configured page limit; this does not by itself imply a parser error.\n- sections_dropped: Sections within processed pages were omitted.\n- timeout: The operation explicitly reported a timeout.\n- transport_error: The operation explicitly reported a network, connection, or TLS failure.\n- proxy_error: The operation explicitly reported a proxy failure.\n- other: Another operation failure was reported; describe the returned error without guessing its cause.",
+          "minItems": 1,
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
         },
         "issues": {
           "maxItems": 20,
@@ -1932,6 +1966,20 @@
           "anyOf": [
             {
               "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "details": {
+          "description": "Request validation errors."
+        },
+        "retry_after_seconds": {
+          "description": "Seconds to wait before retrying a throttled submission.",
+          "anyOf": [
+            {
+              "type": "number"
             },
             {
               "type": "null"
@@ -3957,7 +4005,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_parse@238d88be408f": {
+  "firecrawl_parse@042033c7a8e1": {
     "annotations": {
       "title": "Firecrawl file parsing",
       "readOnlyHint": true,
@@ -3965,7 +4013,7 @@
       "destructiveHint": false
     },
     "title": "Firecrawl file parsing",
-    "description": "\nParse one supported document into markdown, HTML, links, summary, targeted answers, or JSON matching a schema. Supported inputs include common HTML, PDF, Word, RTF, OpenDocument, and spreadsheet files; PDF parsing can be bounded with `pdfOptions.maxPages`.\n\nLocal MCP reads `filePath` from the server filesystem. Hosted MCP uses two calls: first provide `filePath` to receive upload instructions, upload locally, then call again with the returned `uploadRef`; do not send both fields together. Remote web URLs belong in `firecrawl_scrape`.\n\nSet `redactPII` to request redaction of personally identifiable information in the returned content. `zeroDataRetention` requires an eligible authenticated account; omit it for anonymous keyless use. Returns upload instructions for hosted phase one or parsed document content for the final call. Authenticated final responses can include a `data.metadata.scrapeId` for optional parse feedback.\n",
+    "description": "\nParse one supported document into markdown, HTML, links, summary, targeted answers, or JSON matching a schema. Supported inputs include common HTML, PDF, Word, RTF, OpenDocument, and spreadsheet files; PDF parsing can be bounded with `pdfOptions.maxPages`.\n\nLocal MCP requires an explicitly configured `FIRECRAWL_API_URL` before reading `filePath` from the server filesystem and uploading it. Parsing happens on that API server. Hosted MCP uses two calls: first provide `filePath` to receive upload instructions, upload locally, then call again with the returned `uploadRef`; do not send both fields together. Remote web URLs belong in `firecrawl_scrape`.\n\nSet `redactPII` to request redaction of personally identifiable information in the returned content. `zeroDataRetention` requires an eligible authenticated account; omit it for anonymous keyless use. Returns upload instructions for hosted phase one or parsed document content for the final call. Authenticated final responses can include a `data.metadata.scrapeId` for optional parse feedback.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4084,18 +4132,26 @@
           ]
         },
         "filePath": {
-          "description": "Absolute or relative path to a local file to parse. Supported: .html, .htm, .pdf, .docx, .doc, .odt, .rtf, .xlsx, .xls",
+          "description": "Phase 1 only: path to the local file on the caller/harness machine. Hosted MCP will not read or stat this path; it is used only to produce upload instructions.",
+          "type": "string",
+          "minLength": 1
+        },
+        "uploadRef": {
+          "description": "Phase 2 only: short-lived upload reference returned by phase 1 after the local PUT upload completes.",
           "type": "string",
           "minLength": 1
         },
         "contentType": {
-          "description": "Optional MIME type override. If omitted, the server infers the file kind from the extension.",
+          "description": "Phase 1 MIME type override. If omitted, the server infers it from the file extension without reading the file.",
           "type": "string"
+        },
+        "declaredSizeBytes": {
+          "description": "Optional phase 1 size declaration. Hosted MCP does not stat the file; provide this only if the caller already knows it.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
         }
       },
-      "required": [
-        "filePath"
-      ],
       "additionalProperties": false
     },
     "name": "firecrawl_parse",
@@ -4272,7 +4328,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_parse@9738b5806dc4": {
+  "firecrawl_parse@2ed6311a9eae": {
     "annotations": {
       "title": "Firecrawl file parsing",
       "readOnlyHint": true,
@@ -4280,7 +4336,7 @@
       "destructiveHint": false
     },
     "title": "Firecrawl file parsing",
-    "description": "\nParse one supported document into markdown, HTML, links, summary, targeted answers, or JSON matching a schema. Supported inputs include common HTML, PDF, Word, RTF, OpenDocument, and spreadsheet files; PDF parsing can be bounded with `pdfOptions.maxPages`.\n\nLocal MCP reads `filePath` from the server filesystem. Hosted MCP uses two calls: first provide `filePath` to receive upload instructions, upload locally, then call again with the returned `uploadRef`; do not send both fields together. Remote web URLs belong in `firecrawl_scrape`.\n\nSet `redactPII` to request redaction of personally identifiable information in the returned content. `zeroDataRetention` requires an eligible authenticated account; omit it for anonymous keyless use. Returns upload instructions for hosted phase one or parsed document content for the final call. Authenticated final responses can include a `data.metadata.scrapeId` for optional parse feedback.\n",
+    "description": "\nParse one supported document into markdown, HTML, links, summary, targeted answers, or JSON matching a schema. Supported inputs include common HTML, PDF, Word, RTF, OpenDocument, and spreadsheet files; PDF parsing can be bounded with `pdfOptions.maxPages`.\n\nLocal MCP requires an explicitly configured `FIRECRAWL_API_URL` before reading `filePath` from the server filesystem and uploading it. Parsing happens on that API server. Hosted MCP uses two calls: first provide `filePath` to receive upload instructions, upload locally, then call again with the returned `uploadRef`; do not send both fields together. Remote web URLs belong in `firecrawl_scrape`.\n\nSet `redactPII` to request redaction of personally identifiable information in the returned content. `zeroDataRetention` requires an eligible authenticated account; omit it for anonymous keyless use. Returns upload instructions for hosted phase one or parsed document content for the final call. Authenticated final responses can include a `data.metadata.scrapeId` for optional parse feedback.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4399,26 +4455,18 @@
           ]
         },
         "filePath": {
-          "description": "Phase 1 only: path to the local file on the caller/harness machine. Hosted MCP will not read or stat this path; it is used only to produce upload instructions.",
-          "type": "string",
-          "minLength": 1
-        },
-        "uploadRef": {
-          "description": "Phase 2 only: short-lived upload reference returned by phase 1 after the local PUT upload completes.",
+          "description": "Absolute or relative path to a local file to parse. Supported: .html, .htm, .pdf, .docx, .doc, .odt, .rtf, .xlsx, .xls",
           "type": "string",
           "minLength": 1
         },
         "contentType": {
-          "description": "Phase 1 MIME type override. If omitted, the server infers it from the file extension without reading the file.",
+          "description": "Optional MIME type override. If omitted, the server infers the file kind from the extension.",
           "type": "string"
-        },
-        "declaredSizeBytes": {
-          "description": "Optional phase 1 size declaration. Hosted MCP does not stat the file; provide this only if the caller already knows it.",
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
         }
       },
+      "required": [
+        "filePath"
+      ],
       "additionalProperties": false
     },
     "name": "firecrawl_parse",
@@ -6967,7 +7015,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_search_feedback@aaf6dc6f2735": {
+  "firecrawl_search_feedback@8be846cf488c": {
     "annotations": {
       "title": "Firecrawl search feedback",
       "readOnlyHint": false,
@@ -7089,6 +7137,20 @@
           "anyOf": [
             {
               "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "details": {
+          "description": "Request validation errors."
+        },
+        "retry_after_seconds": {
+          "description": "Seconds to wait before retrying a throttled submission.",
+          "anyOf": [
+            {
+              "type": "number"
             },
             {
               "type": "null"
@@ -7223,234 +7285,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_search@9ba4844726b1": {
-    "annotations": {
-      "title": "Firecrawl web search",
-      "readOnlyHint": true,
-      "openWorldHint": true,
-      "destructiveHint": false
-    },
-    "title": "Firecrawl web search",
-    "description": "\nSearch web and specialized indexes, returning ranked results with query-relevant highlights. Each web result is a title, URL, and description. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. `includeDomains` and `excludeDomains` are mutually exclusive hostname filters; categories limit result types to `research`, `pdf`, `developer`, or `gov`.\n\nFor a programming question, add `categories: [\"developer\"]`. It searches an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and returns the results in `data.web` with `category: \"developer\"`.\n\nFor a legal or regulatory question, `categories: [\"gov\"]` returns results in `data.web` with `category: \"gov\"` and cannot be combined with other categories; `firecrawl_gov_search` is the dedicated tool.\n\nAuthenticated search combines web results, semantic tool summaries and domain matches. Use sources: [\"alexandria\"] for semantic tools only. A search with sources: [\"web\"] omits semantic provider discovery; domainTools: true can still return website-matched tools. Web-only results use domainTools: false. Tool matches describe available structured-data capabilities, not executed data. toolDetail: \"compact\" (default) returns only provider, capability and description; \"summary\" adds metadata; \"full\" includes their input and output contracts. firecrawl_scrape with an alexandria body executes a selected capability; firecrawl_find_tools provides catalogue browsing and full contracts.\n\nReturns result groups in `data` and an operation `id`.\n",
-    "inputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "type": "object",
-      "properties": {
-        "toolDetail": {
-          "description": "Compact by default. Compact returns only provider, capability and description; full includes contracts. Inspect selected compact tools with firecrawl_find_tools providers and capabilities.",
-          "type": "string",
-          "enum": [
-            "compact",
-            "summary",
-            "full"
-          ]
-        },
-        "query": {
-          "description": "Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Catalogue browsing is available through firecrawl_find_tools.",
-          "type": "string",
-          "minLength": 1
-        },
-        "objective": {
-          "description": "Optional broader goal for this search, if known. Avoid sensitive information.",
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 5000
-        },
-        "clientModel": {
-          "description": "Optional model identifier, if known.",
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128
-        },
-        "domainTools": {
-          "description": "Include domain-matched tools for result URLs. Defaults to true when Alexandria is combined with web, news or images; semantic-only search leaves domain matching off.",
-          "type": "boolean"
-        },
-        "highlights": {
-          "description": "Return query-relevant page excerpts for web and news results when available (default). Highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned. Set to false to keep the original search snippets.",
-          "type": "boolean"
-        },
-        "limit": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
-        },
-        "tbs": {
-          "type": "string"
-        },
-        "filter": {
-          "type": "string"
-        },
-        "location": {
-          "type": "string"
-        },
-        "includeDomains": {
-          "description": "Hostnames to restrict results to. Mutually exclusive with excludeDomains.",
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 253,
-            "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
-          }
-        },
-        "excludeDomains": {
-          "description": "Hostnames to leave out of results. Mutually exclusive with includeDomains.",
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 253,
-            "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
-          }
-        },
-        "sources": {
-          "description": "Search sources; authenticated sessions default to web + alexandria, keyless sessions to web only. A search with sources: [\"web\"] omits semantic provider discovery; domainTools: true can still return website-matched tools. Web-only results use domainTools: false. Use [\"alexandria\"] alone for provider discovery without web results.",
-          "type": "array",
-          "items": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "web",
-                  "images",
-                  "news",
-                  "alexandria",
-                  "exchange"
-                ]
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "web",
-                      "images",
-                      "news",
-                      "alexandria",
-                      "exchange"
-                    ]
-                  }
-                },
-                "required": [
-                  "type"
-                ],
-                "additionalProperties": false
-              }
-            ]
-          }
-        },
-        "categories": {
-          "description": "Limit results to specific source types. `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation; `gov` searches the Government Index of US federal, state, and local legal and regulatory sources, the index behind firecrawl_gov_search, and cannot be combined with other categories. `developer` and `gov` return hits in `data.web` with `category` set to their name; the other categories also filter `data.web`.",
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "research",
-              "pdf",
-              "developer",
-              "gov"
-            ]
-          }
-        },
-        "enterprise": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "default",
-              "anon",
-              "zdr"
-            ]
-          }
-        }
-      },
-      "required": [
-        "query"
-      ],
-      "additionalProperties": false
-    },
-    "name": "firecrawl_search",
-    "outputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "description": "Ranked search results grouped by source.",
-      "type": "object",
-      "properties": {
-        "agent_hints": {
-          "description": "Optional response guidance from the Firecrawl API.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "success": {
-          "description": "Whether the API call succeeded.",
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "data": {
-          "description": "Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`."
-        },
-        "error": {
-          "description": "Error message or error object when the call did not succeed."
-        },
-        "warning": {
-          "description": "Non-fatal warning about the result.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "id": {
-          "description": "Search identifier, for optional `firecrawl_search_feedback`.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "creditsUsed": {
-          "description": "Credits this search consumed.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "tools": {
-          "description": "Domain-matched Alexandria tools for the results."
-        },
-        "nextTool": {
-          "description": "A follow-up tool call that continues this search."
-        },
-        "feedbackTool": {
-          "description": "Pointer to the feedback tool for this search."
-        }
-      },
-      "additionalProperties": false
-    },
-    "_meta": {
-      "anthropic/alwaysLoad": true
-    }
-  },
-  "firecrawl_search@d2a0ac386a6f": {
+  "firecrawl_search@1cbe3035e0b1": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -7882,7 +7717,7 @@
           ]
         },
         "id": {
-          "description": "Search identifier, for optional `firecrawl_search_feedback`.",
+          "description": "Search job identifier for optional `firecrawl_search_feedback` on authenticated sessions; keyless invitations use `firecrawl_feedback`.",
           "anyOf": [
             {
               "type": "string"
@@ -7891,6 +7726,9 @@
               "type": "null"
             }
           ]
+        },
+        "metadata": {
+          "description": "Job reference and optional feedback invitation."
         },
         "creditsUsed": {
           "description": "Credits this search consumed.",
@@ -7919,7 +7757,237 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_search@f2742fbf4e93": {
+  "firecrawl_search@4ba637374d75": {
+    "annotations": {
+      "title": "Firecrawl web search",
+      "readOnlyHint": true,
+      "openWorldHint": true,
+      "destructiveHint": false
+    },
+    "title": "Firecrawl web search",
+    "description": "\nSearch web and specialized indexes, returning ranked results with query-relevant highlights. Each web result is a title, URL, and description. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. `includeDomains` and `excludeDomains` are mutually exclusive hostname filters; categories limit result types to `research`, `pdf`, `developer`, or `gov`.\n\nFor a programming question, add `categories: [\"developer\"]`. It searches an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and returns the results in `data.web` with `category: \"developer\"`.\n\nFor a legal or regulatory question, `categories: [\"gov\"]` returns results in `data.web` with `category: \"gov\"` and cannot be combined with other categories; `firecrawl_gov_search` is the dedicated tool.\n\nAuthenticated search combines web results, semantic tool summaries and domain matches. Use sources: [\"alexandria\"] for semantic tools only. A search with sources: [\"web\"] omits semantic provider discovery; domainTools: true can still return website-matched tools. Web-only results use domainTools: false. Tool matches describe available structured-data capabilities, not executed data. toolDetail: \"compact\" (default) returns only provider, capability and description; \"summary\" adds metadata; \"full\" includes their input and output contracts. firecrawl_scrape with an alexandria body executes a selected capability; firecrawl_find_tools provides catalogue browsing and full contracts.\n\nReturns result groups in `data` and an operation `id`.\n",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "toolDetail": {
+          "description": "Compact by default. Compact returns only provider, capability and description; full includes contracts. Inspect selected compact tools with firecrawl_find_tools providers and capabilities.",
+          "type": "string",
+          "enum": [
+            "compact",
+            "summary",
+            "full"
+          ]
+        },
+        "query": {
+          "description": "Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Catalogue browsing is available through firecrawl_find_tools.",
+          "type": "string",
+          "minLength": 1
+        },
+        "objective": {
+          "description": "Optional broader goal for this search, if known. Avoid sensitive information.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 5000
+        },
+        "clientModel": {
+          "description": "Optional model identifier, if known.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "domainTools": {
+          "description": "Include domain-matched tools for result URLs. Defaults to true when Alexandria is combined with web, news or images; semantic-only search leaves domain matching off.",
+          "type": "boolean"
+        },
+        "highlights": {
+          "description": "Return query-relevant page excerpts for web and news results when available (default). Highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned. Set to false to keep the original search snippets.",
+          "type": "boolean"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "tbs": {
+          "type": "string"
+        },
+        "filter": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "includeDomains": {
+          "description": "Hostnames to restrict results to. Mutually exclusive with excludeDomains.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 253,
+            "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
+          }
+        },
+        "excludeDomains": {
+          "description": "Hostnames to leave out of results. Mutually exclusive with includeDomains.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 253,
+            "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
+          }
+        },
+        "sources": {
+          "description": "Search sources; authenticated sessions default to web + alexandria, keyless sessions to web only. A search with sources: [\"web\"] omits semantic provider discovery; domainTools: true can still return website-matched tools. Web-only results use domainTools: false. Use [\"alexandria\"] alone for provider discovery without web results.",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "web",
+                  "images",
+                  "news",
+                  "alexandria",
+                  "exchange"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "web",
+                      "images",
+                      "news",
+                      "alexandria",
+                      "exchange"
+                    ]
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "categories": {
+          "description": "Limit results to specific source types. `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation; `gov` searches the Government Index of US federal, state, and local legal and regulatory sources, the index behind firecrawl_gov_search, and cannot be combined with other categories. `developer` and `gov` return hits in `data.web` with `category` set to their name; the other categories also filter `data.web`.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "research",
+              "pdf",
+              "developer",
+              "gov"
+            ]
+          }
+        },
+        "enterprise": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "default",
+              "anon",
+              "zdr"
+            ]
+          }
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false
+    },
+    "name": "firecrawl_search",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "Ranked search results grouped by source.",
+      "type": "object",
+      "properties": {
+        "agent_hints": {
+          "description": "Optional response guidance from the Firecrawl API.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "success": {
+          "description": "Whether the API call succeeded.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "data": {
+          "description": "Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`."
+        },
+        "error": {
+          "description": "Error message or error object when the call did not succeed."
+        },
+        "warning": {
+          "description": "Non-fatal warning about the result.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "description": "Search job identifier for optional `firecrawl_search_feedback` on authenticated sessions; keyless invitations use `firecrawl_feedback`.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "metadata": {
+          "description": "Job reference and optional feedback invitation."
+        },
+        "creditsUsed": {
+          "description": "Credits this search consumed.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tools": {
+          "description": "Domain-matched Alexandria tools for the results."
+        },
+        "nextTool": {
+          "description": "A follow-up tool call that continues this search."
+        },
+        "feedbackTool": {
+          "description": "Pointer to the feedback tool for this search."
+        }
+      },
+      "additionalProperties": false
+    },
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    }
+  },
+  "firecrawl_search@609ceb64513a": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -8299,7 +8367,7 @@
           ]
         },
         "id": {
-          "description": "Search identifier, for optional `firecrawl_search_feedback`.",
+          "description": "Search job identifier for optional `firecrawl_search_feedback` on authenticated sessions; keyless invitations use `firecrawl_feedback`.",
           "anyOf": [
             {
               "type": "string"
@@ -8308,6 +8376,9 @@
               "type": "null"
             }
           ]
+        },
+        "metadata": {
+          "description": "Job reference and optional feedback invitation."
         },
         "creditsUsed": {
           "description": "Credits this search consumed.",
