@@ -8,9 +8,9 @@
     "capabilities": ["Read", "Write"],
     "category": "Productivity",
     "defaultPrompt": [
-      "Find current sources for a topic and summarize them",
-      "Read a webpage and extract its main points",
-      "Find research papers and verify their key claims"
+      "Based on what you know about me, use Alexandria to pull fresh data that moves one of my goals forward today",
+      "Find the cheapest round-trip flights from my home city to somewhere warm next month and compare airlines",
+      "Every Monday, recap my favorite team's weekend: score, key stats, injuries and next game"
     ],
     "developerName": "SideGuide Technologies, Inc.",
     "displayName": "Firecrawl",
@@ -22,7 +22,7 @@
   },
   "name": "app-6a314a73f8ac819195b0d55e36b9c609",
   "skills": "./skills",
-  "version": "2.2.3",
+  "version": "2.3.0",
   "extensions": {
     "com.openai": {
       "onboardingSkill": "./skills/get-started/SKILL.md"
