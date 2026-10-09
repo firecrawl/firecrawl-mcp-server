@@ -9,7 +9,6 @@ import {
 import {
   createServiceHooks,
   makePrimaryProfile,
-  makeSearchProfile,
   resolveCredentialFromEnv,
 } from './service/index.js';
 
@@ -86,7 +85,6 @@ const args: FirecrawlMcpServerStartArgs =
         httpStream: {
           port: PORT,
           host: HOST,
-          endpoint: primaryProfile.endpoint,
           stateless: true,
         },
       }
@@ -118,40 +116,3 @@ if (
 }
 
 await start(args);
-
-// Bring up the search surface as a second in-process instance on its own port.
-// The pod's nginx routes its public path here; the full surface above is
-// untouched. Only registered in the hosted profile and when not disabled.
-const searchProfileEnabled =
-  hosted &&
-  primaryProfile.id === 'full' &&
-  process.env.FIRECRAWL_MCP_SEARCH_ENABLED !== 'false';
-
-if (searchProfileEnabled) {
-  const searchProfile = makeSearchProfile();
-  const searchServer = createFirecrawlMcpServer({
-    ...options,
-    unstable_hooks: createServiceHooks(searchProfile, serviceSettings),
-  });
-
-  // Isolate the search instance from the already-serving full instance: if it
-  // fails to bind (port in use, etc.), log and carry on rather than let a
-  // top-level rejection exit the process and take the healthy full surface down.
-  try {
-    await searchServer.start({
-      transportType: 'httpStream',
-      httpStream: {
-        port: searchProfile.port,
-        host: HOST,
-        endpoint: searchProfile.endpoint,
-        stateless: true,
-      },
-    });
-  } catch (error) {
-    console.error(
-      `[search-profile] failed to start on port ${searchProfile.port}; ` +
-        'the full surface is unaffected',
-      error
-    );
-  }
-}

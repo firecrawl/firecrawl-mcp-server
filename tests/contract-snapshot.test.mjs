@@ -7,7 +7,6 @@
 //   pnpm run build && UPDATE_CONTRACT_SNAPSHOTS=1 node --test tests/contract-snapshot.test.mjs
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { createServer } from 'node:http';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import test, { after } from 'node:test';
 import {
@@ -22,9 +21,6 @@ import {
 const UPDATE = process.env.UPDATE_CONTRACT_SNAPSHOTS === '1';
 const SNAPSHOT_DIR = new URL('./contract-snapshots/', import.meta.url);
 const UNREACHABLE_API_URL = 'http://127.0.0.1:9';
-const SEARCH_ENDPOINT = '/v2/mcp-search';
-const SEARCH_RESOURCE = 'https://mcp.firecrawl.dev/v2/mcp-search';
-const ACCOUNT_ENDPOINT = '/v2/mcp-oauth';
 const CLIENT_INFO = { name: 'firecrawl-contract-snapshot', version: '1.0.0' };
 const PROTOCOL_VERSION = '2025-06-18';
 
@@ -38,11 +34,6 @@ const BASE_ENV = {
   FIRECRAWL_DISABLE_ENDPOINT_FEEDBACK: '',
   FIRECRAWL_DISABLE_SEARCH_FEEDBACK: '',
   FIRECRAWL_MCP_RESOURCE_URL: '',
-  FIRECRAWL_MCP_SEARCH_ENABLED: '',
-  FIRECRAWL_MCP_SEARCH_ENDPOINT: '',
-  FIRECRAWL_MCP_SEARCH_OAUTH_ONLY: '',
-  FIRECRAWL_MCP_SEARCH_PORT: '',
-  FIRECRAWL_MCP_SEARCH_RESOURCE_URL: '',
   FIRECRAWL_NO_ENDPOINT_FEEDBACK: '',
   FIRECRAWL_NO_SEARCH_FEEDBACK: '',
   FIRECRAWL_OAUTH_INTROSPECT_SECRET: '',
@@ -249,19 +240,6 @@ async function getRoute(port, path) {
   return { body: await readBody(response), status: response.status };
 }
 
-async function unauthenticatedList(port, endpoint) {
-  const response = await rpc(port, endpoint, { id: 9, method: 'tools/list' });
-  const body = await readBody(response);
-  return {
-    body:
-      typeof body === 'string' && body.startsWith('event:')
-        ? parseSseJson(body)
-        : body,
-    status: response.status,
-    wwwAuthenticate: response.headers.get('www-authenticate'),
-  };
-}
-
 async function startHttp(t, env, waitPort) {
   const port = await getFreePort();
   const child = spawnServer({ ...BASE_ENV, PORT: String(port), ...env });
@@ -292,42 +270,6 @@ async function stdioContract(t, env, calls = []) {
 }
 
 /** Stands in for the OAuth issuer's token introspection endpoint. */
-async function startFakeIssuer(audience) {
-  const server = createServer(async (req, res) => {
-    let raw = '';
-    req.setEncoding('utf8');
-    for await (const chunk of req) raw += chunk;
-    if (req.method === 'POST' && req.url === '/api/oauth/introspect') {
-      const token = new URLSearchParams(raw).get('token') ?? '';
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(
-        JSON.stringify(
-          token.startsWith('fco_')
-            ? {
-                active: true,
-                api_key: 'fc-from-introspection',
-                aud: audience,
-                credential_purpose: 'hosted_mcp_oauth',
-                scope: 'firecrawl:global',
-              }
-            : { active: false }
-        )
-      );
-      return;
-    }
-    res.writeHead(404, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ error: `Unhandled ${req.method} ${req.url}` }));
-  });
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
-  });
-  return {
-    url: `http://127.0.0.1:${server.address().port}`,
-    close: () => new Promise((resolve) => server.close(resolve)),
-  };
-}
-
 test('contract: stdio with an API key', async (t) => {
   await matchSnapshot(
     'stdio-api-key',
@@ -386,18 +328,15 @@ test('contract: local HTTP against a self-hosted API URL', async (t) => {
   });
 });
 
-test('contract: hosted full surface (API key, keyless, invalid credential) and search companion', async (t) => {
-  const searchPort = await getFreePort();
-  const { port, child } = await startHttp(t, {
+test('contract: hosted full surface (API key, keyless, invalid credential)', async (t) => {
+  const { port } = await startHttp(t, {
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: UNREACHABLE_API_URL,
-    FIRECRAWL_MCP_SEARCH_PORT: String(searchPort),
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'contract-introspect-secret',
     HTTP_STREAMABLE_SERVER: 'true',
     KEYLESS_PROXY_SECRET: 'contract-keyless-secret',
   });
-  await waitForHealth(searchPort, child);
   const keyed = { authorization: 'Bearer fc-contract' };
   const invalid = { authorization: 'Bearer not-a-firecrawl-key' };
 
@@ -445,79 +384,5 @@ test('contract: hosted full surface (API key, keyless, invalid credential) and s
       ready: await getRoute(port, '/ready'),
     },
   });
-
-  await matchSnapshot('hosted-search-companion', {
-    session: await httpSurface(searchPort, SEARCH_ENDPOINT, keyed),
-    unauthenticated: await unauthenticatedList(searchPort, SEARCH_ENDPOINT),
-    routes: {
-      health: await getRoute(searchPort, '/health'),
-      oauthProtectedResource: await getRoute(
-        searchPort,
-        `/.well-known/oauth-protected-resource${SEARCH_ENDPOINT}`
-      ),
-      ready: await getRoute(searchPort, '/ready'),
-    },
-  });
 });
 
-test('contract: hosted account surface (/v2/mcp-oauth)', async (t) => {
-  const { port } = await startHttp(t, {
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: ACCOUNT_ENDPOINT,
-    FIRECRAWL_API_URL: UNREACHABLE_API_URL,
-    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'contract-introspect-secret',
-    HTTP_STREAMABLE_SERVER: 'true',
-  });
-  await matchSnapshot('hosted-account', {
-    session: await httpSurface(port, ACCOUNT_ENDPOINT, {
-      authorization: 'Bearer fc-contract',
-    }),
-    unauthenticated: await unauthenticatedList(port, ACCOUNT_ENDPOINT),
-    routes: {
-      oauthProtectedResource: await getRoute(
-        port,
-        `/.well-known/oauth-protected-resource${ACCOUNT_ENDPOINT}`
-      ),
-      ready: await getRoute(port, '/ready'),
-    },
-  });
-});
-
-test('contract: hosted primary search surface (/v2/mcp-search, OAuth only)', async (t) => {
-  const issuer = await startFakeIssuer(SEARCH_RESOURCE);
-  t.after(() => issuer.close());
-  const { port } = await startHttp(t, {
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: SEARCH_ENDPOINT,
-    FIRECRAWL_API_URL: UNREACHABLE_API_URL,
-    FIRECRAWL_MCP_SEARCH_OAUTH_ONLY: 'true',
-    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'contract-introspect-secret',
-    FIRECRAWL_OAUTH_ISSUER: issuer.url,
-    HTTP_STREAMABLE_SERVER: 'true',
-  });
-  await matchSnapshot('hosted-search-primary', {
-    session: await httpSurface(port, SEARCH_ENDPOINT, {
-      authorization: 'Bearer fco_contract',
-    }),
-    unauthenticated: await unauthenticatedList(port, SEARCH_ENDPOINT),
-    apiKeyRejected: await (async () => {
-      const response = await rpc(port, SEARCH_ENDPOINT, {
-        id: 3,
-        method: 'tools/list',
-        headers: { authorization: 'Bearer fc-contract' },
-      });
-      return {
-        body: await readBody(response),
-        status: response.status,
-        wwwAuthenticate: response.headers.get('www-authenticate'),
-      };
-    })(),
-    routes: {
-      oauthProtectedResource: await getRoute(
-        port,
-        `/.well-known/oauth-protected-resource${SEARCH_ENDPOINT}`
-      ),
-      ready: await getRoute(port, '/ready'),
-    },
-  });
-});

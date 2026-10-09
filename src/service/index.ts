@@ -12,15 +12,7 @@ import {
   keylessForwardingHeaders,
   requireKeylessEligibility,
 } from './keyless.js';
-import {
-  getOAuthIssuer,
-  SEARCH_PROFILE_INSTRUCTIONS,
-  type ServerProfile,
-} from './profiles.js';
-import {
-  searchSurfaceTools,
-  searchSurfaceToolFilter,
-} from './search-surface.js';
+import type { ServerProfile } from './profiles.js';
 import {
   credentialForOutboundRequest,
   hasManagedOAuthCredential,
@@ -29,40 +21,27 @@ import type { ServiceSession } from './session.js';
 import { createToolGuard } from './tool-guard.js';
 
 export {
-  getPrimaryEndpoint,
   makePrimaryProfile,
-  makeSearchProfile,
   resolveCredentialFromEnv,
   type ServerProfile,
 } from './profiles.js';
 
 export type ServiceSettings = {
-  /** The hosted deployment: credential policy, keyless gating, logging, OAuth metadata. */
+  /** The hosted deployment: credential policy and keyless gating. */
   hosted: boolean;
   transport: 'stdio' | 'httpStream';
   apiKey?: string;
   apiUrl?: string;
 };
 
-/** Hooks that give one server instance the behaviour of a service profile. */
+/** Hooks that give the server instance its service behaviour. */
 export function createServiceHooks(
   profile: ServerProfile,
   settings: ServiceSettings
 ): FirecrawlMcpServerHooks {
-  const searchSurface = profile.id === 'search';
   const hooks: FirecrawlMcpServerHooks = {
     instructions: (defaults) =>
-      searchSurface
-        ? SEARCH_PROFILE_INSTRUCTIONS
-        : profile.id === 'account' || settings.apiKey
-          ? defaults.authenticated
-          : defaults.keyless,
-    ...(searchSurface
-      ? {
-          toolFilter: searchSurfaceToolFilter,
-          registerExtraTools: searchSurfaceTools({ safeMode: settings.hosted }),
-        }
-      : {}),
+      settings.apiKey ? defaults.authenticated : defaults.keyless,
   };
 
   if (settings.transport === 'httpStream') {
@@ -85,18 +64,5 @@ export function createServiceHooks(
     wrapTool: createToolGuard({ apiBaseUrl: apiBase }),
     beforeKeylessRequest: (session, origin) =>
       requireKeylessEligibility(apiBase, session as ServiceSession, origin),
-    ...(profile.advertiseOAuth
-      ? {
-          oauth: {
-            protectedResource: {
-              authorizationServers: [getOAuthIssuer()],
-              bearerMethodsSupported: ['header'],
-              resource: profile.resourceUrl,
-              resourceName: profile.resourceName,
-              scopesSupported: ['firecrawl:global'],
-            },
-          },
-        }
-      : {}),
   };
 }

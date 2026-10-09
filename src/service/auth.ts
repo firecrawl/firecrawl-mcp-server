@@ -1,5 +1,4 @@
 import type { IncomingHttpHeaders } from 'http';
-import { randomUUID } from 'node:crypto';
 import {
   invalidApiKeyRecoveryPayload,
   invalidOAuthRecoveryPayload,
@@ -20,12 +19,7 @@ import {
   requireDelegatedCredentialSigning,
   setManagedOAuthApiKey,
 } from './session-credential.js';
-import {
-  DEFAULT_MCP_RESOURCE_URL,
-  DEFAULT_MCP_SEARCH_ENDPOINT,
-  getOAuthIssuer,
-  type ServerProfile,
-} from './profiles.js';
+import { getOAuthIssuer, type ServerProfile } from './profiles.js';
 import type { ServiceSession } from './session.js';
 
 /** The HTTP request FastMCP hands to `authenticate`; absent for stdio. */
@@ -74,13 +68,8 @@ function isLegacyKeyPathRequest(request: AuthRequest | undefined): boolean {
 }
 
 function requestShouldReceiveOAuthChallenge(
-  request: AuthRequest | undefined,
-  profile: ServerProfile
+  request: AuthRequest | undefined
 ): boolean {
-  // OAuth-only profiles must challenge API-key and key-in-path attempts too;
-  // otherwise FastMCP would return a generic error instead of the resource's
-  // reconnectable OAuth challenge.
-  if (!profile.acceptApiKeys) return true;
   if (!request?.headers) return true;
   const headerApiKey = normalizeHeader(
     request.headers['x-firecrawl-api-key'] ?? request.headers['x-api-key']
@@ -89,20 +78,8 @@ function requestShouldReceiveOAuthChallenge(
   const bearer = extractBearerToken(request.headers);
   return !bearer || isFirecrawlOAuthAccessToken(bearer);
 }
-// PRM location per RFC 9728. firecrawl-fastmcp serves the document both at the
-// origin-level path and at `/.well-known/oauth-protected-resource${endpoint}`.
-// The full surface uses the origin-level document (unchanged); a path-scoped
-// surface advertises the document that sits under its own resource path, so a
-// single host can carry more than one protected resource.
-function getOAuthProtectedResourceMetadataUrl(profile: ServerProfile): string {
-  const resource = new URL(profile.resourceUrl);
-  const base = `${resource.origin}/.well-known/oauth-protected-resource`;
-  return profile.id === 'full' ? base : `${base}${resource.pathname}`;
-}
-
 function createOAuthChallengeResponse(
   error: unknown,
-  profile: ServerProfile,
   oauthEnabled: boolean,
   details: Record<string, unknown> = {}
 ): Response | undefined {
@@ -116,11 +93,6 @@ function createOAuthChallengeResponse(
   // message cannot split the header value.
   const wwwAuthenticateDescription = errorMessage.replace(/[\r\n]+/g, ' ').trim();
   const wwwAuthenticate = [
-    ...(profile.advertiseOAuth
-      ? [
-          `resource_metadata="${escapeWWWAuthenticateValue(getOAuthProtectedResourceMetadataUrl(profile))}"`,
-        ]
-      : []),
     'error="invalid_token"',
     `error_description="${escapeWWWAuthenticateValue(wwwAuthenticateDescription)}"`,
   ].join(', ');
@@ -442,11 +414,6 @@ async function resolveCredentialFromHeaders(
   );
   const token = headerApiKey ?? bearer;
   if (!token) return undefined;
-  if (!profile.acceptApiKeys && !isFirecrawlOAuthAccessToken(token)) {
-    throw new Error(
-      `OAuth access token required for the Firecrawl MCP resource ${profile.endpoint}`
-    );
-  }
   if (!isFirecrawlOAuthAccessToken(token) && !isFirecrawlApiKey(token)) {
     return { invalid: true };
   }
@@ -459,35 +426,15 @@ async function resolveCredentialFromHeaders(
     return { credential: token, source: 'api-key' };
   }
 
-  let data = await introspectToken(token, profile.resourceUrl);
-  if (
-    isFirecrawlOAuthAccessToken(token) &&
-    !data.active &&
-    profile.acceptLegacyAudience
-  ) {
-    data = await introspectToken(token, DEFAULT_MCP_RESOURCE_URL);
-  }
+  const data = await introspectToken(token, profile.resourceUrl);
   if (!data.active || !data.api_key) {
     throw new InvalidOAuthCredentialError();
   }
-  const expectedAudience =
-    profile.acceptLegacyAudience &&
-    audienceMatchesResource(data.aud, DEFAULT_MCP_RESOURCE_URL)
-      ? DEFAULT_MCP_RESOURCE_URL
-      : profile.resourceUrl;
-  if (!audienceMatchesResource(data.aud, expectedAudience)) {
+  if (!audienceMatchesResource(data.aud, profile.resourceUrl)) {
     throw new Error('OAuth token audience does not match this resource');
   }
-  if (
-    profile.requireManagedOAuth &&
-    data.credential_purpose !== 'hosted_mcp_oauth'
-  ) {
-    throw new Error('OAuth token is not a managed Firecrawl MCP credential');
-  }
   if (data.credential_purpose === 'hosted_mcp_oauth') {
-    // expectedAudience, not profile.resourceUrl: it is the resource the token
-    // was actually validated against once the legacy fallback is applied.
-    requireDelegatedCredentialSigning(expectedAudience);
+    requireDelegatedCredentialSigning(profile.resourceUrl);
     return {
       managedOAuthApiKey: data.api_key,
       source: 'oauth',
@@ -551,11 +498,6 @@ async function authenticateRequest(
           keylessClientIp: extractClientIp(request),
         };
       }
-      if (!profile.acceptApiKeys) {
-        throw new Error(
-          `OAuth access token required for the Firecrawl MCP resource ${profile.endpoint}`
-        );
-      }
       throw new Error(
         'Firecrawl credentials required: OAuth access token (Authorization: Bearer fco_...) or API key (x-firecrawl-api-key)'
       );
@@ -595,67 +537,13 @@ async function authenticateRequest(
   return managedCred ? setManagedOAuthApiKey(session, managedCred) : session;
 }
 
-type SearchCompanionAuthMode = 'oauth' | 'api-key' | 'none';
-
-function searchCompanionAuthMode(
-  request?: AuthRequest,
-  session?: ServiceSession
-): SearchCompanionAuthMode {
-  if (session?.authType === 'oauth') return 'oauth';
-  if (session?.authType === 'api-key') return 'api-key';
-  // Mirror resolveCredentialFromHeaders precedence: explicit API-key headers
-  // win over Authorization when both are present.
-  const headerApiKey = normalizeHeader(
-    request?.headers?.['x-firecrawl-api-key'] ?? request?.headers?.['x-api-key']
-  );
-  if (headerApiKey) return 'api-key';
-  const bearer = request?.headers ? extractBearerToken(request.headers) : undefined;
-  if (bearer?.startsWith('fco_')) return 'oauth';
-  if (bearer) return 'api-key';
-  return 'none';
-}
-
-/**
- * Additive, intentionally low-cardinality companion traffic telemetry. This
- * is the only reliable way to establish whether the live companion is still
- * serving API-key consumers before its explicit OAuth-only cutover. Do not add
- * identifiers, credentials, request URLs, user agents, or hashes here.
- */
-function emitSearchCompanionAuthTelemetry(
-  hosted: boolean,
-  profile: ServerProfile,
-  request: AuthRequest | undefined,
-  outcome: 'accepted' | 'rejected',
-  session?: ServiceSession
-): void {
-  if (
-    !hosted ||
-    profile.id !== 'search' ||
-    profile.primary === true
-  ) {
-    return;
-  }
-  console.log(
-    '[MCP_SEARCH_AUTH]',
-    JSON.stringify({
-      auth_mode: searchCompanionAuthMode(request, session),
-      outcome,
-      profile: 'companion',
-      // Unique only to this telemetry record; it is not a cross-service
-      // correlation ID and does not accept client-controlled identifiers.
-      event_id: randomUUID(),
-      route: DEFAULT_MCP_SEARCH_ENDPOINT,
-    })
-  );
-}
-
 function emitLegacyKeyPathTelemetry(
   profile: ServerProfile,
   request: AuthRequest | undefined,
   outcome: 'accepted' | 'rejected',
   session?: ServiceSession
 ): void {
-  if (profile.id !== 'full' || !isLegacyKeyPathRequest(request)) return;
+  if (!isLegacyKeyPathRequest(request)) return;
   console.log(
     '[MCP_LEGACY_KEY_PATH]',
     JSON.stringify({
@@ -681,14 +569,6 @@ export function createServiceAuthenticate(
   ): Promise<ServiceSession> {
     return authenticateRequest(request, profile, options)
       .then((session) => {
-        session.profile = profile.id;
-        emitSearchCompanionAuthTelemetry(
-          options.hosted,
-          profile,
-          request,
-          session.credentialError ? 'rejected' : 'accepted',
-          session
-        );
         emitLegacyKeyPathTelemetry(
           profile,
           request,
@@ -698,12 +578,6 @@ export function createServiceAuthenticate(
         return session;
       })
       .catch((error) => {
-        emitSearchCompanionAuthTelemetry(
-          options.hosted,
-          profile,
-          request,
-          'rejected'
-        );
         emitLegacyKeyPathTelemetry(profile, request, 'rejected');
         if (error instanceof InvalidFirecrawlCredentialError) {
           throw createInvalidCredentialResponse(error);
@@ -712,7 +586,6 @@ export function createServiceAuthenticate(
           const recovery = invalidOAuthRecoveryPayload();
           const oauthChallenge = createOAuthChallengeResponse(
             new Error(recovery.message),
-            profile,
             options.hosted,
             recovery
           );
@@ -721,9 +594,9 @@ export function createServiceAuthenticate(
         if (error instanceof CredentialValidationUnavailableError) {
           throw createCredentialValidationUnavailableResponse(error);
         }
-        const shouldChallenge = requestShouldReceiveOAuthChallenge(request, profile);
+        const shouldChallenge = requestShouldReceiveOAuthChallenge(request);
         const oauthChallenge = shouldChallenge
-          ? createOAuthChallengeResponse(error, profile, options.hosted)
+          ? createOAuthChallengeResponse(error, options.hosted)
           : undefined;
         if (oauthChallenge) {
           throw oauthChallenge;

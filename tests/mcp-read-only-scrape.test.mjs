@@ -48,7 +48,6 @@ async function startHosted(t) {
   const api = await startFakeExchangeApi();
   t.after(() => api.close());
   const port = await getFreePort();
-  const searchPort = await getFreePort();
   const child = spawnServer({
     CLOUD_SERVICE: 'true',
     HTTP_STREAMABLE_SERVER: 'true',
@@ -58,20 +57,17 @@ async function startHosted(t) {
     FIRECRAWL_API_URL: api.url,
     KEYLESS_PROXY_SECRET: 'keyless-secret',
     PORT: String(port),
-    FIRECRAWL_MCP_SEARCH_PORT: String(searchPort),
   });
   t.after(() => stopChild(child));
   await waitForHealth(port, child);
-  await waitForHealth(searchPort, child);
-  return { api, port, searchPort };
+  return { api, port };
 }
 
 test('hosted scrape and search are read-only and load profiles without saving', async (t) => {
-  const { api, port, searchPort } = await startHosted(t);
+  const { api, port } = await startHosted(t);
   const headers = { 'x-api-key': 'fc-hosted-test' };
   for (const [label, endpoint, surfacePort] of [
     ['hosted full surface', '/v2/mcp', port],
-    ['search surface', '/v2/mcp-search', searchPort],
   ]) {
     const { tools } = await httpSession(surfacePort, endpoint, headers);
     const scrape = tools.find((tool) => tool.name === 'firecrawl_scrape');
@@ -94,7 +90,7 @@ test('hosted scrape and search are read-only and load profiles without saving', 
   );
   assert.equal(tools.some((tool) => /terms/.test(tool.name)), false, 'no tool accepts terms');
 
-  for (const [surfacePort, endpoint] of [[port, '/v2/mcp'], [searchPort, '/v2/mcp-search']]) {
+  for (const [surfacePort, endpoint] of [[port, '/v2/mcp']]) {
     for (const profile of [{ name: 'saved-login' }, { name: 'saved-login', saveChanges: true }]) {
       const scraped = await rpcResult(surfacePort, endpoint, {
         id: 3,
@@ -135,9 +131,9 @@ test('hosted scrape and search are read-only and load profiles without saving', 
   assert.equal(localSearch.annotations.readOnlyHint, true, 'local search annotation remains unchanged');
 });
 
-test('hosted scrape refuses terms acceptance on both surfaces and points to the dashboard', async (t) => {
-  const { api, port, searchPort } = await startHosted(t);
-  for (const [surfacePort, endpoint] of [[port, '/v2/mcp'], [searchPort, '/v2/mcp-search']]) {
+test('hosted scrape refuses terms acceptance and points to the dashboard', async (t) => {
+  const { api, port } = await startHosted(t);
+  for (const [surfacePort, endpoint] of [[port, '/v2/mcp']]) {
     const acceptance = { provider: 'firecrawl', capability: 'terms/accept', options: { provider: 'benzinga', version: 'v1', digest: 'a'.repeat(64), confirmed: true } };
     for (const alexandria of [
       acceptance,

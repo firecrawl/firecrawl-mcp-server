@@ -35,10 +35,9 @@ const searchDomainSchema = z
     'Domain must be a valid hostname without protocol or path'
   );
 
-// Parameter fields shared by both firecrawl_search surfaces. The full surface
-// adds `scrapeOptions` on top; the search surface uses these as-is (strict, no
-// scrapeOptions). Defining the field set once keeps the two surfaces from
-// drifting when a source type, category, or filter changes.
+// Parameter fields of firecrawl_search without `scrapeOptions`, which the
+// built-in tool adds on top. Exported through firecrawl-mcp/server so an
+// embedder's search tool can reuse the same field set.
 export const searchToolBaseFields = {
   toolDetail: z.enum(['compact', 'summary', 'full']).optional().describe('Compact by default. Compact returns only provider, capability and description; full includes contracts. Inspect selected compact tools with firecrawl_find_tools providers and capabilities.'),
   query: z
