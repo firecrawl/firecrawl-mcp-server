@@ -386,7 +386,7 @@ test('contract: local HTTP against a self-hosted API URL', async (t) => {
   });
 });
 
-test('contract: hosted full surface (API key, invalid credential) and search companion', async (t) => {
+test('contract: hosted full surface (API key, anonymous, invalid credential) and search companion', async (t) => {
   const searchPort = await getFreePort();
   const { port, child } = await startHttp(t, {
     CLOUD_SERVICE: 'true',
@@ -405,6 +405,7 @@ test('contract: hosted full surface (API key, invalid credential) and search com
       apiKey: await httpSurface(port, '/v2/mcp', keyed),
       invalidCredential: await httpSurface(port, '/v2/mcp', invalid),
     },
+    unauthenticated: await unauthenticatedList(port, '/v2/mcp'),
     calls: {
       apiKeyDeprecatedExtract: await httpCall(
         port,

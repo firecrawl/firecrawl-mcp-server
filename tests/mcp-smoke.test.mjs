@@ -837,6 +837,21 @@ test('HTTP cloud transport serves keyed sessions without advertising OAuth', asy
   );
   assert.equal(prm.status, 404);
 
+  // Hosted mode requires a credential: no keyless admission.
+  const anonymous = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
+    body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'tools/list', params: {} }),
+    headers: {
+      accept: 'application/json, text/event-stream',
+      'content-type': 'application/json',
+    },
+    method: 'POST',
+  });
+  assert.equal(anonymous.status, 401);
+  assert.doesNotMatch(
+    anonymous.headers.get('www-authenticate') ?? '',
+    /resource_metadata/
+  );
+
   const initialize = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({
       id: 2,

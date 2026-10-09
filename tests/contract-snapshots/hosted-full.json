@@ -66,6 +66,14 @@
       ]
     }
   },
+  "unauthenticated": {
+    "body": {
+      "error": "invalid_token",
+      "error_description": "Firecrawl credentials required: OAuth access token (Authorization: Bearer fco_...) or API key (x-firecrawl-api-key)"
+    },
+    "status": 401,
+    "wwwAuthenticate": "Bearer error=\"invalid_token\", error_description=\"Firecrawl credentials required: OAuth access token (Authorization: Bearer fco_...) or API key (x-firecrawl-api-key)\""
+  },
   "calls": {
     "apiKeyDeprecatedExtract": {
       "content": [
