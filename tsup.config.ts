@@ -6,21 +6,24 @@ const fastmcpPackage = JSON.parse(
 ) as { dependencies?: Record<string, string> };
 
 export default defineConfig({
-  entry: [
-    'src/index.ts',
-    'src/www-authenticate.ts',
-    'src/agent-hints.ts',
-    'src/origin.ts',
-    'src/introspection-cache.ts',
-    'src/keyless-signup-link.ts',
-  ],
+  entry: {
+    index: 'src/index.ts',
+    server: 'src/server.ts',
+    'www-authenticate': 'src/service/www-authenticate.ts',
+    'agent-hints': 'src/agent-hints.ts',
+    origin: 'src/origin.ts',
+    'introspection-cache': 'src/service/introspection-cache.ts',
+    'keyless-signup-link': 'src/keyless-signup-link.ts',
+  },
   format: ['esm'],
   platform: 'node',
   target: 'node22',
   clean: true,
   splitting: false,
   sourcemap: false,
-  dts: false,
+  // Declarations only for the library entry, whose public types do not
+  // reference fastmcp.
+  dts: { entry: { server: 'src/server.ts' } },
   // Bundle fastmcp so npm and npx installs run the pnpm-patched copy
   // (patches/fastmcp@4.3.2.patch). npm does not apply pnpm patches, so an
   // external fastmcp would load unpatched from the registry. Its own

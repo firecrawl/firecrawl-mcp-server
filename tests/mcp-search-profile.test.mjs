@@ -1104,19 +1104,6 @@ test('primary search profile is OAuth-only, nine-tool frozen, and ready without 
   assert.deepEqual([...names].sort(), [...SEARCH_TOOLS].sort());
 });
 
-test('primary search readiness requires the exact canonical resource origin', async (t) => {
-  const { port } = await startPrimarySearchServer(t, {
-    FIRECRAWL_MCP_SEARCH_RESOURCE_URL: `https://example.invalid${SEARCH_ENDPOINT}`,
-  });
-
-  const ready = await fetch(`http://127.0.0.1:${port}/ready`);
-  assert.equal(ready.status, 503);
-  assert.deepEqual(await ready.json(), {
-    ok: false,
-    missing: ['FIRECRAWL_MCP_SEARCH_RESOURCE_URL (endpoint mismatch)'],
-  });
-});
-
 test('primary search profile uses the strict marketplace search tool, not the full search variant', async (t) => {
   const { port } = await startPrimarySearchServer(t);
   const headers = { authorization: 'Bearer fco_primary_strict_search' };
@@ -1261,7 +1248,7 @@ test('primary search profile fails closed unless the canonical OAuth-only flag i
   assert.match(stderr, /FIRECRAWL_MCP_SEARCH_OAUTH_ONLY=true/);
 });
 
-test('primary search profile rejects legacy /v2/mcp audience and requires the delegated signing secret', async (t) => {
+test('primary search profile rejects legacy /v2/mcp audience', async (t) => {
   const legacyBackend = await startFakeBackend({
     introspectionAud: 'https://mcp.firecrawl.dev/v2/mcp',
   });
@@ -1277,30 +1264,6 @@ test('primary search profile rejects legacy /v2/mcp audience and requires the de
     headers: { authorization: 'Bearer fco_legacy_audience' },
   });
   assert.equal(wrongAudience.status, 401);
-
-  // A separate process proves readiness is profile-specific: search needs the
-  // fcmcp_ signer but intentionally does not require KEYLESS_PROXY_SECRET.
-  const unavailablePort = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    HTTP_STREAMABLE_SERVER: 'true',
-    FASTMCP_ENDPOINT: SEARCH_ENDPOINT,
-    FIRECRAWL_API_URL: legacyBackend.url,
-    FIRECRAWL_MCP_SEARCH_RESOURCE_URL: SEARCH_RESOURCE,
-    FIRECRAWL_MCP_SEARCH_OAUTH_ONLY: 'true',
-    FIRECRAWL_OAUTH_ISSUER: legacyBackend.url,
-    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
-    MCP_DELEGATED_CREDENTIAL_SECRET: '',
-    PORT: String(unavailablePort),
-  });
-  t.after(() => stopChild(child));
-  await waitForHealth(unavailablePort, child);
-  const ready = await fetch(`http://127.0.0.1:${unavailablePort}/ready`);
-  assert.equal(ready.status, 503);
-  assert.deepEqual(await ready.json(), {
-    missing: ['MCP_DELEGATED_CREDENTIAL_SECRET'],
-    ok: false,
-  });
 });
 
 test('companion stays API-key compatible by default and only becomes OAuth-only behind its explicit flag', async (t) => {

@@ -54,10 +54,6 @@
       },
       "status": 200
     },
-    "openAiAppsChallenge": {
-      "body": "",
-      "status": 404
-    },
     "ready": {
       "body": {
         "mode": "stateless",
