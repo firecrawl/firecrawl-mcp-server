@@ -6,6 +6,7 @@
 
 - Hosted mode (`CLOUD_SERVICE=true`) no longer writes per-call `[MCP_ACTION]` and `[MCP_AGENT_HINTS]` log lines or posts action-log records (`FIRECRAWL_MCP_ACTION_LOG_URL`, `FIRECRAWL_MCP_ACTION_LOG_SECRET`). These modules are now maintained with the hosted deployment. The `onToolResult` hook is unchanged, so embedders can still observe tool calls.
 - The `/.well-known/openai-apps-challenge` route (`OPENAI_APPS_CHALLENGE_TOKEN`) is removed in every HTTP mode. Hosted `/ready` no longer checks deployment configuration: the primary HTTP listener's `/ready` now returns `{"ok":true}` in every mode, as it already did for self-hosted HTTP. The hosted search instance keeps FastMCP's own `/ready` response.
+- Hosted keyless admission is removed. With `CLOUD_SERVICE=true`, an HTTP request without a credential is now rejected with 401 like any other missing credential, instead of being admitted as a rate-limited keyless session; `KEYLESS_PROXY_SECRET` is no longer read and client IPs are no longer forwarded. A request with an invalid credential on the full endpoint is still admitted and every tool call returns the `CREDENTIAL_INVALID` recovery payload. The search-only and account profiles never admitted keyless sessions and are unchanged. Local keyless stdio (no `FIRECRAWL_API_KEY` and no `FIRECRAWL_API_URL`) is unchanged.
 
 ## [3.29.0] - 2026-10-09
 

@@ -29,7 +29,6 @@ const TERMS_REQUIRED_BODY = {
 };
 
 async function startFakeExchangeApi(options = {}) {
-  const { keylessEligible = false } = options;
   const requests = [];
   const server = createServer(async (req, res) => {
     try {
@@ -56,10 +55,6 @@ async function startFakeExchangeApi(options = {}) {
 
     if (options.largeResult && (url.pathname === '/v2/search' || url.pathname.startsWith('/exchange/discover'))) return json(200, options.largeResult);
     if (options.apiStatus) return json(options.apiStatus, { success: false, error: 'Invalid API key' });
-
-    if (req.method === 'GET' && url.pathname === '/v2/keyless/eligibility') {
-      return json(200, { eligible: keylessEligible });
-    }
 
     if (url.pathname === '/exchange/skills/resolve')
       return json(200, { skills: [{ id: 'particle-podcasts' }] });

@@ -8,11 +8,6 @@ import type {
 } from '../server.js';
 import { createServiceAuthenticate } from './auth.js';
 import {
-  apiBaseUrl,
-  keylessForwardingHeaders,
-  requireKeylessEligibility,
-} from './keyless.js';
-import {
   getOAuthIssuer,
   SEARCH_PROFILE_INSTRUCTIONS,
   type ServerProfile,
@@ -37,7 +32,7 @@ export {
 } from './profiles.js';
 
 export type ServiceSettings = {
-  /** The hosted deployment: credential policy, keyless gating, logging, OAuth metadata. */
+  /** The hosted deployment: credential policy and OAuth metadata. */
   hosted: boolean;
   transport: 'stdio' | 'httpStream';
   apiKey?: string;
@@ -72,19 +67,15 @@ export function createServiceHooks(
       const credential = hasManagedOAuthCredential(serviceSession)
         ? credentialForOutboundRequest(serviceSession)
         : undefined;
-      const headers = keylessForwardingHeaders(serviceSession);
-      return credential || headers ? { credential, headers } : undefined;
+      return credential ? { credential } : undefined;
     };
   }
 
   if (!settings.hosted) return hooks;
 
-  const apiBase = apiBaseUrl(settings.apiUrl);
   return {
     ...hooks,
-    wrapTool: createToolGuard({ apiBaseUrl: apiBase }),
-    beforeKeylessRequest: (session, origin) =>
-      requireKeylessEligibility(apiBase, session as ServiceSession, origin),
+    wrapTool: createToolGuard(),
     ...(profile.advertiseOAuth
       ? {
           oauth: {

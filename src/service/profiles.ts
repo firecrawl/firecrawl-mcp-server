@@ -28,7 +28,11 @@ export type ServerProfile = {
   port: number;
   /** When set, only these tool names may register on this instance. */
   toolAllowlist?: Set<string>;
-  /** Allow the keyless free-tier fallback (no credential required). */
+  /**
+   * Admit a hosted request whose credential is not a Firecrawl API key or
+   * access token as a session that answers every tool call with recovery
+   * guidance, instead of rejecting it with 401.
+   */
   allowKeyless: boolean;
   /** Whether ordinary Firecrawl API keys are accepted for this identity. */
   acceptApiKeys: boolean;

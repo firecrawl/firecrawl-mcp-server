@@ -56,7 +56,6 @@ async function startHosted(t) {
     FIRECRAWL_API_KEY: '',
     FIRECRAWL_OAUTH_TOKEN: '',
     FIRECRAWL_API_URL: api.url,
-    KEYLESS_PROXY_SECRET: 'keyless-secret',
     PORT: String(port),
     FIRECRAWL_MCP_SEARCH_PORT: String(searchPort),
   });
