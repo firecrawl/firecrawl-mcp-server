@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Experimental MCP Apps view for Alexandria results, off by default. With `FIRECRAWL_MCP_APPS=true` (or `mcpApps: true` for embedders), `firecrawl_scrape` declares `_meta.ui.resourceUri` and the server serves `ui://firecrawl/alexandria-results.html` (`text/html;profile=mcp-app`). MCP Apps hosts such as ChatGPT and Claude render each Alexandria call as a table, with a bar chart when one column is numeric. Tool inputs and outputs are unchanged, and hosts without MCP Apps support ignore the metadata.
+
 ## [3.29.1] - 2026-10-09
 
 ### Added
