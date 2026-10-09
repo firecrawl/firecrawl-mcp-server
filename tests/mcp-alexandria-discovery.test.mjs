@@ -22,3 +22,22 @@ test('discovery progresses from categories to compact tools and selected contrac
   await call({ providers: ['particle'], capabilities: ['podcasts/episodes/search'] });
   assert.deepEqual(api.requests.at(-1).body.alexandria.options.expand, ['options', 'response', 'examples']);
 });
+
+test('find_tools validates urls at runtime without publishing a schema pattern', async (t) => {
+  const { api, client } = await startStdioWithApi(t);
+  const { tools } = await client.request('tools/list', {});
+  const urls = tools.find(tool => tool.name === 'firecrawl_find_tools').inputSchema.properties.urls;
+  assert.equal(urls.items.pattern, undefined);
+  assert.equal(urls.items.format, undefined);
+
+  const call = arguments_ => client.request('tools/call', { name: 'firecrawl_find_tools', arguments: arguments_ });
+  await call({ urls: ['HTTPS://www.amazon.com/dp/B0CX23V2ZK'] });
+  assert.deepEqual(api.requests.at(-1).body.alexandria.options.urls, ['HTTPS://www.amazon.com/dp/B0CX23V2ZK']);
+
+  const before = api.requests.length;
+  for (const url of ['www.amazon.com', 'https:www.amazon.com', 'ftp://example.com/file', 'javascript:alert(1)']) {
+    const rejected = await call({ urls: [url] }).then(result => result, error => error);
+    assert(rejected instanceof Error || rejected.isError, `expected ${url} to be rejected`);
+  }
+  assert.equal(api.requests.length, before);
+});

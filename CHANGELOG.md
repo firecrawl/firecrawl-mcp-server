@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- `firecrawl_find_tools` no longer publishes a `pattern` on `urls` items. ChatGPT's connector rejected valid https URLs against the escaped `^https?:\/\/` before the call reached the server, so URL-scoped discovery never ran there. The server still rejects anything that is not an absolute http(s) URL, and an uppercase scheme (`HTTPS://`) is now accepted.
+
 ### Removed
 
 - Hosted mode (`CLOUD_SERVICE=true`) no longer writes per-call `[MCP_ACTION]` and `[MCP_AGENT_HINTS]` log lines or posts action-log records (`FIRECRAWL_MCP_ACTION_LOG_URL`, `FIRECRAWL_MCP_ACTION_LOG_SECRET`). These modules are now maintained with the hosted deployment. The `onToolResult` hook is unchanged, so embedders can still observe tool calls.
