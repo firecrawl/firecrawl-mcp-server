@@ -295,7 +295,7 @@ Use **access** tokens (`fco_…`) only. Refresh tokens (`fcr_…`) must be excha
 - safe mode: scrape is read-only (see the scrape tool below);
 - `firecrawl_parse` accepts uploads only and never reads local files.
 
-`FASTMCP_ENDPOINT` selects the surface: `/v2/mcp` (default) serves the full tool set, `/v2/mcp-oauth` the account surface, and `/v2/mcp-search` the [search-only surface](#search-only-surface-hosted) described below.
+`FASTMCP_ENDPOINT` selects the surface: `/v2/mcp` (default) serves the full tool set, `/v2/mcp-oauth` the account surface, and `/v2/mcp-search` (which also requires `FIRECRAWL_MCP_SEARCH_OAUTH_ONLY=true`) the [search-only surface](#search-only-surface-hosted) described below.
 
 #### Search-only surface (hosted)
 
