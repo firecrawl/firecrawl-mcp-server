@@ -96,8 +96,6 @@ function spawnServer(env) {
       ...process.env,
       FIRECRAWL_API_KEY: '',
       FIRECRAWL_OAUTH_TOKEN: '',
-      MCP_DELEGATED_CREDENTIAL_SECRET:
-        'test-mcp-delegated-credential-secret-32',
       ...env,
     },
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -2170,7 +2168,7 @@ test('HTTP cloud transport accepts the x-firecrawl-api-key header', async (t) =>
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
-test('HTTP cloud authenticated Parse forwards ZDR for API-key and managed OAuth sessions', async (t) => {
+test('HTTP cloud authenticated Parse forwards ZDR for API-key sessions', async (t) => {
   const accountResource = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
   const backend = await startFakeFirecrawlBackend({
     introspectionHandler: ({ token }) =>
@@ -2180,17 +2178,6 @@ test('HTTP cloud authenticated Parse forwards ZDR for API-key and managed OAuth 
             api_key: 'fc-parse-api-key',
             credential_purpose: 'general',
             scope: 'firecrawl:global',
-          }
-        : token === 'fco_parse'
-        ? {
-            active: true,
-            api_key: 'fc-managed-parse-key',
-            api_key_id: '42',
-            aud: accountResource,
-            credential_purpose: 'hosted_mcp_oauth',
-            scope: 'firecrawl:global',
-            sub: '00000000-0000-4000-8000-000000000001',
-            team_id: '00000000-0000-4000-8000-000000000002',
           }
         : { active: false },
   });
@@ -2211,7 +2198,6 @@ test('HTTP cloud authenticated Parse forwards ZDR for API-key and managed OAuth 
 
   for (const [label, headers] of [
     ['api-key', { 'x-firecrawl-api-key': 'fc-parse-api-key' }],
-    ['managed-oauth', { authorization: 'Bearer fco_parse' }],
   ]) {
     const phaseOne = await httpToolCall(port, {
       endpoint: '/v2/mcp-oauth',
@@ -2270,8 +2256,8 @@ test('HTTP cloud authenticated Parse forwards ZDR for API-key and managed OAuth 
   const introspectedTokens = backend.requests
     .filter((request) => request.url === '/api/oauth/introspect')
     .map((request) => request.body.token);
-  assert.equal(uploads.length, 2);
-  assert.equal(parses.length, 2);
+  assert.equal(uploads.length, 1);
+  assert.equal(parses.length, 1);
   assert.deepEqual(
     feedbackRequests.map((request) => ({
       endpoint: request.body.endpoint,
@@ -2284,21 +2270,10 @@ test('HTTP cloud authenticated Parse forwards ZDR for API-key and managed OAuth 
       },
     ]
   );
-  assert.deepEqual(
-    introspectedTokens,
-    ['fco_parse'],
-    'only OAuth access tokens are introspected, and a repeat request reuses the cached answer'
-  );
+  assert.deepEqual(introspectedTokens, [], 'API keys are not introspected');
   assert.equal(uploads[0].headers.authorization, 'Bearer fc-parse-api-key');
   assert.equal(parses[0].headers.authorization, 'Bearer fc-parse-api-key');
-  for (const request of [uploads[1], parses[1]]) {
-    const assertion = request.headers.authorization?.replace(/^Bearer /, '');
-    assert.match(assertion ?? '', /^fcmcp_/);
-    assert.equal(assertion?.includes('fc-managed-parse-key'), false);
-    assert.equal(assertion?.includes('fco_parse'), false);
-  }
   assert.equal(parses[0].body.zeroDataRetention, true);
-  assert.equal(parses[1].body.zeroDataRetention, true);
 });
 
 test('credential validation outages do not misdirect clients into OAuth', async (t) => {
@@ -2642,60 +2617,6 @@ test('active introspection with an unknown credential purpose fails closed', asy
   await assertCredentialValidationUnavailable(response, 'unknown purpose');
 });
 
-test('a missing delegated signing secret names the resource it failed on', async (t) => {
-  const backend = await startFakeFirecrawlBackend({
-    introspectionHandler: () => ({
-      active: true,
-      api_key: 'fc-managed-secret',
-      api_key_id: '42',
-      aud: ACCOUNT_RESOURCE,
-      client_id: 'https://example.test/client',
-      credential_purpose: 'hosted_mcp_oauth',
-      scope: 'firecrawl:global',
-      sub: '00000000-0000-4000-8000-000000000001',
-      team_id: '00000000-0000-4000-8000-000000000002',
-    }),
-  });
-  t.after(() => backend.close());
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp-oauth',
-    FIRECRAWL_API_URL: backend.url,
-    FIRECRAWL_MCP_RESOURCE_URL: ACCOUNT_RESOURCE,
-    FIRECRAWL_OAUTH_ISSUER: backend.url,
-    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
-    HTTP_STREAMABLE_SERVER: 'true',
-    MCP_DELEGATED_CREDENTIAL_SECRET: '',
-    PORT: String(port),
-  });
-  t.after(() => stopChild(child));
-  let stderr = '';
-  child.stderr.on('data', (chunk) => {
-    stderr += chunk;
-  });
-  await waitForHealth(port, child);
-
-  const response = await fetch(`http://127.0.0.1:${port}/v2/mcp-oauth`, {
-    body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'tools/list', params: {} }),
-    headers: {
-      accept: 'application/json, text/event-stream',
-      authorization: 'Bearer fco_managed_token',
-      'content-type': 'application/json',
-    },
-    method: 'POST',
-  });
-  await assertCredentialValidationUnavailable(response, 'missing delegation secret');
-
-  // Introspection succeeded here, so the record has no status or timing. The
-  // resource is the only context distinguishing which surface was affected.
-  const record = await waitForCredentialValidationLog(() => stderr);
-  assert.ok(record, `missing validation log in ${stderr}`);
-  assert.equal(record.reason, 'delegated_signing_secret_missing');
-  assert.equal(record.resource, ACCOUNT_RESOURCE);
-  assert.equal(record.introspect_status, null);
-});
-
 test('each credential validation failure logs its own reason and status', async (t) => {
   const backend = await startFakeFirecrawlBackend();
   t.after(() => backend.close());
@@ -2818,112 +2739,6 @@ test('each credential validation failure logs its own reason and status', async 
     for (const secret of [clientToken, resolvedApiKey, 'introspect-secret-value']) {
       assert.doesNotMatch(stderr, new RegExp(secret), `${testCase.reason}: ${secret}`);
     }
-  }
-});
-
-test('hosted OAuth executes current and historical credit usage with delegated credentials', async (t) => {
-  const accountResource = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
-  const backend = await startFakeFirecrawlBackend({
-    introspectionHandler: ({ token }) =>
-      token === 'fco_credit_usage'
-        ? {
-            active: true,
-            api_key: 'fc-managed-credit-usage',
-            aud: accountResource,
-            credential_purpose: 'hosted_mcp_oauth',
-            scope: 'firecrawl:global',
-          }
-        : { active: false },
-  });
-  t.after(() => backend.close());
-
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp-oauth',
-    FIRECRAWL_API_URL: backend.url,
-    FIRECRAWL_MCP_RESOURCE_URL: accountResource,
-    FIRECRAWL_OAUTH_ISSUER: backend.url,
-    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
-    FIRECRAWL_API_KEY: 'fc-shared-env-must-not-be-used',
-    HTTP_STREAMABLE_SERVER: 'true',
-    PORT: String(port),
-  });
-  t.after(() => stopChild(child));
-  await waitForHealth(port, child);
-
-  const headers = {
-    authorization: 'Bearer fco_credit_usage',
-    'user-agent': 'hosted-oauth-usage-test/1.0',
-  };
-  const currentResponse = await httpToolCall(port, {
-    endpoint: '/v2/mcp-oauth',
-    headers,
-    id: 'hosted-oauth-current-credit-usage',
-    params: { arguments: {}, name: 'firecrawl_credit_usage' },
-  });
-  assert.equal(currentResponse.status, 200);
-  const currentResult = parseSseJson(await currentResponse.text()).result;
-  assert.notEqual(currentResult.isError, true);
-  assert.deepEqual(JSON.parse(currentResult.content[0].text), {
-    billingPeriodEnd: '2026-10-01T00:00:00.000Z',
-    billingPeriodStart: '2026-09-01T00:00:00.000Z',
-    planCredits: 1000,
-    remainingCredits: 750,
-  });
-
-  const historicalResponse = await httpToolCall(port, {
-    endpoint: '/v2/mcp-oauth',
-    headers,
-    id: 'hosted-oauth-historical-credit-usage',
-    params: {
-      arguments: { byApiKey: true },
-      name: 'firecrawl_credit_usage',
-    },
-  });
-  assert.equal(historicalResponse.status, 200);
-  const historicalResult = parseSseJson(await historicalResponse.text()).result;
-  assert.notEqual(historicalResult.isError, true);
-  assert.deepEqual(JSON.parse(historicalResult.content[0].text), {
-    periods: [
-      {
-        apiKey: 'Hosted OAuth key',
-        creditsUsed: 250,
-        endDate: null,
-        startDate: '2026-09-01T00:00:00.000Z',
-      },
-    ],
-    success: true,
-  });
-
-  const usageCalls = backend.requests.filter((request) =>
-    request.url?.startsWith('/v2/team/credit-usage')
-  );
-  assert.deepEqual(
-    usageCalls.map((request) => request.url),
-    [
-      '/v2/team/credit-usage',
-      '/v2/team/credit-usage/historical?byApiKey=true',
-    ]
-  );
-  for (const request of usageCalls) {
-    assert.equal(request.method, 'GET');
-    assert.equal(
-      request.headers['x-origin'],
-      `mcp-ua-hosted-oauth-usage-test@${serverVersion}`
-    );
-    const assertion = request.headers.authorization?.replace(/^Bearer /, '');
-    assert.match(assertion ?? '', /^fcmcp_/);
-    assert.notEqual(assertion, 'fc-shared-env-must-not-be-used');
-    const payload = JSON.parse(
-      Buffer.from(
-        assertion.split('.')[0].slice('fcmcp_'.length),
-        'base64url'
-      ).toString()
-    );
-    assert.equal(payload.api_key, 'fc-managed-credit-usage');
-    assert.equal(payload.purpose, 'hosted_mcp_oauth');
-    assert.equal(payload.aud, 'firecrawl-core');
   }
 });
 

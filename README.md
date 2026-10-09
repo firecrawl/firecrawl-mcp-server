@@ -277,6 +277,14 @@ Hosted Firecrawl can issue OAuth **access tokens** (`fco_…`) via the authoriza
 
 Use **access** tokens (`fco_…`) only. Refresh tokens (`fcr_…`) must be exchanged at the token endpoint, not passed to the scrape/search API.
 
+#### Hardened HTTP preset (`CLOUD_SERVICE=true`)
+
+`CLOUD_SERVICE=true` serves the standard tool set over streamable HTTP on `PORT` (default `3000`), bound to `0.0.0.0`, with stricter defaults for a shared deployment:
+
+- every request must carry a credential (an API key in `Authorization: Bearer`, `x-firecrawl-api-key` or `x-api-key`, or an OAuth access token); a request without one, or with a credential that is not a Firecrawl API key or access token, gets `401`;
+- safe mode: scrape is read-only (see the scrape tool below);
+- `firecrawl_parse` accepts uploads only and never reads local files.
+
 ### Configuration Examples
 
 For cloud API usage:
@@ -435,7 +443,7 @@ Scrape content from a single URL with advanced options.
 
 **Branding format:** Extracts comprehensive brand identity (colors, fonts, typography, spacing, logo, UI components) for design analysis or style replication.
 **Privacy:** Set `redactPII: true` to return content with personally identifiable information redacted.
-**Hosted server:** On the hosted server (`CLOUD_SERVICE=true`) scrape is read-only. It takes no browser `actions` and cannot accept provider terms. A named `profile` loads saved browser state without saving changes to it, and the full endpoint's `firecrawl_search` treats `scrapeOptions.profile` the same way. To save browser state to a profile, open the page with `firecrawl_interact` (see below). An organization admin accepts terms in the dashboard.
+**Hardened HTTP preset and the hosted server:** With `CLOUD_SERVICE=true`, as on the hosted server, scrape is read-only. It takes no browser `actions` and cannot accept provider terms. A named `profile` loads saved browser state without saving changes to it, and `firecrawl_search` treats `scrapeOptions.profile` the same way. To save browser state to a profile, open the page with `firecrawl_interact` (see below). An organization admin accepts terms in the dashboard.
 
 **Returns:**
 

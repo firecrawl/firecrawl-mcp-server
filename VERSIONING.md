@@ -11,20 +11,13 @@ The server provides versioned endpoints to maintain backward compatibility while
 
 ## Endpoints
 
-### Cloud Service (CLOUD_SERVICE=true)
+### Hardened HTTP preset (CLOUD_SERVICE=true)
 
-When running in cloud mode, the server provides versioned endpoints:
-
-#### V1 Endpoints (Legacy)
-- **SSE**: `/:apiKey/sse`
-- **Messages**: `/:apiKey/messages`
-
-#### V2 Endpoints (Current)
-- **SSE**: `/:apiKey/v2/sse`
-- **Messages**: `/:apiKey/v2/messages`
+Serves the standard tool set over streamable HTTP on `PORT`, bound to `0.0.0.0`, with a credential required on every request, safe mode on, and upload-only file access. See the README section "Hardened HTTP preset".
 
 #### Health Check
 - **Health**: `/health`
+- **Readiness**: `/ready`
 
 ### Local Service
 
@@ -102,9 +95,9 @@ TEST_BASE_URL=http://localhost:8080 TEST_API_KEY=your-key npm run test:endpoints
 
 ## Deployment
 
-### Cloud Service
+### Hardened HTTP preset
 ```bash
-# Start versioned cloud server
+# Start the server with CLOUD_SERVICE=true
 npm run start:cloud
 ```
 
@@ -122,7 +115,7 @@ HTTP_STREAMABLE_SERVER=true npm start
 
 ## Environment Variables
 
-- `CLOUD_SERVICE=true` - Enable versioned cloud endpoints
+- `CLOUD_SERVICE=true` - Hardened HTTP preset (credential required, safe mode, upload-only file access)
 - `FIRECRAWL_API_KEY` - Your Firecrawl API key
 - `FIRECRAWL_API_URL` - Custom Firecrawl API URL (optional)
 - `PORT` - Server port (default: 3000)

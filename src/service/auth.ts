@@ -15,8 +15,6 @@ import {
 import {
   credentialValidationUnavailable,
   CredentialValidationUnavailableError,
-  requireDelegatedCredentialSigning,
-  setManagedOAuthApiKey,
 } from './session-credential.js';
 import { getOAuthIssuer, type ServerProfile } from './profiles.js';
 import type { ServiceSession } from './session.js';
@@ -199,7 +197,6 @@ type CredentialMetadata = Pick<
 
 type ResolvedCredential = {
   credential?: string;
-  managedOAuthApiKey?: string;
   invalid?: boolean;
   source?: 'api-key' | 'oauth' | 'env';
   metadata?: CredentialMetadata;
@@ -426,12 +423,12 @@ async function resolveCredentialFromHeaders(
     throw new Error('OAuth token audience does not match this resource');
   }
   if (data.credential_purpose === 'hosted_mcp_oauth') {
-    requireDelegatedCredentialSigning(profile.resourceUrl);
-    return {
-      managedOAuthApiKey: data.api_key,
-      source: 'oauth',
-      metadata: credentialMetadata(data),
-    };
+    // A managed grant can only be forwarded as a deployment-specific delegated
+    // credential, which this server does not issue.
+    throw credentialValidationUnavailable({
+      reason: 'introspect_unusable_credential',
+      resource: profile.resourceUrl,
+    });
   }
   return {
     credential: data.api_key,
@@ -456,41 +453,24 @@ async function authenticateRequest(
     : undefined;
 
   const headerCred = resolved?.credential;
-  const managedCred = resolved?.managedOAuthApiKey;
   const envCred = options.apiKey;
 
   if (options.hosted) {
-    if (!headerCred && !managedCred) {
-      if (resolved?.invalid) {
-        // A supplied-but-invalid credential must reach the *agent*, not die as a
-        // transport 401. MCP clients treat a 401 at initialize/tools-list as
-        // "server unavailable" and never surface the response body to the model,
-        // so the recovery payload in that 401 was unreachable in a real session.
-        // Admit the session flagged with credentialError: the connection
-        // succeeds, tools list, and every tool call returns the
-        // CREDENTIAL_INVALID recovery payload as a 200 isError result. No
-        // credential is forwarded and no tool executes, so this grants zero
-        // functional access.
-        return {
-          authType: 'api-key',
-          credentialError: 'CREDENTIAL_INVALID',
-          firecrawlApiKey: undefined,
-        };
-      }
+    if (!headerCred) {
+      if (resolved?.invalid) throw new InvalidFirecrawlCredentialError();
       throw new Error(
         'Firecrawl credentials required: OAuth access token (Authorization: Bearer fco_...) or API key (x-firecrawl-api-key)'
       );
     }
-    const session: ServiceSession = {
+    return {
       authType: resolved?.source === 'oauth' ? 'oauth' : 'api-key',
       firecrawlApiKey: headerCred,
       ...(isLegacyKeyPathRequest(request) ? { keyTransport: 'path' as const } : {}),
       ...resolved?.metadata,
     };
-    return managedCred ? setManagedOAuthApiKey(session, managedCred) : session;
   }
 
-  const credential = headerCred ?? managedCred ?? envCred;
+  const credential = headerCred ?? envCred;
 
   // Self-hosted / stdio / HTTP streamable — headers supply MCP OAuth token when present
   const httpStreaming = options.transport === 'httpStream';
@@ -501,7 +481,7 @@ async function authenticateRequest(
     process.exit(1);
   }
 
-  const session: ServiceSession = {
+  return {
     authType:
       resolved?.source === 'oauth'
         ? 'oauth'
@@ -513,7 +493,6 @@ async function authenticateRequest(
     firecrawlApiKey: headerCred ?? envCred,
     ...resolved?.metadata,
   };
-  return managedCred ? setManagedOAuthApiKey(session, managedCred) : session;
 }
 
 function emitLegacyKeyPathTelemetry(
@@ -548,12 +527,7 @@ export function createServiceAuthenticate(
   ): Promise<ServiceSession> {
     return authenticateRequest(request, profile, options)
       .then((session) => {
-        emitLegacyKeyPathTelemetry(
-          profile,
-          request,
-          session.credentialError ? 'rejected' : 'accepted',
-          session
-        );
+        emitLegacyKeyPathTelemetry(profile, request, 'accepted', session);
         return session;
       })
       .catch((error) => {

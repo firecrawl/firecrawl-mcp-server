@@ -53,8 +53,6 @@ function spawnServer(env) {
   const child = spawn(process.execPath, ['dist/index.js'], {
     env: {
       ...process.env,
-      MCP_DELEGATED_CREDENTIAL_SECRET:
-        'test-mcp-delegated-credential-secret-32',
       ...env,
     },
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -110,9 +108,7 @@ async function startFakeBackend(options = {}) {
                 api_key: token.startsWith('fc-')
                   ? token
                   : apiKeyFromIntrospection,
-                credential_purpose: token.startsWith('fco_')
-                  ? 'hosted_mcp_oauth'
-                  : 'general',
+                credential_purpose: 'general',
                 scope: 'firecrawl:global',
                 ...(introspectionAud ? { aud: introspectionAud } : {}),
               }

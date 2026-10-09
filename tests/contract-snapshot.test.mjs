@@ -327,7 +327,7 @@ test('contract: local HTTP against a self-hosted API URL', async (t) => {
   });
 });
 
-test('contract: hosted full surface (API key, invalid credential)', async (t) => {
+test('contract: hosted full surface (API key)', async (t) => {
   const { port } = await startHttp(t, {
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
@@ -336,12 +336,10 @@ test('contract: hosted full surface (API key, invalid credential)', async (t) =>
     HTTP_STREAMABLE_SERVER: 'true',
   });
   const keyed = { authorization: 'Bearer fc-contract' };
-  const invalid = { authorization: 'Bearer not-a-firecrawl-key' };
 
   await matchSnapshot('hosted-full', {
     sessions: {
       apiKey: await httpSurface(port, '/v2/mcp', keyed),
-      invalidCredential: await httpSurface(port, '/v2/mcp', invalid),
     },
     calls: {
       apiKeyDeprecatedExtract: await httpCall(
@@ -351,15 +349,6 @@ test('contract: hosted full surface (API key, invalid credential)', async (t) =>
         'firecrawl_extract',
         {
           urls: ['https://example.com'],
-        }
-      ),
-      invalidCredentialSearch: await httpCall(
-        port,
-        '/v2/mcp',
-        invalid,
-        'firecrawl_search',
-        {
-          query: 'example',
         }
       ),
     },
