@@ -1944,16 +1944,53 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
     return json;
   }
 
+  /**
+   * GET through the SDK's HTTP layer, raising a non-2xx answer as the API's own
+   * error message. The layer rejects with the raw transport error, whose message
+   * is only "Request failed with status code 404"; the reason is in the body.
+   */
+  async function getCoreJson(
+    client: FirecrawlApp,
+    endpoint: string,
+    origin: string
+  ): Promise<any> {
+    try {
+      return await (client as any).http.get(endpoint, originHeaders(origin));
+    } catch (error) {
+      throw withApiReason(error);
+    }
+  }
+
+  /** A transport error with an HTTP response, as the API's own error message. */
+  function withApiReason(error: unknown): unknown {
+    const response = (error as { response?: { status?: number; data?: any } })
+      ?.response;
+    if (typeof response?.status !== 'number') return error;
+    return new CoreHttpError(
+      response.data?.error ||
+        (error instanceof Error ? error.message : String(error)),
+      response.status
+    );
+  }
+
   async function getCrawlStatusWithOrigin(
     client: FirecrawlApp,
     jobId: string,
     origin: string
   ): Promise<Record<string, unknown>> {
-    const res = await (client as any).http.get(
+    const res = await getCoreJson(
+      client,
       `/v2/crawl/${encodeURIComponent(jobId)}`,
-      originHeaders(origin)
+      origin
     );
-    return collectCrawlPages(client, jobId, origin, (res?.data ?? {}) as any);
+    const body = (res?.data ?? {}) as any;
+    if (body.success === false) {
+      throw new CoreHttpError(
+        body.error || 'Failed to get crawl status',
+        res?.status ?? 200
+      );
+    }
+    return collectCrawlPages(client, jobId, origin, body);
   }
 
   /** A crawl status body with its remaining result pages appended. */
@@ -1981,12 +2018,15 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
     const docs = initialDocs.slice();
     let current = body.next as string | null;
     while (current) {
-      const pageRes = await (client as any).http.get(
-        current,
-        originHeaders(origin)
-      );
+      const pageRes = await getCoreJson(client, current, origin);
       const payload = (pageRes?.data ?? {}) as any;
-      if (!payload.success) break;
+      // Returning the pages read so far would report a partial crawl as complete.
+      if (!payload.success) {
+        throw new CoreHttpError(
+          payload.error || 'Failed to get crawl results page',
+          pageRes?.status ?? 200
+        );
+      }
 
       const pageData = Array.isArray(payload.data)
         ? payload.data
@@ -2034,7 +2074,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       } catch (error) {
         const response = (error as { response?: { status?: number; headers?: any; data?: any } })
           ?.response;
-        if (response?.status !== 429) throw error;
+        if (response?.status !== 429) throw withApiReason(error);
         // A rate-limited status read says nothing about the crawl: wait it out.
         const retryAfter = String(
           response.headers?.['retry-after'] ?? response.data?.retry_after_seconds ?? ''
