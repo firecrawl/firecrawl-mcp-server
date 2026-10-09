@@ -26,7 +26,7 @@ import {
   hasManagedOAuthCredential,
 } from './session-credential.js';
 import type { ServiceSession } from './session.js';
-import { createToolCallLogger, createToolGuard } from './tool-guard.js';
+import { createToolGuard } from './tool-guard.js';
 
 export {
   getPrimaryEndpoint,
@@ -81,20 +81,9 @@ export function createServiceHooks(
   if (!settings.hosted) return hooks;
 
   const apiBase = apiBaseUrl(settings.apiUrl);
-  const logActions = !searchSurface;
   return {
     ...hooks,
-    wrapTool: createToolGuard({
-      profile,
-      apiUrl: settings.apiUrl,
-      apiBaseUrl: apiBase,
-      logActions,
-    }),
-    onToolResult: createToolCallLogger({
-      profile,
-      apiUrl: settings.apiUrl,
-      logActions,
-    }),
+    wrapTool: createToolGuard({ apiBaseUrl: apiBase }),
     beforeKeylessRequest: (session, origin) =>
       requireKeylessEligibility(apiBase, session as ServiceSession, origin),
     ...(profile.advertiseOAuth
