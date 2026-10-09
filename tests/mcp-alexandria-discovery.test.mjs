@@ -35,7 +35,7 @@ test('find_tools validates urls at runtime without publishing a schema pattern',
   assert.deepEqual(api.requests.at(-1).body.alexandria.options.urls, ['HTTPS://www.amazon.com/dp/B0CX23V2ZK']);
 
   const before = api.requests.length;
-  for (const url of ['www.amazon.com', 'ftp://example.com/file', 'javascript:alert(1)']) {
+  for (const url of ['www.amazon.com', 'https:www.amazon.com', 'ftp://example.com/file', 'javascript:alert(1)']) {
     const rejected = await call({ urls: [url] }).then(result => result, error => error);
     assert(rejected instanceof Error || rejected.isError, `expected ${url} to be rejected`);
   }

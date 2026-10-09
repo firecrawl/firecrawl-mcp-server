@@ -40,6 +40,7 @@ export function searchQueryIsValid(args: { query?: string }): boolean {
 // Validated at runtime only: a schema `pattern` here is published to clients, and
 // ChatGPT's connector rejected valid https URLs against the escaped `^https?:\/\/`.
 function isHttpUrl(value: string): boolean {
+  if (!/^https?:\/\//i.test(value)) return false;
   try {
     const { protocol } = new URL(value);
     return protocol === 'https:' || protocol === 'http:';
