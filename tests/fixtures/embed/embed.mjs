@@ -21,9 +21,25 @@ export async function startEmbedded(port) {
         registrar.addTool({
           name: 'embed_echo',
           description: 'Echo text with the caller tenant.',
+          icons: [{
+            src: 'https://example.com/icon.svg',
+            mimeType: 'image/svg+xml',
+            sizes: ['any'],
+          }],
           parameters: z.object({ text: z.string() }),
           execute: async ({ text }, { session }) =>
             `${session?.tenant}: ${text}`,
+        });
+      },
+      registerResources: ({ addResource }) => {
+        addResource({
+          uri: 'ui://example/app.html',
+          name: 'Example app',
+          mimeType: 'text/html;profile=mcp-app',
+          load: async (session) => ({
+            text: `<html>${session.tenant}</html>`,
+            _meta: { ui: { csp: { connectDomains: [], resourceDomains: [] } } },
+          }),
         });
       },
     },
