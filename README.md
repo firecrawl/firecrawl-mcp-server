@@ -1246,6 +1246,8 @@ Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`,
 
 FastMCP is bundled inside the package, so use the types exported from `firecrawl-mcp/server` (`Session`, `ToolDefinition`, `ToolRegistrar`, `FirecrawlMcpServerHooks` and others) rather than importing `fastmcp` yourself.
 
+The entry point also exports the helpers the built-in tools use, such as `recoveryPayload`, `normalizeHeader`, `requestOrigin`, `searchToolBaseFields`, `searchOutputSchema` and `structuredCompact`, so extra tools and hooks can match the built-in behaviour. They are unstable as well.
+
 ## Logging System
 
 The server includes comprehensive logging:

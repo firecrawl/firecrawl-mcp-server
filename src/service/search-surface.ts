@@ -2,29 +2,26 @@ import { z } from 'zod';
 import {
   ALEXANDRIA_CATALOGUE_VERTICALS,
   ALEXANDRIA_SEARCH_INSTRUCTIONS,
+  assertExchangeCredential,
   defaultDomainTools,
+  type ExtraToolsContext,
+  type FirecrawlMcpServerHooks,
   hasAlexandria,
   normalizeSearchSources,
-  searchQueryIsValid,
-} from '../alexandria';
-import { requestOrigin } from '../origin';
-import type {
-  ExtraToolsContext,
-  FirecrawlMcpServerHooks,
-  ToolRegistrar,
-  ToolResult,
-} from '../server.js';
-import { searchOutputSchema, structuredCompact } from '../tool-output';
-import {
-  assertExchangeCredential,
   postSearchWithFallback,
   relayExchangeError,
   relayTermsRequired,
   removeEmptyTopLevel,
+  requestOrigin,
   SEARCH_DOMAINS_CONFLICT_MESSAGE,
   searchDomainsAreExclusive,
+  searchOutputSchema,
+  searchQueryIsValid,
   searchToolBaseFields,
-} from '../tool-helpers.js';
+  structuredCompact,
+  type ToolRegistrar,
+  type ToolResult,
+} from '../server.js';
 import {
   SEARCH_PROFILE_TOOLS,
   SEARCH_SURFACE_VARIANT_TOOLS,

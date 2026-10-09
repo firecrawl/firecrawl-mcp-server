@@ -343,6 +343,20 @@ test('a 401 from an added tool is not treated as a Firecrawl credential rejectio
   assert.notEqual(result.structuredContent?.code, 'CREDENTIAL_INVALID');
 });
 
+test('changing the exported keyless tool set does not change the server', async () => {
+  const { KEYLESS_TOOL_NAMES, recoveryPayload } = await import('../dist/server.js');
+  const before = recoveryPayload('KEYLESS_ELIGIBILITY_UNAVAILABLE').available_tools;
+  KEYLESS_TOOL_NAMES.add('firecrawl_map');
+  try {
+    assert.deepEqual(
+      recoveryPayload('KEYLESS_ELIGIBILITY_UNAVAILABLE').available_tools,
+      before
+    );
+  } finally {
+    KEYLESS_TOOL_NAMES.delete('firecrawl_map');
+  }
+});
+
 // Feedback tools on a stdio instance that gets credentials only from hooks.
 // The stdio transport owns the process's stdin and stdout, so each case runs
 // in a child process.

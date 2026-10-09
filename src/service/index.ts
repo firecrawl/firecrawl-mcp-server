@@ -3,7 +3,9 @@
  * to the core server through its hooks. Only the CLI imports this directory;
  * nothing in the core depends on it.
  */
-import type { FirecrawlMcpServerHooks } from '../server.js';
+import type {
+  FirecrawlMcpServerHooks,
+} from '../server.js';
 import { createServiceAuthenticate } from './auth.js';
 import {
   apiBaseUrl,

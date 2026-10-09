@@ -3,8 +3,9 @@ import { randomUUID } from 'node:crypto';
 import {
   invalidApiKeyRecoveryPayload,
   invalidOAuthRecoveryPayload,
-} from '../recovery.js';
-import { normalizeHeader, withoutTrailingSlash } from '../headers.js';
+  normalizeHeader,
+  withoutTrailingSlash,
+} from '../server.js';
 import { escapeWWWAuthenticateValue } from './www-authenticate.js';
 import {
   createIntrospectionCache,

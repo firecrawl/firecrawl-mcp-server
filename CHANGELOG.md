@@ -1,10 +1,11 @@
 # Changelog
 
-## [Unreleased]
+## [3.29.0] - 2026-10-09
 
 ### Added
 
 - Unstable library entry point `firecrawl-mcp/server`: `createFirecrawlMcpServer(options)` builds a server instance for embedding in another runtime, with extension hooks under `unstable_hooks` (`authenticate`, `wrapTool`, `onToolResult`, `instructions`, `registerExtraTools`, `outboundRequest`, `beforeKeylessRequest`, `toolFilter`, `configureHttp`, `oauth`) and its own type declarations, so embedders do not import `fastmcp`. The API may change in any release. The `firecrawl-mcp` CLI is unchanged.
+- `firecrawl-mcp/server` also exports the helpers the built-in tools use (credential recovery payloads, header and origin helpers, search field definitions, the search output schema, search request and Alexandria error helpers, the read-only `KEYLESS_TOOL_NAMES` set, and `structuredCompact`), so embedded tools and hooks can behave like the built-in ones. They are unstable too.
 - `firecrawl_gov_search` queries `/v2/search/gov`, an index of primary law and regulatory material from US federal, state, and local government sources (statutes, regulations, codes, court opinions, and other government publications). It takes `query` and an optional `k` (1 to 100) and returns ranked results with a position, title, URL, and matched snippet. It is registered on the full surface for authenticated sessions and on the search surface (`/v2/mcp-search`), whose fixed tool set grows to nine.
 - `firecrawl_agent` now exposes the optional `effort` (`low`, `medium`, `high`), `maxCredits`, and `strictConstrainToURLs` parameters that `POST /v2/agent` already accepts, and forwards them in the request body.
 - `firecrawl_agent` can continue a thread: it accepts `threadId` and `mode` (`"extract"` or `"chat"`) and forwards them to `POST /v2/agent` through the SDK. On a follow-up, omitted `mode`, `urls` and `schema` carry over from the previous turn. `firecrawl_agent_status` now keeps `message` and `suggestions` in its structured content, next to `threadId` and `threadTurn`.

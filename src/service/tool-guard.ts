@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { normalizeHeader, withoutTrailingSlash } from '../headers.js';
-import { KEYLESS_TOOL_NAMES, recoveryPayload } from '../recovery.js';
 import {
-  UserError,
   type FirecrawlMcpServerHooks,
+  KEYLESS_TOOL_NAMES,
+  normalizeHeader,
+  recoveryPayload,
   type ToolDefinition,
+  UserError,
+  withoutTrailingSlash,
 } from '../server.js';
 import { hostedKeylessSignupUrl } from './keyless.js';
 import type { ServerProfile } from './profiles.js';

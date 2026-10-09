@@ -1,5 +1,8 @@
-import { normalizeHeader, withoutTrailingSlash } from '../headers.js';
-import type { HttpApp } from '../server.js';
+import {
+  type HttpApp,
+  normalizeHeader,
+  withoutTrailingSlash,
+} from '../server.js';
 import {
   DEFAULT_MCP_SEARCH_RESOURCE_URL,
   getPrimaryEndpoint,

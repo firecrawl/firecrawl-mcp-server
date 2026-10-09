@@ -68,6 +68,7 @@ import { CoreHttpError } from './core-http-error.js';
 import { normalizeHeader } from './headers.js';
 import {
   FIRECRAWL_CREDENTIAL_REJECTED,
+  KEYLESS_TOOL_NAMES,
   keylessQuotaReason,
   keylessSignupUrlFrom,
   recoveryPayload,
@@ -349,6 +350,52 @@ export interface FirecrawlMcpServer {
   start(args: FirecrawlMcpServerStartArgs): Promise<void>;
   stop(): Promise<void>;
 }
+
+/*
+ * Helpers the built-in tools use, exported so embedders can build tools and
+ * hooks that behave like the built-in ones. Unstable, like the rest of this
+ * entry point.
+ */
+export { normalizeHeader, withoutTrailingSlash } from './headers.js';
+export { originHeaders, requestOrigin } from './origin.js';
+export {
+  invalidApiKeyRecoveryPayload,
+  invalidOAuthRecoveryPayload,
+  keylessQuotaReason,
+  keylessSignupUrlFrom,
+  recoveryPayload,
+} from './recovery.js';
+export {
+  ALEXANDRIA_CATALOGUE_VERTICALS,
+  ALEXANDRIA_SEARCH_INSTRUCTIONS,
+  defaultDomainTools,
+  hasAlexandria,
+  normalizeSearchSources,
+  searchQueryIsValid,
+} from './alexandria.js';
+export { searchOutputSchema } from './tool-output.js';
+export {
+  assertExchangeCredential,
+  postSearchWithFallback,
+  relayExchangeError,
+  relayTermsRequired,
+  removeEmptyTopLevel,
+  SEARCH_DOMAINS_CONFLICT_MESSAGE,
+  searchDomainsAreExclusive,
+  searchToolBaseFields,
+} from './tool-helpers.js';
+
+/**
+ * Tools a keyless session can call. A copy, so changing it cannot change
+ * which tools the server itself treats as keyless.
+ */
+const keylessToolNames: ReadonlySet<string> = new Set(KEYLESS_TOOL_NAMES);
+export { keylessToolNames as KEYLESS_TOOL_NAMES };
+
+/** Compact JSON text of `data`, with `data` as structured content when it is an object. */
+const structuredCompactResult: (data: unknown) => ToolResult =
+  structuredCompact;
+export { structuredCompactResult as structuredCompact };
 
 const authResultByRequest = Symbol('firecrawlMcpAuthResult');
 
