@@ -242,6 +242,24 @@ export async function relayTermsRequired<T>(
     return await run();
   } catch (error) {
     throwIfTermsRequired(error, context);
+    const response = (error as { response?: { status?: number; data?: unknown; headers?: Record<string, unknown> } } | null)?.response;
+    if (context.tool === 'firecrawl_search' && response?.status && response.status !== 401) {
+      const data = response.data as { error?: unknown } | null;
+      const message = typeof data?.error === 'string'
+        ? data.error
+        : `Search request failed (HTTP ${response.status})`;
+      const retryAfter = response.headers?.['retry-after'];
+      const retryAfterSeconds = typeof retryAfter === 'string' && /^\d+$/.test(retryAfter)
+        ? Number(retryAfter)
+        : undefined;
+      const hints = readErrorAgentHints(error);
+      throw new UserError(message, {
+        status: response.status,
+        error: message,
+        ...(Number.isSafeInteger(retryAfterSeconds) ? { retryAfterSeconds } : {}),
+        ...(hints ? { agent_hints: hints } : {}),
+      });
+    }
     throw error;
   }
 }
