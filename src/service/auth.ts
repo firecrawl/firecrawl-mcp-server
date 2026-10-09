@@ -59,12 +59,6 @@ function isFirecrawlApiKey(token: string): boolean {
   return token.startsWith('fc-');
 }
 
-function isLegacyKeyPathRequest(request: AuthRequest | undefined): boolean {
-  return (
-    normalizeHeader(request?.headers?.['x-firecrawl-key-transport']) === 'path'
-  );
-}
-
 function requestShouldReceiveOAuthChallenge(
   request: AuthRequest | undefined,
   profile: ServerProfile
@@ -546,7 +540,6 @@ async function authenticateRequest(
     const session: ServiceSession = {
       authType: resolved?.source === 'oauth' ? 'oauth' : 'api-key',
       firecrawlApiKey: headerCred,
-      ...(isLegacyKeyPathRequest(request) ? { keyTransport: 'path' as const } : {}),
       ...resolved?.metadata,
     };
     return managedCred ? setManagedOAuthApiKey(session, managedCred) : session;
@@ -632,24 +625,6 @@ function emitSearchCompanionAuthTelemetry(
   );
 }
 
-function emitLegacyKeyPathTelemetry(
-  profile: ServerProfile,
-  request: AuthRequest | undefined,
-  outcome: 'accepted' | 'rejected',
-  session?: ServiceSession
-): void {
-  if (profile.id !== 'full' || !isLegacyKeyPathRequest(request)) return;
-  console.log(
-    '[MCP_LEGACY_KEY_PATH]',
-    JSON.stringify({
-      auth_type: session?.authType ?? 'none',
-      key_transport: 'path',
-      outcome,
-      resource: profile.resourceUrl,
-    })
-  );
-}
-
 /**
  * Builds the `authenticate` hook for one profile. FastMCP runs it on every
  * request (including `tools/list`), so a rejection here yields a 401 with the
@@ -672,12 +647,6 @@ export function createServiceAuthenticate(
           session.credentialError ? 'rejected' : 'accepted',
           session
         );
-        emitLegacyKeyPathTelemetry(
-          profile,
-          request,
-          session.credentialError ? 'rejected' : 'accepted',
-          session
-        );
         return session;
       })
       .catch((error) => {
@@ -687,7 +656,6 @@ export function createServiceAuthenticate(
           request,
           'rejected'
         );
-        emitLegacyKeyPathTelemetry(profile, request, 'rejected');
         if (error instanceof InvalidFirecrawlCredentialError) {
           throw createInvalidCredentialResponse(error);
         }

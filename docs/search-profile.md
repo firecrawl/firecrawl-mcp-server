@@ -127,8 +127,8 @@ The bundled hosted deployment fixes the public path at `/v2/mcp-search`, the
 internal search port at `3001`, and the OAuth resource at
 `https://mcp.firecrawl.dev/v2/mcp-search`. `FIRECRAWL_MCP_SEARCH_ENABLED` is the
 supported operational toggle. Node-level overrides for the port, endpoint, and
-resource exist for isolated tests only; they do not update `docker/nginx.conf`
-or the authorization server allowlist.
+resource exist for isolated tests only; they do not update the deployment's
+proxy routes or the authorization server allowlist.
 
 ## Tests
 

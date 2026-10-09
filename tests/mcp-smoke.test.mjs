@@ -3172,56 +3172,6 @@ test('hosted OAuth executes current and historical credit usage with delegated c
   }
 });
 
-test('legacy key-in-path telemetry is sanitized and does not leak the credential', async (t) => {
-  const backend = await startFakeFirecrawlBackend();
-  t.after(() => backend.close());
-  const port = await getFreePort();
-  const legacyCredential = 'fc-legacy-path-secret';
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp',
-    FIRECRAWL_API_URL: backend.url,
-    FIRECRAWL_OAUTH_ISSUER: backend.url,
-    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
-    HTTP_STREAMABLE_SERVER: 'true',
-    PORT: String(port),
-  });
-  let stdout = '';
-  child.stdout.on('data', (chunk) => {
-    stdout += chunk;
-  });
-  t.after(() => stopChild(child));
-  await waitForHealth(port, child);
-
-  const response = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
-    body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'tools/list', params: {} }),
-    headers: {
-      accept: 'application/json, text/event-stream',
-      'content-type': 'application/json',
-      'x-firecrawl-api-key': legacyCredential,
-      'x-firecrawl-key-transport': 'path',
-    },
-    method: 'POST',
-  });
-  assert.equal(response.status, 200);
-  const legacyTools = parseSseJson(await response.text()).result.tools.map((tool) => tool.name);
-  assert.ok(legacyTools.includes('firecrawl_scrape'));
-  assert.ok(legacyTools.includes('firecrawl_search'));
-  assert.ok(legacyTools.includes('firecrawl_map'), legacyTools.join(', '));
-  await delay(25);
-
-  const telemetry = stdout
-    .split(/\r?\n/)
-    .find((line) => line.includes('[MCP_LEGACY_KEY_PATH]'));
-  assert.ok(telemetry, stdout);
-  assert.match(telemetry, /"key_transport":"path"/);
-  assert.match(telemetry, /"outcome":"accepted"/);
-  assert.match(telemetry, /"resource":"https:\/\/mcp\.firecrawl\.dev\/v2\/mcp"/);
-  assert.doesNotMatch(telemetry, new RegExp(legacyCredential));
-  assert.doesNotMatch(telemetry, /\bfc-[^\s"]+/);
-  assert.doesNotMatch(telemetry, /(?:\d{1,3}\.){3}\d{1,3}|::1/);
-});
-
 test('hosted profile selection fails closed for an unsupported endpoint', async () => {
   const child = spawnServer({
     CLOUD_SERVICE: 'true',
@@ -3269,10 +3219,6 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
     HTTP_STREAMABLE_SERVER: 'true',
     PORT: String(port),
-  });
-  let stdout = '';
-  child.stdout.on('data', (chunk) => {
-    stdout += chunk;
   });
   t.after(() => stopChild(child));
   await waitForHealth(port, child);
@@ -3332,29 +3278,6 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
     'CREDENTIAL_INVALID must not advertise tools the agent cannot call'
   );
 
-  const invalidLegacyPath = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
-    body: JSON.stringify({ id: 4, jsonrpc: '2.0', method: 'tools/list', params: {} }),
-    headers: {
-      accept: 'application/json, text/event-stream',
-      'content-type': 'application/json',
-      'x-firecrawl-api-key': 'fc-invalid',
-      'x-firecrawl-key-transport': 'path',
-    },
-    method: 'POST',
-  });
-  assert.equal(invalidLegacyPath.status, 200);
-  const invalidLegacyJson = parseSseJson(await invalidLegacyPath.text());
-  assert.ok((invalidLegacyJson.result?.tools?.length ?? 0) > 0);
-  await delay(25);
-  // A well-formed API key is admitted at connect time because Core owns the
-  // verdict. The legacy-path record must still contain no credential material.
-  const legacyTelemetry = stdout
-    .split(/\r?\n/)
-    .find((line) => line.includes('[MCP_LEGACY_KEY_PATH]'));
-  assert.ok(legacyTelemetry, stdout);
-  assert.match(legacyTelemetry, /"outcome":"accepted"/);
-  assert.doesNotMatch(legacyTelemetry, /\bfc-[^\s"]+/);
-  assert.doesNotMatch(legacyTelemetry, /(?:\d{1,3}\.){3}\d{1,3}|::1/);
   const introspectedTokens = backend.requests
     .filter((request) => request.url === '/api/oauth/introspect')
     .map((request) => request.body.token);
