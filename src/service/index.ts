@@ -7,11 +7,6 @@ import type {
   FirecrawlMcpServerHooks,
 } from '../server.js';
 import { createServiceAuthenticate } from './auth.js';
-import {
-  apiBaseUrl,
-  keylessForwardingHeaders,
-  requireKeylessEligibility,
-} from './keyless.js';
 import type { ServerProfile } from './profiles.js';
 import {
   credentialForOutboundRequest,
@@ -27,7 +22,7 @@ export {
 } from './profiles.js';
 
 export type ServiceSettings = {
-  /** The hosted deployment: credential policy and keyless gating. */
+  /** The hosted deployment: credential policy. */
   hosted: boolean;
   transport: 'stdio' | 'httpStream';
   apiKey?: string;
@@ -51,18 +46,11 @@ export function createServiceHooks(
       const credential = hasManagedOAuthCredential(serviceSession)
         ? credentialForOutboundRequest(serviceSession)
         : undefined;
-      const headers = keylessForwardingHeaders(serviceSession);
-      return credential || headers ? { credential, headers } : undefined;
+      return credential ? { credential } : undefined;
     };
   }
 
   if (!settings.hosted) return hooks;
 
-  const apiBase = apiBaseUrl(settings.apiUrl);
-  return {
-    ...hooks,
-    wrapTool: createToolGuard({ apiBaseUrl: apiBase }),
-    beforeKeylessRequest: (session, origin) =>
-      requireKeylessEligibility(apiBase, session as ServiceSession, origin),
-  };
+  return { ...hooks, wrapTool: createToolGuard() };
 }

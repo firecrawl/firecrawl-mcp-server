@@ -41,7 +41,6 @@ const BASE_ENV = {
   FIRECRAWL_OAUTH_TOKEN: '',
   HOST: '127.0.0.1',
   HTTP_STREAMABLE_SERVER: '',
-  KEYLESS_PROXY_SECRET: '',
   PORT: '',
   SSE_LOCAL: '',
 };
@@ -328,14 +327,13 @@ test('contract: local HTTP against a self-hosted API URL', async (t) => {
   });
 });
 
-test('contract: hosted full surface (API key, keyless, invalid credential)', async (t) => {
+test('contract: hosted full surface (API key, invalid credential)', async (t) => {
   const { port } = await startHttp(t, {
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_API_URL: UNREACHABLE_API_URL,
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'contract-introspect-secret',
     HTTP_STREAMABLE_SERVER: 'true',
-    KEYLESS_PROXY_SECRET: 'contract-keyless-secret',
   });
   const keyed = { authorization: 'Bearer fc-contract' };
   const invalid = { authorization: 'Bearer not-a-firecrawl-key' };
@@ -343,7 +341,6 @@ test('contract: hosted full surface (API key, keyless, invalid credential)', asy
   await matchSnapshot('hosted-full', {
     sessions: {
       apiKey: await httpSurface(port, '/v2/mcp', keyed),
-      keyless: await httpSurface(port, '/v2/mcp', {}),
       invalidCredential: await httpSurface(port, '/v2/mcp', invalid),
     },
     calls: {
@@ -354,15 +351,6 @@ test('contract: hosted full surface (API key, keyless, invalid credential)', asy
         'firecrawl_extract',
         {
           urls: ['https://example.com'],
-        }
-      ),
-      keylessAccountOnlyTool: await httpCall(
-        port,
-        '/v2/mcp',
-        {},
-        'firecrawl_map',
-        {
-          url: 'https://example.com',
         }
       ),
       invalidCredentialSearch: await httpCall(

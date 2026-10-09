@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import dotenv from 'dotenv';
-import { normalizeHeader } from './headers.js';
 import {
   createFirecrawlMcpServer,
   type FirecrawlMcpServerOptions,
@@ -89,16 +88,6 @@ const args: FirecrawlMcpServerStartArgs =
         },
       }
     : { transportType: 'stdio' };
-
-if (
-  hosted &&
-  primaryProfile.allowKeyless &&
-  !normalizeHeader(process.env.KEYLESS_PROXY_SECRET)
-) {
-  console.warn(
-    '[firecrawl-mcp] KEYLESS_PROXY_SECRET is missing; keyless requests will be unavailable.'
-  );
-}
 
 if (
   transport === 'stdio' &&

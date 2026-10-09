@@ -12,7 +12,6 @@ import {
   INTROSPECTION_INACTIVE_TTL_MS,
   introspectionTtlMs,
 } from './introspection-cache.js';
-import { extractSingleTrustedClientIp } from './keyless-client-ip.js';
 import {
   credentialValidationUnavailable,
   CredentialValidationUnavailableError,
@@ -29,7 +28,7 @@ type AuthRequest = {
 };
 
 export type ServiceAuthOptions = {
-  /** Apply the hosted session policy (credential required, keyless admission). */
+  /** Apply the hosted session policy (credential required). */
   hosted: boolean;
   /** Credential used when a request does not carry one. */
   apiKey?: string;
@@ -37,13 +36,6 @@ export type ServiceAuthOptions = {
   apiUrl?: string;
   transport: 'stdio' | 'httpStream';
 };
-
-/** Best-effort end-user client IP from the incoming MCP request headers. */
-function extractClientIp(request?: {
-  headers: IncomingHttpHeaders;
-}): string | undefined {
-  return extractSingleTrustedClientIp(request?.headers?.['x-forwarded-for']);
-}
 
 function extractBearerToken(headers: IncomingHttpHeaders): string | undefined {
   const headerAuth = normalizeHeader(headers['authorization']);
@@ -474,28 +466,15 @@ async function authenticateRequest(
         // transport 401. MCP clients treat a 401 at initialize/tools-list as
         // "server unavailable" and never surface the response body to the model,
         // so the recovery payload in that 401 was unreachable in a real session.
-        // On the keyless+API-key endpoint, admit the session flagged with
-        // credentialError: the connection succeeds, tools list, and every tool
-        // call returns the CREDENTIAL_INVALID recovery payload as a 200 isError
-        // result — the same agent-legible path keyless quota recovery uses. No
+        // Admit the session flagged with credentialError: the connection
+        // succeeds, tools list, and every tool call returns the
+        // CREDENTIAL_INVALID recovery payload as a 200 isError result. No
         // credential is forwarded and no tool executes, so this grants zero
-        // functional access. OAuth-only surfaces (e.g. /v2/mcp-search) keep the
-        // hard 401 credential-rejection contract they already advertise.
-        if (profile.allowKeyless) {
-          return {
-            authType: 'api-key',
-            credentialError: 'CREDENTIAL_INVALID',
-            firecrawlApiKey: undefined,
-            keylessClientIp: extractClientIp(request),
-          };
-        }
-        throw new InvalidFirecrawlCredentialError();
-      }
-      if (profile.allowKeyless) {
+        // functional access.
         return {
-          authType: 'keyless',
+          authType: 'api-key',
+          credentialError: 'CREDENTIAL_INVALID',
           firecrawlApiKey: undefined,
-          keylessClientIp: extractClientIp(request),
         };
       }
       throw new Error(

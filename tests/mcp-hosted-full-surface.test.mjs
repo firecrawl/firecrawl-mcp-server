@@ -250,7 +250,6 @@ async function startHostedServer(t, extraEnv = {}) {
     HTTP_STREAMABLE_SERVER: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp',
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
-    KEYLESS_PROXY_SECRET: 'delegation-secret',
     FIRECRAWL_API_URL: defaultBackend.url,
     FIRECRAWL_OAUTH_ISSUER: defaultBackend.url,
     PORT: String(fullPort),

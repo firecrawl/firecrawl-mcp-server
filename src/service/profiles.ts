@@ -7,8 +7,6 @@ export const DEFAULT_MCP_RESOURCE_URL = 'https://mcp.firecrawl.dev/v2/mcp';
 export type ServerProfile = {
   /** OAuth protected-resource identifier that access tokens must be issued for. */
   resourceUrl: string;
-  /** Allow the keyless free-tier fallback (no credential required). */
-  allowKeyless: boolean;
 };
 
 export function getOAuthIssuer(): string {
@@ -29,6 +27,5 @@ export function makePrimaryProfile(): ServerProfile {
     resourceUrl:
       normalizeHeader(process.env.FIRECRAWL_MCP_RESOURCE_URL) ??
       DEFAULT_MCP_RESOURCE_URL,
-    allowKeyless: true,
   };
 }
