@@ -37,6 +37,17 @@ export function searchQueryIsValid(args: { query?: string }): boolean {
   return !!args.query?.trim();
 }
 
+// Validated at runtime only: a schema `pattern` here is published to clients, and
+// ChatGPT's connector rejected valid https URLs against the escaped `^https?:\/\/`.
+function isHttpUrl(value: string): boolean {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === 'https:' || protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 export const findToolsSchema = z
   .object({
     query: z.string().trim().min(1).max(2000).optional().describe('Semantic lookup of tools for the data you need. Selectors constrain the search.'),
@@ -44,12 +55,13 @@ export const findToolsSchema = z
       .array(
         z
           .string()
-          .url()
-          .regex(/^https?:\/\//)
+          .refine(isHttpUrl, 'Each URL must be an absolute http(s) URL.')
+          .describe('Absolute http(s) page URL.')
       )
       .min(1)
       .max(100)
-      .optional(),
+      .optional()
+      .describe('Pages whose website you need data from; returns the tools that cover that site. Pass a page URL, not only the domain.'),
     providers: z.array(z.string().min(1)).min(1).max(50).optional().describe('Provider IDs returned by category browsing. Lists compact tools by default.'),
     categories: z.array(z.string().min(1)).min(1).max(50).optional().describe('Category IDs returned by an empty call. Lists providers by default.'),
     groups: z.array(z.string().min(1)).min(1).max(50).optional().describe('Optional group IDs for explicit group browsing.'),

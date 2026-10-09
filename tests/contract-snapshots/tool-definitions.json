@@ -2066,7 +2066,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_find_tools@9dd2800b8610": {
+  "firecrawl_find_tools@38b3f1dae247": {
     "annotations": {
       "title": "Find Tools",
       "readOnlyHint": true,
@@ -2087,12 +2087,13 @@
           "maxLength": 2000
         },
         "urls": {
+          "description": "Pages whose website you need data from; returns the tools that cover that site. Pass a page URL, not only the domain.",
           "minItems": 1,
           "maxItems": 100,
           "type": "array",
           "items": {
-            "type": "string",
-            "pattern": "^https?:\\/\\/"
+            "description": "Absolute http(s) page URL.",
+            "type": "string"
           }
         },
         "providers": {
