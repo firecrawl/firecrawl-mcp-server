@@ -14,6 +14,7 @@ export default defineConfig({
     origin: 'src/origin.ts',
     'introspection-cache': 'src/service/introspection-cache.ts',
     'keyless-signup-link': 'src/keyless-signup-link.ts',
+    'mcp-apps': 'src/mcp-apps.ts',
   },
   format: ['esm'],
   platform: 'node',
