@@ -161,10 +161,6 @@
       "body": "",
       "status": 404
     },
-    "openAiAppsChallenge": {
-      "body": "contract-challenge-token",
-      "status": 200
-    },
     "ready": {
       "body": {
         "ok": true

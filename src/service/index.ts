@@ -35,7 +35,6 @@ export {
   resolveCredentialFromEnv,
   type ServerProfile,
 } from './profiles.js';
-export { registerServiceRoutes } from './http.js';
 
 export type ServiceSettings = {
   /** The hosted deployment: credential policy, keyless gating, logging, OAuth metadata. */

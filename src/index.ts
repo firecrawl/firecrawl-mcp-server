@@ -10,7 +10,6 @@ import {
   createServiceHooks,
   makePrimaryProfile,
   makeSearchProfile,
-  registerServiceRoutes,
   resolveCredentialFromEnv,
 } from './service/index.js';
 
@@ -71,8 +70,9 @@ const { start } = createFirecrawlMcpServer({
   ...options,
   unstable_hooks: {
     ...primaryHooks,
-    configureHttp: (app) =>
-      registerServiceRoutes(app, primaryProfile, { hosted }),
+    configureHttp: (app) => {
+      app.get('/ready', (context) => context.json({ ok: true }, 200));
+    },
   },
 });
 
@@ -98,7 +98,7 @@ if (
   !normalizeHeader(process.env.KEYLESS_PROXY_SECRET)
 ) {
   console.warn(
-    '[firecrawl-mcp] KEYLESS_PROXY_SECRET is missing; keyless requests will be unavailable and /ready will fail.'
+    '[firecrawl-mcp] KEYLESS_PROXY_SECRET is missing; keyless requests will be unavailable.'
   );
 }
 

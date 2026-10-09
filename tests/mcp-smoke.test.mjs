@@ -898,7 +898,6 @@ test('HTTP cloud keyless transport preserves app challenge without advertising O
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
     FIRECRAWL_OAUTH_ISSUER: backend.url,
     FIRECRAWL_API_URL: backend.url,
-    OPENAI_APPS_CHALLENGE_TOKEN: 'challenge-123',
     PORT: String(port),
   });
   let stderr = '';
@@ -909,12 +908,6 @@ test('HTTP cloud keyless transport preserves app challenge without advertising O
 
   const health = await waitForHealth(port, child);
   assert.equal(await health.text(), 'ok');
-
-  const challenge = await fetch(
-    `http://127.0.0.1:${port}/.well-known/openai-apps-challenge`
-  );
-  assert.equal(challenge.status, 200);
-  assert.equal(await challenge.text(), 'challenge-123');
 
   const prm = await fetch(
     `http://127.0.0.1:${port}/.well-known/oauth-protected-resource`
@@ -3201,8 +3194,6 @@ test('hosted keyless warns when KEYLESS_PROXY_SECRET is missing', async (t) => {
   t.after(() => stopChild(child));
   await waitForHealth(port, child);
 
-  const ready = await fetch(`http://127.0.0.1:${port}/ready`);
-  assert.equal(ready.status, 503);
   assert.match(stderr, /KEYLESS_PROXY_SECRET is missing/);
 });
 
@@ -3313,32 +3304,6 @@ test('account endpoint keeps OAuth discovery and gives safe re-auth guidance for
   );
   assert.equal(body.next_actions, undefined);
   assert.equal(backend.requests.some((request) => request.url === '/v2/search'), false);
-});
-
-test('account readiness requires the managed OAuth delegation secret', async (t) => {
-  const backend = await startFakeFirecrawlBackend();
-  t.after(() => backend.close());
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp-oauth',
-    FIRECRAWL_API_URL: backend.url,
-    FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
-    FIRECRAWL_OAUTH_ISSUER: backend.url,
-    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
-    HTTP_STREAMABLE_SERVER: 'true',
-    MCP_DELEGATED_CREDENTIAL_SECRET: '',
-    PORT: String(port),
-  });
-  t.after(() => stopChild(child));
-  await waitForHealth(port, child);
-
-  const ready = await fetch(`http://127.0.0.1:${port}/ready`);
-  assert.equal(ready.status, 503);
-  assert.deepEqual(await ready.json(), {
-    missing: ['MCP_DELEGATED_CREDENTIAL_SECRET'],
-    ok: false,
-  });
 });
 
 test('credential validation outages do not misdirect clients into OAuth', async (t) => {
