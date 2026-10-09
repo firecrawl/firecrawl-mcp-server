@@ -1,6 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [3.29.1] - 2026-10-09
+
+### Added
+
+- Scrape formats accept `images` for page image URLs, including the shared scrape options used by search, crawl, and browser interaction. Other formats are unchanged.
 
 ### Removed
 
