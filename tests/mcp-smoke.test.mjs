@@ -2912,7 +2912,6 @@ test('HTTP cloud keyless Parse rejects zeroDataRetention before any backend call
   t.after(() => stopChild(child));
   await waitForHealth(port, child);
 
-  const requestIds = [];
   for (const arguments_ of [
     { filePath: '/not-read-by-hosted-mcp/zdr.pdf', zeroDataRetention: true },
     { uploadRef: 'test-upload-ref', zeroDataRetention: true },
@@ -2934,24 +2933,12 @@ test('HTTP cloud keyless Parse rejects zeroDataRetention before any backend call
     assert.equal(result.structuredContent.option, 'zeroDataRetention');
     assert.match(result.structuredContent.message, /omit zeroDataRetention/i);
     assert.doesNotMatch(result.structuredContent.message, /connect an account/i);
-    requestIds.push(
-      assertServerGeneratedRequestId(result.structuredContent, [
-        clientRequestId,
-        jsonRpcId,
-      ])
-    );
+    assertServerGeneratedRequestId(result.structuredContent, [
+      clientRequestId,
+      jsonRpcId,
+    ]);
   }
   assert.equal(backend.requests.length, 0, JSON.stringify(backend.requests));
-  const loggedErrorRequestIds = stderr
-    .split(/\r?\n/)
-    .filter((line) => line.startsWith('[MCP_ACTION] '))
-    .map((line) => JSON.parse(line.slice('[MCP_ACTION] '.length)))
-    .filter(
-      (entry) =>
-        entry.tool_name === 'firecrawl_parse' && entry.status === 'error'
-    )
-    .map((entry) => entry.request_id);
-  assert.deepEqual(new Set(loggedErrorRequestIds), new Set(requestIds));
   assert.equal(stderr.includes('keyless-zdr-secret'), false, stderr);
   assert.equal(stderr.includes('8.8.8.44'), false, stderr);
 });
@@ -3227,7 +3214,6 @@ test('account endpoint challenges anonymous clients and accepts API keys', async
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp-oauth',
     FIRECRAWL_API_URL: backend.url,
-    FIRECRAWL_MCP_ACTION_LOG_SECRET: 'action-secret',
     FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
     FIRECRAWL_OAUTH_ISSUER: backend.url,
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
@@ -3337,7 +3323,6 @@ test('account readiness requires the managed OAuth delegation secret', async (t)
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp-oauth',
     FIRECRAWL_API_URL: backend.url,
-    FIRECRAWL_MCP_ACTION_LOG_SECRET: 'action-secret',
     FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
     FIRECRAWL_OAUTH_ISSUER: backend.url,
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
@@ -3907,7 +3892,6 @@ test('account endpoint accepts legacy OAuth one way and delegates managed keys',
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp-oauth',
     FIRECRAWL_API_URL: backend.url,
-    FIRECRAWL_MCP_ACTION_LOG_SECRET: 'action-secret',
     FIRECRAWL_MCP_RESOURCE_URL: accountResource,
     FIRECRAWL_OAUTH_ISSUER: backend.url,
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
@@ -3995,42 +3979,6 @@ test('account endpoint accepts legacy OAuth one way and delegates managed keys',
     .map((request) => request.body.resource);
   assert.deepEqual(legacyAttempts, [accountResource, legacyResource]);
 
-  for (let i = 0; i < 20; i += 1) {
-    if (
-      backend.requests.filter(
-        (request) => request.url === '/v2/mcp/action-logs'
-      ).length === 4
-    ) {
-      break;
-    }
-    await delay(25);
-  }
-  const actionLogs = backend.requests.filter(
-    (request) => request.url === '/v2/mcp/action-logs'
-  );
-  assert.equal(actionLogs.length, 4);
-  const deprecatedExtractLog = actionLogs.find(
-    request => request.body.tool_name === 'firecrawl_extract'
-  );
-  assert.ok(deprecatedExtractLog);
-  assert.equal(deprecatedExtractLog.body.status, 'error');
-  assert.equal(deprecatedExtractLog.body.error_class, 'UserError');
-
-  for (const request of actionLogs) {
-    assert.equal(request.headers.authorization, 'Bearer action-secret');
-    assert.equal(request.body.auth_type, 'oauth');
-    assert.equal(request.body.api_key_id, '42');
-    assert.equal(request.body.team_id, metadata.team_id);
-    assert.equal(request.body.user_id, metadata.sub);
-    assert.equal(request.body.oauth_client_id, metadata.client_id);
-    assert.equal(request.body.resource, accountResource);
-    assert.equal(JSON.stringify(request.body).includes('fc-managed-secret'), false);
-    assert.equal(JSON.stringify(request.body).includes('fco_'), false);
-  }
-  assert.equal(
-    actionLogs.filter(request => request.body.status === 'success').length,
-    3
-  );
   assert.equal(stderr.includes('fc-managed-secret'), false);
   assert.equal(stderr.includes('fco_account'), false);
   assert.equal(stderr.includes('fco_legacy'), false);
