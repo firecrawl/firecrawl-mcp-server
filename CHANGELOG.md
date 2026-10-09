@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- `firecrawl_check_crawl_status` (and the polling inside `firecrawl_crawl`) now reports the API's own error message, for example `Job not found`, instead of `Request failed with status code 404`. A results page that the API cannot return now fails the call instead of returning the pages read so far as a finished crawl.
+
 ## [3.29.1] - 2026-10-09
 
 ### Added
