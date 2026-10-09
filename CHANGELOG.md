@@ -5,7 +5,7 @@
 ### Removed
 
 - Hosted mode (`CLOUD_SERVICE=true`) no longer writes per-call `[MCP_ACTION]` and `[MCP_AGENT_HINTS]` log lines or posts action-log records (`FIRECRAWL_MCP_ACTION_LOG_URL`, `FIRECRAWL_MCP_ACTION_LOG_SECRET`). These modules are now maintained with the hosted deployment. The `onToolResult` hook is unchanged, so embedders can still observe tool calls.
-- Hosted mode no longer serves the `/.well-known/openai-apps-challenge` route (`OPENAI_APPS_CHALLENGE_TOKEN`), and its `/ready` no longer checks hosted deployment configuration. `/ready` now returns `{"ok":true}` in every HTTP mode, as it already did for self-hosted HTTP.
+- The `/.well-known/openai-apps-challenge` route (`OPENAI_APPS_CHALLENGE_TOKEN`) is removed in every HTTP mode. Hosted `/ready` no longer checks deployment configuration; `/ready` now returns `{"ok":true}` in every HTTP mode, as it already did for self-hosted HTTP.
 
 ## [3.29.0] - 2026-10-09
 
