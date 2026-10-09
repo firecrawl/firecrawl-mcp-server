@@ -51,7 +51,6 @@ const BASE_ENV = {
   HOST: '127.0.0.1',
   HTTP_STREAMABLE_SERVER: '',
   KEYLESS_PROXY_SECRET: '',
-  OPENAI_APPS_CHALLENGE_TOKEN: '',
   PORT: '',
   SSE_LOCAL: '',
 };
@@ -397,7 +396,6 @@ test('contract: hosted full surface (API key, keyless, invalid credential) and s
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'contract-introspect-secret',
     HTTP_STREAMABLE_SERVER: 'true',
     KEYLESS_PROXY_SECRET: 'contract-keyless-secret',
-    OPENAI_APPS_CHALLENGE_TOKEN: 'contract-challenge-token',
   });
   await waitForHealth(searchPort, child);
   const keyed = { authorization: 'Bearer fc-contract' };
@@ -444,10 +442,6 @@ test('contract: hosted full surface (API key, keyless, invalid credential) and s
         port,
         '/.well-known/oauth-protected-resource'
       ),
-      openAiAppsChallenge: await getRoute(
-        port,
-        '/.well-known/openai-apps-challenge'
-      ),
       ready: await getRoute(port, '/ready'),
     },
   });
@@ -460,10 +454,6 @@ test('contract: hosted full surface (API key, keyless, invalid credential) and s
       oauthProtectedResource: await getRoute(
         searchPort,
         `/.well-known/oauth-protected-resource${SEARCH_ENDPOINT}`
-      ),
-      openAiAppsChallenge: await getRoute(
-        searchPort,
-        '/.well-known/openai-apps-challenge'
       ),
       ready: await getRoute(searchPort, '/ready'),
     },
