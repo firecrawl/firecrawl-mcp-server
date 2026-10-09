@@ -920,6 +920,7 @@ export function createFirecrawlMcpServer(
           'rawHtml',
           'screenshot',
           'links',
+          'images',
           'summary',
           'changeTracking',
           'branding',
