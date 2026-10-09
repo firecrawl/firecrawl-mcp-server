@@ -287,11 +287,21 @@ Hosted Firecrawl can issue OAuth **access tokens** (`fco_…`) via the authoriza
 
 Use **access** tokens (`fco_…`) only. Refresh tokens (`fcr_…`) must be exchanged at the token endpoint, not passed to the scrape/search API.
 
+#### Hardened HTTP preset (`CLOUD_SERVICE=true`)
+
+`CLOUD_SERVICE=true` serves the tools over streamable HTTP on `PORT` (default `3000`), bound to `0.0.0.0`, with stricter defaults for a shared deployment:
+
+- every request must carry a credential (an API key or an OAuth access token);
+- safe mode: scrape is read-only (see the scrape tool below);
+- `firecrawl_parse` accepts uploads only and never reads local files.
+
+`FASTMCP_ENDPOINT` selects the surface: `/v2/mcp` (default) serves the full tool set, `/v2/mcp-oauth` the account surface, and `/v2/mcp-search` the [search-only surface](#search-only-surface-hosted) described below.
+
 #### Search-only surface (hosted)
 
-In hosted mode (`CLOUD_SERVICE=true`) a second in-process instance serves the [search-only endpoint](#search-only-endpoint). The bundled service has a fixed deployment contract: nginx routes `/v2/mcp-search` to the instance on local port `3001`, and the OAuth protected-resource identifier is `https://mcp.firecrawl.dev/v2/mcp-search`.
+In hosted mode (`CLOUD_SERVICE=true`) a second in-process instance serves the [search-only endpoint](#search-only-endpoint) on local port `3001`. The hosted deployment's reverse proxy routes `/v2/mcp-search` to that port, and the OAuth protected-resource identifier is `https://mcp.firecrawl.dev/v2/mcp-search`.
 
-`FIRECRAWL_MCP_SEARCH_ENABLED` (default `true`) is the supported operational toggle; set it to `false` to prevent the search instance from starting. The Node process also accepts `FIRECRAWL_MCP_SEARCH_PORT`, `FIRECRAWL_MCP_SEARCH_ENDPOINT`, and `FIRECRAWL_MCP_SEARCH_RESOURCE_URL` for isolated tests. Those overrides do not reconfigure the bundled nginx routes or the authorization server allowlist and must not be used independently in the hosted deployment.
+`FIRECRAWL_MCP_SEARCH_ENABLED` (default `true`) is the supported operational toggle; set it to `false` to prevent the search instance from starting. The Node process also accepts `FIRECRAWL_MCP_SEARCH_PORT`, `FIRECRAWL_MCP_SEARCH_ENDPOINT`, and `FIRECRAWL_MCP_SEARCH_RESOURCE_URL` for isolated tests. Those overrides do not reconfigure the deployment's proxy routes or the authorization server allowlist and must not be used independently in the hosted deployment.
 
 The search instance requires authentication for every request (including `tools/list`) and rejects OAuth tokens whose audience does not match its own resource.
 
@@ -453,7 +463,7 @@ Scrape content from a single URL with advanced options.
 
 **Branding format:** Extracts comprehensive brand identity (colors, fonts, typography, spacing, logo, UI components) for design analysis or style replication.
 **Privacy:** Set `redactPII: true` to return content with personally identifiable information redacted.
-**Hosted server:** On the hosted server (`CLOUD_SERVICE=true`) scrape is read-only. It takes no browser `actions` and cannot accept provider terms. A named `profile` loads saved browser state without saving changes to it, and the full endpoint's `firecrawl_search` treats `scrapeOptions.profile` the same way. To save browser state to a profile, open the page with `firecrawl_interact` (see below). An organization admin accepts terms in the dashboard.
+**Hardened HTTP preset and the hosted server:** With `CLOUD_SERVICE=true`, as on the hosted server, scrape is read-only. It takes no browser `actions` and cannot accept provider terms. A named `profile` loads saved browser state without saving changes to it, and the full endpoint's `firecrawl_search` treats `scrapeOptions.profile` the same way. To save browser state to a profile, open the page with `firecrawl_interact` (see below). An organization admin accepts terms in the dashboard.
 
 **Returns:**
 
