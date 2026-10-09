@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import dotenv from 'dotenv';
-import { normalizeHeader } from './headers.js';
 import {
   createFirecrawlMcpServer,
   type FirecrawlMcpServerOptions,
@@ -10,7 +9,6 @@ import {
   createServiceHooks,
   makePrimaryProfile,
   makeSearchProfile,
-  registerServiceRoutes,
   resolveCredentialFromEnv,
 } from './service/index.js';
 
@@ -71,8 +69,9 @@ const { start } = createFirecrawlMcpServer({
   ...options,
   unstable_hooks: {
     ...primaryHooks,
-    configureHttp: (app) =>
-      registerServiceRoutes(app, primaryProfile, { hosted }),
+    configureHttp: (app) => {
+      app.get('/ready', (context) => context.json({ ok: true }, 200));
+    },
   },
 });
 
@@ -93,16 +92,6 @@ const args: FirecrawlMcpServerStartArgs =
     : { transportType: 'stdio' };
 
 if (
-  hosted &&
-  primaryProfile.allowKeyless &&
-  !normalizeHeader(process.env.KEYLESS_PROXY_SECRET)
-) {
-  console.warn(
-    '[firecrawl-mcp] KEYLESS_PROXY_SECRET is missing; keyless requests will be unavailable and /ready will fail.'
-  );
-}
-
-if (
   transport === 'stdio' &&
   !process.env.FIRECRAWL_API_KEY &&
   !process.env.FIRECRAWL_API_URL
@@ -119,9 +108,10 @@ if (
 
 await start(args);
 
-// Bring up the search surface as a second in-process instance on its own port.
-// The pod's nginx routes its public path here; the full surface above is
-// untouched. Only registered in the hosted profile and when not disabled.
+// Bring up the search surface as a second in-process instance on its own port
+// (FIRECRAWL_MCP_SEARCH_PORT); a reverse proxy in front of the process routes
+// its public path there. The full surface above is untouched. Only registered
+// in the hosted profile and when not disabled.
 const searchProfileEnabled =
   hosted &&
   primaryProfile.id === 'full' &&

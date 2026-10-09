@@ -9,6 +9,13 @@
 ### Removed
 
 - Hosted mode (`CLOUD_SERVICE=true`) no longer writes per-call `[MCP_ACTION]` and `[MCP_AGENT_HINTS]` log lines or posts action-log records (`FIRECRAWL_MCP_ACTION_LOG_URL`, `FIRECRAWL_MCP_ACTION_LOG_SECRET`). These modules are now maintained with the hosted deployment. The `onToolResult` hook is unchanged, so embedders can still observe tool calls.
+- The `/.well-known/openai-apps-challenge` route (`OPENAI_APPS_CHALLENGE_TOKEN`) is removed in every HTTP mode. Hosted `/ready` no longer checks deployment configuration: the primary HTTP listener's `/ready` now returns `{"ok":true}` in every mode, as it already did for self-hosted HTTP. The hosted search instance keeps FastMCP's own `/ready` response.
+- Hosted keyless admission is removed. With `CLOUD_SERVICE=true`, an HTTP request without a credential is now rejected with 401 like any other missing credential, instead of being admitted as a rate-limited keyless session; `KEYLESS_PROXY_SECRET` is no longer read and client IPs are no longer forwarded. A request with an invalid credential on the full endpoint is still admitted and every tool call returns the `CREDENTIAL_INVALID` recovery payload. The search-only and account profiles never admitted keyless sessions and are unchanged. Local keyless stdio (no `FIRECRAWL_API_KEY` and no `FIRECRAWL_API_URL`) is unchanged.
+- The service image files `docker/nginx.conf` and `docker/entrypoint.sh` are removed, along with the internal marker header and log line for their credential-in-path route (`X-Firecrawl-Key-Transport`, `[MCP_LEGACY_KEY_PATH]`). The standard `Dockerfile` image is unchanged.
+
+### Changed
+
+- `CLOUD_SERVICE=true` is documented as a hardened HTTP preset: streamable HTTP bound to `0.0.0.0`, a credential required on every request, safe mode, and upload-only file access. The account and search-only surfaces selected by `FASTMCP_ENDPOINT` are unchanged, and `npm run start:cloud` still starts the preset.
 
 ## [3.29.0] - 2026-10-09
 

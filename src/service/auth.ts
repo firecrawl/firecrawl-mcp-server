@@ -13,7 +13,6 @@ import {
   INTROSPECTION_INACTIVE_TTL_MS,
   introspectionTtlMs,
 } from './introspection-cache.js';
-import { extractSingleTrustedClientIp } from './keyless-client-ip.js';
 import {
   credentialValidationUnavailable,
   CredentialValidationUnavailableError,
@@ -35,7 +34,7 @@ type AuthRequest = {
 };
 
 export type ServiceAuthOptions = {
-  /** Apply the hosted session policy (credential required, keyless admission). */
+  /** Apply the hosted session policy (credential required). */
   hosted: boolean;
   /** Credential used when a request does not carry one. */
   apiKey?: string;
@@ -43,13 +42,6 @@ export type ServiceAuthOptions = {
   apiUrl?: string;
   transport: 'stdio' | 'httpStream';
 };
-
-/** Best-effort end-user client IP from the incoming MCP request headers. */
-function extractClientIp(request?: {
-  headers: IncomingHttpHeaders;
-}): string | undefined {
-  return extractSingleTrustedClientIp(request?.headers?.['x-forwarded-for']);
-}
 
 function extractBearerToken(headers: IncomingHttpHeaders): string | undefined {
   const headerAuth = normalizeHeader(headers['authorization']);
@@ -65,12 +57,6 @@ function isFirecrawlOAuthAccessToken(token: string): boolean {
 
 function isFirecrawlApiKey(token: string): boolean {
   return token.startsWith('fc-');
-}
-
-function isLegacyKeyPathRequest(request: AuthRequest | undefined): boolean {
-  return (
-    normalizeHeader(request?.headers?.['x-firecrawl-key-transport']) === 'path'
-  );
 }
 
 function requestShouldReceiveOAuthChallenge(
@@ -527,29 +513,20 @@ async function authenticateRequest(
         // transport 401. MCP clients treat a 401 at initialize/tools-list as
         // "server unavailable" and never surface the response body to the model,
         // so the recovery payload in that 401 was unreachable in a real session.
-        // On the keyless+API-key endpoint, admit the session flagged with
-        // credentialError: the connection succeeds, tools list, and every tool
-        // call returns the CREDENTIAL_INVALID recovery payload as a 200 isError
-        // result — the same agent-legible path keyless quota recovery uses. No
+        // On the full endpoint, admit the session flagged with credentialError:
+        // the connection succeeds, tools list, and every tool call returns the
+        // CREDENTIAL_INVALID recovery payload as a 200 isError result. No
         // credential is forwarded and no tool executes, so this grants zero
-        // functional access. OAuth-only surfaces (e.g. /v2/mcp-search) keep the
-        // hard 401 credential-rejection contract they already advertise.
+        // functional access. The account and search surfaces keep the hard 401
+        // credential-rejection contract they already advertise.
         if (profile.allowKeyless) {
           return {
             authType: 'api-key',
             credentialError: 'CREDENTIAL_INVALID',
             firecrawlApiKey: undefined,
-            keylessClientIp: extractClientIp(request),
           };
         }
         throw new InvalidFirecrawlCredentialError();
-      }
-      if (profile.allowKeyless) {
-        return {
-          authType: 'keyless',
-          firecrawlApiKey: undefined,
-          keylessClientIp: extractClientIp(request),
-        };
       }
       if (!profile.acceptApiKeys) {
         throw new Error(
@@ -563,7 +540,6 @@ async function authenticateRequest(
     const session: ServiceSession = {
       authType: resolved?.source === 'oauth' ? 'oauth' : 'api-key',
       firecrawlApiKey: headerCred,
-      ...(isLegacyKeyPathRequest(request) ? { keyTransport: 'path' as const } : {}),
       ...resolved?.metadata,
     };
     return managedCred ? setManagedOAuthApiKey(session, managedCred) : session;
@@ -649,24 +625,6 @@ function emitSearchCompanionAuthTelemetry(
   );
 }
 
-function emitLegacyKeyPathTelemetry(
-  profile: ServerProfile,
-  request: AuthRequest | undefined,
-  outcome: 'accepted' | 'rejected',
-  session?: ServiceSession
-): void {
-  if (profile.id !== 'full' || !isLegacyKeyPathRequest(request)) return;
-  console.log(
-    '[MCP_LEGACY_KEY_PATH]',
-    JSON.stringify({
-      auth_type: session?.authType ?? 'none',
-      key_transport: 'path',
-      outcome,
-      resource: profile.resourceUrl,
-    })
-  );
-}
-
 /**
  * Builds the `authenticate` hook for one profile. FastMCP runs it on every
  * request (including `tools/list`), so a rejection here yields a 401 with the
@@ -689,12 +647,6 @@ export function createServiceAuthenticate(
           session.credentialError ? 'rejected' : 'accepted',
           session
         );
-        emitLegacyKeyPathTelemetry(
-          profile,
-          request,
-          session.credentialError ? 'rejected' : 'accepted',
-          session
-        );
         return session;
       })
       .catch((error) => {
@@ -704,7 +656,6 @@ export function createServiceAuthenticate(
           request,
           'rejected'
         );
-        emitLegacyKeyPathTelemetry(profile, request, 'rejected');
         if (error instanceof InvalidFirecrawlCredentialError) {
           throw createInvalidCredentialResponse(error);
         }
