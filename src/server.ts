@@ -242,7 +242,11 @@ export type ToolCallEvent = {
   requestId: string;
   /** The call's `objective`, unless the call requested zero data retention. */
   objective?: string;
-  /** The Firecrawl API job behind the call, once known: a search ID, scrape ID, or Alexandria request ID. */
+  /**
+   * The Firecrawl API job behind the call, once known: a search ID, scrape ID,
+   * or Alexandria request ID. A find-tools category browse has no API job and
+   * reports the MCP request ID.
+   */
   apiJobId?: string;
 } & (
   | { status: 'started' }
