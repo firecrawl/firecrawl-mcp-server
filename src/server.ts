@@ -89,6 +89,16 @@ import {
   searchToolBaseFields,
   termsWriteError,
 } from './tool-helpers.js';
+import {
+  noteApiJobId,
+  OBJECTIVE_TOOLS,
+  objectiveMissing,
+  objectiveRequiredResult,
+  type ObjectiveMode,
+  requestsZeroDataRetention,
+  startCallRecord,
+  withObjectiveParameter,
+} from './objective.js';
 
 /**
  * Library entry point: `import { createFirecrawlMcpServer } from 'firecrawl-mcp/server'`.
@@ -230,6 +240,10 @@ export type ToolCallEvent = {
   tool: string;
   session: SessionData;
   requestId: string;
+  /** The call's `objective`, unless the call requested zero data retention. */
+  objective?: string;
+  /** The Firecrawl API job behind the call, once known: a search ID, scrape ID, or Alexandria request ID. */
+  apiJobId?: string;
 } & (
   | { status: 'started' }
   | { status: 'success'; result: unknown; agentHints?: string[] }
@@ -324,6 +338,12 @@ export interface FirecrawlMcpServerOptions {
   searchFeedback?: boolean;
   /** Register firecrawl_feedback. Defaults to true. */
   endpointFeedback?: boolean;
+  /**
+   * `required` makes the tools that take `objective` (firecrawl_search,
+   * firecrawl_scrape, firecrawl_find_tools) answer a call without one with an
+   * OBJECTIVE_REQUIRED tool error. Defaults to `optional`.
+   */
+  objective?: ObjectiveMode;
   /** Extension hooks. Unstable: may change in any release. */
   unstable_hooks?: FirecrawlMcpServerHooks;
 }
@@ -374,6 +394,7 @@ export {
   searchQueryIsValid,
 } from './alexandria.js';
 export { searchOutputSchema } from './tool-output.js';
+export { noteApiJobId, type ObjectiveMode } from './objective.js';
 export {
   assertExchangeCredential,
   postSearchWithFallback,
@@ -508,6 +529,7 @@ export function createFirecrawlMcpServer(
     requireCredential: options.requireCredential ?? false,
     searchFeedback: options.searchFeedback ?? true,
     endpointFeedback: options.endpointFeedback ?? true,
+    objective: options.objective ?? 'optional',
   };
   const logging = options.logging ?? config.transport === 'httpStream';
 
@@ -623,21 +645,52 @@ export function createFirecrawlMcpServer(
    */
   function prepareTool(tool: RegisteredTool): RegisteredTool {
     const execute = tool.execute;
+    const objectivePolicy = OBJECTIVE_TOOLS.get(tool.name);
+    const beforeValidate = tool.beforeValidate;
     const instrumented: RegisteredTool = {
       ...tool,
+      parameters: withObjectiveParameter(
+        tool.name,
+        tool.parameters,
+        config.objective
+      ) as RegisteredTool['parameters'],
+      ...(objectivePolicy && config.objective === 'required'
+        ? {
+            beforeValidate: (args: unknown, session: SessionData) =>
+              objectiveMissing(args)
+                ? objectiveRequiredResult(tool.name)
+                : beforeValidate?.(args, session),
+          }
+        : {}),
       execute: async (args, context) => {
         const session = context.session as SessionData;
         const requestId = session.requestId as string;
-        const call = { tool: tool.name, session, requestId };
-        hooks.onToolResult?.({ ...call, status: 'started' });
+        const callRecord = startCallRecord(session);
+        let toolArgs = args;
+        let objective: string | undefined;
+        if (objectivePolicy && args && typeof args === 'object') {
+          const { objective: supplied, ...rest } = args as Record<string, unknown>;
+          if (!objectivePolicy.forwarded) toolArgs = rest as typeof args;
+          if (typeof supplied === 'string' && !requestsZeroDataRetention(rest)) {
+            objective = supplied;
+          }
+        }
+        const call = () => ({
+          tool: tool.name,
+          session,
+          requestId,
+          ...(objective ? { objective } : {}),
+          ...(callRecord.apiJobId ? { apiJobId: callRecord.apiJobId } : {}),
+        });
+        hooks.onToolResult?.({ ...call(), status: 'started' });
         try {
           const result = await runWithCredentialRecovery(
-            () => execute(args, context),
+            () => execute(toolArgs, context),
             requestId,
             session
           );
           hooks.onToolResult?.({
-            ...call,
+            ...call(),
             status: 'success',
             result,
             agentHints: resultAgentHints(result),
@@ -645,7 +698,7 @@ export function createFirecrawlMcpServer(
           return result;
         } catch (error) {
           hooks.onToolResult?.({
-            ...call,
+            ...call(),
             status: 'error',
             error,
             agentHints: readErrorAgentHints(error),
@@ -1061,6 +1114,7 @@ export function createFirecrawlMcpServer(
             key === 'alexandria' ||
             key === 'requestId' ||
             key === 'timeout' ||
+            key === 'objective' ||
             // URL-mode discovery options that mean nothing when executing a
             // provider. Agents carry toolDetail over from firecrawl_search (where
             // it selects contract detail), so accept and ignore them rather than
@@ -1536,6 +1590,7 @@ Alexandria mode, on an authenticated session with Alexandria access: \`alexandri
           },
           session
         );
+        noteApiJobId(session, json?.data?.metadata?.scrapeId);
         return structuredText(preserveAgentHints(json?.data ?? json, json));
       }
       const client = getClient(session);
@@ -1549,6 +1604,7 @@ Alexandria mode, on an authenticated session with Alexandria access: \`alexandri
           ),
         { tool: 'firecrawl_scrape' }
       );
+      noteApiJobId(session, (res as { metadata?: { scrapeId?: unknown } })?.metadata?.scrapeId);
       return structuredText(res);
     },
   };
@@ -1686,6 +1742,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       const httpRes = exchangeSource
         ? await relayExchangeError(postSearch, context)
         : await relayTermsRequired(postSearch, context);
+      noteApiJobId(session, httpRes?.data?.id);
       return structuredCompact(httpRes?.data ?? {});
     },
   });
@@ -1702,6 +1759,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
     assertExchangeCredential(session);
     const client = getClient(session);
     const requestId = suppliedRequestId ?? randomUUID();
+    noteApiJobId(session, requestId);
     try {
       const response = await relayExchangeError(() =>
         (client as any).http.post(
@@ -1764,6 +1822,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       catch (error) { throw new UserError(error instanceof Error ? error.message : String(error)); }
       if (options.level === 'categories') {
         assertExchangeCredential(session);
+        noteApiJobId(session, session?.requestId);
         const response = await relayExchangeError(
           () => (getClient(session) as any).http.get('/exchange/discover', originHeaders(origin)),
           { tool: 'firecrawl_find_tools', requestId: session?.requestId }

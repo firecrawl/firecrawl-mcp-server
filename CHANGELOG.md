@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `firecrawl_scrape` (URL and Alexandria modes) and `firecrawl_find_tools` accept an optional `objective`: the user's underlying goal for the call in one sentence, at most 1,000 characters. `firecrawl_search` keeps its existing `objective`. Scrape and find-tools keep `objective` within the MCP server and do not send it to the Firecrawl API; search still forwards it.
+- `createFirecrawlMcpServer` takes `objective: 'optional' | 'required'` (default `optional`). In required mode, a call to `firecrawl_search`, `firecrawl_scrape` or `firecrawl_find_tools` without an `objective`, or with a blank one, returns a tool error with code `OBJECTIVE_REQUIRED` and retry guidance instead of a schema error. That includes a no-argument `firecrawl_find_tools` catalogue browse, which must be retried with a goal. Optional mode leaves every call, including no-argument browsing, unchanged.
+- `onToolResult` events carry the call's `objective` and `apiJobId`, the Firecrawl API job behind the call once known: the search ID, the scrape ID, or the Alexandria request ID (for a find-tools category browse, which has none, the MCP request ID). `objective` is left out when the call requests zero data retention (`zeroDataRetention: true`, or search `enterprise` containing `zdr` or `anon`). `firecrawl-mcp/server` exports `noteApiJobId` so embedded tools can report their own API job.
+
 ## [3.29.1] - 2026-10-09
 
 ### Added

@@ -1239,13 +1239,13 @@ await server.start({
 
 Set `host` explicitly. Without it the server listens on `localhost`, which Node binds to a single address (often only `::1`), so requests to `127.0.0.1` are refused. Use `0.0.0.0` or `::` to accept connections from other machines only behind network access controls or an `unstable_hooks.authenticate` check: without one, every caller that can reach the port is served with the configured `apiKey`.
 
-Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`, `logging`, `safeMode`, `fileAccess` (`local` or `upload`), `requireCredential`, `searchFeedback` and `endpointFeedback`. `unstable_hooks` accepts:
+Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`, `logging`, `safeMode`, `fileAccess` (`local` or `upload`), `requireCredential`, `searchFeedback` and `endpointFeedback`. `objective` (`optional` by default, or `required`) controls the `objective` argument of `firecrawl_search`, `firecrawl_scrape` and `firecrawl_find_tools`: when required, a call without one returns an `OBJECTIVE_REQUIRED` tool error that asks the agent to retry with a one-sentence goal. Only `firecrawl_search` sends `objective` to the Firecrawl API; the other tools keep it within the MCP server. `unstable_hooks` accepts:
 
 | Hook | Purpose |
 |---|---|
 | `authenticate(request)` | Resolve the session for a request; throw a `Response` to reject it. |
 | `wrapTool(tool)` | Decorate every registered tool. |
-| `onToolResult(event)` | Observe the start and outcome of each tool call, with any API agent hints. |
+| `onToolResult(event)` | Observe the start and outcome of each tool call, with any API agent hints, the call's `objective` (left out when the call requests zero data retention) and `apiJobId`, the Firecrawl API job behind it once known. |
 | `instructions` | Server instructions, or a function choosing from the defaults. |
 | `registerExtraTools(registrar, context)` | Add tools after the built-in ones. |
 | `outboundRequest(session)` | Credential and extra headers for each Firecrawl API request. |
@@ -1256,7 +1256,7 @@ Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`,
 
 FastMCP is bundled inside the package, so use the types exported from `firecrawl-mcp/server` (`Session`, `ToolDefinition`, `ToolRegistrar`, `FirecrawlMcpServerHooks` and others) rather than importing `fastmcp` yourself.
 
-The entry point also exports the helpers the built-in tools use, such as `recoveryPayload`, `normalizeHeader`, `requestOrigin`, `searchToolBaseFields`, `searchOutputSchema` and `structuredCompact`, so extra tools and hooks can match the built-in behaviour. They are unstable as well.
+The entry point also exports the helpers the built-in tools use, such as `recoveryPayload`, `normalizeHeader`, `requestOrigin`, `searchToolBaseFields`, `searchOutputSchema`, `structuredCompact` and `noteApiJobId` (records a tool's API job for `onToolResult`), so extra tools and hooks can match the built-in behaviour. They are unstable as well.
 
 ## Logging System
 

@@ -8,6 +8,7 @@ import {
   type FirecrawlMcpServerHooks,
   hasAlexandria,
   normalizeSearchSources,
+  noteApiJobId,
   postSearchWithFallback,
   relayExchangeError,
   relayTermsRequired,
@@ -161,6 +162,7 @@ Returns result groups in \`data\` and an operation \`id\`.
       const httpRes = exchangeSource
         ? await relayExchangeError(postSearch, context)
         : await relayTermsRequired(postSearch, context);
+      noteApiJobId(session, httpRes?.data?.id);
       return structuredCompact(httpRes?.data ?? {});
     },
   });
