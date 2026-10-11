@@ -63,16 +63,19 @@ async function startFakeApi(t) {
   return { url: `http://127.0.0.1:${server.address().port}`, requests };
 }
 
-async function startEmbedded(t, { objective } = {}) {
+async function startEmbedded(t, { objective, keyless = false } = {}) {
   const api = await startFakeApi(t);
   const events = [];
   const port = await getFreePort();
   const instance = createFirecrawlMcpServer({
     transport: 'httpStream',
     apiUrl: api.url,
-    apiKey: 'fc-objective-test',
+    ...(keyless ? {} : { apiKey: 'fc-objective-test' }),
     ...(objective ? { objective } : {}),
-    unstable_hooks: { onToolResult: (event) => events.push(event) },
+    unstable_hooks: {
+      onToolResult: (event) => events.push(event),
+      ...(keyless ? { authenticate: async () => ({ authType: 'keyless' }) } : {}),
+    },
   });
   await instance.start({
     transportType: 'httpStream',
@@ -151,6 +154,16 @@ test('search still forwards objective to the API and reports it with the search 
   assert.notEqual(result.isError, true, JSON.stringify(result));
   const search = api.requests.find((request) => request.url === '/v2/search');
   assert.equal(search.body.objective, OBJECTIVE);
+  const success = eventsFor(events, 'firecrawl_search').find((event) => event.status === 'success');
+  assert.equal(success.objective, OBJECTIVE);
+  assert.equal(success.apiJobId, SEARCH_ID);
+});
+
+test('a keyless search reports its search ID without returning it to the client', async (t) => {
+  const { events, callTool } = await startEmbedded(t, { keyless: true });
+  const result = await callTool('firecrawl_search', { query: 'crm pricing', objective: OBJECTIVE });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  assert.equal(result.structuredContent.id, undefined);
   const success = eventsFor(events, 'firecrawl_search').find((event) => event.status === 'success');
   assert.equal(success.objective, OBJECTIVE);
   assert.equal(success.apiJobId, SEARCH_ID);

@@ -1721,6 +1721,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         assertExchangeCredential(session);
       if (isKeylessMode(session)) {
         const json = await keylessPost('/v2/search', searchBody, session);
+        noteApiJobId(session, json?.id);
         // Search feedback requires an authenticated account. Do not expose its
         // identifier to keyless clients, where it would invite an unusable call.
         const keylessResponse = { ...(json ?? {}) };
