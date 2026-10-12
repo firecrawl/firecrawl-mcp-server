@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { UserError } from 'fastmcp';
 import { CoreHttpError } from './core-http-error.js';
-import { agentHintsText, readErrorAgentHints } from './agent-hints';
 import { checkKeylessSignupUrl } from './keyless-signup-link';
 
 // Human-facing guidance value. MCP_CONNECTION_GUIDE_URL stays a stable,
@@ -156,18 +155,6 @@ export async function runWithCredentialRecovery<T>(
     // different fault and keeps its own reconnect guidance; a keyless session
     // never sent an account credential at all.
     if (session?.authType !== 'api-key' || !isCoreCredentialRejection(error, session)) {
-      const hints = readErrorAgentHints(error);
-      if (hints) {
-        const message = error instanceof Error ? error.message : String(error);
-        throw new UserError(
-          hints.length ? `${message}\n\n${agentHintsText(hints)}` : message,
-          {
-            ...(error instanceof UserError ? error.extras : {}),
-            error: message,
-            agent_hints: hints,
-          }
-        );
-      }
       throw error;
     }
     const payload = recoveryPayload('CREDENTIAL_INVALID', requestId);
