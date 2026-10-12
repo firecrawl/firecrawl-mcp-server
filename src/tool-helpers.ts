@@ -272,7 +272,7 @@ export async function relayExchangeError(
           code: typeof data?.code === 'string' ? data.code : 'exchange_error',
           status: 403,
           message,
-              nextTool: {
+          nextTool: {
             name: 'firecrawl_scrape',
             arguments: {
               alexandria: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: disabledProvider } }],
