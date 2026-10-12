@@ -256,6 +256,33 @@ test('outboundRequest credential and headers reach SDK and fetch-based API calls
   }
 });
 
+test('outboundRequest headers take precedence over default request headers', async (t) => {
+  const api = await startFakeApi(t);
+  const port = await startEmbedded(t, {
+    apiUrl: api.url,
+    apiKey: 'fc-configured',
+    unstable_hooks: {
+      outboundRequest: () => ({ headers: { 'X-Firecrawl-Agent-Hints': 'false' } }),
+    },
+  });
+
+  const mapped = await callTool(port, 'firecrawl_map', {
+    url: 'https://example.com',
+  });
+  assert.notEqual(mapped.isError, true, JSON.stringify(mapped));
+  const listed = await callTool(port, 'firecrawl_monitor_list');
+  assert.notEqual(listed.isError, true, JSON.stringify(listed));
+
+  for (const [label, prefix] of [
+    ['SDK', '/v2/map'],
+    ['fetch', '/v2/monitor'],
+  ]) {
+    const request = api.requests.find((entry) => entry.url.startsWith(prefix));
+    assert.ok(request, `${label} request was not made`);
+    assert.equal(request.headers['x-firecrawl-agent-hints'], 'false', label);
+  }
+});
+
 test('beforeKeylessRequest can refuse a keyless call before it is sent', async (t) => {
   const origins = [];
   const port = await startEmbedded(t, {

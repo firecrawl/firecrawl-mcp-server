@@ -690,11 +690,16 @@ export function createFirecrawlMcpServer(
     const client = new FirecrawlApp(clientConfig);
     const axiosInstance = (client as any).http?.instance;
     if (axiosInstance?.interceptors?.request?.use) {
+      // Axios runs request interceptors in reverse order of registration, so
+      // this one runs after getClient's outboundRequest interceptor: set the
+      // default only where the hook did not set the header itself.
       axiosInstance.interceptors.request.use((request: any) => {
-        if (typeof request.headers?.set === 'function') {
-          request.headers.set('X-Firecrawl-Agent-Hints', 'true');
-        } else {
-          request.headers = { ...(request.headers ?? {}), ...AGENT_HINTS_HEADERS };
+        for (const [name, value] of Object.entries(AGENT_HINTS_HEADERS)) {
+          if (typeof request.headers?.set === 'function') {
+            if (!request.headers.has(name)) request.headers.set(name, value);
+          } else {
+            request.headers = { [name]: value, ...(request.headers ?? {}) };
+          }
         }
         return request;
       });
