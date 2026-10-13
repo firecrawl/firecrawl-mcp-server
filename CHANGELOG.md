@@ -1,5 +1,21 @@
 # Changelog
 
+## [3.30.0] - 2026-10-14
+
+### Added
+
+- `firecrawl-mcp/server` (unstable): `unstable_hooks.registerResources(registrar)` lets an embedder register MCP resources after the built-in tools. Resource definitions take a `uri`, `name`, optional `description` and `mimeType`, and a `load(session)` that returns one or more text or blob contents, each with optional `uri`, `mimeType` and `_meta` overrides. The `ResourceDefinition`, `ResourceContent` and `ResourceRegistrar` types are exported.
+- Tool definitions passed to `registerExtraTools` accept `icons` (`src`, optional `mimeType`, `sizes`, `theme`), which `tools/list` now sends. Built-in tools, resources and local stdio behaviour are unchanged.
+
+### Removed
+
+- The server no longer sends `X-Firecrawl-Agent-Hints: true` on its Firecrawl API requests and no longer relays the API's optional `agent_hints` field. `agent_hints` is removed from every tool's output schema, structured content and error payloads, and `ToolCallEvent` (passed to `onToolResult`) no longer has `agentHints`. The API no longer sends this field, so tool results are otherwise unchanged.
+- `firecrawl_search` no longer advertises or forwards the optional `objective` and `clientModel` inputs, on both the full and the search-only surface. Clients that still send them keep working: the values are ignored and not sent to `/v2/search`. `firecrawl_feedback` keeps its `objective` field.
+
+### Changed
+
+- The README's `CLOUD_SERVICE=true` and search-only sections are shortened into one section. Behaviour is unchanged.
+
 ## [3.29.1] - 2026-10-09
 
 ### Added
