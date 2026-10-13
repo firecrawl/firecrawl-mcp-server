@@ -10,7 +10,6 @@ export default defineConfig({
     index: 'src/index.ts',
     server: 'src/server.ts',
     'www-authenticate': 'src/service/www-authenticate.ts',
-    'agent-hints': 'src/agent-hints.ts',
     origin: 'src/origin.ts',
     'introspection-cache': 'src/service/introspection-cache.ts',
     'keyless-signup-link': 'src/keyless-signup-link.ts',
