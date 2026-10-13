@@ -85,6 +85,149 @@ function extraTool(name, execute) {
   };
 }
 
+test('resource reads preserve CSP and display metadata and receive the authenticated session', async (t) => {
+  const uri = 'ui://example/app.html';
+  const metadata = {
+    ui: {
+      csp: { connectDomains: [], resourceDomains: [] },
+      prefersBorder: true,
+    },
+    'openai/widgetCSP': { redirect_domains: ['https://example.com'] },
+    'openai/ui': {
+      preferredDisplayMode: 'fullscreen',
+      availableDisplayModes: ['fullscreen'],
+    },
+  };
+  const port = await startEmbedded(t, {
+    unstable_hooks: {
+      authenticate: async (request) => ({ tenant: request.headers['x-tenant'] }),
+      registerResources: (registrar) => {
+        registrar.addResource({
+          uri,
+          name: 'Example app',
+          description: 'An embedded app resource.',
+          mimeType: 'text/html;profile=mcp-app',
+          load: async (session) => ({
+            text: `<html>${session.tenant}</html>`,
+            _meta: metadata,
+          }),
+        });
+      },
+    },
+  });
+  assert.deepEqual((await rpc(port, 'resources/list')).resources, [
+    {
+      uri,
+      name: 'Example app',
+      description: 'An embedded app resource.',
+      mimeType: 'text/html;profile=mcp-app',
+    },
+  ]);
+  assert.deepEqual(
+    (await rpc(port, 'resources/read', { uri }, { 'x-tenant': 'acme' })).contents,
+    [{
+      uri,
+      name: 'Example app',
+      mimeType: 'text/html;profile=mcp-app',
+      text: '<html>acme</html>',
+      _meta: metadata,
+    }]
+  );
+});
+
+test('resource arrays preserve per-content metadata and URI and MIME overrides', async (t) => {
+  const uri = 'example://collection';
+  const port = await startEmbedded(t, {
+    apiUrl: 'http://127.0.0.1:9',
+    unstable_hooks: {
+      registerResources: ({ addResource }) => {
+        addResource({
+          uri,
+          name: 'Collection',
+          mimeType: 'text/plain',
+          load: async () => [
+            { text: 'first', _meta: { ui: { prefersBorder: false } } },
+            {
+              blob: 'aGVsbG8=',
+              uri: 'example://binary',
+              mimeType: 'application/octet-stream',
+              _meta: { label: 'second' },
+            },
+          ],
+        });
+      },
+    },
+  });
+  assert.deepEqual((await rpc(port, 'resources/read', { uri })).contents, [
+    {
+      text: 'first',
+      uri,
+      name: 'Collection',
+      mimeType: 'text/plain',
+      _meta: { ui: { prefersBorder: false } },
+    },
+    {
+      blob: 'aGVsbG8=',
+      uri: 'example://binary',
+      name: 'Collection',
+      mimeType: 'application/octet-stream',
+      _meta: { label: 'second' },
+    },
+  ]);
+});
+
+test('tool icons survive wrapping and tools/list alongside existing title and metadata', async (t) => {
+  const icons = [
+    {
+      src: 'data:image/svg+xml;base64,PHN2Zy8+',
+      mimeType: 'image/svg+xml',
+      sizes: ['any'],
+      theme: 'dark',
+    },
+  ];
+  const metadata = {
+    ui: { resourceUri: 'ui://example/app.html', visibility: ['app'] },
+  };
+  const port = await startEmbedded(t, {
+    apiUrl: 'http://127.0.0.1:9',
+    unstable_hooks: {
+      wrapTool: (tool) =>
+        tool.name === 'embed_icon' ? { ...tool, icons } : tool,
+      registerExtraTools: ({ addTool }) => {
+        addTool({
+          ...extraTool('embed_icon', async () => 'ok'),
+          annotations: { title: 'Example icon' },
+          _meta: metadata,
+        });
+        addTool(extraTool('embed_plain', async () => 'ok'));
+      },
+    },
+  });
+  const { tools } = await rpc(port, 'tools/list');
+  const tool = tools.find(({ name }) => name === 'embed_icon');
+  assert.deepEqual(tool.icons, icons);
+  assert.equal(tool.title, 'Example icon');
+  assert.deepEqual(tool._meta, metadata);
+  assert.equal(
+    Object.hasOwn(tools.find(({ name }) => name === 'embed_plain'), 'icons'),
+    false
+  );
+  assert.ok(
+    tools.filter(({ name }) => name.startsWith('firecrawl_'))
+      .every((builtIn) => !Object.hasOwn(builtIn, 'icons'))
+  );
+});
+
+test('the built-in surface does not advertise resources unless an embedder registers them', async (t) => {
+  const port = await startEmbedded(t, { apiUrl: 'http://127.0.0.1:9' });
+  const initialized = await rpc(port, 'initialize', {
+    capabilities: {},
+    clientInfo: { name: 'hooks-test', version: '1.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  assert.equal(Object.hasOwn(initialized.capabilities, 'resources'), false);
+});
+
 test('a custom authenticate session reaches tool handlers with a per-call request ID', async (t) => {
   const port = await startEmbedded(t, {
     apiUrl: 'http://127.0.0.1:9',
@@ -145,7 +288,7 @@ test('wrapTool sees built-in, module and extra tools', async (t) => {
   }
 });
 
-test('onToolResult reports start and outcome with agent hints on success and error', async (t) => {
+test('onToolResult reports start and outcome on success and error', async (t) => {
   const events = [];
   const port = await startEmbedded(t, {
     apiUrl: 'http://127.0.0.1:9',
@@ -153,41 +296,32 @@ test('onToolResult reports start and outcome with agent hints on success and err
       onToolResult: (event) => events.push(event),
       registerExtraTools: (registrar) => {
         registrar.addTool(
-          extraTool('embed_hinted', async () => ({
+          extraTool('embed_ok', async () => ({
             content: [{ type: 'text', text: 'ok' }],
-            structuredContent: { agent_hints: ['hint-on-success'] },
           }))
         );
         registrar.addTool(
           extraTool('embed_failing', async () => {
-            throw Object.assign(new Error('boom'), {
-              agent_hints: ['hint-on-error'],
-            });
+            throw new Error('boom');
           })
         );
       },
     },
   });
 
-  await callTool(port, 'embed_hinted');
+  await callTool(port, 'embed_ok');
   const failed = await callTool(port, 'embed_failing');
   assert.equal(failed.isError, true);
 
-  const summary = events.map(({ tool, status, agentHints }) => ({
-    tool,
-    status,
-    agentHints,
-  }));
+  const summary = events.map(({ tool, status }) => ({ tool, status }));
   assert.deepEqual(summary, [
-    { tool: 'embed_hinted', status: 'started', agentHints: undefined },
-    {
-      tool: 'embed_hinted',
-      status: 'success',
-      agentHints: ['hint-on-success'],
-    },
-    { tool: 'embed_failing', status: 'started', agentHints: undefined },
-    { tool: 'embed_failing', status: 'error', agentHints: ['hint-on-error'] },
+    { tool: 'embed_ok', status: 'started' },
+    { tool: 'embed_ok', status: 'success' },
+    { tool: 'embed_failing', status: 'started' },
+    { tool: 'embed_failing', status: 'error' },
   ]);
+  assert.equal(events[1].result.content[0].text, 'ok');
+  assert.equal(events[3].error.message, 'boom');
   const requestIds = new Set(events.map((event) => event.requestId));
   assert.equal(
     requestIds.size,
@@ -436,6 +570,28 @@ async function startStdioEmbedder(t, hooksSource) {
 }
 
 const FEEDBACK_TOOLS = ['firecrawl_search_feedback', 'firecrawl_feedback'];
+
+test('stdio embedders can register resources with content metadata and tools with icons', async (t) => {
+  const client = await startStdioEmbedder(t, `{
+    registerResources: ({ addResource }) => addResource({
+      uri: 'ui://example/app.html', name: 'Example app', mimeType: 'text/html',
+      load: async () => ({ text: '<html></html>', _meta: { ui: { prefersBorder: true } } })
+    }),
+    registerExtraTools: ({ addTool }) => addTool({
+      name: 'embed_icon', icons: [{ src: 'https://example.com/icon.svg' }],
+      execute: async () => 'ok'
+    })
+  }`);
+  const { contents } = await client.request(3, 'resources/read', { uri: 'ui://example/app.html' });
+  assert.deepEqual(contents, [{
+    uri: 'ui://example/app.html', name: 'Example app', mimeType: 'text/html',
+    text: '<html></html>', _meta: { ui: { prefersBorder: true } },
+  }]);
+  const { tools } = await client.request(4, 'tools/list');
+  assert.deepEqual(tools.find(({ name }) => name === 'embed_icon').icons,
+    [{ src: 'https://example.com/icon.svg' }]);
+  assert.deepEqual(client.outboundRequests(), []);
+});
 
 test('a stdio embedder authenticating through authenticate lists the feedback tools', async (t) => {
   const { names } = await startStdioEmbedder(

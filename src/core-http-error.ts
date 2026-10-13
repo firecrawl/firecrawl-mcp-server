@@ -5,12 +5,10 @@
  */
 export class CoreHttpError extends Error {
   readonly status: number;
-  readonly agent_hints?: string[];
 
-  constructor(message: string, status: number, agentHints?: string[]) {
+  constructor(message: string, status: number) {
     super(message);
     this.name = 'CoreHttpError';
     this.status = status;
-    if (agentHints !== undefined) this.agent_hints = agentHints;
   }
 }

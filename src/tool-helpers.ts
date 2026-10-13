@@ -1,6 +1,5 @@
 import { UserError } from 'fastmcp';
 import { z } from 'zod';
-import { readErrorAgentHints } from './agent-hints';
 import { searchSourceSchema, ALEXANDRIA_SOURCES_OPT_OUT } from './alexandria';
 import { MCP_CONNECTION_GUIDE_URL } from './recovery.js';
 
@@ -45,8 +44,6 @@ export const searchToolBaseFields = {
     .string()
     .min(1)
     .describe('Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Catalogue browsing is available through firecrawl_find_tools.'),
-  objective: z.string().trim().min(1).max(5000).optional().describe('Optional broader goal for this search, if known. Avoid sensitive information.'),
-  clientModel: z.string().trim().min(1).max(128).optional().describe('Optional model identifier, if known.'),
   domainTools: z
     .boolean()
     .optional()
@@ -180,8 +177,7 @@ function termsRequiredAction(body: unknown): TermsRequiredAction | undefined {
 
 function termsRequiredError(
   action: TermsRequiredAction,
-  context: ExchangeErrorContext,
-  hints?: string[]
+  context: ExchangeErrorContext
 ): UserError {
   const requestId = context.requestId;
   const retryIdentity = requestId ? ` and requestId ${requestId}` : '';
@@ -192,7 +188,6 @@ function termsRequiredError(
       code: TERMS_REQUIRED_CODE,
       status: 403,
       message,
-      ...(hints ? { agent_hints: hints } : {}),
       ...(requestId ? { requestId } : {}),
       requiresAction: action,
       nextTool: {
@@ -230,8 +225,7 @@ function throwIfTermsRequired(
     | null
     | undefined;
   const action = termsRequiredAction(source?.response?.data ?? source?.details);
-  if (action)
-    throw termsRequiredError(action, context, readErrorAgentHints(error));
+  if (action) throw termsRequiredError(action, context);
 }
 
 export async function relayTermsRequired<T>(
@@ -264,7 +258,6 @@ export async function relayExchangeError(
     if (!response || response.status === 401) throw error;
     const data = response.data as
       { error?: unknown; code?: unknown; chargeId?: unknown } | undefined;
-    const hints = readErrorAgentHints(error);
     const message =
       typeof data?.error === 'string'
         ? data.error
@@ -279,7 +272,6 @@ export async function relayExchangeError(
           code: typeof data?.code === 'string' ? data.code : 'exchange_error',
           status: 403,
           message,
-          ...(hints ? { agent_hints: hints } : {}),
           nextTool: {
             name: 'firecrawl_scrape',
             arguments: {
@@ -293,7 +285,6 @@ export async function relayExchangeError(
       code: typeof data?.code === 'string' ? data.code : 'exchange_error',
       status: response.status,
       message,
-      ...(hints ? { agent_hints: hints } : {}),
       ...(typeof data?.chargeId === 'string'
         ? { chargeId: data.chargeId }
         : {}),

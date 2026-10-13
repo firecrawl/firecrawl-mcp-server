@@ -7,7 +7,6 @@
 
 import { z } from 'zod';
 import type { ContentResult, FastMCP } from 'fastmcp';
-import { withAgentHints } from './agent-hints';
 import { originHeaders, requestOrigin } from './origin';
 import { govSearchOutputSchema, withStructured } from './tool-output';
 
@@ -100,11 +99,7 @@ Returns ranked results with a position, title, URL, and matched snippet. Results
         originHeaders(requestOrigin(mcpClient, session))
       );
       const results = res.data?.data?.web ?? [];
-      return withAgentHints(
-        withStructured(fmtGov(results), { results }),
-        res.data,
-        true
-      );
+      return withStructured(fmtGov(results), { results });
     },
   });
 }

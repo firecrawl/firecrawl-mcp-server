@@ -81,7 +81,7 @@ A fixed-scope search surface is also hosted at:
 https://mcp.firecrawl.dev/v2/mcp-search
 ```
 
-It exposes a fixed set of nine tools: `firecrawl_search`, `firecrawl_developer_search`, `firecrawl_gov_search`, the four `firecrawl_research_*` tools, and the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`. Its `firecrawl_search` fetches no page content, and the surface has its own OAuth identity; the full endpoint above is unchanged. It backs a published connector listing, so its tool set is a contract rather than a profile to tune. See [docs/search-profile.md](docs/search-profile.md) for the full contract and what a change to it involves.
+It exposes a fixed set of nine tools: `firecrawl_search`, `firecrawl_developer_search`, `firecrawl_gov_search`, the four `firecrawl_research_*` tools, and the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`. Its `firecrawl_search` fetches no page content.
 
 ### Running with npx
 
@@ -280,30 +280,18 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 
 #### MCP OAuth (Bearer access tokens)
 
-Hosted Firecrawl can issue OAuth **access tokens** (`fco_…`) via the authorization server on [firecrawl.dev](https://firecrawl.dev). This MCP server forwards whichever credential it resolves to the Firecrawl API as `Authorization: Bearer …`.
+Firecrawl issues OAuth **access tokens** (`fco_…`) via the authorization server on [firecrawl.dev](https://firecrawl.dev). This MCP server forwards whichever credential it resolves to the Firecrawl API as `Authorization: Bearer …`.
 
 - **HTTP stream transports** (`CLOUD_SERVICE=true`, `HTTP_STREAMABLE_SERVER=true`, or `SSE_LOCAL=true`): Clients should send `Authorization: Bearer <fco_access_token>` on MCP requests. An OAuth bearer token takes precedence over `x-firecrawl-api-key` / `x-api-key` when both are present.
 - **stdio:** Use `FIRECRAWL_OAUTH_TOKEN` for a static access token, or keep using `FIRECRAWL_API_KEY` for an API key.
 
 Use **access** tokens (`fco_…`) only. Refresh tokens (`fcr_…`) must be exchanged at the token endpoint, not passed to the scrape/search API.
 
-#### Hardened HTTP preset (`CLOUD_SERVICE=true`)
+#### `CLOUD_SERVICE=true`
 
-`CLOUD_SERVICE=true` serves the tools over streamable HTTP on `PORT` (default `3000`), bound to `0.0.0.0`, with stricter defaults for a shared deployment:
+`CLOUD_SERVICE=true` serves the tools over streamable HTTP on `PORT` (default `3000`, bound to `0.0.0.0`) with stricter defaults: every request must carry a credential (an API key or an OAuth access token), scrape is read-only (see the scrape tool below), and `firecrawl_parse` accepts uploads only.
 
-- every request must carry a credential (an API key or an OAuth access token);
-- safe mode: scrape is read-only (see the scrape tool below);
-- `firecrawl_parse` accepts uploads only and never reads local files.
-
-`FASTMCP_ENDPOINT` selects the surface: `/v2/mcp` (default) serves the full tool set, `/v2/mcp-oauth` the account surface, and `/v2/mcp-search` (which also requires `FIRECRAWL_MCP_SEARCH_OAUTH_ONLY=true`) the [search-only surface](#search-only-surface-hosted) described below.
-
-#### Search-only surface (hosted)
-
-In hosted mode (`CLOUD_SERVICE=true`) a second in-process instance serves the [search-only endpoint](#search-only-endpoint) on local port `3001`. The hosted deployment's reverse proxy routes `/v2/mcp-search` to that port, and the OAuth protected-resource identifier is `https://mcp.firecrawl.dev/v2/mcp-search`.
-
-`FIRECRAWL_MCP_SEARCH_ENABLED` (default `true`) is the supported operational toggle; set it to `false` to prevent the search instance from starting. The Node process also accepts `FIRECRAWL_MCP_SEARCH_PORT`, `FIRECRAWL_MCP_SEARCH_ENDPOINT`, and `FIRECRAWL_MCP_SEARCH_RESOURCE_URL` for isolated tests. Those overrides do not reconfigure the deployment's proxy routes or the authorization server allowlist and must not be used independently in the hosted deployment.
-
-The search instance requires authentication for every request (including `tools/list`) and rejects OAuth tokens whose audience does not match its own resource.
+`FASTMCP_ENDPOINT` selects the tool surface: `/v2/mcp` (default) for the full tool set, `/v2/mcp-oauth` for the account surface, or `/v2/mcp-search` for the search-only tools (this also requires `FIRECRAWL_MCP_SEARCH_OAUTH_ONLY=true`). With the full surface, a search-only instance also starts on port `3001`; set `FIRECRAWL_MCP_SEARCH_ENABLED=false` to turn it off.
 
 ### Configuration Examples
 
@@ -463,7 +451,7 @@ Scrape content from a single URL with advanced options.
 
 **Branding format:** Extracts comprehensive brand identity (colors, fonts, typography, spacing, logo, UI components) for design analysis or style replication.
 **Privacy:** Set `redactPII: true` to return content with personally identifiable information redacted.
-**Hardened HTTP preset and the hosted server:** With `CLOUD_SERVICE=true`, as on the hosted server, scrape is read-only. It takes no browser `actions` and cannot accept provider terms. A named `profile` loads saved browser state without saving changes to it, and the full endpoint's `firecrawl_search` treats `scrapeOptions.profile` the same way. To save browser state to a profile, open the page with `firecrawl_interact` (see below). An organization admin accepts terms in the dashboard.
+**With `CLOUD_SERVICE=true`:** scrape is read-only. It takes no browser `actions` and cannot accept provider terms. A named `profile` loads saved browser state without saving changes to it, and the full endpoint's `firecrawl_search` treats `scrapeOptions.profile` the same way. To save browser state to a profile, open the page with `firecrawl_interact` (see below). An organization admin accepts terms in the dashboard.
 
 **Returns:**
 
@@ -702,11 +690,11 @@ Check the status and results of an existing crawl job by ID.
 
 Parse local files or hosted upload references with Firecrawl's `/v2/parse` endpoint.
 
-**Best for:** PDFs, Word documents, spreadsheets, HTML files, and other documents that need markdown or structured JSON output. Hosted MCP supports a two-step upload-ref flow; local direct file reads require a self-hosted `FIRECRAWL_API_URL`.
+**Best for:** PDFs, Word documents, spreadsheets, HTML files, and other documents that need markdown or structured JSON output. The hosted endpoint uses a two-step upload flow; local direct file reads require a self-hosted `FIRECRAWL_API_URL`.
 
 **Not recommended for:** Remote URLs (use scrape), multiple files in one call (call parse once per file), or browser-only actions such as screenshots and clicks.
 
-**Hosted MCP flow:** Hosted MCP cannot read the caller's filesystem directly. Call `firecrawl_parse` with `filePath` to receive a short-lived upload command and `nextToolCall`, upload the file locally, then call `firecrawl_parse` again with the returned `uploadRef`. Minting the hosted upload URL requires Firecrawl auth or keyless eligibility. In local `npx firecrawl-mcp` mode, direct file parsing currently requires `FIRECRAWL_API_URL` pointing to a self-hosted Firecrawl API; a plain cloud API-key-only local server cannot read and upload files through this tool.
+**Hosted endpoint:** it cannot read your filesystem. Call `firecrawl_parse` with `filePath` to receive a short-lived upload command and `nextToolCall`, upload the file locally, then call `firecrawl_parse` again with the returned `uploadRef`. The upload step requires Firecrawl auth or the keyless tier. In local `npx firecrawl-mcp` mode, direct file parsing currently requires `FIRECRAWL_API_URL` pointing to a self-hosted Firecrawl API; a plain cloud API-key-only local server cannot read and upload files through this tool.
 
 **Usage Example:**
 
@@ -1245,7 +1233,7 @@ Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`,
 |---|---|
 | `authenticate(request)` | Resolve the session for a request; throw a `Response` to reject it. |
 | `wrapTool(tool)` | Decorate every registered tool. |
-| `onToolResult(event)` | Observe the start and outcome of each tool call, with any API agent hints. |
+| `onToolResult(event)` | Observe the start and outcome of each tool call. |
 | `instructions` | Server instructions, or a function choosing from the defaults. |
 | `registerExtraTools(registrar, context)` | Add tools after the built-in ones. |
 | `outboundRequest(session)` | Credential and extra headers for each Firecrawl API request. |
@@ -1274,33 +1262,6 @@ Example log messages:
 [INFO] Starting scrape for URL: https://example.com
 [ERROR] Rate limit exceeded
 ```
-
-## API response hints
-
-The MCP server explicitly enables Firecrawl API response hints on its outbound
-requests with `X-Firecrawl-Agent-Hints: true`; the API leaves them disabled for
-ordinary callers. When Firecrawl returns an optional `agent_hints` array of
-strings, JSON tool results preserve it in their existing text and
-`structuredContent` alongside the tool's other structured fields. Readable
-Developer and Research outputs keep their existing text and show hints in a
-separate, labeled text block. Empty results can include hints. Error hints
-remain visible with `isError: true`.
-Responses without hints keep their existing output format. Guidance is API
-metadata, separate from the scraped page's content; it is not generated or
-executed by the MCP adapter.
-
-The strings are passed through unchanged. An HTTP operation mentioned in a
-hint is not necessarily an MCP tool: Alexandria discovery is available through
-`firecrawl_find_tools`, and provider execution uses `firecrawl_scrape` with an
-`alexandria` body. The search-only profile exposes those paths and URL-mode
-Scrape, but does not expose feedback tools. Clients should use their advertised
-tool schemas and available capabilities. This change does not add tools,
-translate prose into tool calls, or submit feedback automatically.
-
-The pinned `firecrawl` 4.40.0 discards outer-envelope hints in high-level
-Scrape and Map responses and normalized SDK errors. The adapter captures hints
-from the SDK HTTP response while retaining the SDK's request and retry behavior.
-Authentication recovery retains its existing guidance.
 
 ## Error Handling
 

@@ -25,12 +25,6 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { z } from 'zod';
 import {
-  AGENT_HINTS_HEADERS,
-  preserveAgentHints,
-  readAgentHints,
-  readErrorAgentHints,
-} from './agent-hints';
-import {
   agentOutputSchema,
   agentStatusOutputSchema,
   crawlOutputSchema,
@@ -185,10 +179,18 @@ export type ToolContext = {
   [key: string]: unknown;
 };
 
+export type ToolIcon = {
+  src: string;
+  mimeType?: string;
+  sizes?: string[];
+  theme?: 'light' | 'dark';
+};
+
 /** A tool as registered on the server. */
 export interface ToolDefinition {
   name: string;
   description?: string;
+  icons?: ToolIcon[];
   /** A Standard Schema (for example a zod object) for the arguments. */
   parameters?: unknown;
   /** JSON Schema of the structured result. */
@@ -221,6 +223,24 @@ type RegisteredTool = Parameters<FastMCP<SessionData>['addTool']>[0];
 /** Registers a tool onto an instance. */
 export type ToolRegistrar = { addTool(tool: ToolDefinition): void };
 
+export type ResourceContent = ({ text: string } | { blob: string }) & {
+  uri?: string;
+  mimeType?: string;
+  _meta?: Record<string, unknown>;
+};
+
+export interface ResourceDefinition {
+  uri: string;
+  name: string;
+  description?: string;
+  mimeType?: string;
+  load(session?: Session): Promise<ResourceContent | ResourceContent[]>;
+}
+
+export type ResourceRegistrar = {
+  addResource(resource: ResourceDefinition): void;
+};
+
 /** The HTTP request `authenticate` receives; absent for stdio. */
 export type AuthenticationRequest = {
   headers: IncomingHttpHeaders;
@@ -237,8 +257,8 @@ export type ToolCallEvent = {
   requestId: string;
 } & (
   | { status: 'started' }
-  | { status: 'success'; result: unknown; agentHints?: string[] }
-  | { status: 'error'; error: unknown; agentHints?: string[] }
+  | { status: 'success'; result: unknown }
+  | { status: 'error'; error: unknown }
 );
 
 /** Per-request credential and extra headers for calls to the Firecrawl API. */
@@ -293,6 +313,7 @@ export interface FirecrawlMcpServerHooks {
     registrar: ToolRegistrar,
     context: ExtraToolsContext
   ) => void;
+  registerResources?: (registrar: ResourceRegistrar) => void;
   /** Credential and headers for each Firecrawl API request of a session. */
   outboundRequest?: (
     session: SessionData | undefined
@@ -433,14 +454,6 @@ function copySession(session: SessionData | undefined): SessionData {
     Object.getOwnPropertyDescriptors(session ?? {})
   ) as SessionData;
 }
-
-function resultAgentHints(result: unknown): string[] | undefined {
-  return result && typeof result === 'object'
-    ? readAgentHints((result as { structuredContent?: unknown }).structuredContent)
-    : undefined;
-}
-
-let warnedMissingAgentHintsInterceptor = false;
 
 class ConsoleLogger implements Logger {
   constructor(private readonly shouldLog: boolean) {}
@@ -644,20 +657,10 @@ export function createFirecrawlMcpServer(
             requestId,
             session
           );
-          hooks.onToolResult?.({
-            ...call,
-            status: 'success',
-            result,
-            agentHints: resultAgentHints(result),
-          });
+          hooks.onToolResult?.({ ...call, status: 'success', result });
           return result;
         } catch (error) {
-          hooks.onToolResult?.({
-            ...call,
-            status: 'error',
-            error,
-            agentHints: readErrorAgentHints(error),
-          });
+          hooks.onToolResult?.({ ...call, status: 'error', error });
           throw error;
         }
       },
@@ -695,55 +698,7 @@ export function createFirecrawlMcpServer(
       clientConfig.apiKey = apiKey;
     }
 
-    const client = new FirecrawlApp(clientConfig);
-    const axiosInstance = (client as any).http?.instance;
-    if (axiosInstance?.interceptors?.request?.use) {
-      axiosInstance.interceptors.request.use((request: any) => {
-        if (typeof request.headers?.set === 'function') {
-          request.headers.set('X-Firecrawl-Agent-Hints', 'true');
-        } else {
-          request.headers = { ...(request.headers ?? {}), ...AGENT_HINTS_HEADERS };
-        }
-        return request;
-      });
-    } else if (!warnedMissingAgentHintsInterceptor) {
-      warnedMissingAgentHintsInterceptor = true;
-      console.warn(
-        '[firecrawl-mcp] SDK request interceptor unavailable; API agent hints may be absent.'
-      );
-    }
-    return client;
-  }
-
-  /** Keep SDK validation, retries, and result shaping while retaining response metadata. */
-  async function sdkResultWithAgentHints<T>(
-    client: FirecrawlApp,
-    execute: () => Promise<T>
-  ): Promise<T> {
-    const responseInterceptors = (client as any).http?.instance?.interceptors
-      ?.response;
-    if (!responseInterceptors?.use) return execute();
-    let hints: string[] | undefined;
-    const interceptor = responseInterceptors.use((response: any) => {
-      hints = readAgentHints(response?.data) ?? hints;
-      return response;
-    });
-    try {
-      const result = await execute();
-      return preserveAgentHints(result, { agent_hints: hints }) as T;
-    } catch (error) {
-      if (
-        hints &&
-        error &&
-        typeof error === 'object' &&
-        !readErrorAgentHints(error)
-      ) {
-        (error as { agent_hints?: string[] }).agent_hints = hints;
-      }
-      throw error;
-    } finally {
-      responseInterceptors.eject?.(interceptor);
-    }
+    return new FirecrawlApp(clientConfig);
   }
 
   // Safe mode restricts browser actions and webhooks for deployments that
@@ -1280,7 +1235,6 @@ export function createFirecrawlMcpServer(
     const response = await fetch(`${resolveApiBaseUrl()}${pathName}`, {
       method: 'POST',
       headers: {
-        ...AGENT_HINTS_HEADERS,
         'Content-Type': 'application/json',
         ...extraHeaders,
         Authorization: `Bearer ${apiKey}`,
@@ -1300,8 +1254,7 @@ export function createFirecrawlMcpServer(
         parsed?.error ||
           parsed?.message ||
           `Firecrawl request failed (HTTP ${response.status})`,
-        response.status,
-        readAgentHints(parsed)
+        response.status
       );
     }
     return parsed;
@@ -1423,7 +1376,6 @@ export function createFirecrawlMcpServer(
         session,
         origin
       );
-      const uploadHints = readAgentHints(uploadJson);
       const upload = parseApiData(uploadJson) as ParseUploadUrlData;
       if (!upload?.uploadUrl || !upload?.uploadRef) {
         throw new Error(
@@ -1440,7 +1392,6 @@ export function createFirecrawlMcpServer(
 
       return asText({
         success: true,
-        ...(uploadHints ? { agent_hints: uploadHints } : {}),
         mode: 'hosted-upload-ref-awaiting-upload',
         message:
           'Hosted MCP cannot read local files. Run the local upload command, then call firecrawl_parse again with uploadRef. No Firecrawl API key is included in this command.',
@@ -1544,17 +1495,15 @@ Alexandria mode, on an authenticated session with Alexandria access: \`alexandri
           },
           session
         );
-        return structuredText(preserveAgentHints(json?.data ?? json, json));
+        return structuredText(json?.data ?? json);
       }
       const client = getClient(session);
       const res = await relayTermsRequired(
         () =>
-          sdkResultWithAgentHints(client, () =>
-            client.scrape(String(url), {
-              ...cleaned,
-              origin,
-            } as any)
-          ),
+          client.scrape(String(url), {
+            ...cleaned,
+            origin,
+          } as any),
         { tool: 'firecrawl_scrape' }
       );
       return structuredText(res);
@@ -1615,12 +1564,10 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
       const client = getClient(session);
       const cleaned = removeEmptyTopLevel(options as Record<string, unknown>);
       log.info('Mapping URL', { url: String(url) });
-      const res = await sdkResultWithAgentHints(client, () =>
-        client.map(String(url), {
-          ...cleaned,
-          origin: requestOrigin(mcpClient, session),
-        } as any)
-      );
+      const res = await client.map(String(url), {
+        ...cleaned,
+        origin: requestOrigin(mcpClient, session),
+      } as any);
       return structuredText(res);
     },
   });
@@ -1848,7 +1795,6 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         : requestOrigin(undefined, session));
     await hooks.beforeKeylessRequest?.(session, origin);
     const headers: Record<string, string> = {
-      ...AGENT_HINTS_HEADERS,
       ...originHeaders(origin),
       'Content-Type': 'application/json',
       ...resolveOutbound(session).headers,
@@ -1874,14 +1820,11 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
               : undefined,
           signupUrl: keylessSignupUrlFrom(json?.signup_url),
         });
-        const hints = readAgentHints(json);
-        if (hints) payload.agent_hints = hints;
         throw new UserError(String(payload.message), payload);
       }
       throw new CoreHttpError(
         json?.error || `Firecrawl request failed (HTTP ${response.status})`,
-        response.status,
-        readAgentHints(json)
+        response.status
       );
     }
     return json;
@@ -1909,7 +1852,6 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         expiresAt: body.expiresAt,
         next: body.next ?? null,
         data: initialDocs,
-        ...(readAgentHints(body) ? { agent_hints: readAgentHints(body) } : {}),
       };
     }
 
@@ -1942,7 +1884,6 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       expiresAt: body.expiresAt,
       next: null,
       data: docs,
-      ...(readAgentHints(body) ? { agent_hints: readAgentHints(body) } : {}),
     };
   }
 
@@ -2084,7 +2025,6 @@ Eligibility is limited to successful searches within the feedback age window. Th
         if (querySuggestions) body.querySuggestions = querySuggestions;
 
         const headers: Record<string, string> = {
-          ...AGENT_HINTS_HEADERS,
           ...originHeaders(origin),
           'Content-Type': 'application/json',
         };
@@ -2135,9 +2075,6 @@ Eligibility is limited to successful searches within the feedback age window. Th
             feedbackErrorCode: parsed?.feedbackErrorCode,
             error: parsed?.error ?? `HTTP ${response.status}`,
             retryable: response.status >= 500,
-            ...(readAgentHints(parsed)
-              ? { agent_hints: readAgentHints(parsed) }
-              : {}),
           });
         }
 
@@ -2250,7 +2187,6 @@ Returns submission status, feedback ID, and accounting fields.
 
         const apiBase = resolveApiBaseUrl();
         const headers: Record<string, string> = {
-          ...AGENT_HINTS_HEADERS,
           ...originHeaders(origin),
           'Content-Type': 'application/json',
         };
@@ -2316,9 +2252,6 @@ Returns submission status, feedback ID, and accounting fields.
             feedbackErrorCode: parsed?.feedbackErrorCode,
             error: parsed?.error ?? `HTTP ${response.status}`,
             retryable: response.status >= 500,
-            ...(readAgentHints(parsed)
-              ? { agent_hints: readAgentHints(parsed) }
-              : {}),
           });
         }
 
@@ -2930,7 +2863,6 @@ Set \`redactPII\` to request redaction of personally identifiable information in
       form.append('options', JSON.stringify(optionsPayload));
 
       const headers: Record<string, string> = {
-        ...AGENT_HINTS_HEADERS,
         ...originHeaders(origin),
       };
       const outbound = resolveOutbound(session);
@@ -2955,16 +2887,9 @@ Set \`redactPII\` to request redaction of personally identifiable information in
 
       const responseText = await response.text();
       if (!response.ok) {
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(responseText);
-        } catch {
-          // Keep the original non-JSON error text.
-        }
         throw new CoreHttpError(
           `Parse request failed with status ${response.status}: ${responseText}`,
-          response.status,
-          readAgentHints(parsed)
+          response.status
         );
       }
 
@@ -2997,6 +2922,10 @@ Set \`redactPII\` to request redaction of personally identifiable information in
         builtInTools.get(name) as unknown as ToolDefinition | undefined,
     }
   );
+
+  hooks.registerResources?.({
+    addResource: (resource) => server.addResource(resource),
+  });
 
   return {
     start: (args) =>

@@ -8,12 +8,41 @@ import {
   UserError,
   type FirecrawlMcpServerHooks,
   type Session,
+  type ResourceContent,
+  type ResourceDefinition,
+  type ResourceRegistrar,
   type ToolDefinition,
+  type ToolIcon,
   type ToolResult,
 } from 'firecrawl-mcp/server';
 
+const icon: ToolIcon = {
+  src: 'https://example.com/icon.svg',
+  mimeType: 'image/svg+xml',
+  sizes: ['any'],
+  theme: 'light',
+};
+
+const resource: ResourceDefinition = {
+  uri: 'ui://example/app.html',
+  name: 'Example app',
+  mimeType: 'text/html;profile=mcp-app',
+  load: async (session): Promise<ResourceContent[]> => [
+    {
+      text: String(session?.tenant),
+      _meta: { ui: { csp: { connectDomains: [] } } },
+    },
+    {
+      blob: 'aGVsbG8=',
+      uri: 'example://binary',
+      mimeType: 'application/octet-stream',
+    },
+  ],
+};
+
 const tool: ToolDefinition = {
   name: 'embed_tenant',
+  icons: [icon],
   description: 'Return the caller tenant.',
   execute: async (_args, { session }) => {
     if (!session?.tenant)
@@ -48,6 +77,9 @@ const hooks: FirecrawlMcpServerHooks = {
     const scrape = builtInTool('firecrawl_scrape');
     if (scrape) registrar.addTool({ ...scrape, name: 'embed_scrape' });
   },
+  registerResources: (registrar: ResourceRegistrar) => {
+    registrar.addResource(resource);
+  },
   outboundRequest: (session) => ({
     headers: { 'x-tenant': String(session?.tenant) },
   }),
@@ -63,3 +95,9 @@ export const stop: () => Promise<void> = server.stop;
 // Content items must match one of the MCP content shapes.
 // @ts-expect-error a text item needs its text
 export const missingText: ToolResult = { content: [{ type: 'text' }] };
+
+// @ts-expect-error a resource needs text or blob
+export const missingResourceContent: ResourceContent = { _meta: {} };
+
+// @ts-expect-error icon themes must match the MCP light/dark variants
+export const invalidIcon: ToolIcon = { src: 'https://example.com/icon.svg', theme: 'other' };
