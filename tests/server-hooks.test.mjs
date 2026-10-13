@@ -288,7 +288,7 @@ test('wrapTool sees built-in, module and extra tools', async (t) => {
   }
 });
 
-test('onToolResult reports start and outcome with agent hints on success and error', async (t) => {
+test('onToolResult reports start and outcome on success and error', async (t) => {
   const events = [];
   const port = await startEmbedded(t, {
     apiUrl: 'http://127.0.0.1:9',
@@ -296,41 +296,32 @@ test('onToolResult reports start and outcome with agent hints on success and err
       onToolResult: (event) => events.push(event),
       registerExtraTools: (registrar) => {
         registrar.addTool(
-          extraTool('embed_hinted', async () => ({
+          extraTool('embed_ok', async () => ({
             content: [{ type: 'text', text: 'ok' }],
-            structuredContent: { agent_hints: ['hint-on-success'] },
           }))
         );
         registrar.addTool(
           extraTool('embed_failing', async () => {
-            throw Object.assign(new Error('boom'), {
-              agent_hints: ['hint-on-error'],
-            });
+            throw new Error('boom');
           })
         );
       },
     },
   });
 
-  await callTool(port, 'embed_hinted');
+  await callTool(port, 'embed_ok');
   const failed = await callTool(port, 'embed_failing');
   assert.equal(failed.isError, true);
 
-  const summary = events.map(({ tool, status, agentHints }) => ({
-    tool,
-    status,
-    agentHints,
-  }));
+  const summary = events.map(({ tool, status }) => ({ tool, status }));
   assert.deepEqual(summary, [
-    { tool: 'embed_hinted', status: 'started', agentHints: undefined },
-    {
-      tool: 'embed_hinted',
-      status: 'success',
-      agentHints: ['hint-on-success'],
-    },
-    { tool: 'embed_failing', status: 'started', agentHints: undefined },
-    { tool: 'embed_failing', status: 'error', agentHints: ['hint-on-error'] },
+    { tool: 'embed_ok', status: 'started' },
+    { tool: 'embed_ok', status: 'success' },
+    { tool: 'embed_failing', status: 'started' },
+    { tool: 'embed_failing', status: 'error' },
   ]);
+  assert.equal(events[1].result.content[0].text, 'ok');
+  assert.equal(events[3].error.message, 'boom');
   const requestIds = new Set(events.map((event) => event.requestId));
   assert.equal(
     requestIds.size,
