@@ -89,11 +89,24 @@ test('the packed package embeds through firecrawl-mcp/server', async (t) => {
   const auth = { authorization: 'Bearer embed-token' };
   const listed = await rpc(port, 'tools/list', {}, auth);
   assert.equal(listed.status, 200);
-  const names = parseSseJson(await listed.text()).result.tools.map(
-    (tool) => tool.name
-  );
+  const tools = parseSseJson(await listed.text()).result.tools;
+  const names = tools.map((tool) => tool.name);
   assert.ok(names.includes('firecrawl_scrape'));
   assert.ok(names.includes('embed_echo'));
+  assert.deepEqual(tools.find(({ name }) => name === 'embed_echo').icons, [
+    { src: 'https://example.com/icon.svg', mimeType: 'image/svg+xml', sizes: ['any'] },
+  ]);
+  const rejectedRead = await rpc(port, 'resources/read', { uri: 'ui://example/app.html' });
+  assert.equal(rejectedRead.status, 401);
+  const read = await rpc(port, 'resources/read', { uri: 'ui://example/app.html' }, auth);
+  assert.equal(read.status, 200);
+  assert.deepEqual(parseSseJson(await read.text()).result.contents, [{
+    uri: 'ui://example/app.html',
+    name: 'Example app',
+    mimeType: 'text/html;profile=mcp-app',
+    text: '<html>acme</html>',
+    _meta: { ui: { csp: { connectDomains: [], resourceDomains: [] } } },
+  }]);
 
   const called = await rpc(
     port,
