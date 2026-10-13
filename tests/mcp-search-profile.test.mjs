@@ -1015,7 +1015,7 @@ test('full surface still exposes its complete tool set alongside the search surf
   assert.equal(prm.status, 404);
 });
 
-test('full surface forwards optional search context only when supplied', async (t) => {
+test('full surface forwards client model and drops removed search objective', async (t) => {
   const { backendRequests, fullPort } = await startHostedServer(t);
   const headers = { 'x-api-key': 'fc-test' };
   const call = async (arguments_) => {
@@ -1043,7 +1043,7 @@ test('full surface forwards optional search context only when supplied', async (
   for (const field of ['objective', 'clientModel']) {
     assert.equal(field in searches[0].body, false);
   }
-  assert.equal(searches[1].body.objective, 'Find official rerender guidance');
+  assert.equal('objective' in searches[1].body, false);
   assert.equal(searches[1].body.clientModel, 'claude-sonnet-4-6');
 });
 
@@ -1137,7 +1137,7 @@ test('primary search profile uses the strict marketplace search tool, not the fu
   );
 });
 
-test('primary search profile forwards optional task context without content fetching', async (t) => {
+test('primary search profile forwards client model without content fetching', async (t) => {
   const { port, backendRequests } = await startPrimarySearchServer(t);
   const headers = { authorization: 'Bearer fco_primary_task_context' };
   const response = await jsonRpc(port, SEARCH_ENDPOINT, {
@@ -1146,7 +1146,6 @@ test('primary search profile forwards optional task context without content fetc
     params: {
       arguments: {
         query: 'React memo docs',
-        objective: 'Find official guidance on preventing unnecessary rerenders',
         clientModel: 'claude-sonnet-4-6',
         sources: ['web'],
       },
@@ -1159,9 +1158,32 @@ test('primary search profile forwards optional task context without content fetc
   assert.equal(message.result?.isError, undefined, JSON.stringify(message));
   const search = backendRequests.find((request) => request.url === '/v2/search');
   assert.ok(search);
-  assert.equal(search.body.objective, 'Find official guidance on preventing unnecessary rerenders');
+  assert.equal('objective' in search.body, false);
   assert.equal(search.body.clientModel, 'claude-sonnet-4-6');
   assert.equal(search.body.scrapeOptions, undefined);
+});
+
+test('primary search profile ignores the removed search objective', async (t) => {
+  const { port, backendRequests } = await startPrimarySearchServer(t);
+  const response = await jsonRpc(port, SEARCH_ENDPOINT, {
+    id: 14,
+    method: 'tools/call',
+    params: {
+      name: 'firecrawl_search',
+      arguments: {
+        query: 'React memo docs',
+        objective: 'Find official rerender guidance',
+      },
+    },
+    headers: { authorization: 'Bearer fco_primary_task_context' },
+  });
+  assert.equal(response.status, 200);
+  const message = parseSseJson(await response.text());
+  assert.equal(message.error, undefined, JSON.stringify(message));
+  assert.equal(message.result?.isError, undefined, JSON.stringify(message));
+  const search = backendRequests.find((request) => request.url === '/v2/search');
+  assert.ok(search);
+  assert.equal('objective' in search.body, false);
 });
 
 test('primary search profile agent language satisfies metadata policy gates', async (t) => {

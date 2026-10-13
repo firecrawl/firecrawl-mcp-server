@@ -7230,7 +7230,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_search@418ba95024f1": {
+  "firecrawl_search@36ae7cdd3550": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -7256,12 +7256,6 @@
           "description": "Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Catalogue browsing is available through firecrawl_find_tools.",
           "type": "string",
           "minLength": 1
-        },
-        "objective": {
-          "description": "Optional broader goal for this search, if known. Avoid sensitive information.",
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 5000
         },
         "clientModel": {
           "description": "Optional model identifier, if known.",
@@ -7457,7 +7451,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_search@96490b22500f": {
+  "firecrawl_search@4066838698ae": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -7483,12 +7477,6 @@
           "description": "Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Catalogue browsing is available through firecrawl_find_tools.",
           "type": "string",
           "minLength": 1
-        },
-        "objective": {
-          "description": "Optional broader goal for this search, if known. Avoid sensitive information.",
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 5000
         },
         "clientModel": {
           "description": "Optional model identifier, if known.",
@@ -7875,7 +7863,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_search@f63246a6b903": {
+  "firecrawl_search@4bd9fdfd1b04": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -7901,12 +7889,6 @@
           "description": "Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Catalogue browsing is available through firecrawl_find_tools.",
           "type": "string",
           "minLength": 1
-        },
-        "objective": {
-          "description": "Optional broader goal for this search, if known. Avoid sensitive information.",
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 5000
         },
         "clientModel": {
           "description": "Optional model identifier, if known.",
