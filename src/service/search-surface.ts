@@ -74,6 +74,13 @@ ${ALEXANDRIA_SEARCH_INSTRUCTIONS}
 Returns result groups in \`data\` and an operation \`id\`.
 `,
     outputSchema: searchOutputSchema,
+    beforeValidate: args => {
+      if (args && typeof args === 'object') {
+        delete (args as Record<string, unknown>).objective;
+        delete (args as Record<string, unknown>).clientModel;
+      }
+      return undefined;
+    },
     parameters: z
       .object({ ...searchToolBaseFields })
       // Reject unknown fields (notably scrapeOptions): this surface exposes no
@@ -88,8 +95,6 @@ Returns result groups in \`data\` and an operation \`id\`.
     execute: async (args: unknown, { session, log, client: mcpClient }): Promise<ToolResult> => {
       const {
         query,
-        objective,
-        clientModel,
         includeDomains,
         excludeDomains,
         limit,
@@ -104,8 +109,6 @@ Returns result groups in \`data\` and an operation \`id\`.
         toolDetail,
       } = args as {
         query?: string;
-        objective?: string;
-        clientModel?: string;
         domainTools?: boolean;
         toolDetail?: 'compact' | 'summary' | 'full';
         includeDomains?: string[];
@@ -127,8 +130,6 @@ Returns result groups in \`data\` and an operation \`id\`.
       const searchBody = {
         query: searchQuery,
         ...removeEmptyTopLevel({
-          objective,
-          clientModel,
           limit,
           includeDomains,
           excludeDomains,

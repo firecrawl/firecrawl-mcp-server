@@ -180,10 +180,18 @@ export type ToolContext = {
   [key: string]: unknown;
 };
 
+export type ToolIcon = {
+  src: string;
+  mimeType?: string;
+  sizes?: string[];
+  theme?: 'light' | 'dark';
+};
+
 /** A tool as registered on the server. */
 export interface ToolDefinition {
   name: string;
   description?: string;
+  icons?: ToolIcon[];
   /** A Standard Schema (for example a zod object) for the arguments. */
   parameters?: unknown;
   /** JSON Schema of the structured result. */
@@ -215,6 +223,24 @@ type RegisteredTool = Parameters<FastMCP<SessionData>['addTool']>[0];
 
 /** Registers a tool onto an instance. */
 export type ToolRegistrar = { addTool(tool: ToolDefinition): void };
+
+export type ResourceContent = ({ text: string } | { blob: string }) & {
+  uri?: string;
+  mimeType?: string;
+  _meta?: Record<string, unknown>;
+};
+
+export interface ResourceDefinition {
+  uri: string;
+  name: string;
+  description?: string;
+  mimeType?: string;
+  load(session?: Session): Promise<ResourceContent | ResourceContent[]>;
+}
+
+export type ResourceRegistrar = {
+  addResource(resource: ResourceDefinition): void;
+};
 
 /** The HTTP request `authenticate` receives; absent for stdio. */
 export type AuthenticationRequest = {
@@ -288,6 +314,7 @@ export interface FirecrawlMcpServerHooks {
     registrar: ToolRegistrar,
     context: ExtraToolsContext
   ) => void;
+  registerResources?: (registrar: ResourceRegistrar) => void;
   /** Credential and headers for each Firecrawl API request of a session. */
   outboundRequest?: (
     session: SessionData | undefined
@@ -2972,6 +2999,10 @@ Set \`redactPII\` to request redaction of personally identifiable information in
         builtInTools.get(name) as unknown as ToolDefinition | undefined,
     }
   );
+
+  hooks.registerResources?.({
+    addResource: (resource) => server.addResource(resource),
+  });
 
   return {
     start: (args) =>

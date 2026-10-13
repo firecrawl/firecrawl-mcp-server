@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   fastmcp@4.3.2:
-    hash: 08f77b633292d9ae4cb022c0fa5bd722dbd5c1aaaad600204f8ed38339bfd37b
+    hash: 37f9a424ae5b0b6202b2b16109a1ea88b69cdcda5407f13eda6654a56489ad70
     path: patches/fastmcp@4.3.2.patch
 
 importers:
@@ -21,7 +21,7 @@ importers:
         version: 17.2.2
       fastmcp:
         specifier: 4.3.2
-        version: 4.3.2(patch_hash=08f77b633292d9ae4cb022c0fa5bd722dbd5c1aaaad600204f8ed38339bfd37b)
+        version: 4.3.2(patch_hash=37f9a424ae5b0b6202b2b16109a1ea88b69cdcda5407f13eda6654a56489ad70)
       firecrawl:
         specifier: 4.42.0
         version: 4.42.0
@@ -2498,7 +2498,7 @@ snapshots:
 
   fast-uri@3.1.3: {}
 
-  fastmcp@4.3.2(patch_hash=08f77b633292d9ae4cb022c0fa5bd722dbd5c1aaaad600204f8ed38339bfd37b):
+  fastmcp@4.3.2(patch_hash=37f9a424ae5b0b6202b2b16109a1ea88b69cdcda5407f13eda6654a56489ad70):
     dependencies:
       '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
       '@standard-schema/spec': 1.0.0
