@@ -77,6 +77,7 @@ Returns result groups in \`data\` and an operation \`id\`.
     beforeValidate: args => {
       if (args && typeof args === 'object') {
         delete (args as Record<string, unknown>).objective;
+        delete (args as Record<string, unknown>).clientModel;
       }
       return undefined;
     },
@@ -94,7 +95,6 @@ Returns result groups in \`data\` and an operation \`id\`.
     execute: async (args: unknown, { session, log, client: mcpClient }): Promise<ToolResult> => {
       const {
         query,
-        clientModel,
         includeDomains,
         excludeDomains,
         limit,
@@ -109,7 +109,6 @@ Returns result groups in \`data\` and an operation \`id\`.
         toolDetail,
       } = args as {
         query?: string;
-        clientModel?: string;
         domainTools?: boolean;
         toolDetail?: 'compact' | 'summary' | 'full';
         includeDomains?: string[];
@@ -131,7 +130,6 @@ Returns result groups in \`data\` and an operation \`id\`.
       const searchBody = {
         query: searchQuery,
         ...removeEmptyTopLevel({
-          clientModel,
           limit,
           includeDomains,
           excludeDomains,

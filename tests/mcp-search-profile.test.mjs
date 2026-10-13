@@ -1015,7 +1015,7 @@ test('full surface still exposes its complete tool set alongside the search surf
   assert.equal(prm.status, 404);
 });
 
-test('full surface forwards client model and drops removed search objective', async (t) => {
+test('full surface drops removed search task context', async (t) => {
   const { backendRequests, fullPort } = await startHostedServer(t);
   const headers = { 'x-api-key': 'fc-test' };
   const call = async (arguments_) => {
@@ -1044,7 +1044,7 @@ test('full surface forwards client model and drops removed search objective', as
     assert.equal(field in searches[0].body, false);
   }
   assert.equal('objective' in searches[1].body, false);
-  assert.equal(searches[1].body.clientModel, 'claude-sonnet-4-6');
+  assert.equal('clientModel' in searches[1].body, false);
 });
 
 test('primary search profile is OAuth-only, nine-tool frozen, and ready without keyless configuration', async (t) => {
@@ -1137,7 +1137,7 @@ test('primary search profile uses the strict marketplace search tool, not the fu
   );
 });
 
-test('primary search profile forwards client model without content fetching', async (t) => {
+test('primary search profile ignores legacy client model without content fetching', async (t) => {
   const { port, backendRequests } = await startPrimarySearchServer(t);
   const headers = { authorization: 'Bearer fco_primary_task_context' };
   const response = await jsonRpc(port, SEARCH_ENDPOINT, {
@@ -1159,11 +1159,11 @@ test('primary search profile forwards client model without content fetching', as
   const search = backendRequests.find((request) => request.url === '/v2/search');
   assert.ok(search);
   assert.equal('objective' in search.body, false);
-  assert.equal(search.body.clientModel, 'claude-sonnet-4-6');
+  assert.equal('clientModel' in search.body, false);
   assert.equal(search.body.scrapeOptions, undefined);
 });
 
-test('primary search profile ignores the removed search objective', async (t) => {
+test('primary search profile ignores the removed search task context', async (t) => {
   const { port, backendRequests } = await startPrimarySearchServer(t);
   const response = await jsonRpc(port, SEARCH_ENDPOINT, {
     id: 14,
@@ -1173,6 +1173,7 @@ test('primary search profile ignores the removed search objective', async (t) =>
       arguments: {
         query: 'React memo docs',
         objective: 'Find official rerender guidance',
+        clientModel: 'claude-sonnet-4-6',
       },
     },
     headers: { authorization: 'Bearer fco_primary_task_context' },
@@ -1184,6 +1185,7 @@ test('primary search profile ignores the removed search objective', async (t) =>
   const search = backendRequests.find((request) => request.url === '/v2/search');
   assert.ok(search);
   assert.equal('objective' in search.body, false);
+  assert.equal('clientModel' in search.body, false);
 });
 
 test('primary search profile agent language satisfies metadata policy gates', async (t) => {
