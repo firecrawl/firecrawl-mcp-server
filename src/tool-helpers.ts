@@ -45,8 +45,6 @@ export const searchToolBaseFields = {
     .string()
     .min(1)
     .describe('Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Catalogue browsing is available through firecrawl_find_tools.'),
-  objective: z.string().trim().min(1).max(5000).optional().describe('Optional broader goal for this search, if known. Avoid sensitive information.'),
-  clientModel: z.string().trim().min(1).max(128).optional().describe('Optional model identifier, if known.'),
   domainTools: z
     .boolean()
     .optional()
