@@ -48,8 +48,8 @@ import {
   ALEXANDRIA_SEARCH_LEAD,
   ALEXANDRIA_CONTRACT_GUIDANCE,
   ALEXANDRIA_CATALOGUE_SENTENCE,
-  ALEXANDRIA_CATALOGUE_VERTICALS,
   ALEXANDRIA_SOURCES_OPT_OUT,
+  FIND_TOOLS_DESCRIPTION,
 } from './alexandria';
 import { alexandriaOutput } from './alexandria-output';
 import { registerDeveloperTools } from './developer';
@@ -390,6 +390,7 @@ export {
   ALEXANDRIA_CATALOGUE_VERTICALS,
   ALEXANDRIA_SEARCH_INSTRUCTIONS,
   defaultDomainTools,
+  FIND_TOOLS_DESCRIPTION,
   hasAlexandria,
   normalizeSearchSources,
   searchQueryIsValid,
@@ -1700,8 +1701,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       destructiveHint: false,
       idempotentHint: true,
     },
-    description:
-      'Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers ' + ALEXANDRIA_CATALOGUE_VERTICALS + ': typed, sourced records through published contracts. Prefer normal firecrawl_search for a data task; it already returns matching providers. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Use query for semantic discovery or urls to find providers for a website. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.',
+    description: FIND_TOOLS_DESCRIPTION,
     outputSchema: findToolsOutputSchema,
     parameters: findToolsSchema,
     execute: async (args, { session, client: mcpClient }) => {

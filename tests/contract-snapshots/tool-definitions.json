@@ -2019,7 +2019,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_find_tools@69da36683696": {
+  "firecrawl_find_tools@6842942c25ec": {
     "annotations": {
       "title": "Find Tools",
       "readOnlyHint": true,
@@ -2028,7 +2028,7 @@
       "idempotentHint": true
     },
     "title": "Find Tools",
-    "description": "Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more: typed, sourced records through published contracts. Prefer normal firecrawl_search for a data task; it already returns matching providers. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Use query for semantic discovery or urls to find providers for a website. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.",
+    "description": "Find Alexandria data providers and read their contracts; free, and executes nothing. {\"urls\": [\"<page URL>\"]} lists tools covering a site, {\"query\": \"<data you need>\"} searches, no arguments browses categories. Each listed tool has separate `provider` and `capability` fields: read its contract with {\"providers\": [provider], \"capabilities\": [capability]} (never the combined `id`), then run it with firecrawl_scrape {\"alexandria\": {provider, capability, options}}. Alexandria covers companies, people, jobs, filings, public records, real estate, places, prices, package registries, news, research and more. Prefer normal firecrawl_search for a data task; it already returns matching providers with web results. Use this tool for a full contract, catalogue browsing, or before scraping the same fields from several pages.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",

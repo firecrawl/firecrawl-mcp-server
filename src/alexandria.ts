@@ -73,6 +73,9 @@ export const ALEXANDRIA_SOURCES_OPT_OUT =
 // mechanics live on the parameters they describe.
 export const ALEXANDRIA_SEARCH_LEAD =
   'Authenticated search also returns matching Alexandria data providers in data.tools (' + ALEXANDRIA_CATALOGUE_VERTICALS + '). Prefer a provider over scraping pages when the task needs the same fields across several entities, exact figures or timestamps, provenance, or many records; use web results when they already answer the question. ' + ALEXANDRIA_SOURCES_OPT_OUT;
+// Shared by both server surfaces. Names the listing fields find_tools takes, so agents don't pass a tool's id as a capability.
+export const FIND_TOOLS_DESCRIPTION =
+  'Find Alexandria data providers and read their contracts; free, and executes nothing. {"urls": ["<page URL>"]} lists tools covering a site, {"query": "<data you need>"} searches, no arguments browses categories. Each listed tool has separate `provider` and `capability` fields: read its contract with {"providers": [provider], "capabilities": [capability]} (never the combined `id`), then run it with firecrawl_scrape {"alexandria": {provider, capability, options}}. Alexandria covers companies, people, jobs, filings, public records, real estate, places, prices, package registries, news, research and more. Prefer normal firecrawl_search for a data task; it already returns matching providers with web results. Use this tool for a full contract, catalogue browsing, or before scraping the same fields from several pages.';
 export const ALEXANDRIA_CONTRACT_GUIDANCE =
   'The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and response.key (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination.';
 
