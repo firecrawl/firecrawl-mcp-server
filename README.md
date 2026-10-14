@@ -344,6 +344,7 @@ Use this guide to select the right tool for your task:
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
 - **If you need interactive browser automation** (click, type, navigate): use **interact** with a URL for a fresh page, or **scrape** + **interact** when you already scraped the page or need tighter scrape control
 - **If you need data from a catalogued provider** (Alexandria): search with `sources: ["alexandria"]`, inspect the selected contract with **find_tools**, and execute it with **scrape** `alexandria`
+- **If the task matches an Alexandria pack** (fantasy football lineups, marketing research): load the playbook with **packs**, then follow its recipe through **find_tools** and **scrape**
 
 ### Quick Reference Table
 
@@ -356,6 +357,7 @@ Use this guide to select the right tool for your task:
 | parse     | Files and hosted upload refs                   | markdown, JSON, or document output               |
 | search    | Web search for info                            | results[]                                        |
 | find_tools | Alexandria catalogue browsing and URL lookup | providers, tool contracts and nextTool navigation |
+| packs     | Curated Alexandria playbooks                   | questions to ask, ordered capabilities, output rules |
 | developer | Programming questions over developer sources   | results[] with passages                          |
 | gov       | US primary law and regulatory material         | results[] with snippets                          |
 | agent     | Multi-source research, unknown or many sites   | JSON (structured data)                           |
@@ -1357,6 +1359,18 @@ The CLI discovery sequence maps to these MCP calls:
 | Execute | `firecrawl_scrape` | `{"alexandria":{"provider":"<provider-id>","capability":"<capability-id>","options":{"<required-field>":"<value>"}}}` |
 
 Find Tools and execution are available on both the full surface and the search surface. Reuse a complete contract from search when present rather than making another discovery call. Follow returned `nextTool` navigation only when more results are needed.
+
+### Alexandria packs
+
+`firecrawl_packs` returns curated playbooks for common jobs built on Alexandria providers: `fantasy` (start/sit, waivers, trades, projection checks, draft prep) and `marketing` (competitors, content from search demand, creator and podcast partners, messaging history). It is read-only, free, and makes no API call.
+
+| Call | Returns |
+| --- | --- |
+| `{}` | The packs, their recipes, and a `nextTool` for each |
+| `{"pack":"fantasy"}` | The playbook: questions to ask first, every recipe with its ordered capabilities, output rules, and a `nextTool` that expands their contracts with `firecrawl_find_tools` |
+| `{"pack":"marketing","task":"compare competitors' traffic"}` | The matching recipe in full and the others by title; `task` can also be a recipe ID, and without `pack` it selects across packs |
+
+Pack definitions live in `src/packs/<id>.json`, one file per pack. When `firecrawl_search` or `firecrawl_find_tools` returns a provider that belongs to a pack, the result carries a `packs` pointer to the matching playbook. Like `firecrawl_find_tools`, the tool needs an API key.
 
 ### Alexandria session feedback
 

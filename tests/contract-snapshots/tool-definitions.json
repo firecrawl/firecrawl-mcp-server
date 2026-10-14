@@ -3814,6 +3814,120 @@
       "additionalProperties": false
     }
   },
+  "firecrawl_packs@1774d88971e3": {
+    "annotations": {
+      "title": "Alexandria packs",
+      "readOnlyHint": true,
+      "openWorldHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true
+    },
+    "title": "Alexandria packs",
+    "description": "Use this when the user wants help with fantasy football: who to start or sit, a fantasy lineup, waiver pickups, a trade offer, how projections held up, or draft rankings; or marketing research: competitors' traffic or channels, how a site's messaging or pricing changed, content ideas from search demand, or creators, podcasts and sponsorships to partner with. Returns a curated Alexandria playbook: questions to ask the user first, ordered recipes naming the exact provider capabilities, output rules, and cost and terms notes. With no arguments, lists packs; pack returns its playbook; task selects the matching recipe. Read-only and free. Read the selected capability contracts with firecrawl_find_tools (nextTool) and run them with firecrawl_scrape.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "pack": {
+          "description": "Pack ID. Omit to list the packs.",
+          "type": "string",
+          "enum": [
+            "fantasy",
+            "marketing"
+          ]
+        },
+        "task": {
+          "description": "A recipe ID or the user's request in a few words; selects the matching recipe.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "additionalProperties": false
+    },
+    "name": "firecrawl_packs",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "The pack list, or one pack playbook.",
+      "type": "object",
+      "properties": {
+        "packs": {
+          "description": "Available packs, each with a nextTool that loads its playbook."
+        },
+        "message": {
+          "description": "Guidance when no recipe matched the task.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pack": {
+          "description": "Pack ID.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "description": "Pack title.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "summary": {
+          "description": "What the pack helps with.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "askFirst": {
+          "description": "Questions to ask the user before calling any capability."
+        },
+        "recipes": {
+          "description": "Selected recipes: ordered steps naming the capabilities or tools to use, and the expected output."
+        },
+        "otherRecipes": {
+          "description": "Other recipes in the pack, selectable with task."
+        },
+        "rules": {
+          "description": "Output, sourcing, cost and terms rules for the pack."
+        },
+        "page": {
+          "description": "Public page describing the pack.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nextTool": {
+          "description": "A firecrawl_find_tools call that expands the contracts of the selected capabilities."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
   "firecrawl_parse@1acaf77898b6": {
     "annotations": {
       "title": "Firecrawl file parsing",

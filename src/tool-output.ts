@@ -171,6 +171,22 @@ export const findToolsOutputSchema = z
   })
   .describe('One page of the Alexandria catalogue: categories, providers, tools, or one contract.');
 
+export const packsOutputSchema = z
+  .object({
+    packs: unknown('Available packs, each with a nextTool that loads its playbook.'),
+    message: str('Guidance when no recipe matched the task.'),
+    pack: str('Pack ID.'),
+    title: str('Pack title.'),
+    summary: str('What the pack helps with.'),
+    askFirst: unknown('Questions to ask the user before calling any capability.'),
+    recipes: unknown('Selected recipes: ordered steps naming the capabilities or tools to use, and the expected output.'),
+    otherRecipes: unknown('Other recipes in the pack, selectable with task.'),
+    rules: unknown('Output, sourcing, cost and terms rules for the pack.'),
+    page: str('Public page describing the pack.'),
+    nextTool: unknown('A firecrawl_find_tools call that expands the contracts of the selected capabilities.'),
+  })
+  .describe('The pack list, or one pack playbook.');
+
 export const feedbackOutputSchema = z
   .object({
     success,

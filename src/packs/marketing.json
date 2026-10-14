@@ -1,0 +1,169 @@
+{
+  "id": "marketing",
+  "title": "Marketing research",
+  "summary": "Sourced marketing briefs: competitor traffic and channels, messaging history, rising search demand, and creator and podcast partners.",
+  "when": "competitors' traffic or channels, how a site's messaging or pricing changed, content ideas from search demand, or creators, podcasts and sponsorships to partner with",
+  "page": "https://www.firecrawl.dev/alexandria/marketing",
+  "providers": [
+    "similarweb",
+    "oriane",
+    "firecrawl-trends",
+    "particle",
+    "icons-computer",
+    "web-archive-org"
+  ],
+  "askFirst": [
+    "Their brand or site, the competitors (domains) and the market or country.",
+    "The target audience and the goal: a campaign, content plan, partner shortlist or launch readout.",
+    "The time window, and how many credits they are willing to spend."
+  ],
+  "recipes": [
+    {
+      "id": "competitors",
+      "title": "Know where competitors win",
+      "when": "Comparing competitors' traffic, acquisition channels and positioning.",
+      "keywords": [
+        "competitor",
+        "competitors",
+        "compare",
+        "traffic",
+        "channel",
+        "teardown",
+        "share of voice",
+        "versus",
+        "vs"
+      ],
+      "steps": [
+        {
+          "use": [
+            "similarweb/web/traffic",
+            "similarweb/channels/share"
+          ],
+          "do": "Traffic, engagement and marketing channel shares per domain for one complete month."
+        },
+        {
+          "use": [
+            "web-archive-org/captures/history",
+            "web-archive-org/captures/content"
+          ],
+          "do": "Find a homepage capture per year with history, then read its text with content."
+        },
+        {
+          "use": [
+            "firecrawl-trends/trends/suggestions",
+            "firecrawl-trends/trends/related_queries"
+          ],
+          "do": "Disambiguate brand terms, then find related and rising queries."
+        }
+      ],
+      "output": "Traffic and channel mix, how each story changed, and three campaign opportunities, with every figure cited."
+    },
+    {
+      "id": "content",
+      "title": "Catch demand before everyone else",
+      "when": "Content ideas from growing search interest.",
+      "keywords": [
+        "content",
+        "seo",
+        "search interest",
+        "trend",
+        "trending",
+        "rising",
+        "keyword",
+        "article",
+        "calendar",
+        "blog"
+      ],
+      "steps": [
+        {
+          "use": [
+            "firecrawl-trends/trends/interest_over_time",
+            "firecrawl-trends/trends/related_queries"
+          ],
+          "do": "Find topics with growing interest and their rising queries."
+        },
+        {
+          "use": [
+            "firecrawl_search",
+            "firecrawl_scrape"
+          ],
+          "do": "See which pages already rank for the best queries and read the top results."
+        }
+      ],
+      "output": "Rising queries, who already ranks, and three article briefs with audience and sources."
+    },
+    {
+      "id": "partners",
+      "title": "Find your next audience",
+      "when": "Shortlisting podcasts and creators to sponsor or partner with.",
+      "keywords": [
+        "creator",
+        "creators",
+        "influencer",
+        "podcast",
+        "podcasts",
+        "sponsor",
+        "sponsorship",
+        "partner",
+        "tiktok",
+        "instagram"
+      ],
+      "steps": [
+        {
+          "use": [
+            "particle/podcasts/search",
+            "particle/advertising/show/sponsors"
+          ],
+          "do": "Find relevant shows and the sponsors already buying them."
+        },
+        {
+          "use": [
+            "oriane/tiktok/profiles-search",
+            "oriane/instagram/profiles-search"
+          ],
+          "do": "Find creators by handle, name or bio, with follower counts."
+        }
+      ],
+      "output": "A five-partner shortlist with audience, topic and sponsor evidence, and caveats."
+    },
+    {
+      "id": "page-history",
+      "title": "Messaging and pricing history",
+      "when": "How a homepage, pricing page or launch page changed over time.",
+      "keywords": [
+        "history",
+        "messaging",
+        "positioning",
+        "pricing page",
+        "changed",
+        "archive",
+        "wayback",
+        "launch",
+        "before and after"
+      ],
+      "steps": [
+        {
+          "use": [
+            "web-archive-org/captures/history",
+            "web-archive-org/captures/content"
+          ],
+          "do": "Pick captures by date (history with date) and read each version's text."
+        },
+        {
+          "use": [
+            "similarweb/web/traffic",
+            "firecrawl-trends/trends/interest_over_time"
+          ],
+          "do": "Optionally check whether traffic or search interest moved after each change."
+        }
+      ],
+      "output": "A dated change log of headline, plans and prices, with what each change signals."
+    }
+  ],
+  "rules": [
+    "Check each capability's current inputs and price with firecrawl_find_tools before calling it, and tell the user the cost before a paid call. Similarweb bills per returned metric or row and costs far more than the other sources, so confirm first and keep metrics and limits small.",
+    "When a provider needs its data terms accepted, show the terms and ask an organization admin to accept them in the Firecrawl dashboard. A data request is never acceptance.",
+    "Every figure names its source. Label Similarweb figures as estimates. Oriane and Particle search indexes, so an empty result means not indexed, not absent. Say what is missing or failed; never invent metrics.",
+    "Return a short brief: findings, sources, and actionable next steps."
+  ]
+}
