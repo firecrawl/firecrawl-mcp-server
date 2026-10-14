@@ -50,10 +50,10 @@ export const findToolsSchema = z
       .min(1)
       .max(100)
       .optional(),
-    providers: z.array(z.string().min(1)).min(1).max(50).optional().describe('Provider IDs returned by category browsing. Lists compact tools by default.'),
+    providers: z.array(z.string().min(1)).min(1).max(50).optional().describe('Provider slugs, as in each listed tool\'s `provider` field (e.g. "apps-apple-com"). Alone, lists that provider\'s compact tools; with capabilities, scopes them.'),
     categories: z.array(z.string().min(1)).min(1).max(50).optional().describe('Category IDs returned by an empty call. Lists providers by default.'),
     groups: z.array(z.string().min(1)).min(1).max(50).optional().describe('Optional group IDs for explicit group browsing.'),
-    capabilities: z.array(z.string().min(1)).min(1).max(50).optional().describe('Exact capability IDs. A selected capability expands its complete contract by default.'),
+    capabilities: z.array(z.string().min(1)).min(1).max(50).optional().describe('Capability addresses, as in each listed tool\'s `capability` field (e.g. "apps/app"), not its provider-prefixed `id`. Put the provider in `providers`: {"providers": ["apps-apple-com"], "capabilities": ["apps/app"]}. A selected capability expands its complete contract by default.'),
     level: z.enum(['categories', 'providers', 'groups', 'tools']).optional(),
     expand: z.array(z.enum(['options', 'response', 'examples'])).optional().describe('Use ["options", "response"] for inputs and output shape without example payloads; [] keeps results compact. Omit for full contracts on selected capabilities.'),
     limit: z.number().int().min(1).max(100).optional(),
