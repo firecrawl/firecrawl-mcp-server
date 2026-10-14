@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
-  ALEXANDRIA_CATALOGUE_VERTICALS,
   ALEXANDRIA_SEARCH_INSTRUCTIONS,
+  FIND_TOOLS_DESCRIPTION,
   assertExchangeCredential,
   defaultDomainTools,
   type ExtraToolsContext,
@@ -41,9 +41,6 @@ Scrape one URL and return its content, or execute catalogued Alexandria capabili
 Alexandria mode: \`alexandria\` selects catalogued capability execution and is mutually exclusive with \`url\`. Alexandria execution is billed at the capability's listed price and needs a team with Alexandria enabled.
 `;
 }
-
-const SEARCH_SURFACE_FIND_TOOLS_DESCRIPTION =
-  'Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers ' + ALEXANDRIA_CATALOGUE_VERTICALS + ': typed, sourced records through published contracts. Prefer normal firecrawl_search for a data task; it already returns matching providers. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Use query for semantic discovery or urls to find providers for a website. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.';
 
 // Search-surface variant of firecrawl_search. It takes no scrapeOptions and
 // builds the outbound /v2/search body from an explicit set of fields, so the
@@ -200,7 +197,7 @@ export function searchSurfaceTools({
     if (findTools) {
       surface.addTool({
         ...findTools,
-        description: SEARCH_SURFACE_FIND_TOOLS_DESCRIPTION,
+        description: FIND_TOOLS_DESCRIPTION,
       });
     }
     if (scrape) {

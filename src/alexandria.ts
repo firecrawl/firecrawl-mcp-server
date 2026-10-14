@@ -50,10 +50,10 @@ export const findToolsSchema = z
       .min(1)
       .max(100)
       .optional(),
-    providers: z.array(z.string().min(1)).min(1).max(50).optional().describe('Provider IDs returned by category browsing. Lists compact tools by default.'),
+    providers: z.array(z.string().min(1)).min(1).max(50).optional().describe('Provider slugs, as in each listed tool\'s `provider` field (e.g. "apps-apple-com"). Alone, lists that provider\'s compact tools; with capabilities, scopes them.'),
     categories: z.array(z.string().min(1)).min(1).max(50).optional().describe('Category IDs returned by an empty call. Lists providers by default.'),
     groups: z.array(z.string().min(1)).min(1).max(50).optional().describe('Optional group IDs for explicit group browsing.'),
-    capabilities: z.array(z.string().min(1)).min(1).max(50).optional().describe('Exact capability IDs. A selected capability expands its complete contract by default.'),
+    capabilities: z.array(z.string().min(1)).min(1).max(50).optional().describe('Capability addresses, as in each listed tool\'s `capability` field (e.g. "apps/app"). Put the provider in `providers`: {"providers": ["apps-apple-com"], "capabilities": ["apps/app"]}. A selected capability expands its complete contract by default.'),
     level: z.enum(['categories', 'providers', 'groups', 'tools']).optional(),
     expand: z.array(z.enum(['options', 'response', 'examples'])).optional().describe('Use ["options", "response"] for inputs and output shape without example payloads; [] keeps results compact. Omit for full contracts on selected capabilities.'),
     limit: z.number().int().min(1).max(100).optional(),
@@ -73,6 +73,9 @@ export const ALEXANDRIA_SOURCES_OPT_OUT =
 // mechanics live on the parameters they describe.
 export const ALEXANDRIA_SEARCH_LEAD =
   'Authenticated search also returns matching Alexandria data providers in data.tools (' + ALEXANDRIA_CATALOGUE_VERTICALS + '). Prefer a provider over scraping pages when the task needs the same fields across several entities, exact figures or timestamps, provenance, or many records; use web results when they already answer the question. ' + ALEXANDRIA_SOURCES_OPT_OUT;
+// Shared by both server surfaces. Names the listing fields find_tools takes, so agents don't pass a tool's id as a capability.
+export const FIND_TOOLS_DESCRIPTION =
+  'Find Alexandria data providers and read their contracts; free, and executes nothing. {"urls": ["<page URL>"]} lists tools covering a site, {"query": "<data you need>"} searches, no arguments browses categories. Each listed tool has separate `provider` and `capability` fields: read its contract with {"providers": [provider], "capabilities": [capability]} (never the combined `id`), then run it with firecrawl_scrape {"alexandria": {provider, capability, options}}. Alexandria covers companies, people, jobs, filings, public records, real estate, places, prices, package registries, news, research and more. Prefer normal firecrawl_search for a data task; it already returns matching providers with web results. Use this tool for a full contract, catalogue browsing, or before scraping the same fields from several pages.';
 export const ALEXANDRIA_CONTRACT_GUIDANCE =
   'The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and response.key (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination.';
 
