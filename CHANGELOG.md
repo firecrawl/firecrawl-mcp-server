@@ -6,6 +6,17 @@
 
 - Experimental MCP Apps view for Alexandria results, off by default. With `FIRECRAWL_MCP_APPS=true` (or `mcpApps: true` for embedders), `firecrawl_scrape` declares `_meta.ui.resourceUri` and the server serves `ui://firecrawl/alexandria-results.html` (`text/html;profile=mcp-app`). MCP Apps hosts such as ChatGPT and Claude render each Alexandria call as a table, with a bar chart when one column is numeric. Tool inputs and outputs are unchanged, and hosts without MCP Apps support ignore the metadata.
 
+## [3.30.1] - 2026-10-14
+
+### Added
+
+- `firecrawl_find_tools` accepts `includeCosts`. When it is `true`, tool results carry per-capability credit prices as before, and `nextTool` arguments keep the flag. The server handles it locally and does not send it upstream.
+
+### Changed
+
+- Alexandria output omits per-capability credit prices by default. `creditsCost`, `perRecord`, `billing`, `recordsPerUnit` and `zeroDataRetentionCreditsCost` are dropped from `firecrawl_find_tools` items and related tools, from `data.tools` in `firecrawl_search` and URL-mode `firecrawl_scrape`, and from each Alexandria result entry. Execution request totals such as `data.creditsCost` are unchanged; the free `firecrawl_find_tools` response omits its zero total.
+- Hosted instructions say Alexandria execution is billed per capability, replacing "billed at the capability's listed price".
+
 ## [3.30.0] - 2026-10-14
 
 ### Added

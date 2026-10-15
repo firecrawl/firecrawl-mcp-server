@@ -1112,14 +1112,16 @@ Start with no arguments for categories, then progressively narrow the catalogue:
 | --- | --- |
 | `{}` | Categories and short descriptions |
 | `{"categories":["podcasts"]}` | Providers in that category |
-| `{"categories":["podcasts"],"providers":["particle"]}` | Compact tool names, descriptions, and prices |
+| `{"categories":["podcasts"],"providers":["particle"]}` | Compact tool names and descriptions |
 | `{"providers":["particle"],"capabilities":["podcasts/episodes/search"]}` | Complete selected inputs, constraints, response, and examples |
 
 No group hop is required. Explicit `level` supports `categories`, `providers`,
 `groups`, or `tools`; explicit `expand` selects contract sections. `expand: []`
 keeps results compact even when selecting a capability. For broad full contracts,
 explicitly request `level: "tools"` and `expand: ["options", "response", "examples"]`.
-URLs provide contextual discovery without fetching the page.
+URLs provide contextual discovery without fetching the page. Tool results omit
+per-capability credit prices unless `includeCosts: true` is set; follow-up
+`nextTool` arguments keep it.
 
 Results are in `data.alexandria[0].data`. Follow an item's `nextTool` by calling
 its `name` with its `arguments`; the page's `nextTool` advances pagination.
@@ -1146,7 +1148,7 @@ These controls require the matching Alexandria API deployment.
 }
 ```
 
-**Returns:** `{ success, scrape_id, requestId, data: { alexandria: [...], creditsCost } }`. Each item is either a result (`provider`, `capability`, `creditsCost`, `data`, `records`, `upstreamStatus`) or an `error` with a `code`; the batch never fails as a whole for a provider error and `data.creditsCost` sums the successful items. Alexandria error bodies (403 without Alexandria access, and 402/409 billing statuses) are relayed in-band with their `code`.
+**Returns:** `{ success, scrape_id, requestId, data: { alexandria: [...], creditsCost } }`. Each item is either a result (`provider`, `capability`, `data`, `records`, `upstreamStatus`) or an `error` with a `code`; the batch never fails as a whole for a provider error and `data.creditsCost` is the total charged for the request. Alexandria error bodies (403 without Alexandria access, and 402/409 billing statuses) are relayed in-band with their `code`.
 
 Execution generates one `x-request-id` and returns it on success or failure. Retry
 the identical payload with that `requestId`; do not create a new ID after an
