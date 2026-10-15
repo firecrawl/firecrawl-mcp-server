@@ -20,6 +20,7 @@ test('ordinary search defaults to web and both tool matches, with explicit opt-o
     assert.notEqual(result.isError, true);
     assert.equal(api.requests.at(-1).body.toolDetail, 'compact');
     assert.equal(toolText(result).data.tools[0].provider, 'fred');
+    assert.equal('creditsCost' in toolText(result).data.tools[0], false);
     assert.deepEqual(api.requests.at(-1).body.sources, sources);
     assert.equal(api.requests.at(-1).body.domainTools, domainTools);
   }
