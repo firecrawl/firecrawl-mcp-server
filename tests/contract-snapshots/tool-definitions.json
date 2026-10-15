@@ -2019,7 +2019,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_find_tools@683a50468532": {
+  "firecrawl_find_tools@c6c4aa217920": {
     "annotations": {
       "title": "Find Tools",
       "readOnlyHint": true,
@@ -2049,7 +2049,7 @@
           }
         },
         "providers": {
-          "description": "Provider slugs, as in each listed tool's `provider` field (e.g. \"apps-apple-com\"). Alone, lists that provider's compact tools; with capabilities, scopes them.",
+          "description": "Values from each listed tool's `provider` field (e.g. \"apps-apple-com\"). Alone, lists that provider's compact tools; with capabilities, scopes them.",
           "minItems": 1,
           "maxItems": 50,
           "type": "array",
@@ -2079,7 +2079,7 @@
           }
         },
         "capabilities": {
-          "description": "Capability addresses, as in each listed tool's `capability` field (e.g. \"apps/app\"). Put the provider in `providers`: {\"providers\": [\"apps-apple-com\"], \"capabilities\": [\"apps/app\"]}. A selected capability expands its complete contract by default.",
+          "description": "Values from each listed tool's `capability` field (e.g. \"apps/app\"). Put the provider in `providers`: {\"providers\": [\"apps-apple-com\"], \"capabilities\": [\"apps/app\"]}. A selected capability expands its complete contract by default.",
           "minItems": 1,
           "maxItems": 50,
           "type": "array",
