@@ -2019,7 +2019,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_find_tools@b2f832a3956b": {
+  "firecrawl_find_tools@c6c4aa217920": {
     "annotations": {
       "title": "Find Tools",
       "readOnlyHint": true,
@@ -2049,7 +2049,7 @@
           }
         },
         "providers": {
-          "description": "Provider IDs returned by category browsing. Lists compact tools by default.",
+          "description": "Values from each listed tool's `provider` field (e.g. \"apps-apple-com\"). Alone, lists that provider's compact tools; with capabilities, scopes them.",
           "minItems": 1,
           "maxItems": 50,
           "type": "array",
@@ -2079,7 +2079,7 @@
           }
         },
         "capabilities": {
-          "description": "Exact capability IDs. A selected capability expands its complete contract by default.",
+          "description": "Values from each listed tool's `capability` field (e.g. \"apps/app\"). Put the provider in `providers`: {\"providers\": [\"apps-apple-com\"], \"capabilities\": [\"apps/app\"]}. A selected capability expands its complete contract by default.",
           "minItems": 1,
           "maxItems": 50,
           "type": "array",
