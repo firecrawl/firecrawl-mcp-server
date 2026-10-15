@@ -61,6 +61,7 @@ function registerMarketplaceSearchTool(
       readOnlyHint: true,
       openWorldHint: true,
       destructiveHint: false,
+      idempotentHint: true,
     },
     description: `
 Search web and specialized indexes, returning ranked results with query-relevant highlights. Each web result is a title, URL, and description. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit result types to \`research\`, \`pdf\`, \`developer\`, or \`gov\`.

@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.30.2] - 2026-10-15
+
+### Added
+
+- The server identifies itself with a `title` ("Firecrawl"), a `description`, a `websiteUrl` and `icons` in the `initialize` result, next to the unchanged `name` and `version`. The bundled fastmcp patch adds `title`, `description`, `websiteUrl` and `icons` server options (the first, third and fourth use upstream fastmcp's names).
+- Every tool declares `idempotentHint`: `true` for read-only lookups, status checks, search, map, parse, and monitor/interact-stop operations that are safe to repeat, `false` for tools that start a crawl, agent, monitor run or interact session or record feedback. `firecrawl_scrape` follows safe mode, since browser `actions` are only offered outside it.
+- Inputs of `firecrawl_scrape`, `firecrawl_parse` and `firecrawl_search` carry descriptions, including the scrape options reused as `scrapeOptions` by search (crawl and interact point to `firecrawl_scrape` instead of repeating them): formats, JSON and query options, screenshot and PDF settings, wait, cache, location, proxy and profile fields, and search `limit`, `tbs`, `location` and `enterprise`.
+
+No tool, input name, default, output or behaviour changes.
+
 ## [3.30.1] - 2026-10-14
 
 ### Added

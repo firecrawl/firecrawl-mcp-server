@@ -9,38 +9,57 @@
     "protocolVersion": "2025-06-18",
     "serverInfo": {
       "name": "firecrawl-fastmcp",
-      "version": "<version>"
+      "version": "<version>",
+      "description": "Search the web and scrape pages or parse documents; with an API key, also crawl, map, interact and extract structured data. Built for AI agents.",
+      "icons": [
+        {
+          "src": "https://www.firecrawl.dev/logo.svg",
+          "mimeType": "image/svg+xml",
+          "sizes": [
+            "any"
+          ]
+        },
+        {
+          "src": "https://www.firecrawl.dev/apple-touch-icon.png",
+          "mimeType": "image/png",
+          "sizes": [
+            "180x180"
+          ]
+        }
+      ],
+      "title": "Firecrawl",
+      "websiteUrl": "https://docs.firecrawl.dev/mcp-server?utm_source=mcp-server&utm_medium=server-info"
     }
   },
   "tools": [
-    "firecrawl_scrape@d87341b1d39f",
-    "firecrawl_map@7d8108e2e8e7",
-    "firecrawl_search@297900b36cb7",
+    "firecrawl_scrape@8621ef4c58e0",
+    "firecrawl_map@5ff7c6622cd4",
+    "firecrawl_search@31b08d044c44",
     "firecrawl_find_tools@b2f832a3956b",
-    "firecrawl_search_feedback@3d7d2ef79f89",
-    "firecrawl_feedback@1336142abfd3",
-    "firecrawl_crawl@4ca4a0262b5a",
-    "firecrawl_check_crawl_status@723e60af703e",
-    "firecrawl_agent@f794dfd2e454",
-    "firecrawl_agent_status@6c6e5f971f8e",
-    "firecrawl_interact@5439a16752e2",
-    "firecrawl_interact_stop@142b4e713cfa",
-    "firecrawl_parse@3e81e427aadb",
-    "firecrawl_monitor_create@d90db499e9da",
-    "firecrawl_monitor_list@341234ca0b9f",
-    "firecrawl_monitor_get@fc9fcdd39233",
-    "firecrawl_monitor_update@55bcae1714b8",
-    "firecrawl_monitor_delete@db129f3ce91c",
-    "firecrawl_monitor_run@1129dbdaa964",
-    "firecrawl_monitor_checks@a2ea52047456",
-    "firecrawl_monitor_check@64a3313cba8d",
-    "firecrawl_research_search_papers@35766df64334",
-    "firecrawl_research_inspect_paper@a6f87b19e613",
-    "firecrawl_research_related_papers@0eb420b8cf8d",
-    "firecrawl_research_read_paper@b0cd84d8908a",
-    "firecrawl_developer_search@e9810e540216",
-    "firecrawl_gov_search@0bb788732250",
-    "firecrawl_credit_usage@4202fbda2421"
+    "firecrawl_search_feedback@7f631509762c",
+    "firecrawl_feedback@f419da731b94",
+    "firecrawl_crawl@0928696181e0",
+    "firecrawl_check_crawl_status@7ce70e09cb2d",
+    "firecrawl_agent@3867deb75e6d",
+    "firecrawl_agent_status@f9922a311c03",
+    "firecrawl_interact@d918de19a08d",
+    "firecrawl_interact_stop@e5b6a01c6cc2",
+    "firecrawl_parse@be4d57a131b5",
+    "firecrawl_monitor_create@ef4388e13c0f",
+    "firecrawl_monitor_list@39108c8c65d2",
+    "firecrawl_monitor_get@2a44dd846184",
+    "firecrawl_monitor_update@98dcd8f5adcd",
+    "firecrawl_monitor_delete@80bfa0d3a0ca",
+    "firecrawl_monitor_run@5aaecda5b2c7",
+    "firecrawl_monitor_checks@fb075f49edf0",
+    "firecrawl_monitor_check@4e3e471d7673",
+    "firecrawl_research_search_papers@342139a07a95",
+    "firecrawl_research_inspect_paper@1d3830f9d58f",
+    "firecrawl_research_related_papers@9af175cafdbc",
+    "firecrawl_research_read_paper@b3615f393848",
+    "firecrawl_developer_search@2f198cad3b69",
+    "firecrawl_gov_search@4ff4e80bd4a3",
+    "firecrawl_credit_usage@dcc5f76148e4"
   ],
   "calls": {
     "firecrawl_extract": {

@@ -578,6 +578,25 @@ export function createFirecrawlMcpServer(
   const server = new FastMCP<SessionData>({
     name: 'firecrawl-fastmcp',
     version: packageVersion as `${number}.${number}.${number}`,
+    // MCP Implementation fields beyond name and version; clients and directories
+    // show them. The name stays as is: origin attribution keys on it.
+    title: 'Firecrawl',
+    description:
+      'Search the web and scrape pages or parse documents; with an API key, also crawl, map, interact and extract structured data. Built for AI agents.',
+    websiteUrl:
+      'https://docs.firecrawl.dev/mcp-server?utm_source=mcp-server&utm_medium=server-info',
+    icons: [
+      {
+        src: 'https://www.firecrawl.dev/logo.svg',
+        mimeType: 'image/svg+xml',
+        sizes: ['any'],
+      },
+      {
+        src: 'https://www.firecrawl.dev/apple-touch-icon.png',
+        mimeType: 'image/png',
+        sizes: ['180x180'],
+      },
+    ],
     instructions,
     logger: new ConsoleLogger(logging),
     roots: { enabled: false },
@@ -868,8 +887,93 @@ export function createFirecrawlMcpServer(
     return out;
   }
 
-  const scrapeParamsSchema = z.object({
-    url: z.string().url(),
+  // Descriptions shared by the scrape and parse input schemas (and, through
+  // scrapeOptions, by search; crawl and interact reuse the undocumented copy). Defaults match the Firecrawl API.
+  const FIELD_DOCS = {
+    url: 'Absolute http or https URL of the page to scrape.',
+    jsonOptions:
+      'Settings for the "json" format. Used only when formats includes "json".',
+    jsonPrompt:
+      'Natural-language description of the fields to extract. Optional when a schema is given.',
+    jsonSchema: 'JSON Schema describing the structure of the extracted data.',
+    queryOptions:
+      'Settings for the "query" format. Used only when formats includes "query".',
+    queryPrompt: 'Question to answer from the page content.',
+    queryMode:
+      '"freeform" (default) writes an answer in its own words; "directQuote" answers with text taken directly from the page.',
+    screenshotOptions:
+      'Settings for the "screenshot" format. Used only when formats includes "screenshot".',
+    screenshotFullPage:
+      'Capture the whole page instead of only the visible viewport. Default false.',
+    screenshotQuality: 'Image quality from 1 to 100; 100 is the highest.',
+    viewport: 'Browser window size used for the capture.',
+    viewportWidth: 'Viewport width in pixels.',
+    viewportHeight: 'Viewport height in pixels.',
+    parsers:
+      'PDF parsing is on by default; leave unset unless you need pdfOptions. Passing a list turns off parsers not in it (["pdf"] turns off image OCR). "pdf" is billed per page.',
+    pdfOptions: 'Settings for the "pdf" parser. Used only when parsers includes "pdf".',
+    pdfMaxPages: 'Maximum number of PDF pages to parse; use it to cap cost on long PDFs.',
+    onlyMainContent:
+      'Return only the main content, without headers, navigation and footers. Default true.',
+    redactPII:
+      'Redact personally identifiable information from the returned content. Default false.',
+    includeTags:
+      'HTML tags or CSS selectors to keep; everything else is dropped before conversion.',
+    excludeTags:
+      'HTML tags or CSS selectors to remove before conversion, for example "nav" or ".cookie-banner".',
+    waitFor:
+      'Extra milliseconds to wait before capturing, on top of the automatic wait, for late-loading pages. Default 0, maximum 60000.',
+    mobile: 'Emulate a mobile device. Default false.',
+    skipTlsVerification:
+      'Skip TLS certificate verification when fetching the page. Default true, except when headers or actions are set.',
+    removeBase64Images:
+      'Replace base64-encoded images in the markdown with placeholders to keep it short. Default true.',
+    location: 'Geographic settings for the request.',
+    locationCountry:
+      'ISO 3166-1 alpha-2 country code to fetch from, for example "US" or "DE". Default "US".',
+    locationLanguages:
+      'Preferred languages in priority order, as locale codes such as "en-US". Defaults to the language of the country.',
+    storeInCache:
+      'Store the page in the Firecrawl index and cache. Default true; set false for pages that should not be stored. Forced to false when actions are used.',
+    zeroDataRetention:
+      'Run the request with zero data retention. Available to teams with this feature enabled.',
+    maxAge:
+      'Accept a cached copy of the page up to this many milliseconds old. Defaults to 2 days; 0 forces a fresh fetch.',
+    lockdown:
+      'Serve only from the Firecrawl cache and never contact the target site. A cache miss returns an error. Cannot be combined with profile. Default false.',
+    proxy:
+      '"basic" is fast and suits most sites; "enhanced" is slower and more reliable on sites with strong bot protection; "stealth" is a legacy alias of "enhanced"; "auto" (default) retries with a stronger proxy when basic fails.',
+    profile:
+      'Persistent browser profile that keeps cookies and session state between scrapes.',
+    profileName:
+      'Name of a saved browser profile. Scrapes that use the same name share cookies and session state.',
+    profileSaveChanges:
+      'Save browser state back to the profile after the scrape. Default true.',
+    formats:
+      'Output formats to return. Defaults to ["markdown"]. "json", "query" and "screenshot" take their settings from jsonOptions, queryOptions and screenshotOptions.',
+    actionType:
+      'Kind of browser action to run.',
+    actionSelector:
+      'CSS selector of the element the action targets.',
+    actionMilliseconds:
+      'Time to wait, in milliseconds, for a wait action.',
+    actionText:
+      'Text to type, for a write action.',
+    actionKey:
+      'Key to press, for example "Enter", for a press action.',
+    actionDirection:
+      'Scroll direction, for a scroll action.',
+    actionScript:
+      'JavaScript to run in the page, for an executeJavascript action.',
+    actionFullPage:
+      'Capture the whole page, for a screenshot action.',
+    actions:
+      'Browser actions to run in order before the page is captured.',
+  };
+
+  const buildScrapeParamsSchema = (D: typeof FIELD_DOCS) =>
+    z.object({
+    url: z.string().url().describe(D.url),
     formats: z
       .array(
         z.enum([
@@ -887,83 +991,155 @@ export function createFirecrawlMcpServer(
           'audio',
         ])
       )
-      .optional(),
+      .optional()
+      .describe(
+        D.formats
+      ),
     jsonOptions: z
       .object({
-        prompt: z.string().optional(),
-        schema: z.record(z.string(), z.any()).optional(),
+        prompt: z.string().optional().describe(D.jsonPrompt),
+        schema: z
+          .record(z.string(), z.any())
+          .optional()
+          .describe(D.jsonSchema),
       })
-      .optional(),
+      .optional()
+      .describe(D.jsonOptions),
     queryOptions: z
       .object({
-        prompt: z.string().max(10000),
-        mode: z.enum(['directQuote', 'freeform']).default('freeform'),
+        prompt: z.string().max(10000).describe(D.queryPrompt),
+        mode: z
+          .enum(['directQuote', 'freeform'])
+          .default('freeform')
+          .describe(D.queryMode),
       })
-      .optional(),
+      .optional()
+      .describe(D.queryOptions),
     screenshotOptions: z
       .object({
-        fullPage: z.boolean().optional(),
-        quality: z.number().optional(),
-        viewport: z.object({ width: z.number(), height: z.number() }).optional(),
+        fullPage: z.boolean().optional().describe(D.screenshotFullPage),
+        quality: z.number().optional().describe(D.screenshotQuality),
+        viewport: z
+          .object({
+            width: z.number().describe(D.viewportWidth),
+            height: z.number().describe(D.viewportHeight),
+          })
+          .optional()
+          .describe(D.viewport),
       })
-      .optional(),
-    parsers: z.array(z.enum(['pdf'])).optional(),
+      .optional()
+      .describe(D.screenshotOptions),
+    parsers: z.array(z.enum(['pdf'])).optional().describe(D.parsers),
     pdfOptions: z
       .object({
-        maxPages: z.number().int().min(1).max(10000).optional(),
+        maxPages: z
+          .number()
+          .int()
+          .min(1)
+          .max(10000)
+          .optional()
+          .describe(D.pdfMaxPages),
       })
-      .optional(),
-    onlyMainContent: z.boolean().optional(),
-    redactPII: z.boolean().optional(),
-    includeTags: z.array(z.string()).optional(),
-    excludeTags: z.array(z.string()).optional(),
-    waitFor: z.number().optional(),
+      .optional()
+      .describe(D.pdfOptions),
+    onlyMainContent: z.boolean().optional().describe(D.onlyMainContent),
+    redactPII: z.boolean().optional().describe(D.redactPII),
+    includeTags: z.array(z.string()).optional().describe(D.includeTags),
+    excludeTags: z.array(z.string()).optional().describe(D.excludeTags),
+    waitFor: z.number().optional().describe(D.waitFor),
     ...(SAFE_MODE
       ? {}
       : {
           actions: z
             .array(
               z.object({
-                type: z.enum(allowedActionTypes),
-                selector: z.string().optional(),
-                milliseconds: z.number().optional(),
-                text: z.string().optional(),
-                key: z.string().optional(),
-                direction: z.enum(['up', 'down']).optional(),
-                script: z.string().optional(),
-                fullPage: z.boolean().optional(),
+                type: z
+                  .enum(allowedActionTypes)
+                  .describe(D.actionType),
+                selector: z
+                  .string()
+                  .optional()
+                  .describe(D.actionSelector),
+                milliseconds: z
+                  .number()
+                  .optional()
+                  .describe(D.actionMilliseconds),
+                text: z
+                  .string()
+                  .optional()
+                  .describe(D.actionText),
+                key: z
+                  .string()
+                  .optional()
+                  .describe(D.actionKey),
+                direction: z
+                  .enum(['up', 'down'])
+                  .optional()
+                  .describe(D.actionDirection),
+                script: z
+                  .string()
+                  .optional()
+                  .describe(D.actionScript),
+                fullPage: z
+                  .boolean()
+                  .optional()
+                  .describe(D.actionFullPage),
               })
             )
-            .optional(),
+            .optional()
+            .describe(D.actions),
         }),
-    mobile: z.boolean().optional(),
-    skipTlsVerification: z.boolean().optional(),
-    removeBase64Images: z.boolean().optional(),
+    mobile: z.boolean().optional().describe(D.mobile),
+    skipTlsVerification: z.boolean().optional().describe(D.skipTlsVerification),
+    removeBase64Images: z.boolean().optional().describe(D.removeBase64Images),
     location: z
       .object({
-        country: z.string().optional(),
-        languages: z.array(z.string()).optional(),
+        country: z.string().optional().describe(D.locationCountry),
+        languages: z
+          .array(z.string())
+          .optional()
+          .describe(D.locationLanguages),
       })
-      .optional(),
-    storeInCache: z.boolean().optional(),
-    zeroDataRetention: z.boolean().optional(),
-    maxAge: z.number().optional(),
-    lockdown: z.boolean().optional(),
-    proxy: z.enum(['basic', 'stealth', 'enhanced', 'auto']).optional(),
+      .optional()
+      .describe(D.location),
+    storeInCache: z.boolean().optional().describe(D.storeInCache),
+    zeroDataRetention: z.boolean().optional().describe(D.zeroDataRetention),
+    maxAge: z.number().optional().describe(D.maxAge),
+    lockdown: z.boolean().optional().describe(D.lockdown),
+    proxy: z
+      .enum(['basic', 'stealth', 'enhanced', 'auto'])
+      .optional()
+      .describe(D.proxy),
     profile: z
       .object({
-        name: z.string(),
-        saveChanges: z.boolean().optional(),
+        name: z.string().describe(D.profileName),
+        saveChanges: z
+          .boolean()
+          .optional()
+          .describe(D.profileSaveChanges),
       })
-      .optional(),
+      .optional()
+      .describe(D.profile),
   });
+
+  // Documented for firecrawl_scrape, firecrawl_search and firecrawl_parse. The
+  // undocumented copy passes undefined for every FIELD_DOCS entry, so never build
+  // a string from D.<key> inside buildScrapeParamsSchema; only pass it to .describe().
+  // nested scrapeOptions of crawl and interact use the undocumented copy so
+  // tools/list does not repeat the same text on every tool.
+  const scrapeParamsSchema = buildScrapeParamsSchema(FIELD_DOCS);
+  const plainScrapeParamsSchema = buildScrapeParamsSchema(
+    Object.fromEntries(
+      Object.keys(FIELD_DOCS).map((key) => [key, undefined])
+    ) as unknown as typeof FIELD_DOCS
+  );
 
   // In safe mode firecrawl_scrape and firecrawl_search are read-only, so a named
   // profile they open loads saved browser state without writing it back. The API
   // saves profile changes unless told otherwise, so saveChanges: false is sent
   // explicitly. firecrawl_interact (url with scrapeOptions.profile) saves them.
   const readOnlyProfileSchema = z
-    .object({ name: z.string() })
+    .object({ name: z.string().describe(FIELD_DOCS.profileName) })
     .describe('Loads a saved browser profile without saving changes to it.');
 
   function withReadOnlyProfile(
@@ -983,7 +1159,7 @@ export function createFirecrawlMcpServer(
   const scrapeToolParamsSchema = scrapeParamsSchema
     .extend({
       ...(SAFE_MODE ? { profile: readOnlyProfileSchema.optional() } : {}),
-      url: z.string().url().optional(),
+      url: z.string().url().optional().describe(FIELD_DOCS.url),
       timeout: z.number().int().positive().optional().describe("Execution timeout in milliseconds."),
       requestId: z
         .string()
@@ -1047,38 +1223,69 @@ export function createFirecrawlMcpServer(
           'query',
         ])
       )
-      .optional(),
+      .optional()
+      .describe(
+        'Output formats to return. Defaults to ["markdown"]. "json" and "query" take their settings from jsonOptions and queryOptions.'
+      ),
     jsonOptions: z
       .object({
-        prompt: z.string().optional(),
-        schema: z.record(z.string(), z.any()).optional(),
+        prompt: z.string().optional().describe(FIELD_DOCS.jsonPrompt),
+        schema: z
+          .record(z.string(), z.any())
+          .optional()
+          .describe(FIELD_DOCS.jsonSchema),
       })
-      .optional(),
+      .optional()
+      .describe(FIELD_DOCS.jsonOptions),
     queryOptions: z
       .object({
-        prompt: z.string().max(10000),
-        mode: z.enum(['directQuote', 'freeform']).default('freeform'),
+        prompt: z.string().max(10000).describe(FIELD_DOCS.queryPrompt),
+        mode: z
+          .enum(['directQuote', 'freeform'])
+          .default('freeform')
+          .describe(FIELD_DOCS.queryMode),
       })
-      .optional(),
-    parsers: z.array(z.enum(['pdf'])).optional(),
+      .optional()
+      .describe(FIELD_DOCS.queryOptions),
+    parsers: z.array(z.enum(['pdf'])).optional().describe(FIELD_DOCS.parsers),
     pdfOptions: z
       .object({
-        maxPages: z.number().int().min(1).max(10000).optional(),
+        maxPages: z
+          .number()
+          .int()
+          .min(1)
+          .max(10000)
+          .optional()
+          .describe(FIELD_DOCS.pdfMaxPages),
       })
-      .optional(),
-    onlyMainContent: z.boolean().optional(),
-    redactPII: z.boolean().optional(),
-    includeTags: z.array(z.string()).optional(),
-    excludeTags: z.array(z.string()).optional(),
-    removeBase64Images: z.boolean().optional(),
-    skipTlsVerification: z.boolean().optional(),
-    storeInCache: z.boolean().optional(),
-    zeroDataRetention: z.boolean().optional(),
+      .optional()
+      .describe(FIELD_DOCS.pdfOptions),
+    onlyMainContent: z.boolean().optional().describe(FIELD_DOCS.onlyMainContent),
+    redactPII: z.boolean().optional().describe(FIELD_DOCS.redactPII),
+    includeTags: z.array(z.string()).optional().describe(FIELD_DOCS.includeTags),
+    excludeTags: z.array(z.string()).optional().describe(FIELD_DOCS.excludeTags),
+    removeBase64Images: z.boolean().optional().describe(FIELD_DOCS.removeBase64Images),
+    skipTlsVerification: z
+      .boolean()
+      .optional()
+      .describe('Accepted for API compatibility; parse reads an uploaded file and fetches no page.'),
+    storeInCache: z
+      .boolean()
+      .optional()
+      .describe(
+        'Ignored: parse never stores content in the Firecrawl index or cache.'
+      ),
+    zeroDataRetention: z.boolean().optional().describe(FIELD_DOCS.zeroDataRetention),
     maxAge: z
       .number()
       .optional()
       .describe('Ignored: parse never reuses or stores indexed content.'),
-    proxy: z.enum(['basic', 'auto']).optional(),
+    proxy: z
+      .enum(['basic', 'auto'])
+      .optional()
+      .describe(
+        'No effect on parse, which reads an uploaded file; accepted for API compatibility.'
+      ),
   });
 
   const localParseParamsSchema = parseOptionParamsSchema.extend({
@@ -1435,6 +1642,7 @@ export function createFirecrawlMcpServer(
       readOnlyHint: SAFE_MODE,
       openWorldHint: true, // Accepts any user-supplied URL on the public web.
       destructiveHint: false, // Does not modify, delete, or write to external websites.
+      idempotentHint: SAFE_MODE,
     },
     description: `
 Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields. Use \`firecrawl_search\` when additional web sources are needed; on an authenticated session, \`firecrawl_map\` lists a site's URLs and \`firecrawl_crawl\` collects a set of pages.
@@ -1516,6 +1724,7 @@ Alexandria mode, on an authenticated session with Alexandria access: \`alexandri
       readOnlyHint: true, // Discovers and returns indexed URLs; does not modify the target site.
       openWorldHint: true, // Operates against arbitrary user-supplied web domains.
       destructiveHint: false, // Read-only discovery; no deletion or destructive updates.
+      idempotentHint: true,
     },
     description: `
 Enumerate URLs indexed under one website through Firecrawl without fetching each page's content. Use this when the request asks for a site's URL inventory, when several relevant pages must be located, or when the desired page URL is unknown. An optional \`search\` term narrows the URL list, while sitemap, subdomain, query-parameter, and result-limit options control coverage.
@@ -1558,6 +1767,7 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
       readOnlyHint: true, // Runs a web search and returns results; does not modify external sites.
       openWorldHint: true, // Searches the open web across arbitrary domains and sources.
       destructiveHint: false, // Query-only; no destructive side effects on external entities.
+      idempotentHint: true,
     },
     description: `
 Search web, news, or image sources and return ranked results with query-relevant highlights. Each web result is a title, URL, and description; use \`firecrawl_scrape\` on a result URL when the excerpt is not enough.
@@ -1574,7 +1784,14 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         ...searchToolBaseFields,
         scrapeOptions: scrapeParamsSchema
           .omit({ url: true })
-          .extend(SAFE_MODE ? { profile: readOnlyProfileSchema } : {})
+          .extend({
+            maxAge: z
+              .number()
+              .describe(
+                'Ignored: search fetches pages with a fixed 3-day cache window. Use firecrawl_scrape for a live fetch.'
+              ),
+            ...(SAFE_MODE ? { profile: readOnlyProfileSchema } : {}),
+          })
           .partial()
           .optional()
           .describe('Attach page content for web results in the same call. These fetches ignore maxAge, so use firecrawl_scrape when you need a live fetch. scrapeOptions fetches web pages, never Alexandria provider tools.'),
@@ -1928,6 +2145,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         readOnlyHint: false, // POSTs structured feedback to the API, creating a server-side record.
         openWorldHint: true, // Feedback references open-web search results and external URLs.
         destructiveHint: false, // Additive only; records feedback and may refund credits, does not delete data.
+        idempotentHint: false,
       },
       description: `
 Records schema-validated quality feedback for a prior \`firecrawl_search\` UUID \`searchId\`. A \`good\` rating requires a valuable source, \`partial\` a valuable source or at least one \`missingContent\` entry, and \`bad\` at least one \`missingContent\` entry or a query suggestion; caps are 50 \`valuableSources\` and 20 \`missingContent\` entries.
@@ -2094,6 +2312,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
         readOnlyHint: false, // POSTs structured feedback for a completed job to /v2/feedback.
         openWorldHint: true, // Feedback is tied to jobs that processed open-web URLs.
         destructiveHint: false, // Additive only; submits ratings and notes and may refund credits, does not delete jobs or external content.
+        idempotentHint: false,
       },
       description: `
 Submit concise quality feedback for a completed search, scrape, parse, or map job. Provide the endpoint, job ID, rating, and relevant issue codes or small contextual fields; omit large page contents and raw outputs.
@@ -2248,6 +2467,7 @@ Returns submission status, feedback ID, and accounting fields.
       readOnlyHint: false, // Starts a server-side crawl job and polls until the job reaches a terminal state.
       openWorldHint: true, // Crawls user-specified URLs across the public web.
       destructiveHint: false, // Reads pages from target sites; does not delete or alter external websites.
+      idempotentHint: false,
     },
     description: `
 Start a multi-page crawl at a website URL, poll it to a terminal state, and return the final status and collected data. Scope can be bounded with include/exclude paths, depth, page limit, subdomain/external-link controls, sitemap handling, delay, and scrape options.
@@ -2275,7 +2495,11 @@ Crawl results can be large; use conservative limits when full-site coverage is u
           }),
       deduplicateSimilarURLs: z.boolean().optional(),
       ignoreQueryParameters: z.boolean().optional(),
-      scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+      scrapeOptions: plainScrapeParamsSchema
+        .omit({ url: true })
+        .partial()
+        .optional()
+        .describe('Same fields as firecrawl_scrape.'),
     }),
     outputSchema: crawlOutputSchema,
     execute: async (args, { session, log, client: mcpClient }): Promise<ContentResult> => {
@@ -2334,6 +2558,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
       readOnlyHint: true, // Retrieves status and results for an existing crawl job by ID; no mutations.
       openWorldHint: false, // Queries only Firecrawl job state within the authenticated account.
       destructiveHint: false, // Status lookup only; no deletes or updates.
+      idempotentHint: true,
     },
     description: `
 Retrieve the current status, progress, and available results for an existing crawl ID. This only reads Firecrawl job state and does not start or modify the crawl.
@@ -2365,6 +2590,7 @@ Retrieve the current status, progress, and available results for an existing cra
       readOnlyHint: true,
       openWorldHint: true,
       destructiveHint: false,
+      idempotentHint: true,
     },
     description: `
 Deprecated compatibility entry point. Use firecrawl_scrape once per known URL with formats: ["json"] and jsonOptions containing the prompt and schema. Use firecrawl_agent for multi-source research when the URLs are not known or the data spans several sites.
@@ -2454,6 +2680,7 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
       readOnlyHint: false, // Starts an autonomous research agent job on the Firecrawl API.
       openWorldHint: true, // The agent browses and searches the open web to fulfill the prompt.
       destructiveHint: false, // Gathers information only; does not delete external data or user resources.
+      idempotentHint: false,
     },
     description: `
 Run web research that returns structured data when the URLs are not known or the answer spans several sites. Describe the fields you need in \`prompt\`, optionally pass a JSON \`schema\` and seed \`urls\`, and the research agent searches, navigates, reads pages, and returns JSON assembled across sources. Use it to research an entity plus its fields (founders, pricing, contact details), to build lists and datasets (companies, people, products, jobs, papers), and for pages that need navigation or interaction to reach the data. Optional \`effort\` sets the reasoning budget, \`maxCredits\` caps spend, and \`strictConstrainToURLs\` keeps the agent to the supplied \`urls\`.
@@ -2569,6 +2796,7 @@ The agent only calls Alexandria providers whose terms the team has accepted. \`e
       readOnlyHint: true, // Polls an existing agent job by ID for progress and results; no mutations.
       openWorldHint: false, // Queries only Firecrawl job state by job ID within the user's account.
       destructiveHint: false, // Read-only status check.
+      idempotentHint: true,
     },
     description: `
 Retrieve progress or final results for a \`firecrawl_agent\` job ID. A \`processing\` response is non-terminal and does not contain the final research result. Check again after 15–30 seconds until the status is \`completed\` or \`failed\`; a typical research run takes one to three minutes and complex jobs can take longer. If the job cannot finish within the task's available time, use \`firecrawl_search\` and \`firecrawl_scrape\` to complete the requested output.
@@ -2649,6 +2877,7 @@ Returns job status, progress information, and result data when completed.
       readOnlyHint: false, // Executes browser interactions (clicks, form input, scripts) in a live session.
       openWorldHint: true, // Interacts with pages on the public web via the scraped session.
       destructiveHint: false, // Transient page interactions only; does not delete monitors, jobs, or external sites.
+      idempotentHint: false,
     },
     description: `
 Open or reuse a live browser session to navigate a page, click controls, fill fields, or run browser code. Provide either \`url\` or \`scrapeId\`, and either a natural-language \`prompt\` or executable \`code\`; code can run as Bash, Python, or Node with a bounded timeout.
@@ -2664,7 +2893,11 @@ This acts on the live site, so actions such as form submission can create persis
         code: z.string().trim().min(1).optional(),
         language: z.enum(['bash', 'python', 'node']).optional(),
         timeout: z.number().min(1).max(300).optional(),
-        scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+        scrapeOptions: plainScrapeParamsSchema
+        .omit({ url: true })
+        .partial()
+        .optional()
+        .describe('Same fields as firecrawl_scrape.'),
       })
       .refine((data) => Boolean(data.scrapeId) !== Boolean(data.url), {
         message:
@@ -2753,6 +2986,7 @@ This acts on the live site, so actions such as form submission can create persis
       readOnlyHint: false, // Calls the API to stop and tear down an active interact session.
       openWorldHint: false, // Operates only on a known Firecrawl scrape/interact session ID.
       destructiveHint: true, // Terminates the live browser session; this end state cannot be resumed.
+      idempotentHint: true,
     },
     description: `
 Stop the live interact session associated with a \`scrapeId\` and release its resources. Returns a success confirmation.
@@ -2786,6 +3020,7 @@ Stop the live interact session associated with a \`scrapeId\` and release its re
       readOnlyHint: true, // Local mode reads a file; hosted mode only returns upload instructions or parses an uploadRef.
       openWorldHint: false, // Operates on a local filesystem path/upload reference, not an arbitrary web URL.
       destructiveHint: false, // Read-only parsing; no deletion or writes to the source file.
+      idempotentHint: true,
     },
     description: `
 Parse one supported document into markdown, HTML, links, summary, targeted answers, or JSON matching a schema. Supported inputs include common HTML, PDF, Word, RTF, OpenDocument, and spreadsheet files; PDF parsing can be bounded with \`pdfOptions.maxPages\`.

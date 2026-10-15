@@ -10,19 +10,38 @@
       "protocolVersion": "2025-06-18",
       "serverInfo": {
         "name": "firecrawl-fastmcp",
-        "version": "<version>"
+        "version": "<version>",
+        "description": "Search the web and scrape pages or parse documents; with an API key, also crawl, map, interact and extract structured data. Built for AI agents.",
+        "icons": [
+          {
+            "src": "https://www.firecrawl.dev/logo.svg",
+            "mimeType": "image/svg+xml",
+            "sizes": [
+              "any"
+            ]
+          },
+          {
+            "src": "https://www.firecrawl.dev/apple-touch-icon.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "180x180"
+            ]
+          }
+        ],
+        "title": "Firecrawl",
+        "websiteUrl": "https://docs.firecrawl.dev/mcp-server?utm_source=mcp-server&utm_medium=server-info"
       }
     },
     "tools": [
-      "firecrawl_research_search_papers@35766df64334",
-      "firecrawl_research_inspect_paper@a6f87b19e613",
-      "firecrawl_research_related_papers@0eb420b8cf8d",
-      "firecrawl_research_read_paper@b0cd84d8908a",
-      "firecrawl_developer_search@e9810e540216",
-      "firecrawl_gov_search@0bb788732250",
-      "firecrawl_search@1ddd63a8639e",
+      "firecrawl_research_search_papers@342139a07a95",
+      "firecrawl_research_inspect_paper@1d3830f9d58f",
+      "firecrawl_research_related_papers@9af175cafdbc",
+      "firecrawl_research_read_paper@b3615f393848",
+      "firecrawl_developer_search@2f198cad3b69",
+      "firecrawl_gov_search@4ff4e80bd4a3",
+      "firecrawl_search@b44dbfe0a17e",
       "firecrawl_find_tools@b2f832a3956b",
-      "firecrawl_scrape@a52029fe2c7e"
+      "firecrawl_scrape@696bbb2d8fbc"
     ]
   },
   "unauthenticated": {

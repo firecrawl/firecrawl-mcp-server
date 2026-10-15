@@ -61,6 +61,7 @@ export function registerGovTools(
       readOnlyHint: true,
       openWorldHint: true,
       destructiveHint: false,
+      idempotentHint: true,
     },
     description: `
 Search US federal, state, and local statutes, regulations, codes, court opinions, and other government publications for legal or regulatory questions that need primary text. Clarify a missing jurisdiction or ambiguous as-of date before identifying the governing rule.

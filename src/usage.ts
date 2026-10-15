@@ -70,6 +70,7 @@ export function registerUsageTools(
       readOnlyHint: true,
       openWorldHint: false,
       destructiveHint: false,
+      idempotentHint: true,
     },
     description: `
 Get the authenticated Firecrawl team's current credit balance or historical credit consumption. Use the current view to answer how many credits remain or to check billing-period boundaries. Use the historical view for monthly usage reporting and trend analysis.

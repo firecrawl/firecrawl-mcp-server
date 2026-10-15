@@ -2,9 +2,19 @@ import { z } from 'zod';
 
 const catalogueTypes = ['alexandria', 'exchange'] as const;
 export const searchSourceSchema = z.union([
-  z.enum(['web', 'images', 'news', ...catalogueTypes]),
   z
-    .object({ type: z.enum(['web', 'images', 'news', ...catalogueTypes]) })
+    .enum(['web', 'images', 'news', ...catalogueTypes])
+    .describe(
+      'Source to search: "web", "images", "news" or "alexandria" for structured data providers. "exchange" is a legacy alias of "alexandria".'
+    ),
+  z
+    .object({
+      type: z
+        .enum(['web', 'images', 'news', ...catalogueTypes])
+        .describe(
+          'Source to search: "web", "images", "news" or "alexandria" for structured data providers. "exchange" is a legacy alias of "alexandria".'
+        ),
+    })
     .strict(),
 ]);
 export function hasAlexandria(sources: unknown): boolean {
