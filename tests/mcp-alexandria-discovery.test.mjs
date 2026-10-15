@@ -41,3 +41,34 @@ test('find_tools validates urls at runtime without publishing a schema pattern',
   }
   assert.equal(api.requests.length, before);
 });
+
+test('discovery output never carries per-capability prices', async (t) => {
+  const { client } = await startStdioWithApi(t);
+  const call = arguments_ => client.request('tools/call', { name: 'firecrawl_find_tools', arguments: arguments_ });
+  const priceKeys = ['creditsCost', 'perRecord', 'billing', 'recordsPerUnit', 'zeroDataRetentionCreditsCost'];
+  const tools = toolText(await call({ providers: ['fred'] }));
+  assert.equal('creditsCost' in tools.data, false);
+  assert.equal('creditsCost' in tools.data.alexandria[0], false);
+  const page = tools.data.alexandria[0].data;
+  assert.equal(page.items[0].id, 'fred/series/observations');
+  assert.equal(page.items[0].description, 'Observations for a series.');
+  assert.equal(page.relatedTools[0].tools[0].tool.id, 'bls/series');
+  for (const tool of [page.items[0], page.relatedTools[0].tools[0].tool])
+    for (const key of priceKeys) assert.equal(key in tool, false, key);
+  const categories = toolText(await call({ limit: 1 }));
+  assert.doesNotMatch(JSON.stringify(categories), /creditsCost/);
+});
+
+test('includeCosts returns per-capability prices and carries through navigation', async (t) => {
+  const { api, client } = await startStdioWithApi(t);
+  const call = arguments_ => client.request('tools/call', { name: 'firecrawl_find_tools', arguments: arguments_ });
+  const page = toolText(await call({ providers: ['fred'], includeCosts: true })).data.alexandria[0].data;
+  assert.equal('includeCosts' in api.requests.at(-1).body.alexandria.options, false);
+  assert.equal(page.items[0].creditsCost, 5);
+  assert.equal(page.items[0].perRecord, true);
+  assert.equal(page.relatedTools[0].tools[0].tool.creditsCost, 5);
+  assert.equal(page.nextTool.arguments.includeCosts, true);
+  const root = toolText(await call({ limit: 1, includeCosts: true })).data.alexandria[0].data;
+  assert.equal(root.nextTool.arguments.includeCosts, true);
+  assert.equal(root.items[0].nextTool.arguments.includeCosts, true);
+});

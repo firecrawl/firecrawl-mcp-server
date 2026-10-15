@@ -1,5 +1,32 @@
 # Changelog
 
+## [3.30.1] - 2026-10-14
+
+### Added
+
+- `firecrawl_find_tools` accepts `includeCosts`. When it is `true`, tool results carry per-capability credit prices as before, and `nextTool` arguments keep the flag. The server handles it locally and does not send it upstream.
+
+### Changed
+
+- Alexandria output omits per-capability credit prices by default. `creditsCost`, `perRecord`, `billing`, `recordsPerUnit` and `zeroDataRetentionCreditsCost` are dropped from `firecrawl_find_tools` items and related tools, from `data.tools` in `firecrawl_search` and URL-mode `firecrawl_scrape`, and from each Alexandria result entry. Execution request totals such as `data.creditsCost` are unchanged; the free `firecrawl_find_tools` response omits its zero total.
+- Hosted instructions say Alexandria execution is billed per capability, replacing "billed at the capability's listed price".
+
+## [3.30.0] - 2026-10-14
+
+### Added
+
+- `firecrawl-mcp/server` (unstable): `unstable_hooks.registerResources(registrar)` lets an embedder register MCP resources after the built-in tools. Resource definitions take a `uri`, `name`, optional `description` and `mimeType`, and a `load(session)` that returns one or more text or blob contents, each with optional `uri`, `mimeType` and `_meta` overrides. The `ResourceDefinition`, `ResourceContent` and `ResourceRegistrar` types are exported.
+- Tool definitions passed to `registerExtraTools` accept `icons` (`src`, optional `mimeType`, `sizes`, `theme`), which `tools/list` now sends. Built-in tools, resources and local stdio behaviour are unchanged.
+
+### Removed
+
+- The server no longer sends `X-Firecrawl-Agent-Hints: true` on its Firecrawl API requests and no longer relays the API's optional `agent_hints` field. `agent_hints` is removed from every tool's output schema, structured content and error payloads, and `ToolCallEvent` (passed to `onToolResult`) no longer has `agentHints`. The API no longer sends this field, so tool results are otherwise unchanged.
+- `firecrawl_search` no longer advertises or forwards the optional `objective` and `clientModel` inputs, on both the full and the search-only surface. Clients that still send them keep working: the values are ignored and not sent to `/v2/search`. `firecrawl_feedback` keeps its `objective` field.
+
+### Changed
+
+- The README's `CLOUD_SERVICE=true` and search-only sections are shortened into one section. Behaviour is unchanged.
+
 ## [3.29.1] - 2026-10-09
 
 ### Added
