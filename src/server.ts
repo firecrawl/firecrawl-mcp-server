@@ -41,6 +41,9 @@ import {
   findToolsSchema,
   findToolsOptions,
   withFindToolsNavigation,
+  withoutDiscoveredToolPrices,
+  withoutFindToolsPrices,
+  withoutResultPrices,
   hasAlexandria,
   defaultDomainTools,
   normalizeSearchSources,
@@ -1487,7 +1490,7 @@ Alexandria mode, on an authenticated session with Alexandria access: \`alexandri
           },
           session
         );
-        return structuredText(json?.data ?? json);
+        return structuredText(withoutDiscoveredToolPrices(json?.data ?? json));
       }
       const client = getClient(session);
       const res = await relayTermsRequired(
@@ -1498,7 +1501,7 @@ Alexandria mode, on an authenticated session with Alexandria access: \`alexandri
           } as any),
         { tool: 'firecrawl_scrape' }
       );
-      return structuredText(res);
+      return structuredText(withoutDiscoveredToolPrices(res));
     },
   };
   server.addTool({
@@ -1616,7 +1619,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         // identifier to keyless clients, where it would invite an unusable call.
         const keylessResponse = { ...(json ?? {}) };
         delete keylessResponse.id;
-        return structuredCompact(keylessResponse);
+        return structuredCompact(withoutDiscoveredToolPrices(keylessResponse));
       }
       // Call /v2/search through the SDK's HTTP layer (auth + retries) instead
       // of `client.search()` so we preserve the full response envelope. The
@@ -1633,7 +1636,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       const httpRes = exchangeSource
         ? await relayExchangeError(postSearch, context)
         : await relayTermsRequired(postSearch, context);
-      return structuredCompact(httpRes?.data ?? {});
+      return structuredCompact(withoutDiscoveredToolPrices(httpRes?.data ?? {}));
     },
   });
 
@@ -1644,7 +1647,8 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       | z.infer<typeof exchangeCallsSchema>,
     suppliedRequestId?: string,
     timeout?: number,
-    origin = requestOrigin(undefined, session)
+    origin = requestOrigin(undefined, session),
+    includeCosts = false
   ): Promise<string> {
     assertExchangeCredential(session);
     const client = getClient(session);
@@ -1667,7 +1671,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       );
       const calls = Array.isArray(alexandria) ? alexandria : [alexandria];
       return alexandriaOutput(
-        { ...(response?.data ?? {}), requestId },
+        { ...(includeCosts ? (response?.data ?? {}) : withoutResultPrices(response?.data ?? {})), requestId },
         calls,
         async (body, id) => {
           const result = await (client as any).http.post(
@@ -1709,6 +1713,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       let options;
       try { options = findToolsOptions(args as Parameters<typeof findToolsOptions>[0]); }
       catch (error) { throw new UserError(error instanceof Error ? error.message : String(error)); }
+      const carry: { includeCosts?: true } = (args as { includeCosts?: boolean }).includeCosts ? { includeCosts: true } : {};
       if (options.level === 'categories') {
         assertExchangeCredential(session);
         const response = await relayExchangeError(
@@ -1725,11 +1730,12 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
           next: { provider: 'firecrawl', capability: 'find-tools', options: { categories: [row.cohort], level: 'providers', limit: options.limit } },
         }));
         const page: any = { level: 'categories', items, total: rows.length };
-        if (offset + options.limit < rows.length) page.nextTool = { name: 'firecrawl_find_tools', arguments: { level: 'categories', limit: options.limit, offset: offset + options.limit } };
-        return structuredCompact(withAlexandriaFeedbackHint(withFindToolsNavigation({ success: true, data: { creditsCost: 0, alexandria: [{ provider: 'firecrawl', capability: 'find-tools', creditsCost: 0, data: page }] } }), alexandriaFeedbackAvailable()));
+        if (offset + options.limit < rows.length) page.nextTool = { name: 'firecrawl_find_tools', arguments: { level: 'categories', limit: options.limit, offset: offset + options.limit, ...carry } };
+        return structuredCompact(withAlexandriaFeedbackHint(withFindToolsNavigation({ success: true, data: { alexandria: [{ provider: 'firecrawl', capability: 'find-tools', data: page }] } }, carry), alexandriaFeedbackAvailable()));
       }
-      const result = await executeExchangeCalls(session, { provider: 'firecrawl', capability: 'find-tools', options }, undefined, undefined, origin);
-      return structuredCompact(withFindToolsNavigation(JSON.parse(result)));
+      const result = await executeExchangeCalls(session, { provider: 'firecrawl', capability: 'find-tools', options }, undefined, undefined, origin, carry.includeCosts);
+      const envelope = JSON.parse(result);
+      return structuredCompact(withFindToolsNavigation(carry.includeCosts ? envelope : withoutFindToolsPrices(envelope), carry));
     },
   };
   server.addTool(findToolsTool);
