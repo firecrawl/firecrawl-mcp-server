@@ -53,7 +53,7 @@ test('firecrawl_scrape with alexandria posts the v2 batch and returns the envelo
   assert.equal(payload.scrape_id, '11111111-1111-4111-8111-111111111111');
   assert.equal(payload.data.creditsCost, 1);
   assert.equal(payload.data.alexandria.length, 2);
-  assert.equal(payload.data.alexandria[0].creditsCost, 1);
+  assert.equal('creditsCost' in payload.data.alexandria[0], false);
   assert.equal(payload.data.alexandria[0].records, 1);
   assert.equal(payload.data.alexandria[1].error.code, 'capability_not_found');
 });
