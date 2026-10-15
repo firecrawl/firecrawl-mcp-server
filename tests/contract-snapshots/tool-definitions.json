@@ -2019,7 +2019,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_find_tools@97972a2472af": {
+  "firecrawl_find_tools@b2f832a3956b": {
     "annotations": {
       "title": "Find Tools",
       "readOnlyHint": true,
@@ -2118,6 +2118,10 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
+        },
+        "includeCosts": {
+          "description": "Include per-capability credit prices (creditsCost, perRecord) in tool results.",
+          "type": "boolean"
         }
       },
       "additionalProperties": false
@@ -3814,7 +3818,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_packs@1774d88971e3": {
+  "firecrawl_packs@d5d0adfa8c8b": {
     "annotations": {
       "title": "Alexandria packs",
       "readOnlyHint": true,
@@ -3823,7 +3827,7 @@
       "idempotentHint": true
     },
     "title": "Alexandria packs",
-    "description": "Use this when the user wants help with fantasy football: who to start or sit, a fantasy lineup, waiver pickups, a trade offer, how projections held up, or draft rankings; or marketing research: competitors' traffic or channels, how a site's messaging or pricing changed, content ideas from search demand, or creators, podcasts and sponsorships to partner with. Returns a curated Alexandria playbook: questions to ask the user first, ordered recipes naming the exact provider capabilities, output rules, and cost and terms notes. With no arguments, lists packs; pack returns its playbook; task selects the matching recipe. Read-only and free. Read the selected capability contracts with firecrawl_find_tools (nextTool) and run them with firecrawl_scrape.",
+    "description": "Use this when the user wants help with fantasy football: who to start or sit, a fantasy lineup, waiver pickups, trade value or draft rankings; or marketing research: competitor traffic or channels, messaging changes, content opportunities, creators, podcasts or sponsorship research. Returns agent-facing context: relevant providers, what they can do, a short skill on using them well, and examples of useful combinations. With no arguments, lists packs; pack loads one. This tool does not run providers or require an intake questionnaire. Read-only and free. Follow a provider's nextTool to browse live capabilities and prices with firecrawl_find_tools, then inspect selected contracts before execution through firecrawl_scrape.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3835,12 +3839,6 @@
             "fantasy",
             "marketing"
           ]
-        },
-        "task": {
-          "description": "A recipe ID or the user's request in a few words; selects the matching recipe.",
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 500
         }
       },
       "additionalProperties": false
@@ -3848,22 +3846,11 @@
     "name": "firecrawl_packs",
     "outputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "description": "The pack list, or one pack playbook.",
+      "description": "The pack list, or agent-facing provider context and guidance for one pack.",
       "type": "object",
       "properties": {
         "packs": {
-          "description": "Available packs, each with a nextTool that loads its playbook."
-        },
-        "message": {
-          "description": "Guidance when no recipe matched the task.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "description": "Available packs, each with a nextTool that loads its context."
         },
         "pack": {
           "description": "Pack ID.",
@@ -3898,17 +3885,14 @@
             }
           ]
         },
-        "askFirst": {
-          "description": "Questions to ask the user before calling any capability."
+        "providers": {
+          "description": "Provider IDs, compact summaries, representative capability IDs and nextTool calls for live discovery with costs."
         },
-        "recipes": {
-          "description": "Selected recipes: ordered steps naming the capabilities or tools to use, and the expected output."
+        "skill": {
+          "description": "Short guidance on choosing sources and using them accurately, including access and cost requirements."
         },
-        "otherRecipes": {
-          "description": "Other recipes in the pack, selectable with task."
-        },
-        "rules": {
-          "description": "Output, sourcing, cost and terms rules for the pack."
+        "examples": {
+          "description": "Illustrative requests and useful provider combinations, not mandatory sequences."
         },
         "page": {
           "description": "Public page describing the pack.",
@@ -3920,9 +3904,6 @@
               "type": "null"
             }
           ]
-        },
-        "nextTool": {
-          "description": "A firecrawl_find_tools call that expands the contracts of the selected capabilities."
         }
       },
       "additionalProperties": false
@@ -5664,7 +5645,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_scrape@7bc92e305c98": {
+  "firecrawl_scrape@a52029fe2c7e": {
     "annotations": {
       "title": "Firecrawl scrape",
       "readOnlyHint": true,
@@ -5672,7 +5653,7 @@
       "destructiveHint": false
     },
     "title": "Firecrawl scrape",
-    "description": "\nScrape one URL and return its content, or execute catalogued Alexandria capabilities. URL mode returns markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema, plus page metadata. Firecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it.\n\n`firecrawl_search` with `sources` unset and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching Alexandria provider returns typed records in one call.\n\nAlexandria mode: `alexandria` selects catalogued capability execution and is mutually exclusive with `url`. Alexandria execution is billed at the capability's listed price and needs a team with Alexandria enabled.\n",
+    "description": "\nScrape one URL and return its content, or execute catalogued Alexandria capabilities. URL mode returns markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema, plus page metadata. Firecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it.\n\n`firecrawl_search` with `sources` unset and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching Alexandria provider returns typed records in one call.\n\nAlexandria mode: `alexandria` selects catalogued capability execution and is mutually exclusive with `url`. Alexandria execution is billed per capability (pass includeCosts to firecrawl_find_tools to see prices if you need) and needs a team with Alexandria enabled.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",

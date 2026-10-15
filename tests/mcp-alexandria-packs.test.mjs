@@ -17,56 +17,52 @@ test('packs are listed with a description that names each pack and its handoff',
   assert.match(tool.description, /marketing research: /);
   assert.match(tool.description, /firecrawl_find_tools.*firecrawl_scrape/);
   assert.deepEqual(tool.inputSchema.properties.pack.enum, ['fantasy', 'marketing']);
-  assert.match(init.instructions, /For fantasy football or marketing research, firecrawl_packs returns a playbook/);
+  assert.match(init.instructions, /For fantasy football or marketing research, firecrawl_packs provides relevant providers/);
+  assert.deepEqual(Object.keys(tool.inputSchema.properties), ['pack']);
+  assert.deepEqual(Object.keys(tool.outputSchema.properties).sort(), ['examples', 'pack', 'packs', 'page', 'providers', 'skill', 'summary', 'title']);
 });
 
-test('no arguments lists packs; pack returns its playbook; task selects one recipe; no API call is made', async (t) => {
+test('no arguments lists packs; pack loads provider context and guidance without an API call', async (t) => {
   const { api, client } = await startStdioWithApi(t);
   const list = toolText(await callPacks(client, {}));
   assert.deepEqual(list.packs.map((pack) => pack.id), ['fantasy', 'marketing']);
   assert.deepEqual(list.packs[0].nextTool, { name: 'firecrawl_packs', arguments: { pack: 'fantasy' } });
 
-  const fantasy = toolText(await callPacks(client, { pack: 'fantasy' }));
-  assert.equal(fantasy.recipes.length, 5);
-  assert.ok(fantasy.askFirst.length > 0 && fantasy.rules.length > 0);
-  assert.equal(fantasy.otherRecipes, undefined);
-  assert.equal(fantasy.nextTool.name, 'firecrawl_find_tools');
-  assert.ok(fantasy.nextTool.arguments.providers.includes('draftsharks-com'));
-  assert.ok(fantasy.nextTool.arguments.capabilities.includes('fantasy-sports-rankings/weekly_rankings'));
-  assert.ok(!('keywords' in fantasy.recipes[0]));
-
-  const competitors = toolText(await callPacks(client, { pack: 'marketing', task: 'Compare notion.so and linear.app traffic channels' }));
-  assert.deepEqual(competitors.recipes.map((recipe) => recipe.id), ['competitors']);
-  assert.deepEqual(competitors.otherRecipes.map((recipe) => recipe.id), ['content', 'partners', 'page-history']);
-  assert.deepEqual(competitors.nextTool.arguments, {
-    providers: ['similarweb', 'web-archive-org', 'firecrawl-trends'],
-    capabilities: ['web/traffic', 'channels/share', 'captures/history', 'captures/content', 'trends/suggestions', 'trends/related_queries'],
-    expand: ['options', 'response'],
-  });
-
-  assert.equal(toolText(await callPacks(client, { pack: 'fantasy', task: 'draft' })).recipes[0].id, 'draft');
-  const inferred = toolText(await callPacks(client, { task: 'which podcasts should we sponsor?' }));
-  assert.equal(inferred.pack, 'marketing');
-  assert.equal(inferred.recipes[0].id, 'partners');
-
-  const unmatched = toolText(await callPacks(client, { pack: 'fantasy', task: 'zzz' }));
-  assert.match(unmatched.message, /No recipe matched/);
-  assert.equal(unmatched.recipes.length, 5);
-  assert.deepEqual(toolText(await callPacks(client, { task: 'zzz' })).packs.map((pack) => pack.id), ['fantasy', 'marketing']);
-
+  for (const definition of PACK_FILES) {
+    const result = await callPacks(client, { pack: definition.id });
+    const pack = toolText(result);
+    assert.deepEqual(result.structuredContent, pack);
+    assert.equal(pack.pack, definition.id);
+    assert.deepEqual(pack.skill, definition.skill);
+    assert.deepEqual(pack.examples, definition.examples);
+    assert.equal(pack.examples.length, 2);
+    assert.deepEqual(pack.providers.map((provider) => provider.id), definition.providers.map((provider) => provider.id));
+    for (const provider of pack.providers) {
+      assert.ok(provider.summary && provider.capabilities.length);
+      assert.deepEqual(provider.nextTool, {
+        name: 'firecrawl_find_tools',
+        arguments: { providers: [provider.id], expand: [], includeCosts: true },
+      });
+    }
+    for (const removed of ['task', 'askFirst', 'recipes', 'otherRecipes']) {
+      assert.equal(Object.hasOwn(pack, removed), false);
+    }
+    assert.match(pack.skill.join(' '), /reuse|reusing/i);
+    assert.match(pack.skill.join(' '), /only.*materially/i);
+    assert.match(pack.skill.join(' '), /includeCosts: true/);
+    assert.match(pack.skill.join(' '), /firecrawl_scrape/);
+  }
   await callExpectingError(client, { name: 'firecrawl_packs', arguments: { pack: 'unknown' } });
+  await callExpectingError(client, { name: 'firecrawl_packs', arguments: { task: 'who to start' } });
   assert.equal(api.requests.length, 0);
 });
 
-test('every pack playbook stays within its size budget', async (t) => {
+test('each pack context stays within its size budget without inline contracts or prices', async (t) => {
   const { client } = await startStdioWithApi(t);
-  for (const { id, recipes } of PACK_FILES) {
+  for (const { id } of PACK_FILES) {
     const text = (await callPacks(client, { pack: id })).content[0].text;
-    assert.ok(text.length <= 8000, `${id} playbook is ${text.length} chars`);
-    for (const recipe of recipes) {
-      const one = (await callPacks(client, { pack: id, task: recipe.id })).content[0].text;
-      assert.ok(one.length <= 5000, `${id}/${recipe.id} is ${one.length} chars`);
-    }
+    assert.ok(text.length <= 8000, `${id} context is ${text.length} chars`);
+    assert.doesNotMatch(text, /"creditsCost"|"options"|"response"/);
   }
 });
 

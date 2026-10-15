@@ -1,180 +1,66 @@
 {
   "id": "fantasy",
   "title": "Fantasy football",
-  "summary": "Weekly start/sit calls for a real fantasy football roster, from six projection sources merged into one consensus, plus waivers, trades, projection checks and draft prep.",
-  "when": "who to start or sit, a fantasy lineup, waiver pickups, a trade offer, how projections held up, or draft rankings",
+  "summary": "Projection sources and league context for start/sit decisions, waiver pickups, trades and draft prep.",
+  "when": "who to start or sit, a fantasy lineup, waiver pickups, trade value or draft rankings",
   "page": "https://www.firecrawl.dev/alexandria/fantasy",
   "providers": [
-    "draftsharks-com",
-    "cbssports-com",
-    "fftoday-com",
-    "fantasyfootballcalculator-com",
-    "startwho-com",
-    "fantasydata-com",
-    "football-fantasysports-yahoo-com",
-    "nfl-com"
-  ],
-  "askFirst": [
-    "The league: a Sleeper username, a Yahoo team link, an ESPN league link, or a roster screenshot or paste.",
-    "Scoring (PPR, half-PPR or standard) and lineup slots (for example QB, 2 RB, 2 WR, TE, FLEX, SUPERFLEX, K, DST) when the league read does not show them.",
-    "The week, if not the current one."
-  ],
-  "recipes": [
     {
-      "id": "start-sit",
-      "title": "Who to start this week",
-      "when": "Lineup decisions for the current or a named week.",
-      "keywords": [
-        "start",
-        "sit",
-        "lineup",
-        "this week",
-        "who should i play",
-        "bench",
-        "flex"
-      ],
-      "steps": [
-        {
-          "use": [
-            "football-fantasysports-yahoo-com/fantasy-football-players/public_team_roster",
-            "firecrawl_scrape"
-          ],
-          "do": "Read the roster, scoring and slots. Yahoo public team: public_team_roster with team_url. Sleeper: firecrawl_scrape the public API (api.sleeper.app/v1/user/{username}, then /v1/user/{user_id}/leagues/nfl/{season}, /v1/league/{league_id} for scoring_settings and roster_positions, and /rosters). ESPN or private leagues: use the user's screenshot or paste."
-        },
-        {
-          "use": [
-            "draftsharks-com/fantasy-sports-rankings/weekly_rankings",
-            "cbssports-com/fantasy-sports-rankings/projections",
-            "fftoday-com/fantasy-sports-rankings/weekly_projections",
-            "fantasyfootballcalculator-com/fantasy-sports-rankings/rankings",
-            "startwho-com/fantasy-sports-rankings/projections",
-            "fantasydata-com/fantasy-sports-rankings/rankings"
-          ],
-          "do": "For each rostered position, pull this week's projections from every source in the league's scoring. Scoring options differ by source (CBS Sports has no half-PPR; FFToday has no DST), so map the format per contract. Batch up to 10 calls per firecrawl_scrape."
-        },
-        {
-          "use": [
-            "nfl-com/sports-league-data/injury_report",
-            "startwho-com/fantasy-sports-rankings/injury_report"
-          ],
-          "do": "Check the injury and practice report for rostered players."
-        },
-        {
-          "do": "Merge by player: consensus = mean projected points across the sources that cover the player, with rank spread and source count. Fill the real slots from highest consensus, FLEX and SUPERFLEX last."
-        },
-        {
-          "use": [
-            "football-fantasysports-yahoo-com/fantasy-football-players/list_players"
-          ],
-          "do": "Top 3 free agents: Yahoo public league with status FA; otherwise the best consensus players not on the roster, asking the user to confirm they are available."
-        }
-      ],
-      "output": "Start and sit for each lineup slot with one line on why (consensus points, source agreement, injury), close calls flagged where sources disagree, then the top 3 free agents worth adding."
+      "id": "draftsharks-com",
+      "summary": "Weekly rankings and projected points, including floor/ceiling; rest-of-season trade and waiver value.",
+      "capabilities": ["fantasy-sports-rankings/weekly_rankings", "fantasy-sports-rankings/ros_rankings"]
     },
     {
-      "id": "waivers",
-      "title": "Waiver wire",
-      "when": "Who to pick up or drop.",
-      "keywords": [
-        "waiver",
-        "pickup",
-        "pick up",
-        "free agent",
-        "add",
-        "drop"
-      ],
-      "steps": [
-        {
-          "use": [
-            "draftsharks-com/fantasy-sports-rankings/ros_rankings",
-            "startwho-com/fantasy-sports-rankings/ros_projections",
-            "cbssports-com/fantasy-sports-rankings/projections"
-          ],
-          "do": "Rank the available players against rest-of-season boards (CBS Sports with type ros)."
-        },
-        {
-          "use": [
-            "nfl-com/sports-league-data/injury_report",
-            "football-fantasysports-yahoo-com/fantasy-football-players/list_players"
-          ],
-          "do": "Check injuries; for a Yahoo public league, list status FA players."
-        }
-      ],
-      "output": "Ranked adds with a matching drop for each, one line of reasoning per move."
+      "id": "cbssports-com",
+      "summary": "Weekly and rest-of-season projections, expert rankings and actual fantasy stats. PPR or standard, not half-PPR.",
+      "capabilities": ["fantasy-sports-rankings/projections", "fantasy-sports-rankings/rankings", "fantasy-sports-rankings/stats"]
     },
     {
-      "id": "trade",
-      "title": "Trade check",
-      "when": "Evaluating a trade offer.",
-      "keywords": [
-        "trade",
-        "offer",
-        "deal",
-        "swap"
-      ],
-      "steps": [
-        {
-          "use": [
-            "draftsharks-com/fantasy-sports-rankings/ros_rankings",
-            "startwho-com/fantasy-sports-rankings/ros_projections",
-            "fftoday-com/fantasy-sports-rankings/season_projections"
-          ],
-          "do": "Line up both sides against rest-of-season and season-long projections."
-        }
-      ],
-      "output": "Projected points given and received, the verdict, and what would make the offer fair."
+      "id": "fftoday-com",
+      "summary": "Weekly projected points and stat lines in several scoring presets, weekly rankings and season projections. No weekly DST projections.",
+      "capabilities": ["fantasy-sports-rankings/weekly_projections", "fantasy-sports-rankings/season_projections"]
     },
     {
-      "id": "projection-check",
-      "title": "How projections held up",
-      "when": "Comparing last week's projections with actual scores.",
-      "keywords": [
-        "accuracy",
-        "held up",
-        "actual",
-        "last week",
-        "results",
-        "how did"
-      ],
-      "steps": [
-        {
-          "use": [
-            "startwho-com/fantasy-sports-rankings/weekly_results",
-            "cbssports-com/fantasy-sports-rankings/stats"
-          ],
-          "do": "Pull projected versus actual points for the week."
-        }
-      ],
-      "output": "Biggest hits and misses per source for the user's players."
+      "id": "fantasyfootballcalculator-com",
+      "summary": "Current weekly rankings with projections, dynasty/rookie rankings and historical ADP by scoring and league size. 2-QB projections use standard scoring.",
+      "capabilities": ["fantasy-sports-rankings/rankings", "fantasy-sports-rankings/adp"]
     },
     {
-      "id": "draft",
-      "title": "Draft prep",
-      "when": "Rankings and average draft position before a draft.",
-      "keywords": [
-        "draft",
-        "adp",
-        "mock",
-        "dynasty",
-        "rookie",
-        "keeper"
-      ],
-      "steps": [
-        {
-          "use": [
-            "fantasyfootballcalculator-com/fantasy-sports-rankings/adp",
-            "fftoday-com/fantasy-sports-rankings/season_projections",
-            "startwho-com/fantasy-sports-rankings/season_projections"
-          ],
-          "do": "Pull ADP for the league's scoring and size, then season-long projections."
-        }
-      ],
-      "output": "Value picks and reaches by round, by comparing ADP with projections."
+      "id": "startwho-com",
+      "summary": "Projections built from sportsbook props, injury reports, rest-of-season values and projected-versus-actual weekly results.",
+      "capabilities": ["fantasy-sports-rankings/projections", "fantasy-sports-rankings/injury_report", "fantasy-sports-rankings/weekly_results"]
+    },
+    {
+      "id": "fantasydata-com",
+      "summary": "Current weekly rankings and projected points by position in standard, half-PPR and PPR, with coverage varying by position.",
+      "capabilities": ["fantasy-sports-rankings/rankings"]
+    },
+    {
+      "id": "football-fantasysports-yahoo-com",
+      "summary": "Public Yahoo team rosters and league player lists with availability filters. Private leagues are unavailable; public_team_roster does not supply projected points.",
+      "capabilities": ["fantasy-football-players/public_team_roster", "fantasy-football-players/list_players"]
+    },
+    {
+      "id": "nfl-com",
+      "summary": "Official weekly injury and practice-participation reports and schedules for matchup context.",
+      "capabilities": ["sports-league-data/injury_report", "sports-league-data/schedule"]
     }
   ],
-  "rules": [
-    "Use the league's scoring in every call, and say when a source lacks that format or position.",
-    "Every number comes from a named source; never fill a missing projection. Report source errors.",
-    "Discovery is free. Each capability lists its credit price in firecrawl_find_tools; a lineup is roughly one call per source per position, so give the estimate before a large run."
+  "skill": [
+    "Adapt to the question and reuse the roster, scoring, slots and week already supplied. Ask only for missing details that materially affect the answer. A single-player question need not become a whole-lineup analysis, and not every provider is needed.",
+    "Provider nextTool calls browse compact capabilities with prices. For a selected capability, call firecrawl_find_tools with providers: [provider ID], capabilities: [capability ID], expand: [options, response] and includeCosts: true. Use the live contract for inputs, coverage and credit costs; explain costs before paid execution through firecrawl_scrape with alexandria: {provider, capability, options}.",
+    "For league context, a Sleeper username, Yahoo/ESPN link, roster screenshot or paste can help. Yahoo supports public team rosters; Sleeper's public api.sleeper.app/v1 endpoints can be read with firecrawl_scrape. For ESPN or unavailable/private league data, ask for the relevant roster, settings or available-player list rather than credentials.",
+    "Match week, position and scoring per source contract. Do not silently substitute another scoring format; custom scoring may require comparable stat lines. For a consensus, join players by identity and average only comparable projections; report source count and disagreement without filling missing values. Check injuries and matchup evidence when relevant.",
+    "For lineup advice, respect the actual slots, eligibility, FLEX/SUPERFLEX and locked starters. Give concise start/sit reasoning with sources. For waiver advice, only call players free agents when league availability is known; if fewer than three suitable options are verified, say so. Treat provider errors and missing coverage explicitly. If provider terms are required, show them and ask an organization admin to accept in the dashboard; never infer acceptance."
+  ],
+  "examples": [
+    {
+      "request": "Who should I start from this roster?",
+      "approach": "Use the supplied slots and scoring, compare relevant weekly projections across the six projection sources where available, and add injury context. Show the consensus, source disagreement and one-line reasoning for changes. If verified league availability is supplied, include up to three useful adds."
+    },
+    {
+      "request": "Was last week's projection for my quarterback close?",
+      "approach": "StartWho weekly_results can compare projected and actual scores; CBS stats can provide actual production. A targeted check may be enough without loading the entire league."
+    }
   ]
 }

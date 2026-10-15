@@ -344,7 +344,7 @@ Use this guide to select the right tool for your task:
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
 - **If you need interactive browser automation** (click, type, navigate): use **interact** with a URL for a fresh page, or **scrape** + **interact** when you already scraped the page or need tighter scrape control
 - **If you need data from a catalogued provider** (Alexandria): search with `sources: ["alexandria"]`, inspect the selected contract with **find_tools**, and execute it with **scrape** `alexandria`
-- **If the task matches an Alexandria pack** (fantasy football lineups, marketing research): load the playbook with **packs**, then follow its recipe through **find_tools** and **scrape**
+- **If the task matches an Alexandria pack** (fantasy football, marketing research): use **packs** for provider context and guidance, **find_tools** for selected contracts, and **scrape** for execution
 
 ### Quick Reference Table
 
@@ -357,7 +357,7 @@ Use this guide to select the right tool for your task:
 | parse     | Files and hosted upload refs                   | markdown, JSON, or document output               |
 | search    | Web search for info                            | results[]                                        |
 | find_tools | Alexandria catalogue browsing and URL lookup | providers, tool contracts and nextTool navigation |
-| packs     | Curated Alexandria playbooks                   | questions to ask, ordered capabilities, output rules |
+| packs     | Curated Alexandria context                     | provider summaries, short guidance and examples    |
 | developer | Programming questions over developer sources   | results[] with passages                          |
 | gov       | US primary law and regulatory material         | results[] with snippets                          |
 | agent     | Multi-source research, unknown or many sites   | JSON (structured data)                           |
@@ -1114,14 +1114,16 @@ Start with no arguments for categories, then progressively narrow the catalogue:
 | --- | --- |
 | `{}` | Categories and short descriptions |
 | `{"categories":["podcasts"]}` | Providers in that category |
-| `{"categories":["podcasts"],"providers":["particle"]}` | Compact tool names, descriptions, and prices |
+| `{"categories":["podcasts"],"providers":["particle"]}` | Compact tool names and descriptions |
 | `{"providers":["particle"],"capabilities":["podcasts/episodes/search"]}` | Complete selected inputs, constraints, response, and examples |
 
 No group hop is required. Explicit `level` supports `categories`, `providers`,
 `groups`, or `tools`; explicit `expand` selects contract sections. `expand: []`
 keeps results compact even when selecting a capability. For broad full contracts,
 explicitly request `level: "tools"` and `expand: ["options", "response", "examples"]`.
-URLs provide contextual discovery without fetching the page.
+URLs provide contextual discovery without fetching the page. Tool results omit
+per-capability credit prices unless `includeCosts: true` is set; follow-up
+`nextTool` arguments keep it.
 
 Results are in `data.alexandria[0].data`. Follow an item's `nextTool` by calling
 its `name` with its `arguments`; the page's `nextTool` advances pagination.
@@ -1148,7 +1150,7 @@ These controls require the matching Alexandria API deployment.
 }
 ```
 
-**Returns:** `{ success, scrape_id, requestId, data: { alexandria: [...], creditsCost } }`. Each item is either a result (`provider`, `capability`, `creditsCost`, `data`, `records`, `upstreamStatus`) or an `error` with a `code`; the batch never fails as a whole for a provider error and `data.creditsCost` sums the successful items. Alexandria error bodies (403 without Alexandria access, and 402/409 billing statuses) are relayed in-band with their `code`.
+**Returns:** `{ success, scrape_id, requestId, data: { alexandria: [...], creditsCost } }`. Each item is either a result (`provider`, `capability`, `data`, `records`, `upstreamStatus`) or an `error` with a `code`; the batch never fails as a whole for a provider error and `data.creditsCost` is the total charged for the request. Alexandria error bodies (403 without Alexandria access, and 402/409 billing statuses) are relayed in-band with their `code`.
 
 Execution generates one `x-request-id` and returns it on success or failure. Retry
 the identical payload with that `requestId`; do not create a new ID after an
@@ -1362,15 +1364,17 @@ Find Tools and execution are available on both the full surface and the search s
 
 ### Alexandria packs
 
-`firecrawl_packs` returns curated playbooks for common jobs built on Alexandria providers: `fantasy` (start/sit, waivers, trades, projection checks, draft prep) and `marketing` (competitors, content from search demand, creator and podcast partners, messaging history). It is read-only, free, and makes no API call.
+`firecrawl_packs` supplies agent-facing context for `fantasy` (fantasy football) and `marketing` (marketing research). It is read-only, free, and makes no API call. Users can ask normally; the pack helps the assistant choose useful sources rather than requiring a questionnaire or a fixed workflow.
 
 | Call | Returns |
 | --- | --- |
-| `{}` | The packs, their recipes, and a `nextTool` for each |
-| `{"pack":"fantasy"}` | The playbook: questions to ask first, every recipe with its ordered capabilities, output rules, and a `nextTool` that expands their contracts with `firecrawl_find_tools` |
-| `{"pack":"marketing","task":"compare competitors' traffic"}` | The matching recipe in full and the others by title; `task` can also be a recipe ID, and without `pack` it selects across packs |
+| `{}` | Pack summaries and a `nextTool` to load each one |
+| `{"pack":"fantasy"}` | Provider IDs, purpose summaries and representative capability IDs; a short skill on using them accurately; and two illustrative examples |
+| `{"pack":"marketing"}` | The same context for traffic, search demand, archived messaging, creators, podcasts and visual references |
 
-Pack definitions live in `src/packs/<id>.json`, one file per pack. When `firecrawl_search` or `firecrawl_find_tools` returns a provider that belongs to a pack, the result carries a `packs` pointer to the matching playbook. Like `firecrawl_find_tools`, the tool needs an API key.
+Each provider has a `nextTool` to browse compact live capabilities with `includeCosts: true`. Select the capabilities relevant to the request and inspect their contracts through `firecrawl_find_tools` before execution with `firecrawl_scrape`. Packs contain neither frozen prices nor full contracts. The guidance says to reuse information already supplied, ask only for materially missing details, and avoid calling every provider.
+
+Pack definitions live in `src/packs/<id>.json`, one file per pack. `scripts/check-packs.mjs` checks their representative capability IDs against the live catalogue. When `firecrawl_search` or `firecrawl_find_tools` returns a provider that belongs to a pack, the result carries a `packs` pointer to its context. Like `firecrawl_find_tools`, the tool needs an API key.
 
 ### Alexandria session feedback
 

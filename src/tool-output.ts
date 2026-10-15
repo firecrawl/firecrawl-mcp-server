@@ -173,19 +173,16 @@ export const findToolsOutputSchema = z
 
 export const packsOutputSchema = z
   .object({
-    packs: unknown('Available packs, each with a nextTool that loads its playbook.'),
-    message: str('Guidance when no recipe matched the task.'),
+    packs: unknown('Available packs, each with a nextTool that loads its context.'),
     pack: str('Pack ID.'),
     title: str('Pack title.'),
     summary: str('What the pack helps with.'),
-    askFirst: unknown('Questions to ask the user before calling any capability.'),
-    recipes: unknown('Selected recipes: ordered steps naming the capabilities or tools to use, and the expected output.'),
-    otherRecipes: unknown('Other recipes in the pack, selectable with task.'),
-    rules: unknown('Output, sourcing, cost and terms rules for the pack.'),
+    providers: unknown('Provider IDs, compact summaries, representative capability IDs and nextTool calls for live discovery with costs.'),
+    skill: unknown('Short guidance on choosing sources and using them accurately, including access and cost requirements.'),
+    examples: unknown('Illustrative requests and useful provider combinations, not mandatory sequences.'),
     page: str('Public page describing the pack.'),
-    nextTool: unknown('A firecrawl_find_tools call that expands the contracts of the selected capabilities.'),
   })
-  .describe('The pack list, or one pack playbook.');
+  .describe('The pack list, or agent-facing provider context and guidance for one pack.');
 
 export const feedbackOutputSchema = z
   .object({
