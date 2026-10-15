@@ -201,14 +201,6 @@ docker run --rm -p 127.0.0.1:3000:3000 \
 
 The image sets `HOST=0.0.0.0` and `PORT=3000`; override `PORT` (and the `-p` mapping) to listen elsewhere. The server uses the container's `FIRECRAWL_API_KEY` for requests that don't send their own credential, so the example publishes the port on `127.0.0.1` only; don't expose it more widely unless clients must supply their own key. Set `FIRECRAWL_API_URL` to use a self-hosted Firecrawl API. The container runs as the unprivileged `node` user.
 
-### Installing via Smithery (Legacy)
-
-To install Firecrawl for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@mendableai/mcp-server-firecrawl):
-
-```bash
-npx -y @smithery/cli install @mendableai/mcp-server-firecrawl --client claude
-```
-
 ### Running on VS Code
 
 For one-click installation, click one of the install buttons below...
