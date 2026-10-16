@@ -51,6 +51,17 @@ test('default tools fall back only on discovery refusal; explicit tools and othe
   assert.equal(other.api.requests.length, 1);
 });
 
+test('search relays the API error message whatever sources are requested', async (t) => {
+  const apiError = 'Insufficient credits to perform this request. For more credits, you can upgrade your plan at https://firecrawl.dev/pricing.';
+  const { client } = await startStdioWithApi(t, { apiStatus: 402, apiError });
+  for (const overrides of [{}, { sources: ['web'] }, { sources: ['news'] }, { sources: ['alexandria'] }]) {
+    const result = await callExpectingError(client, {
+      name: 'firecrawl_search', arguments: { query: 'company news', ...overrides },
+    });
+    assert.match(result.content[0].text, /upgrade your plan at https:\/\/firecrawl\.dev\/pricing/, JSON.stringify(overrides));
+  }
+});
+
 test('toolDetail forwards valid values and rejects invalid values before API calls', async (t) => {
   const { api, client } = await startStdioWithApi(t);
   for (const [name, args] of [

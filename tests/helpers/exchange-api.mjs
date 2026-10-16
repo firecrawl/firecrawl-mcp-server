@@ -66,7 +66,7 @@ async function startFakeExchangeApi(options = {}) {
     if (req.method === 'POST' && (!parsedBody || typeof parsedBody !== 'object' || Array.isArray(parsedBody))) return json(400, {error:'Expected a JSON object body'});
 
     if (options.largeResult && (url.pathname === '/v2/search' || url.pathname.startsWith('/exchange/discover'))) return json(200, options.largeResult);
-    if (options.apiStatus) return json(options.apiStatus, { success: false, error: 'Invalid API key' });
+    if (options.apiStatus) return json(options.apiStatus, { success: false, error: options.apiError ?? 'Invalid API key' });
 
     if (url.pathname === '/exchange/skills/resolve')
       return json(200, { skills: [{ id: 'particle-podcasts' }] });

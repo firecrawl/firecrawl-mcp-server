@@ -10,7 +10,6 @@ import {
   normalizeSearchSources,
   postSearchWithFallback,
   relayExchangeError,
-  relayTermsRequired,
   removeEmptyTopLevel,
   requestOrigin,
   SEARCH_DOMAINS_CONFLICT_MESSAGE,
@@ -158,10 +157,7 @@ Returns result groups in \`data\` and an operation \`id\`.
           searchBody,
           sources === undefined && domainTools !== true
         );
-      const context = { tool: 'firecrawl_search' };
-      const httpRes = exchangeSource
-        ? await relayExchangeError(postSearch, context)
-        : await relayTermsRequired(postSearch, context);
+      const httpRes = await relayExchangeError(postSearch, { tool: 'firecrawl_search' });
       return structuredCompact(httpRes?.data ?? {});
     },
   });
