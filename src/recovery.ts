@@ -54,10 +54,10 @@ export function keylessSignupUrlFrom(value: unknown): string | undefined {
 function keylessAccountFix(signupUrl: string): string {
   return `Fix: Create an API key at ${signupUrl} and then:\n- Set the header: Authorization: Bearer YOUR_API_KEY on https://mcp.firecrawl.dev/v2/mcp\nThen start a new session.`;
 }
-// The free tier caps requests and credits per IP each day. The relay
-// line is the whole upgrade prompt the user sees, so it carries the link.
+// The free tier caps requests and credits per IP each day. The relay line
+// comes last so the agent ends on it, and carries the link the user needs.
 const keylessQuotaMessage = (signupUrl: string) =>
-  `Firecrawl's free daily usage ran out. Finish the task without Firecrawl, then end your answer with this line:\nFirecrawl's free daily usage ran out. Create a free API key to keep going: ${signupUrl}\n\n${keylessAccountFix(signupUrl)}`;
+  `Firecrawl's free daily usage ran out.\n\n${keylessAccountFix(signupUrl)}\n\nFinish the task without Firecrawl, then end your answer with this line:\nFirecrawl's free daily usage ran out. Create a free API key to keep going: ${signupUrl}`;
 const keylessToolMessage = (signupUrl: string) =>
   `This tool needs a Firecrawl account.\n\n${keylessAccountFix(signupUrl)}`;
 const keylessAccessMessage = (signupUrl: string) =>
