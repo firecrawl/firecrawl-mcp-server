@@ -553,7 +553,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_crawl@4ca4a0262b5a": {
+  "firecrawl_crawl@1c43cc68a1ce": {
     "annotations": {
       "title": "Firecrawl site crawl",
       "readOnlyHint": false,
@@ -630,6 +630,7 @@
           "type": "boolean"
         },
         "scrapeOptions": {
+          "description": "Same fields as firecrawl_scrape.",
           "type": "object",
           "properties": {
             "formats": {
@@ -1003,7 +1004,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_crawl@c4ede2eb32b6": {
+  "firecrawl_crawl@3631c0748a33": {
     "annotations": {
       "title": "Firecrawl site crawl",
       "readOnlyHint": false,
@@ -1070,6 +1071,7 @@
           "type": "boolean"
         },
         "scrapeOptions": {
+          "description": "Same fields as firecrawl_scrape.",
           "type": "object",
           "properties": {
             "formats": {
@@ -2448,7 +2450,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_interact@5439a16752e2": {
+  "firecrawl_interact@1703e5357c37": {
     "annotations": {
       "title": "Firecrawl interact",
       "readOnlyHint": false,
@@ -2491,6 +2493,7 @@
           "maximum": 300
         },
         "scrapeOptions": {
+          "description": "Same fields as firecrawl_scrape.",
           "type": "object",
           "properties": {
             "formats": {
@@ -2618,56 +2621,6 @@
             },
             "waitFor": {
               "type": "number"
-            },
-            "actions": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "wait",
-                      "screenshot",
-                      "scroll",
-                      "scrape",
-                      "click",
-                      "write",
-                      "press",
-                      "executeJavascript",
-                      "generatePDF"
-                    ]
-                  },
-                  "selector": {
-                    "type": "string"
-                  },
-                  "milliseconds": {
-                    "type": "number"
-                  },
-                  "text": {
-                    "type": "string"
-                  },
-                  "key": {
-                    "type": "string"
-                  },
-                  "direction": {
-                    "type": "string",
-                    "enum": [
-                      "up",
-                      "down"
-                    ]
-                  },
-                  "script": {
-                    "type": "string"
-                  },
-                  "fullPage": {
-                    "type": "boolean"
-                  }
-                },
-                "required": [
-                  "type"
-                ]
-              }
             },
             "mobile": {
               "type": "boolean"
@@ -2845,7 +2798,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_interact@9b215cde7142": {
+  "firecrawl_interact@c8f413f1de61": {
     "annotations": {
       "title": "Firecrawl interact",
       "readOnlyHint": false,
@@ -2888,6 +2841,7 @@
           "maximum": 300
         },
         "scrapeOptions": {
+          "description": "Same fields as firecrawl_scrape.",
           "type": "object",
           "properties": {
             "formats": {
@@ -3015,6 +2969,56 @@
             },
             "waitFor": {
               "type": "number"
+            },
+            "actions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "wait",
+                      "screenshot",
+                      "scroll",
+                      "scrape",
+                      "click",
+                      "write",
+                      "press",
+                      "executeJavascript",
+                      "generatePDF"
+                    ]
+                  },
+                  "selector": {
+                    "type": "string"
+                  },
+                  "milliseconds": {
+                    "type": "number"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "up",
+                      "down"
+                    ]
+                  },
+                  "script": {
+                    "type": "string"
+                  },
+                  "fullPage": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              }
             },
             "mobile": {
               "type": "boolean"
@@ -3818,7 +3822,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_parse@1acaf77898b6": {
+  "firecrawl_parse@25d48f92871e": {
     "annotations": {
       "title": "Firecrawl file parsing",
       "readOnlyHint": true,
@@ -3832,8 +3836,10 @@
       "type": "object",
       "properties": {
         "formats": {
+          "description": "Output formats to return. Defaults to [\"markdown\"]. \"json\" and \"query\" take their settings from jsonOptions and queryOptions.",
           "type": "array",
           "items": {
+            "description": "One output format, for example \"markdown\", \"html\" or \"links\".",
             "type": "string",
             "enum": [
               "markdown",
@@ -3847,12 +3853,15 @@
           }
         },
         "jsonOptions": {
+          "description": "Settings for the \"json\" format. Used only when formats includes \"json\".",
           "type": "object",
           "properties": {
             "prompt": {
+              "description": "Natural-language description of the fields to extract. Optional when a schema is given.",
               "type": "string"
             },
             "schema": {
+              "description": "JSON Schema describing the structure of the extracted data.",
               "type": "object",
               "propertyNames": {
                 "type": "string"
@@ -3863,13 +3872,16 @@
           "additionalProperties": false
         },
         "queryOptions": {
+          "description": "Settings for the \"query\" format. Used only when formats includes \"query\".",
           "type": "object",
           "properties": {
             "prompt": {
+              "description": "Question to answer from the page content.",
               "type": "string",
               "maxLength": 10000
             },
             "mode": {
+              "description": "\"freeform\" (default) writes an answer in its own words; \"directQuote\" answers with text taken directly from the page.",
               "default": "freeform",
               "type": "string",
               "enum": [
@@ -3884,8 +3896,10 @@
           "additionalProperties": false
         },
         "parsers": {
+          "description": "PDF parsing is on by default; leave unset unless you need pdfOptions. Passing a list turns off parsers not in it ([\"pdf\"] turns off image OCR). \"pdf\" is billed per page.",
           "type": "array",
           "items": {
+            "description": "Parser name; \"pdf\" is the only parser.",
             "type": "string",
             "enum": [
               "pdf"
@@ -3893,9 +3907,11 @@
           }
         },
         "pdfOptions": {
+          "description": "Settings for the \"pdf\" parser. Used only when parsers includes \"pdf\".",
           "type": "object",
           "properties": {
             "maxPages": {
+              "description": "Maximum number of PDF pages to parse; use it to cap cost on long PDFs.",
               "type": "integer",
               "minimum": 1,
               "maximum": 10000
@@ -3904,33 +3920,43 @@
           "additionalProperties": false
         },
         "onlyMainContent": {
+          "description": "Return only the main content, without headers, navigation and footers. Default true.",
           "type": "boolean"
         },
         "redactPII": {
+          "description": "Redact personally identifiable information from the returned content. Default false.",
           "type": "boolean"
         },
         "includeTags": {
+          "description": "HTML tags or CSS selectors to keep; everything else is dropped before conversion.",
           "type": "array",
           "items": {
+            "description": "HTML tag name or CSS selector.",
             "type": "string"
           }
         },
         "excludeTags": {
+          "description": "HTML tags or CSS selectors to remove before conversion, for example \"nav\" or \".cookie-banner\".",
           "type": "array",
           "items": {
+            "description": "HTML tag name or CSS selector.",
             "type": "string"
           }
         },
         "removeBase64Images": {
+          "description": "Replace base64-encoded images in the markdown with placeholders to keep it short. Default true.",
           "type": "boolean"
         },
         "skipTlsVerification": {
+          "description": "Accepted for API compatibility; parse reads an uploaded file and fetches no page.",
           "type": "boolean"
         },
         "storeInCache": {
+          "description": "Ignored: parse never stores content in the Firecrawl index or cache.",
           "type": "boolean"
         },
         "zeroDataRetention": {
+          "description": "Run the request with zero data retention. Available to teams with this feature enabled.",
           "type": "boolean"
         },
         "maxAge": {
@@ -3938,6 +3964,7 @@
           "type": "number"
         },
         "proxy": {
+          "description": "No effect on parse, which reads an uploaded file; accepted for API compatibility.",
           "type": "string",
           "enum": [
             "basic",
@@ -4134,7 +4161,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_parse@3e81e427aadb": {
+  "firecrawl_parse@5c2e76808231": {
     "annotations": {
       "title": "Firecrawl file parsing",
       "readOnlyHint": true,
@@ -4148,8 +4175,10 @@
       "type": "object",
       "properties": {
         "formats": {
+          "description": "Output formats to return. Defaults to [\"markdown\"]. \"json\" and \"query\" take their settings from jsonOptions and queryOptions.",
           "type": "array",
           "items": {
+            "description": "One output format, for example \"markdown\", \"html\" or \"links\".",
             "type": "string",
             "enum": [
               "markdown",
@@ -4163,12 +4192,15 @@
           }
         },
         "jsonOptions": {
+          "description": "Settings for the \"json\" format. Used only when formats includes \"json\".",
           "type": "object",
           "properties": {
             "prompt": {
+              "description": "Natural-language description of the fields to extract. Optional when a schema is given.",
               "type": "string"
             },
             "schema": {
+              "description": "JSON Schema describing the structure of the extracted data.",
               "type": "object",
               "propertyNames": {
                 "type": "string"
@@ -4179,13 +4211,16 @@
           "additionalProperties": false
         },
         "queryOptions": {
+          "description": "Settings for the \"query\" format. Used only when formats includes \"query\".",
           "type": "object",
           "properties": {
             "prompt": {
+              "description": "Question to answer from the page content.",
               "type": "string",
               "maxLength": 10000
             },
             "mode": {
+              "description": "\"freeform\" (default) writes an answer in its own words; \"directQuote\" answers with text taken directly from the page.",
               "default": "freeform",
               "type": "string",
               "enum": [
@@ -4200,8 +4235,10 @@
           "additionalProperties": false
         },
         "parsers": {
+          "description": "PDF parsing is on by default; leave unset unless you need pdfOptions. Passing a list turns off parsers not in it ([\"pdf\"] turns off image OCR). \"pdf\" is billed per page.",
           "type": "array",
           "items": {
+            "description": "Parser name; \"pdf\" is the only parser.",
             "type": "string",
             "enum": [
               "pdf"
@@ -4209,9 +4246,11 @@
           }
         },
         "pdfOptions": {
+          "description": "Settings for the \"pdf\" parser. Used only when parsers includes \"pdf\".",
           "type": "object",
           "properties": {
             "maxPages": {
+              "description": "Maximum number of PDF pages to parse; use it to cap cost on long PDFs.",
               "type": "integer",
               "minimum": 1,
               "maximum": 10000
@@ -4220,33 +4259,43 @@
           "additionalProperties": false
         },
         "onlyMainContent": {
+          "description": "Return only the main content, without headers, navigation and footers. Default true.",
           "type": "boolean"
         },
         "redactPII": {
+          "description": "Redact personally identifiable information from the returned content. Default false.",
           "type": "boolean"
         },
         "includeTags": {
+          "description": "HTML tags or CSS selectors to keep; everything else is dropped before conversion.",
           "type": "array",
           "items": {
+            "description": "HTML tag name or CSS selector.",
             "type": "string"
           }
         },
         "excludeTags": {
+          "description": "HTML tags or CSS selectors to remove before conversion, for example \"nav\" or \".cookie-banner\".",
           "type": "array",
           "items": {
+            "description": "HTML tag name or CSS selector.",
             "type": "string"
           }
         },
         "removeBase64Images": {
+          "description": "Replace base64-encoded images in the markdown with placeholders to keep it short. Default true.",
           "type": "boolean"
         },
         "skipTlsVerification": {
+          "description": "Accepted for API compatibility; parse reads an uploaded file and fetches no page.",
           "type": "boolean"
         },
         "storeInCache": {
+          "description": "Ignored: parse never stores content in the Firecrawl index or cache.",
           "type": "boolean"
         },
         "zeroDataRetention": {
+          "description": "Run the request with zero data retention. Available to teams with this feature enabled.",
           "type": "boolean"
         },
         "maxAge": {
@@ -4254,6 +4303,7 @@
           "type": "number"
         },
         "proxy": {
+          "description": "No effect on parse, which reads an uploaded file; accepted for API compatibility.",
           "type": "string",
           "enum": [
             "basic",
@@ -4973,1169 +5023,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_scrape@43d0197b6a3f": {
-    "annotations": {
-      "title": "Firecrawl scrape",
-      "readOnlyHint": true,
-      "openWorldHint": true,
-      "destructiveHint": false
-    },
-    "title": "Firecrawl scrape",
-    "description": "\nScrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session with Alexandria access, `firecrawl_search` with `sources` unset and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching provider returns typed records in one call. Keyless sessions have no provider matches.\n\nAlexandria mode, on an authenticated session with Alexandria access: `alexandria` selects catalogued capability execution and is mutually exclusive with `url`.\n",
-    "inputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "type": "object",
-      "properties": {
-        "url": {
-          "type": "string",
-          "format": "uri"
-        },
-        "formats": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "markdown",
-              "html",
-              "rawHtml",
-              "screenshot",
-              "links",
-              "images",
-              "summary",
-              "changeTracking",
-              "branding",
-              "json",
-              "query",
-              "audio"
-            ]
-          }
-        },
-        "jsonOptions": {
-          "type": "object",
-          "properties": {
-            "prompt": {
-              "type": "string"
-            },
-            "schema": {
-              "type": "object",
-              "propertyNames": {
-                "type": "string"
-              },
-              "additionalProperties": false
-            }
-          },
-          "additionalProperties": false
-        },
-        "queryOptions": {
-          "type": "object",
-          "properties": {
-            "prompt": {
-              "type": "string",
-              "maxLength": 10000
-            },
-            "mode": {
-              "default": "freeform",
-              "type": "string",
-              "enum": [
-                "directQuote",
-                "freeform"
-              ]
-            }
-          },
-          "required": [
-            "prompt"
-          ],
-          "additionalProperties": false
-        },
-        "screenshotOptions": {
-          "type": "object",
-          "properties": {
-            "fullPage": {
-              "type": "boolean"
-            },
-            "quality": {
-              "type": "number"
-            },
-            "viewport": {
-              "type": "object",
-              "properties": {
-                "width": {
-                  "type": "number"
-                },
-                "height": {
-                  "type": "number"
-                }
-              },
-              "required": [
-                "width",
-                "height"
-              ],
-              "additionalProperties": false
-            }
-          },
-          "additionalProperties": false
-        },
-        "parsers": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "pdf"
-            ]
-          }
-        },
-        "pdfOptions": {
-          "type": "object",
-          "properties": {
-            "maxPages": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 10000
-            }
-          },
-          "additionalProperties": false
-        },
-        "onlyMainContent": {
-          "type": "boolean"
-        },
-        "redactPII": {
-          "type": "boolean"
-        },
-        "includeTags": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "excludeTags": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "waitFor": {
-          "type": "number"
-        },
-        "mobile": {
-          "type": "boolean"
-        },
-        "skipTlsVerification": {
-          "type": "boolean"
-        },
-        "removeBase64Images": {
-          "type": "boolean"
-        },
-        "location": {
-          "type": "object",
-          "properties": {
-            "country": {
-              "type": "string"
-            },
-            "languages": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          },
-          "additionalProperties": false
-        },
-        "storeInCache": {
-          "type": "boolean"
-        },
-        "zeroDataRetention": {
-          "type": "boolean"
-        },
-        "maxAge": {
-          "type": "number"
-        },
-        "lockdown": {
-          "type": "boolean"
-        },
-        "proxy": {
-          "type": "string",
-          "enum": [
-            "basic",
-            "stealth",
-            "enhanced",
-            "auto"
-          ]
-        },
-        "profile": {
-          "description": "Loads a saved browser profile without saving changes to it.",
-          "type": "object",
-          "properties": {
-            "name": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "name"
-          ],
-          "additionalProperties": false
-        },
-        "timeout": {
-          "description": "Execution timeout in milliseconds.",
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
-        },
-        "requestId": {
-          "description": "Idempotency key bound to one Alexandria execution payload. Generated when omitted and returned with the result.",
-          "type": "string",
-          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
-        },
-        "alexandria": {
-          "description": "Catalogued Alexandria capability invocation, mutually exclusive with url. One {provider, capability, options} object or an array of 1-10, with contracts available through firecrawl_search or firecrawl_find_tools. Each call may include version to pin a published workflow; omitting it uses latest. Only requestId and timeout are supported alongside alexandria. The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and response.key (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination. Returns per-capability results in data.alexandria with data, records, or an error with a code; individual capabilities can fail even when the outer response succeeds. Requires an API key on a team with Alexandria enabled. Some providers require accepted terms; blocked requests return the applicable requirements.",
-          "anyOf": [
-            {
-              "type": "object",
-              "properties": {
-                "provider": {
-                  "description": "Provider slug, e.g. \"fred\".",
-                  "type": "string",
-                  "minLength": 1
-                },
-                "capability": {
-                  "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
-                  "type": "string",
-                  "minLength": 1
-                },
-                "version": {
-                  "description": "Optional published workflow version. Omit to use the latest version.",
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 128
-                },
-                "options": {
-                  "description": "Capability options as declared by its contract.",
-                  "type": "object",
-                  "propertyNames": {
-                    "type": "string"
-                  },
-                  "additionalProperties": {}
-                }
-              },
-              "required": [
-                "provider",
-                "capability"
-              ]
-            },
-            {
-              "minItems": 1,
-              "maxItems": 10,
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "provider": {
-                    "description": "Provider slug, e.g. \"fred\".",
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "capability": {
-                    "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "version": {
-                    "description": "Optional published workflow version. Omit to use the latest version.",
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 128
-                  },
-                  "options": {
-                    "description": "Capability options as declared by its contract.",
-                    "type": "object",
-                    "propertyNames": {
-                      "type": "string"
-                    },
-                    "additionalProperties": {}
-                  }
-                },
-                "required": [
-                  "provider",
-                  "capability"
-                ]
-              }
-            }
-          ]
-        },
-        "toolDetail": {
-          "description": "URL mode only: domain discovery detail, summary by default; compact returns provider/capability/description, full includes contracts. Ignored with alexandria.",
-          "type": "string",
-          "enum": [
-            "compact",
-            "summary",
-            "full"
-          ]
-        },
-        "domainTools": {
-          "description": "URL mode only: include domain-matched Alexandria tools for the page in tools on the returned document. Ignored with alexandria.",
-          "type": "boolean"
-        }
-      },
-      "additionalProperties": false
-    },
-    "name": "firecrawl_scrape",
-    "outputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "description": "A scraped document, or the Alexandria execution envelope when `alexandria` was passed.",
-      "type": "object",
-      "properties": {
-        "markdown": {
-          "description": "Page content as markdown.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "html": {
-          "description": "Processed HTML of the page.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "rawHtml": {
-          "description": "Unprocessed HTML of the page.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "summary": {
-          "description": "Summary of the page content.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "links": {
-          "description": "Links found on the page."
-        },
-        "screenshot": {
-          "description": "Screenshot of the page."
-        },
-        "images": {
-          "description": "Images found on the page."
-        },
-        "audio": {
-          "description": "Audio extracted from the page."
-        },
-        "video": {
-          "description": "Video extracted from the page."
-        },
-        "answer": {
-          "description": "Targeted answer to the question that was asked of the page.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "highlights": {
-          "description": "Highlighted passages from the page."
-        },
-        "pages": {
-          "description": "Physical PDF pages, when `parsers[].pages` is set."
-        },
-        "blocks": {
-          "description": "Typed PDF layout blocks, when `parsers[].blocks` is set."
-        },
-        "product": {
-          "description": "Product data extracted from the page."
-        },
-        "menu": {
-          "description": "Menu data extracted from the page."
-        },
-        "json": {
-          "description": "Structured data matching the requested JSON schema or prompt."
-        },
-        "attributes": {
-          "description": "Values collected by the requested attribute selectors."
-        },
-        "actions": {
-          "description": "Results of the browser actions that ran during the scrape."
-        },
-        "changeTracking": {
-          "description": "Change-tracking comparison against the previous scrape."
-        },
-        "branding": {
-          "description": "Branding data extracted from the page."
-        },
-        "metadata": {
-          "description": "Page metadata; authenticated responses can include `metadata.scrapeId` for scrape feedback."
-        },
-        "tools": {
-          "description": "Domain-matched Alexandria tools for the page, when `domainTools` is set."
-        },
-        "warning": {
-          "description": "Non-fatal warning about the result.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "success": {
-          "description": "Whether the API call succeeded.",
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "error": {
-          "description": "Error message or error object when the call did not succeed."
-        },
-        "data": {
-          "description": "Alexandria mode: per-capability results in `data.alexandria`, each with `data`, `records`, or an `error`."
-        },
-        "requestId": {
-          "description": "Identifier of this Alexandria execution.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "scrape_id": {
-          "description": "Identifier of the underlying scrape.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "receipt": {
-          "description": "Billing receipt for the execution."
-        },
-        "creditsCost": {
-          "description": "Credits this call consumed.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "delivery": {
-          "description": "`retained` when the full result stayed server-side instead of being inlined.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "responseBytes": {
-          "description": "Size of the full result in bytes.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "estimatedTokens": {
-          "description": "Estimated token cost of the full result.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "tokenEstimateMethod": {
-          "description": "How `estimatedTokens` was derived.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "inlineTokenBudget": {
-          "description": "Token budget above which a result is retained rather than inlined.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "workspaceId": {
-          "description": "Workspace holding a retained result, for inspection through virtual Bash.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "idleTtlSeconds": {
-          "description": "Seconds a retained workspace stays available while idle.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "message": {
-          "description": "Guidance that accompanies the result.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "nextTool": {
-          "description": "A follow-up tool call (`{name, arguments}`) that continues or inspects this result."
-        },
-        "feedbackTool": {
-          "description": "Pointer to the feedback tool for reporting how this result served the task."
-        }
-      },
-      "additionalProperties": false
-    },
-    "_meta": {
-      "anthropic/alwaysLoad": true
-    }
-  },
-  "firecrawl_scrape@a52029fe2c7e": {
-    "annotations": {
-      "title": "Firecrawl scrape",
-      "readOnlyHint": true,
-      "openWorldHint": true,
-      "destructiveHint": false
-    },
-    "title": "Firecrawl scrape",
-    "description": "\nScrape one URL and return its content, or execute catalogued Alexandria capabilities. URL mode returns markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema, plus page metadata. Firecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it.\n\n`firecrawl_search` with `sources` unset and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching Alexandria provider returns typed records in one call.\n\nAlexandria mode: `alexandria` selects catalogued capability execution and is mutually exclusive with `url`. Alexandria execution is billed per capability (pass includeCosts to firecrawl_find_tools to see prices if you need) and needs a team with Alexandria enabled.\n",
-    "inputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "type": "object",
-      "properties": {
-        "url": {
-          "type": "string",
-          "format": "uri"
-        },
-        "formats": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "markdown",
-              "html",
-              "rawHtml",
-              "screenshot",
-              "links",
-              "images",
-              "summary",
-              "changeTracking",
-              "branding",
-              "json",
-              "query",
-              "audio"
-            ]
-          }
-        },
-        "jsonOptions": {
-          "type": "object",
-          "properties": {
-            "prompt": {
-              "type": "string"
-            },
-            "schema": {
-              "type": "object",
-              "propertyNames": {
-                "type": "string"
-              },
-              "additionalProperties": false
-            }
-          },
-          "additionalProperties": false
-        },
-        "queryOptions": {
-          "type": "object",
-          "properties": {
-            "prompt": {
-              "type": "string",
-              "maxLength": 10000
-            },
-            "mode": {
-              "default": "freeform",
-              "type": "string",
-              "enum": [
-                "directQuote",
-                "freeform"
-              ]
-            }
-          },
-          "required": [
-            "prompt"
-          ],
-          "additionalProperties": false
-        },
-        "screenshotOptions": {
-          "type": "object",
-          "properties": {
-            "fullPage": {
-              "type": "boolean"
-            },
-            "quality": {
-              "type": "number"
-            },
-            "viewport": {
-              "type": "object",
-              "properties": {
-                "width": {
-                  "type": "number"
-                },
-                "height": {
-                  "type": "number"
-                }
-              },
-              "required": [
-                "width",
-                "height"
-              ],
-              "additionalProperties": false
-            }
-          },
-          "additionalProperties": false
-        },
-        "parsers": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "pdf"
-            ]
-          }
-        },
-        "pdfOptions": {
-          "type": "object",
-          "properties": {
-            "maxPages": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 10000
-            }
-          },
-          "additionalProperties": false
-        },
-        "onlyMainContent": {
-          "type": "boolean"
-        },
-        "redactPII": {
-          "type": "boolean"
-        },
-        "includeTags": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "excludeTags": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "waitFor": {
-          "type": "number"
-        },
-        "mobile": {
-          "type": "boolean"
-        },
-        "skipTlsVerification": {
-          "type": "boolean"
-        },
-        "removeBase64Images": {
-          "type": "boolean"
-        },
-        "location": {
-          "type": "object",
-          "properties": {
-            "country": {
-              "type": "string"
-            },
-            "languages": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          },
-          "additionalProperties": false
-        },
-        "storeInCache": {
-          "type": "boolean"
-        },
-        "zeroDataRetention": {
-          "type": "boolean"
-        },
-        "maxAge": {
-          "type": "number"
-        },
-        "lockdown": {
-          "type": "boolean"
-        },
-        "proxy": {
-          "type": "string",
-          "enum": [
-            "basic",
-            "stealth",
-            "enhanced",
-            "auto"
-          ]
-        },
-        "profile": {
-          "description": "Loads a saved browser profile without saving changes to it.",
-          "type": "object",
-          "properties": {
-            "name": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "name"
-          ],
-          "additionalProperties": false
-        },
-        "timeout": {
-          "description": "Execution timeout in milliseconds.",
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
-        },
-        "requestId": {
-          "description": "Idempotency key bound to one Alexandria execution payload. Generated when omitted and returned with the result.",
-          "type": "string",
-          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
-        },
-        "alexandria": {
-          "description": "Catalogued Alexandria capability invocation, mutually exclusive with url. One {provider, capability, options} object or an array of 1-10, with contracts available through firecrawl_search or firecrawl_find_tools. Each call may include version to pin a published workflow; omitting it uses latest. Only requestId and timeout are supported alongside alexandria. The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and response.key (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination. Returns per-capability results in data.alexandria with data, records, or an error with a code; individual capabilities can fail even when the outer response succeeds. Requires an API key on a team with Alexandria enabled. Some providers require accepted terms; blocked requests return the applicable requirements.",
-          "anyOf": [
-            {
-              "type": "object",
-              "properties": {
-                "provider": {
-                  "description": "Provider slug, e.g. \"fred\".",
-                  "type": "string",
-                  "minLength": 1
-                },
-                "capability": {
-                  "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
-                  "type": "string",
-                  "minLength": 1
-                },
-                "version": {
-                  "description": "Optional published workflow version. Omit to use the latest version.",
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 128
-                },
-                "options": {
-                  "description": "Capability options as declared by its contract.",
-                  "type": "object",
-                  "propertyNames": {
-                    "type": "string"
-                  },
-                  "additionalProperties": {}
-                }
-              },
-              "required": [
-                "provider",
-                "capability"
-              ]
-            },
-            {
-              "minItems": 1,
-              "maxItems": 10,
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "provider": {
-                    "description": "Provider slug, e.g. \"fred\".",
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "capability": {
-                    "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "version": {
-                    "description": "Optional published workflow version. Omit to use the latest version.",
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 128
-                  },
-                  "options": {
-                    "description": "Capability options as declared by its contract.",
-                    "type": "object",
-                    "propertyNames": {
-                      "type": "string"
-                    },
-                    "additionalProperties": {}
-                  }
-                },
-                "required": [
-                  "provider",
-                  "capability"
-                ]
-              }
-            }
-          ]
-        },
-        "toolDetail": {
-          "description": "URL mode only: domain discovery detail, summary by default; compact returns provider/capability/description, full includes contracts. Ignored with alexandria.",
-          "type": "string",
-          "enum": [
-            "compact",
-            "summary",
-            "full"
-          ]
-        },
-        "domainTools": {
-          "description": "URL mode only: include domain-matched Alexandria tools for the page in tools on the returned document. Ignored with alexandria.",
-          "type": "boolean"
-        }
-      },
-      "additionalProperties": false
-    },
-    "name": "firecrawl_scrape",
-    "outputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "description": "A scraped document, or the Alexandria execution envelope when `alexandria` was passed.",
-      "type": "object",
-      "properties": {
-        "markdown": {
-          "description": "Page content as markdown.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "html": {
-          "description": "Processed HTML of the page.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "rawHtml": {
-          "description": "Unprocessed HTML of the page.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "summary": {
-          "description": "Summary of the page content.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "links": {
-          "description": "Links found on the page."
-        },
-        "screenshot": {
-          "description": "Screenshot of the page."
-        },
-        "images": {
-          "description": "Images found on the page."
-        },
-        "audio": {
-          "description": "Audio extracted from the page."
-        },
-        "video": {
-          "description": "Video extracted from the page."
-        },
-        "answer": {
-          "description": "Targeted answer to the question that was asked of the page.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "highlights": {
-          "description": "Highlighted passages from the page."
-        },
-        "pages": {
-          "description": "Physical PDF pages, when `parsers[].pages` is set."
-        },
-        "blocks": {
-          "description": "Typed PDF layout blocks, when `parsers[].blocks` is set."
-        },
-        "product": {
-          "description": "Product data extracted from the page."
-        },
-        "menu": {
-          "description": "Menu data extracted from the page."
-        },
-        "json": {
-          "description": "Structured data matching the requested JSON schema or prompt."
-        },
-        "attributes": {
-          "description": "Values collected by the requested attribute selectors."
-        },
-        "actions": {
-          "description": "Results of the browser actions that ran during the scrape."
-        },
-        "changeTracking": {
-          "description": "Change-tracking comparison against the previous scrape."
-        },
-        "branding": {
-          "description": "Branding data extracted from the page."
-        },
-        "metadata": {
-          "description": "Page metadata; authenticated responses can include `metadata.scrapeId` for scrape feedback."
-        },
-        "tools": {
-          "description": "Domain-matched Alexandria tools for the page, when `domainTools` is set."
-        },
-        "warning": {
-          "description": "Non-fatal warning about the result.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "success": {
-          "description": "Whether the API call succeeded.",
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "error": {
-          "description": "Error message or error object when the call did not succeed."
-        },
-        "data": {
-          "description": "Alexandria mode: per-capability results in `data.alexandria`, each with `data`, `records`, or an `error`."
-        },
-        "requestId": {
-          "description": "Identifier of this Alexandria execution.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "scrape_id": {
-          "description": "Identifier of the underlying scrape.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "receipt": {
-          "description": "Billing receipt for the execution."
-        },
-        "creditsCost": {
-          "description": "Credits this call consumed.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "delivery": {
-          "description": "`retained` when the full result stayed server-side instead of being inlined.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "responseBytes": {
-          "description": "Size of the full result in bytes.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "estimatedTokens": {
-          "description": "Estimated token cost of the full result.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "tokenEstimateMethod": {
-          "description": "How `estimatedTokens` was derived.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "inlineTokenBudget": {
-          "description": "Token budget above which a result is retained rather than inlined.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "workspaceId": {
-          "description": "Workspace holding a retained result, for inspection through virtual Bash.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "idleTtlSeconds": {
-          "description": "Seconds a retained workspace stays available while idle.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "message": {
-          "description": "Guidance that accompanies the result.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "nextTool": {
-          "description": "A follow-up tool call (`{name, arguments}`) that continues or inspects this result."
-        },
-        "feedbackTool": {
-          "description": "Pointer to the feedback tool for reporting how this result served the task."
-        }
-      },
-      "additionalProperties": false
-    },
-    "_meta": {
-      "anthropic/alwaysLoad": true
-    }
-  },
-  "firecrawl_scrape@d87341b1d39f": {
+  "firecrawl_scrape@1e22cdb0b9ae": {
     "annotations": {
       "title": "Firecrawl scrape",
       "readOnlyHint": false,
@@ -6149,12 +5037,15 @@
       "type": "object",
       "properties": {
         "url": {
+          "description": "Absolute http or https URL of the page to scrape.",
           "type": "string",
           "format": "uri"
         },
         "formats": {
+          "description": "Output formats to return. Defaults to [\"markdown\"]. \"json\", \"query\" and \"screenshot\" take their settings from jsonOptions, queryOptions and screenshotOptions.",
           "type": "array",
           "items": {
+            "description": "One output format, for example \"markdown\", \"html\", \"links\" or \"screenshot\".",
             "type": "string",
             "enum": [
               "markdown",
@@ -6173,12 +5064,15 @@
           }
         },
         "jsonOptions": {
+          "description": "Settings for the \"json\" format. Used only when formats includes \"json\".",
           "type": "object",
           "properties": {
             "prompt": {
+              "description": "Natural-language description of the fields to extract. Optional when a schema is given.",
               "type": "string"
             },
             "schema": {
+              "description": "JSON Schema describing the structure of the extracted data.",
               "type": "object",
               "propertyNames": {
                 "type": "string"
@@ -6189,13 +5083,16 @@
           "additionalProperties": false
         },
         "queryOptions": {
+          "description": "Settings for the \"query\" format. Used only when formats includes \"query\".",
           "type": "object",
           "properties": {
             "prompt": {
+              "description": "Question to answer from the page content.",
               "type": "string",
               "maxLength": 10000
             },
             "mode": {
+              "description": "\"freeform\" (default) writes an answer in its own words; \"directQuote\" answers with text taken directly from the page.",
               "default": "freeform",
               "type": "string",
               "enum": [
@@ -6210,21 +5107,27 @@
           "additionalProperties": false
         },
         "screenshotOptions": {
+          "description": "Settings for the \"screenshot\" format. Used only when formats includes \"screenshot\".",
           "type": "object",
           "properties": {
             "fullPage": {
+              "description": "Capture the whole page instead of only the visible viewport. Default false.",
               "type": "boolean"
             },
             "quality": {
+              "description": "Image quality from 1 to 100; 100 is the highest.",
               "type": "number"
             },
             "viewport": {
+              "description": "Browser window size used for the capture.",
               "type": "object",
               "properties": {
                 "width": {
+                  "description": "Viewport width in pixels.",
                   "type": "number"
                 },
                 "height": {
+                  "description": "Viewport height in pixels.",
                   "type": "number"
                 }
               },
@@ -6238,8 +5141,10 @@
           "additionalProperties": false
         },
         "parsers": {
+          "description": "PDF parsing is on by default; leave unset unless you need pdfOptions. Passing a list turns off parsers not in it ([\"pdf\"] turns off image OCR). \"pdf\" is billed per page.",
           "type": "array",
           "items": {
+            "description": "Parser name; \"pdf\" is the only parser.",
             "type": "string",
             "enum": [
               "pdf"
@@ -6247,9 +5152,11 @@
           }
         },
         "pdfOptions": {
+          "description": "Settings for the \"pdf\" parser. Used only when parsers includes \"pdf\".",
           "type": "object",
           "properties": {
             "maxPages": {
+              "description": "Maximum number of PDF pages to parse; use it to cap cost on long PDFs.",
               "type": "integer",
               "minimum": 1,
               "maximum": 10000
@@ -6258,32 +5165,41 @@
           "additionalProperties": false
         },
         "onlyMainContent": {
+          "description": "Return only the main content, without headers, navigation and footers. Default true.",
           "type": "boolean"
         },
         "redactPII": {
+          "description": "Redact personally identifiable information from the returned content. Default false.",
           "type": "boolean"
         },
         "includeTags": {
+          "description": "HTML tags or CSS selectors to keep; everything else is dropped before conversion.",
           "type": "array",
           "items": {
+            "description": "HTML tag name or CSS selector.",
             "type": "string"
           }
         },
         "excludeTags": {
+          "description": "HTML tags or CSS selectors to remove before conversion, for example \"nav\" or \".cookie-banner\".",
           "type": "array",
           "items": {
+            "description": "HTML tag name or CSS selector.",
             "type": "string"
           }
         },
         "waitFor": {
+          "description": "Extra milliseconds to wait before capturing, on top of the automatic wait, for late-loading pages. Default 0, maximum 60000.",
           "type": "number"
         },
         "actions": {
+          "description": "Browser actions to run in order before the page is captured.",
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
               "type": {
+                "description": "Kind of browser action to run.",
                 "type": "string",
                 "enum": [
                   "wait",
@@ -6298,18 +5214,23 @@
                 ]
               },
               "selector": {
+                "description": "CSS selector of the element the action targets.",
                 "type": "string"
               },
               "milliseconds": {
+                "description": "Time to wait, in milliseconds, for a wait action.",
                 "type": "number"
               },
               "text": {
+                "description": "Text to type, for a write action.",
                 "type": "string"
               },
               "key": {
+                "description": "Key to press, for example \"Enter\", for a press action.",
                 "type": "string"
               },
               "direction": {
+                "description": "Scroll direction, for a scroll action.",
                 "type": "string",
                 "enum": [
                   "up",
@@ -6317,9 +5238,11 @@
                 ]
               },
               "script": {
+                "description": "JavaScript to run in the page, for an executeJavascript action.",
                 "type": "string"
               },
               "fullPage": {
+                "description": "Capture the whole page, for a screenshot action.",
                 "type": "boolean"
               }
             },
@@ -6329,23 +5252,30 @@
           }
         },
         "mobile": {
+          "description": "Emulate a mobile device. Default false.",
           "type": "boolean"
         },
         "skipTlsVerification": {
+          "description": "Skip TLS certificate verification when fetching the page. Default true, except when headers or actions are set.",
           "type": "boolean"
         },
         "removeBase64Images": {
+          "description": "Replace base64-encoded images in the markdown with placeholders to keep it short. Default true.",
           "type": "boolean"
         },
         "location": {
+          "description": "Geographic settings for the request.",
           "type": "object",
           "properties": {
             "country": {
+              "description": "ISO 3166-1 alpha-2 country code to fetch from, for example \"US\" or \"DE\". Default \"US\".",
               "type": "string"
             },
             "languages": {
+              "description": "Preferred languages in priority order, as locale codes such as \"en-US\". Defaults to the language of the country.",
               "type": "array",
               "items": {
+                "description": "Locale code such as \"en-US\".",
                 "type": "string"
               }
             }
@@ -6353,18 +5283,23 @@
           "additionalProperties": false
         },
         "storeInCache": {
+          "description": "Store the page in the Firecrawl index and cache. Default true; set false for pages that should not be stored. Forced to false when actions are used.",
           "type": "boolean"
         },
         "zeroDataRetention": {
+          "description": "Run the request with zero data retention. Available to teams with this feature enabled.",
           "type": "boolean"
         },
         "maxAge": {
+          "description": "Accept a cached copy of the page up to this many milliseconds old. Defaults to 2 days; 0 forces a fresh fetch.",
           "type": "number"
         },
         "lockdown": {
+          "description": "Serve only from the Firecrawl cache and never contact the target site. A cache miss returns an error. Cannot be combined with profile. Default false.",
           "type": "boolean"
         },
         "proxy": {
+          "description": "\"basic\" is fast and suits most sites; \"enhanced\" is slower and more reliable on sites with strong bot protection; \"stealth\" is a legacy alias of \"enhanced\"; \"auto\" (default) retries with a stronger proxy when basic fails.",
           "type": "string",
           "enum": [
             "basic",
@@ -6374,13 +5309,1256 @@
           ]
         },
         "profile": {
+          "description": "Persistent browser profile that keeps cookies and session state between scrapes.",
           "type": "object",
           "properties": {
             "name": {
+              "description": "Name of a saved browser profile. Scrapes that use the same name share cookies and session state.",
               "type": "string"
             },
             "saveChanges": {
+              "description": "Save browser state back to the profile after the scrape. Default true.",
               "type": "boolean"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false
+        },
+        "timeout": {
+          "description": "Execution timeout in milliseconds.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "requestId": {
+          "description": "Idempotency key bound to one Alexandria execution payload. Generated when omitted and returned with the result.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+        },
+        "alexandria": {
+          "description": "Catalogued Alexandria capability invocation, mutually exclusive with url. One {provider, capability, options} object or an array of 1-10, with contracts available through firecrawl_search or firecrawl_find_tools. Each call may include version to pin a published workflow; omitting it uses latest. Only requestId and timeout are supported alongside alexandria. The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and response.key (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination. Returns per-capability results in data.alexandria with data, records, or an error with a code; individual capabilities can fail even when the outer response succeeds. Requires an API key on a team with Alexandria enabled. Some providers require accepted terms; blocked requests return the applicable requirements.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "description": "Provider slug, e.g. \"fred\".",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "capability": {
+                  "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "description": "Optional published workflow version. Omit to use the latest version.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "options": {
+                  "description": "Capability options as declared by its contract.",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
+              },
+              "required": [
+                "provider",
+                "capability"
+              ]
+            },
+            {
+              "minItems": 1,
+              "maxItems": 10,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "description": "Provider slug, e.g. \"fred\".",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "capability": {
+                    "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "version": {
+                    "description": "Optional published workflow version. Omit to use the latest version.",
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "options": {
+                    "description": "Capability options as declared by its contract.",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "provider",
+                  "capability"
+                ]
+              }
+            }
+          ]
+        },
+        "toolDetail": {
+          "description": "URL mode only: domain discovery detail, summary by default; compact returns provider/capability/description, full includes contracts. Ignored with alexandria.",
+          "type": "string",
+          "enum": [
+            "compact",
+            "summary",
+            "full"
+          ]
+        },
+        "domainTools": {
+          "description": "URL mode only: include domain-matched Alexandria tools for the page in tools on the returned document. Ignored with alexandria.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "name": "firecrawl_scrape",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "A scraped document, or the Alexandria execution envelope when `alexandria` was passed.",
+      "type": "object",
+      "properties": {
+        "markdown": {
+          "description": "Page content as markdown.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "html": {
+          "description": "Processed HTML of the page.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rawHtml": {
+          "description": "Unprocessed HTML of the page.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "summary": {
+          "description": "Summary of the page content.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "links": {
+          "description": "Links found on the page."
+        },
+        "screenshot": {
+          "description": "Screenshot of the page."
+        },
+        "images": {
+          "description": "Images found on the page."
+        },
+        "audio": {
+          "description": "Audio extracted from the page."
+        },
+        "video": {
+          "description": "Video extracted from the page."
+        },
+        "answer": {
+          "description": "Targeted answer to the question that was asked of the page.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "highlights": {
+          "description": "Highlighted passages from the page."
+        },
+        "pages": {
+          "description": "Physical PDF pages, when `parsers[].pages` is set."
+        },
+        "blocks": {
+          "description": "Typed PDF layout blocks, when `parsers[].blocks` is set."
+        },
+        "product": {
+          "description": "Product data extracted from the page."
+        },
+        "menu": {
+          "description": "Menu data extracted from the page."
+        },
+        "json": {
+          "description": "Structured data matching the requested JSON schema or prompt."
+        },
+        "attributes": {
+          "description": "Values collected by the requested attribute selectors."
+        },
+        "actions": {
+          "description": "Results of the browser actions that ran during the scrape."
+        },
+        "changeTracking": {
+          "description": "Change-tracking comparison against the previous scrape."
+        },
+        "branding": {
+          "description": "Branding data extracted from the page."
+        },
+        "metadata": {
+          "description": "Page metadata; authenticated responses can include `metadata.scrapeId` for scrape feedback."
+        },
+        "tools": {
+          "description": "Domain-matched Alexandria tools for the page, when `domainTools` is set."
+        },
+        "warning": {
+          "description": "Non-fatal warning about the result.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "success": {
+          "description": "Whether the API call succeeded.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "description": "Error message or error object when the call did not succeed."
+        },
+        "data": {
+          "description": "Alexandria mode: per-capability results in `data.alexandria`, each with `data`, `records`, or an `error`."
+        },
+        "requestId": {
+          "description": "Identifier of this Alexandria execution.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scrape_id": {
+          "description": "Identifier of the underlying scrape.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "receipt": {
+          "description": "Billing receipt for the execution."
+        },
+        "creditsCost": {
+          "description": "Credits this call consumed.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "delivery": {
+          "description": "`retained` when the full result stayed server-side instead of being inlined.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "responseBytes": {
+          "description": "Size of the full result in bytes.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "estimatedTokens": {
+          "description": "Estimated token cost of the full result.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tokenEstimateMethod": {
+          "description": "How `estimatedTokens` was derived.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inlineTokenBudget": {
+          "description": "Token budget above which a result is retained rather than inlined.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "workspaceId": {
+          "description": "Workspace holding a retained result, for inspection through virtual Bash.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "idleTtlSeconds": {
+          "description": "Seconds a retained workspace stays available while idle.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "description": "Guidance that accompanies the result.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nextTool": {
+          "description": "A follow-up tool call (`{name, arguments}`) that continues or inspects this result."
+        },
+        "feedbackTool": {
+          "description": "Pointer to the feedback tool for reporting how this result served the task."
+        }
+      },
+      "additionalProperties": false
+    },
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    }
+  },
+  "firecrawl_scrape@c75a1da7f571": {
+    "annotations": {
+      "title": "Firecrawl scrape",
+      "readOnlyHint": true,
+      "openWorldHint": true,
+      "destructiveHint": false
+    },
+    "title": "Firecrawl scrape",
+    "description": "\nScrape one URL and return its content, or execute catalogued Alexandria capabilities. URL mode returns markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema, plus page metadata. Firecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it.\n\n`firecrawl_search` with `sources` unset and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching Alexandria provider returns typed records in one call.\n\nAlexandria mode: `alexandria` selects catalogued capability execution and is mutually exclusive with `url`. Alexandria execution is billed per capability (pass includeCosts to firecrawl_find_tools to see prices if you need) and needs a team with Alexandria enabled.\n",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "url": {
+          "description": "Absolute http or https URL of the page to scrape.",
+          "type": "string",
+          "format": "uri"
+        },
+        "formats": {
+          "description": "Output formats to return. Defaults to [\"markdown\"]. \"json\", \"query\" and \"screenshot\" take their settings from jsonOptions, queryOptions and screenshotOptions.",
+          "type": "array",
+          "items": {
+            "description": "One output format, for example \"markdown\", \"html\", \"links\" or \"screenshot\".",
+            "type": "string",
+            "enum": [
+              "markdown",
+              "html",
+              "rawHtml",
+              "screenshot",
+              "links",
+              "images",
+              "summary",
+              "changeTracking",
+              "branding",
+              "json",
+              "query",
+              "audio"
+            ]
+          }
+        },
+        "jsonOptions": {
+          "description": "Settings for the \"json\" format. Used only when formats includes \"json\".",
+          "type": "object",
+          "properties": {
+            "prompt": {
+              "description": "Natural-language description of the fields to extract. Optional when a schema is given.",
+              "type": "string"
+            },
+            "schema": {
+              "description": "JSON Schema describing the structure of the extracted data.",
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "queryOptions": {
+          "description": "Settings for the \"query\" format. Used only when formats includes \"query\".",
+          "type": "object",
+          "properties": {
+            "prompt": {
+              "description": "Question to answer from the page content.",
+              "type": "string",
+              "maxLength": 10000
+            },
+            "mode": {
+              "description": "\"freeform\" (default) writes an answer in its own words; \"directQuote\" answers with text taken directly from the page.",
+              "default": "freeform",
+              "type": "string",
+              "enum": [
+                "directQuote",
+                "freeform"
+              ]
+            }
+          },
+          "required": [
+            "prompt"
+          ],
+          "additionalProperties": false
+        },
+        "screenshotOptions": {
+          "description": "Settings for the \"screenshot\" format. Used only when formats includes \"screenshot\".",
+          "type": "object",
+          "properties": {
+            "fullPage": {
+              "description": "Capture the whole page instead of only the visible viewport. Default false.",
+              "type": "boolean"
+            },
+            "quality": {
+              "description": "Image quality from 1 to 100; 100 is the highest.",
+              "type": "number"
+            },
+            "viewport": {
+              "description": "Browser window size used for the capture.",
+              "type": "object",
+              "properties": {
+                "width": {
+                  "description": "Viewport width in pixels.",
+                  "type": "number"
+                },
+                "height": {
+                  "description": "Viewport height in pixels.",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "width",
+                "height"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "parsers": {
+          "description": "PDF parsing is on by default; leave unset unless you need pdfOptions. Passing a list turns off parsers not in it ([\"pdf\"] turns off image OCR). \"pdf\" is billed per page.",
+          "type": "array",
+          "items": {
+            "description": "Parser name; \"pdf\" is the only parser.",
+            "type": "string",
+            "enum": [
+              "pdf"
+            ]
+          }
+        },
+        "pdfOptions": {
+          "description": "Settings for the \"pdf\" parser. Used only when parsers includes \"pdf\".",
+          "type": "object",
+          "properties": {
+            "maxPages": {
+              "description": "Maximum number of PDF pages to parse; use it to cap cost on long PDFs.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            }
+          },
+          "additionalProperties": false
+        },
+        "onlyMainContent": {
+          "description": "Return only the main content, without headers, navigation and footers. Default true.",
+          "type": "boolean"
+        },
+        "redactPII": {
+          "description": "Redact personally identifiable information from the returned content. Default false.",
+          "type": "boolean"
+        },
+        "includeTags": {
+          "description": "HTML tags or CSS selectors to keep; everything else is dropped before conversion.",
+          "type": "array",
+          "items": {
+            "description": "HTML tag name or CSS selector.",
+            "type": "string"
+          }
+        },
+        "excludeTags": {
+          "description": "HTML tags or CSS selectors to remove before conversion, for example \"nav\" or \".cookie-banner\".",
+          "type": "array",
+          "items": {
+            "description": "HTML tag name or CSS selector.",
+            "type": "string"
+          }
+        },
+        "waitFor": {
+          "description": "Extra milliseconds to wait before capturing, on top of the automatic wait, for late-loading pages. Default 0, maximum 60000.",
+          "type": "number"
+        },
+        "mobile": {
+          "description": "Emulate a mobile device. Default false.",
+          "type": "boolean"
+        },
+        "skipTlsVerification": {
+          "description": "Skip TLS certificate verification when fetching the page. Default true, except when headers or actions are set.",
+          "type": "boolean"
+        },
+        "removeBase64Images": {
+          "description": "Replace base64-encoded images in the markdown with placeholders to keep it short. Default true.",
+          "type": "boolean"
+        },
+        "location": {
+          "description": "Geographic settings for the request.",
+          "type": "object",
+          "properties": {
+            "country": {
+              "description": "ISO 3166-1 alpha-2 country code to fetch from, for example \"US\" or \"DE\". Default \"US\".",
+              "type": "string"
+            },
+            "languages": {
+              "description": "Preferred languages in priority order, as locale codes such as \"en-US\". Defaults to the language of the country.",
+              "type": "array",
+              "items": {
+                "description": "Locale code such as \"en-US\".",
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "storeInCache": {
+          "description": "Store the page in the Firecrawl index and cache. Default true; set false for pages that should not be stored. Forced to false when actions are used.",
+          "type": "boolean"
+        },
+        "zeroDataRetention": {
+          "description": "Run the request with zero data retention. Available to teams with this feature enabled.",
+          "type": "boolean"
+        },
+        "maxAge": {
+          "description": "Accept a cached copy of the page up to this many milliseconds old. Defaults to 2 days; 0 forces a fresh fetch.",
+          "type": "number"
+        },
+        "lockdown": {
+          "description": "Serve only from the Firecrawl cache and never contact the target site. A cache miss returns an error. Cannot be combined with profile. Default false.",
+          "type": "boolean"
+        },
+        "proxy": {
+          "description": "\"basic\" is fast and suits most sites; \"enhanced\" is slower and more reliable on sites with strong bot protection; \"stealth\" is a legacy alias of \"enhanced\"; \"auto\" (default) retries with a stronger proxy when basic fails.",
+          "type": "string",
+          "enum": [
+            "basic",
+            "stealth",
+            "enhanced",
+            "auto"
+          ]
+        },
+        "profile": {
+          "description": "Loads a saved browser profile without saving changes to it.",
+          "type": "object",
+          "properties": {
+            "name": {
+              "description": "Name of a saved browser profile. Scrapes that use the same name share cookies and session state.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false
+        },
+        "timeout": {
+          "description": "Execution timeout in milliseconds.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "requestId": {
+          "description": "Idempotency key bound to one Alexandria execution payload. Generated when omitted and returned with the result.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+        },
+        "alexandria": {
+          "description": "Catalogued Alexandria capability invocation, mutually exclusive with url. One {provider, capability, options} object or an array of 1-10, with contracts available through firecrawl_search or firecrawl_find_tools. Each call may include version to pin a published workflow; omitting it uses latest. Only requestId and timeout are supported alongside alexandria. The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and response.key (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination. Returns per-capability results in data.alexandria with data, records, or an error with a code; individual capabilities can fail even when the outer response succeeds. Requires an API key on a team with Alexandria enabled. Some providers require accepted terms; blocked requests return the applicable requirements.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "description": "Provider slug, e.g. \"fred\".",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "capability": {
+                  "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "description": "Optional published workflow version. Omit to use the latest version.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "options": {
+                  "description": "Capability options as declared by its contract.",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
+              },
+              "required": [
+                "provider",
+                "capability"
+              ]
+            },
+            {
+              "minItems": 1,
+              "maxItems": 10,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "description": "Provider slug, e.g. \"fred\".",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "capability": {
+                    "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "version": {
+                    "description": "Optional published workflow version. Omit to use the latest version.",
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "options": {
+                    "description": "Capability options as declared by its contract.",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "provider",
+                  "capability"
+                ]
+              }
+            }
+          ]
+        },
+        "toolDetail": {
+          "description": "URL mode only: domain discovery detail, summary by default; compact returns provider/capability/description, full includes contracts. Ignored with alexandria.",
+          "type": "string",
+          "enum": [
+            "compact",
+            "summary",
+            "full"
+          ]
+        },
+        "domainTools": {
+          "description": "URL mode only: include domain-matched Alexandria tools for the page in tools on the returned document. Ignored with alexandria.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "name": "firecrawl_scrape",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "A scraped document, or the Alexandria execution envelope when `alexandria` was passed.",
+      "type": "object",
+      "properties": {
+        "markdown": {
+          "description": "Page content as markdown.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "html": {
+          "description": "Processed HTML of the page.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rawHtml": {
+          "description": "Unprocessed HTML of the page.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "summary": {
+          "description": "Summary of the page content.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "links": {
+          "description": "Links found on the page."
+        },
+        "screenshot": {
+          "description": "Screenshot of the page."
+        },
+        "images": {
+          "description": "Images found on the page."
+        },
+        "audio": {
+          "description": "Audio extracted from the page."
+        },
+        "video": {
+          "description": "Video extracted from the page."
+        },
+        "answer": {
+          "description": "Targeted answer to the question that was asked of the page.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "highlights": {
+          "description": "Highlighted passages from the page."
+        },
+        "pages": {
+          "description": "Physical PDF pages, when `parsers[].pages` is set."
+        },
+        "blocks": {
+          "description": "Typed PDF layout blocks, when `parsers[].blocks` is set."
+        },
+        "product": {
+          "description": "Product data extracted from the page."
+        },
+        "menu": {
+          "description": "Menu data extracted from the page."
+        },
+        "json": {
+          "description": "Structured data matching the requested JSON schema or prompt."
+        },
+        "attributes": {
+          "description": "Values collected by the requested attribute selectors."
+        },
+        "actions": {
+          "description": "Results of the browser actions that ran during the scrape."
+        },
+        "changeTracking": {
+          "description": "Change-tracking comparison against the previous scrape."
+        },
+        "branding": {
+          "description": "Branding data extracted from the page."
+        },
+        "metadata": {
+          "description": "Page metadata; authenticated responses can include `metadata.scrapeId` for scrape feedback."
+        },
+        "tools": {
+          "description": "Domain-matched Alexandria tools for the page, when `domainTools` is set."
+        },
+        "warning": {
+          "description": "Non-fatal warning about the result.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "success": {
+          "description": "Whether the API call succeeded.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "description": "Error message or error object when the call did not succeed."
+        },
+        "data": {
+          "description": "Alexandria mode: per-capability results in `data.alexandria`, each with `data`, `records`, or an `error`."
+        },
+        "requestId": {
+          "description": "Identifier of this Alexandria execution.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scrape_id": {
+          "description": "Identifier of the underlying scrape.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "receipt": {
+          "description": "Billing receipt for the execution."
+        },
+        "creditsCost": {
+          "description": "Credits this call consumed.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "delivery": {
+          "description": "`retained` when the full result stayed server-side instead of being inlined.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "responseBytes": {
+          "description": "Size of the full result in bytes.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "estimatedTokens": {
+          "description": "Estimated token cost of the full result.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tokenEstimateMethod": {
+          "description": "How `estimatedTokens` was derived.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inlineTokenBudget": {
+          "description": "Token budget above which a result is retained rather than inlined.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "workspaceId": {
+          "description": "Workspace holding a retained result, for inspection through virtual Bash.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "idleTtlSeconds": {
+          "description": "Seconds a retained workspace stays available while idle.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "description": "Guidance that accompanies the result.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nextTool": {
+          "description": "A follow-up tool call (`{name, arguments}`) that continues or inspects this result."
+        },
+        "feedbackTool": {
+          "description": "Pointer to the feedback tool for reporting how this result served the task."
+        }
+      },
+      "additionalProperties": false
+    },
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    }
+  },
+  "firecrawl_scrape@fc5e7ed0f1f2": {
+    "annotations": {
+      "title": "Firecrawl scrape",
+      "readOnlyHint": true,
+      "openWorldHint": true,
+      "destructiveHint": false
+    },
+    "title": "Firecrawl scrape",
+    "description": "\nScrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session with Alexandria access, `firecrawl_search` with `sources` unset and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching provider returns typed records in one call. Keyless sessions have no provider matches.\n\nAlexandria mode, on an authenticated session with Alexandria access: `alexandria` selects catalogued capability execution and is mutually exclusive with `url`.\n",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "url": {
+          "description": "Absolute http or https URL of the page to scrape.",
+          "type": "string",
+          "format": "uri"
+        },
+        "formats": {
+          "description": "Output formats to return. Defaults to [\"markdown\"]. \"json\", \"query\" and \"screenshot\" take their settings from jsonOptions, queryOptions and screenshotOptions.",
+          "type": "array",
+          "items": {
+            "description": "One output format, for example \"markdown\", \"html\", \"links\" or \"screenshot\".",
+            "type": "string",
+            "enum": [
+              "markdown",
+              "html",
+              "rawHtml",
+              "screenshot",
+              "links",
+              "images",
+              "summary",
+              "changeTracking",
+              "branding",
+              "json",
+              "query",
+              "audio"
+            ]
+          }
+        },
+        "jsonOptions": {
+          "description": "Settings for the \"json\" format. Used only when formats includes \"json\".",
+          "type": "object",
+          "properties": {
+            "prompt": {
+              "description": "Natural-language description of the fields to extract. Optional when a schema is given.",
+              "type": "string"
+            },
+            "schema": {
+              "description": "JSON Schema describing the structure of the extracted data.",
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "queryOptions": {
+          "description": "Settings for the \"query\" format. Used only when formats includes \"query\".",
+          "type": "object",
+          "properties": {
+            "prompt": {
+              "description": "Question to answer from the page content.",
+              "type": "string",
+              "maxLength": 10000
+            },
+            "mode": {
+              "description": "\"freeform\" (default) writes an answer in its own words; \"directQuote\" answers with text taken directly from the page.",
+              "default": "freeform",
+              "type": "string",
+              "enum": [
+                "directQuote",
+                "freeform"
+              ]
+            }
+          },
+          "required": [
+            "prompt"
+          ],
+          "additionalProperties": false
+        },
+        "screenshotOptions": {
+          "description": "Settings for the \"screenshot\" format. Used only when formats includes \"screenshot\".",
+          "type": "object",
+          "properties": {
+            "fullPage": {
+              "description": "Capture the whole page instead of only the visible viewport. Default false.",
+              "type": "boolean"
+            },
+            "quality": {
+              "description": "Image quality from 1 to 100; 100 is the highest.",
+              "type": "number"
+            },
+            "viewport": {
+              "description": "Browser window size used for the capture.",
+              "type": "object",
+              "properties": {
+                "width": {
+                  "description": "Viewport width in pixels.",
+                  "type": "number"
+                },
+                "height": {
+                  "description": "Viewport height in pixels.",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "width",
+                "height"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "parsers": {
+          "description": "PDF parsing is on by default; leave unset unless you need pdfOptions. Passing a list turns off parsers not in it ([\"pdf\"] turns off image OCR). \"pdf\" is billed per page.",
+          "type": "array",
+          "items": {
+            "description": "Parser name; \"pdf\" is the only parser.",
+            "type": "string",
+            "enum": [
+              "pdf"
+            ]
+          }
+        },
+        "pdfOptions": {
+          "description": "Settings for the \"pdf\" parser. Used only when parsers includes \"pdf\".",
+          "type": "object",
+          "properties": {
+            "maxPages": {
+              "description": "Maximum number of PDF pages to parse; use it to cap cost on long PDFs.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            }
+          },
+          "additionalProperties": false
+        },
+        "onlyMainContent": {
+          "description": "Return only the main content, without headers, navigation and footers. Default true.",
+          "type": "boolean"
+        },
+        "redactPII": {
+          "description": "Redact personally identifiable information from the returned content. Default false.",
+          "type": "boolean"
+        },
+        "includeTags": {
+          "description": "HTML tags or CSS selectors to keep; everything else is dropped before conversion.",
+          "type": "array",
+          "items": {
+            "description": "HTML tag name or CSS selector.",
+            "type": "string"
+          }
+        },
+        "excludeTags": {
+          "description": "HTML tags or CSS selectors to remove before conversion, for example \"nav\" or \".cookie-banner\".",
+          "type": "array",
+          "items": {
+            "description": "HTML tag name or CSS selector.",
+            "type": "string"
+          }
+        },
+        "waitFor": {
+          "description": "Extra milliseconds to wait before capturing, on top of the automatic wait, for late-loading pages. Default 0, maximum 60000.",
+          "type": "number"
+        },
+        "mobile": {
+          "description": "Emulate a mobile device. Default false.",
+          "type": "boolean"
+        },
+        "skipTlsVerification": {
+          "description": "Skip TLS certificate verification when fetching the page. Default true, except when headers or actions are set.",
+          "type": "boolean"
+        },
+        "removeBase64Images": {
+          "description": "Replace base64-encoded images in the markdown with placeholders to keep it short. Default true.",
+          "type": "boolean"
+        },
+        "location": {
+          "description": "Geographic settings for the request.",
+          "type": "object",
+          "properties": {
+            "country": {
+              "description": "ISO 3166-1 alpha-2 country code to fetch from, for example \"US\" or \"DE\". Default \"US\".",
+              "type": "string"
+            },
+            "languages": {
+              "description": "Preferred languages in priority order, as locale codes such as \"en-US\". Defaults to the language of the country.",
+              "type": "array",
+              "items": {
+                "description": "Locale code such as \"en-US\".",
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "storeInCache": {
+          "description": "Store the page in the Firecrawl index and cache. Default true; set false for pages that should not be stored. Forced to false when actions are used.",
+          "type": "boolean"
+        },
+        "zeroDataRetention": {
+          "description": "Run the request with zero data retention. Available to teams with this feature enabled.",
+          "type": "boolean"
+        },
+        "maxAge": {
+          "description": "Accept a cached copy of the page up to this many milliseconds old. Defaults to 2 days; 0 forces a fresh fetch.",
+          "type": "number"
+        },
+        "lockdown": {
+          "description": "Serve only from the Firecrawl cache and never contact the target site. A cache miss returns an error. Cannot be combined with profile. Default false.",
+          "type": "boolean"
+        },
+        "proxy": {
+          "description": "\"basic\" is fast and suits most sites; \"enhanced\" is slower and more reliable on sites with strong bot protection; \"stealth\" is a legacy alias of \"enhanced\"; \"auto\" (default) retries with a stronger proxy when basic fails.",
+          "type": "string",
+          "enum": [
+            "basic",
+            "stealth",
+            "enhanced",
+            "auto"
+          ]
+        },
+        "profile": {
+          "description": "Loads a saved browser profile without saving changes to it.",
+          "type": "object",
+          "properties": {
+            "name": {
+              "description": "Name of a saved browser profile. Scrapes that use the same name share cookies and session state.",
+              "type": "string"
             }
           },
           "required": [
@@ -7017,7 +7195,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_search@1ddd63a8639e": {
+  "firecrawl_search@61e97aa7d7dc": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -7053,23 +7231,28 @@
           "type": "boolean"
         },
         "limit": {
+          "description": "Maximum number of results to return. Default 10.",
           "type": "integer",
           "minimum": 1,
           "maximum": 100
         },
         "tbs": {
+          "description": "Time filter for web results: \"qdr:h\" past hour, \"qdr:d\" past day, \"qdr:w\" past week, \"qdr:m\" past month, \"qdr:y\" past year, or a custom range such as \"cdr:1,cd_min:12/1/2024,cd_max:12/31/2024\". \"sbd:1\" sorts by date and can be combined, for example \"sbd:1,qdr:w\".",
           "type": "string"
         },
         "filter": {
+          "description": "Advanced; leave unset unless Firecrawl support gave you a value.",
           "type": "string"
         },
         "location": {
+          "description": "Place to search from, as a name such as \"Germany\" or \"San Francisco,California,United States\".",
           "type": "string"
         },
         "includeDomains": {
           "description": "Hostnames to restrict results to. Mutually exclusive with excludeDomains.",
           "type": "array",
           "items": {
+            "description": "Hostname without protocol or path, for example \"example.com\".",
             "type": "string",
             "minLength": 1,
             "maxLength": 253,
@@ -7080,6 +7263,7 @@
           "description": "Hostnames to leave out of results. Mutually exclusive with includeDomains.",
           "type": "array",
           "items": {
+            "description": "Hostname without protocol or path, for example \"example.com\".",
             "type": "string",
             "minLength": 1,
             "maxLength": 253,
@@ -7092,6 +7276,7 @@
           "items": {
             "anyOf": [
               {
+                "description": "Source to search: \"web\", \"images\", \"news\" or \"alexandria\" for structured data providers. \"exchange\" is a legacy alias of \"alexandria\".",
                 "type": "string",
                 "enum": [
                   "web",
@@ -7105,6 +7290,7 @@
                 "type": "object",
                 "properties": {
                   "type": {
+                    "description": "Source to search: \"web\", \"images\", \"news\" or \"alexandria\" for structured data providers. \"exchange\" is a legacy alias of \"alexandria\".",
                     "type": "string",
                     "enum": [
                       "web",
@@ -7127,6 +7313,7 @@
           "description": "Limit results to specific source types. `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation; `gov` searches the Government Index of US federal, state, and local legal and regulatory sources, the index behind firecrawl_gov_search, and cannot be combined with other categories; gov hits can include historical versions, bill text, agency guidance, and third-party reproductions, so verify the issuer, jurisdiction, enacted/effective status, and version before citing current governing law, clarify a missing jurisdiction or ambiguous as-of date, and use general search for non-US questions or missing coverage (no hits does not establish that no applicable law exists). `developer` and `gov` return hits in `data.web` with `category` set to their name; the other categories also filter `data.web`.",
           "type": "array",
           "items": {
+            "description": "One source type to limit results to.",
             "type": "string",
             "enum": [
               "research",
@@ -7137,8 +7324,10 @@
           }
         },
         "enterprise": {
+          "description": "Zero data retention search: \"zdr\" is end-to-end (10 credits per 10 results), \"anon\" is anonymized (2 credits per 10 results), \"default\" is standard search. Requires the feature on your team.",
           "type": "array",
           "items": {
+            "description": "One search mode: \"default\" is standard, \"anon\" is anonymized, and \"zdr\" is end-to-end zero data retention.",
             "type": "string",
             "enum": [
               "default",
@@ -7225,7 +7414,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_search@297900b36cb7": {
+  "firecrawl_search@87b014b42267": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -7261,23 +7450,28 @@
           "type": "boolean"
         },
         "limit": {
+          "description": "Maximum number of results to return. Default 10.",
           "type": "integer",
           "minimum": 1,
           "maximum": 100
         },
         "tbs": {
+          "description": "Time filter for web results: \"qdr:h\" past hour, \"qdr:d\" past day, \"qdr:w\" past week, \"qdr:m\" past month, \"qdr:y\" past year, or a custom range such as \"cdr:1,cd_min:12/1/2024,cd_max:12/31/2024\". \"sbd:1\" sorts by date and can be combined, for example \"sbd:1,qdr:w\".",
           "type": "string"
         },
         "filter": {
+          "description": "Advanced; leave unset unless Firecrawl support gave you a value.",
           "type": "string"
         },
         "location": {
+          "description": "Place to search from, as a name such as \"Germany\" or \"San Francisco,California,United States\".",
           "type": "string"
         },
         "includeDomains": {
           "description": "Hostnames to restrict results to. Mutually exclusive with excludeDomains.",
           "type": "array",
           "items": {
+            "description": "Hostname without protocol or path, for example \"example.com\".",
             "type": "string",
             "minLength": 1,
             "maxLength": 253,
@@ -7288,6 +7482,7 @@
           "description": "Hostnames to leave out of results. Mutually exclusive with includeDomains.",
           "type": "array",
           "items": {
+            "description": "Hostname without protocol or path, for example \"example.com\".",
             "type": "string",
             "minLength": 1,
             "maxLength": 253,
@@ -7300,6 +7495,7 @@
           "items": {
             "anyOf": [
               {
+                "description": "Source to search: \"web\", \"images\", \"news\" or \"alexandria\" for structured data providers. \"exchange\" is a legacy alias of \"alexandria\".",
                 "type": "string",
                 "enum": [
                   "web",
@@ -7313,6 +7509,7 @@
                 "type": "object",
                 "properties": {
                   "type": {
+                    "description": "Source to search: \"web\", \"images\", \"news\" or \"alexandria\" for structured data providers. \"exchange\" is a legacy alias of \"alexandria\".",
                     "type": "string",
                     "enum": [
                       "web",
@@ -7335,6 +7532,7 @@
           "description": "Limit results to specific source types. `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation; `gov` searches the Government Index of US federal, state, and local legal and regulatory sources, the index behind firecrawl_gov_search, and cannot be combined with other categories; gov hits can include historical versions, bill text, agency guidance, and third-party reproductions, so verify the issuer, jurisdiction, enacted/effective status, and version before citing current governing law, clarify a missing jurisdiction or ambiguous as-of date, and use general search for non-US questions or missing coverage (no hits does not establish that no applicable law exists). `developer` and `gov` return hits in `data.web` with `category` set to their name; the other categories also filter `data.web`.",
           "type": "array",
           "items": {
+            "description": "One source type to limit results to.",
             "type": "string",
             "enum": [
               "research",
@@ -7345,8 +7543,10 @@
           }
         },
         "enterprise": {
+          "description": "Zero data retention search: \"zdr\" is end-to-end (10 credits per 10 results), \"anon\" is anonymized (2 credits per 10 results), \"default\" is standard search. Requires the feature on your team.",
           "type": "array",
           "items": {
+            "description": "One search mode: \"default\" is standard, \"anon\" is anonymized, and \"zdr\" is end-to-end zero data retention.",
             "type": "string",
             "enum": [
               "default",
@@ -7360,8 +7560,10 @@
           "type": "object",
           "properties": {
             "formats": {
+              "description": "Output formats to return. Defaults to [\"markdown\"]. \"json\", \"query\" and \"screenshot\" take their settings from jsonOptions, queryOptions and screenshotOptions.",
               "type": "array",
               "items": {
+                "description": "One output format, for example \"markdown\", \"html\", \"links\" or \"screenshot\".",
                 "type": "string",
                 "enum": [
                   "markdown",
@@ -7380,12 +7582,15 @@
               }
             },
             "jsonOptions": {
+              "description": "Settings for the \"json\" format. Used only when formats includes \"json\".",
               "type": "object",
               "properties": {
                 "prompt": {
+                  "description": "Natural-language description of the fields to extract. Optional when a schema is given.",
                   "type": "string"
                 },
                 "schema": {
+                  "description": "JSON Schema describing the structure of the extracted data.",
                   "type": "object",
                   "propertyNames": {
                     "type": "string"
@@ -7396,13 +7601,16 @@
               "additionalProperties": false
             },
             "queryOptions": {
+              "description": "Settings for the \"query\" format. Used only when formats includes \"query\".",
               "type": "object",
               "properties": {
                 "prompt": {
+                  "description": "Question to answer from the page content.",
                   "type": "string",
                   "maxLength": 10000
                 },
                 "mode": {
+                  "description": "\"freeform\" (default) writes an answer in its own words; \"directQuote\" answers with text taken directly from the page.",
                   "default": "freeform",
                   "type": "string",
                   "enum": [
@@ -7417,21 +7625,27 @@
               "additionalProperties": false
             },
             "screenshotOptions": {
+              "description": "Settings for the \"screenshot\" format. Used only when formats includes \"screenshot\".",
               "type": "object",
               "properties": {
                 "fullPage": {
+                  "description": "Capture the whole page instead of only the visible viewport. Default false.",
                   "type": "boolean"
                 },
                 "quality": {
+                  "description": "Image quality from 1 to 100; 100 is the highest.",
                   "type": "number"
                 },
                 "viewport": {
+                  "description": "Browser window size used for the capture.",
                   "type": "object",
                   "properties": {
                     "width": {
+                      "description": "Viewport width in pixels.",
                       "type": "number"
                     },
                     "height": {
+                      "description": "Viewport height in pixels.",
                       "type": "number"
                     }
                   },
@@ -7445,8 +7659,10 @@
               "additionalProperties": false
             },
             "parsers": {
+              "description": "PDF parsing is on by default; leave unset unless you need pdfOptions. Passing a list turns off parsers not in it ([\"pdf\"] turns off image OCR). \"pdf\" is billed per page.",
               "type": "array",
               "items": {
+                "description": "Parser name; \"pdf\" is the only parser.",
                 "type": "string",
                 "enum": [
                   "pdf"
@@ -7454,9 +7670,11 @@
               }
             },
             "pdfOptions": {
+              "description": "Settings for the \"pdf\" parser. Used only when parsers includes \"pdf\".",
               "type": "object",
               "properties": {
                 "maxPages": {
+                  "description": "Maximum number of PDF pages to parse; use it to cap cost on long PDFs.",
                   "type": "integer",
                   "minimum": 1,
                   "maximum": 10000
@@ -7465,94 +7683,58 @@
               "additionalProperties": false
             },
             "onlyMainContent": {
+              "description": "Return only the main content, without headers, navigation and footers. Default true.",
               "type": "boolean"
             },
             "redactPII": {
+              "description": "Redact personally identifiable information from the returned content. Default false.",
               "type": "boolean"
             },
             "includeTags": {
+              "description": "HTML tags or CSS selectors to keep; everything else is dropped before conversion.",
               "type": "array",
               "items": {
+                "description": "HTML tag name or CSS selector.",
                 "type": "string"
               }
             },
             "excludeTags": {
+              "description": "HTML tags or CSS selectors to remove before conversion, for example \"nav\" or \".cookie-banner\".",
               "type": "array",
               "items": {
+                "description": "HTML tag name or CSS selector.",
                 "type": "string"
               }
             },
             "waitFor": {
+              "description": "Extra milliseconds to wait before capturing, on top of the automatic wait, for late-loading pages. Default 0, maximum 60000.",
               "type": "number"
             },
-            "actions": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "wait",
-                      "screenshot",
-                      "scroll",
-                      "scrape",
-                      "click",
-                      "write",
-                      "press",
-                      "executeJavascript",
-                      "generatePDF"
-                    ]
-                  },
-                  "selector": {
-                    "type": "string"
-                  },
-                  "milliseconds": {
-                    "type": "number"
-                  },
-                  "text": {
-                    "type": "string"
-                  },
-                  "key": {
-                    "type": "string"
-                  },
-                  "direction": {
-                    "type": "string",
-                    "enum": [
-                      "up",
-                      "down"
-                    ]
-                  },
-                  "script": {
-                    "type": "string"
-                  },
-                  "fullPage": {
-                    "type": "boolean"
-                  }
-                },
-                "required": [
-                  "type"
-                ]
-              }
-            },
             "mobile": {
+              "description": "Emulate a mobile device. Default false.",
               "type": "boolean"
             },
             "skipTlsVerification": {
+              "description": "Skip TLS certificate verification when fetching the page. Default true, except when headers or actions are set.",
               "type": "boolean"
             },
             "removeBase64Images": {
+              "description": "Replace base64-encoded images in the markdown with placeholders to keep it short. Default true.",
               "type": "boolean"
             },
             "location": {
+              "description": "Geographic settings for the request.",
               "type": "object",
               "properties": {
                 "country": {
+                  "description": "ISO 3166-1 alpha-2 country code to fetch from, for example \"US\" or \"DE\". Default \"US\".",
                   "type": "string"
                 },
                 "languages": {
+                  "description": "Preferred languages in priority order, as locale codes such as \"en-US\". Defaults to the language of the country.",
                   "type": "array",
                   "items": {
+                    "description": "Locale code such as \"en-US\".",
                     "type": "string"
                   }
                 }
@@ -7560,18 +7742,23 @@
               "additionalProperties": false
             },
             "storeInCache": {
+              "description": "Store the page in the Firecrawl index and cache. Default true; set false for pages that should not be stored. Forced to false when actions are used.",
               "type": "boolean"
             },
             "zeroDataRetention": {
+              "description": "Run the request with zero data retention. Available to teams with this feature enabled.",
               "type": "boolean"
             },
             "maxAge": {
+              "description": "Ignored: search fetches pages with a fixed 3-day cache window. Use firecrawl_scrape for a live fetch.",
               "type": "number"
             },
             "lockdown": {
+              "description": "Serve only from the Firecrawl cache and never contact the target site. A cache miss returns an error. Cannot be combined with profile. Default false.",
               "type": "boolean"
             },
             "proxy": {
+              "description": "\"basic\" is fast and suits most sites; \"enhanced\" is slower and more reliable on sites with strong bot protection; \"stealth\" is a legacy alias of \"enhanced\"; \"auto\" (default) retries with a stronger proxy when basic fails.",
               "type": "string",
               "enum": [
                 "basic",
@@ -7581,13 +7768,12 @@
               ]
             },
             "profile": {
+              "description": "Loads a saved browser profile without saving changes to it.",
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of a saved browser profile. Scrapes that use the same name share cookies and session state.",
                   "type": "string"
-                },
-                "saveChanges": {
-                  "type": "boolean"
                 }
               },
               "required": [
@@ -7676,7 +7862,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_search@74e5c71f97bf": {
+  "firecrawl_search@ce9b31ab912b": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -7712,23 +7898,28 @@
           "type": "boolean"
         },
         "limit": {
+          "description": "Maximum number of results to return. Default 10.",
           "type": "integer",
           "minimum": 1,
           "maximum": 100
         },
         "tbs": {
+          "description": "Time filter for web results: \"qdr:h\" past hour, \"qdr:d\" past day, \"qdr:w\" past week, \"qdr:m\" past month, \"qdr:y\" past year, or a custom range such as \"cdr:1,cd_min:12/1/2024,cd_max:12/31/2024\". \"sbd:1\" sorts by date and can be combined, for example \"sbd:1,qdr:w\".",
           "type": "string"
         },
         "filter": {
+          "description": "Advanced; leave unset unless Firecrawl support gave you a value.",
           "type": "string"
         },
         "location": {
+          "description": "Place to search from, as a name such as \"Germany\" or \"San Francisco,California,United States\".",
           "type": "string"
         },
         "includeDomains": {
           "description": "Hostnames to restrict results to. Mutually exclusive with excludeDomains.",
           "type": "array",
           "items": {
+            "description": "Hostname without protocol or path, for example \"example.com\".",
             "type": "string",
             "minLength": 1,
             "maxLength": 253,
@@ -7739,6 +7930,7 @@
           "description": "Hostnames to leave out of results. Mutually exclusive with includeDomains.",
           "type": "array",
           "items": {
+            "description": "Hostname without protocol or path, for example \"example.com\".",
             "type": "string",
             "minLength": 1,
             "maxLength": 253,
@@ -7751,6 +7943,7 @@
           "items": {
             "anyOf": [
               {
+                "description": "Source to search: \"web\", \"images\", \"news\" or \"alexandria\" for structured data providers. \"exchange\" is a legacy alias of \"alexandria\".",
                 "type": "string",
                 "enum": [
                   "web",
@@ -7764,6 +7957,7 @@
                 "type": "object",
                 "properties": {
                   "type": {
+                    "description": "Source to search: \"web\", \"images\", \"news\" or \"alexandria\" for structured data providers. \"exchange\" is a legacy alias of \"alexandria\".",
                     "type": "string",
                     "enum": [
                       "web",
@@ -7786,6 +7980,7 @@
           "description": "Limit results to specific source types. `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation; `gov` searches the Government Index of US federal, state, and local legal and regulatory sources, the index behind firecrawl_gov_search, and cannot be combined with other categories; gov hits can include historical versions, bill text, agency guidance, and third-party reproductions, so verify the issuer, jurisdiction, enacted/effective status, and version before citing current governing law, clarify a missing jurisdiction or ambiguous as-of date, and use general search for non-US questions or missing coverage (no hits does not establish that no applicable law exists). `developer` and `gov` return hits in `data.web` with `category` set to their name; the other categories also filter `data.web`.",
           "type": "array",
           "items": {
+            "description": "One source type to limit results to.",
             "type": "string",
             "enum": [
               "research",
@@ -7796,8 +7991,10 @@
           }
         },
         "enterprise": {
+          "description": "Zero data retention search: \"zdr\" is end-to-end (10 credits per 10 results), \"anon\" is anonymized (2 credits per 10 results), \"default\" is standard search. Requires the feature on your team.",
           "type": "array",
           "items": {
+            "description": "One search mode: \"default\" is standard, \"anon\" is anonymized, and \"zdr\" is end-to-end zero data retention.",
             "type": "string",
             "enum": [
               "default",
@@ -7811,8 +8008,10 @@
           "type": "object",
           "properties": {
             "formats": {
+              "description": "Output formats to return. Defaults to [\"markdown\"]. \"json\", \"query\" and \"screenshot\" take their settings from jsonOptions, queryOptions and screenshotOptions.",
               "type": "array",
               "items": {
+                "description": "One output format, for example \"markdown\", \"html\", \"links\" or \"screenshot\".",
                 "type": "string",
                 "enum": [
                   "markdown",
@@ -7831,12 +8030,15 @@
               }
             },
             "jsonOptions": {
+              "description": "Settings for the \"json\" format. Used only when formats includes \"json\".",
               "type": "object",
               "properties": {
                 "prompt": {
+                  "description": "Natural-language description of the fields to extract. Optional when a schema is given.",
                   "type": "string"
                 },
                 "schema": {
+                  "description": "JSON Schema describing the structure of the extracted data.",
                   "type": "object",
                   "propertyNames": {
                     "type": "string"
@@ -7847,13 +8049,16 @@
               "additionalProperties": false
             },
             "queryOptions": {
+              "description": "Settings for the \"query\" format. Used only when formats includes \"query\".",
               "type": "object",
               "properties": {
                 "prompt": {
+                  "description": "Question to answer from the page content.",
                   "type": "string",
                   "maxLength": 10000
                 },
                 "mode": {
+                  "description": "\"freeform\" (default) writes an answer in its own words; \"directQuote\" answers with text taken directly from the page.",
                   "default": "freeform",
                   "type": "string",
                   "enum": [
@@ -7868,21 +8073,27 @@
               "additionalProperties": false
             },
             "screenshotOptions": {
+              "description": "Settings for the \"screenshot\" format. Used only when formats includes \"screenshot\".",
               "type": "object",
               "properties": {
                 "fullPage": {
+                  "description": "Capture the whole page instead of only the visible viewport. Default false.",
                   "type": "boolean"
                 },
                 "quality": {
+                  "description": "Image quality from 1 to 100; 100 is the highest.",
                   "type": "number"
                 },
                 "viewport": {
+                  "description": "Browser window size used for the capture.",
                   "type": "object",
                   "properties": {
                     "width": {
+                      "description": "Viewport width in pixels.",
                       "type": "number"
                     },
                     "height": {
+                      "description": "Viewport height in pixels.",
                       "type": "number"
                     }
                   },
@@ -7896,8 +8107,10 @@
               "additionalProperties": false
             },
             "parsers": {
+              "description": "PDF parsing is on by default; leave unset unless you need pdfOptions. Passing a list turns off parsers not in it ([\"pdf\"] turns off image OCR). \"pdf\" is billed per page.",
               "type": "array",
               "items": {
+                "description": "Parser name; \"pdf\" is the only parser.",
                 "type": "string",
                 "enum": [
                   "pdf"
@@ -7905,9 +8118,11 @@
               }
             },
             "pdfOptions": {
+              "description": "Settings for the \"pdf\" parser. Used only when parsers includes \"pdf\".",
               "type": "object",
               "properties": {
                 "maxPages": {
+                  "description": "Maximum number of PDF pages to parse; use it to cap cost on long PDFs.",
                   "type": "integer",
                   "minimum": 1,
                   "maximum": 10000
@@ -7916,44 +8131,117 @@
               "additionalProperties": false
             },
             "onlyMainContent": {
+              "description": "Return only the main content, without headers, navigation and footers. Default true.",
               "type": "boolean"
             },
             "redactPII": {
+              "description": "Redact personally identifiable information from the returned content. Default false.",
               "type": "boolean"
             },
             "includeTags": {
+              "description": "HTML tags or CSS selectors to keep; everything else is dropped before conversion.",
               "type": "array",
               "items": {
+                "description": "HTML tag name or CSS selector.",
                 "type": "string"
               }
             },
             "excludeTags": {
+              "description": "HTML tags or CSS selectors to remove before conversion, for example \"nav\" or \".cookie-banner\".",
               "type": "array",
               "items": {
+                "description": "HTML tag name or CSS selector.",
                 "type": "string"
               }
             },
             "waitFor": {
+              "description": "Extra milliseconds to wait before capturing, on top of the automatic wait, for late-loading pages. Default 0, maximum 60000.",
               "type": "number"
             },
+            "actions": {
+              "description": "Browser actions to run in order before the page is captured.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "description": "Kind of browser action to run.",
+                    "type": "string",
+                    "enum": [
+                      "wait",
+                      "screenshot",
+                      "scroll",
+                      "scrape",
+                      "click",
+                      "write",
+                      "press",
+                      "executeJavascript",
+                      "generatePDF"
+                    ]
+                  },
+                  "selector": {
+                    "description": "CSS selector of the element the action targets.",
+                    "type": "string"
+                  },
+                  "milliseconds": {
+                    "description": "Time to wait, in milliseconds, for a wait action.",
+                    "type": "number"
+                  },
+                  "text": {
+                    "description": "Text to type, for a write action.",
+                    "type": "string"
+                  },
+                  "key": {
+                    "description": "Key to press, for example \"Enter\", for a press action.",
+                    "type": "string"
+                  },
+                  "direction": {
+                    "description": "Scroll direction, for a scroll action.",
+                    "type": "string",
+                    "enum": [
+                      "up",
+                      "down"
+                    ]
+                  },
+                  "script": {
+                    "description": "JavaScript to run in the page, for an executeJavascript action.",
+                    "type": "string"
+                  },
+                  "fullPage": {
+                    "description": "Capture the whole page, for a screenshot action.",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              }
+            },
             "mobile": {
+              "description": "Emulate a mobile device. Default false.",
               "type": "boolean"
             },
             "skipTlsVerification": {
+              "description": "Skip TLS certificate verification when fetching the page. Default true, except when headers or actions are set.",
               "type": "boolean"
             },
             "removeBase64Images": {
+              "description": "Replace base64-encoded images in the markdown with placeholders to keep it short. Default true.",
               "type": "boolean"
             },
             "location": {
+              "description": "Geographic settings for the request.",
               "type": "object",
               "properties": {
                 "country": {
+                  "description": "ISO 3166-1 alpha-2 country code to fetch from, for example \"US\" or \"DE\". Default \"US\".",
                   "type": "string"
                 },
                 "languages": {
+                  "description": "Preferred languages in priority order, as locale codes such as \"en-US\". Defaults to the language of the country.",
                   "type": "array",
                   "items": {
+                    "description": "Locale code such as \"en-US\".",
                     "type": "string"
                   }
                 }
@@ -7961,18 +8249,23 @@
               "additionalProperties": false
             },
             "storeInCache": {
+              "description": "Store the page in the Firecrawl index and cache. Default true; set false for pages that should not be stored. Forced to false when actions are used.",
               "type": "boolean"
             },
             "zeroDataRetention": {
+              "description": "Run the request with zero data retention. Available to teams with this feature enabled.",
               "type": "boolean"
             },
             "maxAge": {
+              "description": "Ignored: search fetches pages with a fixed 3-day cache window. Use firecrawl_scrape for a live fetch.",
               "type": "number"
             },
             "lockdown": {
+              "description": "Serve only from the Firecrawl cache and never contact the target site. A cache miss returns an error. Cannot be combined with profile. Default false.",
               "type": "boolean"
             },
             "proxy": {
+              "description": "\"basic\" is fast and suits most sites; \"enhanced\" is slower and more reliable on sites with strong bot protection; \"stealth\" is a legacy alias of \"enhanced\"; \"auto\" (default) retries with a stronger proxy when basic fails.",
               "type": "string",
               "enum": [
                 "basic",
@@ -7982,11 +8275,16 @@
               ]
             },
             "profile": {
-              "description": "Loads a saved browser profile without saving changes to it.",
+              "description": "Persistent browser profile that keeps cookies and session state between scrapes.",
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of a saved browser profile. Scrapes that use the same name share cookies and session state.",
                   "type": "string"
+                },
+                "saveChanges": {
+                  "description": "Save browser state back to the profile after the scrape. Default true.",
+                  "type": "boolean"
                 }
               },
               "required": [

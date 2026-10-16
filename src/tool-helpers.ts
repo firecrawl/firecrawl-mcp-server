@@ -56,23 +56,47 @@ export const searchToolBaseFields = {
     .describe(
       'Return query-relevant page excerpts for web and news results when available (default). Highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned. Set to false to keep the original search snippets.'
     ),
-  limit: z.number().int().min(1).max(100).optional(),
-  tbs: z.string().optional(),
-  filter: z.string().optional(),
-  location: z.string().optional(),
-  includeDomains: z.array(searchDomainSchema).optional().describe('Hostnames to restrict results to. Mutually exclusive with excludeDomains.'),
-  excludeDomains: z.array(searchDomainSchema).optional().describe('Hostnames to leave out of results. Mutually exclusive with includeDomains.'),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .optional()
+    .describe('Maximum number of results to return. Default 10.'),
+  tbs: z
+    .string()
+    .optional()
+    .describe(
+      'Time filter for web results: "qdr:h" past hour, "qdr:d" past day, "qdr:w" past week, "qdr:m" past month, "qdr:y" past year, or a custom range such as "cdr:1,cd_min:12/1/2024,cd_max:12/31/2024". "sbd:1" sorts by date and can be combined, for example "sbd:1,qdr:w".'
+    ),
+  filter: z
+    .string()
+    .optional()
+    .describe('Advanced; leave unset unless Firecrawl support gave you a value.'),
+  location: z
+    .string()
+    .optional()
+    .describe(
+      'Place to search from, as a name such as "Germany" or "San Francisco,California,United States".'
+    ),
+  includeDomains: z.array(searchDomainSchema.describe('Hostname without protocol or path, for example "example.com".')).optional().describe('Hostnames to restrict results to. Mutually exclusive with excludeDomains.'),
+  excludeDomains: z.array(searchDomainSchema.describe('Hostname without protocol or path, for example "example.com".')).optional().describe('Hostnames to leave out of results. Mutually exclusive with includeDomains.'),
   sources: z
     .array(searchSourceSchema)
     .optional()
     .describe('Search sources; authenticated sessions default to web + alexandria, keyless sessions to web only. ' + ALEXANDRIA_SOURCES_OPT_OUT + ' Use ["alexandria"] alone for provider discovery without web results.'),
   categories: z
-    .array(z.enum(['research', 'pdf', 'developer', 'gov']))
+    .array(z.enum(['research', 'pdf', 'developer', 'gov']).describe('One source type to limit results to.'))
     .optional()
     .describe(
       'Limit results to specific source types. `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation; `gov` searches the Government Index of US federal, state, and local legal and regulatory sources, the index behind firecrawl_gov_search, and cannot be combined with other categories; gov hits can include historical versions, bill text, agency guidance, and third-party reproductions, so verify the issuer, jurisdiction, enacted/effective status, and version before citing current governing law, clarify a missing jurisdiction or ambiguous as-of date, and use general search for non-US questions or missing coverage (no hits does not establish that no applicable law exists). `developer` and `gov` return hits in `data.web` with `category` set to their name; the other categories also filter `data.web`.'
     ),
-  enterprise: z.array(z.enum(['default', 'anon', 'zdr'])).optional(),
+  enterprise: z
+    .array(z.enum(['default', 'anon', 'zdr']).describe('One search mode: "default" is standard, "anon" is anonymized, and "zdr" is end-to-end zero data retention.'))
+    .optional()
+    .describe(
+      'Zero data retention search: "zdr" is end-to-end (10 credits per 10 results), "anon" is anonymized (2 credits per 10 results), "default" is standard search. Requires the feature on your team.'
+    ),
 };
 
 // Both surfaces forbid specifying includeDomains and excludeDomains together.
