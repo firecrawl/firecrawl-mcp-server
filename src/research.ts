@@ -208,6 +208,7 @@ export function registerResearchTools(
       readOnlyHint: true, // Semantic search over indexed paper metadata; returns ranked results only.
       openWorldHint: true, // Searches the Firecrawl research paper index.
       destructiveHint: false, // Query-only; no writes to external sources or the research index.
+      idempotentHint: false,
     },
     description: `
 Search paper metadata and abstracts with a natural-language query across the indexed corpus, which spans biomedical, life-science, and clinical literature (PubMed, bioRxiv, medRxiv) alongside arXiv and other scientific sources. Optional author, category, and date filters constrain results.
@@ -294,6 +295,7 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
       readOnlyHint: true, // Fetches canonical metadata (title, abstract, authors) for one paper by ID.
       openWorldHint: true, // Retrieves metadata for papers in public indexes (arXiv, PMC, DOI, etc.).
       destructiveHint: false, // Read-only metadata lookup.
+      idempotentHint: false,
     },
     description: `
 Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DOI identifier. Returns the title, abstract, authors, categories, source IDs, and dates as markdown.
@@ -333,6 +335,7 @@ Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DO
       readOnlyHint: true, // Finds related papers via citation graph expansion; returns candidates only.
       openWorldHint: true, // Traverses relationships across the public research paper corpus.
       destructiveHint: false, // Read-only graph query; no modifications.
+      idempotentHint: false,
     },
     description: `
 Find citation-graph candidates from one to ten \`seed_ids\`; the first ID is the primary seed and later IDs are anchors. \`mode\` defaults to \`similar\` (co-citation/bibliographic coupling); \`citers\` returns papers citing a seed and \`references\` papers cited by a seed. \`intent\` ranks candidates.
@@ -400,6 +403,7 @@ Returns ranked candidates and the evaluated pool size.
       readOnlyHint: true, // Retrieves relevant full-text passages from a paper; does not modify the paper.
       openWorldHint: true, // Reads from publicly indexed paper full text when available.
       destructiveHint: false, // Read-only passage retrieval.
+      idempotentHint: false,
     },
     description: `
 Retrieve in-body passages from one paper that are relevant to a specific question. Full text is available only for indexed papers; \`k\` controls the number of passages.
@@ -463,6 +467,7 @@ Returns matching passages or a notice when full text is unavailable.
       readOnlyHint: true,
       openWorldHint: true,
       destructiveHint: false,
+      idempotentHint: true,
     },
     description: `
 Deprecated compatibility entry point. Use firecrawl_developer_search for GitHub issues, pull requests, and READMEs, plus code documentation, returned as matched passages.
