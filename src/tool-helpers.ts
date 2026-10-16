@@ -261,7 +261,7 @@ export async function relayExchangeError(
     const message =
       typeof data?.error === 'string'
         ? data.error
-        : `Alexandria request failed (HTTP ${response.status})`;
+        : `Firecrawl request failed (HTTP ${response.status})`;
     const disabledProvider = response.status === 403
       ? context.providers?.find(provider => message === `Access to ${provider} is disabled for this organization.`)
       : undefined;

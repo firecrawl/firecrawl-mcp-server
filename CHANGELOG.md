@@ -6,6 +6,12 @@
 
 - Experimental MCP Apps view for Alexandria results, off by default. With `FIRECRAWL_MCP_APPS=true` (or `mcpApps: true` for embedders), `firecrawl_scrape` declares `_meta.ui.resourceUri` and the server serves `ui://firecrawl/alexandria-results.html` (`text/html;profile=mcp-app`). MCP Apps hosts such as ChatGPT and Claude render each Alexandria call as a table, with a bar chart when one column is numeric. Tool inputs and outputs are unchanged, and hosts without MCP Apps support ignore the metadata.
 
+## [3.30.2] - 2026-10-15
+
+### Fixed
+
+- `firecrawl_search` relays the API's error message for every search. Searches with explicit sources that excluded `alexandria` (for example `["web"]`) previously surfaced only `Request failed with status code 402`, dropping the out-of-credits message and upgrade link. The fallback for an error without a message now reads `Firecrawl request failed (HTTP N)`.
+
 ## [3.30.1] - 2026-10-14
 
 ### Added

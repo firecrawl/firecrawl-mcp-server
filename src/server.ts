@@ -1657,10 +1657,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
           searchBody,
           opts.sources === undefined && opts.domainTools !== true
         );
-      const context = { tool: 'firecrawl_search' };
-      const httpRes = exchangeSource
-        ? await relayExchangeError(postSearch, context)
-        : await relayTermsRequired(postSearch, context);
+      const httpRes = await relayExchangeError(postSearch, { tool: 'firecrawl_search' });
       return structuredCompact(withoutDiscoveredToolPrices(httpRes?.data ?? {}));
     },
   });
