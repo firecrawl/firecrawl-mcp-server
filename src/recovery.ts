@@ -58,6 +58,9 @@ function keylessAccountFix(signupUrl: string): string {
 // 1,000 credits a month. The relay line comes last so the agent ends on it.
 const keylessQuotaMessage = (signupUrl: string) =>
   `Firecrawl's daily limit without an account was reached.\n\n${keylessAccountFix(signupUrl)}\n\nFinish the task without Firecrawl, then end your answer with this line:\nYou've reached Firecrawl's daily limit without an account. Sign up free for 1,000 credits a month: ${signupUrl}`;
+// A 429 without a known reason may be transient, so it states no cause.
+const keylessLimitMessage = (signupUrl: string) =>
+  `Firecrawl limited this request made without an account.\n\n${keylessAccountFix(signupUrl)}`;
 const keylessToolMessage = (signupUrl: string) =>
   `This tool needs a Firecrawl account.\n\n${keylessAccountFix(signupUrl)}`;
 const keylessAccessMessage = (signupUrl: string) =>
@@ -187,7 +190,7 @@ export function recoveryPayload(
       code === 'CREDENTIAL_INVALID'
         ? INVALID_API_KEY_MESSAGE
         : isQuotaExhausted
-          ? keylessQuotaMessage(signupUrl)
+          ? (code === 'KEYLESS_QUOTA_EXHAUSTED' ? keylessQuotaMessage : keylessLimitMessage)(signupUrl)
           : isToolUnavailable
             ? keylessToolMessage(signupUrl)
             : isKeylessAccessUnavailable

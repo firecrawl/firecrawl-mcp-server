@@ -11,7 +11,7 @@ import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
 // Both instruction profiles open with the guidance for running out of credits, so clients
 // that cut server instructions short still keep it.
 const OUT_OF_CREDITS_LEAD =
-  /^If a Firecrawl tool reports that credits ran out or the daily limit without an account was reached, finish the task, then end your final answer with the line or link it provides\. /;
+  /^If Firecrawl reports that credits ran out or the daily limit without an account was reached, end your final answer with the line it provides, link included\. /;
 
 const { version: serverVersion } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8')

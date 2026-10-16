@@ -2,10 +2,14 @@
 
 ## [3.30.3] - 2026-10-15
 
+### Fixed
+
+- `firecrawl_crawl` relays the API's error text when a crawl cannot start, so an account out of credits sees the API's message and upgrade link instead of `Request failed with status code 402`.
+
 ### Changed
 
-- When use without an account reaches its daily limit, `firecrawl_search`, `firecrawl_scrape` and `firecrawl_parse` tell the agent to finish the task without Firecrawl and end its answer with one line for the user: `You've reached Firecrawl's daily limit without an account. Sign up free for 1,000 credits a month: <signup link>`. That line closes the message; the setup steps before it are unchanged. The previous text called the limit a rate limit and gave the agent no line to pass on.
-- The default server instructions, for sessions with and without a credential, now open with one sentence: if a Firecrawl tool reports that credits ran out or the daily limit without an account was reached, finish the task, then end the final answer with the line or link it provides. It comes first so clients that cut server instructions short still keep it; the rest of the instructions are unchanged.
+- When use without an account reaches its daily limit, `firecrawl_search`, `firecrawl_scrape` and `firecrawl_parse` tell the agent to finish the task without Firecrawl and end its answer with one line for the user: `You've reached Firecrawl's daily limit without an account. Sign up free for 1,000 credits a month: <signup link>`. That line closes the message; the setup steps before it are unchanged. The previous text called the limit a rate limit and gave the agent no line to pass on. A 429 without a known reason keeps a generic message, since its cause may be transient.
+- The default server instructions, for sessions with and without a credential, now open with one sentence: if Firecrawl reports that credits ran out or the daily limit without an account was reached, end the final answer with the line it provides, link included. It comes first so clients that cut server instructions short still keep it; the rest of the instructions are unchanged.
 
 ## [3.30.2] - 2026-10-15
 

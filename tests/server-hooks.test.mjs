@@ -407,17 +407,23 @@ test('beforeKeylessRequest can refuse a keyless call before it is sent', async (
   assert.equal(origins.length, 1);
 });
 
-test('a keyless quota 429 tells the agent to finish the task and end with the signup line', async (t) => {
+async function startErrorApi(t, status, body) {
   const api = createServer((req, res) => {
     req.resume();
-    res.writeHead(429, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ success: false, error: 'limit', reason: 'credits', retry_after_seconds: 3600 }));
+    res.writeHead(status, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(body()));
   });
   await new Promise((resolve) => api.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise((resolve) => api.close(resolve)));
+  return `http://127.0.0.1:${api.address().port}`;
+}
+
+test('a keyless quota 429 tells the agent to finish the task and end with the signup line', async (t) => {
+  let reason = 'credits';
+  const apiUrl = await startErrorApi(t, 429, () => ({ success: false, error: 'limit', reason, retry_after_seconds: 3600 }));
   // Upload file access is how hosted keyless sessions reach /v2/parse.
   const port = await startEmbedded(t, {
-    apiUrl: `http://127.0.0.1:${api.address().port}`,
+    apiUrl,
     fileAccess: 'upload',
     unstable_hooks: { authenticate: async () => ({ authType: 'keyless' }) },
   });
@@ -435,6 +441,33 @@ test('a keyless quota 429 tells the agent to finish the task and end with the si
     assert.equal(result.isError, true, name);
     assert.equal(result.structuredContent?.code, 'KEYLESS_QUOTA_EXHAUSTED', name);
     assert.ok(result.content[0].text.endsWith(`\n\n${relay}`), `${name}: ${result.content[0].text}`);
+  }
+
+  // A 429 without a known reason may be transient: no daily limit, no relay line.
+  reason = undefined;
+  const fallback = await callTool(port, 'firecrawl_search', { query: 'example' });
+  assert.equal(fallback.structuredContent?.code, 'KEYLESS_LIMIT_REACHED');
+  assert.doesNotMatch(fallback.content[0].text, /daily limit|end your answer/);
+});
+
+test('an account out of credits sees the API text from search, scrape, map and crawl', async (t) => {
+  const error = 'Insufficient credits to perform this request. For more credits, you can upgrade your plan at https://firecrawl.dev/pricing.';
+  const apiUrl = await startErrorApi(t, 402, () => ({ success: false, error }));
+  const port = await startEmbedded(t, {
+    apiUrl,
+    unstable_hooks: {
+      authenticate: async () => ({ authType: 'api-key', firecrawlApiKey: 'fc-embedded' }),
+    },
+  });
+  for (const [name, args] of [
+    ['firecrawl_search', { query: 'example', sources: ['web'] }],
+    ['firecrawl_scrape', { url: 'https://example.com' }],
+    ['firecrawl_map', { url: 'https://example.com' }],
+    ['firecrawl_crawl', { url: 'https://example.com' }],
+  ]) {
+    const result = await callTool(port, name, args);
+    assert.equal(result.isError, true, name);
+    assert.ok(result.content[0].text.includes(error), `${name}: ${result.content[0].text}`);
   }
 });
 
