@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.30.3] - 2026-10-15
+
+### Changed
+
+- When the keyless free tier's daily usage runs out, `firecrawl_search`, `firecrawl_scrape` and `firecrawl_parse` tell the agent to finish the task without Firecrawl and end its answer with one line for the user: `Firecrawl's free daily usage ran out. Create a free API key to keep going: <signup link>`. The setup steps that follow are unchanged. The previous text called the limit a rate limit and gave the agent no line to pass on.
+- The default server instructions, for sessions with and without a credential, now open with one sentence: if a Firecrawl tool reports that credits or free usage ran out, finish the task, then end the final answer with the line or link it provides. It comes first so clients that cut server instructions short still keep it; the rest of the instructions are unchanged.
+
 ## [3.30.2] - 2026-10-15
 
 ### Fixed

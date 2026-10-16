@@ -407,6 +407,37 @@ test('beforeKeylessRequest can refuse a keyless call before it is sent', async (
   assert.equal(origins.length, 1);
 });
 
+test('a keyless quota 429 tells the agent to finish the task and end with the signup line', async (t) => {
+  const api = createServer((req, res) => {
+    req.resume();
+    res.writeHead(429, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ success: false, error: 'limit', reason: 'credits', retry_after_seconds: 3600 }));
+  });
+  await new Promise((resolve) => api.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => api.close(resolve)));
+  const port = await startEmbedded(t, {
+    apiUrl: `http://127.0.0.1:${api.address().port}`,
+    unstable_hooks: { authenticate: async () => ({ authType: 'keyless' }) },
+  });
+  const signupUrl =
+    'https://www.firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp&redirect=%2Fapp%2Fapi-keys';
+  for (const [name, args] of [
+    ['firecrawl_search', { query: 'example', sources: ['web'] }],
+    ['firecrawl_scrape', { url: 'https://example.com' }],
+  ]) {
+    const result = await callTool(port, name, args);
+    assert.equal(result.isError, true, name);
+    assert.equal(result.structuredContent?.code, 'KEYLESS_QUOTA_EXHAUSTED', name);
+    assert.ok(
+      result.content[0].text.startsWith(
+        "Firecrawl's free daily usage ran out. Finish the task without Firecrawl, then end your answer with this line:\n" +
+          `Firecrawl's free daily usage ran out. Create a free API key to keep going: ${signupUrl}\n\n`
+      ),
+      `${name}: ${result.content[0].text}`
+    );
+  }
+});
+
 test('instructions, configureHttp and oauth metadata hooks shape the instance', async (t) => {
   let defaults;
   const port = await startEmbedded(t, {
