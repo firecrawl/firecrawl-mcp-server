@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.30.3] - 2026-10-16
+
+### Added
+
+- The server identifies itself with a `title` ("Firecrawl"), a `description`, a `websiteUrl` and `icons` in the `initialize` result, next to the unchanged `name` and `version`. The bundled fastmcp patch adds `title`, `description`, `websiteUrl` and `icons` server options (the first, third and fourth use upstream fastmcp's names). `firecrawl-mcp/server` (unstable): `unstable_hooks.description` replaces the default description; the search-only surface sets its own.
+- Every tool declares `idempotentHint`. It is `true` when repeating a call changes nothing on the account (status checks, discovery, credit usage, government search, monitor reads, updates and deletes, interact stop, per-search feedback) and `false` when the call starts a job, writes a record or spends credits (scrape, map, search, parse, crawl, agent, interact, research and the other billed tools).
+- Inputs of `firecrawl_scrape`, `firecrawl_parse` and `firecrawl_search` carry descriptions, including the scrape options reused as `scrapeOptions` by search (crawl and interact point to `firecrawl_scrape` instead of repeating them).
+
+Tool names, input names and defaults, tool result shapes and runtime behaviour are unchanged.
+
 ## [3.30.2] - 2026-10-15
 
 ### Fixed
