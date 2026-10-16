@@ -1435,6 +1435,7 @@ export function createFirecrawlMcpServer(
       readOnlyHint: SAFE_MODE,
       openWorldHint: true, // Accepts any user-supplied URL on the public web.
       destructiveHint: false, // Does not modify, delete, or write to external websites.
+      idempotentHint: false,
     },
     description: `
 Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields. Use \`firecrawl_search\` when additional web sources are needed; on an authenticated session, \`firecrawl_map\` lists a site's URLs and \`firecrawl_crawl\` collects a set of pages.
@@ -1516,6 +1517,7 @@ Alexandria mode, on an authenticated session with Alexandria access: \`alexandri
       readOnlyHint: true, // Discovers and returns indexed URLs; does not modify the target site.
       openWorldHint: true, // Operates against arbitrary user-supplied web domains.
       destructiveHint: false, // Read-only discovery; no deletion or destructive updates.
+      idempotentHint: false,
     },
     description: `
 Enumerate URLs indexed under one website through Firecrawl without fetching each page's content. Use this when the request asks for a site's URL inventory, when several relevant pages must be located, or when the desired page URL is unknown. An optional \`search\` term narrows the URL list, while sitemap, subdomain, query-parameter, and result-limit options control coverage.
@@ -1558,6 +1560,7 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
       readOnlyHint: true, // Runs a web search and returns results; does not modify external sites.
       openWorldHint: true, // Searches the open web across arbitrary domains and sources.
       destructiveHint: false, // Query-only; no destructive side effects on external entities.
+      idempotentHint: false,
     },
     description: `
 Search web, news, or image sources and return ranked results with query-relevant highlights. Each web result is a title, URL, and description; use \`firecrawl_scrape\` on a result URL when the excerpt is not enough.
@@ -1925,6 +1928,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         readOnlyHint: false, // POSTs structured feedback to the API, creating a server-side record.
         openWorldHint: true, // Feedback references open-web search results and external URLs.
         destructiveHint: false, // Additive only; records feedback and may refund credits, does not delete data.
+        idempotentHint: true,
       },
       description: `
 Records schema-validated quality feedback for a prior \`firecrawl_search\` UUID \`searchId\`. A \`good\` rating requires a valuable source, \`partial\` a valuable source or at least one \`missingContent\` entry, and \`bad\` at least one \`missingContent\` entry or a query suggestion; caps are 50 \`valuableSources\` and 20 \`missingContent\` entries.
@@ -2091,6 +2095,7 @@ Eligibility is limited to successful searches within the feedback age window. Th
         readOnlyHint: false, // POSTs structured feedback for a completed job to /v2/feedback.
         openWorldHint: true, // Feedback is tied to jobs that processed open-web URLs.
         destructiveHint: false, // Additive only; submits ratings and notes and may refund credits, does not delete jobs or external content.
+        idempotentHint: false,
       },
       description: `
 Submit concise quality feedback for a completed search, scrape, parse, or map job. Provide the endpoint, job ID, rating, and relevant issue codes or small contextual fields; omit large page contents and raw outputs.
@@ -2245,6 +2250,7 @@ Returns submission status, feedback ID, and accounting fields.
       readOnlyHint: false, // Starts a server-side crawl job and polls until the job reaches a terminal state.
       openWorldHint: true, // Crawls user-specified URLs across the public web.
       destructiveHint: false, // Reads pages from target sites; does not delete or alter external websites.
+      idempotentHint: false,
     },
     description: `
 Start a multi-page crawl at a website URL, poll it to a terminal state, and return the final status and collected data. Scope can be bounded with include/exclude paths, depth, page limit, subdomain/external-link controls, sitemap handling, delay, and scrape options.
@@ -2331,6 +2337,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
       readOnlyHint: true, // Retrieves status and results for an existing crawl job by ID; no mutations.
       openWorldHint: false, // Queries only Firecrawl job state within the authenticated account.
       destructiveHint: false, // Status lookup only; no deletes or updates.
+      idempotentHint: true,
     },
     description: `
 Retrieve the current status, progress, and available results for an existing crawl ID. This only reads Firecrawl job state and does not start or modify the crawl.
@@ -2362,6 +2369,7 @@ Retrieve the current status, progress, and available results for an existing cra
       readOnlyHint: true,
       openWorldHint: true,
       destructiveHint: false,
+      idempotentHint: true,
     },
     description: `
 Deprecated compatibility entry point. Use firecrawl_scrape once per known URL with formats: ["json"] and jsonOptions containing the prompt and schema. Use firecrawl_agent for multi-source research when the URLs are not known or the data spans several sites.
@@ -2451,6 +2459,7 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
       readOnlyHint: false, // Starts an autonomous research agent job on the Firecrawl API.
       openWorldHint: true, // The agent browses and searches the open web to fulfill the prompt.
       destructiveHint: false, // Gathers information only; does not delete external data or user resources.
+      idempotentHint: false,
     },
     description: `
 Run web research that returns structured data when the URLs are not known or the answer spans several sites. Describe the fields you need in \`prompt\`, optionally pass a JSON \`schema\` and seed \`urls\`, and the research agent searches, navigates, reads pages, and returns JSON assembled across sources. Use it to research an entity plus its fields (founders, pricing, contact details), to build lists and datasets (companies, people, products, jobs, papers), and for pages that need navigation or interaction to reach the data. Optional \`effort\` sets the reasoning budget, \`maxCredits\` caps spend, and \`strictConstrainToURLs\` keeps the agent to the supplied \`urls\`.
@@ -2566,6 +2575,7 @@ The agent only calls Alexandria providers whose terms the team has accepted. \`e
       readOnlyHint: true, // Polls an existing agent job by ID for progress and results; no mutations.
       openWorldHint: false, // Queries only Firecrawl job state by job ID within the user's account.
       destructiveHint: false, // Read-only status check.
+      idempotentHint: true,
     },
     description: `
 Retrieve progress or final results for a \`firecrawl_agent\` job ID. A \`processing\` response is non-terminal and does not contain the final research result. Check again after 15–30 seconds until the status is \`completed\` or \`failed\`; a typical research run takes one to three minutes and complex jobs can take longer. If the job cannot finish within the task's available time, use \`firecrawl_search\` and \`firecrawl_scrape\` to complete the requested output.
@@ -2646,6 +2656,7 @@ Returns job status, progress information, and result data when completed.
       readOnlyHint: false, // Executes browser interactions (clicks, form input, scripts) in a live session.
       openWorldHint: true, // Interacts with pages on the public web via the scraped session.
       destructiveHint: false, // Transient page interactions only; does not delete monitors, jobs, or external sites.
+      idempotentHint: false,
     },
     description: `
 Open or reuse a live browser session to navigate a page, click controls, fill fields, or run browser code. Provide either \`url\` or \`scrapeId\`, and either a natural-language \`prompt\` or executable \`code\`; code can run as Bash, Python, or Node with a bounded timeout.
@@ -2750,6 +2761,7 @@ This acts on the live site, so actions such as form submission can create persis
       readOnlyHint: false, // Calls the API to stop and tear down an active interact session.
       openWorldHint: false, // Operates only on a known Firecrawl scrape/interact session ID.
       destructiveHint: true, // Terminates the live browser session; this end state cannot be resumed.
+      idempotentHint: true,
     },
     description: `
 Stop the live interact session associated with a \`scrapeId\` and release its resources. Returns a success confirmation.
@@ -2783,6 +2795,7 @@ Stop the live interact session associated with a \`scrapeId\` and release its re
       readOnlyHint: true, // Local mode reads a file; hosted mode only returns upload instructions or parses an uploadRef.
       openWorldHint: false, // Operates on a local filesystem path/upload reference, not an arbitrary web URL.
       destructiveHint: false, // Read-only parsing; no deletion or writes to the source file.
+      idempotentHint: false,
     },
     description: `
 Parse one supported document into markdown, HTML, links, summary, targeted answers, or JSON matching a schema. Supported inputs include common HTML, PDF, Word, RTF, OpenDocument, and spreadsheet files; PDF parsing can be bounded with \`pdfOptions.maxPages\`.

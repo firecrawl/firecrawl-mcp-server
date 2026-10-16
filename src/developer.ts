@@ -89,6 +89,7 @@ export function registerDeveloperTools(
       readOnlyHint: true, // Semantic search over an indexed developer corpus; returns ranked results only.
       openWorldHint: true, // Searches the Firecrawl developer index of public GitHub and documentation content.
       destructiveHint: false, // Query-only; no writes to external sources or the developer index.
+      idempotentHint: false,
     },
     description: `
 Search an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation for programming questions that need external documentation or upstream evidence.

@@ -233,6 +233,7 @@ export function registerMonitorTools(
       readOnlyHint: false, // Creates a new recurring monitor configuration on the Firecrawl API.
       openWorldHint: true, // Monitors user-specified URLs on the public web on a recurring schedule.
       destructiveHint: false, // Additive; creates a new monitor without deleting existing monitors or external content.
+      idempotentHint: false,
     },
     description: `
 Create a recurring scrape, crawl, or search monitor that compares each check with its retained predecessor. The simple form accepts \`page\`/\`pages\` or \`queries\` plus a plain-language \`goal\`; the advanced \`body\` form controls targets, schedule, change-tracking formats, judging, retention, webhook, and notifications.
@@ -281,6 +282,7 @@ In the simple form, a \`goal\` is required. If \`queries\` contains one or more 
       readOnlyHint: true, // Lists monitors for the authenticated account; no mutations.
       openWorldHint: false, // Returns only the user's Firecrawl monitor records, not arbitrary web content.
       destructiveHint: false, // Read-only listing.
+      idempotentHint: true,
     },
     description: `
 List monitors for the authenticated account with optional pagination controls. Returns one page of monitor records and pagination metadata.
@@ -312,6 +314,7 @@ List monitors for the authenticated account with optional pagination controls. R
       readOnlyHint: true, // Fetches a single monitor by ID; no mutations.
       openWorldHint: false, // Reads a specific monitor resource in the user's Firecrawl account.
       destructiveHint: false, // Read-only retrieval.
+      idempotentHint: true,
     },
     description: `
 Retrieve one monitor by ID, including its configuration and current state. This does not run or modify the monitor.
@@ -340,6 +343,7 @@ Retrieve one monitor by ID, including its configuration and current state. This 
       readOnlyHint: false, // PATCHes an existing monitor (status, schedule, targets, webhooks, etc.).
       openWorldHint: true, // Can change which external URLs are monitored and how recurring scrapes run.
       destructiveHint: true, // Can pause, replace, or remove monitor configuration; changes overwrite prior settings.
+      idempotentHint: true,
     },
     description: `
 Patch an existing monitor by ID. The body can change its name, active/paused status, schedule, targets, goal, judging, webhook, notifications, or retention; these changes affect future scheduled checks.
@@ -377,6 +381,7 @@ Returns the updated monitor.
       readOnlyHint: false, // Permanently deletes a monitor via DELETE on the API.
       openWorldHint: true, // Deletes a monitor that tracked open-web URLs.
       destructiveHint: true, // Irreversibly removes the monitor and stops its schedule.
+      idempotentHint: true,
     },
     description: `
 Permanently delete a monitor by ID and stop its future schedule. This operation cannot be undone and returns deletion status.
@@ -407,6 +412,7 @@ Permanently delete a monitor by ID and stop its future schedule. This operation 
       readOnlyHint: false, // Triggers an immediate monitor check, queueing a new scrape/diff run.
       openWorldHint: true, // The triggered check scrapes external URLs configured on the monitor.
       destructiveHint: false, // Starts a read-only check job; does not delete the monitor or external sites.
+      idempotentHint: false,
     },
     description: `
 Queue an immediate check for a monitor outside its normal schedule. This starts network work for the monitor's configured targets and returns the queued check.
@@ -436,6 +442,7 @@ Queue an immediate check for a monitor outside its normal schedule. This starts 
       readOnlyHint: true, // Lists historical check runs for a monitor; no mutations.
       openWorldHint: false, // Returns check history for a known monitor ID within the user's account.
       destructiveHint: false, // Read-only listing.
+      idempotentHint: true,
     },
     description: `
 List historical checks for a monitor, optionally filtered by status and bounded by a result limit. Returns one page of check summaries and pagination metadata.
@@ -475,6 +482,7 @@ List historical checks for a monitor, optionally filtered by status and bounded 
       readOnlyHint: true, // Retrieves a single check run with page-level diff results; no mutations.
       openWorldHint: false, // Reads stored check results for a known monitor/check ID in the user's account.
       destructiveHint: false, // Read-only retrieval of diff snapshots and judgments.
+      idempotentHint: true,
     },
     description: `
 Retrieve one monitor check and its page-level results, optionally filtered by page status. Pages report \`same\`, \`new\`, \`changed\`, \`removed\`, or \`error\`; configured goal judging can add a meaningful-change decision.
