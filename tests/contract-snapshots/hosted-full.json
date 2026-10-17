@@ -15,10 +15,10 @@
         }
       },
       "tools": [
-        "firecrawl_scrape@fb2beb2cac35",
+        "firecrawl_scrape@431d6d1ab47c",
         "firecrawl_map@7d8108e2e8e7",
-        "firecrawl_search@cb2f2e9df6e0",
-        "firecrawl_find_tools@b2f832a3956b",
+        "firecrawl_search@5936ed52a3b6",
+        "firecrawl_find_tools@c6c4aa217920",
         "firecrawl_search_feedback@3d7d2ef79f89",
         "firecrawl_feedback@3781d950aa2d",
         "firecrawl_crawl@61e35af6cdeb",
@@ -60,8 +60,8 @@
         }
       },
       "tools": [
-        "firecrawl_scrape@fb2beb2cac35",
-        "firecrawl_search@cb2f2e9df6e0",
+        "firecrawl_scrape@431d6d1ab47c",
+        "firecrawl_search@5936ed52a3b6",
         "firecrawl_parse@3238dc451bc0"
       ]
     }

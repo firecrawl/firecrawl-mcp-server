@@ -1,6 +1,6 @@
 import { UserError } from 'fastmcp';
 import { z } from 'zod';
-import { searchSourceSchema, ALEXANDRIA_SOURCES_OPT_OUT } from './alexandria';
+import { searchSourceSchema, ALEXANDRIA_SOURCES_ALWAYS_ON } from './alexandria';
 import { MCP_CONNECTION_GUIDE_URL } from './recovery.js';
 
 export function removeEmptyTopLevel<T extends Record<string, any>>(
@@ -65,7 +65,7 @@ export const searchToolBaseFields = {
   sources: z
     .array(searchSourceSchema)
     .optional()
-    .describe('Search sources; authenticated sessions default to web + alexandria, keyless sessions to web only. ' + ALEXANDRIA_SOURCES_OPT_OUT + ' Use ["alexandria"] alone for provider discovery without web results.'),
+    .describe('Search sources; authenticated sessions default to web + alexandria, keyless sessions to web only. ' + ALEXANDRIA_SOURCES_ALWAYS_ON + ' enterprise zdr or anon searches do not add it. Use ["alexandria"] alone for provider discovery without web results.'),
   categories: z
     .array(z.enum(['research', 'pdf', 'developer', 'gov']))
     .optional()
@@ -261,7 +261,7 @@ export async function relayExchangeError(
     const message =
       typeof data?.error === 'string'
         ? data.error
-        : `Alexandria request failed (HTTP ${response.status})`;
+        : `Firecrawl request failed (HTTP ${response.status})`;
     const disabledProvider = response.status === 403
       ? context.providers?.find(provider => message === `Access to ${provider} is disabled for this organization.`)
       : undefined;
@@ -292,10 +292,12 @@ export async function relayExchangeError(
   }
 }
 
+/** Retries without Alexandria, on fallbackSources, when tools the caller did not ask for are refused. */
 export async function postSearchWithFallback(
   client: any,
   body: Record<string, unknown>,
-  implicitTools: boolean
+  implicitTools: boolean,
+  fallbackSources: unknown[] = ['web']
 ): Promise<any> {
   try {
     return await client.http.post('/v2/search', body);
@@ -309,7 +311,7 @@ export async function postSearchWithFallback(
     if (!implicitTools || response?.status !== 403 || !unavailable) throw error;
     return client.http.post('/v2/search', {
       ...body,
-      sources: ['web'],
+      sources: fallbackSources,
       domainTools: false,
     });
   }
