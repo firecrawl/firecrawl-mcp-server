@@ -190,7 +190,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_agent@f794dfd2e454": {
+  "firecrawl_agent@b6b12d824920": {
     "annotations": {
       "title": "Firecrawl agent",
       "readOnlyHint": false,
@@ -220,7 +220,7 @@
           "propertyNames": {
             "type": "string"
           },
-          "additionalProperties": false
+          "additionalProperties": {}
         },
         "effort": {
           "description": "Reasoning budget for the agent task.",
@@ -553,7 +553,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_crawl@4ca4a0262b5a": {
+  "firecrawl_crawl@61e35af6cdeb": {
     "annotations": {
       "title": "Firecrawl site crawl",
       "readOnlyHint": false,
@@ -613,16 +613,6 @@
         "maxConcurrency": {
           "type": "number"
         },
-        "webhook": {
-          "type": "string"
-        },
-        "webhookHeaders": {
-          "type": "object",
-          "propertyNames": {
-            "type": "string"
-          },
-          "additionalProperties": false
-        },
         "deduplicateSimilarURLs": {
           "type": "boolean"
         },
@@ -663,7 +653,7 @@
                   "propertyNames": {
                     "type": "string"
                   },
-                  "additionalProperties": false
+                  "additionalProperties": {}
                 }
               },
               "additionalProperties": false
@@ -757,56 +747,6 @@
             },
             "waitFor": {
               "type": "number"
-            },
-            "actions": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "wait",
-                      "screenshot",
-                      "scroll",
-                      "scrape",
-                      "click",
-                      "write",
-                      "press",
-                      "executeJavascript",
-                      "generatePDF"
-                    ]
-                  },
-                  "selector": {
-                    "type": "string"
-                  },
-                  "milliseconds": {
-                    "type": "number"
-                  },
-                  "text": {
-                    "type": "string"
-                  },
-                  "key": {
-                    "type": "string"
-                  },
-                  "direction": {
-                    "type": "string",
-                    "enum": [
-                      "up",
-                      "down"
-                    ]
-                  },
-                  "script": {
-                    "type": "string"
-                  },
-                  "fullPage": {
-                    "type": "boolean"
-                  }
-                },
-                "required": [
-                  "type"
-                ]
-              }
             },
             "mobile": {
               "type": "boolean"
@@ -1003,7 +943,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_crawl@c4ede2eb32b6": {
+  "firecrawl_crawl@ffc099979959": {
     "annotations": {
       "title": "Firecrawl site crawl",
       "readOnlyHint": false,
@@ -1063,6 +1003,18 @@
         "maxConcurrency": {
           "type": "number"
         },
+        "webhook": {
+          "type": "string"
+        },
+        "webhookHeaders": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
         "deduplicateSimilarURLs": {
           "type": "boolean"
         },
@@ -1103,7 +1055,7 @@
                   "propertyNames": {
                     "type": "string"
                   },
-                  "additionalProperties": false
+                  "additionalProperties": {}
                 }
               },
               "additionalProperties": false
@@ -1197,6 +1149,56 @@
             },
             "waitFor": {
               "type": "number"
+            },
+            "actions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "wait",
+                      "screenshot",
+                      "scroll",
+                      "scrape",
+                      "click",
+                      "write",
+                      "press",
+                      "executeJavascript",
+                      "generatePDF"
+                    ]
+                  },
+                  "selector": {
+                    "type": "string"
+                  },
+                  "milliseconds": {
+                    "type": "number"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "up",
+                      "down"
+                    ]
+                  },
+                  "script": {
+                    "type": "string"
+                  },
+                  "fullPage": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              }
             },
             "mobile": {
               "type": "boolean"
@@ -1606,7 +1608,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_feedback@1336142abfd3": {
+  "firecrawl_feedback@3781d950aa2d": {
     "annotations": {
       "title": "Firecrawl feedback",
       "readOnlyHint": false,
@@ -1840,7 +1842,7 @@
           "propertyNames": {
             "type": "string"
           },
-          "additionalProperties": false
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -2448,7 +2450,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_interact@5439a16752e2": {
+  "firecrawl_interact@9d882e01db56": {
     "annotations": {
       "title": "Firecrawl interact",
       "readOnlyHint": false,
@@ -2524,7 +2526,7 @@
                   "propertyNames": {
                     "type": "string"
                   },
-                  "additionalProperties": false
+                  "additionalProperties": {}
                 }
               },
               "additionalProperties": false
@@ -2845,7 +2847,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_interact@9b215cde7142": {
+  "firecrawl_interact@d004e62b418b": {
     "annotations": {
       "title": "Firecrawl interact",
       "readOnlyHint": false,
@@ -2921,7 +2923,7 @@
                   "propertyNames": {
                     "type": "string"
                   },
-                  "additionalProperties": false
+                  "additionalProperties": {}
                 }
               },
               "additionalProperties": false
@@ -3444,7 +3446,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_monitor_create@d90db499e9da": {
+  "firecrawl_monitor_create@27e3dc8a9687": {
     "annotations": {
       "title": "Create Firecrawl monitor",
       "readOnlyHint": false,
@@ -3462,7 +3464,7 @@
           "propertyNames": {
             "type": "string"
           },
-          "additionalProperties": false
+          "additionalProperties": {}
         },
         "page": {
           "type": "string"
@@ -3761,7 +3763,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_monitor_update@55bcae1714b8": {
+  "firecrawl_monitor_update@d7609cdcb397": {
     "annotations": {
       "title": "Update Firecrawl monitor",
       "readOnlyHint": false,
@@ -3782,7 +3784,7 @@
           "propertyNames": {
             "type": "string"
           },
-          "additionalProperties": false
+          "additionalProperties": {}
         }
       },
       "required": [
@@ -3818,7 +3820,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_parse@1acaf77898b6": {
+  "firecrawl_parse@3238dc451bc0": {
     "annotations": {
       "title": "Firecrawl file parsing",
       "readOnlyHint": true,
@@ -3857,7 +3859,7 @@
               "propertyNames": {
                 "type": "string"
               },
-              "additionalProperties": false
+              "additionalProperties": {}
             }
           },
           "additionalProperties": false
@@ -4134,7 +4136,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_parse@3e81e427aadb": {
+  "firecrawl_parse@d9fce4920b27": {
     "annotations": {
       "title": "Firecrawl file parsing",
       "readOnlyHint": true,
@@ -4173,7 +4175,7 @@
               "propertyNames": {
                 "type": "string"
               },
-              "additionalProperties": false
+              "additionalProperties": {}
             }
           },
           "additionalProperties": false
@@ -4973,7 +4975,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_scrape@5cda34cb58c3": {
+  "firecrawl_scrape@01302f8a2432": {
     "annotations": {
       "title": "Firecrawl scrape",
       "readOnlyHint": true,
@@ -5021,7 +5023,7 @@
               "propertyNames": {
                 "type": "string"
               },
-              "additionalProperties": false
+              "additionalProperties": {}
             }
           },
           "additionalProperties": false
@@ -5554,7 +5556,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_scrape@c67c47e0d8ef": {
+  "firecrawl_scrape@431d6d1ab47c": {
     "annotations": {
       "title": "Firecrawl scrape",
       "readOnlyHint": true,
@@ -5602,7 +5604,7 @@
               "propertyNames": {
                 "type": "string"
               },
-              "additionalProperties": false
+              "additionalProperties": {}
             }
           },
           "additionalProperties": false
@@ -6135,7 +6137,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_scrape@fb6600db7229": {
+  "firecrawl_scrape@5ca5ea2e7963": {
     "annotations": {
       "title": "Firecrawl scrape",
       "readOnlyHint": false,
@@ -6183,7 +6185,7 @@
               "propertyNames": {
                 "type": "string"
               },
-              "additionalProperties": false
+              "additionalProperties": {}
             }
           },
           "additionalProperties": false
@@ -7017,7 +7019,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_search@62659ad45558": {
+  "firecrawl_search@5936ed52a3b6": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -7182,458 +7184,7 @@
                   "propertyNames": {
                     "type": "string"
                   },
-                  "additionalProperties": false
-                }
-              },
-              "additionalProperties": false
-            },
-            "queryOptions": {
-              "type": "object",
-              "properties": {
-                "prompt": {
-                  "type": "string",
-                  "maxLength": 10000
-                },
-                "mode": {
-                  "default": "freeform",
-                  "type": "string",
-                  "enum": [
-                    "directQuote",
-                    "freeform"
-                  ]
-                }
-              },
-              "required": [
-                "prompt"
-              ],
-              "additionalProperties": false
-            },
-            "screenshotOptions": {
-              "type": "object",
-              "properties": {
-                "fullPage": {
-                  "type": "boolean"
-                },
-                "quality": {
-                  "type": "number"
-                },
-                "viewport": {
-                  "type": "object",
-                  "properties": {
-                    "width": {
-                      "type": "number"
-                    },
-                    "height": {
-                      "type": "number"
-                    }
-                  },
-                  "required": [
-                    "width",
-                    "height"
-                  ],
-                  "additionalProperties": false
-                }
-              },
-              "additionalProperties": false
-            },
-            "parsers": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "enum": [
-                  "pdf"
-                ]
-              }
-            },
-            "pdfOptions": {
-              "type": "object",
-              "properties": {
-                "maxPages": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 10000
-                }
-              },
-              "additionalProperties": false
-            },
-            "onlyMainContent": {
-              "type": "boolean"
-            },
-            "redactPII": {
-              "type": "boolean"
-            },
-            "includeTags": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "excludeTags": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "waitFor": {
-              "type": "number"
-            },
-            "actions": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "wait",
-                      "screenshot",
-                      "scroll",
-                      "scrape",
-                      "click",
-                      "write",
-                      "press",
-                      "executeJavascript",
-                      "generatePDF"
-                    ]
-                  },
-                  "selector": {
-                    "type": "string"
-                  },
-                  "milliseconds": {
-                    "type": "number"
-                  },
-                  "text": {
-                    "type": "string"
-                  },
-                  "key": {
-                    "type": "string"
-                  },
-                  "direction": {
-                    "type": "string",
-                    "enum": [
-                      "up",
-                      "down"
-                    ]
-                  },
-                  "script": {
-                    "type": "string"
-                  },
-                  "fullPage": {
-                    "type": "boolean"
-                  }
-                },
-                "required": [
-                  "type"
-                ]
-              }
-            },
-            "mobile": {
-              "type": "boolean"
-            },
-            "skipTlsVerification": {
-              "type": "boolean"
-            },
-            "removeBase64Images": {
-              "type": "boolean"
-            },
-            "location": {
-              "type": "object",
-              "properties": {
-                "country": {
-                  "type": "string"
-                },
-                "languages": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              },
-              "additionalProperties": false
-            },
-            "storeInCache": {
-              "type": "boolean"
-            },
-            "zeroDataRetention": {
-              "type": "boolean"
-            },
-            "maxAge": {
-              "type": "number"
-            },
-            "lockdown": {
-              "type": "boolean"
-            },
-            "proxy": {
-              "type": "string",
-              "enum": [
-                "basic",
-                "stealth",
-                "enhanced",
-                "auto"
-              ]
-            },
-            "profile": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string"
-                },
-                "saveChanges": {
-                  "type": "boolean"
-                }
-              },
-              "required": [
-                "name"
-              ],
-              "additionalProperties": false
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "query"
-      ],
-      "additionalProperties": false
-    },
-    "name": "firecrawl_search",
-    "outputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "description": "Ranked search results grouped by source.",
-      "type": "object",
-      "properties": {
-        "success": {
-          "description": "Whether the API call succeeded.",
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "data": {
-          "description": "Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`."
-        },
-        "error": {
-          "description": "Error message or error object when the call did not succeed."
-        },
-        "warning": {
-          "description": "Non-fatal warning about the result.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "id": {
-          "description": "Search identifier, for optional `firecrawl_search_feedback`.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "creditsUsed": {
-          "description": "Credits this search consumed.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "tools": {
-          "description": "Domain-matched Alexandria tools for the results."
-        },
-        "nextTool": {
-          "description": "A follow-up tool call that continues this search."
-        },
-        "feedbackTool": {
-          "description": "Pointer to the feedback tool for this search."
-        }
-      },
-      "additionalProperties": false
-    },
-    "_meta": {
-      "anthropic/alwaysLoad": true
-    }
-  },
-  "firecrawl_search@90ecc2bb70b0": {
-    "annotations": {
-      "title": "Firecrawl web search",
-      "readOnlyHint": true,
-      "openWorldHint": true,
-      "destructiveHint": false
-    },
-    "title": "Firecrawl web search",
-    "description": "\nSearch web, news, or image sources and return ranked results with query-relevant highlights. Each web result is a title, URL, and description; use `firecrawl_scrape` on a result URL when the excerpt is not enough.\n\nAuthenticated search also returns matching Alexandria data providers in data.tools (companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more). Prefer a provider over scraping pages when the task needs the same fields across several entities, exact figures or timestamps, provenance, or many records; use web results when they already answer the question. Authenticated searches always add alexandria to the sources, so sources: [\"web\"] also returns providers; domainTools: false turns off website-matched tools only.\n\nOn an authenticated session, tool matches describe available capabilities; `firecrawl_find_tools` returns their contracts and `firecrawl_scrape` with an `alexandria` body executes a selected capability. Keyless sessions get no Alexandria matches in data.tools.\n\nFor a programming question, add `categories: [\"developer\"]`; its hits return in `data.web` with `category: \"developer\"`. For a legal or regulatory question, `categories: [\"gov\"]` returns hits in `data.web` with `category: \"gov\"` and cannot be combined with other categories; authenticated sessions also have `firecrawl_gov_search` as the dedicated tool. Verify gov results' issuer, jurisdiction, status, and version before citing current law. `categories: [\"research\"]` restricts web results to research-affiliated websites; the `firecrawl_research_*` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Query operators, domain filters, `categories`, `toolDetail` and `scrapeOptions` are described on their parameters. Returns source-type result groups and usage metadata. Authenticated responses can include an `id` for optional search feedback.\n",
-    "inputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "type": "object",
-      "properties": {
-        "toolDetail": {
-          "description": "Compact by default. Compact returns only provider, capability and description; full includes contracts. Inspect selected compact tools with firecrawl_find_tools providers and capabilities.",
-          "type": "string",
-          "enum": [
-            "compact",
-            "summary",
-            "full"
-          ]
-        },
-        "query": {
-          "description": "Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Catalogue browsing is available through firecrawl_find_tools.",
-          "type": "string",
-          "minLength": 1
-        },
-        "domainTools": {
-          "description": "Include domain-matched tools for result URLs. Defaults to true when Alexandria is combined with web, news or images; semantic-only search leaves domain matching off.",
-          "type": "boolean"
-        },
-        "highlights": {
-          "description": "Return query-relevant page excerpts for web and news results when available (default). Highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned. Set to false to keep the original search snippets.",
-          "type": "boolean"
-        },
-        "limit": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
-        },
-        "tbs": {
-          "type": "string"
-        },
-        "filter": {
-          "type": "string"
-        },
-        "location": {
-          "type": "string"
-        },
-        "includeDomains": {
-          "description": "Hostnames to restrict results to. Mutually exclusive with excludeDomains.",
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 253,
-            "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
-          }
-        },
-        "excludeDomains": {
-          "description": "Hostnames to leave out of results. Mutually exclusive with includeDomains.",
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 253,
-            "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
-          }
-        },
-        "sources": {
-          "description": "Search sources; authenticated sessions default to web + alexandria, keyless sessions to web only. Authenticated searches always add alexandria to the sources, so sources: [\"web\"] also returns providers; domainTools: false turns off website-matched tools only. enterprise zdr or anon searches do not add it. Use [\"alexandria\"] alone for provider discovery without web results.",
-          "type": "array",
-          "items": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "web",
-                  "images",
-                  "news",
-                  "alexandria",
-                  "exchange"
-                ]
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "web",
-                      "images",
-                      "news",
-                      "alexandria",
-                      "exchange"
-                    ]
-                  }
-                },
-                "required": [
-                  "type"
-                ],
-                "additionalProperties": false
-              }
-            ]
-          }
-        },
-        "categories": {
-          "description": "Limit results to specific source types. `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation; `gov` searches the Government Index of US federal, state, and local legal and regulatory sources, the index behind firecrawl_gov_search, and cannot be combined with other categories; gov hits can include historical versions, bill text, agency guidance, and third-party reproductions, so verify the issuer, jurisdiction, enacted/effective status, and version before citing current governing law, clarify a missing jurisdiction or ambiguous as-of date, and use general search for non-US questions or missing coverage (no hits does not establish that no applicable law exists). `developer` and `gov` return hits in `data.web` with `category` set to their name; the other categories also filter `data.web`.",
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "research",
-              "pdf",
-              "developer",
-              "gov"
-            ]
-          }
-        },
-        "enterprise": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "default",
-              "anon",
-              "zdr"
-            ]
-          }
-        },
-        "scrapeOptions": {
-          "description": "Attach page content for web results in the same call. These fetches ignore maxAge, so use firecrawl_scrape when you need a live fetch. scrapeOptions fetches web pages, never Alexandria provider tools.",
-          "type": "object",
-          "properties": {
-            "formats": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "enum": [
-                  "markdown",
-                  "html",
-                  "rawHtml",
-                  "screenshot",
-                  "links",
-                  "images",
-                  "summary",
-                  "changeTracking",
-                  "branding",
-                  "json",
-                  "query",
-                  "audio"
-                ]
-              }
-            },
-            "jsonOptions": {
-              "type": "object",
-              "properties": {
-                "prompt": {
-                  "type": "string"
-                },
-                "schema": {
-                  "type": "object",
-                  "propertyNames": {
-                    "type": "string"
-                  },
-                  "additionalProperties": false
+                  "additionalProperties": {}
                 }
               },
               "additionalProperties": false
@@ -7996,6 +7547,457 @@
               "zdr"
             ]
           }
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false
+    },
+    "name": "firecrawl_search",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "Ranked search results grouped by source.",
+      "type": "object",
+      "properties": {
+        "success": {
+          "description": "Whether the API call succeeded.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "data": {
+          "description": "Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`."
+        },
+        "error": {
+          "description": "Error message or error object when the call did not succeed."
+        },
+        "warning": {
+          "description": "Non-fatal warning about the result.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "description": "Search identifier, for optional `firecrawl_search_feedback`.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "creditsUsed": {
+          "description": "Credits this search consumed.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tools": {
+          "description": "Domain-matched Alexandria tools for the results."
+        },
+        "nextTool": {
+          "description": "A follow-up tool call that continues this search."
+        },
+        "feedbackTool": {
+          "description": "Pointer to the feedback tool for this search."
+        }
+      },
+      "additionalProperties": false
+    },
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    }
+  },
+  "firecrawl_search@c3858b68a405": {
+    "annotations": {
+      "title": "Firecrawl web search",
+      "readOnlyHint": true,
+      "openWorldHint": true,
+      "destructiveHint": false
+    },
+    "title": "Firecrawl web search",
+    "description": "\nSearch web, news, or image sources and return ranked results with query-relevant highlights. Each web result is a title, URL, and description; use `firecrawl_scrape` on a result URL when the excerpt is not enough.\n\nAuthenticated search also returns matching Alexandria data providers in data.tools (companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more). Prefer a provider over scraping pages when the task needs the same fields across several entities, exact figures or timestamps, provenance, or many records; use web results when they already answer the question. Authenticated searches always add alexandria to the sources, so sources: [\"web\"] also returns providers; domainTools: false turns off website-matched tools only.\n\nOn an authenticated session, tool matches describe available capabilities; `firecrawl_find_tools` returns their contracts and `firecrawl_scrape` with an `alexandria` body executes a selected capability. Keyless sessions get no Alexandria matches in data.tools.\n\nFor a programming question, add `categories: [\"developer\"]`; its hits return in `data.web` with `category: \"developer\"`. For a legal or regulatory question, `categories: [\"gov\"]` returns hits in `data.web` with `category: \"gov\"` and cannot be combined with other categories; authenticated sessions also have `firecrawl_gov_search` as the dedicated tool. Verify gov results' issuer, jurisdiction, status, and version before citing current law. `categories: [\"research\"]` restricts web results to research-affiliated websites; the `firecrawl_research_*` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Query operators, domain filters, `categories`, `toolDetail` and `scrapeOptions` are described on their parameters. Returns source-type result groups and usage metadata. Authenticated responses can include an `id` for optional search feedback.\n",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "toolDetail": {
+          "description": "Compact by default. Compact returns only provider, capability and description; full includes contracts. Inspect selected compact tools with firecrawl_find_tools providers and capabilities.",
+          "type": "string",
+          "enum": [
+            "compact",
+            "summary",
+            "full"
+          ]
+        },
+        "query": {
+          "description": "Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Catalogue browsing is available through firecrawl_find_tools.",
+          "type": "string",
+          "minLength": 1
+        },
+        "domainTools": {
+          "description": "Include domain-matched tools for result URLs. Defaults to true when Alexandria is combined with web, news or images; semantic-only search leaves domain matching off.",
+          "type": "boolean"
+        },
+        "highlights": {
+          "description": "Return query-relevant page excerpts for web and news results when available (default). Highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned. Set to false to keep the original search snippets.",
+          "type": "boolean"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "tbs": {
+          "type": "string"
+        },
+        "filter": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "includeDomains": {
+          "description": "Hostnames to restrict results to. Mutually exclusive with excludeDomains.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 253,
+            "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
+          }
+        },
+        "excludeDomains": {
+          "description": "Hostnames to leave out of results. Mutually exclusive with includeDomains.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 253,
+            "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
+          }
+        },
+        "sources": {
+          "description": "Search sources; authenticated sessions default to web + alexandria, keyless sessions to web only. Authenticated searches always add alexandria to the sources, so sources: [\"web\"] also returns providers; domainTools: false turns off website-matched tools only. enterprise zdr or anon searches do not add it. Use [\"alexandria\"] alone for provider discovery without web results.",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "web",
+                  "images",
+                  "news",
+                  "alexandria",
+                  "exchange"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "web",
+                      "images",
+                      "news",
+                      "alexandria",
+                      "exchange"
+                    ]
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "categories": {
+          "description": "Limit results to specific source types. `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation; `gov` searches the Government Index of US federal, state, and local legal and regulatory sources, the index behind firecrawl_gov_search, and cannot be combined with other categories; gov hits can include historical versions, bill text, agency guidance, and third-party reproductions, so verify the issuer, jurisdiction, enacted/effective status, and version before citing current governing law, clarify a missing jurisdiction or ambiguous as-of date, and use general search for non-US questions or missing coverage (no hits does not establish that no applicable law exists). `developer` and `gov` return hits in `data.web` with `category` set to their name; the other categories also filter `data.web`.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "research",
+              "pdf",
+              "developer",
+              "gov"
+            ]
+          }
+        },
+        "enterprise": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "default",
+              "anon",
+              "zdr"
+            ]
+          }
+        },
+        "scrapeOptions": {
+          "description": "Attach page content for web results in the same call. These fetches ignore maxAge, so use firecrawl_scrape when you need a live fetch. scrapeOptions fetches web pages, never Alexandria provider tools.",
+          "type": "object",
+          "properties": {
+            "formats": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "markdown",
+                  "html",
+                  "rawHtml",
+                  "screenshot",
+                  "links",
+                  "images",
+                  "summary",
+                  "changeTracking",
+                  "branding",
+                  "json",
+                  "query",
+                  "audio"
+                ]
+              }
+            },
+            "jsonOptions": {
+              "type": "object",
+              "properties": {
+                "prompt": {
+                  "type": "string"
+                },
+                "schema": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
+              },
+              "additionalProperties": false
+            },
+            "queryOptions": {
+              "type": "object",
+              "properties": {
+                "prompt": {
+                  "type": "string",
+                  "maxLength": 10000
+                },
+                "mode": {
+                  "default": "freeform",
+                  "type": "string",
+                  "enum": [
+                    "directQuote",
+                    "freeform"
+                  ]
+                }
+              },
+              "required": [
+                "prompt"
+              ],
+              "additionalProperties": false
+            },
+            "screenshotOptions": {
+              "type": "object",
+              "properties": {
+                "fullPage": {
+                  "type": "boolean"
+                },
+                "quality": {
+                  "type": "number"
+                },
+                "viewport": {
+                  "type": "object",
+                  "properties": {
+                    "width": {
+                      "type": "number"
+                    },
+                    "height": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "width",
+                    "height"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            },
+            "parsers": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "pdf"
+                ]
+              }
+            },
+            "pdfOptions": {
+              "type": "object",
+              "properties": {
+                "maxPages": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10000
+                }
+              },
+              "additionalProperties": false
+            },
+            "onlyMainContent": {
+              "type": "boolean"
+            },
+            "redactPII": {
+              "type": "boolean"
+            },
+            "includeTags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "excludeTags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "waitFor": {
+              "type": "number"
+            },
+            "actions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "wait",
+                      "screenshot",
+                      "scroll",
+                      "scrape",
+                      "click",
+                      "write",
+                      "press",
+                      "executeJavascript",
+                      "generatePDF"
+                    ]
+                  },
+                  "selector": {
+                    "type": "string"
+                  },
+                  "milliseconds": {
+                    "type": "number"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "up",
+                      "down"
+                    ]
+                  },
+                  "script": {
+                    "type": "string"
+                  },
+                  "fullPage": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              }
+            },
+            "mobile": {
+              "type": "boolean"
+            },
+            "skipTlsVerification": {
+              "type": "boolean"
+            },
+            "removeBase64Images": {
+              "type": "boolean"
+            },
+            "location": {
+              "type": "object",
+              "properties": {
+                "country": {
+                  "type": "string"
+                },
+                "languages": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            },
+            "storeInCache": {
+              "type": "boolean"
+            },
+            "zeroDataRetention": {
+              "type": "boolean"
+            },
+            "maxAge": {
+              "type": "number"
+            },
+            "lockdown": {
+              "type": "boolean"
+            },
+            "proxy": {
+              "type": "string",
+              "enum": [
+                "basic",
+                "stealth",
+                "enhanced",
+                "auto"
+              ]
+            },
+            "profile": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "saveChanges": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
         }
       },
       "required": [
