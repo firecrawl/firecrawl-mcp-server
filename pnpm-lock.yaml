@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   fastmcp@4.3.2:
-    hash: 37f9a424ae5b0b6202b2b16109a1ea88b69cdcda5407f13eda6654a56489ad70
+    hash: 82ca673d11120f3b148d973952ed46ad15d2ff160cc04f81c2c0f00d4d373dc9
     path: patches/fastmcp@4.3.2.patch
 
 importers:
@@ -21,7 +21,7 @@ importers:
         version: 17.2.2
       fastmcp:
         specifier: 4.3.2
-        version: 4.3.2(patch_hash=37f9a424ae5b0b6202b2b16109a1ea88b69cdcda5407f13eda6654a56489ad70)
+        version: 4.3.2(patch_hash=82ca673d11120f3b148d973952ed46ad15d2ff160cc04f81c2c0f00d4d373dc9)
       firecrawl:
         specifier: 4.42.0
         version: 4.42.0
@@ -42,7 +42,7 @@ importers:
         version: 0.2.0
       xsschema:
         specifier: ^0.4.4
-        version: 0.4.4(zod-to-json-schema@3.25.2(zod@4.2.1))(zod@4.2.1)
+        version: 0.4.4(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.2.1)
       zod:
         specifier: ^4.2.1
         version: 4.2.1
@@ -2498,7 +2498,7 @@ snapshots:
 
   fast-uri@3.1.3: {}
 
-  fastmcp@4.3.2(patch_hash=37f9a424ae5b0b6202b2b16109a1ea88b69cdcda5407f13eda6654a56489ad70):
+  fastmcp@4.3.2(patch_hash=82ca673d11120f3b148d973952ed46ad15d2ff160cc04f81c2c0f00d4d373dc9):
     dependencies:
       '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
       '@standard-schema/spec': 1.0.0
@@ -3297,7 +3297,7 @@ snapshots:
 
   wrappy@1.0.2: {}
 
-  xsschema@0.4.4(zod-to-json-schema@3.25.2(zod@4.2.1))(zod@4.2.1):
+  xsschema@0.4.4(zod-to-json-schema@3.25.2(zod@4.4.3))(zod@4.2.1):
     optionalDependencies:
       zod: 4.2.1
       zod-to-json-schema: 3.25.2(zod@4.4.3)
