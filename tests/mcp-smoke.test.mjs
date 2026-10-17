@@ -1886,6 +1886,89 @@ async function startIntrospectCacheServer(t, env = {}) {
   return { introspectCount, search, stderr: () => stderr };
 }
 
+async function startInvalidTokenGuardServer(t, limit) {
+  const backend = await startFakeFirecrawlBackend({
+    apiKeyFromIntrospection: 'fc-introspected-key',
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_INVALID_TOKEN_LIMIT: String(limit),
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  await waitForHealth(port, child);
+  const search = (id, token, headers = {}) =>
+    httpToolCall(port, {
+      id,
+      headers: { authorization: `Bearer ${token}`, ...headers },
+      params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
+    });
+  const introspectCount = () =>
+    backend.requests.filter((r) => r.url === '/api/oauth/introspect').length;
+  return { introspectCount, search, stderr: () => stderr };
+}
+
+test('a client that keeps presenting unknown OAuth tokens is refused locally without spending introspection', async (t) => {
+  const { introspectCount, search, stderr } = await startInvalidTokenGuardServer(t, 3);
+  const attacker = { 'x-forwarded-for': '203.0.113.7' };
+  const neighbour = { 'x-forwarded-for': '198.51.100.9' };
+
+  assert.equal((await search(70, 'fco_cached_token', attacker)).status, 200);
+  for (const index of [0, 1, 2]) {
+    const response = await search(71 + index, `fco_invalid_${index}`, attacker);
+    assert.equal(response.status, 401, `unknown token ${index} is still an invalid_token verdict`);
+  }
+  const introspectedBeforeBlock = introspectCount();
+
+  const refused = await search(74, 'fco_invalid_3', attacker);
+  assert.equal(refused.status, 429);
+  assert.equal(refused.headers.has('www-authenticate'), false, 'a refusal is not a reauthorization prompt');
+  const retryAfter = Number(refused.headers.get('retry-after'));
+  assert.ok(retryAfter >= 1 && retryAfter <= 60, `Retry-After ${retryAfter}`);
+  assert.equal((await search(75, 'fco_new_token', attacker)).status, 429, 'any uncached token from the source waits');
+  assert.equal(introspectCount(), introspectedBeforeBlock, 'no introspection leaves for a refused source');
+
+  assert.equal((await search(76, 'fco_cached_token', attacker)).status, 200, 'a cached answer is served to a refused source');
+  assert.equal((await search(77, 'fco_new_token', neighbour)).status, 200, 'other clients are unaffected');
+
+  const blocks = stderr()
+    .split('\n')
+    .filter((line) => line.startsWith('[MCP_INVALID_TOKEN_GUARD] '))
+    .map((line) => JSON.parse(line.slice('[MCP_INVALID_TOKEN_GUARD] '.length)));
+  assert.equal(blocks.length, 1);
+  assert.equal(blocks[0].event, 'block');
+  assert.equal(blocks[0].limit, 3);
+  assert.doesNotMatch(stderr(), /203\.0\.113\.7|fco_invalid/, 'the record carries no client IP or token');
+  assert.equal(stderr().includes('TypeError'), false, stderr());
+});
+
+test('requests without a single trusted client IP share one invalid-token budget', async (t) => {
+  const { introspectCount, search } = await startInvalidTokenGuardServer(t, 2);
+  assert.equal((await search(80, 'fco_invalid_a')).status, 401);
+  assert.equal((await search(81, 'fco_invalid_b', { 'x-forwarded-for': '203.0.113.7, 10.0.0.1' })).status, 401);
+  assert.equal((await search(82, 'fco_invalid_c')).status, 429, 'a multi-hop chain cannot dodge the budget');
+  assert.equal(introspectCount(), 2);
+});
+
+test('FIRECRAWL_OAUTH_INVALID_TOKEN_LIMIT=0 turns the invalid-token guard off', async (t) => {
+  const { introspectCount, search } = await startInvalidTokenGuardServer(t, 0);
+  for (const id of [90, 91, 92, 93]) {
+    assert.equal((await search(id, `fco_invalid_${id}`, { 'x-forwarded-for': '203.0.113.7' })).status, 401);
+  }
+  assert.equal(introspectCount(), 4);
+});
+
 test('HTTP cloud transport reuses a recent introspection answer across requests', async (t) => {
   const { introspectCount, search, stderr } = await startIntrospectCacheServer(t);
 

@@ -12,6 +12,7 @@ export default defineConfig({
     'www-authenticate': 'src/service/www-authenticate.ts',
     origin: 'src/origin.ts',
     'introspection-cache': 'src/service/introspection-cache.ts',
+    'invalid-token-guard': 'src/service/invalid-token-guard.ts',
     'keyless-signup-link': 'src/keyless-signup-link.ts',
   },
   format: ['esm'],

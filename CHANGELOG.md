@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Hosted OAuth limits how many unknown access tokens one client can have introspected. Once a client IP has caused `FIRECRAWL_OAUTH_INVALID_TOKEN_LIMIT` inactive introspection answers in a minute (default 60, `0` turns it off), its uncached `fco_` lookups get a 429 with `Retry-After` for the rest of that minute, so one client sending made-up tokens cannot use up the issuer's per-IP limit for everyone else. Cached tokens keep working, and other clients are unaffected. Requests without exactly one `X-Forwarded-For` address share one budget. Each block emits one `[MCP_INVALID_TOKEN_GUARD]` record with no IP or token.
+
 ## [3.30.3] - 2026-10-16
 
 ### Changed

@@ -14,6 +14,11 @@ import {
   introspectionTtlMs,
 } from './introspection-cache.js';
 import {
+  createInvalidTokenGuard,
+  UNATTRIBUTED_SOURCE,
+} from './invalid-token-guard.js';
+import { extractSingleTrustedClientIp } from './client-ip.js';
+import {
   credentialValidationUnavailable,
   CredentialValidationUnavailableError,
   requireDelegatedCredentialSigning,
@@ -186,6 +191,22 @@ function createCredentialValidationUnavailableResponse(
   });
 }
 
+/**
+ * Deliberately not a 401: a challenge would push a client whose token is fine
+ * into reauthorization. The client retries after the window instead.
+ */
+function createInvalidTokenThrottledResponse(
+  error: InvalidTokenSourceThrottledError
+): Response {
+  return new Response(error.message, {
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Retry-After': String(Math.max(1, Math.ceil(error.retryAfterMs / 1000))),
+    },
+    status: 429,
+  });
+}
+
 function getOAuthIntrospectionEndpoint(): string {
   return `${getOAuthIssuer()}/api/oauth/introspect`;
 }
@@ -238,6 +259,13 @@ class InvalidOAuthCredentialError extends Error {
   constructor() {
     super('Invalid OAuth access token');
     this.name = 'InvalidOAuthCredentialError';
+  }
+}
+
+class InvalidTokenSourceThrottledError extends Error {
+  constructor(readonly retryAfterMs: number) {
+    super('Too many invalid OAuth access tokens from this client. Retry later.');
+    this.name = 'InvalidTokenSourceThrottledError';
   }
 }
 
@@ -298,18 +326,50 @@ const introspectionCache = createIntrospectionCache({
   },
 });
 
+const DEFAULT_INVALID_TOKEN_LIMIT = 60;
+
+/**
+ * `FIRECRAWL_OAUTH_INVALID_TOKEN_LIMIT` caps inactive introspection answers per
+ * client IP per minute in this process; 0 turns the guard off.
+ */
+function invalidTokenLimit(): number {
+  const raw = normalizeHeader(process.env.FIRECRAWL_OAUTH_INVALID_TOKEN_LIMIT);
+  if (raw === undefined) return DEFAULT_INVALID_TOKEN_LIMIT;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0
+    ? parsed
+    : DEFAULT_INVALID_TOKEN_LIMIT;
+}
+
+const invalidTokenGuard = createInvalidTokenGuard({
+  limit: invalidTokenLimit,
+  windowMs: 60_000,
+  maxSources: 50_000,
+});
+
 /**
  * Every MCP request authenticates, and every pod on a node shares one egress IP
  * against the issuer's per-IP rate limit. Reusing recent answers keeps that
- * volume flat as traffic grows.
+ * volume flat as traffic grows, and the invalid-token guard keeps one client's
+ * made-up tokens from spending it.
  */
 function introspectToken(
   token: string,
-  expectedResource: string
+  expectedResource: string,
+  source: string
 ): Promise<OAuthIntrospectionResponse> {
-  return introspectionCache.get([token, expectedResource], () =>
-    fetchIntrospection(token, expectedResource)
-  );
+  return introspectionCache.get([token, expectedResource], async () => {
+    const blockedForMs = invalidTokenGuard.acquire(source);
+    if (blockedForMs > 0) throw new InvalidTokenSourceThrottledError(blockedForMs);
+    let inactive = false;
+    try {
+      const data = await fetchIntrospection(token, expectedResource);
+      inactive = !data.active;
+      return data;
+    } finally {
+      invalidTokenGuard.settle(source, inactive);
+    }
+  });
 }
 
 /** Known `x-vercel-mitigated` values; anything else reports as other. */
@@ -445,13 +505,16 @@ async function resolveCredentialFromHeaders(
     return { credential: token, source: 'api-key' };
   }
 
-  let data = await introspectToken(token, profile.resourceUrl);
+  const source =
+    extractSingleTrustedClientIp(headers['x-forwarded-for']) ??
+    UNATTRIBUTED_SOURCE;
+  let data = await introspectToken(token, profile.resourceUrl, source);
   if (
     isFirecrawlOAuthAccessToken(token) &&
     !data.active &&
     profile.acceptLegacyAudience
   ) {
-    data = await introspectToken(token, DEFAULT_MCP_RESOURCE_URL);
+    data = await introspectToken(token, DEFAULT_MCP_RESOURCE_URL, source);
   }
   if (!data.active || !data.api_key) {
     throw new InvalidOAuthCredentialError();
@@ -671,6 +734,9 @@ export function createServiceAuthenticate(
         }
         if (error instanceof CredentialValidationUnavailableError) {
           throw createCredentialValidationUnavailableResponse(error);
+        }
+        if (error instanceof InvalidTokenSourceThrottledError) {
+          throw createInvalidTokenThrottledResponse(error);
         }
         const shouldChallenge = requestShouldReceiveOAuthChallenge(request, profile);
         const oauthChallenge = shouldChallenge
