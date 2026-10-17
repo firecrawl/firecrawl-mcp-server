@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.30.3] - 2026-10-16
+
+### Changed
+
+- Authenticated `firecrawl_search` always includes Alexandria. When `sources` is omitted it sends `["web", "alexandria"]` as before; when the caller passes sources without `alexandria`, such as `["web"]` or `["news"]`, `alexandria` is added and the requested sources are kept. `["alexandria"]` alone is unchanged. Keyless sessions, sessions without a credential, and `enterprise` searches with `zdr` or `anon` are unchanged, because the API refuses provider discovery there. If the API refuses discovery the caller did not ask for, the search retries on the requested sources alone.
+- Search tool descriptions and instructions describe the always-on behaviour in place of the `sources: ["web"]` opt-out.
+
+## [3.30.2] - 2026-10-15
+
+### Fixed
+
+- `firecrawl_search` relays the API's error message for every search. Searches with explicit sources that excluded `alexandria` (for example `["web"]`) previously surfaced only `Request failed with status code 402`, dropping the out-of-credits message and upgrade link. The fallback for an error without a message now reads `Firecrawl request failed (HTTP N)`.
+
 ## [3.30.1] - 2026-10-14
 
 ### Added
