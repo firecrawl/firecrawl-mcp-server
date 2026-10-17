@@ -6,6 +6,13 @@
 
 - Experimental MCP Apps view for Alexandria results, off by default. With `FIRECRAWL_MCP_APPS=true` (or `mcpApps: true` for embedders), `firecrawl_scrape` declares `_meta.ui.resourceUri` and the server serves `ui://firecrawl/alexandria-results.html` (`text/html;profile=mcp-app`). MCP Apps hosts such as ChatGPT and Claude render each Alexandria call as a table, with a bar chart when one column is numeric. Tool inputs and outputs are unchanged, and hosts without MCP Apps support ignore the metadata.
 
+## [3.30.3] - 2026-10-16
+
+### Changed
+
+- Authenticated `firecrawl_search` always includes Alexandria. When `sources` is omitted it sends `["web", "alexandria"]` as before; when the caller passes sources without `alexandria`, such as `["web"]` or `["news"]`, `alexandria` is added and the requested sources are kept. `["alexandria"]` alone is unchanged. Keyless sessions, sessions without a credential, and `enterprise` searches with `zdr` or `anon` are unchanged, because the API refuses provider discovery there. If the API refuses discovery the caller did not ask for, the search retries on the requested sources alone.
+- Search tool descriptions and instructions describe the always-on behaviour in place of the `sources: ["web"]` opt-out.
+
 ## [3.30.2] - 2026-10-15
 
 ### Fixed
