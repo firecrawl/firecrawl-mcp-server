@@ -65,7 +65,7 @@ export const searchToolBaseFields = {
   sources: z
     .array(searchSourceSchema)
     .optional()
-    .describe('Search sources; authenticated sessions default to web + alexandria, keyless sessions to web only. ' + ALEXANDRIA_SOURCES_ALWAYS_ON + ' Use ["alexandria"] alone for provider discovery without web results.'),
+    .describe('Search sources; authenticated sessions default to web + alexandria, keyless sessions to web only. ' + ALEXANDRIA_SOURCES_ALWAYS_ON + ' enterprise zdr or anon searches do not add it. Use ["alexandria"] alone for provider discovery without web results.'),
   categories: z
     .array(z.enum(['research', 'pdf', 'developer', 'gov']))
     .optional()
