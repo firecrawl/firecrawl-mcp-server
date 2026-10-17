@@ -15,23 +15,23 @@
         }
       },
       "tools": [
-        "firecrawl_scrape@c67c47e0d8ef",
+        "firecrawl_scrape@56364306d714",
         "firecrawl_map@7d8108e2e8e7",
-        "firecrawl_search@90ecc2bb70b0",
+        "firecrawl_search@41b03213a730",
         "firecrawl_find_tools@c6c4aa217920",
-        "firecrawl_search_feedback@3d7d2ef79f89",
-        "firecrawl_feedback@1336142abfd3",
-        "firecrawl_crawl@c4ede2eb32b6",
+        "firecrawl_search_feedback@589586f87517",
+        "firecrawl_feedback@da74ee7a208c",
+        "firecrawl_crawl@907e636acd6a",
         "firecrawl_check_crawl_status@723e60af703e",
-        "firecrawl_agent@f794dfd2e454",
+        "firecrawl_agent@1409a6234901",
         "firecrawl_agent_status@6c6e5f971f8e",
-        "firecrawl_interact@9b215cde7142",
+        "firecrawl_interact@8382f643b4b6",
         "firecrawl_interact_stop@142b4e713cfa",
-        "firecrawl_parse@1acaf77898b6",
-        "firecrawl_monitor_create@d90db499e9da",
+        "firecrawl_parse@fcef8edfc1a7",
+        "firecrawl_monitor_create@ceffa1023c1c",
         "firecrawl_monitor_list@341234ca0b9f",
         "firecrawl_monitor_get@fc9fcdd39233",
-        "firecrawl_monitor_update@55bcae1714b8",
+        "firecrawl_monitor_update@32ffb7835d65",
         "firecrawl_monitor_delete@db129f3ce91c",
         "firecrawl_monitor_run@1129dbdaa964",
         "firecrawl_monitor_checks@a2ea52047456",
@@ -60,9 +60,9 @@
         }
       },
       "tools": [
-        "firecrawl_scrape@c67c47e0d8ef",
-        "firecrawl_search@90ecc2bb70b0",
-        "firecrawl_parse@1acaf77898b6"
+        "firecrawl_scrape@56364306d714",
+        "firecrawl_search@41b03213a730",
+        "firecrawl_parse@fcef8edfc1a7"
       ]
     }
   },
