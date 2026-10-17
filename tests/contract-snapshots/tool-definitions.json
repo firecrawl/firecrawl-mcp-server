@@ -2448,12 +2448,12 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_interact@5439a16752e2": {
+  "firecrawl_interact@4a8c7ac1bfa1": {
     "annotations": {
       "title": "Firecrawl interact",
       "readOnlyHint": false,
       "openWorldHint": true,
-      "destructiveHint": false
+      "destructiveHint": true
     },
     "title": "Firecrawl interact",
     "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill fields, or run browser code. Provide either `url` or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThis acts on the live site, so actions such as form submission can create persistent external side effects. Returns execution output, stdout/stderr, exit status, and session viewing URLs.\n",
@@ -2845,12 +2845,12 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_interact@9b215cde7142": {
+  "firecrawl_interact@de071e4db129": {
     "annotations": {
       "title": "Firecrawl interact",
       "readOnlyHint": false,
       "openWorldHint": true,
-      "destructiveHint": false
+      "destructiveHint": true
     },
     "title": "Firecrawl interact",
     "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill fields, or run browser code. Provide either `url` or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThis acts on the live site, so actions such as form submission can create persistent external side effects. Returns execution output, stdout/stderr, exit status, and session viewing URLs.\n",
