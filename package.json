@@ -1,6 +1,6 @@
 {
   "name": "firecrawl-mcp",
-  "version": "3.31.0",
+  "version": "3.31.1",
   "description": "Firecrawl MCP server, the context API for AI agents: search, scrape, parse, crawl, map, and interact with the web, run Agent and Monitor jobs, and search scientific papers (PubMed, bioRxiv, medRxiv, arXiv). Works with Firecrawl cloud or a self-hosted instance.",
   "type": "module",
   "mcpName": "io.github.firecrawl/firecrawl-mcp-server",
@@ -38,7 +38,7 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "dotenv": "^17.2.2",
     "fastmcp": "4.3.2",
-    "firecrawl": "4.42.0",
+    "firecrawl": "4.46.0",
     "fuse.js": "^7.1.0",
     "hono": "^4.12.27",
     "mcp-proxy": "^6.5.1",

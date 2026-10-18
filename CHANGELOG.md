@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.31.1] - 2026-10-18
+
+### Changed
+
+- The `firecrawl` JS SDK dependency moves from 4.42.0 to 4.46.0.
+
 ## [3.31.0] - 2026-10-18
 
 ### Added
