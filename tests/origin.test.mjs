@@ -190,14 +190,14 @@ test('default SDK names, the server name, local hosts and addresses are not sign
 });
 
 test('a URL OAuth client id names the product when the User-Agent is a runtime or missing', () => {
-  const origin = (oauthClientId, userAgent = 'node') =>
+  const origin = (oauthClientId, userAgent) =>
     originForClient(undefined, '3.33.0', userAgent, { oauthClientId });
   assert.equal(
-    origin('https://antigravity.example/oauth/client-metadata.json'),
+    origin('https://antigravity.example/oauth/client-metadata.json', 'node'),
     'mcp-oauth-antigravity-example@3.33.0'
   );
   assert.equal(
-    origin('https://www.app.example.com/oauth/client-metadata.json', undefined),
+    origin('https://www.app.example.com/oauth/client-metadata.json'),
     'mcp-oauth-app-example-com@3.33.0'
   );
   assert.equal(
@@ -233,6 +233,21 @@ test('a shared static host adds the first path segment to the OAuth client token
     origin('https://tool.vercel.app/'),
     'mcp-oauth-tool-vercel-app@3.33.0'
   );
+});
+
+test('exact shared hosts and long shared-host names keep the path segment', () => {
+  const origin = (oauthClientId) =>
+    originForClient(undefined, '3.33.0', 'node', { oauthClientId });
+  assert.equal(
+    origin('https://pages.dev/tool-one/client.json'),
+    'mcp-oauth-pages-dev-tool-one@3.33.0'
+  );
+  const host = `${'a'.repeat(40)}.github.io`;
+  const one = origin(`https://${host}/project-one/client.json`);
+  const two = origin(`https://${host}/project-two/client.json`);
+  assert.notEqual(one, two);
+  assert.match(one, /project-one@3\.33\.0$/);
+  assert.ok(one.slice('mcp-oauth-'.length, one.indexOf('@')).length <= 48);
 });
 
 test('OAuth client ids that name nothing are not signals', () => {

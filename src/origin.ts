@@ -164,13 +164,20 @@ function oauthClientSlug(clientId: string | null | undefined): string {
   if (!host || host === 'firecrawl.dev' || host.endsWith('.firecrawl.dev')) {
     return '';
   }
-  if (!SHARED_STATIC_HOSTS.some((shared) => host.endsWith(`.${shared}`))) {
+  if (
+    !SHARED_STATIC_HOSTS.some(
+      (shared) => host === shared || host.endsWith(`.${shared}`)
+    )
+  ) {
     return slugOf(host);
   }
-  const [segment = ''] = new URL(clientId ?? '').pathname
+  const [first = ''] = new URL(clientId ?? '').pathname
     .split('/')
     .filter(Boolean);
-  return slugOf(`${host}-${segment}`);
+  const segment = slugOf(first).slice(0, NAME_MAX / 2);
+  if (!segment) return slugOf(host);
+  const room = NAME_MAX - segment.length - 1;
+  return slugOf(`${slugOf(host).slice(0, room)}-${segment}`);
 }
 
 /**
