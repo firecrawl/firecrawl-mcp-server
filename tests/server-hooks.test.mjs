@@ -511,6 +511,30 @@ test('a World ID credential reaches keyless requests and only keyless requests',
   assert.equal(sent('/v2/search')['x-firecrawl-world-id'], 'fcwid_from.option');
   assert.equal(sent('/v2/map')['x-firecrawl-world-id'], undefined);
   assert.equal(sent('/v2/map').authorization, 'Bearer fc-configured');
+
+  const oauthApi = await startFakeApi(t);
+  const oauthPort = await startEmbedded(t, {
+    apiUrl: oauthApi.url,
+    worldIdCredential: 'fcwid_from.option',
+    unstable_hooks: {
+      authenticate: async () => ({
+        authType: 'oauth',
+        firecrawlApiKey: 'fco_oauth-token',
+      }),
+    },
+  });
+  const oauth = await callTool(
+    oauthPort,
+    'firecrawl_map',
+    { url: 'https://example.com' },
+    { 'x-firecrawl-world-id': 'fcwid_from.header' }
+  );
+  assert.notEqual(oauth.isError, true, JSON.stringify(oauth));
+  const oauthCall = oauthApi.requests.find((request) =>
+    request.url.startsWith('/v2/map')
+  );
+  assert.equal(oauthCall.headers['x-firecrawl-world-id'], undefined);
+  assert.equal(oauthCall.headers.authorization, 'Bearer fco_oauth-token');
 });
 
 test('instructions, configureHttp and oauth metadata hooks shape the instance', async (t) => {
