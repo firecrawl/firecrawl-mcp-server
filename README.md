@@ -73,6 +73,10 @@ Authorization: Bearer <FIRECRAWL_API_KEY>
 
 Never put an API key in the server URL. Never put an API key in an agent chat. Configure it directly in the client or secret manager. See the [hosted MCP setup guide](https://docs.firecrawl.dev/mcp-server) and the [agent onboarding guide](https://www.firecrawl.dev/agent-onboarding/SKILL.md) for client-specific instructions.
 
+#### Naming your integration
+
+An integration that connects over HTTP can name itself with an `X-Firecrawl-Origin` header, for example `X-Firecrawl-Origin: my-agent`. The server reports it to Firecrawl as the request origin `mcp-my-agent@<server version>`, in place of the client name or User-Agent it would otherwise report. Use letters, digits and dashes; other characters become dashes and the name is cut at 48 characters. The header changes no behaviour.
+
 #### Search-only endpoint
 
 A fixed-scope search surface is also hosted at:
@@ -1246,7 +1250,7 @@ Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`,
 
 FastMCP is bundled inside the package, so use the types exported from `firecrawl-mcp/server` (`Session`, `ToolDefinition`, `ToolRegistrar`, `FirecrawlMcpServerHooks` and others) rather than importing `fastmcp` yourself.
 
-The entry point also exports the helpers the built-in tools use, such as `recoveryPayload`, `normalizeHeader`, `requestOrigin`, `searchToolBaseFields`, `searchOutputSchema` and `structuredCompact`, so extra tools and hooks can match the built-in behaviour. They are unstable as well.
+The entry point also exports the helpers the built-in tools use, such as `recoveryPayload`, `normalizeHeader`, `requestOrigin`, `isRuntimeUserAgent`, `initializeClientSlug`, `searchToolBaseFields`, `searchOutputSchema` and `structuredCompact`, so extra tools and hooks can match the built-in behaviour. They are unstable as well.
 
 ## Logging System
 

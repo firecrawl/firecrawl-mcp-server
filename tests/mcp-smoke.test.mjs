@@ -1010,6 +1010,69 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
+test('HTTP cloud transport stamps the declared origin, then the referrer, over a runtime User-Agent', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: fakeApi.url,
+    FIRECRAWL_OAUTH_ISSUER: fakeApi.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const searchOrigin = async (headers) => {
+    const before = fakeApi.requests.length;
+    const response = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
+      body: JSON.stringify({
+        id: 5,
+        jsonrpc: '2.0',
+        method: 'tools/call',
+        params: {
+          arguments: { limit: 1, query: 'example domain' },
+          name: 'firecrawl_search',
+        },
+      }),
+      headers: {
+        accept: 'application/json, text/event-stream',
+        'content-type': 'application/json',
+        'x-api-key': 'fc-http-test',
+        ...headers,
+      },
+      method: 'POST',
+    });
+    assert.equal(response.status, 200);
+    await response.text();
+    return fakeApi.requests
+      .slice(before)
+      .find((request) => request.url === '/v2/search').body.origin;
+  };
+
+  assert.equal(
+    await searchOrigin({ 'user-agent': 'node', 'x-firecrawl-origin': 'Example Plugin' }),
+    `mcp-example-plugin@${serverVersion}`
+  );
+  assert.equal(
+    await searchOrigin({ 'user-agent': 'node', origin: 'https://www.app.example.com' }),
+    `mcp-ref-app-example-com@${serverVersion}`
+  );
+  assert.equal(
+    await searchOrigin({ 'user-agent': 'Claude-User/1.0', referer: 'https://app.example.com/x' }),
+    `mcp-ua-claude-user@${serverVersion}`
+  );
+  assert.equal(
+    await searchOrigin({ 'user-agent': 'undici' }),
+    `mcp-ua-undici@${serverVersion}`
+  );
+});
+
+
 test('HTTP cloud transport rejects invalid search limits before calling Firecrawl', async (t) => {
   const fakeApi = await startFakeFirecrawlApi();
   t.after(() => fakeApi.close());

@@ -62,7 +62,12 @@ import { registerGovTools } from './gov';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
 import { registerUsageTools } from './usage';
-import { originHeaders, requestOrigin, type McpClient } from './origin';
+import {
+  DECLARED_ORIGIN_HEADER,
+  originHeaders,
+  requestOrigin,
+  type McpClient,
+} from './origin';
 import { CoreHttpError } from './core-http-error.js';
 import { normalizeHeader } from './headers.js';
 import {
@@ -151,6 +156,16 @@ export interface SessionData {
    * client signal a stateless HTTP tool call carries (see src/origin.ts).
    */
   clientUserAgent?: string;
+  /** The `X-Firecrawl-Origin` header: the integration the connection names. */
+  clientOrigin?: string;
+  /** The `Origin` or `Referer` header of that request. */
+  clientReferrer?: string;
+  /**
+   * The client an earlier initialize named, for stateless HTTP calls that do
+   * not carry it. Set by an embedder that can recover it; read only when the
+   * User-Agent names a runtime rather than a client.
+   */
+  initializeClient?: { name?: string; version?: string };
   authType?: 'api-key' | 'oauth' | 'env' | 'keyless' | 'none';
   /** Admitted, but the supplied credential cannot be used. */
   credentialError?: 'CREDENTIAL_INVALID';
@@ -383,7 +398,13 @@ export interface FirecrawlMcpServer {
  * entry point.
  */
 export { normalizeHeader, withoutTrailingSlash } from './headers.js';
-export { originHeaders, requestOrigin } from './origin.js';
+export {
+  DECLARED_ORIGIN_HEADER,
+  initializeClientSlug,
+  isRuntimeUserAgent,
+  originHeaders,
+  requestOrigin,
+} from './origin.js';
 export {
   invalidApiKeyRecoveryPayload,
   invalidOAuthRecoveryPayload,
@@ -569,10 +590,16 @@ export function createFirecrawlMcpServer(
     const cached = request?.[authResultByRequest];
     if (cached) return cached;
     const authResult = authenticateSession(request).then((session) => {
-      const userAgent = request?.headers?.['user-agent'];
+      const headers = request?.headers;
+      const userAgent = headers?.['user-agent'];
       if (typeof userAgent === 'string' && userAgent !== '') {
         session.clientUserAgent = userAgent;
       }
+      const declaredOrigin = normalizeHeader(headers?.[DECLARED_ORIGIN_HEADER]);
+      if (declaredOrigin) session.clientOrigin = declaredOrigin;
+      const referrer =
+        normalizeHeader(headers?.['origin']) ?? normalizeHeader(headers?.['referer']);
+      if (referrer) session.clientReferrer = referrer;
       return session;
     });
     if (request) request[authResultByRequest] = authResult;

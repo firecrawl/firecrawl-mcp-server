@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   ORIGIN_SERVER,
+  initializeClientSlug,
+  isRuntimeUserAgent,
   originForClient,
   originHeaders,
   userAgentProduct,
@@ -88,3 +90,99 @@ test('without a client name the User-Agent product token names the client, marke
     'mcp-claude-code@3.24.1'
   );
 });
+
+test('a declared origin names the integration over every other signal', () => {
+  assert.equal(
+    originForClient(undefined, '3.31.0', 'Claude-User/1.0', {
+      declaredOrigin: 'Example Plugin',
+    }),
+    'mcp-example-plugin@3.31.0'
+  );
+  assert.equal(
+    originForClient({ name: 'claude-code' }, '3.31.0', 'claude-code/2.0', {
+      declaredOrigin: 'example-plugin',
+    }),
+    'mcp-example-plugin@3.31.0'
+  );
+  assert.equal(
+    originForClient(undefined, '3.31.0', 'node', { declaredOrigin: '  ' }),
+    'mcp-ua-node@3.31.0'
+  );
+  assert.equal(
+    originForClient(undefined, '3.31.0', 'node', { declaredOrigin: 'fastmcp' }),
+    'mcp-ua-node@3.31.0'
+  );
+});
+
+test('runtime User-Agents give way to a carried initialize name, then the referrer host', () => {
+  assert.equal(isRuntimeUserAgent('node'), true);
+  assert.equal(isRuntimeUserAgent('python-httpx/0.28.1'), true);
+  assert.equal(isRuntimeUserAgent('Go-http-client/2.0'), true);
+  assert.equal(isRuntimeUserAgent(undefined), true);
+  assert.equal(isRuntimeUserAgent('Claude-User/1.0'), false);
+  assert.equal(isRuntimeUserAgent('claude-code/2.1.0'), false);
+
+  const initializeClient = { name: 'ai-sdk-mcp-client', version: '1.0.0' };
+  assert.equal(
+    originForClient(undefined, '3.31.0', 'node', { initializeClient }),
+    'mcp-ai-sdk-mcp-client@3.31.0'
+  );
+  assert.equal(
+    originForClient(undefined, '3.31.0', undefined, { initializeClient }),
+    'mcp-ai-sdk-mcp-client@3.31.0'
+  );
+  assert.equal(
+    originForClient(undefined, '3.31.0', 'python-httpx/0.28.1', {
+      initializeClient: { name: 'mcp', version: '0.1.0' },
+      referrer: 'https://www.app.example.com/agents',
+    }),
+    'mcp-ref-app-example-com@3.31.0'
+  );
+  assert.equal(
+    originForClient(undefined, '3.31.0', 'undici', {
+      initializeClient,
+      referrer: 'https://app.example.com',
+    }),
+    'mcp-ai-sdk-mcp-client@3.31.0'
+  );
+});
+
+test('signals that only replace a runtime never rename a named User-Agent or client', () => {
+  const signals = {
+    initializeClient: { name: 'claude-ai' },
+    referrer: 'https://claude.ai',
+  };
+  assert.equal(
+    originForClient(undefined, '3.31.0', 'Claude-User/1.0', signals),
+    'mcp-ua-claude-user@3.31.0'
+  );
+  assert.equal(
+    originForClient({ name: 'claude-code' }, '3.31.0', 'node', signals),
+    'mcp-claude-code@3.31.0'
+  );
+  assert.equal(
+    originForClient({ name: 'mcp' }, '3.31.0', 'python-httpx/0.28.1'),
+    'mcp-mcp@3.31.0'
+  );
+});
+
+test('default SDK names, the server name, local hosts and addresses are not signals', () => {
+  for (const name of ['mcp', 'MCP Client', 'client', 'test-client', 'fastmcp', '', undefined]) {
+    assert.equal(initializeClientSlug(name), '');
+  }
+  assert.equal(initializeClientSlug('My Agent'), 'my-agent');
+  for (const referrer of [
+    'http://localhost:6274',
+    'http://127.0.0.1:3000/x',
+    'http://[::1]:8080',
+    'http://app.localhost',
+    'null',
+    'not a url',
+  ]) {
+    assert.equal(
+      originForClient(undefined, '3.31.0', 'Mozilla/5.0 (X11)', { referrer }),
+      'mcp-ua-mozilla@3.31.0'
+    );
+  }
+});
+
