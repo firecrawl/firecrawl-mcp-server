@@ -106,7 +106,7 @@ test('FIRECRAWL_INTEGRATION tags the requests a stdio server sends', async (t) =
 });
 
 test('without FIRECRAWL_INTEGRATION no integration field is sent', async (t) => {
-  const posts = await callTools(t, {});
+  const posts = await callTools(t, { FIRECRAWL_INTEGRATION: '' });
   for (const request of posts) {
     assert.equal('integration' in request.body, false, request.url);
   }

@@ -278,7 +278,7 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
   - Example: `https://firecrawl.your-domain.com`
   - If not provided, the cloud API will be used (requires API key)
 - `FIRECRAWL_INTEGRATION` (Optional): Integration tag for apps that launch this server, such as an editor extension
-  - Sent as the `integration` field of scrape, crawl, map, search, extract, agent, parse, interact and feedback requests
+  - Sent as the `integration` field of scrape, batch scrape, crawl, map, search, extract, agent, parse, interact and feedback requests
   - Use a value that starts with `_`, for example `_zed`
 
 #### MCP OAuth (Bearer access tokens)

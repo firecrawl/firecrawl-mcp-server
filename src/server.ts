@@ -2052,7 +2052,13 @@ Eligibility is limited to successful searches within the feedback age window. Th
         const response = await fetch(endpoint, {
           method: 'POST',
           headers,
-          body: JSON.stringify(withIntegration(endpoint, body, config.integration)),
+          body: JSON.stringify(
+            withIntegration(
+              `/v2/search/${encodeURIComponent(searchId)}/feedback`,
+              body,
+              config.integration
+            )
+          ),
         });
 
         const responseText = await response.text();
