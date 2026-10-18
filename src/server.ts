@@ -73,6 +73,7 @@ import {
   requestOrigin,
   type McpClient,
 } from './origin';
+import { integrationFrom, withIntegration } from './integration';
 import { CoreHttpError } from './core-http-error.js';
 import { normalizeHeader } from './headers.js';
 import {
@@ -372,6 +373,8 @@ export interface FirecrawlMcpServerOptions {
   endpointFeedback?: boolean;
   /** Render Alexandria results from firecrawl_scrape inline in MCP Apps hosts. Experimental, off by default. */
   mcpApps?: boolean;
+  /** Tag sent as the `integration` field of API requests that accept one, such as `_zed`. */
+  integration?: string;
   /** Extension hooks. Unstable: may change in any release. */
   unstable_hooks?: FirecrawlMcpServerHooks;
 }
@@ -557,6 +560,7 @@ export function createFirecrawlMcpServer(
     searchFeedback: options.searchFeedback ?? true,
     endpointFeedback: options.endpointFeedback ?? true,
     mcpApps: options.mcpApps ?? false,
+    integration: integrationFrom(options.integration),
   };
   const logging = options.logging ?? config.transport === 'httpStream';
 
@@ -734,7 +738,26 @@ export function createFirecrawlMcpServer(
       clientConfig.apiKey = apiKey;
     }
 
-    return new FirecrawlApp(clientConfig);
+    const client = new FirecrawlApp(clientConfig);
+    if (config.integration) {
+      (client as any).http?.instance?.interceptors?.request?.use((request: any) => {
+        const isPost = String(request.method ?? '').toLowerCase() === 'post';
+        const isPlainObject =
+          request.data != null &&
+          typeof request.data === 'object' &&
+          !Array.isArray(request.data) &&
+          !(request.data instanceof FormData);
+        if (isPost && isPlainObject) {
+          request.data = withIntegration(
+            request.url ?? '',
+            request.data,
+            config.integration
+          );
+        }
+        return request;
+      });
+    }
+    return client;
   }
 
   // Safe mode restricts browser actions and webhooks for deployments that
@@ -1229,7 +1252,7 @@ export function createFirecrawlMcpServer(
   ): Record<string, unknown> {
     const transformed = transformScrapeParams(options);
     const cleaned = removeEmptyTopLevel(transformed) as Record<string, unknown>;
-    return { origin, ...cleaned };
+    return withIntegration('/v2/parse', { origin, ...cleaned }, config.integration);
   }
 
   function buildContinuationArguments(
@@ -1276,7 +1299,7 @@ export function createFirecrawlMcpServer(
         Authorization: `Bearer ${apiKey}`,
         ...(origin ? originHeaders(origin) : {}),
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(withIntegration(pathName, body, config.integration)),
     });
     const responseText = await response.text();
     let parsed: any;
@@ -1844,7 +1867,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
     const response = await fetch(`${resolveApiBaseUrl()}${path}`, {
       method: 'POST',
       headers,
-      body: JSON.stringify(body),
+      body: JSON.stringify(withIntegration(path, body, config.integration)),
     });
     const json: any = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -2083,7 +2106,13 @@ Eligibility is limited to successful searches within the feedback age window. Th
         const response = await fetch(endpoint, {
           method: 'POST',
           headers,
-          body: JSON.stringify(body),
+          body: JSON.stringify(
+            withIntegration(
+              `/v2/search/${encodeURIComponent(searchId)}/feedback`,
+              body,
+              config.integration
+            )
+          ),
         });
 
         const responseText = await response.text();
@@ -2263,7 +2292,7 @@ Returns submission status, feedback ID, and accounting fields.
         const response = await fetch(`${apiBase}/v2/feedback`, {
           method: 'POST',
           headers,
-          body: JSON.stringify(body),
+          body: JSON.stringify(withIntegration('/v2/feedback', body, config.integration)),
         });
 
         const responseText = await response.text();
