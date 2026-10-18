@@ -1,10 +1,22 @@
 # Changelog
 
-## [3.30.4] - 2026-10-18
+## [3.31.1] - 2026-10-18
 
 ### Changed
 
 - The `firecrawl` JS SDK dependency moves from 4.42.0 to 4.46.0.
+
+## [3.31.0] - 2026-10-18
+
+### Added
+
+- The request origin can be named by the connection. An `X-Firecrawl-Origin` header stamps `mcp-<name>` ahead of every other signal.
+- When the User-Agent names only an HTTP runtime (`node`, `undici`, `python-httpx`, `Go-http-client` and similar) or is missing, the origin uses, in order, a client name an embedder recovered from an earlier `initialize` (`session.initializeClient`, stamped `mcp-<client>`), then the `Origin` or `Referer` host (`mcp-ref-<host>`), before falling back to `mcp-ua-<runtime>` as before. SDK default names such as `mcp` and local or IP-address hosts are skipped.
+- `firecrawl-mcp/server` exports `isRuntimeUserAgent`, `initializeClientSlug` and `DECLARED_ORIGIN_HEADER`.
+
+### Unchanged
+
+- Every origin a request stamped before keeps its value unless the request sends `X-Firecrawl-Origin`, or its User-Agent is a runtime and it carries one of the new signals.
 
 ## [3.30.3] - 2026-10-16
 
