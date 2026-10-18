@@ -475,6 +475,48 @@ test('an account out of credits sees the API text from search, scrape, map and c
   }
 });
 
+test('a World ID credential reaches keyless requests and only keyless requests', async (t) => {
+  const api = await startFakeApi(t);
+  const keylessPort = await startEmbedded(t, {
+    apiUrl: api.url,
+    worldIdCredential: 'fcwid_from.option',
+    unstable_hooks: { authenticate: async () => ({ authType: 'keyless' }) },
+  });
+
+  const fromHeader = await callTool(
+    keylessPort,
+    'firecrawl_scrape',
+    { url: 'https://example.com' },
+    { 'x-firecrawl-world-id': 'fcwid_from.header' }
+  );
+  assert.notEqual(fromHeader.isError, true, JSON.stringify(fromHeader));
+  const fromOption = await callTool(keylessPort, 'firecrawl_search', {
+    query: 'example',
+  });
+  assert.notEqual(fromOption.isError, true, JSON.stringify(fromOption));
+
+  const keyedPort = await startEmbedded(t, {
+    apiUrl: api.url,
+    apiKey: 'fc-configured',
+    worldIdCredential: 'fcwid_from.option',
+  });
+  const keyed = await callTool(
+    keyedPort,
+    'firecrawl_map',
+    { url: 'https://example.com' },
+    { 'x-firecrawl-world-id': 'fcwid_from.header' }
+  );
+  assert.notEqual(keyed.isError, true, JSON.stringify(keyed));
+
+  const sent = (path) =>
+    api.requests.find((request) => request.url.startsWith(path))?.headers;
+  assert.equal(sent('/v2/scrape')['x-firecrawl-world-id'], 'fcwid_from.header');
+  assert.equal(sent('/v2/scrape').authorization, undefined);
+  assert.equal(sent('/v2/search')['x-firecrawl-world-id'], 'fcwid_from.option');
+  assert.equal(sent('/v2/map')['x-firecrawl-world-id'], undefined);
+  assert.equal(sent('/v2/map').authorization, 'Bearer fc-configured');
+});
+
 test('instructions, configureHttp and oauth metadata hooks shape the instance', async (t) => {
   let defaults;
   const port = await startEmbedded(t, {
