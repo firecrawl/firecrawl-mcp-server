@@ -73,6 +73,10 @@ Authorization: Bearer <FIRECRAWL_API_KEY>
 
 Never put an API key in the server URL. Never put an API key in an agent chat. Configure it directly in the client or secret manager. See the [hosted MCP setup guide](https://docs.firecrawl.dev/mcp-server) and the [agent onboarding guide](https://www.firecrawl.dev/agent-onboarding/SKILL.md) for client-specific instructions.
 
+#### Naming your integration
+
+An integration that connects over HTTP can name itself with an `X-Firecrawl-Origin` header, for example `X-Firecrawl-Origin: my-agent`. The server reports it to Firecrawl as the request origin `mcp-my-agent@<server version>`, in place of the client name or User-Agent it would otherwise report. Use letters, digits and dashes: each run of other characters becomes one dash, leading and trailing dashes are dropped, and the name is cut at 48 characters. Tool results are unaffected; only the origin sent to the Firecrawl API (and passed to an embedder's `beforeKeylessRequest`) changes.
+
 #### Search-only endpoint
 
 A fixed-scope search surface is also hosted at:
@@ -200,14 +204,6 @@ docker run --rm -p 127.0.0.1:3000:3000 \
 ```
 
 The image sets `HOST=0.0.0.0` and `PORT=3000`; override `PORT` (and the `-p` mapping) to listen elsewhere. The server uses the container's `FIRECRAWL_API_KEY` for requests that don't send their own credential, so the example publishes the port on `127.0.0.1` only; don't expose it more widely unless clients must supply their own key. Set `FIRECRAWL_API_URL` to use a self-hosted Firecrawl API. The container runs as the unprivileged `node` user.
-
-### Installing via Smithery (Legacy)
-
-To install Firecrawl for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@mendableai/mcp-server-firecrawl):
-
-```bash
-npx -y @smithery/cli install @mendableai/mcp-server-firecrawl --client claude
-```
 
 ### Running on VS Code
 
@@ -1249,7 +1245,7 @@ Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`,
 
 FastMCP is bundled inside the package, so use the types exported from `firecrawl-mcp/server` (`Session`, `ToolDefinition`, `ToolRegistrar`, `FirecrawlMcpServerHooks` and others) rather than importing `fastmcp` yourself.
 
-The entry point also exports the helpers the built-in tools use, such as `recoveryPayload`, `normalizeHeader`, `requestOrigin`, `searchToolBaseFields`, `searchOutputSchema` and `structuredCompact`, so extra tools and hooks can match the built-in behaviour. They are unstable as well.
+The entry point also exports the helpers the built-in tools use, such as `recoveryPayload`, `normalizeHeader`, `requestOrigin`, `isRuntimeUserAgent`, `initializeClientSlug`, `searchToolBaseFields`, `searchOutputSchema` and `structuredCompact`, so extra tools and hooks can match the built-in behaviour. They are unstable as well.
 
 ## Logging System
 
