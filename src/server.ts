@@ -152,8 +152,8 @@ export interface SessionData {
    */
   firecrawlApiKey?: string;
   /**
-   * The User-Agent of the HTTP request that opened the session, the only
-   * client signal a stateless HTTP tool call carries (see src/origin.ts).
+   * The User-Agent of the HTTP request that opened the session, one of the
+   * client signals a stateless HTTP tool call carries (see src/origin.ts).
    */
   clientUserAgent?: string;
   /** The `X-Firecrawl-Origin` header: the integration the connection names. */
@@ -597,8 +597,10 @@ export function createFirecrawlMcpServer(
       }
       const declaredOrigin = normalizeHeader(headers?.[DECLARED_ORIGIN_HEADER]);
       if (declaredOrigin) session.clientOrigin = declaredOrigin;
-      const referrer =
-        normalizeHeader(headers?.['origin']) ?? normalizeHeader(headers?.['referer']);
+      const referrer = [
+        normalizeHeader(headers?.['origin']),
+        normalizeHeader(headers?.['referer']),
+      ].find((value) => value && value !== 'null');
       if (referrer) session.clientReferrer = referrer;
       return session;
     });

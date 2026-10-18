@@ -1063,6 +1063,10 @@ test('HTTP cloud transport stamps the declared origin, then the referrer, over a
     `mcp-ref-app-example-com@${serverVersion}`
   );
   assert.equal(
+    await searchOrigin({ 'user-agent': 'node', origin: 'null', referer: 'https://app.example.com/x' }),
+    `mcp-ref-app-example-com@${serverVersion}`
+  );
+  assert.equal(
     await searchOrigin({ 'user-agent': 'Claude-User/1.0', referer: 'https://app.example.com/x' }),
     `mcp-ua-claude-user@${serverVersion}`
   );

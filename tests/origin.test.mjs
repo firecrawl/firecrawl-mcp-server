@@ -176,6 +176,8 @@ test('default SDK names, the server name, local hosts and addresses are not sign
     'http://127.0.0.1:3000/x',
     'http://[::1]:8080',
     'http://app.localhost',
+    'http://localhost.:3000',
+    'http://printer.local',
     'null',
     'not a url',
   ]) {

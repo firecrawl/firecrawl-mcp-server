@@ -123,13 +123,14 @@ export function initializeClientSlug(name: string | null | undefined): string {
 function referrerSlug(referrer: string | null | undefined): string {
   let host: string;
   try {
-    host = new URL(referrer ?? '').hostname.toLowerCase();
+    host = new URL(referrer ?? '').hostname.toLowerCase().replace(/\.$/, '');
   } catch {
     return '';
   }
   if (
     !host.includes('.') ||
     host.endsWith('.localhost') ||
+    host.endsWith('.local') ||
     /^[\d.]+$/.test(host) ||
     host.startsWith('[')
   ) {

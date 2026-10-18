@@ -75,7 +75,7 @@ Never put an API key in the server URL. Never put an API key in an agent chat. C
 
 #### Naming your integration
 
-An integration that connects over HTTP can name itself with an `X-Firecrawl-Origin` header, for example `X-Firecrawl-Origin: my-agent`. The server reports it to Firecrawl as the request origin `mcp-my-agent@<server version>`, in place of the client name or User-Agent it would otherwise report. Use letters, digits and dashes; other characters become dashes and the name is cut at 48 characters. The header changes no behaviour.
+An integration that connects over HTTP can name itself with an `X-Firecrawl-Origin` header, for example `X-Firecrawl-Origin: my-agent`. The server reports it to Firecrawl as the request origin `mcp-my-agent@<server version>`, in place of the client name or User-Agent it would otherwise report. Use letters, digits and dashes: each run of other characters becomes one dash, leading and trailing dashes are dropped, and the name is cut at 48 characters. Tool results are unaffected; only the origin sent to the Firecrawl API (and passed to an embedder's `beforeKeylessRequest`) changes.
 
 #### Search-only endpoint
 
