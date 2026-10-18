@@ -17,20 +17,82 @@ import { createRequire } from 'node:module';
 /** The origin of a request whose client is unknown, and the prefix every client origin carries. */
 export const ORIGIN_SERVER = 'mcp-fastmcp';
 
+/** The header a connection sets to name the integration it comes from. */
+export const DECLARED_ORIGIN_HEADER = 'x-firecrawl-origin';
+
 const NAME_MAX = 48;
+
+/**
+ * User-Agent products that name an HTTP runtime or library rather than an MCP
+ * client. Their stamp is the last resort, after every other signal.
+ */
+const RUNTIME_PRODUCTS = new Set([
+  'apache-httpasyncclient',
+  'apache-httpclient',
+  'aiohttp',
+  'axios',
+  'bun',
+  'curl',
+  'dart',
+  'deno',
+  'faraday',
+  'go-http-client',
+  'got',
+  'guzzlehttp',
+  'java-http-client',
+  'ktor-client',
+  'libcurl-agent',
+  'mozilla',
+  'node',
+  'node-fetch',
+  'okhttp',
+  'python',
+  'python-httpx',
+  'python-httpx2',
+  'python-requests',
+  'python-urllib',
+  'reqwest',
+  'ruby',
+  'undici',
+  'wget',
+]);
+
+/** Client names SDKs send by default, which say nothing about the integration. */
+const GENERIC_CLIENT_NAMES = new Set([
+  'client',
+  'example-client',
+  'mcp',
+  'mcp-client',
+  'test',
+  'test-client',
+]);
 
 export type ClientImplementation = {
   name?: string;
   version?: string;
 };
 
-function slugOf(name: string | undefined): string {
+/** What a connection says about its client besides the call's own clientInfo. */
+export type ClientSignals = {
+  /** The `X-Firecrawl-Origin` header. */
+  declaredOrigin?: string | null;
+  /** The client an earlier initialize named, for calls that do not carry it. */
+  initializeClient?: ClientImplementation | null;
+  /** The `Origin` or `Referer` header. */
+  referrer?: string | null;
+};
+
+function slugOf(name: string | undefined | null): string {
   return (name ?? '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, NAME_MAX)
     .replace(/-+$/, '');
+}
+
+function isOwnSlug(slug: string): boolean {
+  return slug === '' || slug === 'fastmcp' || slug === 'firecrawl-fastmcp';
 }
 
 /**
@@ -42,27 +104,81 @@ export function userAgentProduct(userAgent: string | null | undefined): string {
   return slugOf(first.split('/')[0]);
 }
 
+/** Whether a User-Agent is absent or names an HTTP runtime rather than an MCP client. */
+export function isRuntimeUserAgent(userAgent: string | null | undefined): boolean {
+  const product = userAgentProduct(userAgent);
+  return product === '' || RUNTIME_PRODUCTS.has(product);
+}
+
+/**
+ * The token an initialize client name stamps when it reaches a call only
+ * through `ClientSignals.initializeClient`; empty for the server's own names
+ * and the defaults SDKs send when the integration sets none.
+ */
+export function initializeClientSlug(name: string | null | undefined): string {
+  const slug = slugOf(name);
+  return isOwnSlug(slug) || GENERIC_CLIENT_NAMES.has(slug) ? '' : slug;
+}
+
+function referrerSlug(referrer: string | null | undefined): string {
+  let host: string;
+  try {
+    host = new URL(referrer ?? '').hostname.toLowerCase().replace(/\.$/, '');
+  } catch {
+    return '';
+  }
+  if (
+    !host.includes('.') ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.local') ||
+    /^[\d.]+$/.test(host) ||
+    host.startsWith('[')
+  ) {
+    return '';
+  }
+  return slugOf(host.replace(/^www\./, ''));
+}
+
 /**
  * `mcp-<client>@<serverVersion>`: the client name lowercased and reduced to
- * letters, digits and single dashes, cut at 48 characters. Without a usable
- * client name (the server's own fastmcp names, an empty name, or a stateless
- * HTTP call that never saw the client's initialize) the origin falls back to
- * the User-Agent product token as `mcp-ua-<product>@<serverVersion>`, and
- * without that to `mcp-fastmcp@<serverVersion>`.
+ * letters, digits and single dashes, cut at 48 characters. The first signal
+ * that yields a token wins:
+ *
+ * 1. `X-Firecrawl-Origin`, as `mcp-<origin>`;
+ * 2. the call's own initialize client name, as `mcp-<client>`;
+ * 3. a User-Agent that names a client, as `mcp-ua-<product>`;
+ * 4. a client name an earlier initialize carried, as `mcp-<client>`;
+ * 5. the `Origin` or `Referer` host, as `mcp-ref-<host>`;
+ * 6. a runtime User-Agent (`node`, `python-httpx`), as `mcp-ua-<product>`;
+ * 7. otherwise `mcp-fastmcp`.
+ *
+ * Signals 4 and 5 only ever replace a runtime User-Agent or a missing one, so a
+ * client that stamped `mcp-ua-<product>` for a named client keeps its token.
  */
 export function originForClient(
   client: ClientImplementation | null | undefined,
   serverVersion: string,
-  userAgent?: string | null
+  userAgent?: string | null,
+  signals: ClientSignals = {}
 ): string {
+  const declared = slugOf(signals.declaredOrigin);
   const slug = slugOf(client?.name);
-  const own = slug === '' || slug === 'fastmcp' || slug === 'firecrawl-fastmcp';
-  const product = own ? userAgentProduct(userAgent) : '';
-  const base = !own
-    ? `mcp-${slug}`
-    : product
-      ? `mcp-ua-${product}`
-      : ORIGIN_SERVER;
+  const product = userAgentProduct(userAgent);
+  const remembered = initializeClientSlug(signals.initializeClient?.name);
+  const referrer = referrerSlug(signals.referrer);
+  const base = !isOwnSlug(declared)
+    ? `mcp-${declared}`
+    : !isOwnSlug(slug)
+      ? `mcp-${slug}`
+      : product && !RUNTIME_PRODUCTS.has(product)
+        ? `mcp-ua-${product}`
+        : remembered
+          ? `mcp-${remembered}`
+          : referrer
+            ? `mcp-ref-${referrer}`
+            : product
+              ? `mcp-ua-${product}`
+              : ORIGIN_SERVER;
   return serverVersion ? `${base}@${serverVersion}` : base;
 }
 
@@ -82,18 +198,31 @@ const { version: serverVersion } = createRequire(import.meta.url)(
 export type McpClient =
   { version?: ClientImplementation | undefined } | undefined;
 
+/** The client signals the authenticated session carries (see SessionData). */
+export type OriginSession = {
+  clientUserAgent?: string;
+  clientOrigin?: string;
+  clientReferrer?: string;
+  initializeClient?: ClientImplementation;
+};
+
 /**
  * The origin of every request a tool call makes: the call's client, the
- * User-Agent the session was authenticated with (stateless HTTP calls carry
- * no client name), and this server's version.
+ * client signals of the request the session was authenticated with
+ * (stateless HTTP calls carry no client name), and this server's version.
  */
 export function requestOrigin(
   client: McpClient,
-  session?: { clientUserAgent?: string } | undefined
+  session?: OriginSession | undefined
 ): string {
   return originForClient(
     client?.version ?? null,
     serverVersion,
-    session?.clientUserAgent
+    session?.clientUserAgent,
+    {
+      declaredOrigin: session?.clientOrigin,
+      initializeClient: session?.initializeClient,
+      referrer: session?.clientReferrer,
+    }
   );
 }
