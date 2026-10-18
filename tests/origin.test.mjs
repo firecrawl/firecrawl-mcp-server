@@ -247,6 +247,7 @@ test('exact shared hosts and long shared-host names keep the path segment', () =
   const two = origin(`https://${host}/project-two/client.json`);
   assert.notEqual(one, two);
   assert.match(one, /project-one@3\.33\.0$/);
+  assert.match(two, /project-two@3\.33\.0$/);
   assert.ok(one.slice('mcp-oauth-'.length, one.indexOf('@')).length <= 48);
 });
 
