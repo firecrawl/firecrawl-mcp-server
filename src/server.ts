@@ -167,6 +167,11 @@ export interface SessionData {
    * User-Agent names a runtime rather than a client.
    */
   initializeClient?: { name?: string; version?: string };
+  /**
+   * The OAuth client id the access token was issued to. A metadata URL id
+   * names the product; read only when the User-Agent names a runtime.
+   */
+  oauthClientId?: string;
   authType?: 'api-key' | 'oauth' | 'env' | 'keyless' | 'none';
   /** Admitted, but the supplied credential cannot be used. */
   credentialError?: 'CREDENTIAL_INVALID';
