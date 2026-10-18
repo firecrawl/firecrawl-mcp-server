@@ -8,7 +8,7 @@
 
 # Firecrawl MCP Server
 
-A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com/firecrawl/firecrawl) to MCP-compatible AI agents — search, scrape, and interact with the live web for clean, agent-ready context.
+A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com/firecrawl/firecrawl), the context API for AI agents, to MCP-compatible clients: search, scrape, and interact with the live web and get back clean Markdown or structured data.
 
 > Big thanks to [@vrknetha](https://github.com/vrknetha), [@knacklabs](https://www.knacklabs.ai) for the initial implementation!
 
