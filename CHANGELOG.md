@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.32.0] - 2026-10-18
+
+### Added
+
+- `FIRECRAWL_INTEGRATION` sets the `integration` field on the API requests that accept it: scrape, batch scrape, crawl, map, search, extract, agent, parse, interact and feedback. Apps that launch the server, such as editor extensions, use it to tag their traffic, for example `FIRECRAWL_INTEGRATION=_zed`. Requests that already carry an `integration` keep it, and other endpoints, such as monitors, are unchanged. Unset or blank sends no field, as before.
+
 ## [3.31.1] - 2026-10-18
 
 ### Changed
