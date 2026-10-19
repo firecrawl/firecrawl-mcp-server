@@ -6,6 +6,7 @@ import {
   isRuntimeUserAgent,
   originForClient,
   originHeaders,
+  requestOrigin,
   userAgentProduct,
 } from '../dist/origin.js';
 
@@ -188,3 +189,185 @@ test('default SDK names, the server name, local hosts and addresses are not sign
   }
 });
 
+test('a URL OAuth client id names the product when the User-Agent is a runtime or missing', () => {
+  const origin = (oauthClientId, userAgent) =>
+    originForClient(undefined, '3.33.0', userAgent, { oauthClientId });
+  assert.equal(
+    origin('https://antigravity.example/oauth/client-metadata.json', 'node'),
+    'mcp-oauth-antigravity-example@3.33.0'
+  );
+  assert.equal(
+    origin('https://www.app.example.com/oauth/client-metadata.json'),
+    'mcp-oauth-app-example-com@3.33.0'
+  );
+  assert.equal(
+    origin('https://api.example.build/oauth/client-metadata.json', 'python-httpx/0.28.1'),
+    'mcp-oauth-api-example-build@3.33.0'
+  );
+});
+
+test('a shared static host adds the first path segment to the OAuth client token', () => {
+  const origin = (oauthClientId) =>
+    originForClient(undefined, '3.33.0', 'node', { oauthClientId });
+  assert.equal(
+    origin('https://acme.github.io/agent-one/docs/oauth/client-metadata.json'),
+    'mcp-oauth-acme-github-io-agent-one@3.33.0'
+  );
+  assert.equal(
+    origin('https://acme.github.io/agent-two/client.json'),
+    'mcp-oauth-acme-github-io-agent-two@3.33.0'
+  );
+  assert.equal(
+    origin('https://team.gitlab.io/tool/client.json'),
+    'mcp-oauth-team-gitlab-io-tool@3.33.0'
+  );
+  assert.equal(
+    origin('https://tool.pages.dev/oauth/client.json'),
+    'mcp-oauth-tool-pages-dev-oauth@3.33.0'
+  );
+  assert.equal(
+    origin('https://tool.netlify.app/client.json'),
+    'mcp-oauth-tool-netlify-app-client-json@3.33.0'
+  );
+  assert.equal(
+    origin('https://tool.vercel.app/'),
+    'mcp-oauth-tool-vercel-app@3.33.0'
+  );
+});
+
+test('exact shared hosts and long shared-host names keep the path segment', () => {
+  const origin = (oauthClientId) =>
+    originForClient(undefined, '3.33.0', 'node', { oauthClientId });
+  assert.equal(
+    origin('https://pages.dev/tool-one/client.json'),
+    'mcp-oauth-pages-dev-tool-one@3.33.0'
+  );
+  const host = `${'a'.repeat(40)}.github.io`;
+  const one = origin(`https://${host}/project-one/client.json`);
+  const two = origin(`https://${host}/project-two/client.json`);
+  assert.notEqual(one, two);
+  assert.match(one, /project-one@3\.33\.0$/);
+  assert.match(two, /project-two@3\.33\.0$/);
+  assert.ok(one.slice('mcp-oauth-'.length, one.indexOf('@')).length <= 48);
+});
+
+test('a non-URL OAuth client id is named by its registered client name', () => {
+  const origin = (oauthClientId, oauthClientName, signals = {}) =>
+    originForClient(undefined, '3.33.0', 'node', {
+      oauthClientId,
+      oauthClientName,
+      ...signals,
+    });
+  assert.equal(
+    origin('dyn_0123456789abcdef', 'Example Agents'),
+    'mcp-oauth-example-agents@3.33.0'
+  );
+  assert.equal(
+    originForClient(undefined, '3.33.0', undefined, {
+      oauthClientId: 'dyn_0123456789abcdef',
+      oauthClientName: 'Lead Connector',
+    }),
+    'mcp-oauth-lead-connector@3.33.0'
+  );
+  assert.equal(
+    origin(undefined, 'Example Agents'),
+    'mcp-oauth-example-agents@3.33.0'
+  );
+  assert.equal(
+    origin('dyn_0123456789abcdef', 'x'.repeat(60)),
+    `mcp-oauth-${'x'.repeat(48)}@3.33.0`
+  );
+  for (const name of ['MCP Client', 'client', 'test-client', 'fastmcp', '  ', '***', '', null]) {
+    assert.equal(origin('dyn_0123456789abcdef', name), 'mcp-ua-node@3.33.0');
+  }
+  assert.equal(
+    origin('https://app.example.com/oauth/client.json', 'Other Name'),
+    'mcp-oauth-app-example-com@3.33.0'
+  );
+  assert.equal(
+    origin('https://mcp.firecrawl.dev/oauth/client.json', 'Other Name'),
+    'mcp-ua-node@3.33.0'
+  );
+  assert.equal(
+    origin('dyn_0123456789abcdef', 'Example Agents', {
+      initializeClient: { name: 'ai-sdk-mcp-client' },
+    }),
+    'mcp-ai-sdk-mcp-client@3.33.0'
+  );
+  assert.equal(
+    originForClient(undefined, '3.33.0', 'Claude-User/1.0', {
+      oauthClientId: 'dyn_0123456789abcdef',
+      oauthClientName: 'Example Agents',
+    }),
+    'mcp-ua-claude-user@3.33.0'
+  );
+  assert.match(
+    requestOrigin(undefined, {
+      clientUserAgent: 'node',
+      oauthClientId: 'dyn_0123456789abcdef',
+      oauthClientName: 'Example Agents',
+    }),
+    /^mcp-oauth-example-agents@/
+  );
+});
+
+test('OAuth client ids that name nothing are not signals', () => {
+  for (const oauthClientId of [
+    'dyn_0123456789abcdef',
+    'some-client-id',
+    '',
+    null,
+    undefined,
+    'https://firecrawl.dev/oauth/client.json',
+    'https://mcp.firecrawl.dev/oauth/client.json',
+    'http://localhost:3000/client.json',
+    'http://127.0.0.1/client.json',
+  ]) {
+    assert.equal(
+      originForClient(undefined, '3.33.0', 'node', { oauthClientId }),
+      'mcp-ua-node@3.33.0'
+    );
+  }
+});
+
+test('the OAuth client sits after a carried initialize name and before the referrer', () => {
+  const oauthClientId = 'https://app.example.com/oauth/client-metadata.json';
+  const referrer = 'https://claude.ai';
+  assert.equal(
+    originForClient(undefined, '3.33.0', 'node', {
+      oauthClientId,
+      referrer,
+      initializeClient: { name: 'ai-sdk-mcp-client' },
+    }),
+    'mcp-ai-sdk-mcp-client@3.33.0'
+  );
+  assert.equal(
+    originForClient(undefined, '3.33.0', 'node', { oauthClientId, referrer }),
+    'mcp-oauth-app-example-com@3.33.0'
+  );
+  assert.equal(
+    originForClient(undefined, '3.33.0', 'Claude-User/1.0', { oauthClientId }),
+    'mcp-ua-claude-user@3.33.0'
+  );
+  assert.equal(
+    originForClient({ name: 'claude-code' }, '3.33.0', 'node', { oauthClientId }),
+    'mcp-claude-code@3.33.0'
+  );
+  assert.equal(
+    originForClient(undefined, '3.33.0', 'node', {
+      oauthClientId,
+      declaredOrigin: 'example-plugin',
+    }),
+    'mcp-example-plugin@3.33.0'
+  );
+});
+
+test('requestOrigin reads the OAuth client id from the session', () => {
+  assert.match(
+    requestOrigin(undefined, {
+      clientUserAgent: 'node',
+      oauthClientId: 'https://app.example.com/oauth/client-metadata.json',
+    }),
+    /^mcp-oauth-app-example-com@/
+  );
+});

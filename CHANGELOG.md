@@ -6,6 +6,16 @@
 
 - Experimental MCP Apps view for Alexandria results, off by default. With `FIRECRAWL_MCP_APPS=true` (or `mcpApps: true` for embedders), `firecrawl_scrape` declares `_meta.ui.resourceUri` and the server serves `ui://firecrawl/alexandria-results.html` (`text/html;profile=mcp-app`). MCP Apps hosts such as ChatGPT and Claude render each Alexandria call as a table, with a bar chart when one column is numeric. Tool inputs and outputs are unchanged, and hosts without MCP Apps support ignore the metadata.
 
+## [3.33.0] - 2026-10-18
+
+### Added
+
+- A session's OAuth client id (`session.oauthClientId`) can name the integration. When the id is a metadata URL and the User-Agent names only an HTTP runtime or is missing, the origin uses the URL host as `mcp-oauth-<host>`, after a carried initialize name and before the `Origin` or `Referer` host. Shared static hosts (`github.io`, `gitlab.io`, `pages.dev`, `netlify.app`, `vercel.app`) add the first path segment. Firecrawl's own hosts name nothing. For an id that is not a URL, such as a dynamically registered client, `session.oauthClientName` (the registered client name) stamps `mcp-oauth-<name>` in the same position; SDK default names such as `mcp` are skipped.
+
+### Unchanged
+
+- Every origin a request stamped before keeps its value unless its User-Agent is a runtime or missing and the session carries an OAuth client id that names a product.
+
 ## [3.32.0] - 2026-10-18
 
 ### Added
