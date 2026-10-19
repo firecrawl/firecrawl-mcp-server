@@ -66,7 +66,12 @@ function liftTypedObjects(
       const { type, ...options } = item;
       if (Object.keys(options).length === 0) return type;
       const optionsKey = optionFields[type];
-      if (!optionsKey || !(optionsKey in shape) || value[optionsKey] != null) {
+      if (!optionsKey || value[optionsKey] != null) return item;
+      const optionsShape = unwrap(shape[optionsKey])?._zod?.def?.shape;
+      if (
+        !optionsShape ||
+        Object.keys(options).some((key) => !(key in optionsShape))
+      ) {
         return item;
       }
       value[optionsKey] = options;
