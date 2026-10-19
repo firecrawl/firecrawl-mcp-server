@@ -748,27 +748,29 @@ export function createFirecrawlMcpServer(
     }
     const isErrorResult = (value: unknown): value is ContentResult =>
       typeof value === 'object' && value !== null && 'content' in value && (value as ContentResult).isError === true;
+    async function delivered<T>(run: () => T | Promise<T>): Promise<T | ContentResult> {
+      try {
+        const result = await run();
+        return isErrorResult(result) ? deliverError(result) : result;
+      } catch (error) {
+        if (!(error instanceof FastMcpUserError)) throw error;
+        return deliverError({
+          content: [{ type: 'text', text: error.message }],
+          isError: true,
+          ...(error.extras ? { structuredContent: error.extras } : {}),
+        });
+      }
+    }
     return {
       ...wrapped,
-      beforeValidate: async (args, session) => {
+      beforeValidate: (args, session) => {
         normalizeToolArguments(wrapped.parameters, args);
-        const result = await wrapped.beforeValidate?.(args, session);
-        return isErrorResult(result) ? deliverError(result) : result;
+        return delivered(() => wrapped.beforeValidate?.(args, session));
       },
-      execute: async (args, context) => {
+      execute: (args, context) => {
         const session = copySession(context.session);
         session.requestId = randomUUID();
-        try {
-          const result = await wrapped.execute(args, { ...context, session });
-          return isErrorResult(result) ? deliverError(result) : result;
-        } catch (error) {
-          if (!(error instanceof FastMcpUserError)) throw error;
-          return deliverError({
-            content: [{ type: 'text', text: error.message }],
-            isError: true,
-            ...(error.extras ? { structuredContent: error.extras } : {}),
-          });
-        }
+        return delivered(() => wrapped.execute(args, { ...context, session }));
       },
     };
   }

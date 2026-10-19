@@ -26,12 +26,12 @@ async function startRefusingApi(t, status, body) {
   return `http://127.0.0.1:${server.address().port}`;
 }
 
-async function connect(t, { apiUrl, session, registerExtraTools }) {
+async function connect(t, { apiUrl, session, registerExtraTools, onToolResult }) {
   const port = await getFreePort();
   const instance = createFirecrawlMcpServer({
     transport: 'httpStream',
     apiUrl,
-    unstable_hooks: { authenticate: async () => ({ ...session }), registerExtraTools },
+    unstable_hooks: { authenticate: async () => ({ ...session }), registerExtraTools, onToolResult },
   });
   await instance.start({
     transportType: 'httpStream',
@@ -45,8 +45,8 @@ async function connect(t, { apiUrl, session, registerExtraTools }) {
   return { client, tools };
 }
 
-async function assertReadableError(t, { apiUrl, session, name, args, includes, registerExtraTools }) {
-  const { client, tools } = await connect(t, { apiUrl, session, registerExtraTools });
+async function assertReadableError(t, { apiUrl, session, name, args, includes, registerExtraTools, onToolResult }) {
+  const { client, tools } = await connect(t, { apiUrl, session, registerExtraTools, onToolResult });
   assert.ok(tools.find((tool) => tool.name === name)?.outputSchema, `${name} declares an outputSchema`);
   const result = await client.callTool({ name, arguments: args });
   assert.equal(result.isError, true, JSON.stringify(result));
@@ -134,24 +134,37 @@ for (const { name, payload, delivered } of [
     delivered: undefined,
   },
 ]) {
-  test(`an embedder error ${name}`, async (t) => {
-    const result = await assertReadableError(t, {
-      apiUrl: 'http://127.0.0.1:9',
-      session: apiKey,
-      name: 'embed_refuses',
-      args: {},
-      includes: 'Refused.',
-      registerExtraTools: (registrar) =>
-        registrar.addTool({
-          name: 'embed_refuses',
-          description: 'Always refuses.',
-          parameters: z.object({}),
-          outputSchema: z.object({ code: z.string().optional(), message: z.string().optional() }),
-          execute: async () => {
+  for (const path of ['execute throws', 'execute returns', 'beforeValidate throws', 'beforeValidate returns']) {
+    test(`an embedder error ${name} (${path})`, async (t) => {
+      const refusal = { content: [{ type: 'text', text: 'Refused.' }], isError: true, structuredContent: payload };
+      const refuse = path.endsWith('throws')
+        ? async () => {
             throw new UserError('Refused.', payload);
-          },
-        }),
+          }
+        : async () => refusal;
+      const events = [];
+      const result = await assertReadableError(t, {
+        apiUrl: 'http://127.0.0.1:9',
+        session: apiKey,
+        name: 'embed_refuses',
+        args: {},
+        includes: 'Refused.',
+        onToolResult: (event) => events.push(event),
+        registerExtraTools: (registrar) =>
+          registrar.addTool({
+            name: 'embed_refuses',
+            description: 'Always refuses.',
+            parameters: z.object({}),
+            outputSchema: z.object({ code: z.string().optional(), message: z.string().optional() }),
+            ...(path.startsWith('beforeValidate') ? { beforeValidate: refuse } : {}),
+            execute: path.startsWith('execute') ? refuse : async () => 'unreachable',
+          }),
+      });
+      assert.deepEqual(result.structuredContent, delivered);
+      if (path === 'execute throws') {
+        const error = events.find((event) => event.status === 'error')?.error;
+        assert.deepEqual(error?.extras, payload, 'hooks see the full payload');
+      }
     });
-    assert.deepEqual(result.structuredContent, delivered);
-  });
+  }
 }

@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { TERMS_REQUIRED_BODY } from './helpers/exchange-api.mjs';
-import { startStdioWithApi, callExpectingError, toolText } from './helpers/exchange-mcp.mjs';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { createFirecrawlMcpServer } from '../dist/server.js';
+import { startFakeExchangeApi, TERMS_REQUIRED_BODY } from './helpers/exchange-api.mjs';
+import { getFreePort, startStdioWithApi, callExpectingError, toolText } from './helpers/exchange-mcp.mjs';
 
 test('terms are read through scrape and accepted by an organization admin in the dashboard', async (t) => {
   const { api, client } = await startStdioWithApi(t);
@@ -82,4 +85,46 @@ test('disabled provider offers read-only terms recovery without treating other r
       assert.equal(api.requests[1].body.alexandria[0].capability, 'terms/show');
     }
   }
+});
+
+test('the terms refusal keeps its full recovery contract for hooks while the client gets the declared fields', async (t) => {
+  const api = await startFakeExchangeApi();
+  t.after(() => api.close());
+  const events = [];
+  const port = await getFreePort();
+  const instance = createFirecrawlMcpServer({
+    transport: 'httpStream',
+    apiUrl: api.url,
+    unstable_hooks: {
+      authenticate: async () => ({ authType: 'api-key', firecrawlApiKey: 'fc-exchange-test' }),
+      onToolResult: (event) => events.push(event),
+    },
+  });
+  await instance.start({
+    transportType: 'httpStream',
+    httpStream: { port, host: '127.0.0.1', endpoint: '/mcp', stateless: true },
+  });
+  t.after(() => instance.stop());
+  const client = new Client({ name: 'terms-contract-test', version: '1.0.0' });
+  await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`)));
+  t.after(() => client.close());
+  await client.listTools();
+
+  const result = await client.callTool({
+    name: 'firecrawl_scrape',
+    arguments: { alexandria: [{ provider: 'benzinga', capability: 'news/search' }] },
+  });
+  assert.equal(result.isError, true);
+  assert.deepEqual(Object.keys(result.structuredContent).sort(), ['message', 'nextTool', 'requestId']);
+
+  const { requiresAction } = TERMS_REQUIRED_BODY;
+  const { code, status, requestId, next_actions } = events.find((event) => event.status === 'error').error.extras;
+  assert.equal(code, TERMS_REQUIRED_BODY.code);
+  assert.equal(status, 403);
+  assert.equal(requestId, result.structuredContent.requestId);
+  assert.deepEqual(next_actions, [
+    { kind: 'human_action_required', action: 'accept_terms', who: 'organization_admin',
+      url: requiresAction.url, provider: requiresAction.terms, version: requiresAction.version },
+    { kind: 'retry_same_request', tool: 'firecrawl_scrape', requestId, after: 'human_action_required' },
+  ]);
 });
