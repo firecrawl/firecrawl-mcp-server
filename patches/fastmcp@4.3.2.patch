@@ -198,7 +198,7 @@ index 3b695bf493c4f54fd970e145cf14fdd8effc9c6d..1b7ce74a69d3104f23da4e4a5b3218fc
 -            inputSchema: tool.parameters ? _xsschema.strictJsonSchema.call(void 0, await _xsschema.toJsonSchema.call(void 0, tool.parameters)) : {
 +            inputSchema: tool.parameters ? strictToolInputSchema(await _xsschema.toJsonSchema.call(void 0, tool.parameters)) : {
                additionalProperties: false,
-@@ -1026,6 +1033,15 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
+@@ -1026,7 +1033,16 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
            `Unknown tool: ${request.params.name}`
          );
        }
