@@ -243,8 +243,13 @@ test('domain filters read a URL naming only a host as that host', async (t) => {
     for (const domain of [
       'https://docs.firecrawl.dev/guides',
       'https://docs.firecrawl.dev/?q=1',
+      'https://docs.firecrawl.dev/#section',
       'https://docs.firecrawl.dev:8443/',
+      'https://docs.firecrawl.dev:443/',
+      'https://docs.firecrawl.dev/./',
+      'https://docs.firecrawl.dev?',
       'https://user@docs.firecrawl.dev/',
+      'https://@docs.firecrawl.dev/',
       'ftp://docs.firecrawl.dev/',
       'docs.firecrawl.dev/guides',
     ]) {

@@ -24,22 +24,9 @@ export function removeEmptyTopLevel<T extends Record<string, any>>(
 }
 
 // A URL naming only a host (https://docs.example.com/) is read as that host.
-// A path, query, port or credentials would change the filter, so those stay.
+// Anything else in the URL, even a default port or an empty query, is refused.
 function hostOfBareUrl(value: string): string {
-  if (!/^https?:\/\//.test(value)) return value;
-  try {
-    const url = new URL(value);
-    const bare =
-      url.pathname === '/' &&
-      !url.search &&
-      !url.hash &&
-      !url.port &&
-      !url.username &&
-      !url.password;
-    return bare ? url.hostname : value;
-  } catch {
-    return value;
-  }
+  return /^https?:\/\/([a-z0-9.-]+)\/?$/.exec(value)?.[1] ?? value;
 }
 
 const searchDomainSchema = z
