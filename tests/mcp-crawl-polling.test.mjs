@@ -16,7 +16,7 @@ async function startCrawlApi() {
   let statusReads = 0;
   const server = createServer(async (req, res) => {
     for await (const _chunk of req);
-    requests.push(req.url);
+    requests.push({ url: req.url, at: Date.now() });
     const base = `http://127.0.0.1:${server.address().port}`;
     const json = (status, payload, headers = {}) => {
       res.writeHead(status, { 'content-type': 'application/json', ...headers });
@@ -91,5 +91,8 @@ test('crawl waits out a rate-limited status read and pages results only once it 
   const result = JSON.parse(message.result.content[0].text);
   assert.equal(result.status, 'completed');
   assert.deepEqual(result.data.map((doc) => doc.markdown), ['page one', 'page two']);
-  assert.equal(api.requests.filter((url) => url.endsWith('?skip=1')).length, 1);
+  const statusReads = api.requests.filter(({ url }) => url === `/v2/crawl/${CRAWL_ID}`);
+  assert.equal(statusReads.length, 3);
+  assert.ok(statusReads[2].at - statusReads[1].at >= 1000, 'the read after a 429 waits for Retry-After');
+  assert.equal(api.requests.filter(({ url }) => url.endsWith('?skip=1')).length, 1);
 });
