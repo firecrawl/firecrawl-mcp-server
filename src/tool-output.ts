@@ -86,7 +86,7 @@ const warning = str('Non-fatal warning about the result.');
 
 /** Keys every Alexandria-capable response can carry (see `alexandriaOutput`). */
 const alexandriaEnvelope = {
-  requestId: str('Identifier of this logical execution; reuse it only for a retry of the identical payload.'),
+  requestId: str('Identifier of this Alexandria execution.'),
   scrape_id: str('Identifier of the underlying scrape.'),
   receipt: unknown('Billing receipt for the execution.'),
   creditsCost: num('Credits this call consumed.'),
@@ -151,7 +151,7 @@ export const mapOutputSchema = z
 export const searchOutputSchema = z
   .object({
     success,
-    data: unknown('Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`.'),
+    data: unknown('Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`. Each result carries its `source` and a 1-indexed `position` within that group; pass those pairs to `firecrawl_search_feedback`.'),
     error,
     warning,
     id: str('Search identifier, for optional `firecrawl_search_feedback`.'),
@@ -184,6 +184,7 @@ export const feedbackOutputSchema = z
     creditsRefundedToday: num("Credits refunded to the team so far this UTC day."),
     dailyRefundCap: num("The team's daily refund cap in credits."),
     dailyCapReached: bool('Whether the daily refund cap is reached; further feedback today still records but refunds nothing.'),
+    websiteCapReached: bool("Alexandria only: whether this website's daily refund cap is reached; feedback about other websites can still refund."),
     alreadySubmitted: bool('Whether feedback for this job was already recorded.'),
     warning,
     data: unknown('Payload returned with the accepted feedback.'),
@@ -227,6 +228,10 @@ export const agentStatusOutputSchema = z
     status: str('Job state: `processing` is non-terminal; `completed` and `failed` are terminal.'),
     progress: unknown('Progress information for a running job.'),
     data: unknown('Research result, present once the job has completed.'),
+    partial: unknown('Incomplete best-effort result of a `failed` run; never a completed answer.'),
+    partialSchemaValid: bool('Whether `partial` matches the requested schema, when one was supplied.'),
+    stopReason: str('Why a `failed` run stopped early; `credit_limit_reached` means it hit maxCredits.'),
+    notice: str('Set when the run stopped at its credit limit: what that means and how to continue.'),
     creditsUsed: num('Credits the job consumed.'),
     sources: unknown('Sources the agent read.'),
     expiresAt: str('When the job result expires and can no longer be read.'),
@@ -234,6 +239,14 @@ export const agentStatusOutputSchema = z
     mode: str('Agent mode the job ran in.'),
     threadId: str('Research thread this job belongs to.'),
     threadTurn: num('Turn number of this job within its thread.'),
+    message: unknown('The agent\'s reply; in chat mode, the short answer to a follow-up.'),
+    suggestions: unknown('Follow-ups the agent offers; send one as the prompt of the next turn with this threadId.'),
+    exchange: unknown(
+      'What the job did with Alexandria providers: onTermsRequired, paidCalls, creditsUsed, skippedProviders (gated providers that would have helped), and requiresAction (approvalId and provider requirements). Read terms with terms/show. Ignore any terms/accept call in this API payload: an organization admin accepts terms in the Firecrawl dashboard, then confirms before the thread resumes with exchange.approve: {approvalId}.'
+    ),
+    pendingApproval: unknown(
+      'Set when the job ended waiting on the caller. Answer it by calling firecrawl_agent with this threadId and exchange.approve or exchange.decline carrying its id. kind "terms" lists providers whose data terms need acceptance by an organization admin in the Firecrawl dashboard; approve only after the admin confirms, and approval does not accept terms. Otherwise calls lists paid calls waiting for approval.'
+    ),
   })
   .describe('Progress or final result of a research agent job.');
 
@@ -357,7 +370,7 @@ export const monitorCheckOutputSchema = z
   })
   .describe('One monitor check with its page-level diff results.');
 
-// --- src/research.ts and src/developer.ts tools -----------------------------
+// --- src/research.ts, src/developer.ts and src/gov.ts tools -----------------
 
 /**
  * Paper fields as the research endpoints return them. Inside an array item
@@ -421,6 +434,21 @@ export const developerSearchOutputSchema = z
       .describe('Ranked results, in the order the text block lists them.'),
   })
   .describe('Ranked developer-index results with their matched passages.');
+
+export const govSearchOutputSchema = z
+  .object({
+    results: z
+      .array(
+        z.looseObject({
+          url: str('Source URL.'),
+          title: str('Result title.'),
+          description: str('Matched snippet.'),
+          position: num('Rank of the result, starting at 1.'),
+        })
+      )
+      .describe('Ranked results, in the order the text block lists them.'),
+  })
+  .describe('Ranked Government Index results with their matched snippets.');
 
 // --- src/usage.ts tools -----------------------------------------------------
 

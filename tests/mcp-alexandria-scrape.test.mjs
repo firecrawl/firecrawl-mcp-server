@@ -53,7 +53,7 @@ test('firecrawl_scrape with alexandria posts the v2 batch and returns the envelo
   assert.equal(payload.scrape_id, '11111111-1111-4111-8111-111111111111');
   assert.equal(payload.data.creditsCost, 1);
   assert.equal(payload.data.alexandria.length, 2);
-  assert.equal(payload.data.alexandria[0].creditsCost, 1);
+  assert.equal('creditsCost' in payload.data.alexandria[0], false);
   assert.equal(payload.data.alexandria[0].records, 1);
   assert.equal(payload.data.alexandria[1].error.code, 'capability_not_found');
 });
@@ -132,4 +132,19 @@ test('below-budget results, errors, utility calls and URL scrapes bypass retenti
     assert.equal(result.delivery, undefined);
     assert.equal(api.requests.length, 1);
   }
+});
+
+test('alexandria execution ignores URL-mode discovery options instead of rejecting the call', async (t) => {
+  const { api, client } = await startStdioWithApi(t);
+  const result = await client.request('tools/call', {
+    name: 'firecrawl_scrape',
+    arguments: { alexandria: EXCHANGE_CALL, toolDetail: 'full', domainTools: true },
+  });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  const payload = toolText(result);
+  assert.equal(payload.success, true);
+  const sent = api.requests.find((request) => request.url === '/v2/scrape').body;
+  assert.equal('toolDetail' in sent, false);
+  assert.equal('domainTools' in sent, false);
+  assert.deepEqual(Object.keys(sent).sort(), ['alexandria', 'origin']);
 });

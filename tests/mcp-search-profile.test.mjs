@@ -7,6 +7,7 @@ import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
 import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
+import { assertAlexandriaMetadata } from './helpers/alexandria-metadata.mjs';
 
 const { version: serverVersion } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
@@ -23,6 +24,7 @@ const { version: serverVersion } = JSON.parse(
 const SEARCH_TOOLS = [
   'firecrawl_search',
   'firecrawl_developer_search',
+  'firecrawl_gov_search',
   'firecrawl_research_search_papers',
   'firecrawl_research_inspect_paper',
   'firecrawl_research_related_papers',
@@ -184,6 +186,26 @@ async function startFakeBackend(options = {}) {
               url: 'https://github.com/firecrawl/firecrawl/issues/1',
             },
           ],
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'GET' && req.url?.startsWith('/v2/search/gov')) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          success: true,
+          data: {
+            web: [
+              {
+                description: 'The matched snippet.',
+                position: 1,
+                title: '21 CFR Part 101 -- Food Labeling',
+                url: 'https://www.ecfr.gov/current/title-21/part-101',
+              },
+            ],
+          },
         })
       );
       return;
@@ -380,7 +402,7 @@ async function listTools(port, endpoint, headers) {
   return tools.map((tool) => tool.name);
 }
 
-test('search surface lists exactly the eight contracted tools', async (t) => {
+test('search surface lists exactly the nine contracted tools', async (t) => {
   const { searchPort, getStderr } = await startHostedServer(t);
 
   const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, {
@@ -389,9 +411,12 @@ test('search surface lists exactly the eight contracted tools', async (t) => {
   const names = tools.map((tool) => tool.name);
   const search = tools.find((tool) => tool.name === 'firecrawl_search');
   assert.ok(search);
-  assert.equal(search._meta?.['anthropic/alwaysLoad'], undefined);
+  for (const name of ['firecrawl_search', 'firecrawl_scrape']) {
+    const tool = tools.find((item) => item.name === name);
+    assert.equal(tool?._meta?.['anthropic/alwaysLoad'], true, name);
+  }
   assert.equal(
-    tools.find((tool) => tool.name === 'firecrawl_scrape')?._meta?.['anthropic/alwaysLoad'],
+    tools.find((tool) => tool.name === 'firecrawl_find_tools')?._meta?.['anthropic/alwaysLoad'],
     undefined
   );
   assert.match(
@@ -551,8 +576,8 @@ test('search firecrawl_search sends a clean body built from allowed fields only'
   assert.deepEqual(sentBody, {
     query: 'example domain',
     limit: 1,
-    sources: [{ type: 'web' }],
-    domainTools: false,
+    sources: [{ type: 'web' }, { type: 'alexandria' }],
+    domainTools: true,
     toolDetail: 'compact',
     origin: `mcp-ua-firecrawl-search-profile-test@${serverVersion}`,
   });
@@ -650,7 +675,7 @@ test('search categories reject github on both MCP profiles before calling the AP
     const tools = await listToolDefinitions(port, endpoint, { 'x-api-key': 'fc-test' });
     const search = tools.find((tool) => tool.name === 'firecrawl_search');
     assert.deepEqual(search.inputSchema.properties.categories.items.enum, [
-      'research', 'pdf', 'developer',
+      'research', 'pdf', 'developer', 'gov',
     ]);
     const res = await jsonRpc(port, endpoint, {
       id: 40,
@@ -774,6 +799,42 @@ test('search firecrawl_developer_search queries the developer index and returns 
     .searchParams;
   assert.equal(skillsQuery.get('skills'), 'only');
   assert.equal(skillsQuery.get('query'), 'retry loop backoff');
+});
+
+test('search firecrawl_gov_search queries the Government Index', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+  });
+
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 44,
+    method: 'tools/call',
+    params: {
+      arguments: { query: 'food labeling requirements', k: 1 },
+      name: 'firecrawl_gov_search',
+    },
+    headers: { 'x-api-key': 'fc-search-key' },
+  });
+  assert.equal(res.status, 200);
+  const message = parseSseJson(await res.text());
+  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+
+  const calls = backend.requests.filter((request) =>
+    request.url?.startsWith('/v2/search/gov')
+  );
+  assert.equal(calls.length, 1);
+  const query = new URL(calls[0].url, 'http://localhost').searchParams;
+  assert.equal(query.get('query'), 'food labeling requirements');
+  assert.equal(query.get('k'), '1');
+
+  assert.equal(
+    message.result.content[0].text,
+    '## 1. 21 CFR Part 101 -- Food Labeling\nhttps://www.ecfr.gov/current/title-21/part-101\nThe matched snippet.'
+  );
+  assert.equal(message.result.structuredContent.results.length, 1);
+  assert.equal(backend.requests.some((request) => request.url === '/v2/search'), false);
 });
 
 test('search surface requires authentication for tools/list', async (t) => {
@@ -940,6 +1001,7 @@ test('full surface still exposes its complete tool set alongside the search surf
   assert.ok(names.includes('firecrawl_scrape'));
   assert.ok(names.includes('firecrawl_search'));
   assert.ok(names.includes('firecrawl_developer_search'));
+  assert.ok(names.includes('firecrawl_gov_search'));
   assert.ok(names.includes('firecrawl_parse'));
   assert.ok(names.length > SEARCH_TOOLS.length);
   assert.equal(
@@ -956,7 +1018,39 @@ test('full surface still exposes its complete tool set alongside the search surf
   assert.equal(prm.status, 404);
 });
 
-test('primary search profile is OAuth-only, eight-tool frozen, and ready without keyless configuration', async (t) => {
+test('full surface drops removed search task context', async (t) => {
+  const { backendRequests, fullPort } = await startHostedServer(t);
+  const headers = { 'x-api-key': 'fc-test' };
+  const call = async (arguments_) => {
+    const response = await jsonRpc(fullPort, '/v2/mcp', {
+      id: 15,
+      method: 'tools/call',
+      params: { name: 'firecrawl_search', arguments: arguments_ },
+      headers,
+    });
+    assert.equal(response.status, 200);
+    const message = parseSseJson(await response.text());
+    assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+  };
+
+  await call({ query: 'React memo docs', sources: ['web'] });
+  await call({
+    query: 'React memo docs',
+    sources: ['web'],
+    objective: 'Find official rerender guidance',
+    clientModel: 'claude-sonnet-4-6',
+  });
+
+  const searches = backendRequests.filter((request) => request.url === '/v2/search');
+  assert.equal(searches.length, 2);
+  for (const field of ['objective', 'clientModel']) {
+    assert.equal(field in searches[0].body, false);
+  }
+  assert.equal('objective' in searches[1].body, false);
+  assert.equal('clientModel' in searches[1].body, false);
+});
+
+test('primary search profile is OAuth-only, nine-tool frozen, and ready without keyless configuration', async (t) => {
   const { backendRequests, port, issuerUrl } = await startPrimarySearchServer(t);
 
   const ready = await fetch(`http://127.0.0.1:${port}/ready`);
@@ -1013,19 +1107,6 @@ test('primary search profile is OAuth-only, eight-tool frozen, and ready without
   assert.deepEqual([...names].sort(), [...SEARCH_TOOLS].sort());
 });
 
-test('primary search readiness requires the exact canonical resource origin', async (t) => {
-  const { port } = await startPrimarySearchServer(t, {
-    FIRECRAWL_MCP_SEARCH_RESOURCE_URL: `https://example.invalid${SEARCH_ENDPOINT}`,
-  });
-
-  const ready = await fetch(`http://127.0.0.1:${port}/ready`);
-  assert.equal(ready.status, 503);
-  assert.deepEqual(await ready.json(), {
-    ok: false,
-    missing: ['FIRECRAWL_MCP_SEARCH_RESOURCE_URL (endpoint mismatch)'],
-  });
-});
-
 test('primary search profile uses the strict marketplace search tool, not the full search variant', async (t) => {
   const { port } = await startPrimarySearchServer(t);
   const headers = { authorization: 'Bearer fco_primary_strict_search' };
@@ -1059,12 +1140,64 @@ test('primary search profile uses the strict marketplace search tool, not the fu
   );
 });
 
+test('primary search profile ignores legacy client model without content fetching', async (t) => {
+  const { port, backendRequests } = await startPrimarySearchServer(t);
+  const headers = { authorization: 'Bearer fco_primary_task_context' };
+  const response = await jsonRpc(port, SEARCH_ENDPOINT, {
+    id: 14,
+    method: 'tools/call',
+    params: {
+      arguments: {
+        query: 'React memo docs',
+        clientModel: 'claude-sonnet-4-6',
+        sources: ['web'],
+      },
+      name: 'firecrawl_search',
+    },
+    headers,
+  });
+  assert.equal(response.status, 200);
+  const message = parseSseJson(await response.text());
+  assert.equal(message.result?.isError, undefined, JSON.stringify(message));
+  const search = backendRequests.find((request) => request.url === '/v2/search');
+  assert.ok(search);
+  assert.equal('objective' in search.body, false);
+  assert.equal('clientModel' in search.body, false);
+  assert.equal(search.body.scrapeOptions, undefined);
+});
+
+test('primary search profile ignores the removed search task context', async (t) => {
+  const { port, backendRequests } = await startPrimarySearchServer(t);
+  const response = await jsonRpc(port, SEARCH_ENDPOINT, {
+    id: 14,
+    method: 'tools/call',
+    params: {
+      name: 'firecrawl_search',
+      arguments: {
+        query: 'React memo docs',
+        objective: 'Find official rerender guidance',
+        clientModel: 'claude-sonnet-4-6',
+      },
+    },
+    headers: { authorization: 'Bearer fco_primary_task_context' },
+  });
+  assert.equal(response.status, 200);
+  const message = parseSseJson(await response.text());
+  assert.equal(message.error, undefined, JSON.stringify(message));
+  assert.equal(message.result?.isError, undefined, JSON.stringify(message));
+  const search = backendRequests.find((request) => request.url === '/v2/search');
+  assert.ok(search);
+  assert.equal('objective' in search.body, false);
+  assert.equal('clientModel' in search.body, false);
+});
+
 test('primary search profile agent language satisfies metadata policy gates', async (t) => {
   const { port } = await startPrimarySearchServer(t);
   const headers = { authorization: 'Bearer fco_primary_search_metadata' };
   const initialize = await initializeProfile(port, SEARCH_ENDPOINT, headers);
   const tools = await listToolDefinitions(port, SEARCH_ENDPOINT, headers);
 
+  assertAlexandriaMetadata(tools, initialize.instructions, { hosted: true });
   assertAgentMetadataPolicy(
     [initialize.instructions, ...tools.map((tool) => tool.description ?? '')],
     assert
@@ -1112,6 +1245,7 @@ test('account (mcp-oauth) full-surface instructions satisfy the same metadata po
     assert.equal(tool?._meta?.['anthropic/alwaysLoad'], true, name);
   }
 
+  assertAlexandriaMetadata(tools, initialize.instructions, { hosted: true });
   assertAgentMetadataPolicy(
     [initialize.instructions, ...tools.map((tool) => tool.description ?? '')],
     assert
@@ -1141,7 +1275,7 @@ test('primary search profile fails closed unless the canonical OAuth-only flag i
   assert.match(stderr, /FIRECRAWL_MCP_SEARCH_OAUTH_ONLY=true/);
 });
 
-test('primary search profile rejects legacy /v2/mcp audience and requires the delegated signing secret', async (t) => {
+test('primary search profile rejects legacy /v2/mcp audience', async (t) => {
   const legacyBackend = await startFakeBackend({
     introspectionAud: 'https://mcp.firecrawl.dev/v2/mcp',
   });
@@ -1157,30 +1291,6 @@ test('primary search profile rejects legacy /v2/mcp audience and requires the de
     headers: { authorization: 'Bearer fco_legacy_audience' },
   });
   assert.equal(wrongAudience.status, 401);
-
-  // A separate process proves readiness is profile-specific: search needs the
-  // fcmcp_ signer but intentionally does not require KEYLESS_PROXY_SECRET.
-  const unavailablePort = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    HTTP_STREAMABLE_SERVER: 'true',
-    FASTMCP_ENDPOINT: SEARCH_ENDPOINT,
-    FIRECRAWL_API_URL: legacyBackend.url,
-    FIRECRAWL_MCP_SEARCH_RESOURCE_URL: SEARCH_RESOURCE,
-    FIRECRAWL_MCP_SEARCH_OAUTH_ONLY: 'true',
-    FIRECRAWL_OAUTH_ISSUER: legacyBackend.url,
-    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
-    MCP_DELEGATED_CREDENTIAL_SECRET: '',
-    PORT: String(unavailablePort),
-  });
-  t.after(() => stopChild(child));
-  await waitForHealth(unavailablePort, child);
-  const ready = await fetch(`http://127.0.0.1:${unavailablePort}/ready`);
-  assert.equal(ready.status, 503);
-  assert.deepEqual(await ready.json(), {
-    missing: ['MCP_DELEGATED_CREDENTIAL_SECRET'],
-    ok: false,
-  });
 });
 
 test('companion stays API-key compatible by default and only becomes OAuth-only behind its explicit flag', async (t) => {
@@ -1303,9 +1413,10 @@ test('ordinary search profile enables semantic and domain tools by default', asy
 
 test('search surface registers the two Alexandria tools with surface-scoped copy', async (t) => {
   const { searchPort } = await startHostedServer(t);
-  const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, {
-    'x-api-key': 'fc-test',
-  });
+  const headers = { 'x-api-key': 'fc-test' };
+  const initialize = await initializeProfile(searchPort, SEARCH_ENDPOINT, headers);
+  const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, headers);
+  assertAlexandriaMetadata(tools, initialize.instructions, { hosted: true });
   // Claude Code truncates tool descriptions at CLAUDE_CODE_TEXT_CAP characters.
   for (const tool of tools) {
     assert.ok((tool.description ?? '').length <= CLAUDE_CODE_TEXT_CAP, `${tool.name} description is ${(tool.description ?? '').length} chars`);

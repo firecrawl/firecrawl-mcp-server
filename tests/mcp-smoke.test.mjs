@@ -55,22 +55,6 @@ function parseSseJson(body) {
   return JSON.parse(dataLine.slice('data: '.length));
 }
 
-function assertServerGeneratedRequestId(payload, untrustedValues = []) {
-  assert.match(
-    payload.request_id,
-    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-  );
-  for (const value of untrustedValues) {
-    assert.notEqual(payload.request_id, value);
-  }
-  return payload.request_id;
-}
-
-const KEYLESS_ACCOUNT_FIX =
-  'Fix: Create an API key at https://www.firecrawl.dev/app/api-keys, then:\n- Set the header: Authorization: Bearer YOUR_API_KEY on https://mcp.firecrawl.dev/v2/mcp\nThen start a new session.';
-const KEYLESS_QUOTA_MESSAGE = `You've hit Firecrawl's free MCP rate limit. To continue using without limits, create a Firecrawl API key.\n\n${KEYLESS_ACCOUNT_FIX}`;
-const KEYLESS_TOOL_MESSAGE = `This tool needs a Firecrawl account.\n\n${KEYLESS_ACCOUNT_FIX}`;
-const KEYLESS_ACCESS_MESSAGE = `Anonymous keyless access is unavailable for this request.\n\n${KEYLESS_ACCOUNT_FIX}`;
 const INVALID_API_KEY_MESSAGE =
   'The Firecrawl API key is invalid or revoked.\nFix: Replace the key on the existing Firecrawl MCP server, then start a new session. Get an API key at https://www.firecrawl.dev/app/api-keys';
 const INVALID_OAUTH_MESSAGE =
@@ -104,39 +88,6 @@ async function waitForCredentialValidationLog(readStderr) {
     await delay(25);
   }
   return undefined;
-}
-
-function assertKeylessAccountRecovery(
-  result,
-  { code, message, retryAfterSeconds, untrustedRequestIds = [] }
-) {
-  assert.equal(result.isError, true);
-  assert.equal(result.content[0].type, 'text');
-  assert.equal(result.content[0].text, message);
-  assert.equal(result.content[0].text, result.structuredContent.message);
-  assert.equal(result.structuredContent.code, code);
-  assert.equal(result.structuredContent.auth_mode, 'keyless');
-  assert.equal(result.structuredContent.message, message);
-  assert.equal(
-    result.structuredContent.docs_url,
-    'https://docs.firecrawl.dev/mcp-server'
-  );
-  assert.equal(result.structuredContent.available_tools, undefined);
-  assert.equal(result.structuredContent.next_actions, undefined);
-  assert.doesNotMatch(result.content[0].text, /ask the human/i);
-  assert.doesNotMatch(result.content[0].text, /never ask/i);
-  assert.doesNotMatch(result.content[0].text, /outside this chat/i);
-  assert.doesNotMatch(result.content[0].text, /must complete the connection/i);
-  assert.doesNotMatch(result.content[0].text, /try again in about/);
-  assert.doesNotMatch(result.content[0].text, /remain available/);
-  assert.doesNotMatch(result.content[0].text, /continue with those/);
-  assert.doesNotMatch(result.content[0].text, /\bOAuth\b/i);
-  assert.doesNotMatch(result.content[0].text, /mcp-oauth/i);
-  assert.equal(result.structuredContent.retry_after_seconds, retryAfterSeconds);
-  assertServerGeneratedRequestId(
-    result.structuredContent,
-    untrustedRequestIds
-  );
 }
 
 function spawnServer(env) {
@@ -239,6 +190,23 @@ async function startFakeFirecrawlApi({ searchResponse } = {}) {
       return;
     }
 
+    if (
+      req.method === 'POST' &&
+      req.url === '/v2/agent' &&
+      parsedBody?.threadId === '00000000-0000-4000-8000-000000000036'
+    ) {
+      res.writeHead(409, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          success: false,
+          code: 'thread_busy',
+          error: 'This thread already has a run in progress',
+          runId: '00000000-0000-4000-8000-000000000037',
+        })
+      );
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/v2/agent') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
@@ -265,6 +233,159 @@ async function startFakeFirecrawlApi({ searchResponse } = {}) {
           success: true,
           threadId: '00000000-0000-4000-8000-000000000031',
           threadTurn: 1,
+        })
+      );
+      return;
+    }
+
+    if (req.method === 'GET' && req.url === '/v2/agent/00000000-0000-4000-8000-000000000032') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: null,
+          expiresAt: '2026-10-01T00:00:00.000Z',
+          message: 'Apollo could add verified work emails.',
+          mode: 'chat',
+          model: 'spark-2',
+          status: 'completed',
+          success: true,
+          exchange: {
+            enabled: true,
+            onTermsRequired: 'ask',
+            paidCalls: 0,
+            creditsUsed: null,
+            skippedProviders: [
+              {
+                provider: 'apollo',
+                name: 'Apollo',
+                capability: 'people/search',
+                reason: 'terms_required',
+                version: 'F-1.0.0',
+                termsUrl: 'https://www.firecrawl.dev/app/alexandria/apollo',
+              },
+            ],
+            requiresAction: {
+              type: 'accept_terms',
+              approvalId: '00000000-0000-4000-8000-000000000033',
+              providers: [
+                {
+                  provider: 'apollo',
+                  name: 'Apollo',
+                  version: 'F-1.0.0',
+                  digest: null,
+                  url: 'https://www.firecrawl.dev/app/alexandria/apollo',
+                  show: { provider: 'firecrawl', capability: 'terms/show', options: { provider: 'apollo' } },
+                  accept: {
+                    provider: 'firecrawl',
+                    capability: 'terms/accept',
+                    options: { provider: 'apollo', version: 'F-1.0.0', digest: null, confirmed: true },
+                  },
+                },
+              ],
+            },
+          },
+          pendingApproval: {
+            id: '00000000-0000-4000-8000-000000000033',
+            kind: 'terms',
+            reason: 'Apollo could add verified work emails.',
+            calls: [],
+            terms: [{ provider: 'apollo', name: 'Apollo', version: 'F-1.0.0', digest: null, url: 'https://www.firecrawl.dev/app/alexandria/apollo' }],
+            resolution: null,
+          },
+        })
+      );
+      return;
+    }
+
+    // Credit-limit stops: with a partial, without one, and an ordinary failure.
+    const failedAgentRuns = {
+      '/v2/agent/00000000-0000-4000-8000-000000000040': {
+        creditsUsed: 100,
+        error: 'Agent reached max credits',
+        expiresAt: '2026-10-01T00:00:00.000Z',
+        message: 'Only Acme was found.',
+        mode: 'extract',
+        model: 'spark-2',
+        partial: { companies: [{ name: 'Acme' }] },
+        partialSchemaValid: false,
+        status: 'failed',
+        stopReason: 'credit_limit_reached',
+        success: true,
+        threadId: '00000000-0000-4000-8000-000000000041',
+        threadTurn: 1,
+      },
+      '/v2/agent/00000000-0000-4000-8000-000000000042': {
+        creditsUsed: 50,
+        error: 'Agent reached max credits',
+        expiresAt: '2026-10-01T00:00:00.000Z',
+        status: 'failed',
+        stopReason: 'credit_limit_reached',
+        success: true,
+      },
+      '/v2/agent/00000000-0000-4000-8000-000000000044': {
+        creditsUsed: 100,
+        error: 'Agent reached max credits',
+        expiresAt: '2026-10-01T00:00:00.000Z',
+        partial: { companies: [{ name: 'Acme' }] },
+        partialSchemaValid: true,
+        status: 'failed',
+        stopReason: 'credit_limit_reached',
+        success: true,
+      },
+      '/v2/agent/00000000-0000-4000-8000-000000000045': {
+        creditsUsed: 100,
+        error: 'Agent reached max credits',
+        expiresAt: '2026-10-01T00:00:00.000Z',
+        partial: { companies: [{ name: 'Acme' }] },
+        status: 'failed',
+        stopReason: 'credit_limit_reached',
+        success: true,
+      },
+      '/v2/agent/00000000-0000-4000-8000-000000000043': {
+        error: 'Agent failed',
+        expiresAt: '2026-10-01T00:00:00.000Z',
+        status: 'failed',
+        success: true,
+        threadId: '00000000-0000-4000-8000-000000000041',
+        threadTurn: 1,
+      },
+    };
+    if (req.method === 'GET' && failedAgentRuns[req.url]) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(failedAgentRuns[req.url]));
+      return;
+    }
+
+    if (req.method === 'GET' && req.url === '/v2/agent/00000000-0000-4000-8000-000000000034') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: null,
+          expiresAt: '2026-10-01T00:00:00.000Z',
+          message: 'Kept the 2 founders.',
+          mode: 'chat',
+          model: 'spark-2',
+          status: 'completed',
+          success: true,
+          threadId: '00000000-0000-4000-8000-000000000031',
+          threadTurn: 2,
+          suggestions: [{ label: 'Only founders', prompt: 'Only keep the founders' }],
+          exchange: { enabled: true, requireApproval: true, paidCalls: 0, creditsUsed: null },
+          pendingApproval: {
+            id: '00000000-0000-4000-8000-000000000035',
+            kind: 'calls',
+            reason: 'Apollo can return verified work emails.',
+            calls: [
+              {
+                id: 'call-1',
+                provider: 'apollo',
+                capability: 'people/search',
+                input: { domain: 'exa.ai' },
+                creditsEstimate: 3,
+              },
+            ],
+            resolution: null,
+          },
         })
       );
       return;
@@ -479,15 +600,13 @@ async function startFakeDeveloperApi() {
 }
 
 // A single fake origin that stands in for BOTH the Firecrawl OAuth issuer
-// (token introspection + keyless eligibility) AND the Firecrawl API. Every
+// (token introspection) AND the Firecrawl API. Every
 // request is recorded so tests can assert what the MCP server forwarded.
 async function startFakeFirecrawlBackend(options = {}) {
   const {
     apiKeyFromIntrospection = 'fc-from-introspection',
     introspectionHandler,
     introspectionMetadata = {},
-    keylessEligible = false,
-    keylessEligibilityResponse,
     searchResponse,
   } = options;
   const requests = [];
@@ -535,17 +654,6 @@ async function startFakeFirecrawlBackend(options = {}) {
             : { active: false })
         )
       );
-      return;
-    }
-
-    // Keyless free-tier eligibility (secret-gated, read-only).
-    if (req.method === 'GET' && req.url === '/v2/keyless/eligibility') {
-      const response = keylessEligibilityResponse ?? {
-        status: 200,
-        body: { eligible: keylessEligible },
-      };
-      res.writeHead(response.status, { 'content-type': 'application/json' });
-      res.end(JSON.stringify(response.body));
       return;
     }
 
@@ -704,7 +812,7 @@ async function httpToolCall(port, { endpoint = '/v2/mcp', id, headers, params })
   });
 }
 
-test('HTTP cloud keyless transport preserves app challenge without advertising OAuth', async (t) => {
+test('HTTP cloud transport serves keyed sessions without advertising OAuth', async (t) => {
   const backend = await startFakeFirecrawlBackend();
   t.after(() => backend.close());
   const port = await getFreePort();
@@ -715,7 +823,6 @@ test('HTTP cloud keyless transport preserves app challenge without advertising O
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
     FIRECRAWL_OAUTH_ISSUER: backend.url,
     FIRECRAWL_API_URL: backend.url,
-    OPENAI_APPS_CHALLENGE_TOKEN: 'challenge-123',
     PORT: String(port),
   });
   let stderr = '';
@@ -727,74 +834,25 @@ test('HTTP cloud keyless transport preserves app challenge without advertising O
   const health = await waitForHealth(port, child);
   assert.equal(await health.text(), 'ok');
 
-  const challenge = await fetch(
-    `http://127.0.0.1:${port}/.well-known/openai-apps-challenge`
-  );
-  assert.equal(challenge.status, 200);
-  assert.equal(await challenge.text(), 'challenge-123');
-
   const prm = await fetch(
     `http://127.0.0.1:${port}/.well-known/oauth-protected-resource`
   );
   assert.equal(prm.status, 404);
 
-  const unauthenticated = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
-    body: JSON.stringify({
-      id: 1,
-      jsonrpc: '2.0',
-      method: 'tools/list',
-      params: {},
-    }),
+  // Hosted mode requires a credential: no keyless admission.
+  const anonymous = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
+    body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'tools/list', params: {} }),
     headers: {
       accept: 'application/json, text/event-stream',
       'content-type': 'application/json',
     },
     method: 'POST',
   });
-  assert.equal(unauthenticated.status, 200);
-  const anonymousTools = parseSseJson(await unauthenticated.text()).result.tools;
-  assert.deepEqual(
-    anonymousTools.map((tool) => tool.name).sort(),
-    ['firecrawl_parse', 'firecrawl_scrape', 'firecrawl_search']
+  assert.equal(anonymous.status, 401);
+  assert.doesNotMatch(
+    anonymous.headers.get('www-authenticate') ?? '',
+    /resource_metadata/
   );
-  const anonymousParse = anonymousTools.find(
-    (tool) => tool.name === 'firecrawl_parse'
-  );
-  assert.ok(anonymousParse);
-  assert.match(anonymousParse.description, /redactPII/i);
-  assert.match(anonymousParse.description, /omit it for anonymous keyless/i);
-  assert.doesNotMatch(anonymousParse.description, /"zeroDataRetention"\s*:\s*true/);
-  const anonymousSearch = anonymousTools.find(
-    (tool) => tool.name === 'firecrawl_search'
-  );
-  assert.ok(anonymousSearch);
-  for (const name of ['firecrawl_search', 'firecrawl_scrape']) {
-    const tool = anonymousTools.find((item) => item.name === name);
-    assert.equal(tool?._meta?.['anthropic/alwaysLoad'], true, name);
-  }
-  assert.equal(anonymousParse._meta?.['anthropic/alwaysLoad'], undefined);
-  // Keyless sessions list only search, scrape and parse, and FastMCP serves one
-  // description per tool. Every sentence that points at a tool or mode keyless
-  // sessions do not have must say it applies to authenticated sessions.
-  const listedNames = new Set(anonymousTools.map((tool) => tool.name));
-  for (const tool of anonymousTools) {
-    const sentences = tool.description.replace(/\s+/g, ' ').split(/(?<=[.!?])\s+(?=[A-Z`])/);
-    for (const sentence of sentences) {
-      const unlisted = [...sentence.matchAll(/\bfirecrawl_[a-z_]+/g)].map((m) => m[0]).filter((name) => !listedNames.has(name) && !name.startsWith('firecrawl_research_'));
-      if (unlisted.length || /Alexandria mode/.test(sentence)) {
-        assert.match(sentence, /authenticated/i, `${tool.name}: keyless sessions see an unscoped reference to ${unlisted.join(', ') || 'Alexandria mode'}: ${sentence}`);
-      }
-    }
-  }
-  assert.match(
-    anonymousSearch.description,
-    /categories: \["developer"\].*data\.web.*category.*developer/is
-  );
-  assert.match(
-    anonymousSearch.description,
-    /categories: \["research"\].*research-affiliated websites.*`firecrawl_research_\*` tools are a separate surface.*PubMed, bioRxiv, medRxiv.*arXiv/is
-  );
-  assert.doesNotMatch(anonymousSearch.description, /data\.developer/i);
 
   const initialize = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({
@@ -958,6 +1016,73 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
+test('HTTP cloud transport stamps the declared origin, then the referrer, over a runtime User-Agent', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: fakeApi.url,
+    FIRECRAWL_OAUTH_ISSUER: fakeApi.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  await waitForHealth(port, child);
+
+  const searchOrigin = async (headers) => {
+    const before = fakeApi.requests.length;
+    const response = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
+      body: JSON.stringify({
+        id: 5,
+        jsonrpc: '2.0',
+        method: 'tools/call',
+        params: {
+          arguments: { limit: 1, query: 'example domain' },
+          name: 'firecrawl_search',
+        },
+      }),
+      headers: {
+        accept: 'application/json, text/event-stream',
+        'content-type': 'application/json',
+        'x-api-key': 'fc-http-test',
+        ...headers,
+      },
+      method: 'POST',
+    });
+    assert.equal(response.status, 200);
+    await response.text();
+    return fakeApi.requests
+      .slice(before)
+      .find((request) => request.url === '/v2/search').body.origin;
+  };
+
+  assert.equal(
+    await searchOrigin({ 'user-agent': 'node', 'x-firecrawl-origin': 'Example Plugin' }),
+    `mcp-example-plugin@${serverVersion}`
+  );
+  assert.equal(
+    await searchOrigin({ 'user-agent': 'node', origin: 'https://www.app.example.com' }),
+    `mcp-ref-app-example-com@${serverVersion}`
+  );
+  assert.equal(
+    await searchOrigin({ 'user-agent': 'node', origin: 'null', referer: 'https://app.example.com/x' }),
+    `mcp-ref-app-example-com@${serverVersion}`
+  );
+  assert.equal(
+    await searchOrigin({ 'user-agent': 'Claude-User/1.0', referer: 'https://app.example.com/x' }),
+    `mcp-ua-claude-user@${serverVersion}`
+  );
+  assert.equal(
+    await searchOrigin({ 'user-agent': 'undici' }),
+    `mcp-ua-undici@${serverVersion}`
+  );
+});
+
+
 test('HTTP cloud transport rejects invalid search limits before calling Firecrawl', async (t) => {
   const fakeApi = await startFakeFirecrawlApi();
   t.after(() => fakeApi.close());
@@ -1093,6 +1218,11 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.ok(toolNames.includes('firecrawl_credit_usage'));
   assert.equal(toolNames.includes('firecrawl_credit_usage_historical'), false);
   assert.equal(toolNames.includes('firecrawl_extract'), false);
+  // Codex tool search indexes the top-level Tool.title, not annotations.title.
+  for (const tool of tools.tools) {
+    assert.ok(tool.annotations?.title, `${tool.name} needs annotations.title`);
+    assert.equal(tool.title, tool.annotations.title, `${tool.name} top-level title`);
+  }
 
   const deprecatedExtract = await client.request('tools/call', {
     // beforeValidate must intercept before the legacy required `urls` schema.
@@ -1131,31 +1261,23 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   // A stdio session with an API key gets the Alexandria-aware instructions,
   // not the keyless wording.
   assert.match(init.instructions, /firecrawl_scrape retrieves one supplied page/i);
-  // Claude Code truncates server instructions at CLAUDE_CODE_TEXT_CAP characters; the
-  // Alexandria routing paragraph has to land inside that window. Trade-off: the
-  // developer/research routing and the requestId retry rule now sit after it, past the
-  // cap. Both are also carried where Claude Code does not truncate them: the
-  // firecrawl_search description (developer and research categories, asserted below)
-  // and the requestId parameter description (retry rule, asserted in the budget test).
+  // Keep Alexandria routing within the truncated server instructions. The search
+  // description also carries developer and research routing (asserted below).
   const instructionsHead = init.instructions.slice(0, CLAUDE_CODE_TEXT_CAP);
   assert.match(instructionsHead, /Alexandria is Firecrawl's catalogue of data providers/);
-  assert.match(instructionsHead, /Before scraping more than one page for the same fields/);
-  assert.match(instructionsHead, /Passing sources without alexandria in it/);
+  assert.match(instructionsHead, /For the same fields across multiple pages/);
+  assert.match(instructionsHead, /Authenticated searches always add alexandria to the sources/);
   assert.match(
     init.instructions,
     /Alexandria is Firecrawl's catalogue of data providers and workflows.*firecrawl_scrape with alexandria.*executes up to ten capabilities/is
   );
   assert.match(
     init.instructions,
-    /Passing sources without alexandria in it \(for example \["web"\] or \["news"\]\) excludes Alexandria provider matches; omit sources unless you specifically need web-only or news-only results, or include "alexandria" alongside them/
+    /Authenticated searches always add alexandria to the sources, so sources: \["web"\] also returns providers; domainTools: false turns off website-matched tools only/
   );
   assert.match(
     init.instructions,
-    /Before scraping more than one page for the same fields, spend one free firecrawl_find_tools call/
-  );
-  assert.match(
-    init.instructions,
-    /THIRD_PARTY_DATA_TERMS_REQUIRED.*terms\/show.*terms\/accept.*acceptance requires explicit user authorization/is
+    /For the same fields across multiple pages, firecrawl_find_tools offers free provider discovery/
   );
   assert.match(
     byName.get('firecrawl_scrape').description,
@@ -1766,6 +1888,7 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
   const sessionFeedback = {
     endpoint: 'alexandria', rating: 'partial',
     requestedWebsite: { url: 'https://example.com', requestedFunctionality: 'Download attachments' },
+    objective: 'Compare contract requirements across agencies',
     rationale: 'Only summaries available',
     capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'new_capability_request', why: 'Missing attachments', requestedFunctionality: 'Return document links' }],
   };
@@ -1782,9 +1905,15 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
   assert.notEqual(missingCapabilityResult.isError, true);
   const sentMissingCapability = fakeApi.requests.filter(request => request.url === '/v2/feedback').at(-1).body;
   assert.deepEqual(sentMissingCapability, { ...missingCapabilityFeedback, origin: sentMissingCapability.origin });
+  const { objective: _objective, ...withoutObjective } = sessionFeedback;
+  const withoutObjectiveResult = await client.request('tools/call', { name: 'firecrawl_feedback', arguments: withoutObjective });
+  assert.notEqual(withoutObjectiveResult.isError, true);
+  const sentWithoutObjective = fakeApi.requests.filter(request => request.url === '/v2/feedback').at(-1).body;
+  assert.deepEqual(sentWithoutObjective, { ...withoutObjective, origin: sentWithoutObjective.origin });
   for (const invalid of [
     { endpoint: 'scrape', rating: 'good' },
     { endpoint: 'alexandria', rating: 'good' },
+    { ...sessionFeedback, objective: ' ' },
     { ...sessionFeedback, jobId: '00000000-0000-4000-8000-000000000010' },
     { ...sessionFeedback, capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'new_capability_request', why: 'Missing attachments' }] },
     { ...sessionFeedback, capabilityFeedback: [{ name: 'attachments', provider: 'example', issue: 'unknown_issue', why: 'Not a supported issue code' }] },
@@ -1797,6 +1926,7 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
     for (const [field, value] of Object.entries({
       requestedWebsite: sessionFeedback.requestedWebsite,
       rationale: sessionFeedback.rationale,
+      objective: sessionFeedback.objective,
       providerFeedback: [],
       capabilityFeedback: sessionFeedback.capabilityFeedback,
     })) {
@@ -1866,6 +1996,135 @@ test('HTTP cloud transport swaps an fco_ OAuth token for its introspected API ke
 
   assert.equal(searchCalls.length, 1);
   assert.equal(searchCalls[0].headers.authorization, 'Bearer fc-introspected-key');
+  assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+async function startIntrospectCacheServer(t, env = {}) {
+  const backend = await startFakeFirecrawlBackend({
+    apiKeyFromIntrospection: 'fc-introspected-key',
+  });
+  t.after(() => backend.close());
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: backend.url,
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+    ...env,
+  });
+  t.after(() => stopChild(child));
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  await waitForHealth(port, child);
+  const search = (id) =>
+    httpToolCall(port, {
+      id,
+      headers: { authorization: 'Bearer fco_live_access_token' },
+      params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
+    });
+  const introspectCount = () =>
+    backend.requests.filter((r) => r.url === '/api/oauth/introspect').length;
+  return { introspectCount, search, stderr: () => stderr };
+}
+
+test('HTTP cloud transport reuses a recent introspection answer across requests', async (t) => {
+  const { introspectCount, search, stderr } = await startIntrospectCacheServer(t);
+
+  for (const id of [20, 21, 22]) {
+    const response = await search(id);
+    assert.equal(response.status, 200);
+    assert.notEqual(parseSseJson(await response.text()).result.isError, true);
+  }
+  assert.equal(introspectCount(), 1, 'repeat requests with one token must hit the cache');
+  assert.equal(stderr().includes('TypeError'), false, stderr());
+});
+
+test('FIRECRAWL_OAUTH_INTROSPECT_CACHE_TTL_MS=0 introspects every request', async (t) => {
+  const { introspectCount, search, stderr } = await startIntrospectCacheServer(t, {
+    FIRECRAWL_OAUTH_INTROSPECT_CACHE_TTL_MS: '0',
+  });
+
+  for (const id of [23, 24]) {
+    assert.equal((await search(id)).status, 200);
+  }
+  assert.equal(introspectCount(), 2);
+  assert.equal(stderr().includes('TypeError'), false, stderr());
+});
+
+test('an edge-mitigated introspection is logged, not cached, and retried next request', async (t) => {
+  const backend = await startFakeFirecrawlBackend();
+  t.after(() => backend.close());
+
+  let blocked = true;
+  let introspections = 0;
+  const issuerPort = await getFreePort();
+  const issuer = createServer(async (req, res) => {
+    req.setEncoding('utf8');
+    for await (const chunk of req) void chunk;
+    if (req.method === 'POST' && req.url === '/api/oauth/introspect') {
+      introspections += 1;
+      if (blocked) {
+        res.writeHead(403, { 'content-type': 'text/plain', 'x-vercel-mitigated': 'deny' });
+        res.end('Forbidden');
+        return;
+      }
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          active: true,
+          api_key: 'fc-introspected-key',
+          aud: 'https://mcp.firecrawl.dev/v2/mcp',
+          credential_purpose: 'general',
+          scope: 'firecrawl:global',
+        })
+      );
+      return;
+    }
+    res.writeHead(404, { 'content-type': 'application/json' });
+    res.end('{}');
+  });
+  await new Promise((resolve) => issuer.listen(issuerPort, '127.0.0.1', resolve));
+  t.after(() => issuer.close());
+
+  const port = await getFreePort();
+  const child = spawnServer({
+    CLOUD_SERVICE: 'true',
+    FASTMCP_ENDPOINT: '/v2/mcp',
+    FIRECRAWL_API_URL: backend.url,
+    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'introspect-secret',
+    FIRECRAWL_OAUTH_ISSUER: `http://127.0.0.1:${issuerPort}`,
+    HTTP_STREAMABLE_SERVER: 'true',
+    PORT: String(port),
+  });
+  t.after(() => stopChild(child));
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  await waitForHealth(port, child);
+
+  const search = (id) =>
+    httpToolCall(port, {
+      id,
+      headers: { authorization: 'Bearer fco_live_access_token' },
+      params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
+    });
+
+  await assertCredentialValidationUnavailable(await search(30), 'edge-mitigated introspection');
+  const record = await waitForCredentialValidationLog(() => stderr);
+  assert.equal(record.reason, 'introspect_http_status');
+  assert.equal(record.introspect_status, 403);
+  assert.equal(record.edge_mitigation, 'deny');
+
+  blocked = false;
+  const recovered = await search(31);
+  assert.equal(recovered.status, 200);
+  assert.equal(introspections, 2, 'the failed answer must not be served from cache');
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
@@ -2072,414 +2331,6 @@ test('HTTP cloud transport accepts the x-firecrawl-api-key header', async (t) =>
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
-test('HTTP cloud transport serves an eligible keyless client and forwards its IP', async (t) => {
-  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
-  t.after(() => backend.close());
-
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp',
-    FIRECRAWL_API_URL: backend.url,
-    HTTP_STREAMABLE_SERVER: 'true',
-    KEYLESS_PROXY_SECRET: 'keyless-secret',
-    PORT: String(port),
-  });
-  let stderr = '';
-  child.stderr.on('data', (chunk) => {
-    stderr += chunk;
-  });
-  t.after(() => stopChild(child));
-
-  await waitForHealth(port, child);
-
-  const toolCall = await httpToolCall(port, {
-    id: 13,
-    headers: { 'x-forwarded-for': '8.8.8.7' },
-    params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
-  });
-  assert.equal(toolCall.status, 200);
-  const message = parseSseJson(await toolCall.text());
-  assert.notEqual(message.result.isError, true);
-  const keylessSearchPayload = JSON.parse(message.result.content[0].text);
-  assert.equal('id' in keylessSearchPayload, false);
-
-  const eligibilityCalls = backend.requests.filter(
-    (r) => r.url === '/v2/keyless/eligibility'
-  );
-  assert.equal(eligibilityCalls.length >= 1, true);
-  // nginx preserves the single source IP sanitized by the trusted ingress.
-  assert.equal(eligibilityCalls[0].headers['x-firecrawl-keyless-ip'], '8.8.8.7');
-  assert.equal(
-    eligibilityCalls[0].headers['x-firecrawl-keyless-secret'],
-    'keyless-secret'
-  );
-  assert.equal(stderr.includes('TypeError'), false, stderr);
-});
-
-test('HTTP cloud keyless returns retry recovery when eligibility is unavailable', async (t) => {
-  const backend = await startFakeFirecrawlBackend({
-    keylessEligibilityResponse: { status: 503, body: { error: 'unavailable' } },
-  });
-  t.after(() => backend.close());
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp',
-    FIRECRAWL_API_URL: backend.url,
-    HTTP_STREAMABLE_SERVER: 'true',
-    KEYLESS_PROXY_SECRET: 'keyless-secret',
-    PORT: String(port),
-  });
-  t.after(() => stopChild(child));
-  await waitForHealth(port, child);
-
-  const response = await httpToolCall(port, {
-    id: 'keyless-eligibility-unavailable',
-    headers: { 'x-forwarded-for': '8.8.8.7' },
-    params: {
-      arguments: { limit: 1, query: 'example domain' },
-      name: 'firecrawl_search',
-    },
-  });
-  const result = parseSseJson(await response.text()).result;
-  assert.equal(result.isError, true);
-  assert.equal(
-    result.structuredContent.code,
-    'KEYLESS_ELIGIBILITY_UNAVAILABLE'
-  );
-  assert.deepEqual(result.structuredContent.next_actions, [
-    { kind: 'retry_later', after_seconds: 30 },
-  ]);
-  assert.equal(
-    result.structuredContent.available_tools.includes('firecrawl_search'),
-    true
-  );
-  assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
-});
-
-test('HTTP cloud keyless blocks account-only tools instead of continuing keyless', async (t) => {
-  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
-  t.after(() => backend.close());
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp',
-    FIRECRAWL_API_URL: backend.url,
-    HTTP_STREAMABLE_SERVER: 'true',
-    KEYLESS_PROXY_SECRET: 'keyless-secret',
-    PORT: String(port),
-  });
-  t.after(() => stopChild(child));
-  await waitForHealth(port, child);
-
-  const response = await httpToolCall(port, {
-    id: 'keyless-account-only-tool',
-    headers: { 'x-forwarded-for': '8.8.8.7' },
-    params: {
-      arguments: { url: 'https://example.com/' },
-      name: 'firecrawl_crawl',
-    },
-  });
-  const result = parseSseJson(await response.text()).result;
-  assertKeylessAccountRecovery(result, {
-    code: 'KEYLESS_TOOL_NOT_AVAILABLE',
-    message: KEYLESS_TOOL_MESSAGE,
-  });
-  assert.doesNotMatch(result.content[0].text, /remain available/);
-  assert.doesNotMatch(result.content[0].text, /continue with those/);
-  assert.equal(backend.requests.some((r) => r.url === '/v2/crawl'), false);
-});
-
-test('HTTP cloud keyless quota stays 200 isError without inlining retry_after_seconds', async (t) => {
-  for (const [label, backendOptions, expectedCode, retryAfterSeconds] of [
-    [
-      'core-with-reason',
-      {
-        keylessEligible: true,
-        searchResponse: {
-          status: 429,
-          body: { error: 'limit', reason: 'credits', retry_after_seconds: 42 },
-        },
-      },
-      'KEYLESS_QUOTA_EXHAUSTED',
-      42,
-    ],
-    [
-      'core-without-reason',
-      {
-        keylessEligible: true,
-        searchResponse: { status: 429, body: { error: 'limit' } },
-      },
-      'KEYLESS_LIMIT_REACHED',
-      undefined,
-    ],
-    [
-      'eligibility-exhausted',
-      {
-        keylessEligibilityResponse: {
-          status: 200,
-          body: { eligible: false, reason: 'credits', retryAfterSeconds: 42 },
-        },
-      },
-      'KEYLESS_QUOTA_EXHAUSTED',
-      42,
-    ],
-  ]) {
-    const backend = await startFakeFirecrawlBackend(backendOptions);
-    const port = await getFreePort();
-    const child = spawnServer({
-      CLOUD_SERVICE: 'true',
-      FASTMCP_ENDPOINT: '/v2/mcp',
-      FIRECRAWL_API_URL: backend.url,
-      HTTP_STREAMABLE_SERVER: 'true',
-      KEYLESS_PROXY_SECRET: 'keyless-secret',
-      PORT: String(port),
-    });
-    let cleanedUp = false;
-    const cleanup = async () => {
-      if (cleanedUp) return;
-      cleanedUp = true;
-      await stopChild(child);
-      await backend.close();
-    };
-    t.after(cleanup);
-    await waitForHealth(port, child);
-    const response = await httpToolCall(port, {
-      id: `keyless-${label}`,
-      headers: { 'x-forwarded-for': '8.8.8.7' },
-      params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
-    });
-    assert.equal(response.status, 200, label);
-    const result = parseSseJson(await response.text()).result;
-    assertKeylessAccountRecovery(result, {
-      code: expectedCode,
-      message: KEYLESS_QUOTA_MESSAGE,
-      retryAfterSeconds,
-    });
-    assert.doesNotMatch(result.content[0].text, /about 42 seconds/, label);
-    assert.doesNotMatch(result.content[0].text, /claude mcp add/, label);
-    await cleanup();
-  }
-});
-
-test('HTTP cloud keyless Parse completes both phases without credentials and forwards redactPII', async (t) => {
-  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
-  t.after(() => backend.close());
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp',
-    FIRECRAWL_API_URL: backend.url,
-    HTTP_STREAMABLE_SERVER: 'true',
-    KEYLESS_PROXY_SECRET: 'keyless-parse-secret',
-    PORT: String(port),
-  });
-  let stderr = '';
-  child.stderr.on('data', (chunk) => {
-    stderr += chunk;
-  });
-  t.after(() => stopChild(child));
-  await waitForHealth(port, child);
-
-  const phaseOne = await httpToolCall(port, {
-    id: 'keyless-parse-phase-one',
-    headers: {
-      'user-agent': 'firecrawl-keyless-smoke/0.0.0',
-      'x-forwarded-for': '8.8.8.43',
-    },
-    params: {
-      arguments: {
-        contentType: 'application/pdf',
-        filePath: '/not-read-by-hosted-mcp/document.pdf',
-        formats: ['markdown'],
-        parsers: ['pdf'],
-      },
-      name: 'firecrawl_parse',
-    },
-  });
-  assert.equal(phaseOne.status, 200);
-  const phaseOneResult = parseSseJson(await phaseOne.text()).result;
-  assert.notEqual(phaseOneResult.isError, true);
-  const phaseOnePayload = JSON.parse(phaseOneResult.content[0].text);
-  assert.equal(phaseOnePayload.upload.uploadRef, 'test-upload-ref');
-  assert.equal(phaseOnePayload.nextToolCall.arguments.uploadRef, 'test-upload-ref');
-  // The continuation data has to reach structuredContent as well: a client
-  // reading only the structured result still has to be able to finish the
-  // upload flow, and parseOutputSchema is what decides whether it survives.
-  assert.deepEqual(phaseOneResult.structuredContent, phaseOnePayload);
-  assert.equal(
-    typeof phaseOneResult.structuredContent.upload.command,
-    'string'
-  );
-  assert.ok(phaseOneResult.structuredContent.notes.length > 0);
-
-  const phaseTwo = await httpToolCall(port, {
-    id: 'keyless-parse-phase-two',
-    headers: {
-      'user-agent': 'firecrawl-keyless-smoke/0.0.0',
-      'x-forwarded-for': '8.8.8.43',
-    },
-    params: {
-      arguments: {
-        formats: ['markdown'],
-        redactPII: true,
-        uploadRef: 'test-upload-ref',
-      },
-      name: 'firecrawl_parse',
-    },
-  });
-  assert.equal(phaseTwo.status, 200);
-  assert.notEqual(parseSseJson(await phaseTwo.text()).result.isError, true);
-
-  const uploadCalls = backend.requests.filter((r) => r.url === '/v2/parse/upload-url');
-  const parseCalls = backend.requests.filter((r) => r.url === '/v2/parse');
-  assert.equal(uploadCalls.length, 1);
-  assert.equal(parseCalls.length, 1);
-  assert.equal(uploadCalls[0].headers.authorization, undefined);
-  assert.equal(
-    uploadCalls[0].headers['x-origin'],
-    `mcp-ua-firecrawl-keyless-smoke@${serverVersion}`
-  );
-  assert.equal(parseCalls[0].headers.authorization, undefined);
-  assert.equal(parseCalls[0].body.uploadRef, 'test-upload-ref');
-  assert.equal(parseCalls[0].body.redactPII, true);
-  assert.equal(
-    parseCalls[0].body.origin,
-    `mcp-ua-firecrawl-keyless-smoke@${serverVersion}`
-  );
-  assert.equal(stderr.includes('keyless-parse-secret'), false, stderr);
-  assert.equal(stderr.includes('8.8.8.43'), false, stderr);
-});
-
-test('HTTP cloud keyless Parse rejects zeroDataRetention before any backend call', async (t) => {
-  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
-  t.after(() => backend.close());
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp',
-    FIRECRAWL_API_URL: backend.url,
-    HTTP_STREAMABLE_SERVER: 'true',
-    KEYLESS_PROXY_SECRET: 'keyless-zdr-secret',
-    PORT: String(port),
-  });
-  let stderr = '';
-  child.stderr.on('data', (chunk) => {
-    stderr += chunk;
-  });
-  t.after(() => stopChild(child));
-  await waitForHealth(port, child);
-
-  const requestIds = [];
-  for (const arguments_ of [
-    { filePath: '/not-read-by-hosted-mcp/zdr.pdf', zeroDataRetention: true },
-    { uploadRef: 'test-upload-ref', zeroDataRetention: true },
-  ]) {
-    const clientRequestId = `client-${'filePath' in arguments_ ? 'phase-one' : 'phase-two'}`;
-    const jsonRpcId = `keyless-zdr-${'filePath' in arguments_ ? 'phase-one' : 'phase-two'}`;
-    const response = await httpToolCall(port, {
-      id: jsonRpcId,
-      headers: {
-        'x-forwarded-for': '8.8.8.44',
-        'x-request-id': clientRequestId,
-      },
-      params: { arguments: arguments_, name: 'firecrawl_parse' },
-    });
-    assert.equal(response.status, 200);
-    const result = parseSseJson(await response.text()).result;
-    assert.equal(result.isError, true);
-    assert.equal(result.structuredContent.code, 'KEYLESS_OPTION_NOT_AVAILABLE');
-    assert.equal(result.structuredContent.option, 'zeroDataRetention');
-    assert.match(result.structuredContent.message, /omit zeroDataRetention/i);
-    assert.doesNotMatch(result.structuredContent.message, /connect an account/i);
-    requestIds.push(
-      assertServerGeneratedRequestId(result.structuredContent, [
-        clientRequestId,
-        jsonRpcId,
-      ])
-    );
-  }
-  assert.equal(backend.requests.length, 0, JSON.stringify(backend.requests));
-  const loggedErrorRequestIds = stderr
-    .split(/\r?\n/)
-    .filter((line) => line.startsWith('[MCP_ACTION] '))
-    .map((line) => JSON.parse(line.slice('[MCP_ACTION] '.length)))
-    .filter(
-      (entry) =>
-        entry.tool_name === 'firecrawl_parse' && entry.status === 'error'
-    )
-    .map((entry) => entry.request_id);
-  assert.deepEqual(new Set(loggedErrorRequestIds), new Set(requestIds));
-  assert.equal(stderr.includes('keyless-zdr-secret'), false, stderr);
-  assert.equal(stderr.includes('8.8.8.44'), false, stderr);
-});
-
-test('HTTP cloud keyless rejects multi-hop or malformed forwarded IP identity', async (t) => {
-  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
-  t.after(() => backend.close());
-
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp',
-    FIRECRAWL_API_URL: backend.url,
-    HTTP_STREAMABLE_SERVER: 'true',
-    KEYLESS_PROXY_SECRET: 'keyless-secret',
-    PORT: String(port),
-  });
-  t.after(() => stopChild(child));
-  await waitForHealth(port, child);
-
-  for (const xff of ['8.8.8.8, 10.0.0.1', 'not-an-ip']) {
-    const response = await httpToolCall(port, {
-      id: `keyless-untrusted-ip-${xff}`,
-      headers: { 'x-forwarded-for': xff },
-      params: {
-        arguments: { limit: 1, query: 'example domain' },
-        name: 'firecrawl_search',
-      },
-    });
-    assert.equal(response.status, 200, xff);
-    const result = parseSseJson(await response.text()).result;
-    assertKeylessAccountRecovery(result, {
-      code: 'KEYLESS_ACCESS_NOT_AVAILABLE',
-      message: KEYLESS_ACCESS_MESSAGE,
-    });
-  }
-  assert.equal(backend.requests.length, 0, JSON.stringify(backend.requests));
-});
-
-test('HTTP cloud keyless accepts one internal IP supplied by the trusted edge', async (t) => {
-  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
-  t.after(() => backend.close());
-
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp',
-    FIRECRAWL_API_URL: backend.url,
-    HTTP_STREAMABLE_SERVER: 'true',
-    KEYLESS_PROXY_SECRET: 'keyless-secret',
-    PORT: String(port),
-  });
-  t.after(() => stopChild(child));
-  await waitForHealth(port, child);
-
-  const response = await httpToolCall(port, {
-    id: 'keyless-trusted-internal-ip',
-    headers: { 'x-forwarded-for': '10.0.0.1' },
-    params: {
-      arguments: { limit: 1, query: 'example domain' },
-      name: 'firecrawl_search',
-    },
-  });
-  assert.equal(response.status, 200);
-  assert.notEqual(parseSseJson(await response.text()).result.isError, true);
-  const eligibility = backend.requests.find((r) => r.url === '/v2/keyless/eligibility');
-  assert.equal(eligibility.headers['x-firecrawl-keyless-ip'], '10.0.0.1');
-});
-
 test('HTTP cloud authenticated Parse forwards ZDR for API-key and managed OAuth sessions', async (t) => {
   const accountResource = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
   const backend = await startFakeFirecrawlBackend({
@@ -2596,8 +2447,8 @@ test('HTTP cloud authenticated Parse forwards ZDR for API-key and managed OAuth 
   );
   assert.deepEqual(
     introspectedTokens,
-    ['fco_parse', 'fco_parse'],
-    'only OAuth access tokens may be introspected on the account route'
+    ['fco_parse'],
+    'only OAuth access tokens are introspected, and a repeat request reuses the cached answer'
   );
   assert.equal(uploads[0].headers.authorization, 'Bearer fc-parse-api-key');
   assert.equal(parses[0].headers.authorization, 'Bearer fc-parse-api-key');
@@ -2611,73 +2462,6 @@ test('HTTP cloud authenticated Parse forwards ZDR for API-key and managed OAuth 
   assert.equal(parses[1].body.zeroDataRetention, true);
 });
 
-test('HTTP cloud transport returns recovery when keyless identity has no client IP', async (t) => {
-  const backend = await startFakeFirecrawlBackend({ keylessEligible: true });
-  t.after(() => backend.close());
-
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp',
-    FIRECRAWL_API_URL: backend.url,
-    HTTP_STREAMABLE_SERVER: 'true',
-    KEYLESS_PROXY_SECRET: 'keyless-secret',
-    PORT: String(port),
-  });
-  let stderr = '';
-  child.stderr.on('data', (chunk) => {
-    stderr += chunk;
-  });
-  t.after(() => stopChild(child));
-
-  await waitForHealth(port, child);
-
-  // Discovery remains keyless-first, but the actual call fails closed because
-  // the API cannot enforce the anonymous per-IP allowance.
-  const toolCall = await httpToolCall(port, {
-    id: 'client-json-rpc-id',
-    headers: { 'x-request-id': 'client-request-header-id' },
-    params: { arguments: { limit: 1, query: 'example domain' }, name: 'firecrawl_search' },
-  });
-  assert.equal(toolCall.status, 200);
-  const result = parseSseJson(await toolCall.text()).result;
-  assertKeylessAccountRecovery(result, {
-    code: 'KEYLESS_ACCESS_NOT_AVAILABLE',
-    message: KEYLESS_ACCESS_MESSAGE,
-    untrustedRequestIds: [
-      'client-json-rpc-id',
-      'client-request-header-id',
-    ],
-  });
-  assert.equal(backend.requests.some((r) => r.url === '/v2/search'), false);
-  assert.equal(stderr.includes('TypeError'), false, stderr);
-});
-
-test('hosted keyless warns when KEYLESS_PROXY_SECRET is missing', async (t) => {
-  const backend = await startFakeFirecrawlBackend();
-  t.after(() => backend.close());
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp',
-    FIRECRAWL_API_URL: backend.url,
-    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
-    HTTP_STREAMABLE_SERVER: 'true',
-    KEYLESS_PROXY_SECRET: '',
-    PORT: String(port),
-  });
-  let stderr = '';
-  child.stderr.on('data', (chunk) => {
-    stderr += chunk;
-  });
-  t.after(() => stopChild(child));
-  await waitForHealth(port, child);
-
-  const ready = await fetch(`http://127.0.0.1:${port}/ready`);
-  assert.equal(ready.status, 503);
-  assert.match(stderr, /KEYLESS_PROXY_SECRET is missing/);
-});
-
 test('account endpoint challenges anonymous clients and accepts API keys', async (t) => {
   const backend = await startFakeFirecrawlBackend();
   t.after(() => backend.close());
@@ -2686,7 +2470,6 @@ test('account endpoint challenges anonymous clients and accepts API keys', async
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp-oauth',
     FIRECRAWL_API_URL: backend.url,
-    FIRECRAWL_MCP_ACTION_LOG_SECRET: 'action-secret',
     FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
     FIRECRAWL_OAUTH_ISSUER: backend.url,
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
@@ -2786,33 +2569,6 @@ test('account endpoint keeps OAuth discovery and gives safe re-auth guidance for
   );
   assert.equal(body.next_actions, undefined);
   assert.equal(backend.requests.some((request) => request.url === '/v2/search'), false);
-});
-
-test('account readiness requires the managed OAuth delegation secret', async (t) => {
-  const backend = await startFakeFirecrawlBackend();
-  t.after(() => backend.close());
-  const port = await getFreePort();
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp-oauth',
-    FIRECRAWL_API_URL: backend.url,
-    FIRECRAWL_MCP_ACTION_LOG_SECRET: 'action-secret',
-    FIRECRAWL_MCP_RESOURCE_URL: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
-    FIRECRAWL_OAUTH_ISSUER: backend.url,
-    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
-    HTTP_STREAMABLE_SERVER: 'true',
-    MCP_DELEGATED_CREDENTIAL_SECRET: '',
-    PORT: String(port),
-  });
-  t.after(() => stopChild(child));
-  await waitForHealth(port, child);
-
-  const ready = await fetch(`http://127.0.0.1:${port}/ready`);
-  assert.equal(ready.status, 503);
-  assert.deepEqual(await ready.json(), {
-    missing: ['MCP_DELEGATED_CREDENTIAL_SECRET'],
-    ok: false,
-  });
 });
 
 test('credential validation outages do not misdirect clients into OAuth', async (t) => {
@@ -3139,7 +2895,6 @@ test('active introspection with an unknown credential purpose fails closed', asy
     FIRECRAWL_OAUTH_ISSUER: backend.url,
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
     HTTP_STREAMABLE_SERVER: 'true',
-    KEYLESS_PROXY_SECRET: 'delegation-secret',
     PORT: String(port),
   });
   t.after(() => stopChild(child));
@@ -3366,13 +3121,11 @@ test('account endpoint accepts legacy OAuth one way and delegates managed keys',
     CLOUD_SERVICE: 'true',
     FASTMCP_ENDPOINT: '/v2/mcp-oauth',
     FIRECRAWL_API_URL: backend.url,
-    FIRECRAWL_MCP_ACTION_LOG_SECRET: 'action-secret',
     FIRECRAWL_MCP_RESOURCE_URL: accountResource,
     FIRECRAWL_OAUTH_ISSUER: backend.url,
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
     FIRECRAWL_API_KEY: 'fc-shared-env-must-not-be-used',
     HTTP_STREAMABLE_SERVER: 'true',
-    KEYLESS_PROXY_SECRET: 'delegation-secret',
     PORT: String(port),
   });
   let stderr = '';
@@ -3454,42 +3207,6 @@ test('account endpoint accepts legacy OAuth one way and delegates managed keys',
     .map((request) => request.body.resource);
   assert.deepEqual(legacyAttempts, [accountResource, legacyResource]);
 
-  for (let i = 0; i < 20; i += 1) {
-    if (
-      backend.requests.filter(
-        (request) => request.url === '/v2/mcp/action-logs'
-      ).length === 4
-    ) {
-      break;
-    }
-    await delay(25);
-  }
-  const actionLogs = backend.requests.filter(
-    (request) => request.url === '/v2/mcp/action-logs'
-  );
-  assert.equal(actionLogs.length, 4);
-  const deprecatedExtractLog = actionLogs.find(
-    request => request.body.tool_name === 'firecrawl_extract'
-  );
-  assert.ok(deprecatedExtractLog);
-  assert.equal(deprecatedExtractLog.body.status, 'error');
-  assert.equal(deprecatedExtractLog.body.error_class, 'UserError');
-
-  for (const request of actionLogs) {
-    assert.equal(request.headers.authorization, 'Bearer action-secret');
-    assert.equal(request.body.auth_type, 'oauth');
-    assert.equal(request.body.api_key_id, '42');
-    assert.equal(request.body.team_id, metadata.team_id);
-    assert.equal(request.body.user_id, metadata.sub);
-    assert.equal(request.body.oauth_client_id, metadata.client_id);
-    assert.equal(request.body.resource, accountResource);
-    assert.equal(JSON.stringify(request.body).includes('fc-managed-secret'), false);
-    assert.equal(JSON.stringify(request.body).includes('fco_'), false);
-  }
-  assert.equal(
-    actionLogs.filter(request => request.body.status === 'success').length,
-    3
-  );
   assert.equal(stderr.includes('fc-managed-secret'), false);
   assert.equal(stderr.includes('fco_account'), false);
   assert.equal(stderr.includes('fco_legacy'), false);
@@ -3601,56 +3318,6 @@ test('hosted OAuth executes current and historical credit usage with delegated c
   }
 });
 
-test('legacy key-in-path telemetry is sanitized and does not leak the credential', async (t) => {
-  const backend = await startFakeFirecrawlBackend();
-  t.after(() => backend.close());
-  const port = await getFreePort();
-  const legacyCredential = 'fc-legacy-path-secret';
-  const child = spawnServer({
-    CLOUD_SERVICE: 'true',
-    FASTMCP_ENDPOINT: '/v2/mcp',
-    FIRECRAWL_API_URL: backend.url,
-    FIRECRAWL_OAUTH_ISSUER: backend.url,
-    FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
-    HTTP_STREAMABLE_SERVER: 'true',
-    PORT: String(port),
-  });
-  let stdout = '';
-  child.stdout.on('data', (chunk) => {
-    stdout += chunk;
-  });
-  t.after(() => stopChild(child));
-  await waitForHealth(port, child);
-
-  const response = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
-    body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'tools/list', params: {} }),
-    headers: {
-      accept: 'application/json, text/event-stream',
-      'content-type': 'application/json',
-      'x-firecrawl-api-key': legacyCredential,
-      'x-firecrawl-key-transport': 'path',
-    },
-    method: 'POST',
-  });
-  assert.equal(response.status, 200);
-  const legacyTools = parseSseJson(await response.text()).result.tools.map((tool) => tool.name);
-  assert.ok(legacyTools.includes('firecrawl_scrape'));
-  assert.ok(legacyTools.includes('firecrawl_search'));
-  assert.ok(legacyTools.includes('firecrawl_map'), legacyTools.join(', '));
-  await delay(25);
-
-  const telemetry = stdout
-    .split(/\r?\n/)
-    .find((line) => line.includes('[MCP_LEGACY_KEY_PATH]'));
-  assert.ok(telemetry, stdout);
-  assert.match(telemetry, /"key_transport":"path"/);
-  assert.match(telemetry, /"outcome":"accepted"/);
-  assert.match(telemetry, /"resource":"https:\/\/mcp\.firecrawl\.dev\/v2\/mcp"/);
-  assert.doesNotMatch(telemetry, new RegExp(legacyCredential));
-  assert.doesNotMatch(telemetry, /\bfc-[^\s"]+/);
-  assert.doesNotMatch(telemetry, /(?:\d{1,3}\.){3}\d{1,3}|::1/);
-});
-
 test('hosted profile selection fails closed for an unsupported endpoint', async () => {
   const child = spawnServer({
     CLOUD_SERVICE: 'true',
@@ -3697,12 +3364,7 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
     FIRECRAWL_OAUTH_ISSUER: backend.url,
     FIRECRAWL_OAUTH_INTROSPECT_SECRET: 'test-secret',
     HTTP_STREAMABLE_SERVER: 'true',
-    KEYLESS_PROXY_SECRET: 'delegation-secret',
     PORT: String(port),
-  });
-  let stdout = '';
-  child.stdout.on('data', (chunk) => {
-    stdout += chunk;
   });
   t.after(() => stopChild(child));
   await waitForHealth(port, child);
@@ -3762,29 +3424,6 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
     'CREDENTIAL_INVALID must not advertise tools the agent cannot call'
   );
 
-  const invalidLegacyPath = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
-    body: JSON.stringify({ id: 4, jsonrpc: '2.0', method: 'tools/list', params: {} }),
-    headers: {
-      accept: 'application/json, text/event-stream',
-      'content-type': 'application/json',
-      'x-firecrawl-api-key': 'fc-invalid',
-      'x-firecrawl-key-transport': 'path',
-    },
-    method: 'POST',
-  });
-  assert.equal(invalidLegacyPath.status, 200);
-  const invalidLegacyJson = parseSseJson(await invalidLegacyPath.text());
-  assert.ok((invalidLegacyJson.result?.tools?.length ?? 0) > 0);
-  await delay(25);
-  // A well-formed API key is admitted at connect time because Core owns the
-  // verdict. The legacy-path record must still contain no credential material.
-  const legacyTelemetry = stdout
-    .split(/\r?\n/)
-    .find((line) => line.includes('[MCP_LEGACY_KEY_PATH]'));
-  assert.ok(legacyTelemetry, stdout);
-  assert.match(legacyTelemetry, /"outcome":"accepted"/);
-  assert.doesNotMatch(legacyTelemetry, /\bfc-[^\s"]+/);
-  assert.doesNotMatch(legacyTelemetry, /(?:\d{1,3}\.){3}\d{1,3}|::1/);
   const introspectedTokens = backend.requests
     .filter((request) => request.url === '/api/oauth/introspect')
     .map((request) => request.body.token);
@@ -3907,4 +3546,516 @@ test('every listed tool declares an output schema and returns structured content
     assert.ok(key in feedback.structuredContent, `feedback structuredContent lost ${key}`);
   }
   assert.equal('id' in feedback.structuredContent, false);
+});
+
+test('firecrawl_agent forwards effort, maxCredits and strictConstrainToURLs to /v2/agent', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-agent-params', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  // The API accepts these on POST /v2/agent; the tool has to pass every one
+  // through untouched so an agent can tune the run without a second surface.
+  const result = await client.request('tools/call', {
+    arguments: {
+      effort: 'high',
+      maxCredits: 100,
+      prompt: 'Find the example domain owner',
+      strictConstrainToURLs: true,
+      urls: ['https://example.com/'],
+    },
+    name: 'firecrawl_agent',
+  });
+  assert.notEqual(result.isError, true);
+
+  const agentRequest = fakeApi.requests.find((request) => request.url === '/v2/agent');
+  assert.equal(agentRequest.method, 'POST');
+  assert.equal(agentRequest.body.prompt, 'Find the example domain owner');
+  assert.deepEqual(agentRequest.body.urls, ['https://example.com/']);
+  assert.equal(agentRequest.body.effort, 'high');
+  assert.equal(agentRequest.body.maxCredits, 100);
+  assert.equal(agentRequest.body.strictConstrainToURLs, true);
+
+  // Omitted options stay off the wire so the API keeps its own defaults.
+  const bare = await client.request('tools/call', {
+    arguments: { prompt: 'Find the example domain owner' },
+    name: 'firecrawl_agent',
+  });
+  assert.notEqual(bare.isError, true);
+  const bareRequest = fakeApi.requests.filter((request) => request.url === '/v2/agent').at(-1);
+  for (const key of ['effort', 'maxCredits', 'strictConstrainToURLs']) {
+    assert.ok(!(key in bareRequest.body), `bare agent request leaked ${key}`);
+  }
+
+  // A falsy value is still a value: `strictConstrainToURLs: false` must reach
+  // the body, so a later truthiness check in the forwarding code cannot drop it.
+  const relaxed = await client.request('tools/call', {
+    arguments: {
+      prompt: 'Find the example domain owner',
+      strictConstrainToURLs: false,
+      urls: ['https://example.com/'],
+    },
+    name: 'firecrawl_agent',
+  });
+  assert.notEqual(relaxed.isError, true);
+  const relaxedRequest = fakeApi.requests.filter((request) => request.url === '/v2/agent').at(-1);
+  assert.equal(relaxedRequest.body.strictConstrainToURLs, false);
+
+  // The schema rejects a non-positive spending limit as a parameter-validation
+  // error before anything is sent.
+  const sentBefore = fakeApi.requests.filter((request) => request.url === '/v2/agent').length;
+  await assert.rejects(
+    client.request('tools/call', {
+      arguments: { maxCredits: 0, prompt: 'Find the example domain owner' },
+      name: 'firecrawl_agent',
+    }),
+    /maxCredits/
+  );
+  assert.equal(fakeApi.requests.filter((request) => request.url === '/v2/agent').length, sentBefore);
+});
+
+test('firecrawl_agent_status flags a credit-limit stop and keeps its partial', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-agent-partial', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const status = async (id) => {
+    const result = await client.request('tools/call', { arguments: { id }, name: 'firecrawl_agent_status' });
+    assert.notEqual(result.isError, true);
+    return result;
+  };
+
+  // A partial: the notice leads the text, and Codex (which reads
+  // structuredContent) keeps the partial, its validity and the notice.
+  const stopped = await status('00000000-0000-4000-8000-000000000040');
+  const text = stopped.content[0].text;
+  const notice = text.slice(0, text.indexOf('\n\n'));
+  assert.match(notice, /stopped at its credit limit \(maxCredits\)/);
+  assert.match(notice, /`partial` is an INCOMPLETE best-effort result/);
+  assert.match(notice, /It does not match the schema this run was given\./);
+  assert.match(notice, /Agent message: Only Acme was found\./);
+  assert.match(notice, /firecrawl_agent with threadId "00000000-0000-4000-8000-000000000041"/);
+  assert.match(notice, /higher maxCredits/);
+  assert.deepEqual(JSON.parse(text.slice(notice.length + 2)).partial, { companies: [{ name: 'Acme' }] });
+  const structured = stopped.structuredContent;
+  assert.deepEqual(structured.partial, { companies: [{ name: 'Acme' }] });
+  assert.equal(structured.partialSchemaValid, false);
+  assert.equal(structured.stopReason, 'credit_limit_reached');
+  assert.equal(structured.notice, notice);
+  assert.equal(structured.status, 'failed');
+
+  // A schema-valid partial says so.
+  const valid = await status('00000000-0000-4000-8000-000000000044');
+  const validNotice = valid.content[0].text.slice(0, valid.content[0].text.indexOf('\n\n'));
+  assert.match(validNotice, /`partial` is an INCOMPLETE best-effort result/);
+  assert.match(validNotice, /It matches the schema this run was given\./);
+  assert.doesNotMatch(validNotice, /does not match/);
+  assert.equal(valid.structuredContent.partialSchemaValid, true);
+  assert.equal(valid.structuredContent.notice, validNotice);
+
+  // No partialSchemaValid (a run without a schema): no schema claim either way.
+  const unchecked = await status('00000000-0000-4000-8000-000000000045');
+  const uncheckedNotice = unchecked.structuredContent.notice;
+  assert.match(uncheckedNotice, /`partial` is an INCOMPLETE best-effort result/);
+  assert.doesNotMatch(uncheckedNotice, /schema/);
+  assert.equal('partialSchemaValid' in unchecked.structuredContent, false);
+
+  // No partial and no thread: say so, and point at a fresh run.
+  const bare = await status('00000000-0000-4000-8000-000000000042');
+  const bareNotice = bare.structuredContent.notice;
+  assert.match(bareNotice, /No partial result was recovered\./);
+  assert.doesNotMatch(bareNotice, /threadId|schema|Agent message/);
+  assert.match(bareNotice, /start a new firecrawl_agent run with a higher maxCredits/);
+  assert.equal('partial' in bare.structuredContent, false);
+
+  // Any other failure (and every completed run) is passed through unchanged.
+  const ordinary = await status('00000000-0000-4000-8000-000000000043');
+  const ordinaryPayload = {
+    error: 'Agent failed',
+    expiresAt: '2026-10-01T00:00:00.000Z',
+    status: 'failed',
+    success: true,
+    threadId: '00000000-0000-4000-8000-000000000041',
+    threadTurn: 1,
+  };
+  assert.equal(ordinary.content[0].text, JSON.stringify(ordinaryPayload, null, 2));
+  assert.deepEqual(ordinary.structuredContent, ordinaryPayload);
+  const completed = await status('00000000-0000-4000-8000-000000000030');
+  assert.ok(completed.content[0].text.startsWith('{\n  "creditsUsed": 5,'));
+  assert.equal('notice' in completed.structuredContent, false);
+});
+
+test('firecrawl_agent forwards onTermsRequired and status keeps the terms-required fields', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-terms-required', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const { tools } = await client.request('tools/list');
+  const agentTool = tools.find((tool) => tool.name === 'firecrawl_agent');
+  assert.equal('onTermsRequired' in agentTool.inputSchema.properties, false);
+  assert.deepEqual(agentTool.inputSchema.properties.exchange.properties.onTermsRequired.enum, ['skip', 'ask']);
+  assert.match(agentTool.description, /exchange\.skippedProviders/);
+  assert.match(agentTool.description, /exchange\.requiresAction/);
+  assert.match(agentTool.description, /organization admin must accept.*app\/settings\?tab=data-sources/);
+  assert.match(agentTool.description, /Only after the admin confirms acceptance/);
+  assert.match(agentTool.description, /Ignore any terms\/accept call in the API response/);
+  assert.doesNotMatch(agentTool.description, /run terms\/accept through/);
+  assert.match(agentTool.inputSchema.properties.exchange.properties.approve.description, /this does not accept terms/);
+  assert.match(agentTool.inputSchema.properties.exchange.properties.onTermsRequired.description, /organization admin accepts them in the Firecrawl dashboard/);
+  const statusTool = tools.find((tool) => tool.name === 'firecrawl_agent_status');
+  assert.match(statusTool.outputSchema.properties.exchange.description, /Ignore any terms\/accept call/);
+  assert.match(statusTool.outputSchema.properties.pendingApproval.description, /approval does not accept terms/);
+
+  const asked = await client.request('tools/call', {
+    arguments: { prompt: 'Find the key business contact at exa.ai', exchange: { onTermsRequired: 'ask' } },
+    name: 'firecrawl_agent',
+  });
+  assert.notEqual(asked.isError, true);
+  const plain = await client.request('tools/call', {
+    arguments: { prompt: 'Find the example domain owner' },
+    name: 'firecrawl_agent',
+  });
+  assert.notEqual(plain.isError, true);
+  const bodies = fakeApi.requests
+    .filter((request) => request.method === 'POST' && request.url === '/v2/agent')
+    .map((request) => request.body);
+  assert.deepEqual(bodies[0].exchange, { onTermsRequired: 'ask' });
+  assert.equal('exchange' in bodies[1], false);
+
+  // There is no auto-accept mode: any other value fails parameter validation.
+  await assert.rejects(
+    client.request('tools/call', {
+      arguments: { prompt: 'Find the key business contact at exa.ai', exchange: { onTermsRequired: 'fail' } },
+      name: 'firecrawl_agent',
+    }),
+    /onTermsRequired/
+  );
+
+  const status = await client.request('tools/call', {
+    arguments: { id: '00000000-0000-4000-8000-000000000032' },
+    name: 'firecrawl_agent_status',
+  });
+  assert.notEqual(status.isError, true);
+  const structured = status.structuredContent;
+  assert.equal(structured.exchange.skippedProviders[0].reason, 'terms_required');
+  assert.equal(structured.exchange.requiresAction.providers[0].accept.capability, 'terms/accept');
+  assert.equal(structured.pendingApproval.kind, 'terms');
+  assert.equal(structured.message, 'Apollo could add verified work emails.');
+});
+
+test('firecrawl_agent answers a pending approval on a thread', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-agent-thread', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const threadId = '00000000-0000-4000-8000-000000000031';
+  const approvalId = '00000000-0000-4000-8000-000000000033';
+
+  const { tools } = await client.request('tools/list');
+  const agentTool = tools.find((tool) => tool.name === 'firecrawl_agent');
+  const props = agentTool.inputSchema.properties;
+  assert.equal(props.threadId.format, 'uuid');
+  assert.deepEqual(props.mode.enum, ['extract', 'chat']);
+  // The exchange object mirrors the gateway's agentExchangeSchema key for key.
+  assert.deepEqual(Object.keys(props.exchange.properties).sort(), [
+    'approve',
+    'decline',
+    'enabled',
+    'maxCalls',
+    'onTermsRequired',
+    'requireApproval',
+    'toolkits',
+  ]);
+  assert.equal(props.exchange.additionalProperties, false);
+  assert.deepEqual(Object.keys(props.exchange.properties.approve.properties).sort(), [
+    'always',
+    'approvalId',
+    'callIds',
+  ]);
+  assert.deepEqual(props.exchange.properties.approve.required, ['approvalId']);
+  assert.deepEqual(Object.keys(props.exchange.properties.decline.properties), ['approvalId']);
+  assert.equal(props.exchange.properties.maxCalls.minimum, 1);
+  assert.equal(props.exchange.properties.maxCalls.maximum, 30);
+  assert.equal('model' in props, false);
+  assert.ok(agentTool.description.length <= CLAUDE_CODE_TEXT_CAP, `description is ${agentTool.description.length} chars`);
+  assert.match(agentTool.description, /same `threadId` and `exchange\.approve: \{approvalId\}`/);
+  assert.match(agentTool.description, /`exchange\.decline: \{approvalId\}`/);
+  assert.match(agentTool.description, /organization admin must accept terms in the Firecrawl dashboard/);
+  assert.match(agentTool.description, /Never infer acceptance from a data request/);
+
+  const call = (args) => client.request('tools/call', { arguments: args, name: 'firecrawl_agent' });
+
+  // 1. A follow-up turn on the same thread.
+  const followUp = await call({ prompt: 'Only keep the founders', threadId, mode: 'chat' });
+  assert.notEqual(followUp.isError, true);
+  assert.equal(followUp.structuredContent.threadId, threadId);
+  assert.equal(followUp.structuredContent.threadTurn, 1);
+
+  // 2. Answering a pending approval on the thread: forwarding of approve and
+  // decline only. Terms acceptance happens in the dashboard, and the
+  // Alexandria terms tests cover its rejection through firecrawl_scrape.
+  const approved = await call({
+    prompt: 'The admin confirmed acceptance of the Apollo terms in the dashboard. Continue.',
+    threadId,
+    exchange: { approve: { approvalId } },
+  });
+  assert.notEqual(approved.isError, true);
+  assert.equal(approved.structuredContent.threadId, threadId);
+  assert.equal(typeof approved.structuredContent.threadTurn, 'number');
+  const declined = await call({
+    prompt: 'Do not use Apollo.',
+    threadId,
+    exchange: { decline: { approvalId } },
+  });
+  assert.notEqual(declined.isError, true);
+
+  // A paid-call approval with a subset, plus the other exchange settings.
+  const paid = await call({
+    prompt: 'Run only the first call.',
+    threadId,
+    exchange: {
+      approve: { approvalId, callIds: ['call-1'], always: true },
+      toolkits: ['apollo'],
+      maxCalls: 4,
+      requireApproval: true,
+      enabled: true,
+    },
+    mode: 'chat',
+  });
+  assert.notEqual(paid.isError, true);
+
+  const asked = await call({
+    prompt: 'Keep asking about terms.',
+    threadId,
+    exchange: { maxCalls: 2, onTermsRequired: 'ask' },
+  });
+  assert.notEqual(asked.isError, true);
+
+  const bodies = fakeApi.requests
+    .filter((request) => request.method === 'POST' && request.url === '/v2/agent')
+    .map(({ body }) => {
+      const { origin, ...rest } = body;
+      assert.equal(typeof origin, 'string');
+      return rest;
+    });
+  assert.deepEqual(bodies, [
+    { prompt: 'Only keep the founders', threadId, mode: 'chat' },
+    { prompt: 'The admin confirmed acceptance of the Apollo terms in the dashboard. Continue.', threadId, exchange: { approve: { approvalId } } },
+    { prompt: 'Do not use Apollo.', threadId, exchange: { decline: { approvalId } } },
+    {
+      prompt: 'Run only the first call.',
+      threadId,
+      exchange: {
+        approve: { approvalId, callIds: ['call-1'], always: true },
+        toolkits: ['apollo'],
+        maxCalls: 4,
+        requireApproval: true,
+        enabled: true,
+      },
+      mode: 'chat',
+    },
+    { prompt: 'Keep asking about terms.', threadId, exchange: { maxCalls: 2, onTermsRequired: 'ask' } },
+  ]);
+  // Nothing invents a model: the gateway runs every request on spark-2.
+  for (const body of bodies) assert.equal('model' in body, false);
+
+  // Schema validation: every rejection happens before any request is sent.
+  const sent = bodies.length;
+  const rejects = [
+    [{ prompt: 'x', threadId: 'not-a-uuid' }, /threadId/],
+    [{ prompt: 'x', mode: 'research' }, /mode/],
+    [{ prompt: 'x', threadId, exchange: { approve: { approvalId: 'nope' } } }, /approvalId/],
+    [{ prompt: 'x', threadId, exchange: { approve: {} } }, /approvalId/],
+    [{ prompt: 'x', threadId, exchange: { approve: { approvalId, autoAccept: true } } }, /autoAccept/],
+    [{ prompt: 'x', threadId, exchange: { acceptTerms: true } }, /acceptTerms/],
+    [{ prompt: 'x', threadId, exchange: { maxCalls: 31 } }, /maxCalls/],
+    [{ prompt: 'x', threadId, exchange: { maxCalls: 0 } }, /maxCalls/],
+    [{ prompt: 'x', threadId, exchange: { onTermsRequired: 'accept' } }, /onTermsRequired/],
+    [{ prompt: 'x', exchange: { approve: { approvalId } } }, /threadId/],
+    [{ prompt: 'x', exchange: { decline: { approvalId } } }, /threadId/],
+    [
+      { prompt: 'x', threadId, exchange: { approve: { approvalId }, decline: { approvalId } } },
+      /not both/,
+    ],
+    [{ prompt: 'x', threadId, exchange: { toolkits: ['a', 'b', 'c', 'd', 'e', 'f'] } }, /toolkits/],
+    // The agent service checks the mode on the request itself, so an inherited
+    // chat mode is not enough.
+    [{ prompt: 'x', exchange: { requireApproval: true } }, /requireApproval needs mode/],
+    [{ prompt: 'x', mode: 'extract', exchange: { requireApproval: true } }, /requireApproval needs mode/],
+    [{ prompt: 'x', threadId, exchange: { requireApproval: true } }, /requireApproval needs mode/],
+  ];
+  for (const [args, pattern] of rejects) {
+    await assert.rejects(call(args), pattern, JSON.stringify(args));
+  }
+  assert.equal(
+    fakeApi.requests.filter((request) => request.method === 'POST' && request.url === '/v2/agent').length,
+    sent
+  );
+
+  // A thread error from the API reaches the caller with its message.
+  const busy = await call({ prompt: 'x', threadId: '00000000-0000-4000-8000-000000000036' }).then(
+    (result) => JSON.stringify(result),
+    (error) => String(error?.message ?? error)
+  );
+  assert.match(busy, /This thread already has a run in progress/);
+
+  // 3. Status keeps the thread and both pendingApproval shapes in structuredContent.
+  const status = async (id) => {
+    const result = await client.request('tools/call', { arguments: { id }, name: 'firecrawl_agent_status' });
+    assert.notEqual(result.isError, true);
+    return result.structuredContent;
+  };
+  const terms = await status('00000000-0000-4000-8000-000000000032');
+  assert.equal(terms.pendingApproval.kind, 'terms');
+  assert.deepEqual(terms.pendingApproval.calls, []);
+  assert.equal(terms.pendingApproval.terms[0].provider, 'apollo');
+  assert.equal(terms.exchange.requiresAction.type, 'accept_terms');
+  assert.equal(terms.exchange.requiresAction.approvalId, terms.pendingApproval.id);
+  assert.equal(terms.exchange.requiresAction.providers[0].show.capability, 'terms/show');
+
+  const paidStatus = await status('00000000-0000-4000-8000-000000000034');
+  assert.equal(paidStatus.threadId, threadId);
+  assert.equal(paidStatus.threadTurn, 2);
+  assert.equal(paidStatus.mode, 'chat');
+  assert.equal(paidStatus.pendingApproval.kind, 'calls');
+  assert.equal(paidStatus.pendingApproval.calls[0].id, 'call-1');
+  assert.equal(paidStatus.pendingApproval.calls[0].creditsEstimate, 3);
+  assert.deepEqual(paidStatus.suggestions, [{ label: 'Only founders', prompt: 'Only keep the founders' }]);
+});
+
+test('firecrawl_agent continues a thread', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-agent-thread', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const threadId = '00000000-0000-4000-8000-000000000031';
+
+  const { tools } = await client.request('tools/list');
+  const agentTool = tools.find((tool) => tool.name === 'firecrawl_agent');
+  const props = agentTool.inputSchema.properties;
+  assert.equal(props.threadId.format, 'uuid');
+  assert.deepEqual(props.mode.enum, ['extract', 'chat']);
+  assert.equal('model' in props, false);
+  assert.ok(agentTool.description.length <= CLAUDE_CODE_TEXT_CAP, `description is ${agentTool.description.length} chars`);
+  assert.match(agentTool.description, /To continue that thread, pass it with a follow-up `prompt`/);
+
+  const call = (args) => client.request('tools/call', { arguments: args, name: 'firecrawl_agent' });
+
+  // A follow-up turn on the same thread, and a turn that only sets the mode.
+  const followUp = await call({ prompt: 'Only keep the founders', threadId, mode: 'chat' });
+  assert.notEqual(followUp.isError, true);
+  assert.equal(followUp.structuredContent.threadId, threadId);
+  assert.equal(followUp.structuredContent.threadTurn, 1);
+  const inherited = await call({ prompt: 'Add their LinkedIn URLs', threadId });
+  assert.notEqual(inherited.isError, true);
+
+  const bodies = fakeApi.requests
+    .filter((request) => request.method === 'POST' && request.url === '/v2/agent')
+    .map(({ body }) => {
+      const { origin, ...rest } = body;
+      assert.equal(typeof origin, 'string');
+      return rest;
+    });
+  assert.deepEqual(bodies, [
+    { prompt: 'Only keep the founders', threadId, mode: 'chat' },
+    { prompt: 'Add their LinkedIn URLs', threadId },
+  ]);
+  // Nothing invents a model: the gateway runs every request on spark-2.
+  for (const body of bodies) assert.equal('model' in body, false);
+
+  // Invalid values fail parameter validation before anything is sent.
+  for (const [args, pattern] of [
+    [{ prompt: 'x', threadId: 'not-a-uuid' }, /threadId/],
+    [{ prompt: 'x', mode: 'research' }, /mode/],
+  ]) {
+    await assert.rejects(call(args), pattern, JSON.stringify(args));
+  }
+  assert.equal(
+    fakeApi.requests.filter((request) => request.method === 'POST' && request.url === '/v2/agent').length,
+    bodies.length
+  );
+
+  // A thread error from the API reaches the caller with its message.
+  const busy = await call({ prompt: 'x', threadId: '00000000-0000-4000-8000-000000000036' }).then(
+    (result) => JSON.stringify(result),
+    (error) => String(error?.message ?? error)
+  );
+  assert.match(busy, /This thread already has a run in progress/);
+
+  // Status keeps the thread fields, the chat reply and the suggestions.
+  const status = await client.request('tools/call', {
+    arguments: { id: '00000000-0000-4000-8000-000000000034' },
+    name: 'firecrawl_agent_status',
+  });
+  assert.notEqual(status.isError, true);
+  const structured = status.structuredContent;
+  assert.equal(structured.threadId, threadId);
+  assert.equal(structured.threadTurn, 2);
+  assert.equal(structured.mode, 'chat');
+  assert.equal(structured.message, 'Kept the 2 founders.');
+  assert.deepEqual(structured.suggestions, [{ label: 'Only founders', prompt: 'Only keep the founders' }]);
 });

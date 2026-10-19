@@ -9,6 +9,18 @@ const CAPABILITY_HIT = {
   similarity: 0.8123,
 };
 
+const PRICED_TOOL = {
+  id: 'fred/series/observations',
+  provider: 'fred',
+  capability: 'series/observations',
+  description: 'Observations for a series.',
+  creditsCost: 5,
+  perRecord: true,
+  recordsPerUnit: 10,
+  zeroDataRetentionCreditsCost: 10,
+  billing: { unitLabel: 'record' },
+};
+
 const EXCHANGE_CALL = {
   provider: 'fred',
   capability: 'series/observations',
@@ -29,7 +41,6 @@ const TERMS_REQUIRED_BODY = {
 };
 
 async function startFakeExchangeApi(options = {}) {
-  const { keylessEligible = false } = options;
   const requests = [];
   const server = createServer(async (req, res) => {
     try {
@@ -55,11 +66,7 @@ async function startFakeExchangeApi(options = {}) {
     if (req.method === 'POST' && (!parsedBody || typeof parsedBody !== 'object' || Array.isArray(parsedBody))) return json(400, {error:'Expected a JSON object body'});
 
     if (options.largeResult && (url.pathname === '/v2/search' || url.pathname.startsWith('/exchange/discover'))) return json(200, options.largeResult);
-    if (options.apiStatus) return json(options.apiStatus, { success: false, error: 'Invalid API key' });
-
-    if (req.method === 'GET' && url.pathname === '/v2/keyless/eligibility') {
-      return json(200, { eligible: keylessEligible });
-    }
+    if (options.apiStatus) return json(options.apiStatus, { success: false, error: options.apiError ?? 'Invalid API key' });
 
     if (url.pathname === '/exchange/skills/resolve')
       return json(200, { skills: [{ id: 'particle-podcasts' }] });
@@ -96,7 +103,7 @@ async function startFakeExchangeApi(options = {}) {
         return json(200, { success: true, data: { alexandria: [{ provider: 'firecrawl', capability: 'bash', data: { workspaceId: 'retained-workspace', exitCode: 0, stdout: JSON.stringify(identities), idleTtlSeconds: 300 } }] } });
       }
       if (options.largeResult) return json(200, options.largeResult);
-      if (parsedBody.alexandria?.provider === 'firecrawl') return json(200, {success:true, data:{creditsCost:0, alexandria:[{provider:'firecrawl',capability:'find-tools',creditsCost:0,data:{level:'tools',items:[],total:4,next:{provider:'firecrawl',capability:'find-tools',options:{...parsedBody.alexandria.options, offset:4}}}}]}});
+      if (parsedBody.alexandria?.provider === 'firecrawl') return json(200, {success:true, data:{creditsCost:0, alexandria:[{provider:'firecrawl',capability:'find-tools',creditsCost:0,data:{level:'tools',items:[PRICED_TOOL],relatedTools:[{group:'alternative',label:'Alternative sources',tools:[{tool:{...PRICED_TOOL,id:'bls/series'},reason:'r'}]}],total:4,next:{provider:'firecrawl',capability:'find-tools',options:{...parsedBody.alexandria.options, offset:4}}}}]}});
 
       if (parsedBody?.alexandria?.[0]?.provider === 'locked') {
         return json(403, {

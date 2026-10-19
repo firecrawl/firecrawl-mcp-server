@@ -14,21 +14,6 @@ export interface CredentialSession {
 }
 
 /**
- * A non-2xx answer from Core on a path that does not go through the SDK. The
- * status travels with the error so a credential rejection stays recognisable
- * wherever it was raised, rather than being inferred from a message string.
- */
-export class CoreHttpError extends Error {
-  readonly status: number;
-
-  constructor(message: string, status: number) {
-    super(message);
-    this.name = 'CoreHttpError';
-    this.status = status;
-  }
-}
-
-/**
  * Names the validation step that failed. Deliberately low cardinality and
  * server-side only: these tags are for operators triaging a credential
  * validation outage, and they never carry credential material.
@@ -54,6 +39,8 @@ export type CredentialValidationDiagnostics = {
   aborted?: boolean;
   /** MCP resource the credential was being validated against. */
   resource?: string;
+  /** Edge firewall verdict on the response: deny, challenge, rate_limit or other. */
+  edgeMitigation?: string;
 };
 
 /**
@@ -83,17 +70,20 @@ export class CredentialValidationUnavailableError extends Error {
  * covers only the first, and silently drops any throw site added later.
  *
  * Intentionally low cardinality. `resource` is one of a handful of server-owned
- * URLs. Never add the token, the resolved API key, the upstream response body
- * or its headers, request URLs, user agents, or hashes of any of them.
+ * URLs, and `edge_mitigation` is one of four fixed values. Never add the token,
+ * the resolved API key, the upstream response body or raw headers, request
+ * URLs, user agents, or hashes of any of them.
  */
 export function credentialValidationUnavailable(
   diagnostics: CredentialValidationDiagnostics
 ): CredentialValidationUnavailableError {
-  const { aborted, elapsedMs, reason, resource, status } = diagnostics;
+  const { aborted, edgeMitigation, elapsedMs, reason, resource, status } =
+    diagnostics;
   console.error(
     '[MCP_CREDENTIAL_VALIDATION]',
     JSON.stringify({
       aborted: aborted ?? null,
+      edge_mitigation: edgeMitigation ?? null,
       elapsed_ms: elapsedMs ?? null,
       introspect_status: status ?? null,
       reason,

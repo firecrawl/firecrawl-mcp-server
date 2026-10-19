@@ -1,13 +1,150 @@
 # Changelog
 
-## [Unreleased]
+## [3.33.3] - 2026-10-19
 
 ### Changed
 
+- The `firecrawl` JS SDK dependency moves from 4.49.1 to 4.50.0. That release lets the SDK load in browser bundles and on Node 18 and 20, and makes v2 requests work on Cloudflare Workers; the server uses none of those paths, so it behaves the same on Node. The server still requires Node 22 or later because `mcp-proxy`'s `pipenet` dependency sets that floor; `undici` 7 alone would rule out Node 18.
+
+### Fixed
+
+- `firecrawl_crawl` with a wait keeps polling when a status read is rate limited (429), waiting the `Retry-After` time (seconds or an HTTP date, capped at 60 s) instead of failing, and reads result pages only once the crawl ends.
+- `firecrawl_crawl` relays the API's reason, status and code when the API refuses to start a crawl, instead of a generic request error.
+
+## [3.33.2] - 2026-10-19
+
+### Changed
+
+- The `firecrawl` JS SDK dependency moves from 4.49.0 to 4.49.1. That release changes only the SDK's package description, so the server behaves the same; the bump keeps the SDK pin at our latest release.
+
+## [3.33.1] - 2026-10-18
+
+### Changed
+
+- The `firecrawl` JS SDK dependency moves from 4.46.0 to 4.49.0. The SDK now keeps v1-style method calls working on the v2 client with a one-time deprecation warning; the server makes no such calls. A request the server does not stamp with its own origin carries the SDK's wrapper default, `js-sdk.firecrawl-mcp@<version>` when installed from npm, in place of `js-sdk@<version>`.
+- `firecrawl_search` reads an `includeDomains` or `excludeDomains` entry given as a URL that names only a host, such as `https://docs.firecrawl.dev/`, as that host. A URL with a path, query, fragment, port or credentials is still refused, since it would change the filter.
+- Tool arguments are normalized before validation, on every tool and surface. An optional parameter sent as `null` is treated as absent. A numeric string in a number parameter, such as `limit: "5"`, is read as a number and checked against the same bounds. A format or parser object the API accepts is read as the tool's own form: `{type: "markdown"}` as `"markdown"`, and `{type: "json", prompt, schema}`, `{type: "query", ...}`, `{type: "screenshot", ...}` or `{type: "pdf", maxPages}` as the format or parser plus its options field, when that field is not also set and the object carries only options that field declares.
+- `firecrawl_search` refuses `developer` or `gov` combined with another category before calling the API, with the API's reason instead of `Invalid request body`.
+
+### Unchanged
+
+- Tool definitions, descriptions and input schemas. Required parameters sent as `null`, out-of-range numbers, unknown formats and domain filters given as URLs with a path are still refused.
+
+## [3.33.0] - 2026-10-18
+
+### Added
+
+- A session's OAuth client id (`session.oauthClientId`) can name the integration. When the id is a metadata URL and the User-Agent names only an HTTP runtime or is missing, the origin uses the URL host as `mcp-oauth-<host>`, after a carried initialize name and before the `Origin` or `Referer` host. Shared static hosts (`github.io`, `gitlab.io`, `pages.dev`, `netlify.app`, `vercel.app`) add the first path segment. Firecrawl's own hosts name nothing. For an id that is not a URL, such as a dynamically registered client, `session.oauthClientName` (the registered client name) stamps `mcp-oauth-<name>` in the same position; SDK default names such as `mcp` are skipped.
+
+### Unchanged
+
+- Every origin a request stamped before keeps its value unless its User-Agent is a runtime or missing and the session carries an OAuth client id that names a product.
+
+## [3.32.0] - 2026-10-18
+
+### Added
+
+- `FIRECRAWL_INTEGRATION` sets the `integration` field on the API requests that accept it: scrape, batch scrape, crawl, map, search, extract, agent, parse, interact and feedback. Apps that launch the server, such as editor extensions, use it to tag their traffic, for example `FIRECRAWL_INTEGRATION=_zed`. Requests that already carry an `integration` keep it, and other endpoints, such as monitors, are unchanged. Unset or blank sends no field, as before.
+
+## [3.31.1] - 2026-10-18
+
+### Changed
+
+- The `firecrawl` JS SDK dependency moves from 4.42.0 to 4.46.0.
+
+## [3.31.0] - 2026-10-18
+
+### Added
+
+- The request origin can be named by the connection. An `X-Firecrawl-Origin` header stamps `mcp-<name>` ahead of every other signal.
+- When the User-Agent names only an HTTP runtime (`node`, `undici`, `python-httpx`, `Go-http-client` and similar) or is missing, the origin uses, in order, a client name an embedder recovered from an earlier `initialize` (`session.initializeClient`, stamped `mcp-<client>`), then the `Origin` or `Referer` host (`mcp-ref-<host>`), before falling back to `mcp-ua-<runtime>` as before. SDK default names such as `mcp` and local or IP-address hosts are skipped.
+- `firecrawl-mcp/server` exports `isRuntimeUserAgent`, `initializeClientSlug` and `DECLARED_ORIGIN_HEADER`.
+
+### Unchanged
+
+- Every origin a request stamped before keeps its value unless the request sends `X-Firecrawl-Origin`, or its User-Agent is a runtime and it carries one of the new signals.
+
+## [3.30.3] - 2026-10-16
+
+### Changed
+
+- Authenticated `firecrawl_search` always includes Alexandria. When `sources` is omitted it sends `["web", "alexandria"]` as before; when the caller passes sources without `alexandria`, such as `["web"]` or `["news"]`, `alexandria` is added and the requested sources are kept. `["alexandria"]` alone is unchanged. Keyless sessions, sessions without a credential, and `enterprise` searches with `zdr` or `anon` are unchanged, because the API refuses provider discovery there. If the API refuses discovery the caller did not ask for, the search retries on the requested sources alone.
+- Search tool descriptions and instructions describe the always-on behaviour in place of the `sources: ["web"]` opt-out.
+
+## [3.30.2] - 2026-10-15
+
+### Fixed
+
+- `firecrawl_search` relays the API's error message for every search. Searches with explicit sources that excluded `alexandria` (for example `["web"]`) previously surfaced only `Request failed with status code 402`, dropping the out-of-credits message and upgrade link. The fallback for an error without a message now reads `Firecrawl request failed (HTTP N)`.
+
+## [3.30.1] - 2026-10-14
+
+### Added
+
+- `firecrawl_find_tools` accepts `includeCosts`. When it is `true`, tool results carry per-capability credit prices as before, and `nextTool` arguments keep the flag. The server handles it locally and does not send it upstream.
+
+### Changed
+
+- Alexandria output omits per-capability credit prices by default. `creditsCost`, `perRecord`, `billing`, `recordsPerUnit` and `zeroDataRetentionCreditsCost` are dropped from `firecrawl_find_tools` items and related tools, from `data.tools` in `firecrawl_search` and URL-mode `firecrawl_scrape`, and from each Alexandria result entry. Execution request totals such as `data.creditsCost` are unchanged; the free `firecrawl_find_tools` response omits its zero total.
+- Hosted instructions say Alexandria execution is billed per capability, replacing "billed at the capability's listed price".
+
+## [3.30.0] - 2026-10-14
+
+### Added
+
+- `firecrawl-mcp/server` (unstable): `unstable_hooks.registerResources(registrar)` lets an embedder register MCP resources after the built-in tools. Resource definitions take a `uri`, `name`, optional `description` and `mimeType`, and a `load(session)` that returns one or more text or blob contents, each with optional `uri`, `mimeType` and `_meta` overrides. The `ResourceDefinition`, `ResourceContent` and `ResourceRegistrar` types are exported.
+- Tool definitions passed to `registerExtraTools` accept `icons` (`src`, optional `mimeType`, `sizes`, `theme`), which `tools/list` now sends. Built-in tools, resources and local stdio behaviour are unchanged.
+
+### Removed
+
+- The server no longer sends `X-Firecrawl-Agent-Hints: true` on its Firecrawl API requests and no longer relays the API's optional `agent_hints` field. `agent_hints` is removed from every tool's output schema, structured content and error payloads, and `ToolCallEvent` (passed to `onToolResult`) no longer has `agentHints`. The API no longer sends this field, so tool results are otherwise unchanged.
+- `firecrawl_search` no longer advertises or forwards the optional `objective` and `clientModel` inputs, on both the full and the search-only surface. Clients that still send them keep working: the values are ignored and not sent to `/v2/search`. `firecrawl_feedback` keeps its `objective` field.
+
+### Changed
+
+- The README's `CLOUD_SERVICE=true` and search-only sections are shortened into one section. Behaviour is unchanged.
+
+## [3.29.1] - 2026-10-09
+
+### Added
+
+- Scrape formats accept `images` for page image URLs, including the shared scrape options used by search, crawl, and browser interaction. Other formats are unchanged.
+
+### Removed
+
+- Hosted mode (`CLOUD_SERVICE=true`) no longer writes per-call `[MCP_ACTION]` and `[MCP_AGENT_HINTS]` log lines or posts action-log records (`FIRECRAWL_MCP_ACTION_LOG_URL`, `FIRECRAWL_MCP_ACTION_LOG_SECRET`). These modules are now maintained with the hosted deployment. The `onToolResult` hook is unchanged, so embedders can still observe tool calls.
+- The `/.well-known/openai-apps-challenge` route (`OPENAI_APPS_CHALLENGE_TOKEN`) is removed in every HTTP mode. Hosted `/ready` no longer checks deployment configuration: the primary HTTP listener's `/ready` now returns `{"ok":true}` in every mode, as it already did for self-hosted HTTP. The hosted search instance keeps FastMCP's own `/ready` response.
+- Hosted keyless admission is removed. With `CLOUD_SERVICE=true`, an HTTP request without a credential is now rejected with 401 like any other missing credential, instead of being admitted as a rate-limited keyless session; `KEYLESS_PROXY_SECRET` is no longer read and client IPs are no longer forwarded. A request with an invalid credential on the full endpoint is still admitted and every tool call returns the `CREDENTIAL_INVALID` recovery payload. The search-only and account profiles never admitted keyless sessions and are unchanged. Local keyless stdio (no `FIRECRAWL_API_KEY` and no `FIRECRAWL_API_URL`) is unchanged.
+- The service image files `docker/nginx.conf` and `docker/entrypoint.sh` are removed, along with the internal marker header and log line for their credential-in-path route (`X-Firecrawl-Key-Transport`, `[MCP_LEGACY_KEY_PATH]`). The standard `Dockerfile` image is unchanged.
+
+### Changed
+
+- `CLOUD_SERVICE=true` is documented as a hardened HTTP preset: streamable HTTP bound to `0.0.0.0`, a credential required on every request, safe mode, and upload-only file access. The account and search-only surfaces selected by `FASTMCP_ENDPOINT` are unchanged, and `npm run start:cloud` still starts the preset.
+
+## [3.29.0] - 2026-10-09
+
+### Added
+
+- Unstable library entry point `firecrawl-mcp/server`: `createFirecrawlMcpServer(options)` builds a server instance for embedding in another runtime, with extension hooks under `unstable_hooks` (`authenticate`, `wrapTool`, `onToolResult`, `instructions`, `registerExtraTools`, `outboundRequest`, `beforeKeylessRequest`, `toolFilter`, `configureHttp`, `oauth`) and its own type declarations, so embedders do not import `fastmcp`. The API may change in any release. The `firecrawl-mcp` CLI is unchanged.
+- `firecrawl-mcp/server` also exports the helpers the built-in tools use (credential recovery payloads, header and origin helpers, search field definitions, the search output schema, search request and Alexandria error helpers, the read-only `KEYLESS_TOOL_NAMES` set, and `structuredCompact`), so embedded tools and hooks can behave like the built-in ones. They are unstable too.
+- `firecrawl_gov_search` queries `/v2/search/gov`, an index of primary law and regulatory material from US federal, state, and local government sources (statutes, regulations, codes, court opinions, and other government publications). It takes `query` and an optional `k` (1 to 100) and returns ranked results with a position, title, URL, and matched snippet. It is registered on the full surface for authenticated sessions and on the search surface (`/v2/mcp-search`), whose fixed tool set grows to nine.
+- `firecrawl_agent` now exposes the optional `effort` (`low`, `medium`, `high`), `maxCredits`, and `strictConstrainToURLs` parameters that `POST /v2/agent` already accepts, and forwards them in the request body.
+- `firecrawl_agent` can continue a thread: it accepts `threadId` and `mode` (`"extract"` or `"chat"`) and forwards them to `POST /v2/agent` through the SDK. On a follow-up, omitted `mode`, `urls` and `schema` carry over from the previous turn. `firecrawl_agent_status` now keeps `message` and `suggestions` in its structured content, next to `threadId` and `threadTurn`.
+- `firecrawl_agent` accepts an `exchange` object that mirrors the API's (`enabled`, `toolkits` (at most 5), `maxCalls`, `requireApproval`, `approve: { approvalId, callIds?, always? }`, `decline: { approvalId }`, `onTermsRequired`) and forwards it to `POST /v2/agent` through the SDK. `exchange.onTermsRequired` (`"skip"` or `"ask"`) controls Alexandria providers whose data terms the team has not accepted; they are never called. After an ask-mode terms offer and the user's explicit consent to `terms/accept`, a caller answers the offer on the same thread with `exchange.approve: { approvalId }` (or `exchange.decline`) instead of starting over. `approve` and `decline` require `threadId` and cannot be sent together, and `exchange.requireApproval` requires `mode: "chat"` on the same call. There is no auto-accept. `firecrawl_agent_status` now keeps `exchange` (including `skippedProviders` and `requiresAction`, whose provider `digest` is `string | null` and always present) and `pendingApproval` in its structured content.
+
+- `firecrawl_agent_status` flags a run that stopped at its credit limit. When the API reports `status: "failed"` with `stopReason: "credit_limit_reached"`, the text result starts with a plain notice: the run hit `maxCredits`, `partial` (when present) is an incomplete best-effort result and whether it matches the requested schema, the agent's `message`, and how to continue (a follow-up on the same `threadId`, or a new run with a higher `maxCredits`). Structured content keeps `partial`, `partialSchemaValid` and `stopReason` and adds the same `notice`. Every other status is returned unchanged.
+
+### Changed
+
+- The `ghcr.io/firecrawl/firecrawl-mcp-server` container image now packages the standard server: stdio by default, Streamable HTTP with `HTTP_STREAMABLE_SERVER=true` on `PORT` (default `3000`), entrypoint `node dist/index.js`, running as the non-root `node` user. Earlier `latest` builds ran a deployment-specific image listening on port `8080`; if you ran that image, update your port mapping and configuration. Images are tagged `latest`, `v<package version>` and `sha-<commit sha>`, and the `firecrawl-mcp-server-alpha` image is no longer published. See "Running with Docker" in the README.
+- `tools/list` now sends each tool's top-level `title` (MCP 2025-06-18), copied from `annotations.title`. The title wording is unchanged. Clients that read only the top-level field, such as Codex's tool search, now see the same display names.
+- The npm package now bundles the pnpm-patched fastmcp. npm does not apply pnpm patches, so `npx firecrawl-mcp` installs were loading unpatched fastmcp from the registry, without the top-level titles or the `canList` and `beforeValidate` hooks. fastmcp's runtime imports (`@modelcontextprotocol/sdk`, `fuse.js`, `hono`, `mcp-proxy`, `undici`, `uri-templates`, `xsschema`) are now direct dependencies so they resolve under pnpm's non-hoisted layout too.
+- Keyless recovery messages now link to the caller's own signup link, `https://firecrawl.dev/k/<token>` (a 12-character encrypted token), instead of `/app/api-keys`. The API issues the link (the `signup_url` of a keyless 429, or `signupUrl` from the eligibility check, which the server now also asks for when a keyless session calls an account-only tool) and the site decrypts it to MCP keyless attribution. When the API can't give one it sends the regular keyless signup link, which is relayed as is; with no API link at all the message uses the regular MCP signup link (`signin?utm_source=keyless&utm_medium=mcp`). Recovery payloads carry the link as `signup_url`. Signed-in users who open it land on the API keys page.
 - The search surface (`/v2/mcp-search`) now exposes `firecrawl_find_tools` and `firecrawl_scrape` alongside its six search tools, so agents can execute the Alexandria providers that `firecrawl_search` already returns. Both carry surface-scoped descriptions that name only tools registered on that surface, and Alexandria results there omit the `firecrawl_feedback` pointer. See docs/search-profile.md.
 
 ### Fixed
 
+- Hosted OAuth reuses a token's introspection answer for up to 60 seconds, capped by the token's expiry, and 10 seconds for an inactive answer. Concurrent requests with one token share a single introspection call, and failed introspections are never cached. This keeps each node under the issuer's per-IP rate limit, which was turning bursts into `Firecrawl credential validation is temporarily unavailable`. A revoked token can keep working for up to 60 seconds on a pod that cached it. Set `FIRECRAWL_OAUTH_INTROSPECT_CACHE_TTL_MS=0` to turn the cache off. `[MCP_CREDENTIAL_VALIDATION]` records now include `edge_mitigation` (`deny`, `challenge`, `rate_limit` or `other`) when the edge firewall blocked the introspection.
 - `firecrawl_search` on both surfaces now forwards `includeDomains` and `excludeDomains` to `/v2/search` as body fields instead of rewriting the query with `site:` operators, so the API's domain enforcement applies to MCP callers.
 
 ## [3.25.0] - Unreleased

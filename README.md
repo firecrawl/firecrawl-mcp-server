@@ -8,17 +8,20 @@
 
 # Firecrawl MCP Server
 
-A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com/firecrawl/firecrawl) to MCP-compatible AI agents — search, scrape, and interact with the live web for clean, agent-ready context.
+A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com/firecrawl/firecrawl), the context API for AI agents, to MCP-compatible clients: search, scrape, and interact with the live web and get back clean Markdown or structured data.
 
 > Big thanks to [@vrknetha](https://github.com/vrknetha), [@knacklabs](https://www.knacklabs.ai) for the initial implementation!
 
 ## Features
 
-- Search the web and get full page content
-- Search an index built for coding agents: GitHub issues, merged pull requests, READMEs, and docs
-- Scrape any URL into clean, structured data
-- Interact with pages — click, navigate, and operate
-- Deep research with autonomous agent
+- Search the web, optionally with full page content for each result
+- Search indexes for developer sources (GitHub issues, merged pull requests, READMEs, and docs), US government sources, and scientific papers (PubMed, bioRxiv, medRxiv, arXiv)
+- Scrape any URL into clean Markdown or structured JSON
+- Parse PDFs and documents
+- Crawl a site for content from many pages, or map it to discover its URLs
+- Interact with pages in a real browser: click, type, fill forms, and navigate dynamic pages
+- Run Agent jobs for multi-source research that returns structured data
+- Monitor pages and get notified when their content changes
 - Check current and historical Firecrawl credit usage
 - Automatic retries and rate limiting
 - Cloud and self-hosted support
@@ -32,12 +35,12 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Use `firecrawl_map` when you need to discover URLs on a site without fetching their content.
 - Use `firecrawl_crawl` when you need content from many pages under a site; set `limit`, `includePaths`/`excludePaths`, or `maxDiscoveryDepth` to bound it.
 - Use `firecrawl_search` when you're starting from a query rather than a URL and want ranked web results; add `scrapeOptions` if you also want page content fetched in the same call (the search-only endpoint never fetches content).
-- Use `firecrawl_interact` when a page needs a click, type, or navigate action before you can read it — pass a `url` for a fresh page or a `scrapeId` to continue on one you already scraped.
+- Use `firecrawl_interact` when a page needs a click, type, or navigate action before you can read it: pass a `url` for a fresh page or a `scrapeId` to continue on one you already scraped.
 - Use the `firecrawl_monitor_*` tools when the same page needs to be checked on a recurring schedule with diffs and change alerts, rather than fetched once.
 - Use `firecrawl_credit_usage` to check credits left or monthly consumption, optionally broken down by API key.
-- Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control — the session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
+- Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control. The session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
 
-This server lists 26 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 — `firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse` — and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 8 tools (search, developer and research search, plus Alexandria catalogue lookup and execution).
+This server lists 27 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 9 tools (search, developer, government, and research search, plus Alexandria catalogue lookup and execution).
 
 ## Installation
 
@@ -73,6 +76,10 @@ Authorization: Bearer <FIRECRAWL_API_KEY>
 
 Never put an API key in the server URL. Never put an API key in an agent chat. Configure it directly in the client or secret manager. See the [hosted MCP setup guide](https://docs.firecrawl.dev/mcp-server) and the [agent onboarding guide](https://www.firecrawl.dev/agent-onboarding/SKILL.md) for client-specific instructions.
 
+#### Naming your integration
+
+An integration that connects over HTTP can name itself with an `X-Firecrawl-Origin` header, for example `X-Firecrawl-Origin: my-agent`. The server reports it to Firecrawl as the request origin `mcp-my-agent@<server version>`, in place of the client name or User-Agent it would otherwise report. Use letters, digits and dashes: each run of other characters becomes one dash, leading and trailing dashes are dropped, and the name is cut at 48 characters. Tool results are unaffected; only the origin sent to the Firecrawl API (and passed to an embedder's `beforeKeylessRequest`) changes.
+
 #### Search-only endpoint
 
 A fixed-scope search surface is also hosted at:
@@ -81,7 +88,7 @@ A fixed-scope search surface is also hosted at:
 https://mcp.firecrawl.dev/v2/mcp-search
 ```
 
-It exposes a fixed set of eight tools: `firecrawl_search`, `firecrawl_developer_search`, the four `firecrawl_research_*` tools, and the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`. Its `firecrawl_search` fetches no page content, and the surface has its own OAuth identity; the full endpoint above is unchanged. It backs a published connector listing, so its tool set is a contract rather than a profile to tune. See [docs/search-profile.md](docs/search-profile.md) for the full contract and what a change to it involves.
+It exposes a fixed set of nine tools: `firecrawl_search`, `firecrawl_developer_search`, `firecrawl_gov_search`, the four `firecrawl_research_*` tools, and the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`. Its `firecrawl_search` fetches no page content.
 
 ### Running with npx
 
@@ -136,7 +143,7 @@ To configure Firecrawl MCP in Cursor **v0.45.6**
 
 Replace `your-api-key` with your Firecrawl API key. If you don't have one yet, you can create an account and get it from https://www.firecrawl.dev/app/api-keys
 
-After adding, refresh the MCP server list to see the new tools. The Composer Agent will automatically use Firecrawl MCP when appropriate, but you can explicitly request it by describing your web scraping needs. Access the Composer via Command+L (Mac), select "Agent" next to the submit button, and enter your query.
+After adding, refresh the MCP server list to see the new tools. The Composer Agent will automatically use Firecrawl MCP when appropriate, but you can explicitly request it by describing what you need from the web. Access the Composer via Command+L (Mac), select "Agent" next to the submit button, and enter your query.
 
 ### Running on Windsurf
 
@@ -166,13 +173,40 @@ env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecra
 
 Use the url: http://localhost:3000/mcp
 
-### Installing via Smithery (Legacy)
+### Running with Docker
 
-To install Firecrawl for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@mendableai/mcp-server-firecrawl):
+The `ghcr.io/firecrawl/firecrawl-mcp-server` image runs the same server as `npx -y firecrawl-mcp`. Every build from `main` is tagged `latest`, `v<package version>` and `sha-<commit sha>`. `v<package version>` moves to the newest build of that version, so pin `sha-<commit sha>` (or a digest) when you need a fixed image.
+
+stdio (the default), for MCP clients that launch the server as a command:
 
 ```bash
-npx -y @smithery/cli install @mendableai/mcp-server-firecrawl --client claude
+docker run -i --rm -e FIRECRAWL_API_KEY=fc-YOUR_API_KEY ghcr.io/firecrawl/firecrawl-mcp-server:latest
 ```
+
+```json
+{
+  "mcpServers": {
+    "firecrawl-mcp": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "FIRECRAWL_API_KEY", "ghcr.io/firecrawl/firecrawl-mcp-server:latest"],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+Streamable HTTP, served at `http://localhost:3000/mcp`:
+
+```bash
+docker run --rm -p 127.0.0.1:3000:3000 \
+  -e HTTP_STREAMABLE_SERVER=true \
+  -e FIRECRAWL_API_KEY=fc-YOUR_API_KEY \
+  ghcr.io/firecrawl/firecrawl-mcp-server:latest
+```
+
+The image sets `HOST=0.0.0.0` and `PORT=3000`; override `PORT` (and the `-p` mapping) to listen elsewhere. The server uses the container's `FIRECRAWL_API_KEY` for requests that don't send their own credential, so the example publishes the port on `127.0.0.1` only; don't expose it more widely unless clients must supply their own key. Set `FIRECRAWL_API_URL` to use a self-hosted Firecrawl API. The container runs as the unprivileged `node` user.
 
 ### Running on VS Code
 
@@ -242,23 +276,24 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 - `FIRECRAWL_API_URL` (Optional): Custom API endpoint for self-hosted instances
   - Example: `https://firecrawl.your-domain.com`
   - If not provided, the cloud API will be used (requires API key)
+- `FIRECRAWL_INTEGRATION` (Optional): Integration tag for apps that launch this server, such as an editor extension
+  - Sent as the `integration` field of scrape, batch scrape, crawl, map, search, extract, agent, parse, interact and feedback requests
+  - Use a value that starts with `_`, for example `_zed`
 
 #### MCP OAuth (Bearer access tokens)
 
-Hosted Firecrawl can issue OAuth **access tokens** (`fco_…`) via the authorization server on [firecrawl.dev](https://firecrawl.dev). This MCP server forwards whichever credential it resolves to the Firecrawl API as `Authorization: Bearer …`.
+Firecrawl issues OAuth **access tokens** (`fco_…`) via the authorization server on [firecrawl.dev](https://firecrawl.dev). This MCP server forwards whichever credential it resolves to the Firecrawl API as `Authorization: Bearer …`.
 
 - **HTTP stream transports** (`CLOUD_SERVICE=true`, `HTTP_STREAMABLE_SERVER=true`, or `SSE_LOCAL=true`): Clients should send `Authorization: Bearer <fco_access_token>` on MCP requests. An OAuth bearer token takes precedence over `x-firecrawl-api-key` / `x-api-key` when both are present.
 - **stdio:** Use `FIRECRAWL_OAUTH_TOKEN` for a static access token, or keep using `FIRECRAWL_API_KEY` for an API key.
 
 Use **access** tokens (`fco_…`) only. Refresh tokens (`fcr_…`) must be exchanged at the token endpoint, not passed to the scrape/search API.
 
-#### Search-only surface (hosted)
+#### `CLOUD_SERVICE=true`
 
-In hosted mode (`CLOUD_SERVICE=true`) a second in-process instance serves the [search-only endpoint](#search-only-endpoint). The bundled service has a fixed deployment contract: nginx routes `/v2/mcp-search` to the instance on local port `3001`, and the OAuth protected-resource identifier is `https://mcp.firecrawl.dev/v2/mcp-search`.
+`CLOUD_SERVICE=true` serves the tools over streamable HTTP on `PORT` (default `3000`, bound to `0.0.0.0`) with stricter defaults: every request must carry a credential (an API key or an OAuth access token), scrape is read-only (see the scrape tool below), and `firecrawl_parse` accepts uploads only.
 
-`FIRECRAWL_MCP_SEARCH_ENABLED` (default `true`) is the supported operational toggle; set it to `false` to prevent the search instance from starting. The Node process also accepts `FIRECRAWL_MCP_SEARCH_PORT`, `FIRECRAWL_MCP_SEARCH_ENDPOINT`, and `FIRECRAWL_MCP_SEARCH_RESOURCE_URL` for isolated tests. Those overrides do not reconfigure the bundled nginx routes or the authorization server allowlist and must not be used independently in the hosted deployment.
-
-The search instance requires authentication for every request (including `tools/list`) and rejects OAuth tokens whose audience does not match its own resource.
+`FASTMCP_ENDPOINT` selects the tool surface: `/v2/mcp` (default) for the full tool set, `/v2/mcp-oauth` for the account surface, or `/v2/mcp-search` for the search-only tools (this also requires `FIRECRAWL_MCP_SEARCH_OAUTH_ONLY=true`). With the full surface, a search-only instance also starts on port `3001`; set `FIRECRAWL_MCP_SEARCH_ENABLED=false` to turn it off.
 
 ### Configuration Examples
 
@@ -305,7 +340,8 @@ Use this guide to select the right tool for your task:
 - **If you need to discover URLs on a site:** use **map**
 - **If you want to search the web for info:** use **search**
 - **If you have a programming question** (a library, an API contract, an error message, a known bug): use **developer search**
-- **If you need scientific papers** (biomedical, life-science, clinical, or arXiv literature): use **research tools** — they search paper abstracts and full text. `search` with `categories: ["research"]` is a different thing: a website filter over ordinary web results.
+- **If you have a legal or regulatory question** (a statute, regulation, code, court opinion, or other US government publication): use the **Firecrawl Government Index**
+- **If you need scientific papers** (biomedical, life-science, clinical, or arXiv literature): use **research tools**, which search paper abstracts and full text. `search` with `categories: ["research"]` is a different thing: a website filter over ordinary web results.
 - **If you need multi-source research that returns structured data, do not know the URLs, or the answer spans several sites** (an entity plus its fields, a list, a dataset): use **agent**
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
 - **If you need interactive browser automation** (click, type, navigate): use **interact** with a URL for a fresh page, or **scrape** + **interact** when you already scraped the page or need tighter scrape control
@@ -323,6 +359,7 @@ Use this guide to select the right tool for your task:
 | search    | Web search for info                            | results[]                                        |
 | find_tools | Alexandria catalogue browsing and URL lookup | providers, tool contracts and nextTool navigation |
 | developer | Programming questions over developer sources   | results[] with passages                          |
+| gov       | US primary law and regulatory material         | results[] with snippets                          |
 | agent     | Multi-source research, unknown or many sites   | JSON (structured data)                           |
 | monitor   | Recurring page checks                          | monitor/check metadata and diffs                 |
 | research  | Paper and GitHub repository research           | research results and repo matches                |
@@ -416,6 +453,7 @@ Scrape content from a single URL with advanced options.
 
 **Branding format:** Extracts comprehensive brand identity (colors, fonts, typography, spacing, logo, UI components) for design analysis or style replication.
 **Privacy:** Set `redactPII: true` to return content with personally identifiable information redacted.
+**With `CLOUD_SERVICE=true`:** scrape is read-only. It takes no browser `actions` and cannot accept provider terms. A named `profile` loads saved browser state without saving changes to it, and the full endpoint's `firecrawl_search` treats `scrapeOptions.profile` the same way. To save browser state to a profile, open the page with `firecrawl_interact` (see below). An organization admin accepts terms in the dashboard.
 
 **Returns:**
 
@@ -518,7 +556,7 @@ Sends structured feedback on a previous `firecrawl_search` result. The first fee
 
 **Opt out:** set `FIRECRAWL_NO_SEARCH_FEEDBACK=1` (or `FIRECRAWL_DISABLE_SEARCH_FEEDBACK=1`) in the environment when starting the MCP server. The `firecrawl_search_feedback` tool will not be registered, so agents can't call it. Team admins can also disable feedback server-side; in that case the tool is registered but always returns `feedbackErrorCode: "TEAM_OPTED_OUT"`.
 
-**Most important field:** `missingContent`. It's an array of specific pieces of content the agent expected to find but did not. One entry per missing topic — these aggregate across teams and tell us what to index next. For useful results, use `valuableResults` with the `source`/`position` pair stamped on each result — results are grouped and each group is numbered from 1 independently, so both are required. List **every** useful result (unlisted results are treated as not useful), and reserve `valuableSources` for useful URLs that were not among the returned results.
+**Most important field:** `missingContent`. It's an array of specific pieces of content the agent expected to find but did not. One entry per missing topic; these aggregate across teams and tell us what to index next. For useful results, use `valuableResults` with the `source`/`position` pair stamped on each result — results are grouped and each group is numbered from 1 independently, so both are required. List **every** useful result (unlisted results are treated as not useful), and reserve `valuableSources` for useful URLs that were not among the returned results.
 
 **Daily refund cap (per team, per UTC day, default 100 credits).** Once a team's `creditsRefundedToday` reaches `dailyRefundCap`, further submissions still record feedback but no longer refund credits. The response sets `dailyCapReached: true`. Agents should stop calling this tool for the rest of the UTC day when they see that flag.
 
@@ -592,7 +630,7 @@ and small metadata objects. Do not include raw scrape/parse outputs.
 
 **Returns:**
 
-- `{ success, feedbackId, creditsRefunded, creditsRefundedToday?, dailyRefundCap?, dailyCapReached?, alreadySubmitted?, warning? }` JSON.
+- `{ success, feedbackId, creditsRefunded, creditsRefundedToday?, dailyRefundCap?, dailyCapReached?, websiteCapReached?, alreadySubmitted?, warning? }` JSON.
 
 ### 4. Crawl Tool (`firecrawl_crawl`)
 
@@ -659,11 +697,11 @@ Check the status and results of an existing crawl job by ID.
 
 Parse local files or hosted upload references with Firecrawl's `/v2/parse` endpoint.
 
-**Best for:** PDFs, Word documents, spreadsheets, HTML files, and other documents that need markdown or structured JSON output. Hosted MCP supports a two-step upload-ref flow; local direct file reads require a self-hosted `FIRECRAWL_API_URL`.
+**Best for:** PDFs, Word documents, spreadsheets, HTML files, and other documents that need markdown or structured JSON output. The hosted endpoint uses a two-step upload flow; local direct file reads require a self-hosted `FIRECRAWL_API_URL`.
 
 **Not recommended for:** Remote URLs (use scrape), multiple files in one call (call parse once per file), or browser-only actions such as screenshots and clicks.
 
-**Hosted MCP flow:** Hosted MCP cannot read the caller's filesystem directly. Call `firecrawl_parse` with `filePath` to receive a short-lived upload command and `nextToolCall`, upload the file locally, then call `firecrawl_parse` again with the returned `uploadRef`. Minting the hosted upload URL requires Firecrawl auth or keyless eligibility. In local `npx firecrawl-mcp` mode, direct file parsing currently requires `FIRECRAWL_API_URL` pointing to a self-hosted Firecrawl API; a plain cloud API-key-only local server cannot read and upload files through this tool.
+**Hosted endpoint:** it cannot read your filesystem. Call `firecrawl_parse` with `filePath` to receive a short-lived upload command and `nextToolCall`, upload the file locally, then call `firecrawl_parse` again with the returned `uploadRef`. The upload step requires Firecrawl auth or the keyless tier. In local `npx firecrawl-mcp` mode, direct file parsing currently requires `FIRECRAWL_API_URL` pointing to a self-hosted Firecrawl API; a plain cloud API-key-only local server cannot read and upload files through this tool.
 
 **Usage Example:**
 
@@ -740,6 +778,28 @@ The agent performs web searches, follows links, reads pages, and gathers data au
 - `prompt`: Natural language description of the data you want (required, max 10,000 characters)
 - `urls`: Optional array of URLs to focus the agent on specific pages
 - `schema`: Optional JSON schema for structured output
+- `effort`: Optional. `"low"`, `"medium"` or `"high"` reasoning budget for the agent task.
+- `maxCredits`: Optional positive integer. Spending limit in credits for this run. The API defaults to 2,500 when omitted, and caps a free request at 2,500.
+- `strictConstrainToURLs`: Optional boolean. If `true`, the agent only visits the URLs in `urls`.
+- `threadId`: Optional. Continue an existing thread: the `threadId` from an earlier `firecrawl_agent` or `firecrawl_agent_status` result. Omit to start a new thread. On a follow-up, omitted `mode`, `urls`, `schema` and `exchange` settings carry over from the previous turn.
+- `mode`: Optional. `"extract"` (default) returns the complete structured result every turn. `"chat"` lets a follow-up that asks for no new data get a short reply in `message` instead of a re-run; `exchange.requireApproval` needs it.
+- `exchange`: Optional. Alexandria provider settings for this turn, forwarded as-is to `POST /v2/agent`:
+  - `enabled`, `toolkits` (up to 5 provider slugs), `maxCalls` (1 to 30), `requireApproval` (paid calls end the turn with a `pendingApproval`; needs `mode: "chat"` on the same call, even on a follow-up)
+  - `onTermsRequired`: what to do when an Alexandria provider the agent would use needs data terms your team has not accepted. Gated providers are never called in any mode. Omitted on a follow-up keeps the previous turn's value.
+    - `"skip"` (default): answer with accepted providers only. `exchange.skippedProviders` on the status result lists the gated providers that would have helped.
+    - `"ask"`: the same, plus a terms `pendingApproval` and `exchange.requiresAction` with the approval ID and provider requirements. Read terms with `terms/show`; an organization admin accepts them in the Firecrawl dashboard.
+  - `approve`: `{ approvalId, callIds?, always? }` answers yes to the `pendingApproval` the previous turn ended on. `callIds` and `always` apply to paid-call approvals only.
+  - `decline`: `{ approvalId }` answers no. A declined terms offer keeps those providers out of the rest of the thread.
+  - `approve` and `decline` need `threadId`, and only one of them can be sent.
+
+**Provider terms (ask mode):** there is no auto-accept mode. When a turn ends on a terms offer, the status result carries `pendingApproval` (`kind: "terms"`) and `exchange.requiresAction` with the `approvalId` and provider requirements. Any `terms/accept` descriptor in that API payload is unavailable through MCP. To use the provider:
+
+1. Show the user the terms (`terms/show` through `firecrawl_scrape` with `alexandria`).
+2. Direct an organization admin to accept the terms at the provider's URL, or [data sources settings](https://www.firecrawl.dev/app/settings?tab=data-sources). A data request is not consent.
+3. Wait for the admin to confirm acceptance in the dashboard.
+4. Continue the same thread: call `firecrawl_agent` with the same `threadId` and `exchange.approve: { "approvalId": "..." }`. This resumes research and does not accept terms.
+
+If the user says no, call `firecrawl_agent` with the same `threadId` and `exchange.decline: { "approvalId": "..." }` instead.
 
 **Prompt Example:**
 
@@ -786,9 +846,34 @@ Then poll with `firecrawl_agent_status` using the returned job ID.
 }
 ```
 
+**Usage Example (follow-up on the same thread):**
+
+```json
+{
+  "name": "firecrawl_agent",
+  "arguments": {
+    "prompt": "Only keep the startups based in Europe",
+    "threadId": "0199a1b2-0000-7000-8000-000000000031"
+  }
+}
+```
+
+**Usage Example (continue the thread after an admin confirmed dashboard acceptance):**
+
+```json
+{
+  "name": "firecrawl_agent",
+  "arguments": {
+    "prompt": "The admin confirmed acceptance of the Apollo terms in the dashboard. Continue.",
+    "threadId": "0199a1b2-0000-7000-8000-000000000031",
+    "exchange": { "approve": { "approvalId": "0199a1b2-0000-7000-8000-000000000033" } }
+  }
+}
+```
+
 **Returns:**
 
-- Job ID for status checking. Use `firecrawl_agent_status` to poll for results.
+- Job ID for status checking, plus `threadId` and `threadTurn`. Use `firecrawl_agent_status` to poll for results.
 
 ### 9. Check Agent Status (`firecrawl_agent_status`)
 
@@ -821,6 +906,7 @@ Interact with a fresh URL or with a page that was already opened by `firecrawl_s
 
 - Pass `url` to scrape and open a page for interaction in one MCP call.
 - Pass `scrapeId` to continue interacting with an existing scraped page.
+- To save browser state (cookies, localStorage) to a named profile, pass `url` with `scrapeOptions: { "profile": { "name": "my-profile", "saveChanges": true } }`. The state is saved when `firecrawl_interact_stop` ends the session.
 - Pass exactly one of `url` or `scrapeId`, plus either `prompt` or `code`.
 
 **Usage Example:**
@@ -863,9 +949,9 @@ Search and inspect papers and GitHub repositories through the research MCP tools
 - `firecrawl_research_related_papers`: expand from one or more anchor papers through the citation graph.
 - `firecrawl_research_read_paper`: read full-text passages from a specific paper.
 
-**Best for:** Literature review, paper lookup, and repository discovery workflows where the agent needs a focused research surface instead of general web scraping.
+**Best for:** Literature review, paper lookup, and repository discovery workflows where the agent needs a focused research surface instead of general web search.
 
-`firecrawl_search` with `categories: ["research"]` is a different surface: it filters ordinary web results to research-affiliated websites and returns page snippets, not paper records. Use these tools when the question is about the literature itself, and pass several distinct framings of the same question — they surface different papers than a single query does.
+`firecrawl_search` with `categories: ["research"]` is a different surface: it filters ordinary web results to research-affiliated websites and returns page snippets, not paper records. Use these tools when the question is about the literature itself, and pass several distinct framings of the same question, since they surface different papers than a single query does.
 
 ### 13. Monitor Tools (`firecrawl_monitor_*`)
 
@@ -940,7 +1026,7 @@ Pass `body` when you need crawl targets, JSON change tracking, custom retention,
 
 Search an index built for coding agents. The index covers GitHub issues, merged pull requests, repository READMEs, and code documentation.
 
-**Best for:** A programming question — code behaviour, a library or framework, an API contract, an error message, or a known bug.
+**Best for:** A programming question: code behaviour, a library or framework, an API contract, an error message, or a known bug.
 
 **Arguments:**
 
@@ -962,6 +1048,31 @@ Search an index built for coding agents. The index covers GitHub issues, merged 
 **Returns:** Ranked results. Each result carries an ID, a source type (`issue`, `pull_request`, `readme`, or `doc`), a URL, a title, and the matched passages in markdown.
 
 `firecrawl_search` with `categories: ["developer"]` searches the same index beside the web results. Use this tool instead when you want the matched passages, the `skills` filter, or no web results in the response. The search-only endpoint exposes both tools, and the same choice applies there.
+
+### 14b. Government Index Search Tool (`firecrawl_gov_search`)
+
+Search primary law and regulatory material from US federal, state, and local government sources: statutes, regulations, codes, court opinions, and other government publications.
+
+**Best for:** A legal or regulatory question that needs the governing text or an official government source.
+
+**Arguments:**
+
+```json
+{
+  "name": "firecrawl_gov_search",
+  "arguments": {
+    "query": "federal food labeling requirements for allergens",
+    "k": 10
+  }
+}
+```
+
+- `query` (required): the legal or regulatory question or search phrase.
+- `k`: number of ranked results. The default is 10 and the maximum is 100.
+
+**Returns:** Ranked results. Each result carries a position, a title, a URL, and the matched snippet. The search-only endpoint exposes this tool too.
+
+`firecrawl_search` with `categories: ["gov"]` searches the same sources and returns the hits in `data.web` with `category: "gov"`. The `gov` category cannot be combined with other categories.
 
 ### 15. Alexandria Tools
 
@@ -1008,14 +1119,16 @@ Start with no arguments for categories, then progressively narrow the catalogue:
 | --- | --- |
 | `{}` | Categories and short descriptions |
 | `{"categories":["podcasts"]}` | Providers in that category |
-| `{"categories":["podcasts"],"providers":["particle"]}` | Compact tool names, descriptions, and prices |
+| `{"categories":["podcasts"],"providers":["particle"]}` | Compact tool names and descriptions |
 | `{"providers":["particle"],"capabilities":["podcasts/episodes/search"]}` | Complete selected inputs, constraints, response, and examples |
 
 No group hop is required. Explicit `level` supports `categories`, `providers`,
 `groups`, or `tools`; explicit `expand` selects contract sections. `expand: []`
 keeps results compact even when selecting a capability. For broad full contracts,
 explicitly request `level: "tools"` and `expand: ["options", "response", "examples"]`.
-URLs provide contextual discovery without fetching the page.
+URLs provide contextual discovery without fetching the page. Tool results omit
+per-capability credit prices unless `includeCosts: true` is set; follow-up
+`nextTool` arguments keep it.
 
 Results are in `data.alexandria[0].data`. Follow an item's `nextTool` by calling
 its `name` with its `arguments`; the page's `nextTool` advances pagination.
@@ -1042,7 +1155,7 @@ These controls require the matching Alexandria API deployment.
 }
 ```
 
-**Returns:** `{ success, scrape_id, requestId, data: { alexandria: [...], creditsCost } }`. Each item is either a result (`provider`, `capability`, `creditsCost`, `data`, `records`, `upstreamStatus`) or an `error` with a `code`; the batch never fails as a whole for a provider error and `data.creditsCost` sums the successful items. Alexandria error bodies (403 without Alexandria access, and 402/409 billing statuses) are relayed in-band with their `code`.
+**Returns:** `{ success, scrape_id, requestId, data: { alexandria: [...], creditsCost } }`. Each item is either a result (`provider`, `capability`, `data`, `records`, `upstreamStatus`) or an `error` with a `code`; the batch never fails as a whole for a provider error and `data.creditsCost` is the total charged for the request. Alexandria error bodies (403 without Alexandria access, and 402/409 billing statuses) are relayed in-band with their `code`.
 
 Execution generates one `x-request-id` and returns it on success or failure. Retry
 the identical payload with that `requestId`; do not create a new ID after an
@@ -1068,16 +1181,14 @@ HTTP 403 and this body:
 The tool result relays it as an error with `structuredContent` carrying `code`,
 `status: 403`, `requestId`, the `requiresAction` object unchanged, and
 `next_actions` (`human_action_required` then `retry_same_request`). Accepting
-terms is a legal act. Use the returned `nextTool` call to read the agreement through `firecrawl_scrape`
-with `alexandria: [{provider: "firecrawl", capability: "terms/show", options: {provider: "<provider>"}}]`.
-Present it to the user and obtain explicit authorization to bind their organization
-before calling `firecrawl_scrape` with capability `terms/accept` under provider `firecrawl`.
-Its options are `provider`, the exact reviewed `version`
-and 64-character lowercase hexadecimal `digest`, and `confirmed: true`. A request
-for data is not consent. Authority or eligibility errors may require an organization
-admin to use `requiresAction.url`. No automatic acceptance or uncertain retries occur.
-Send terms calls separately from execution. These are nested capabilities, not top-level MCP tools.
-No credits are charged for the blocked retrieval. After confirmed acceptance, call the same
+terms is a legal act, so an organization admin accepts them in the Firecrawl dashboard, not
+through MCP. Use the returned `nextTool` call to read the agreement through `firecrawl_scrape`
+with `alexandria: [{provider: "firecrawl", capability: "terms/show", options: {provider: "<provider>"}}]`,
+sent separately from provider execution, and present it to the user. An organization admin then
+accepts it at `requiresAction.url`, or at https://www.firecrawl.dev/app/settings?tab=data-sources.
+`firecrawl_scrape` refuses every other `terms/*` capability, so it makes no account changes. A request
+for data is not consent, and no automatic acceptance or uncertain retries occur.
+No credits are charged for the blocked retrieval. After the admin confirms acceptance, call the same
 tool again with the identical payload and `requestId`.
 
 ### 16. Credit Usage Tool
@@ -1086,6 +1197,63 @@ The tool requires an authenticated Firecrawl account and is read-only.
 
 - `firecrawl_credit_usage` defaults to `{ "view": "current" }` and returns `remainingCredits`, `planCredits`, `billingPeriodStart`, and `billingPeriodEnd`. Remaining credits can exceed plan credits when the team has top-ups or grants.
 - Pass `{ "view": "historical" }` for calendar-month periods containing `startDate`, `endDate`, and `creditsUsed`. Passing `{ "byApiKey": true }` also selects the historical view and splits periods by API key; each row then includes `apiKey`. Do not combine `byApiKey` with `{ "view": "current" }`. The latest period's `endDate` can be null.
+
+## Programmatic use (unstable)
+
+The package also exposes a library entry point for embedding the server in another runtime. It is **unstable**: the API, its options and its types may change in any release, including minor and patch releases, so pin an exact version.
+
+```sh
+npm install --save-exact firecrawl-mcp zod
+```
+
+The example defines tool parameters with `zod`, so the embedding project installs it as its own dependency.
+
+```js
+import { createFirecrawlMcpServer } from 'firecrawl-mcp/server';
+import { z } from 'zod';
+
+const server = createFirecrawlMcpServer({
+  transport: 'httpStream',
+  apiKey: process.env.FIRECRAWL_API_KEY,
+  unstable_hooks: {
+    registerExtraTools: (registrar) => {
+      registrar.addTool({
+        name: 'my_tool',
+        description: 'An extra tool served next to the Firecrawl tools.',
+        parameters: z.object({ text: z.string() }),
+        execute: async ({ text }) => text,
+      });
+    },
+  },
+});
+
+await server.start({
+  transportType: 'httpStream',
+  httpStream: { port: 3000, host: '127.0.0.1', endpoint: '/mcp', stateless: true },
+});
+// MCP endpoint: http://127.0.0.1:3000/mcp
+```
+
+Set `host` explicitly. Without it the server listens on `localhost`, which Node binds to a single address (often only `::1`), so requests to `127.0.0.1` are refused. Use `0.0.0.0` or `::` to accept connections from other machines only behind network access controls or an `unstable_hooks.authenticate` check: without one, every caller that can reach the port is served with the configured `apiKey`.
+
+Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`, `logging`, `safeMode`, `fileAccess` (`local` or `upload`), `requireCredential`, `searchFeedback` and `endpointFeedback`. `unstable_hooks` accepts:
+
+| Hook | Purpose |
+|---|---|
+| `authenticate(request)` | Resolve the session for a request; throw a `Response` to reject it. |
+| `wrapTool(tool)` | Decorate every registered tool. |
+| `onToolResult(event)` | Observe the start and outcome of each tool call. |
+| `instructions` | Server instructions, or a function choosing from the defaults. |
+| `registerExtraTools(registrar, context)` | Add tools after the built-in ones. |
+| `outboundRequest(session)` | Credential and extra headers for each Firecrawl API request. |
+| `beforeKeylessRequest(session, origin)` | Refuse a keyless request by throwing. |
+| `toolFilter(name)` | Leave built-in tools out of the instance. |
+| `configureHttp(app)` | Add HTTP routes. |
+| `oauth.protectedResource` | Serve OAuth protected-resource metadata. |
+
+FastMCP is bundled inside the package, so use the types exported from `firecrawl-mcp/server` (`Session`, `ToolDefinition`, `ToolRegistrar`, `FirecrawlMcpServerHooks` and others) rather than importing `fastmcp` yourself.
+
+The entry point also exports the helpers the built-in tools use, such as `recoveryPayload`, `normalizeHeader`, `requestOrigin`, `isRuntimeUserAgent`, `initializeClientSlug`, `searchToolBaseFields`, `searchOutputSchema` and `structuredCompact`, so extra tools and hooks can match the built-in behaviour. They are unstable as well.
 
 ## Logging System
 
@@ -1201,7 +1369,7 @@ Find Tools and execution are available on both the full surface and the search s
 
 ### Alexandria session feedback
 
-Use the existing `firecrawl_feedback` tool with `endpoint: "alexandria"`:
+The existing `firecrawl_feedback` tool accepts `endpoint: "alexandria"`:
 
 ```json
 {
@@ -1211,10 +1379,13 @@ Use the existing `firecrawl_feedback` tool with `endpoint: "alexandria"`:
     "url": "https://example.com",
     "requestedFunctionality": "Find records and download their attachments"
   },
+  "objective": "Compare contract requirements across agencies before bidding",
   "rationale": "Found summaries but could not retrieve attachments"
 }
 ```
 
-This uses authenticated `POST /v2/feedback`, without a job ID, job-age deadline, or credit refund. Optional `providerFeedback` and `capabilityFeedback` arrays describe coverage gaps and execution issues; the tool schema lists supported issue values. A `new_capability_request` requires `requestedFunctionality`; `missing_capability` (the provider exists but lacks the capability) does not. Existing feedback opt-out and authentication controls apply.
+The optional `objective` is the underlying goal of the session: what the agent or its user was ultimately trying to accomplish, beyond the single website in `requestedWebsite`.
 
-Agents are pointed at this loop from three places: the server instructions, the `firecrawl_scrape` and `firecrawl_find_tools` descriptions, and a `feedbackTool` object attached to every Alexandria execution and discovery result (with the tool name and a skeleton of the arguments). The hint is omitted for Firecrawl-internal calls such as `bash` and when `firecrawl_feedback` is not registered (`FIRECRAWL_NO_ENDPOINT_FEEDBACK` or keyless startup).
+This uses authenticated `POST /v2/feedback`, without a job ID. It must arrive within 20 minutes of the team's most recent Alexandria search, discovery, or execution; later feedback is rejected with `FEEDBACK_WINDOW_EXPIRED`. Eligible feedback can refund 1 credit, subject to daily caps of 10 credits per website and 100 credits per team (UTC day). Past either cap, feedback is still recorded with no refund, and the response sets `websiteCapReached` or `dailyCapReached`. Optional `providerFeedback` and `capabilityFeedback` arrays describe coverage gaps and execution issues; the tool schema lists supported issue values. A `new_capability_request` requires `requestedFunctionality`; `missing_capability` (the provider exists but lacks the capability) does not. Existing feedback opt-out and authentication controls apply.
+
+Eligible Alexandria execution and discovery results include a `feedbackTool` pointer with the tool name and a skeleton of the arguments. The pointer is omitted for Firecrawl-internal calls such as `bash` and when `firecrawl_feedback` is not registered (`FIRECRAWL_NO_ENDPOINT_FEEDBACK` or keyless startup).
