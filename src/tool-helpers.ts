@@ -85,6 +85,19 @@ export function searchDomainsAreExclusive(args: {
 export const SEARCH_DOMAINS_CONFLICT_MESSAGE =
   'includeDomains and excludeDomains cannot both be specified';
 
+// The search API refuses developer or gov combined with another category.
+export function searchCategoriesAreCompatible(args: {
+  categories?: string[];
+}): boolean {
+  const categories = args.categories ?? [];
+  return (
+    categories.length <= 1 ||
+    !categories.some((category) => category === 'developer' || category === 'gov')
+  );
+}
+export const SEARCH_CATEGORIES_CONFLICT_MESSAGE =
+  'The developer and gov categories cannot be combined with other categories';
+
 // Alexandria execution requires authenticated team access.
 const EXCHANGE_KEY_REQUIRED_MESSAGE =
   'Alexandria requires an API key on a team with Alexandria access';
