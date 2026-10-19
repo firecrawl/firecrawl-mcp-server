@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- The `firecrawl_agent` description states the data-terms rules as facts: only an organization admin can accept data terms, in the Firecrawl dashboard; the tool cannot accept them, `firecrawl_scrape` refuses terms/accept even when an API response names it, and a data request is not acceptance. Behavior is unchanged.
+- The `firecrawl_search` description says that signed-in searches also return matching catalogue capabilities by name and description, including with `sources: ["web"]`, and that search never runs them. Behavior is unchanged.
+
 ## [3.33.3] - 2026-10-19
 
 ### Changed
