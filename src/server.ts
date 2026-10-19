@@ -1,4 +1,9 @@
 import {
+  ALEXANDRIA_RESULTS_URI,
+  MCP_APP_MIME_TYPE,
+  alexandriaResultsHtml,
+} from './mcp-apps.js';
+import {
   ALEXANDRIA_FEEDBACK_HINT,
   alexandriaCallsWarrantFeedback,
   alexandriaFeedbackFields,
@@ -373,6 +378,8 @@ export interface FirecrawlMcpServerOptions {
   searchFeedback?: boolean;
   /** Register firecrawl_feedback. Defaults to true. */
   endpointFeedback?: boolean;
+  /** Render Alexandria results from firecrawl_scrape inline in MCP Apps hosts. Experimental, off by default. */
+  mcpApps?: boolean;
   /** Tag sent as the `integration` field of API requests that accept one, such as `_zed`. */
   integration?: string;
   /** Extension hooks. Unstable: may change in any release. */
@@ -559,6 +566,7 @@ export function createFirecrawlMcpServer(
     requireCredential: options.requireCredential ?? false,
     searchFeedback: options.searchFeedback ?? true,
     endpointFeedback: options.endpointFeedback ?? true,
+    mcpApps: options.mcpApps ?? false,
     integration: integrationFrom(options.integration),
   };
   const logging = options.logging ?? config.transport === 'httpStream';
@@ -1569,8 +1577,25 @@ Alexandria mode, on an authenticated session with Alexandria access: \`alexandri
   };
   server.addTool({
     ...scrapeTool,
-    _meta: { 'anthropic/alwaysLoad': true },
+    _meta: {
+      'anthropic/alwaysLoad': true,
+      ...(config.mcpApps ? { ui: { resourceUri: ALEXANDRIA_RESULTS_URI } } : {}),
+    },
   });
+  if (config.mcpApps) {
+    server.addResource({
+      uri: ALEXANDRIA_RESULTS_URI,
+      name: 'Alexandria results',
+      description: 'Tables and charts for Alexandria results returned by firecrawl_scrape.',
+      mimeType: MCP_APP_MIME_TYPE,
+      load: async () =>
+        ({
+          text: alexandriaResultsHtml(),
+          mimeType: MCP_APP_MIME_TYPE,
+          _meta: { ui: { prefersBorder: true } },
+        }) as { text: string; mimeType: string },
+    });
+  }
 
   server.addTool({
     name: 'firecrawl_map',
