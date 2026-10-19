@@ -23,10 +23,23 @@ export function removeEmptyTopLevel<T extends Record<string, any>>(
   return out;
 }
 
+// A URL naming only a host (https://docs.example.com/) is read as that host.
+// Anything else in the URL, even a default port or an empty query, is refused.
+function hostOfBareUrl(value: string): string {
+  const host = /^https?:\/\/([a-z0-9.-]+)\/?$/.exec(value)?.[1];
+  if (!host) return value;
+  try {
+    return new URL(value).hostname === host ? host : value;
+  } catch {
+    return value;
+  }
+}
+
 const searchDomainSchema = z
   .string()
   .trim()
   .toLowerCase()
+  .overwrite(hostOfBareUrl)
   .min(1)
   .max(253)
   .regex(
