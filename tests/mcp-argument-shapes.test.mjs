@@ -220,13 +220,37 @@ test('search refuses category combinations the API refuses, before calling it', 
   }
 });
 
-test('domain filters still take hostnames only', async (t) => {
-  const { api, full } = await startHosted(t);
-  const before = api.requests.length;
-  const refused = await full('firecrawl_search', {
-    query: 'firecrawl docs',
-    includeDomains: ['https://docs.firecrawl.dev/'],
-  });
-  assert.match(rejectionText(refused), /valid hostname without protocol or path/);
-  assert.equal(api.requests.length, before);
+test('domain filters read a URL naming only a host as that host', async (t) => {
+  const { api, full, search } = await startHosted(t);
+
+  for (const [label, call] of [['full', full], ['search surface', search]]) {
+    assertAccepted(
+      await call('firecrawl_search', {
+        query: 'firecrawl docs',
+        includeDomains: ['https://docs.firecrawl.dev/', 'HTTP://Example.com'],
+      }),
+      label
+    );
+    assert.deepEqual(lastBody(api, '/v2/search').includeDomains, ['docs.firecrawl.dev', 'example.com'], label);
+
+    assertAccepted(
+      await call('firecrawl_search', { query: 'firecrawl docs', excludeDomains: ['https://reddit.com/'] }),
+      label
+    );
+    assert.deepEqual(lastBody(api, '/v2/search').excludeDomains, ['reddit.com'], label);
+
+    const before = api.requests.length;
+    for (const domain of [
+      'https://docs.firecrawl.dev/guides',
+      'https://docs.firecrawl.dev/?q=1',
+      'https://docs.firecrawl.dev:8443/',
+      'https://user@docs.firecrawl.dev/',
+      'ftp://docs.firecrawl.dev/',
+      'docs.firecrawl.dev/guides',
+    ]) {
+      const refused = await call('firecrawl_search', { query: 'firecrawl docs', includeDomains: [domain] });
+      assert.match(rejectionText(refused), /valid hostname without protocol or path/, `${label}: ${domain}`);
+    }
+    assert.equal(api.requests.length, before, label);
+  }
 });
