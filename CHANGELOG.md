@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.32.1] - 2026-10-18
+
+### Changed
+
+- The server description in `package.json` and `server.json` is updated, so npm and the MCP registry show the new description. No code changes.
+
 ## [3.32.0] - 2026-10-18
 
 ### Added
