@@ -4,7 +4,7 @@
 
 ### Changed
 
-- The `firecrawl` JS SDK dependency moves from 4.49.1 to 4.50.0. That release lets the SDK load in browser bundles and on Node 18 and 20, and makes v2 requests work on Cloudflare Workers; the server uses none of those paths, so it behaves the same on Node. The server still requires Node 22 or later, since `undici` 7 and `mcp-proxy`'s dependencies set that floor.
+- The `firecrawl` JS SDK dependency moves from 4.49.1 to 4.50.0. That release lets the SDK load in browser bundles and on Node 18 and 20, and makes v2 requests work on Cloudflare Workers; the server uses none of those paths, so it behaves the same on Node. The server still requires Node 22 or later because `mcp-proxy`'s `pipenet` dependency sets that floor; `undici` 7 alone would rule out Node 18.
 
 ### Fixed
 
