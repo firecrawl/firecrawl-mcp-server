@@ -4,7 +4,7 @@
 
 ### Added
 
-- A session's OAuth client id (`session.oauthClientId`) can name the integration. When the id is a metadata URL and the User-Agent names only an HTTP runtime or is missing, the origin uses the URL host as `mcp-oauth-<host>`, after a carried initialize name and before the `Origin` or `Referer` host. Shared static hosts (`github.io`, `gitlab.io`, `pages.dev`, `netlify.app`, `vercel.app`) add the first path segment. Other ids and Firecrawl's own hosts name nothing.
+- A session's OAuth client id (`session.oauthClientId`) can name the integration. When the id is a metadata URL and the User-Agent names only an HTTP runtime or is missing, the origin uses the URL host as `mcp-oauth-<host>`, after a carried initialize name and before the `Origin` or `Referer` host. Shared static hosts (`github.io`, `gitlab.io`, `pages.dev`, `netlify.app`, `vercel.app`) add the first path segment. Firecrawl's own hosts name nothing. For an id that is not a URL, such as a dynamically registered client, `session.oauthClientName` (the registered client name) stamps `mcp-oauth-<name>` in the same position; SDK default names such as `mcp` are skipped.
 
 ### Unchanged
 

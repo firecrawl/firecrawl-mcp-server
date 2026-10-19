@@ -251,6 +251,66 @@ test('exact shared hosts and long shared-host names keep the path segment', () =
   assert.ok(one.slice('mcp-oauth-'.length, one.indexOf('@')).length <= 48);
 });
 
+test('a non-URL OAuth client id is named by its registered client name', () => {
+  const origin = (oauthClientId, oauthClientName, signals = {}) =>
+    originForClient(undefined, '3.33.0', 'node', {
+      oauthClientId,
+      oauthClientName,
+      ...signals,
+    });
+  assert.equal(
+    origin('dyn_0123456789abcdef', 'Example Agents'),
+    'mcp-oauth-example-agents@3.33.0'
+  );
+  assert.equal(
+    originForClient(undefined, '3.33.0', undefined, {
+      oauthClientId: 'dyn_0123456789abcdef',
+      oauthClientName: 'Lead Connector',
+    }),
+    'mcp-oauth-lead-connector@3.33.0'
+  );
+  assert.equal(
+    origin(undefined, 'Example Agents'),
+    'mcp-oauth-example-agents@3.33.0'
+  );
+  assert.equal(
+    origin('dyn_0123456789abcdef', 'x'.repeat(60)),
+    `mcp-oauth-${'x'.repeat(48)}@3.33.0`
+  );
+  for (const name of ['MCP Client', 'client', 'test-client', 'fastmcp', '  ', '***', '', null]) {
+    assert.equal(origin('dyn_0123456789abcdef', name), 'mcp-ua-node@3.33.0');
+  }
+  assert.equal(
+    origin('https://app.example.com/oauth/client.json', 'Other Name'),
+    'mcp-oauth-app-example-com@3.33.0'
+  );
+  assert.equal(
+    origin('https://mcp.firecrawl.dev/oauth/client.json', 'Other Name'),
+    'mcp-ua-node@3.33.0'
+  );
+  assert.equal(
+    origin('dyn_0123456789abcdef', 'Example Agents', {
+      initializeClient: { name: 'ai-sdk-mcp-client' },
+    }),
+    'mcp-ai-sdk-mcp-client@3.33.0'
+  );
+  assert.equal(
+    originForClient(undefined, '3.33.0', 'Claude-User/1.0', {
+      oauthClientId: 'dyn_0123456789abcdef',
+      oauthClientName: 'Example Agents',
+    }),
+    'mcp-ua-claude-user@3.33.0'
+  );
+  assert.match(
+    requestOrigin(undefined, {
+      clientUserAgent: 'node',
+      oauthClientId: 'dyn_0123456789abcdef',
+      oauthClientName: 'Example Agents',
+    }),
+    /^mcp-oauth-example-agents@/
+  );
+});
+
 test('OAuth client ids that name nothing are not signals', () => {
   for (const oauthClientId of [
     'dyn_0123456789abcdef',

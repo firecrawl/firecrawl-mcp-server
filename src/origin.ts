@@ -80,6 +80,8 @@ export type ClientSignals = {
   initializeClient?: ClientImplementation | null;
   /** The OAuth client id of the session, when its token resolved one. */
   oauthClientId?: string | null;
+  /** The registered name of that client, read when its id is not a URL. */
+  oauthClientName?: string | null;
   /** The `Origin` or `Referer` header. */
   referrer?: string | null;
 };
@@ -155,11 +157,24 @@ const SHARED_STATIC_HOSTS = [
   'vercel.app',
 ];
 
+function isHttpUrl(value: string | null | undefined): boolean {
+  try {
+    return /^https?:$/.test(new URL(value ?? '').protocol);
+  } catch {
+    return false;
+  }
+}
+
 /**
- * The product a URL OAuth client id names (`https://app.example.com/oauth/client.json`
- * reads as `app-example-com`); empty for any other id and for Firecrawl's own hosts.
+ * The product an OAuth client names: a URL id by its host
+ * (`https://app.example.com/oauth/client.json` reads as `app-example-com`,
+ * nothing for Firecrawl's own hosts), any other id by its registered name.
  */
-function oauthClientSlug(clientId: string | null | undefined): string {
+function oauthClientSlug(
+  clientId: string | null | undefined,
+  clientName: string | null | undefined
+): string {
+  if (!isHttpUrl(clientId)) return initializeClientSlug(clientName);
   const host = publicHost(clientId);
   if (!host || host === 'firecrawl.dev' || host.endsWith('.firecrawl.dev')) {
     return '';
@@ -189,8 +204,9 @@ function oauthClientSlug(clientId: string | null | undefined): string {
  * 2. the call's own initialize client name, as `mcp-<client>`;
  * 3. a User-Agent that names a client, as `mcp-ua-<product>`;
  * 4. a client name an earlier initialize carried, as `mcp-<client>`;
- * 5. the host of a URL OAuth client id, as `mcp-oauth-<host>` (a shared
- *    static host adds the first path segment);
+ * 5. the host of a URL OAuth client id, or the registered name of any other
+ *    client, as `mcp-oauth-<host or name>` (a shared static host adds the
+ *    first path segment);
  * 6. the `Origin` or `Referer` host, as `mcp-ref-<host>`;
  * 7. a runtime User-Agent (`node`, `python-httpx`), as `mcp-ua-<product>`;
  * 8. otherwise `mcp-fastmcp`.
@@ -208,7 +224,10 @@ export function originForClient(
   const slug = slugOf(client?.name);
   const product = userAgentProduct(userAgent);
   const remembered = initializeClientSlug(signals.initializeClient?.name);
-  const oauthClient = oauthClientSlug(signals.oauthClientId);
+  const oauthClient = oauthClientSlug(
+    signals.oauthClientId,
+    signals.oauthClientName
+  );
   const referrer = referrerSlug(signals.referrer);
   const base = !isOwnSlug(declared)
     ? `mcp-${declared}`
@@ -251,6 +270,7 @@ export type OriginSession = {
   clientReferrer?: string;
   initializeClient?: ClientImplementation;
   oauthClientId?: string;
+  oauthClientName?: string;
 };
 
 /**
@@ -270,6 +290,7 @@ export function requestOrigin(
       declaredOrigin: session?.clientOrigin,
       initializeClient: session?.initializeClient,
       oauthClientId: session?.oauthClientId,
+      oauthClientName: session?.oauthClientName,
       referrer: session?.clientReferrer,
     }
   );

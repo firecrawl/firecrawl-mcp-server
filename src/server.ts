@@ -172,6 +172,8 @@ export interface SessionData {
    * names the product; read only when the User-Agent names a runtime.
    */
   oauthClientId?: string;
+  /** The registered name of that client; read when the id is not a URL. */
+  oauthClientName?: string;
   authType?: 'api-key' | 'oauth' | 'env' | 'keyless' | 'none';
   /** Admitted, but the supplied credential cannot be used. */
   credentialError?: 'CREDENTIAL_INVALID';
