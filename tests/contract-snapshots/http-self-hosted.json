@@ -51,9 +51,7 @@
         }
       ],
       "structuredContent": {
-        "code": "EXCHANGE_API_KEY_REQUIRED",
-        "message": "Alexandria requires an API key on a team with Alexandria access",
-        "docs_url": "https://docs.firecrawl.dev/mcp-server"
+        "message": "Alexandria requires an API key on a team with Alexandria access"
       },
       "isError": true
     },
