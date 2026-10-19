@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.33.3] - 2026-10-19
+
+### Changed
+
+- The `firecrawl` JS SDK dependency moves from 4.49.1 to 4.50.0. That release lets the SDK load in browser bundles and on Node 18 and 20, and makes v2 requests work on Cloudflare Workers; the server uses none of those paths, so it behaves the same on Node. The server still requires Node 22 or later because `mcp-proxy`'s `pipenet` dependency sets that floor; `undici` 7 alone would rule out Node 18.
+
+### Fixed
+
+- `firecrawl_crawl` with a wait keeps polling when a status read is rate limited (429), waiting the `Retry-After` time (seconds or an HTTP date, capped at 60 s) instead of failing, and reads result pages only once the crawl ends.
+- `firecrawl_crawl` relays the API's reason, status and code when the API refuses to start a crawl, instead of a generic request error.
+
 ## [3.33.2] - 2026-10-19
 
 ### Changed
