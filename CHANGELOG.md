@@ -1,9 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [3.33.1] - 2026-10-18
 
 ### Changed
 
+- The `firecrawl` JS SDK dependency moves from 4.46.0 to 4.49.0. The SDK now keeps v1-style method calls working on the v2 client with a one-time deprecation warning; the server makes no such calls. A request the server does not stamp with its own origin carries the SDK's wrapper default, `js-sdk.firecrawl-mcp@<version>` when installed from npm, in place of `js-sdk@<version>`.
 - `firecrawl_search` reads an `includeDomains` or `excludeDomains` entry given as a URL that names only a host, such as `https://docs.firecrawl.dev/`, as that host. A URL with a path, query, fragment, port or credentials is still refused, since it would change the filter.
 - Tool arguments are normalized before validation, on every tool and surface. An optional parameter sent as `null` is treated as absent. A numeric string in a number parameter, such as `limit: "5"`, is read as a number and checked against the same bounds. A format or parser object the API accepts is read as the tool's own form: `{type: "markdown"}` as `"markdown"`, and `{type: "json", prompt, schema}`, `{type: "query", ...}`, `{type: "screenshot", ...}` or `{type: "pdf", maxPages}` as the format or parser plus its options field, when that field is not also set and the object carries only options that field declares.
 - `firecrawl_search` refuses `developer` or `gov` combined with another category before calling the API, with the API's reason instead of `Invalid request body`.
