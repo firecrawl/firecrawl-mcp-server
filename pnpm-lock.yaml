@@ -23,8 +23,8 @@ importers:
         specifier: 4.3.2
         version: 4.3.2(patch_hash=37f9a424ae5b0b6202b2b16109a1ea88b69cdcda5407f13eda6654a56489ad70)
       firecrawl:
-        specifier: 4.49.0
-        version: 4.49.0
+        specifier: 4.49.1
+        version: 4.49.1
       fuse.js:
         specifier: ^7.1.0
         version: 7.1.0
@@ -911,8 +911,8 @@ packages:
     resolution: {integrity: sha512-78/PXT1wlLLDgTzDs7sjq9hzz0vXD+zn+7wypEe4fXQxCmdmqfGsEPQxmiCSQI3ajFV91bVSsvNtrJRiW6nGng==}
     engines: {node: '>=10'}
 
-  firecrawl@4.49.0:
-    resolution: {integrity: sha512-uYlpMQYpZlsmFOyuvPiV3h6Tavxfj3PAdBUM8h0ocH4loF5FMjRGjBZWo/MxRfIQNI6CPa6XTiiByQojkfjF9w==}
+  firecrawl@4.49.1:
+    resolution: {integrity: sha512-ssm5wDo3xwiPyb7uPMu9sfSx57VOztW2SgP6cmOgswxARrWuHUSHL5InF/rWhddRtgdhEXVhJlA+bk9mNOUMOQ==}
     engines: {node: '>=22.0.0'}
 
   fix-dts-default-cjs-exports@1.0.1:
@@ -2563,7 +2563,7 @@ snapshots:
       locate-path: 6.0.0
       path-exists: 4.0.0
 
-  firecrawl@4.49.0:
+  firecrawl@4.49.1:
     dependencies:
       axios: 1.20.0(debug@4.4.3)
       typescript-event-target: 1.1.1

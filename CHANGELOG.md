@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.33.2] - 2026-10-19
+
+### Changed
+
+- The `firecrawl` JS SDK dependency moves from 4.49.0 to 4.49.1. That release changes only the SDK's package description, so the server behaves the same; the bump keeps the SDK pin at our latest release.
+
 ## [3.33.1] - 2026-10-18
 
 ### Changed

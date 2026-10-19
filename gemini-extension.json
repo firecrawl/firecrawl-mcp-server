@@ -1,6 +1,6 @@
 {
   "name": "firecrawl",
-  "version": "3.33.1",
+  "version": "3.33.2",
   "description": "Official Firecrawl MCP server, the context API for AI agents: search, scrape, parse, crawl, map, and interact with the web, run Agent and Monitor jobs, and search scientific papers (PubMed, bioRxiv, medRxiv, arXiv).",
   "mcpServers": {
     "firecrawl": {
