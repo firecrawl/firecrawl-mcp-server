@@ -151,7 +151,7 @@ export const mapOutputSchema = z
 export const searchOutputSchema = z
   .object({
     success,
-    data: unknown('Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`.'),
+    data: unknown('Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`. Each result carries its `source` and a 1-indexed `position` within that group; pass those pairs to `firecrawl_search_feedback`.'),
     error,
     warning,
     id: str('Search identifier, for optional `firecrawl_search_feedback`.'),
