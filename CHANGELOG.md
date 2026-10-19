@@ -10,7 +10,7 @@
 
 ### Unchanged
 
-- Tool definitions, descriptions and input schemas. Required parameters sent as `null`, out-of-range numbers, unknown formats and domain filters given as URLs are still refused.
+- Tool definitions, descriptions and input schemas. Required parameters sent as `null`, out-of-range numbers, unknown formats and domain filters given as URLs with a path are still refused.
 
 ## [3.33.0] - 2026-10-18
 
