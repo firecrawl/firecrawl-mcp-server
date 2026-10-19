@@ -13,7 +13,9 @@ import {
   relayExchangeError,
   removeEmptyTopLevel,
   requestOrigin,
+  SEARCH_CATEGORIES_CONFLICT_MESSAGE,
   SEARCH_DOMAINS_CONFLICT_MESSAGE,
+  searchCategoriesAreCompatible,
   searchDomainsAreExclusive,
   searchOutputSchema,
   searchQueryIsValid,
@@ -89,6 +91,7 @@ Returns result groups in \`data\` and an operation \`id\`.
       // error rather than being silently dropped.
       .strict()
       .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE)
+      .refine(searchCategoriesAreCompatible, SEARCH_CATEGORIES_CONFLICT_MESSAGE)
       .refine(
         searchQueryIsValid,
         'A query is required. Use firecrawl_find_tools to browse the catalogue.'

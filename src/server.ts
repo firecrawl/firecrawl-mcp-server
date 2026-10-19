@@ -89,11 +89,14 @@ import {
   relayExchangeError,
   relayTermsRequired,
   removeEmptyTopLevel,
+  SEARCH_CATEGORIES_CONFLICT_MESSAGE,
   SEARCH_DOMAINS_CONFLICT_MESSAGE,
+  searchCategoriesAreCompatible,
   searchDomainsAreExclusive,
   searchToolBaseFields,
   termsWriteError,
 } from './tool-helpers.js';
+import { normalizeToolArguments } from './tool-arguments.js';
 
 /**
  * Library entry point: `import { createFirecrawlMcpServer } from 'firecrawl-mcp/server'`.
@@ -439,7 +442,9 @@ export {
   relayExchangeError,
   relayTermsRequired,
   removeEmptyTopLevel,
+  SEARCH_CATEGORIES_CONFLICT_MESSAGE,
   SEARCH_DOMAINS_CONFLICT_MESSAGE,
+  searchCategoriesAreCompatible,
   searchDomainsAreExclusive,
   searchToolBaseFields,
 } from './tool-helpers.js';
@@ -677,9 +682,10 @@ export function createFirecrawlMcpServer(
   }
 
   /**
-   * Every tool runs inside this pipeline: a per-call session copy carrying a
-   * request ID, then `wrapTool`'s decoration, then call reporting and
-   * credential recovery around the tool itself.
+   * Every tool runs inside this pipeline: argument normalization before
+   * validation, a per-call session copy carrying a request ID, then
+   * `wrapTool`'s decoration, then call reporting and credential recovery
+   * around the tool itself.
    */
   function prepareTool(tool: RegisteredTool): RegisteredTool {
     const execute = tool.execute;
@@ -709,6 +715,10 @@ export function createFirecrawlMcpServer(
       : instrumented;
     return {
       ...wrapped,
+      beforeValidate: (args, session) => {
+        normalizeToolArguments(wrapped.parameters, args);
+        return wrapped.beforeValidate?.(args, session);
+      },
       execute: (args, context) => {
         const session = copySession(context.session);
         session.requestId = randomUUID();
@@ -1643,6 +1653,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
           .describe('Attach page content for web results in the same call. These fetches ignore maxAge, so use firecrawl_scrape when you need a live fetch. scrapeOptions fetches web pages, never Alexandria provider tools.'),
       })
       .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE)
+      .refine(searchCategoriesAreCompatible, SEARCH_CATEGORIES_CONFLICT_MESSAGE)
       .refine(
         searchQueryIsValid,
         'A query is required. Use Find Tools for catalogue lookup.'
