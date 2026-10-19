@@ -1954,18 +1954,32 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
   ): Promise<Record<string, unknown>> {
     const startedAt = Date.now();
     for (;;) {
-      const status = await getCrawlStatusWithOrigin(client, jobId, origin);
-      if (
-        ['completed', 'failed', 'cancelled'].includes(String(status.status ?? ''))
-      ) {
-        return status;
+      let waitMs = Math.max(1000, pollInterval * 1000);
+      try {
+        // Poll the first page only; result pages are read once the crawl ends.
+        const res = await (client as any).http.get(
+          `/v2/crawl/${encodeURIComponent(jobId)}`,
+          originHeaders(origin)
+        );
+        if (
+          ['completed', 'failed', 'cancelled'].includes(String(res?.data?.status ?? ''))
+        ) {
+          return await getCrawlStatusWithOrigin(client, jobId, origin);
+        }
+      } catch (error) {
+        const response = (error as { response?: { status?: number; headers?: any; data?: any } })
+          ?.response;
+        if (response?.status !== 429) throw error;
+        // A rate-limited status read says nothing about the crawl: wait it out.
+        const retryAfter = Number(
+          response.headers?.['retry-after'] ?? response.data?.retry_after_seconds
+        );
+        waitMs = Math.min(60_000, Math.max(waitMs, (retryAfter || 10) * 1000));
       }
       if (timeout != null && Date.now() - startedAt > timeout * 1000) {
         throw new Error(`Crawl job ${jobId} did not complete within ${timeout}s`);
       }
-      await new Promise((resolve) =>
-        setTimeout(resolve, Math.max(1000, pollInterval * 1000))
-      );
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
     }
   }
 
