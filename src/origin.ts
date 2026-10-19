@@ -78,6 +78,10 @@ export type ClientSignals = {
   declaredOrigin?: string | null;
   /** The client an earlier initialize named, for calls that do not carry it. */
   initializeClient?: ClientImplementation | null;
+  /** The OAuth client id of the session, when its token resolved one. */
+  oauthClientId?: string | null;
+  /** The registered name of that client, read when its id is not a URL. */
+  oauthClientName?: string | null;
   /** The `Origin` or `Referer` header. */
   referrer?: string | null;
 };
@@ -120,13 +124,14 @@ export function initializeClientSlug(name: string | null | undefined): string {
   return isOwnSlug(slug) || GENERIC_CLIENT_NAMES.has(slug) ? '' : slug;
 }
 
-function referrerSlug(referrer: string | null | undefined): string {
-  let host: string;
+function publicHost(url: string | null | undefined): string {
+  let parsed: URL;
   try {
-    host = new URL(referrer ?? '').hostname.toLowerCase().replace(/\.$/, '');
+    parsed = new URL(url ?? '');
   } catch {
     return '';
   }
+  const host = parsed.hostname.toLowerCase().replace(/\.$/, '');
   if (
     !host.includes('.') ||
     host.endsWith('.localhost') ||
@@ -136,7 +141,58 @@ function referrerSlug(referrer: string | null | undefined): string {
   ) {
     return '';
   }
-  return slugOf(host.replace(/^www\./, ''));
+  return host.replace(/^www\./, '');
+}
+
+function referrerSlug(referrer: string | null | undefined): string {
+  return slugOf(publicHost(referrer));
+}
+
+/** Hosts many unrelated projects share, so the first path segment tells them apart. */
+const SHARED_STATIC_HOSTS = [
+  'github.io',
+  'gitlab.io',
+  'pages.dev',
+  'netlify.app',
+  'vercel.app',
+];
+
+function isHttpUrl(value: string | null | undefined): boolean {
+  try {
+    return /^https?:$/.test(new URL(value ?? '').protocol);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The product an OAuth client names: a URL id by its host
+ * (`https://app.example.com/oauth/client.json` reads as `app-example-com`,
+ * nothing for Firecrawl's own hosts), any other id by its registered name.
+ */
+function oauthClientSlug(
+  clientId: string | null | undefined,
+  clientName: string | null | undefined
+): string {
+  if (!isHttpUrl(clientId)) return initializeClientSlug(clientName);
+  const host = publicHost(clientId);
+  if (!host || host === 'firecrawl.dev' || host.endsWith('.firecrawl.dev')) {
+    return '';
+  }
+  if (
+    !SHARED_STATIC_HOSTS.some(
+      (shared) => host === shared || host.endsWith(`.${shared}`)
+    )
+  ) {
+    return slugOf(host);
+  }
+  const [first = ''] = new URL(clientId ?? '').pathname
+    .split('/')
+    .filter(Boolean);
+  const segment = slugOf(first).slice(0, NAME_MAX / 2);
+  if (!segment) return slugOf(host);
+  const room = NAME_MAX - segment.length - 1;
+  return slugOf(`${slugOf(host).slice(0, room)}-${segment}`);
 }
 
 /**
@@ -148,11 +204,14 @@ function referrerSlug(referrer: string | null | undefined): string {
  * 2. the call's own initialize client name, as `mcp-<client>`;
  * 3. a User-Agent that names a client, as `mcp-ua-<product>`;
  * 4. a client name an earlier initialize carried, as `mcp-<client>`;
- * 5. the `Origin` or `Referer` host, as `mcp-ref-<host>`;
- * 6. a runtime User-Agent (`node`, `python-httpx`), as `mcp-ua-<product>`;
- * 7. otherwise `mcp-fastmcp`.
+ * 5. the host of a URL OAuth client id, or the registered name of any other
+ *    client, as `mcp-oauth-<host or name>` (a shared static host adds the
+ *    first path segment);
+ * 6. the `Origin` or `Referer` host, as `mcp-ref-<host>`;
+ * 7. a runtime User-Agent (`node`, `python-httpx`), as `mcp-ua-<product>`;
+ * 8. otherwise `mcp-fastmcp`.
  *
- * Signals 4 and 5 only ever replace a runtime User-Agent or a missing one, so a
+ * Signals 4 to 6 only ever replace a runtime User-Agent or a missing one, so a
  * client that stamped `mcp-ua-<product>` for a named client keeps its token.
  */
 export function originForClient(
@@ -165,6 +224,10 @@ export function originForClient(
   const slug = slugOf(client?.name);
   const product = userAgentProduct(userAgent);
   const remembered = initializeClientSlug(signals.initializeClient?.name);
+  const oauthClient = oauthClientSlug(
+    signals.oauthClientId,
+    signals.oauthClientName
+  );
   const referrer = referrerSlug(signals.referrer);
   const base = !isOwnSlug(declared)
     ? `mcp-${declared}`
@@ -174,11 +237,13 @@ export function originForClient(
         ? `mcp-ua-${product}`
         : remembered
           ? `mcp-${remembered}`
-          : referrer
-            ? `mcp-ref-${referrer}`
-            : product
-              ? `mcp-ua-${product}`
-              : ORIGIN_SERVER;
+          : oauthClient
+            ? `mcp-oauth-${oauthClient}`
+            : referrer
+              ? `mcp-ref-${referrer}`
+              : product
+                ? `mcp-ua-${product}`
+                : ORIGIN_SERVER;
   return serverVersion ? `${base}@${serverVersion}` : base;
 }
 
@@ -204,6 +269,8 @@ export type OriginSession = {
   clientOrigin?: string;
   clientReferrer?: string;
   initializeClient?: ClientImplementation;
+  oauthClientId?: string;
+  oauthClientName?: string;
 };
 
 /**
@@ -222,6 +289,8 @@ export function requestOrigin(
     {
       declaredOrigin: session?.clientOrigin,
       initializeClient: session?.initializeClient,
+      oauthClientId: session?.oauthClientId,
+      oauthClientName: session?.oauthClientName,
       referrer: session?.clientReferrer,
     }
   );
