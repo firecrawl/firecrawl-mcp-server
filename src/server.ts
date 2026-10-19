@@ -1897,7 +1897,16 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       `/v2/crawl/${encodeURIComponent(jobId)}`,
       originHeaders(origin)
     );
-    const body = (res?.data ?? {}) as any;
+    return collectCrawlPages(client, jobId, origin, (res?.data ?? {}) as any);
+  }
+
+  /** A crawl status body with its remaining result pages appended. */
+  async function collectCrawlPages(
+    client: FirecrawlApp,
+    jobId: string,
+    origin: string,
+    body: any
+  ): Promise<Record<string, unknown>> {
     const initialDocs = Array.isArray(body.data) ? body.data : [];
 
     if (!body.next) {
@@ -1954,18 +1963,38 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
   ): Promise<Record<string, unknown>> {
     const startedAt = Date.now();
     for (;;) {
-      const status = await getCrawlStatusWithOrigin(client, jobId, origin);
-      if (
-        ['completed', 'failed', 'cancelled'].includes(String(status.status ?? ''))
-      ) {
-        return status;
+      let waitMs = Math.max(1000, pollInterval * 1000);
+      try {
+        // Poll the first page only; result pages are read once the crawl ends.
+        const res = await (client as any).http.get(
+          `/v2/crawl/${encodeURIComponent(jobId)}`,
+          originHeaders(origin)
+        );
+        if (
+          ['completed', 'failed', 'cancelled'].includes(String(res?.data?.status ?? ''))
+        ) {
+          return await collectCrawlPages(client, jobId, origin, res.data);
+        }
+      } catch (error) {
+        const response = (error as { response?: { status?: number; headers?: any; data?: any } })
+          ?.response;
+        if (response?.status !== 429) throw error;
+        // A rate-limited status read says nothing about the crawl: wait it out.
+        const retryAfter = String(
+          response.headers?.['retry-after'] ?? response.data?.retry_after_seconds ?? ''
+        ).trim();
+        const retryAfterMs = /^\d+$/.test(retryAfter)
+          ? Number(retryAfter) * 1000
+          : Date.parse(retryAfter) - Date.now();
+        waitMs = Math.min(
+          60_000,
+          Math.max(waitMs, Number.isFinite(retryAfterMs) ? retryAfterMs : 10_000)
+        );
       }
       if (timeout != null && Date.now() - startedAt > timeout * 1000) {
         throw new Error(`Crawl job ${jobId} did not complete within ${timeout}s`);
       }
-      await new Promise((resolve) =>
-        setTimeout(resolve, Math.max(1000, pollInterval * 1000))
-      );
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
     }
   }
 
