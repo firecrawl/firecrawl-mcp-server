@@ -2419,11 +2419,15 @@ Crawl results can be large; use conservative limits when full-site coverage is u
       delete (cleaned as Record<string, unknown>).timeout;
 
       log.info('Starting crawl', { url: String(url) });
-      const started = await (client as any).http.post('/v2/crawl', {
-        url: String(url),
-        ...(cleaned as Record<string, unknown>),
-        origin,
-      });
+      const started = await relayExchangeError(
+        () =>
+          (client as any).http.post('/v2/crawl', {
+            url: String(url),
+            ...(cleaned as Record<string, unknown>),
+            origin,
+          }),
+        { tool: 'firecrawl_crawl' }
+      );
       const crawlId = started?.data?.id;
       if (!crawlId) {
         return structuredText(started?.data ?? {});

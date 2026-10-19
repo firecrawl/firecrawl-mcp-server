@@ -11,7 +11,7 @@ import {
 
 const CRAWL_ID = 'crawl-1';
 
-async function startCrawlApi() {
+async function startCrawlApi(startRefusal) {
   const requests = [];
   let statusReads = 0;
   const server = createServer(async (req, res) => {
@@ -23,6 +23,7 @@ async function startCrawlApi() {
       res.end(JSON.stringify(payload));
     };
     if (req.method === 'POST' && req.url === '/v2/crawl') {
+      if (startRefusal) return json(startRefusal.status, { success: false, error: startRefusal.error });
       return json(200, { success: true, id: CRAWL_ID });
     }
     if (req.url === `/v2/crawl/${CRAWL_ID}?skip=1`) {
@@ -53,9 +54,7 @@ async function startCrawlApi() {
   };
 }
 
-test('crawl waits out a rate-limited status read and pages results only once it ends', async (t) => {
-  const api = await startCrawlApi();
-  t.after(() => api.close());
+async function callCrawl(t, api) {
   const port = await getFreePort();
   const child = spawnServer({
     CLOUD_SERVICE: 'true',
@@ -69,7 +68,6 @@ test('crawl waits out a rate-limited status read and pages results only once it 
   });
   t.after(() => stopChild(child));
   await waitForHealth(port, child);
-
   const response = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
     body: JSON.stringify({
       id: 1,
@@ -86,7 +84,35 @@ test('crawl waits out a rate-limited status read and pages results only once it 
     signal: AbortSignal.timeout(20_000),
   });
   assert.equal(response.status, 200);
-  const message = parseSseJson(await response.text());
+  return parseSseJson(await response.text());
+}
+
+for (const refusal of [
+  {
+    status: 402,
+    error: 'Insufficient credits to perform this request. For more credits, you can upgrade your plan at https://firecrawl.dev/pricing or try changing the request limit to a lower value.',
+  },
+  {
+    status: 429,
+    error: 'Rate limit exceeded. Consumed (req/min): 2, Remaining (req/min): 0. Please retry after 30s.',
+  },
+]) {
+  test(`a crawl the API refuses with ${refusal.status} relays the API's reason`, async (t) => {
+    const api = await startCrawlApi(refusal);
+    t.after(() => api.close());
+    const message = await callCrawl(t, api);
+    assert.equal(message.result?.isError, true, JSON.stringify(message));
+    const text = message.result.content[0].text;
+    assert.ok(text.includes(refusal.error), text);
+    assert.doesNotMatch(text, /Request failed with status code/);
+    assert.equal(api.requests.filter(({ url }) => url.startsWith(`/v2/crawl/${CRAWL_ID}`)).length, 0);
+  });
+}
+
+test('crawl waits out a rate-limited status read and pages results only once it ends', async (t) => {
+  const api = await startCrawlApi();
+  t.after(() => api.close());
+  const message = await callCrawl(t, api);
   assert.notEqual(message.result?.isError, true, JSON.stringify(message));
   const result = JSON.parse(message.result.content[0].text);
   assert.equal(result.status, 'completed');
