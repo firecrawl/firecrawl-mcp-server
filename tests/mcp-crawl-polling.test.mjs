@@ -105,6 +105,8 @@ for (const refusal of [
     const text = message.result.content[0].text;
     assert.ok(text.includes(refusal.error), text);
     assert.doesNotMatch(text, /Request failed with status code/);
+    assert.equal(message.result.structuredContent?.status, refusal.status, JSON.stringify(message.result));
+    assert.equal(message.result.structuredContent?.code, 'exchange_error');
     assert.equal(api.requests.filter(({ url }) => url.startsWith(`/v2/crawl/${CRAWL_ID}`)).length, 0);
   });
 }
