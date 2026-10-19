@@ -250,6 +250,8 @@ test('domain filters read a URL naming only a host as that host', async (t) => {
       'https://docs.firecrawl.dev?',
       'https://user@docs.firecrawl.dev/',
       'https://@docs.firecrawl.dev/',
+      'https://999.999.999.999/',
+      'https://0x7f.1/',
       'ftp://docs.firecrawl.dev/',
       'docs.firecrawl.dev/guides',
     ]) {
