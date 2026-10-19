@@ -8,6 +8,11 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
 import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
 
+// Both instruction profiles open with the guidance for running out of credits, so clients
+// that cut server instructions short still keep it.
+const OUT_OF_CREDITS_LEAD =
+  /^If Firecrawl reports that credits ran out or the daily limit without an account was reached, end your final answer with the line it provides, link included\. /;
+
 const { version: serverVersion } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
 );
@@ -1258,6 +1263,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   // Keep Alexandria routing within the truncated server instructions. The search
   // description also carries developer and research routing (asserted below).
   const instructionsHead = init.instructions.slice(0, CLAUDE_CODE_TEXT_CAP);
+  assert.match(instructionsHead, OUT_OF_CREDITS_LEAD);
   assert.match(instructionsHead, /Alexandria is Firecrawl's catalogue of data providers/);
   assert.match(instructionsHead, /For the same fields across multiple pages/);
   assert.match(instructionsHead, /Authenticated searches always add alexandria to the sources/);
@@ -1521,6 +1527,7 @@ test('local keyless stdio keeps profile guidance keyless-scoped and omits feedba
   assert.notEqual(apiKeyBoundaryIndex, -1);
   const keylessGuidance = init.instructions.slice(0, apiKeyBoundaryIndex);
   const apiKeyGuidance = init.instructions.slice(apiKeyBoundaryIndex);
+  assert.match(keylessGuidance, OUT_OF_CREDITS_LEAD);
   assert.match(
     keylessGuidance,
     /Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits/i
