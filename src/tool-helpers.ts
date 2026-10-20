@@ -23,10 +23,23 @@ export function removeEmptyTopLevel<T extends Record<string, any>>(
   return out;
 }
 
+// A URL naming only a host (https://docs.example.com/) is read as that host.
+// Anything else in the URL, even a default port or an empty query, is refused.
+function hostOfBareUrl(value: string): string {
+  const host = /^https?:\/\/([a-z0-9.-]+)\/?$/.exec(value)?.[1];
+  if (!host) return value;
+  try {
+    return new URL(value).hostname === host ? host : value;
+  } catch {
+    return value;
+  }
+}
+
 const searchDomainSchema = z
   .string()
   .trim()
   .toLowerCase()
+  .overwrite(hostOfBareUrl)
   .min(1)
   .max(253)
   .regex(
@@ -84,6 +97,19 @@ export function searchDomainsAreExclusive(args: {
 }
 export const SEARCH_DOMAINS_CONFLICT_MESSAGE =
   'includeDomains and excludeDomains cannot both be specified';
+
+// The search API refuses developer or gov combined with another category.
+export function searchCategoriesAreCompatible(args: {
+  categories?: string[];
+}): boolean {
+  const categories = args.categories ?? [];
+  return (
+    categories.length <= 1 ||
+    !categories.some((category) => category === 'developer' || category === 'gov')
+  );
+}
+export const SEARCH_CATEGORIES_CONFLICT_MESSAGE =
+  'The developer and gov categories cannot be combined with other categories';
 
 // Alexandria execution requires authenticated team access.
 const EXCHANGE_KEY_REQUIRED_MESSAGE =
