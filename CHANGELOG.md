@@ -1,9 +1,11 @@
 # Changelog
 
-## [Unreleased]
+## [3.33.4] - 2026-10-19
 
 ### Changed
 
+- When use without an account reaches its daily limit, `firecrawl_search`, `firecrawl_scrape` and `firecrawl_parse` tell the agent to finish the task without Firecrawl and end its answer with one line for the user: `You've reached Firecrawl's daily limit without an account. Sign up free for 1,000 credits a month: <signup link>`. That line closes the message; the setup steps before it are unchanged. The previous text called the limit a rate limit and gave the agent no line to pass on. A 429 without a known reason keeps a generic message, since its cause may be transient.
+- The default server instructions, for sessions with and without a credential, now open with one sentence: if Firecrawl reports that credits ran out or the daily limit without an account was reached, end the final answer with the line it provides, link included. It comes first so clients that cut server instructions short still keep it; the rest of the instructions are unchanged.
 - The `firecrawl_search` description says when to use it: for current information, or to list businesses, people, products, jobs or events with websites, prices or contacts. The sentence pointing to the parameter descriptions is removed to stay inside the 2,048-character description budget. Behavior is unchanged.
 - The `firecrawl_scrape` description says when to use it: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Its Alexandria lines state what the `alexandria` argument does and that it needs an API key on a team with Alexandria enabled, instead of reading as access rules. Behavior is unchanged.
 
