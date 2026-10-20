@@ -34,7 +34,7 @@
       "headers": [
         {
           "name": "Authorization",
-          "description": "Bearer <FIRECRAWL_API_KEY>. Get a key at https://firecrawl.dev/app/api-keys",
+          "description": "Optional. Bearer <FIRECRAWL_API_KEY>. Get a key at https://firecrawl.dev/app/api-keys",
           "isRequired": false,
           "isSecret": true
         }
