@@ -576,8 +576,8 @@ test('search firecrawl_search sends a clean body built from allowed fields only'
   assert.deepEqual(sentBody, {
     query: 'example domain',
     limit: 1,
-    sources: [{ type: 'web' }],
-    domainTools: false,
+    sources: [{ type: 'web' }, { type: 'alexandria' }],
+    domainTools: true,
     toolDetail: 'compact',
     origin: `mcp-ua-firecrawl-search-profile-test@${serverVersion}`,
   });

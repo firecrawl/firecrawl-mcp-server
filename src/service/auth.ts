@@ -211,12 +211,18 @@ type OAuthIntrospectionResponse = {
   sub?: string;
   api_key_id?: string;
   client_id?: string;
+  client_name?: string;
   exp?: number;
 };
 
 type CredentialMetadata = Pick<
   ServiceSession,
-  'teamId' | 'userId' | 'apiKeyId' | 'oauthClientId' | 'resource'
+  | 'teamId'
+  | 'userId'
+  | 'apiKeyId'
+  | 'oauthClientId'
+  | 'oauthClientName'
+  | 'resource'
 >;
 
 type ResolvedCredential = {
@@ -265,6 +271,8 @@ function credentialMetadata(data: OAuthIntrospectionResponse): CredentialMetadat
     apiKeyId: typeof data.api_key_id === 'string' ? data.api_key_id : undefined,
     oauthClientId:
       typeof data.client_id === 'string' ? data.client_id : undefined,
+    oauthClientName:
+      typeof data.client_name === 'string' ? data.client_name : undefined,
     resource: typeof data.aud === 'string' ? data.aud : undefined,
   };
 }

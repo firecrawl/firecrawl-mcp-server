@@ -1,7 +1,7 @@
 {
   "name": "firecrawl",
-  "version": "3.30.2",
-  "description": "Official Firecrawl MCP for web search, scraping, crawling, and structured data extraction.",
+  "version": "3.33.4",
+  "description": "Official Firecrawl MCP server, the context API for AI agents: search, scrape, parse, crawl, map, and interact with the web, run Agent and Monitor jobs, and search scientific papers (PubMed, bioRxiv, medRxiv, arXiv).",
   "mcpServers": {
     "firecrawl": {
       "command": "npx",

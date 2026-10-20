@@ -4,6 +4,7 @@ import {
   ALEXANDRIA_SEARCH_INSTRUCTIONS,
   assertExchangeCredential,
   defaultDomainTools,
+  enterpriseAllowsAlexandria,
   type ExtraToolsContext,
   type FirecrawlMcpServerHooks,
   hasAlexandria,
@@ -12,7 +13,9 @@ import {
   relayExchangeError,
   removeEmptyTopLevel,
   requestOrigin,
+  SEARCH_CATEGORIES_CONFLICT_MESSAGE,
   SEARCH_DOMAINS_CONFLICT_MESSAGE,
+  searchCategoriesAreCompatible,
   searchDomainsAreExclusive,
   searchOutputSchema,
   searchQueryIsValid,
@@ -20,6 +23,7 @@ import {
   structuredCompact,
   type ToolRegistrar,
   type ToolResult,
+  withAlexandriaSource,
 } from '../server.js';
 import {
   SEARCH_PROFILE_TOOLS,
@@ -35,7 +39,7 @@ function searchSurfaceScrapeDescription(safeMode: boolean): string {
   return `
 Scrape one URL and return its content, or execute catalogued Alexandria capabilities. URL mode returns markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema, plus page metadata. Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch. A successful response does not by itself confirm the page is still current. ${safeMode ? 'A named browser profile loads saved session data without saving changes to it.' : 'Browser actions can change the live page, and a named browser profile can load saved session data and overwrite its stored state.'}
 
-\`firecrawl_search\` with \`sources\` unset and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching Alexandria provider returns typed records in one call.
+\`firecrawl_search\` and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching Alexandria provider returns typed records in one call.
 
 Alexandria mode: \`alexandria\` selects catalogued capability execution and is mutually exclusive with \`url\`. Alexandria execution is billed per capability (pass includeCosts to firecrawl_find_tools to see prices if you need) and needs a team with Alexandria enabled.
 `;
@@ -87,6 +91,7 @@ Returns result groups in \`data\` and an operation \`id\`.
       // error rather than being silently dropped.
       .strict()
       .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE)
+      .refine(searchCategoriesAreCompatible, SEARCH_CATEGORIES_CONFLICT_MESSAGE)
       .refine(
         searchQueryIsValid,
         'A query is required. Use firecrawl_find_tools to browse the catalogue.'
@@ -123,6 +128,16 @@ Returns result groups in \`data\` and an operation \`id\`.
       };
 
       const searchQuery = query ?? '';
+      const requestedSources = normalizeSearchSources(
+        sources?.length ? sources : ['web']
+      ) as unknown[];
+      const addsAlexandria =
+        hasCredential(session) &&
+        enterpriseAllowsAlexandria(enterprise) &&
+        !hasAlexandria(requestedSources);
+      const searchSources = addsAlexandria
+        ? withAlexandriaSource(requestedSources)
+        : requestedSources;
 
       // Build the outbound body from allowed fields only. Never spread the raw
       // arguments, so no scrape/content-fetch options can reach the API.
@@ -135,13 +150,13 @@ Returns result groups in \`data\` and an operation \`id\`.
           tbs,
           filter,
           location,
-          sources: normalizeSearchSources(sources ?? ['web', 'alexandria']),
+          sources: searchSources,
           categories,
           highlights,
           enterprise,
           toolDetail: toolDetail ?? 'compact',
           domainTools:
-            domainTools ?? defaultDomainTools(sources ?? ['web', 'alexandria']),
+            domainTools ?? defaultDomainTools(searchSources),
         }),
         origin: requestOrigin(mcpClient, session),
       };
@@ -155,7 +170,8 @@ Returns result groups in \`data\` and an operation \`id\`.
         postSearchWithFallback(
           client,
           searchBody,
-          sources === undefined && domainTools !== true
+          addsAlexandria && domainTools !== true,
+          requestedSources
         );
       const httpRes = await relayExchangeError(postSearch, { tool: 'firecrawl_search' });
       return structuredCompact(httpRes?.data ?? {});

@@ -1,5 +1,91 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- The `firecrawl_scrape` sentence about provider discovery says again that it applies to authenticated sessions. Hosted keyless sessions list only `firecrawl_search`, `firecrawl_scrape` and `firecrawl_parse`, so they no longer read an unscoped pointer to `firecrawl_find_tools`.
+
+## [3.33.4] - 2026-10-19
+
+### Changed
+
+- When use without an account reaches its daily limit, `firecrawl_search`, `firecrawl_scrape` and `firecrawl_parse` tell the agent to finish the task without Firecrawl and end its answer with one line for the user: `You've reached Firecrawl's daily limit without an account. Sign up free for 1,000 credits a month: <signup link>`. That line closes the message; the setup steps before it are unchanged. The previous text called the limit a rate limit and gave the agent no line to pass on. A 429 without a known reason keeps a generic message, since its cause may be transient.
+- The default server instructions, for sessions with and without a credential, now open with one sentence: if Firecrawl reports that credits ran out or the daily limit without an account was reached, end the final answer with the line it provides, link included. It comes first so clients that cut server instructions short still keep it; the rest of the instructions are unchanged.
+- The `firecrawl_search` description says when to use it: for current information, or to list businesses, people, products, jobs or events with websites, prices or contacts. The sentence pointing to the parameter descriptions is removed to stay inside the 2,048-character description budget. Behavior is unchanged.
+- The `firecrawl_scrape` description says when to use it: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Its Alexandria lines state what the `alexandria` argument does and that it needs an API key on a team with Alexandria enabled, instead of reading as access rules. Behavior is unchanged.
+
+## [3.33.3] - 2026-10-19
+
+### Changed
+
+- The `firecrawl` JS SDK dependency moves from 4.49.1 to 4.50.0. That release lets the SDK load in browser bundles and on Node 18 and 20, and makes v2 requests work on Cloudflare Workers; the server uses none of those paths, so it behaves the same on Node. The server still requires Node 22 or later because `mcp-proxy`'s `pipenet` dependency sets that floor; `undici` 7 alone would rule out Node 18.
+
+### Fixed
+
+- `firecrawl_crawl` with a wait keeps polling when a status read is rate limited (429), waiting the `Retry-After` time (seconds or an HTTP date, capped at 60 s) instead of failing, and reads result pages only once the crawl ends.
+- `firecrawl_crawl` relays the API's reason, status and code when the API refuses to start a crawl, instead of a generic request error.
+
+## [3.33.2] - 2026-10-19
+
+### Changed
+
+- The `firecrawl` JS SDK dependency moves from 4.49.0 to 4.49.1. That release changes only the SDK's package description, so the server behaves the same; the bump keeps the SDK pin at our latest release.
+
+## [3.33.1] - 2026-10-18
+
+### Changed
+
+- The `firecrawl` JS SDK dependency moves from 4.46.0 to 4.49.0. The SDK now keeps v1-style method calls working on the v2 client with a one-time deprecation warning; the server makes no such calls. A request the server does not stamp with its own origin carries the SDK's wrapper default, `js-sdk.firecrawl-mcp@<version>` when installed from npm, in place of `js-sdk@<version>`.
+- `firecrawl_search` reads an `includeDomains` or `excludeDomains` entry given as a URL that names only a host, such as `https://docs.firecrawl.dev/`, as that host. A URL with a path, query, fragment, port or credentials is still refused, since it would change the filter.
+- Tool arguments are normalized before validation, on every tool and surface. An optional parameter sent as `null` is treated as absent. A numeric string in a number parameter, such as `limit: "5"`, is read as a number and checked against the same bounds. A format or parser object the API accepts is read as the tool's own form: `{type: "markdown"}` as `"markdown"`, and `{type: "json", prompt, schema}`, `{type: "query", ...}`, `{type: "screenshot", ...}` or `{type: "pdf", maxPages}` as the format or parser plus its options field, when that field is not also set and the object carries only options that field declares.
+- `firecrawl_search` refuses `developer` or `gov` combined with another category before calling the API, with the API's reason instead of `Invalid request body`.
+
+### Unchanged
+
+- Tool definitions, descriptions and input schemas. Required parameters sent as `null`, out-of-range numbers, unknown formats and domain filters given as URLs with a path are still refused.
+
+## [3.33.0] - 2026-10-18
+
+### Added
+
+- A session's OAuth client id (`session.oauthClientId`) can name the integration. When the id is a metadata URL and the User-Agent names only an HTTP runtime or is missing, the origin uses the URL host as `mcp-oauth-<host>`, after a carried initialize name and before the `Origin` or `Referer` host. Shared static hosts (`github.io`, `gitlab.io`, `pages.dev`, `netlify.app`, `vercel.app`) add the first path segment. Firecrawl's own hosts name nothing. For an id that is not a URL, such as a dynamically registered client, `session.oauthClientName` (the registered client name) stamps `mcp-oauth-<name>` in the same position; SDK default names such as `mcp` are skipped.
+
+### Unchanged
+
+- Every origin a request stamped before keeps its value unless its User-Agent is a runtime or missing and the session carries an OAuth client id that names a product.
+
+## [3.32.0] - 2026-10-18
+
+### Added
+
+- `FIRECRAWL_INTEGRATION` sets the `integration` field on the API requests that accept it: scrape, batch scrape, crawl, map, search, extract, agent, parse, interact and feedback. Apps that launch the server, such as editor extensions, use it to tag their traffic, for example `FIRECRAWL_INTEGRATION=_zed`. Requests that already carry an `integration` keep it, and other endpoints, such as monitors, are unchanged. Unset or blank sends no field, as before.
+
+## [3.31.1] - 2026-10-18
+
+### Changed
+
+- The `firecrawl` JS SDK dependency moves from 4.42.0 to 4.46.0.
+
+## [3.31.0] - 2026-10-18
+
+### Added
+
+- The request origin can be named by the connection. An `X-Firecrawl-Origin` header stamps `mcp-<name>` ahead of every other signal.
+- When the User-Agent names only an HTTP runtime (`node`, `undici`, `python-httpx`, `Go-http-client` and similar) or is missing, the origin uses, in order, a client name an embedder recovered from an earlier `initialize` (`session.initializeClient`, stamped `mcp-<client>`), then the `Origin` or `Referer` host (`mcp-ref-<host>`), before falling back to `mcp-ua-<runtime>` as before. SDK default names such as `mcp` and local or IP-address hosts are skipped.
+- `firecrawl-mcp/server` exports `isRuntimeUserAgent`, `initializeClientSlug` and `DECLARED_ORIGIN_HEADER`.
+
+### Unchanged
+
+- Every origin a request stamped before keeps its value unless the request sends `X-Firecrawl-Origin`, or its User-Agent is a runtime and it carries one of the new signals.
+
+## [3.30.3] - 2026-10-16
+
+### Changed
+
+- Authenticated `firecrawl_search` always includes Alexandria. When `sources` is omitted it sends `["web", "alexandria"]` as before; when the caller passes sources without `alexandria`, such as `["web"]` or `["news"]`, `alexandria` is added and the requested sources are kept. `["alexandria"]` alone is unchanged. Keyless sessions, sessions without a credential, and `enterprise` searches with `zdr` or `anon` are unchanged, because the API refuses provider discovery there. If the API refuses discovery the caller did not ask for, the search retries on the requested sources alone.
+- Search tool descriptions and instructions describe the always-on behaviour in place of the `sources: ["web"]` opt-out.
+
 ## [3.30.2] - 2026-10-15
 
 ### Fixed
