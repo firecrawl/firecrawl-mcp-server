@@ -39,7 +39,7 @@ export const PACKS_TOOL_DESCRIPTION =
   '\nCall with {pack} to load one, or {} to list them. Read-only, free, and it does not run providers or ask the user questions. Then follow a provider\'s nextTool to browse its live capabilities and prices with firecrawl_find_tools, and execute selected capabilities through firecrawl_scrape.';
 
 export const PACKS_INSTRUCTIONS_SENTENCE =
-  `For requests about ${PACKS.map((pack) => pack.title.toLowerCase()).join(', ')}, call firecrawl_packs with that pack before searching; it names the providers that hold that data.`;
+  `For requests about ${PACKS.map((pack) => pack.title.toLowerCase()).join(', ')}, call firecrawl_packs before searching; it names the providers that hold that data.`;
 
 export function packsResult({ pack: packId }: z.infer<typeof packsSchema>) {
   if (!packId) {

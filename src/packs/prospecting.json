@@ -1,8 +1,8 @@
 {
   "id": "prospecting",
-  "title": "Sales prospecting",
+  "title": "Company research and prospecting",
   "summary": "Find target companies and people, enrich them with firmographics and verified contacts, track funding and hiring signals, and list local businesses.",
-  "when": "building a lead or prospect list, finding decision-makers or work emails, enriching companies or contacts, startup funding rounds and investors, or listing local businesses by category and city",
+  "when": "researching companies (firmographics, headcount, funding rounds and investors, startup directories such as Y Combinator), building a lead or prospect list, finding decision-makers, or listing local businesses by category and city",
   "providers": [
     {
       "id": "apollo",

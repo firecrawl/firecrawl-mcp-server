@@ -346,7 +346,7 @@ Use this guide to select the right tool for your task:
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
 - **If you need interactive browser automation** (click, type, navigate): use **interact** with a URL for a fresh page, or **scrape** + **interact** when you already scraped the page or need tighter scrape control
 - **If you need data from a catalogued provider** (Alexandria): search with `sources: ["alexandria"]`, inspect the selected contract with **find_tools**, and execute it with **scrape** `alexandria`
-- **If the task matches an Alexandria pack** (creators and social media, marketing research, sales prospecting, job search, investing, shopping, travel, fantasy football): use **packs** for provider context and guidance, **find_tools** for selected contracts, and **scrape** for execution
+- **If the task matches an Alexandria pack** (creators and social media, marketing research, company research and prospecting, job search, stocks and earnings, shopping, travel, fantasy football): use **packs** for provider context and guidance, **find_tools** for selected contracts, and **scrape** for execution
 
 ### Quick Reference Table
 
