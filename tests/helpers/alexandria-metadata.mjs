@@ -13,7 +13,9 @@ export function assertAlexandriaMetadata(tools, instructions, { hosted = false }
   assert.match(alexandria.description, /mutually exclusive with url/);
   assert.match(alexandria.description, /array of 1-10/);
   assert.match(alexandria.description, /per-capability results in data\.alexandria/);
-  assert.match(alexandria.description, /blocked requests return the applicable requirements/i);
+  assert.doesNotMatch(alexandria.description, /API key on a team with Alexandria enabled|Alexandria access needs an API key/i);
+  assert.match(alexandria.description, /Some providers require accepted terms/i);
+  assert.match(alexandria.description, /direct the user to the Firecrawl dashboard URL/i);
 
   const descriptions = [instructions];
   for (const name of ['firecrawl_search', 'firecrawl_scrape', 'firecrawl_find_tools']) {

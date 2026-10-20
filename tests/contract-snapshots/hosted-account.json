@@ -14,7 +14,7 @@
       }
     },
     "tools": [
-      "firecrawl_scrape@5ec97de8cdd3",
+      "firecrawl_scrape@1eb5e578ec04",
       "firecrawl_map@7d8108e2e8e7",
       "firecrawl_search@292a4deea1d7",
       "firecrawl_find_tools@c6c4aa217920",
