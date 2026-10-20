@@ -14,11 +14,11 @@ test('packs are listed with a description that names each pack and its handoff',
   const tool = tools.find((item) => item.name === 'firecrawl_packs');
   assert.ok(tool);
   assert.equal(tool.annotations.readOnlyHint, true);
-  assert.match(tool.description, /^Use this when the user wants help with creators and social media: /);
-  for (const definition of PACK_FILES) assert.ok(tool.description.includes(`${definition.title.toLowerCase()}: ${definition.when}`));
+  assert.match(tool.description, /^Start here when the task fits one of these packs\./);
+  for (const definition of PACK_FILES) assert.ok(tool.description.includes(`- ${definition.id}: ${definition.when}`));
   assert.match(tool.description, /firecrawl_find_tools.*firecrawl_scrape/);
   assert.deepEqual(tool.inputSchema.properties.pack.enum, PACK_IDS);
-  assert.match(init.instructions, /For creators and social media, marketing research, .* or fantasy football, firecrawl_packs provides relevant providers/);
+  assert.match(init.instructions, /For requests about creators and social media, marketing research, .*, fantasy football, call firecrawl_packs with that pack before searching/);
   assert.deepEqual(Object.keys(tool.inputSchema.properties), ['pack']);
   assert.deepEqual(Object.keys(tool.outputSchema.properties).sort(), ['examples', 'pack', 'packs', 'page', 'providers', 'skill', 'summary', 'title']);
 });
@@ -86,11 +86,13 @@ test('search and find_tools results point at the packs of matched providers', as
   });
   const search = toolText(await client.request('tools/call', { name: 'firecrawl_search', arguments: { query: 'competitor traffic' } }));
   assert.deepEqual(search.data.packs, [
-    { pack: 'marketing', title: 'Marketing research', nextTool: { name: 'firecrawl_packs', arguments: { pack: 'marketing' } } },
-    { pack: 'investing', title: 'Investing', nextTool: { name: 'firecrawl_packs', arguments: { pack: 'investing' } } },
+    { pack: 'marketing', title: 'Marketing research', note: 'The marketing pack names the providers that hold this kind of data and how to use them.', nextTool: { name: 'firecrawl_packs', arguments: { pack: 'marketing' } } },
+    { pack: 'investing', title: 'Investing', note: 'The investing pack names the providers that hold this kind of data and how to use them.', nextTool: { name: 'firecrawl_packs', arguments: { pack: 'investing' } } },
   ]);
+  assert.equal(Object.keys(search.data)[0], 'packs');
   const page = toolText(await client.request('tools/call', { name: 'firecrawl_find_tools', arguments: { query: 'half-PPR projections' } })).data.alexandria[0].data;
   assert.deepEqual(page.packs.map((pack) => pack.pack), ['fantasy']);
+  assert.equal(Object.keys(page)[0], 'packs');
   const providers = toolText(await client.request('tools/call', { name: 'firecrawl_find_tools', arguments: { categories: ['sports'] } })).data.alexandria[0].data;
   assert.deepEqual(providers.packs.map((pack) => pack.pack), ['fantasy']);
 });

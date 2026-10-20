@@ -1722,7 +1722,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       const tools = body?.data?.tools;
       if (packsAvailable() && Array.isArray(tools)) {
         const packs = packPointers(tools.map((tool: any) => tool?.provider));
-        if (packs.length) body.data.packs = packs;
+        if (packs.length) body.data = { packs, ...body.data };
       }
       return structuredCompact(body);
     },
@@ -1827,7 +1827,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       const page = envelope?.data?.alexandria?.[0]?.data;
       if (packsAvailable() && Array.isArray(page?.items)) {
         const packs = packPointers(page.items.map((item: any) => item?.provider ?? item?.id));
-        if (packs.length) page.packs = packs;
+        if (packs.length) envelope.data.alexandria[0].data = { packs, ...page };
       }
       return structuredCompact(envelope);
     },

@@ -34,14 +34,12 @@ export const packsSchema = z.object({
 }).strict();
 
 export const PACKS_TOOL_DESCRIPTION =
-  'Use this when the user wants help with ' +
-  PACKS.map((pack) => `${pack.title.toLowerCase()}: ${pack.when}`).join('; or ') +
-  '. Returns agent-facing context: relevant providers, what they can do, a short skill on using them well, and examples of useful combinations. With no arguments, lists packs; pack loads one. This tool does not run providers or require an intake questionnaire. Read-only and free. Follow a provider\'s nextTool to browse live capabilities and prices with firecrawl_find_tools, then inspect selected contracts before execution through firecrawl_scrape.';
-
-const PACK_TITLES = PACKS.map((pack) => pack.title.toLowerCase());
+  'Start here when the task fits one of these packs. A pack names the Alexandria providers that hold the data for that kind of task, what each returns, and short guidance on using them, so you can query them directly instead of assembling the answer from web pages.\n' +
+  PACKS.map((pack) => `- ${pack.id}: ${pack.when}`).join('\n') +
+  '\nCall with {pack} to load one, or {} to list them. Read-only, free, and it does not run providers or ask the user questions. Then follow a provider\'s nextTool to browse its live capabilities and prices with firecrawl_find_tools, and execute selected capabilities through firecrawl_scrape.';
 
 export const PACKS_INSTRUCTIONS_SENTENCE =
-  `For ${PACK_TITLES.slice(0, -1).join(', ')} or ${PACK_TITLES.at(-1)}, firecrawl_packs provides relevant providers and short guidance; adapt it to the request.`;
+  `For requests about ${PACKS.map((pack) => pack.title.toLowerCase()).join(', ')}, call firecrawl_packs with that pack before searching; it names the providers that hold that data.`;
 
 export function packsResult({ pack: packId }: z.infer<typeof packsSchema>) {
   if (!packId) {
@@ -78,6 +76,7 @@ export function packPointers(providers: Iterable<unknown>) {
   return PACKS.filter((pack) => pack.providers.some((provider) => found.has(provider.id))).map((pack) => ({
     pack: pack.id,
     title: pack.title,
+    note: `The ${pack.id} pack names the providers that hold this kind of data and how to use them.`,
     nextTool: { name: 'firecrawl_packs', arguments: { pack: pack.id } },
   }));
 }

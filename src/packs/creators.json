@@ -2,7 +2,7 @@
   "id": "creators",
   "title": "Creators and social media",
   "summary": "YouTube videos and transcripts, X posts and profiles, Instagram and TikTok creators, podcasts and newsletters for content, influencer and audience research.",
-  "when": "YouTube videos or transcripts, X/Twitter posts, Instagram or TikTok creators and influencers, podcasts, newsletters or what people are saying about a topic on social media",
+  "when": "a YouTube video or its transcript, what people say on X/Twitter, Instagram or TikTok creators and influencers, podcasts and their guests or sponsors, or newsletters",
   "providers": [
     {
       "id": "youtube",

@@ -2,7 +2,7 @@
   "id": "investing",
   "title": "Investing",
   "summary": "Quotes and price history, SEC filings and financial statements, earnings transcripts, analyst ratings, market news and economic data.",
-  "when": "stock or ETF prices and fundamentals, earnings or SEC filings, a company's financial statements, analyst ratings, why a stock moved, or macroeconomic data such as rates and inflation",
+  "when": "a stock's price or why it moved, a company's quarterly revenue, segment results, earnings call or SEC filings, analyst ratings, or economic data such as unemployment, CPI inflation or interest rates",
   "providers": [
     {
       "id": "finance-yahoo-com",

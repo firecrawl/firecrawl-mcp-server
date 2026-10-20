@@ -2,7 +2,7 @@
   "id": "marketing",
   "title": "Marketing research",
   "summary": "Competitor traffic and channels, search demand and keywords, ad libraries, archived messaging and app-store presence for a short sourced brief.",
-  "when": "competitor traffic or channels, keyword or search-demand research, Google Trends, competitors' ads, messaging or pricing-page changes over time, or app-store positioning and reviews",
+  "when": "competitor website traffic or channels, what topics or keywords people search for and which are rising, Google Trends, competitors' ads, how a site's messaging or pricing changed over time, or app-store reviews",
   "page": "https://www.firecrawl.dev/alexandria/marketing",
   "providers": [
     {
@@ -72,7 +72,7 @@
   ],
   "skill": [
     "Help with the request as written, reusing any supplied brand, competitors, audience, market and dates. Ask for missing information only when it materially changes the answer. Choose the relevant sources, not every provider.",
-    "Provider nextTool calls browse compact capabilities with prices. For a selected capability, call firecrawl_find_tools with providers: [provider ID], capabilities: [capability ID], expand: [options, response] and includeCosts: true. Use the live contract for inputs, coverage and credit costs; explain costs before paid execution through firecrawl_scrape with alexandria: {provider, capability, options}. Similarweb may bill per returned metric or row, so confirm scope and keep requests small; do not copy frozen prices into the brief.",
+    "Provider nextTool calls browse compact capabilities with prices. For a selected capability, call firecrawl_find_tools with providers: [provider ID], capabilities: [capability ID], expand: [options, response] and includeCosts: true. Use the live contract for inputs, coverage and credit costs; explain costs before paid execution through firecrawl_scrape with alexandria: {provider, capability, options}. Similarweb bills per returned metric and row, and one multi-metric or multi-month call can cost tens of thousands of credits: read the cost in the contract, request one domain, metric and month at a time, and tell the user the expected cost before anything larger. Do not copy frozen prices into the brief.",
     "Cite sources, dates, geography and device scope for figures. Flag Similarweb estimates and relative Trends interest; do not infer causality from coincident traffic and messaging changes. Distinguish provider errors from missing coverage; never invent metrics. If a provider requires data terms, show them and ask an organization admin to accept them in the Firecrawl dashboard; a request for data is not acceptance.",
     "Return a short brief with evidence, caveats and actionable recommendations. firecrawl_search and URL-mode firecrawl_scrape can supplement provider data, for example by reading a competitor's current pages. For creators, influencers or podcasts, the creators pack is a better fit."
   ],
