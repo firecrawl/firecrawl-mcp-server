@@ -1902,7 +1902,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       title: 'Update Skill',
       readOnlyHint: false,
       openWorldHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
     },
     description:

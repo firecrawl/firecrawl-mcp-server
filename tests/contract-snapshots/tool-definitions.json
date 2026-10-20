@@ -1393,7 +1393,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_create_skill@6afb1a7403cc": {
+  "firecrawl_create_skill@b4d879fc1361": {
     "annotations": {
       "title": "Create Skill",
       "readOnlyHint": false,
@@ -1434,8 +1434,8 @@
         "slug": {
           "description": "Lowercase words joined by hyphens; defaults to one made from the name.",
           "type": "string",
-          "minLength": 1,
-          "maxLength": 64
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
         }
       },
       "additionalProperties": false
@@ -8660,12 +8660,12 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_update_skill@65c0df001723": {
+  "firecrawl_update_skill@aacd885b6640": {
     "annotations": {
       "title": "Update Skill",
       "readOnlyHint": false,
       "openWorldHint": false,
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false
     },
     "title": "Update Skill",
@@ -8677,8 +8677,8 @@
         "id": {
           "description": "team:<slug> from firecrawl_find_skills. Library skills cannot be changed; copy one with firecrawl_create_skill.",
           "type": "string",
-          "minLength": 1,
-          "maxLength": 100
+          "maxLength": 100,
+          "pattern": "^team:[a-z0-9]+(?:-[a-z0-9]+)*$"
         },
         "baseVersion": {
           "description": "The version firecrawl_read_skill returned. A skill changed since is refused with conflict: read it again and reapply.",

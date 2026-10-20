@@ -10,11 +10,11 @@ test('find_skills lists skills through find-skills and links each to read_skill'
     assert(tool, name);
     assert.equal(tool.annotations.readOnlyHint, true);
   }
-  for (const name of ['firecrawl_create_skill', 'firecrawl_update_skill']) {
+  for (const [name, destructive] of [['firecrawl_create_skill', false], ['firecrawl_update_skill', true]]) {
     const tool = tools.find(entry => entry.name === name);
     assert(tool, name);
     assert.equal(tool.annotations.readOnlyHint, false);
-    assert.equal(tool.annotations.destructiveHint, false);
+    assert.equal(tool.annotations.destructiveHint, destructive, name);
   }
   const page = toolText(await client.request('tools/call', { name: 'firecrawl_find_skills', arguments: { query: 'digest', limit: 5 } })).data.alexandria[0].data;
   assert.deepEqual(api.requests.at(-1).body.alexandria, { provider: 'firecrawl', capability: 'find-skills', options: { query: 'digest', limit: 5 } });
@@ -92,5 +92,10 @@ test('write tools refuse bad arguments before calling Exchange', async (t) => {
   await callExpectingError(client, { name: 'firecrawl_update_skill', arguments: { id: 'team:weekly-digest', name: 'x' } });
   await callExpectingError(client, { name: 'firecrawl_update_skill', arguments: { id: 'team:weekly-digest', baseVersion: 1, delete: true } });
   await callExpectingError(client, { name: 'firecrawl_create_skill', arguments: { from: 'deep-research', extra: 1 } });
+  await callExpectingError(client, { name: 'firecrawl_create_skill', arguments: {} });
+  await callExpectingError(client, { name: 'firecrawl_create_skill', arguments: { name: 'Digest', description: 'Summarise.' } });
+  await callExpectingError(client, { name: 'firecrawl_create_skill', arguments: { from: 'deep-research', slug: 'Our Research' } });
+  await callExpectingError(client, { name: 'firecrawl_update_skill', arguments: { id: 'team:weekly-digest', baseVersion: 1 } });
+  await callExpectingError(client, { name: 'firecrawl_update_skill', arguments: { id: 'deep-research', baseVersion: 1, name: 'x' } });
   assert.equal(api.requests.length, before);
 });

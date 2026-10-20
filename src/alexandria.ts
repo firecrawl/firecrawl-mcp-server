@@ -95,13 +95,17 @@ export const createSkillSchema = z
     name: z.string().trim().min(1).max(1000).optional().describe('Skill name; required without from.'),
     description: z.string().trim().min(1).max(5000).optional().describe('When to use the skill; required without from.'),
     body: z.string().min(1).max(200_000).optional().describe('The instructions, in Markdown; required without from. Reference capabilities as @provider/capability.'),
-    slug: z.string().trim().min(1).max(64).optional().describe('Lowercase words joined by hyphens; defaults to one made from the name.'),
+    slug: z.string().trim().max(64).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'slug is lowercase letters and digits in words joined by single hyphens').optional().describe('Lowercase words joined by hyphens; defaults to one made from the name.'),
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) => value.from !== undefined || (value.name !== undefined && value.description !== undefined && value.body !== undefined),
+    { message: 'Give name, description and body, or from to copy a skill.' }
+  );
 
 export const updateSkillSchema = z
   .object({
-    id: z.string().trim().min(1).max(100).describe('team:<slug> from firecrawl_find_skills. Library skills cannot be changed; copy one with firecrawl_create_skill.'),
+    id: z.string().trim().max(100).regex(/^team:[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Only team skills (team:<slug>) can be changed; copy a library skill with firecrawl_create_skill.').describe('team:<slug> from firecrawl_find_skills. Library skills cannot be changed; copy one with firecrawl_create_skill.'),
     baseVersion: z.number().int().min(1).describe('The version firecrawl_read_skill returned. A skill changed since is refused with conflict: read it again and reapply.'),
     name: z.string().trim().min(1).max(1000).optional(),
     description: z.string().trim().min(1).max(5000).optional(),
@@ -109,7 +113,11 @@ export const updateSkillSchema = z
     enabled: z.boolean().optional().describe('Turn the skill on or off.'),
     discoverable: z.boolean().optional().describe('Whether firecrawl_find_skills lists it.'),
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) => ['name', 'description', 'body', 'enabled', 'discoverable'].some((key) => value[key as keyof typeof value] !== undefined),
+    { message: 'Nothing to change: give name, description, body, enabled or discoverable.' }
+  );
 
 const toolFor = (request: any) => {
   if (request?.provider !== 'firecrawl' || !request.options) return undefined;
