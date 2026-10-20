@@ -1393,7 +1393,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_credit_usage@de070cb40eef": {
+  "firecrawl_credit_usage@5b79f64c3f82": {
     "annotations": {
       "title": "Firecrawl credit usage",
       "readOnlyHint": true,
@@ -1498,7 +1498,7 @@
           "description": "Error message or error object when the call did not succeed."
         },
         "bin": {
-          "description": "Period length the API applied, `month` or `day`; present when a split or daily periods were requested.",
+          "description": "Period length the API applied, `month` or `day`; present when the API applied a requested endpoint split or daily periods.",
           "anyOf": [
             {
               "type": "string"

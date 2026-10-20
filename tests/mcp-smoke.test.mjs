@@ -466,7 +466,8 @@ async function startFakeFirecrawlApi() {
 
     if (
       req.method === 'GET' &&
-      req.url === '/v2/team/credit-usage/historical?byApiKey=true'
+      (req.url === '/v2/team/credit-usage/historical?byApiKey=true' ||
+        req.url === '/v2/team/credit-usage/historical?byApiKey=true&bin=day')
     ) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
@@ -512,6 +513,7 @@ async function startFakeFirecrawlApi() {
     if (
       req.method === 'GET' &&
       (req.url === '/v2/team/credit-usage/historical' ||
+        req.url === '/v2/team/credit-usage/historical?bin=day' ||
         req.url === '/v2/team/credit-usage/historical?byEndpoint=true&bin=month')
     ) {
       res.writeHead(200, { 'content-type': 'application/json' });
@@ -1555,6 +1557,41 @@ test('credit usage tool exposes current balance and both historical request shap
     success: true,
   });
 
+  const dailyOnOlderApi = await client.request('tools/call', {
+    arguments: { bin: 'day' },
+    name: 'firecrawl_credit_usage',
+  });
+  assert.deepEqual(JSON.parse(dailyOnOlderApi.content[0].text), {
+    notice:
+      'Firecrawl does not offer daily periods yet, so these periods are calendar-month totals.',
+    periods: [
+      {
+        creditsUsed: 654,
+        endDate: null,
+        startDate: '2026-09-01T00:00:00.000Z',
+      },
+    ],
+    success: true,
+  });
+
+  const dailyByApiKeyOnOlderApi = await client.request('tools/call', {
+    arguments: { bin: 'day', byApiKey: true },
+    name: 'firecrawl_credit_usage',
+  });
+  assert.deepEqual(JSON.parse(dailyByApiKeyOnOlderApi.content[0].text), {
+    notice:
+      'Firecrawl does not offer daily periods yet, so these periods are calendar-month totals per API key.',
+    periods: [
+      {
+        apiKey: 'Production key',
+        creditsUsed: 321,
+        endDate: null,
+        startDate: '2026-09-01T00:00:00.000Z',
+      },
+    ],
+    success: true,
+  });
+
   for (const [args, message] of [
     [{ byEndpoint: true, view: 'current' }, /byEndpoint can only be used with view "historical"/i],
     [{ bin: 'day', view: 'current' }, /bin can only be used with view "historical"/i],
@@ -1574,6 +1611,8 @@ test('credit usage tool exposes current balance and both historical request shap
     '/v2/team/credit-usage/historical?byApiKey=true',
     '/v2/team/credit-usage/historical?byEndpoint=true&bin=day',
     '/v2/team/credit-usage/historical?byEndpoint=true&bin=month',
+    '/v2/team/credit-usage/historical?bin=day',
+    '/v2/team/credit-usage/historical?byApiKey=true&bin=day',
   ]) {
     const request = fakeApi.requests.find((candidate) => candidate.url === path);
     assert.ok(request, path);
