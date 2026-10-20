@@ -1516,7 +1516,7 @@ Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch
 
 \`firecrawl_search\` and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.
 
-With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capabilities instead of fetching a page. Provider discovery and execution are available to signed-in teams with Alexandria enabled.
+With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capabilities instead of fetching a page. Provider discovery and execution require an API key on a team with Alexandria enabled.
 `,
     outputSchema: scrapeOutputSchema,
     parameters: scrapeToolParamsSchema,
