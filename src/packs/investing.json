@@ -1,0 +1,81 @@
+{
+  "id": "investing",
+  "title": "Investing",
+  "summary": "Quotes and price history, SEC filings and financial statements, earnings transcripts, analyst ratings, market news and economic data.",
+  "when": "stock or ETF prices and fundamentals, earnings or SEC filings, a company's financial statements, analyst ratings, why a stock moved, or macroeconomic data such as rates and inflation",
+  "providers": [
+    {
+      "id": "finance-yahoo-com",
+      "summary": "Live quotes with key fundamentals, price history, dividends, earnings dates and symbol search for stocks, ETFs, indices and futures.",
+      "capabilities": [
+        "equities/quote",
+        "equities/history",
+        "equities/earnings",
+        "equities/search"
+      ]
+    },
+    {
+      "id": "sec-gov",
+      "summary": "EDGAR filer lookup, filing lists, 10-K/10-Q sections, XBRL facts, 13F holdings and full-text search.",
+      "capabilities": [
+        "filings/company",
+        "filings/filings",
+        "filings/sections",
+        "filings/concept"
+      ]
+    },
+    {
+      "id": "fiscal-ai",
+      "summary": "Standardized and as-reported financial statements, segments and KPIs, earnings call transcripts and the earnings calendar.",
+      "capabilities": [
+        "company/profile",
+        "financials/income-statement",
+        "company/segments-and-kpis",
+        "events/transcript"
+      ]
+    },
+    {
+      "id": "benzinga",
+      "summary": "Analyst rating changes and consensus, why-is-it-moving notes, news search and M&A calendar.",
+      "capabilities": [
+        "calendar/ratings",
+        "calendar/consensus-ratings",
+        "news/wiims",
+        "news/search"
+      ]
+    },
+    {
+      "id": "nasdaq-com",
+      "summary": "Ticker news, company press releases and market headlines with exact publish times.",
+      "capabilities": [
+        "news/ticker_news",
+        "news/press_releases",
+        "news/article"
+      ]
+    },
+    {
+      "id": "fred",
+      "summary": "Federal Reserve economic data: search series and read observations for rates, inflation, employment and more.",
+      "capabilities": [
+        "series/search",
+        "series/observations"
+      ]
+    }
+  ],
+  "skill": [
+    "Reuse supplied tickers, holdings, periods and the question being asked. Ask only for details that materially change the answer (for example which share class or period). A single quote does not need a full analysis; pick the providers the question needs.",
+    "Provider nextTool calls browse compact capabilities with prices. For a selected capability, call firecrawl_find_tools with providers: [provider ID], capabilities: [capability ID], expand: [options, response] and includeCosts: true. Use the live contract for inputs, coverage and credit costs; explain costs before paid execution through firecrawl_scrape with alexandria: {provider, capability, options}.",
+    "State the as-of time for every price and the period and filing for every figure. Prefer filings for reported numbers and label adjusted or estimated metrics. Do not compute ratios from mismatched periods. Distinguish news attribution from established cause. If a provider requires data terms, show them and ask an organization admin to accept them in the Firecrawl dashboard; a request for data is not acceptance.",
+    "Present facts and sourced analysis, not personalized financial advice; note risks and uncertainty when discussing a position."
+  ],
+  "examples": [
+    {
+      "request": "How did Nvidia's data center revenue trend over the last four quarters?",
+      "approach": "Fiscal AI segments-and-kpis or SEC filings/concept give the reported segment figures by quarter; cite each filing period. The latest transcript can add management's explanation."
+    },
+    {
+      "request": "Why is AMD down today?",
+      "approach": "Yahoo quote for the move and time, Benzinga news/wiims or Nasdaq ticker_news for attributed explanations; present the attributed reasons with sources and timestamps."
+    }
+  ]
+}

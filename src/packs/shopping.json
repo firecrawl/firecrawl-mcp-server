@@ -1,0 +1,89 @@
+{
+  "id": "shopping",
+  "title": "Shopping",
+  "summary": "Product search, current prices and stock, specifications, reviews and bestseller rankings across major retailers, plus wholesale sourcing.",
+  "when": "comparing products or prices across stores, current price or stock for an item, product reviews and ratings, bestsellers in a category, or wholesale suppliers for sourcing",
+  "providers": [
+    {
+      "id": "amazon-com",
+      "summary": "Amazon US search, product details, buy-box price and stock for up to five ASINs, specifications, reviews and category bestsellers.",
+      "capabilities": [
+        "products/search",
+        "products/product",
+        "products/prices",
+        "products/reviews",
+        "products/bestsellers"
+      ]
+    },
+    {
+      "id": "walmart-com",
+      "summary": "Walmart search, category browsing, item details and reviews.",
+      "capabilities": [
+        "products/search",
+        "products/product",
+        "products/reviews"
+      ]
+    },
+    {
+      "id": "bestbuy-com",
+      "summary": "Best Buy search, product details, pricing, store pickup and delivery availability by ZIP, and reviews.",
+      "capabilities": [
+        "products/search",
+        "products/pricing",
+        "products/availability",
+        "products/reviews"
+      ]
+    },
+    {
+      "id": "newegg-com",
+      "summary": "Newegg search, live price and stock, open-box listings and reviews for electronics and PC parts.",
+      "capabilities": [
+        "products/search",
+        "products/product",
+        "products/open_box"
+      ]
+    },
+    {
+      "id": "ebay-com",
+      "summary": "eBay listing details, per-variation prices and shipping for a known item number.",
+      "capabilities": [
+        "listings/item",
+        "listings/item_shipping",
+        "listings/suggest"
+      ]
+    },
+    {
+      "id": "etsy-com",
+      "summary": "Etsy listing details, variations and similar listings from a known listing; keyword search is not available.",
+      "capabilities": [
+        "listings/listing",
+        "listings/similar_listings"
+      ]
+    },
+    {
+      "id": "alibaba",
+      "summary": "Wholesale product search, MOQ and quantity price tiers, specifications and supplier summaries.",
+      "capabilities": [
+        "retail/search",
+        "retail/price_tiers",
+        "retail/supplier"
+      ]
+    }
+  ],
+  "skill": [
+    "Reuse the supplied product, budget, must-have features, location or ZIP and preferred stores. Ask only for details that materially change the recommendation. Check the retailers relevant to the item and region; not every provider is needed.",
+    "Provider nextTool calls browse compact capabilities with prices. For a selected capability, call firecrawl_find_tools with providers: [provider ID], capabilities: [capability ID], expand: [options, response] and includeCosts: true. Use the live contract for inputs, coverage and credit costs; explain costs before paid execution through firecrawl_scrape with alexandria: {provider, capability, options}. Batch price checks where a contract allows several items per call.",
+    "Prices and stock change quickly: give the retailer, the time checked and whether the price is a displayed, list or open-box price; exclude shipping and tax unless the source includes them. Match the exact model and variant before comparing prices. Summarize reviews by theme with counts rather than cherry-picking. If a provider requires data terms, show them and ask an organization admin to accept them in the Firecrawl dashboard; a request for data is not acceptance.",
+    "Return a compact comparison table and a clear pick with the trade-offs. Do not place orders or add items to carts."
+  ],
+  "examples": [
+    {
+      "request": "What's the cheapest place to buy a Sony WH-1000XM5 right now?",
+      "approach": "Search Amazon, Best Buy and Walmart for the exact model, read current prices and stock, and show a table with retailer, price, condition and time checked."
+    },
+    {
+      "request": "Find suppliers for custom printed tote bags at 500 units.",
+      "approach": "Alibaba retail/search, then price_tiers for the 500-unit price and supplier for tenure and country; present three suppliers with MOQ and unit price, noting shipping is excluded."
+    }
+  ]
+}

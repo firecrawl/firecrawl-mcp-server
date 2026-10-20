@@ -1,0 +1,79 @@
+{
+  "id": "travel",
+  "title": "Travel",
+  "summary": "Flight fares and cheap dates, hotel and vacation-rental prices and reviews, and restaurant availability for trip planning.",
+  "when": "flight prices or the cheapest dates to fly, hotel or vacation-rental options and prices for specific dates, hotel reviews, or restaurant reservations for a trip",
+  "providers": [
+    {
+      "id": "flights-google-com",
+      "summary": "Google Flights one-way and round-trip fares for given dates; resolve airports first.",
+      "capabilities": [
+        "flights/suggest_places",
+        "flights/search_flights"
+      ]
+    },
+    {
+      "id": "skyscanner-net",
+      "summary": "Cheapest month and cheapest days for a route, then live fares for concrete dates.",
+      "capabilities": [
+        "flights/suggest_places",
+        "flights/monthly_prices",
+        "flights/price_calendar",
+        "flights/search_flights"
+      ]
+    },
+    {
+      "id": "booking-com",
+      "summary": "Hotel search for dates and guests, property availability and total prices, details and guest reviews.",
+      "capabilities": [
+        "hotels/locations",
+        "hotels/search",
+        "hotels/availability",
+        "hotels/reviews"
+      ]
+    },
+    {
+      "id": "vrbo-com",
+      "summary": "Vacation rentals by destination and dates, listing details and a total stay quote.",
+      "capabilities": [
+        "vacation-rentals/locations",
+        "vacation-rentals/search",
+        "vacation-rentals/offers"
+      ]
+    },
+    {
+      "id": "expedia-co-uk",
+      "summary": "Expedia UK hotel search and room offers with GBP totals.",
+      "capabilities": [
+        "hotels/locations",
+        "hotels/search",
+        "hotels/availability"
+      ]
+    },
+    {
+      "id": "resy-com",
+      "summary": "Restaurants with tables on a day, venue details and time slots for a party size.",
+      "capabilities": [
+        "restaurants/locations",
+        "restaurants/search_venues",
+        "restaurants/availability"
+      ]
+    }
+  ],
+  "skill": [
+    "Reuse supplied origin, destination, dates or flexibility, travellers, budget and preferences. Ask only for details that materially change results, such as exact dates when the user wants live prices. Pick the providers the trip needs; not every provider is needed.",
+    "Provider nextTool calls browse compact capabilities with prices. For a selected capability, call firecrawl_find_tools with providers: [provider ID], capabilities: [capability ID], expand: [options, response] and includeCosts: true. Use the live contract for inputs, coverage and credit costs; explain costs before paid execution through firecrawl_scrape with alexandria: {provider, capability, options}. Resolve places to provider IDs first; use cheap-date calendars before many live searches.",
+    "Fares and room prices change quickly: state currency, whether a price is per person or total, taxes and fees when shown, and the time checked. Compare like with like (same dates, guests and cabin). Do not book, hold or pay for anything. If a provider requires data terms, show them and ask an organization admin to accept them in the Firecrawl dashboard; a request for data is not acceptance.",
+    "Return a short comparison with links, the best options and their trade-offs (stops, duration, cancellation terms, location)."
+  ],
+  "examples": [
+    {
+      "request": "When is the cheapest time to fly Lisbon to New York this winter?",
+      "approach": "Skyscanner monthly_prices for the route, then price_calendar for the cheapest month; confirm one or two dates with a live search_flights. Report currency and time checked."
+    },
+    {
+      "request": "Find a hotel in Kyoto near Gion for 2 adults, 12–15 March, under $250 a night.",
+      "approach": "Booking hotels/locations to resolve Gion, hotels/search with dates and guests, then availability and reviews for the best few; present total price, rating and distance."
+    }
+  ]
+}

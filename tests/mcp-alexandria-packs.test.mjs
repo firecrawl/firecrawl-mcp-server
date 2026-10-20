@@ -4,7 +4,8 @@ import test from 'node:test';
 import { EXCHANGE_KEY_REQUIRED_MESSAGE, callExpectingError, startStdio, startStdioWithApi, toolText } from './helpers/exchange-mcp.mjs';
 import { CAPABILITY_HIT } from './helpers/exchange-api.mjs';
 
-const PACK_FILES = ['fantasy', 'marketing'].map((id) => JSON.parse(readFileSync(new URL(`../src/packs/${id}.json`, import.meta.url), 'utf8')));
+const PACK_IDS = ['creators', 'marketing', 'prospecting', 'jobs', 'investing', 'shopping', 'travel', 'fantasy'];
+const PACK_FILES = PACK_IDS.map((id) => JSON.parse(readFileSync(new URL(`../src/packs/${id}.json`, import.meta.url), 'utf8')));
 const callPacks = (client, args) => client.request('tools/call', { name: 'firecrawl_packs', arguments: args });
 
 test('packs are listed with a description that names each pack and its handoff', async (t) => {
@@ -13,11 +14,11 @@ test('packs are listed with a description that names each pack and its handoff',
   const tool = tools.find((item) => item.name === 'firecrawl_packs');
   assert.ok(tool);
   assert.equal(tool.annotations.readOnlyHint, true);
-  assert.match(tool.description, /^Use this when the user wants help with fantasy football: /);
-  assert.match(tool.description, /marketing research: /);
+  assert.match(tool.description, /^Use this when the user wants help with creators and social media: /);
+  for (const definition of PACK_FILES) assert.ok(tool.description.includes(`${definition.title.toLowerCase()}: ${definition.when}`));
   assert.match(tool.description, /firecrawl_find_tools.*firecrawl_scrape/);
-  assert.deepEqual(tool.inputSchema.properties.pack.enum, ['fantasy', 'marketing']);
-  assert.match(init.instructions, /For fantasy football or marketing research, firecrawl_packs provides relevant providers/);
+  assert.deepEqual(tool.inputSchema.properties.pack.enum, PACK_IDS);
+  assert.match(init.instructions, /For creators and social media, marketing research, .* or fantasy football, firecrawl_packs provides relevant providers/);
   assert.deepEqual(Object.keys(tool.inputSchema.properties), ['pack']);
   assert.deepEqual(Object.keys(tool.outputSchema.properties).sort(), ['examples', 'pack', 'packs', 'page', 'providers', 'skill', 'summary', 'title']);
 });
@@ -25,8 +26,8 @@ test('packs are listed with a description that names each pack and its handoff',
 test('no arguments lists packs; pack loads provider context and guidance without an API call', async (t) => {
   const { api, client } = await startStdioWithApi(t);
   const list = toolText(await callPacks(client, {}));
-  assert.deepEqual(list.packs.map((pack) => pack.id), ['fantasy', 'marketing']);
-  assert.deepEqual(list.packs[0].nextTool, { name: 'firecrawl_packs', arguments: { pack: 'fantasy' } });
+  assert.deepEqual(list.packs.map((pack) => pack.id), PACK_IDS);
+  assert.deepEqual(list.packs[0].nextTool, { name: 'firecrawl_packs', arguments: { pack: 'creators' } });
 
   for (const definition of PACK_FILES) {
     const result = await callPacks(client, { pack: definition.id });
@@ -84,7 +85,10 @@ test('search and find_tools results point at the packs of matched providers', as
     findToolsItems: [{ id: 'startwho-com/fantasy-sports-rankings/projections', provider: 'startwho-com', capability: 'fantasy-sports-rankings/projections' }],
   });
   const search = toolText(await client.request('tools/call', { name: 'firecrawl_search', arguments: { query: 'competitor traffic' } }));
-  assert.deepEqual(search.data.packs, [{ pack: 'marketing', title: 'Marketing research', nextTool: { name: 'firecrawl_packs', arguments: { pack: 'marketing' } } }]);
+  assert.deepEqual(search.data.packs, [
+    { pack: 'marketing', title: 'Marketing research', nextTool: { name: 'firecrawl_packs', arguments: { pack: 'marketing' } } },
+    { pack: 'investing', title: 'Investing', nextTool: { name: 'firecrawl_packs', arguments: { pack: 'investing' } } },
+  ]);
   const page = toolText(await client.request('tools/call', { name: 'firecrawl_find_tools', arguments: { query: 'half-PPR projections' } })).data.alexandria[0].data;
   assert.deepEqual(page.packs.map((pack) => pack.pack), ['fantasy']);
   const providers = toolText(await client.request('tools/call', { name: 'firecrawl_find_tools', arguments: { categories: ['sports'] } })).data.alexandria[0].data;
@@ -92,7 +96,7 @@ test('search and find_tools results point at the packs of matched providers', as
 });
 
 test('results without pack providers carry no pointer', async (t) => {
-  const { client } = await startStdioWithApi(t);
+  const { client } = await startStdioWithApi(t, { searchTools: [{ ...CAPABILITY_HIT, provider: 'census-gov', capability: 'census/data' }] });
   const search = toolText(await client.request('tools/call', { name: 'firecrawl_search', arguments: { query: 'cpi' } }));
   assert.equal(search.data.packs, undefined);
 });

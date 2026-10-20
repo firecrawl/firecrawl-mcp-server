@@ -1,13 +1,19 @@
 import { z } from 'zod';
+import creators from './packs/creators.json';
 import fantasy from './packs/fantasy.json';
+import investing from './packs/investing.json';
+import jobs from './packs/jobs.json';
 import marketing from './packs/marketing.json';
+import prospecting from './packs/prospecting.json';
+import shopping from './packs/shopping.json';
+import travel from './packs/travel.json';
 
 const packSchema = z.object({
   id: z.string().regex(/^[a-z][a-z0-9-]*$/),
   title: z.string().min(1),
   summary: z.string().min(1),
   when: z.string().min(1),
-  page: z.string().url(),
+  page: z.string().url().optional(),
   providers: z.array(z.object({
     id: z.string().regex(/^[a-z0-9-]+$/),
     summary: z.string().min(1),
@@ -20,7 +26,7 @@ const packSchema = z.object({
   }).strict()).min(1),
 }).strict();
 
-const PACKS = [fantasy, marketing].map((pack) => packSchema.parse(pack));
+const PACKS = [creators, marketing, prospecting, jobs, investing, shopping, travel, fantasy].map((pack) => packSchema.parse(pack));
 const PACK_IDS = PACKS.map((pack) => pack.id) as [string, ...string[]];
 
 export const packsSchema = z.object({
@@ -32,8 +38,10 @@ export const PACKS_TOOL_DESCRIPTION =
   PACKS.map((pack) => `${pack.title.toLowerCase()}: ${pack.when}`).join('; or ') +
   '. Returns agent-facing context: relevant providers, what they can do, a short skill on using them well, and examples of useful combinations. With no arguments, lists packs; pack loads one. This tool does not run providers or require an intake questionnaire. Read-only and free. Follow a provider\'s nextTool to browse live capabilities and prices with firecrawl_find_tools, then inspect selected contracts before execution through firecrawl_scrape.';
 
+const PACK_TITLES = PACKS.map((pack) => pack.title.toLowerCase());
+
 export const PACKS_INSTRUCTIONS_SENTENCE =
-  `For ${PACKS.map((pack) => pack.title.toLowerCase()).join(' or ')}, firecrawl_packs provides relevant providers and short guidance on using them well; adapt it to the user's request.`;
+  `For ${PACK_TITLES.slice(0, -1).join(', ')} or ${PACK_TITLES.at(-1)}, firecrawl_packs provides relevant providers and short guidance; adapt it to the request.`;
 
 export function packsResult({ pack: packId }: z.infer<typeof packsSchema>) {
   if (!packId) {

@@ -1,0 +1,86 @@
+{
+  "id": "prospecting",
+  "title": "Sales prospecting",
+  "summary": "Find target companies and people, enrich them with firmographics and verified contacts, track funding and hiring signals, and list local businesses.",
+  "when": "building a lead or prospect list, finding decision-makers or work emails, enriching companies or contacts, startup funding rounds and investors, or listing local businesses by category and city",
+  "providers": [
+    {
+      "id": "apollo",
+      "summary": "People and company search and enrichment. people/search is free and should come first; matches and enrichment unlock contacts and bill per matched record.",
+      "capabilities": [
+        "people/search",
+        "people/match",
+        "companies/search",
+        "companies/enrich"
+      ]
+    },
+    {
+      "id": "fullenrich",
+      "summary": "Company and people search and lookup, verified work emails and mobile numbers. Mobile numbers cost the most; ask for them only when needed.",
+      "capabilities": [
+        "companies/search",
+        "people/search",
+        "contacts/work-email",
+        "companies/lookup"
+      ]
+    },
+    {
+      "id": "people-data-labs",
+      "summary": "Company search by industry, headcount, funding stage and location, and one-company firmographic enrichment.",
+      "capabilities": [
+        "company/search",
+        "company/enrich"
+      ]
+    },
+    {
+      "id": "fireround",
+      "summary": "Startup funding rounds, company funding profiles and investor track records; useful for funding and timing signals.",
+      "capabilities": [
+        "rounds/search",
+        "companies/search",
+        "companies/rounds",
+        "investors/profile"
+      ]
+    },
+    {
+      "id": "ycombinator-com",
+      "summary": "Public YC company directory: search by batch, industry or location, company profiles with founders, and listed jobs.",
+      "capabilities": [
+        "companies/search",
+        "companies/company"
+      ]
+    },
+    {
+      "id": "firecrawl-maps",
+      "summary": "Local businesses by category and city with ratings, review counts, phones and websites, plus reviews for one place.",
+      "capabilities": [
+        "businesses/search",
+        "businesses/reviews"
+      ]
+    },
+    {
+      "id": "bbb-business-profiles-ratings-complaint",
+      "summary": "BBB profiles, ratings and complaint history for US and Canadian businesses.",
+      "capabilities": [
+        "businesses/search",
+        "businesses/profile"
+      ]
+    }
+  ],
+  "skill": [
+    "Reuse the ideal customer profile, territory, titles, list size and any supplied companies. Ask only for details that materially change who qualifies. Start small: a short, accurate list beats a large unverified one, and not every provider is needed.",
+    "Provider nextTool calls browse compact capabilities with prices. For a selected capability, call firecrawl_find_tools with providers: [provider ID], capabilities: [capability ID], expand: [options, response] and includeCosts: true. Use the live contract for inputs, coverage and credit costs; explain costs before paid execution through firecrawl_scrape with alexandria: {provider, capability, options}. Prefer free search and preview steps first (for example Apollo people/search), then enrich or reveal contacts only for the records the user wants. Contact reveals and bulk enrichment can be costly, so confirm count and fields before running them.",
+    "Use contact data only for legitimate business outreach. Prefer work emails; personal emails and mobile numbers carry extra legal and cost considerations, so ask before retrieving them. Report verification status and source for each contact; never guess an email pattern as verified. If a provider requires data terms, show them and ask an organization admin to accept them in the Firecrawl dashboard; a request for data is not acceptance.",
+    "Deduplicate across providers by company domain and person LinkedIn URL or name plus employer. Mark which fields came from which provider and when; flag stale or conflicting firmographics. Return a table the user can act on, with gaps stated."
+  ],
+  "examples": [
+    {
+      "request": "Find 15 Series A fintech startups in London and their heads of engineering.",
+      "approach": "Fireround rounds/search or People Data Labs company/search builds the company list; Apollo people/search (free) finds candidates by title; reveal work emails only for the people the user confirms."
+    },
+    {
+      "request": "List dentists in Austin with good reviews but no website.",
+      "approach": "Maps businesses/search by category and city returns ratings, review counts and website fields; filter and present a table. A BBB profile can add complaint history if relevant."
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "id": "jobs",
+  "title": "Job search",
+  "summary": "Current job openings across major boards and company career sites, with salaries, employer details and pay benchmarks.",
+  "when": "finding job openings or roles to apply to, jobs at a specific company, salary ranges or pay benchmarks, or which companies are hiring for a role",
+  "providers": [
+    {
+      "id": "indeed-com",
+      "summary": "Job search with filters and paging, job details and employer research.",
+      "capabilities": [
+        "jobs/search",
+        "jobs/job",
+        "jobs/employer"
+      ]
+    },
+    {
+      "id": "ziprecruiter-com",
+      "summary": "Job search, company job lists, job details and salary benchmarks for a title and city.",
+      "capabilities": [
+        "jobs/search_jobs",
+        "jobs/job",
+        "jobs/salary"
+      ]
+    },
+    {
+      "id": "glassdoor-com",
+      "summary": "Job discovery with location and employer filters; resolve locations, titles and employer IDs first.",
+      "capabilities": [
+        "jobs/search_jobs",
+        "jobs/suggest_locations",
+        "jobs/suggest_employers"
+      ]
+    },
+    {
+      "id": "myworkdayjobs-com",
+      "summary": "Openings on any company's Workday career site, with facet filters; start from the career-site URL.",
+      "capabilities": [
+        "jobs/search_jobs",
+        "jobs/get_job"
+      ]
+    },
+    {
+      "id": "greenhouse-io",
+      "summary": "Every opening on a company's Greenhouse board, with departments, offices and full job posts.",
+      "capabilities": [
+        "jobs/jobs",
+        "jobs/search",
+        "jobs/job"
+      ]
+    },
+    {
+      "id": "builtin-com",
+      "summary": "Technology jobs with salary ranges, plus company profiles.",
+      "capabilities": [
+        "jobs/search",
+        "jobs/job"
+      ]
+    },
+    {
+      "id": "ycombinator-com",
+      "summary": "Jobs listed on YC startup profiles, with salary text and requirements.",
+      "capabilities": [
+        "companies/jobs",
+        "companies/search"
+      ]
+    }
+  ],
+  "skill": [
+    "Reuse the supplied role, seniority, location or remote preference, salary floor, visa needs and target companies. Ask only for details that materially change the search. Pick boards that fit: company career sites (Workday, Greenhouse) for named employers, broad boards for discovery; not every provider is needed.",
+    "Provider nextTool calls browse compact capabilities with prices. For a selected capability, call firecrawl_find_tools with providers: [provider ID], capabilities: [capability ID], expand: [options, response] and includeCosts: true. Use the live contract for inputs, coverage and credit costs; explain costs before paid execution through firecrawl_scrape with alexandria: {provider, capability, options}. Job searches page; fetch details only for promising postings.",
+    "Report posting dates and the source of every salary figure; distinguish a posting's stated range from a benchmark estimate. Deduplicate the same role across boards. Removed or expired postings return not found; say so rather than presenting them as open. If a provider requires data terms, show them and ask an organization admin to accept them in the Firecrawl dashboard; a request for data is not acceptance.",
+    "Return a short table with title, company, location, pay when stated, date and link, followed by the best matches and why. Do not apply to jobs or submit personal data on the user's behalf."
+  ],
+  "examples": [
+    {
+      "request": "Find remote senior data engineer roles paying over $180k.",
+      "approach": "Search Indeed and ZipRecruiter with the role and remote filters, Built In for tech roles with ranges; keep postings that state pay at or above the floor and note those that do not state pay."
+    },
+    {
+      "request": "Is Stripe hiring product designers in Dublin?",
+      "approach": "Read the company's own board (Greenhouse or Workday) filtered by department and office; a broad board can confirm. Link each posting and its date."
+    }
+  ]
+}

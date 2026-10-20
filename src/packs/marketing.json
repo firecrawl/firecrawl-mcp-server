@@ -1,56 +1,89 @@
 {
   "id": "marketing",
   "title": "Marketing research",
-  "summary": "Traffic, search demand, archived messaging, creators and podcast intelligence for a short sourced brief.",
-  "when": "competitor traffic or channels, messaging changes, content opportunities, creators, podcasts or sponsorship research",
+  "summary": "Competitor traffic and channels, search demand and keywords, ad libraries, archived messaging and app-store presence for a short sourced brief.",
+  "when": "competitor traffic or channels, keyword or search-demand research, Google Trends, competitors' ads, messaging or pricing-page changes over time, or app-store positioning and reviews",
   "page": "https://www.firecrawl.dev/alexandria/marketing",
   "providers": [
     {
       "id": "similarweb",
-      "summary": "Estimated website traffic, engagement, channel mix, geography, referrals and paid search spend. Current contracts cover one complete month, with subscription and provider allowance requirements.",
-      "capabilities": ["web/traffic", "channels/share", "web/geography", "web/ppc-spend"]
-    },
-    {
-      "id": "oriane",
-      "summary": "Indexed Instagram and TikTok profile/post searches, bios, follower counts and engagement. Coverage and freshness are index-dependent, not a complete live feed; empty results do not trigger ingestion.",
-      "capabilities": ["instagram/profiles-search", "tiktok/profiles-search", "instagram/posts-search"]
+      "summary": "Estimated website traffic, engagement, channel mix, geography, referrals and paid search spend for one complete month. Subscription and provider allowance requirements apply.",
+      "capabilities": [
+        "web/traffic",
+        "channels/share",
+        "web/geography",
+        "web/ppc-spend"
+      ]
     },
     {
       "id": "firecrawl-trends",
-      "summary": "Search interest over time and by region, related/rising queries, topic suggestions and trending searches. Interest is relative, not absolute search volume.",
-      "capabilities": ["trends/interest_over_time", "trends/related_queries", "trends/suggestions"]
+      "summary": "Search interest over time and by region, related and rising queries, and trending searches. Interest is relative, not absolute search volume.",
+      "capabilities": [
+        "trends/interest_over_time",
+        "trends/related_queries",
+        "trends/interest_by_region",
+        "trends/suggestions"
+      ]
     },
     {
-      "id": "particle",
-      "summary": "Podcast/show and episode discovery, transcripts, guests, sponsors and advertising signals. Show-name search resolves a show; episode search finds discussions of a topic.",
-      "capabilities": ["podcasts/search", "podcasts/episodes/search", "advertising/show/sponsors"]
+      "id": "answerthepublic-com",
+      "summary": "Question, preposition and comparison keyword suggestions for a seed keyword, useful for content ideas.",
+      "capabilities": [
+        "search-suggestions/get_keyword_research"
+      ]
     },
     {
-      "id": "icons-computer",
-      "summary": "App-icon discovery by name, color, style, category or platform, plus image links and source attribution; useful when a brief needs visual references.",
-      "capabilities": ["icons/search", "icons/detail"]
+      "id": "adstransparency-google-com",
+      "summary": "Google Ads Transparency: resolve an advertiser, list its ads and read one creative. Start with suggest to get an advertiser ID.",
+      "capabilities": [
+        "ad-transparency/suggest",
+        "ad-transparency/list_ads",
+        "ad-transparency/get_ad"
+      ]
+    },
+    {
+      "id": "upspring",
+      "summary": "Meta ad library intelligence: a brand's ad strategy, its ads, hooks, offers and landing pages, and similar competitors. Taxonomy calls are free.",
+      "capabilities": [
+        "advertisers/by-domain",
+        "advertisers/brief",
+        "ads/browse",
+        "advertisers/compare"
+      ]
     },
     {
       "id": "web-archive-org",
-      "summary": "Archived capture history and readable page text for messaging or pricing comparisons. Content needs an exact capture timestamp from history; it does not execute JavaScript.",
-      "capabilities": ["captures/history", "captures/content", "captures/oldest"]
+      "summary": "Archived capture history and page text for messaging or pricing comparisons. Content needs an exact capture timestamp from history.",
+      "capabilities": [
+        "captures/history",
+        "captures/content"
+      ]
+    },
+    {
+      "id": "apps-apple-com",
+      "summary": "App Store search, app details, reviews and top charts for app positioning and review themes.",
+      "capabilities": [
+        "apps/search",
+        "apps/app",
+        "apps/reviews",
+        "apps/top_charts"
+      ]
     }
   ],
   "skill": [
-    "Help with the request as written, reusing any supplied brand, competitors, audience, market and dates. Ask for missing information only when it materially changes the answer. Choose the relevant sources, not every provider, and treat the examples as possibilities rather than a fixed research plan.",
-    "Provider nextTool calls browse compact capabilities with prices. Inspect only needed contracts with firecrawl_find_tools: providers: [provider ID], capabilities: [capability ID], expand: [options, response], includeCosts: true. Explain costs before paid execution through firecrawl_scrape with alexandria: {provider, capability, options}. Similarweb may bill per returned metric or row, so confirm scope and keep requests small; do not copy frozen prices into the brief.",
-    "If a provider requires data terms, show the terms and ask an organization admin to accept them in the Firecrawl dashboard. A request for data is not acceptance. State missing access or subscription requirements instead of retrying blindly.",
-    "Cite sources, dates, geography and device scope for figures. Flag Similarweb estimates and relative Trends interest; do not infer causality from coincident traffic and messaging changes. An empty index search does not prove a creator or mention is absent, and followers do not establish audience geography. Distinguish provider errors from missing coverage; never invent metrics.",
-    "Return a short brief with evidence, caveats and actionable recommendations suited to the request. Ordinary firecrawl_search and URL-mode firecrawl_scrape can supplement provider data, for example by reading competing pages. Preserve icon source attribution when including visual references."
+    "Help with the request as written, reusing any supplied brand, competitors, audience, market and dates. Ask for missing information only when it materially changes the answer. Choose the relevant sources, not every provider.",
+    "Provider nextTool calls browse compact capabilities with prices. For a selected capability, call firecrawl_find_tools with providers: [provider ID], capabilities: [capability ID], expand: [options, response] and includeCosts: true. Use the live contract for inputs, coverage and credit costs; explain costs before paid execution through firecrawl_scrape with alexandria: {provider, capability, options}. Similarweb may bill per returned metric or row, so confirm scope and keep requests small; do not copy frozen prices into the brief.",
+    "Cite sources, dates, geography and device scope for figures. Flag Similarweb estimates and relative Trends interest; do not infer causality from coincident traffic and messaging changes. Distinguish provider errors from missing coverage; never invent metrics. If a provider requires data terms, show them and ask an organization admin to accept them in the Firecrawl dashboard; a request for data is not acceptance.",
+    "Return a short brief with evidence, caveats and actionable recommendations. firecrawl_search and URL-mode firecrawl_scrape can supplement provider data, for example by reading a competitor's current pages. For creators, influencers or podcasts, the creators pack is a better fit."
   ],
   "examples": [
     {
-      "request": "Compare Notion, Linear and ClickUp's marketing opportunities.",
-      "approach": "Similarweb web/traffic and channels/share can reveal acquisition patterns; Wayback captures/history and captures/content can show messaging changes; Trends related_queries can suggest demand gaps. Use only the comparisons needed for a short sourced brief, and label estimates."
+      "request": "Compare Notion, Linear and ClickUp's marketing.",
+      "approach": "Similarweb web/traffic and channels/share show acquisition patterns; Upspring or Ads Transparency show what each is advertising; Wayback captures can show messaging changes. Use only the comparisons needed for a short sourced brief, and label estimates."
     },
     {
-      "request": "Which creators or podcasts might fit our launch?",
-      "approach": "Oriane profile searches can surface creators; Particle episode search can find relevant discussions and show sponsor data can inform fit. A small evidence-backed shortlist may be enough. Flag unavailable audience or coverage signals rather than inventing reach."
+      "request": "Which blog topics should we write about for home espresso?",
+      "approach": "Trends related_queries and interest_over_time show rising and seasonal demand; AnswerThePublic adds the questions people ask. Present a ranked topic list with the evidence for each."
     }
   ]
 }
