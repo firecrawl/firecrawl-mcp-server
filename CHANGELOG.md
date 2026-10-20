@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- The `firecrawl_search` description says when to use it: for current information, or to list businesses, people, products, jobs or events with websites, prices or contacts. The sentence pointing to the parameter descriptions is removed to stay inside the 2,048-character description budget. Behavior is unchanged.
+- The `firecrawl_scrape` description says when to use it: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Its Alexandria lines state what the `alexandria` argument does and that it needs an API key on a team with Alexandria enabled, instead of reading as access rules. Behavior is unchanged.
+
 ## [3.33.3] - 2026-10-19
 
 ### Changed
