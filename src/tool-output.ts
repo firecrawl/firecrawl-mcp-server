@@ -462,6 +462,8 @@ export const creditUsageOutputSchema = z
     // Historical view.
     success,
     error,
-    periods: unknown('Historical periods sorted by start date, each with `startDate`, `endDate`, `creditsUsed`, and `apiKey` when broken down by key.'),
+    bin: str('Period length the API applied, `month` or `day`; present when the API applied a requested endpoint split or daily periods.'),
+    periods: unknown('Historical periods sorted by start date, each with `startDate`, `endDate`, `creditsUsed`, and `endpoint` or `apiKey` when split.'),
+    notice: str('Present when the requested split or daily periods are not available yet; the periods are then calendar-month figures.'),
   })
   .describe('The team credit balance, or historical credit consumption by period.');

@@ -1393,7 +1393,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_credit_usage@4202fbda2421": {
+  "firecrawl_credit_usage@5b79f64c3f82": {
     "annotations": {
       "title": "Firecrawl credit usage",
       "readOnlyHint": true,
@@ -1401,13 +1401,13 @@
       "destructiveHint": false
     },
     "title": "Firecrawl credit usage",
-    "description": "\nGet the authenticated Firecrawl team's current credit balance or historical credit consumption. Use the current view to answer how many credits remain or to check billing-period boundaries. Use the historical view for monthly usage reporting and trend analysis.\n\nThe current view returns `remainingCredits`, `planCredits`, `billingPeriodStart`, and `billingPeriodEnd`. Extra purchased or granted credits can make `remainingCredits` greater than `planCredits`. Billing-period dates may be null when the upstream billing provider has no period metadata.\n\nThe historical view returns periods sorted by start date with `startDate`, `endDate`, and `creditsUsed`. Set `byApiKey` to include separate periods per API key, identified by the optional `apiKey` field. The newest period's `endDate` can be null.\n",
+    "description": "\nGet the authenticated Firecrawl team's current credit balance or its credit usage over the last 90 days. Use the current view to answer how many credits remain or to check billing-period boundaries. Use the historical view to answer what credits were spent on and when.\n\nThe current view returns `remainingCredits`, `planCredits`, `billingPeriodStart`, and `billingPeriodEnd`. Extra purchased or granted credits can make `remainingCredits` greater than `planCredits`. Billing-period dates may be null when the upstream billing provider has no period metadata.\n\nThe historical view returns periods sorted by start date with `startDate`, `endDate`, and `creditsUsed`, one per calendar month, or one per UTC day with `bin: \"day\"`. Set `byEndpoint` to split each period by the endpoint that used the credits (`endpoint`: scrape, search, crawl, map, agent, ...), or `byApiKey` to split it by API key (`apiKey`). The endpoint split also counts search usage, which the unsplit and per-key figures leave out, so its rows can add up to more. The newest period's `endDate` can be null. A `notice` means the requested split or daily periods are not available yet and the periods are monthly figures.\n\nThis tool cannot attribute credits to individual jobs, URLs, or MCP clients. Each tool's own result reports what that call used (`creditsUsed`, or `metadata.creditsUsed` on scrapes), and the Usage and Logs pages of the Firecrawl dashboard list usage per job.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "view": {
-          "description": "Select current balance or historical monthly usage. Defaults to current.",
+          "description": "Select current balance or historical usage. Defaults to current.",
           "type": "string",
           "enum": [
             "current",
@@ -1417,6 +1417,18 @@
         "byApiKey": {
           "description": "Break historical usage down by API key. When view is omitted, true selects the historical view; it cannot be combined with view \"current\".",
           "type": "boolean"
+        },
+        "byEndpoint": {
+          "description": "Break historical usage down by endpoint (scrape, search, crawl, map, agent, ...). When view is omitted, true selects the historical view; it cannot be combined with view \"current\" or byApiKey.",
+          "type": "boolean"
+        },
+        "bin": {
+          "description": "Length of each historical period: calendar month (default) or UTC day. When view is omitted, it selects the historical view; it cannot be combined with view \"current\".",
+          "type": "string",
+          "enum": [
+            "month",
+            "day"
+          ]
         }
       },
       "additionalProperties": false
@@ -1485,8 +1497,30 @@
         "error": {
           "description": "Error message or error object when the call did not succeed."
         },
+        "bin": {
+          "description": "Period length the API applied, `month` or `day`; present when the API applied a requested endpoint split or daily periods.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "periods": {
-          "description": "Historical periods sorted by start date, each with `startDate`, `endDate`, `creditsUsed`, and `apiKey` when broken down by key."
+          "description": "Historical periods sorted by start date, each with `startDate`, `endDate`, `creditsUsed`, and `endpoint` or `apiKey` when split."
+        },
+        "notice": {
+          "description": "Present when the requested split or daily periods are not available yet; the periods are then calendar-month figures.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
