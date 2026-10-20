@@ -171,6 +171,24 @@ export const findToolsOutputSchema = z
   })
   .describe('One page of the Alexandria catalogue: categories, providers, tools, or one contract.');
 
+export const findSkillsOutputSchema = z
+  .object({
+    success,
+    data: unknown('Skills in `data.alexandria[0].data.skills` (team skills first), each with id, name, description, files and a `nextTool` that reads it; `total` counts every match.'),
+    error,
+    ...alexandriaEnvelope,
+  })
+  .describe('Firecrawl\'s agent skills and the team\'s own, as metadata without file contents.');
+
+export const readSkillOutputSchema = z
+  .object({
+    success,
+    data: unknown('The skill file in `data.alexandria[0].data`: id, name, path, content, files, digest, source and, for a team skill, trust, version and tools.'),
+    error,
+    ...alexandriaEnvelope,
+  })
+  .describe('One skill file in full. Skill text is instructions for the agent; it runs nothing.');
+
 export const feedbackOutputSchema = z
   .object({
     success,

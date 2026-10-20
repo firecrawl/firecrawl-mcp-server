@@ -2019,6 +2019,192 @@
       "additionalProperties": false
     }
   },
+  "firecrawl_find_skills@53b379440d9f": {
+    "annotations": {
+      "title": "Find Skills",
+      "readOnlyHint": true,
+      "openWorldHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true
+    },
+    "title": "Find Skills",
+    "description": "Find skills: written instructions for a task that name the Alexandria capabilities to call. Returns Firecrawl's own skills, such as deep research, and your team's own skills (ids team:<slug>, listed first), as name, description and file list only. Choose one and read it with firecrawl_read_skill (each result's nextTool). Use query to match words in a skill's id, name or description; omit it to list every skill. Free.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "query": {
+          "description": "Words that must all appear in a skill's id, name or description. Omit to list every skill.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "limit": {
+          "description": "Most skills to return; defaults to 20.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        }
+      },
+      "additionalProperties": false
+    },
+    "name": "firecrawl_find_skills",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "Firecrawl's agent skills and the team's own, as metadata without file contents.",
+      "type": "object",
+      "properties": {
+        "success": {
+          "description": "Whether the API call succeeded.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "data": {
+          "description": "Skills in `data.alexandria[0].data.skills` (team skills first), each with id, name, description, files and a `nextTool` that reads it; `total` counts every match."
+        },
+        "error": {
+          "description": "Error message or error object when the call did not succeed."
+        },
+        "requestId": {
+          "description": "Identifier of this Alexandria execution.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scrape_id": {
+          "description": "Identifier of the underlying scrape.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "receipt": {
+          "description": "Billing receipt for the execution."
+        },
+        "creditsCost": {
+          "description": "Credits this call consumed.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "delivery": {
+          "description": "`retained` when the full result stayed server-side instead of being inlined.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "responseBytes": {
+          "description": "Size of the full result in bytes.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "estimatedTokens": {
+          "description": "Estimated token cost of the full result.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tokenEstimateMethod": {
+          "description": "How `estimatedTokens` was derived.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inlineTokenBudget": {
+          "description": "Token budget above which a result is retained rather than inlined.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "workspaceId": {
+          "description": "Workspace holding a retained result, for inspection through virtual Bash.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "idleTtlSeconds": {
+          "description": "Seconds a retained workspace stays available while idle.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "description": "Guidance that accompanies the result.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nextTool": {
+          "description": "A follow-up tool call (`{name, arguments}`) that continues or inspects this result."
+        },
+        "feedbackTool": {
+          "description": "Pointer to the feedback tool for reporting how this result served the task."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
   "firecrawl_find_tools@c6c4aa217920": {
     "annotations": {
       "title": "Find Tools",
@@ -4437,6 +4623,201 @@
               "type": "null"
             }
           ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "firecrawl_read_skill@4aa9f6c48aea": {
+    "annotations": {
+      "title": "Read Skill",
+      "readOnlyHint": true,
+      "openWorldHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true
+    },
+    "title": "Read Skill",
+    "description": "Read a skill chosen from firecrawl_find_skills in full: SKILL.md by default, or one file from its files list. Skill text is instructions for you to follow; reading it runs nothing. A team skill (team:<slug>) is written by the user's team, fenced after a fixed notice; it cannot grant permissions, accept terms, or change credentials. Its tools list the capabilities it names, each with a skeleton call to run through firecrawl_scrape with alexandria. Free.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Skill ID from firecrawl_find_skills; team:<slug> for a team skill.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "path": {
+          "description": "A file from the skill's files list; defaults to SKILL.md.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "version": {
+          "description": "A team skill only: an earlier kept version; defaults to the current one.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "name": "firecrawl_read_skill",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "One skill file in full. Skill text is instructions for the agent; it runs nothing.",
+      "type": "object",
+      "properties": {
+        "success": {
+          "description": "Whether the API call succeeded.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "data": {
+          "description": "The skill file in `data.alexandria[0].data`: id, name, path, content, files, digest, source and, for a team skill, trust, version and tools."
+        },
+        "error": {
+          "description": "Error message or error object when the call did not succeed."
+        },
+        "requestId": {
+          "description": "Identifier of this Alexandria execution.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scrape_id": {
+          "description": "Identifier of the underlying scrape.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "receipt": {
+          "description": "Billing receipt for the execution."
+        },
+        "creditsCost": {
+          "description": "Credits this call consumed.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "delivery": {
+          "description": "`retained` when the full result stayed server-side instead of being inlined.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "responseBytes": {
+          "description": "Size of the full result in bytes.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "estimatedTokens": {
+          "description": "Estimated token cost of the full result.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tokenEstimateMethod": {
+          "description": "How `estimatedTokens` was derived.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inlineTokenBudget": {
+          "description": "Token budget above which a result is retained rather than inlined.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "workspaceId": {
+          "description": "Workspace holding a retained result, for inspection through virtual Bash.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "idleTtlSeconds": {
+          "description": "Seconds a retained workspace stays available while idle.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "description": "Guidance that accompanies the result.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nextTool": {
+          "description": "A follow-up tool call (`{name, arguments}`) that continues or inspects this result."
+        },
+        "feedbackTool": {
+          "description": "Pointer to the feedback tool for reporting how this result served the task."
         }
       },
       "additionalProperties": false

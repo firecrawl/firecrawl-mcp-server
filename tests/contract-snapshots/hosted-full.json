@@ -19,6 +19,8 @@
         "firecrawl_map@7d8108e2e8e7",
         "firecrawl_search@249b1f104ce3",
         "firecrawl_find_tools@c6c4aa217920",
+        "firecrawl_find_skills@53b379440d9f",
+        "firecrawl_read_skill@4aa9f6c48aea",
         "firecrawl_search_feedback@3d7d2ef79f89",
         "firecrawl_feedback@1336142abfd3",
         "firecrawl_crawl@c4ede2eb32b6",

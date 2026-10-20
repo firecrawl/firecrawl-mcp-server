@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `firecrawl_find_skills` and `firecrawl_read_skill` expose Alexandria's skills the way `firecrawl_find_tools` exposes its catalogue. `firecrawl_find_skills` lists Firecrawl's skills and the team's own (`team:<slug>`, first) as metadata, each with a `nextTool` that reads it; `firecrawl_read_skill` returns one skill file in full. Both are free, read-only calls to `firecrawl/find-skills` and `firecrawl/read-skill`, on the full surface only (the search profile's tool set is unchanged).
+
 ### Fixed
 
 - The `firecrawl_scrape` sentence about provider discovery says again that it applies to authenticated sessions. Hosted keyless sessions list only `firecrawl_search`, `firecrawl_scrape` and `firecrawl_parse`, so they no longer read an unscoped pointer to `firecrawl_find_tools`.

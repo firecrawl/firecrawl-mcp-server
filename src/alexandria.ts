@@ -74,6 +74,30 @@ export const findToolsSchema = z
   })
   .strict();
 
+export const findSkillsSchema = z
+  .object({
+    query: z.string().trim().min(1).max(2000).optional().describe('Words that must all appear in a skill\'s id, name or description. Omit to list every skill.'),
+    limit: z.number().int().min(1).max(50).optional().describe('Most skills to return; defaults to 20.'),
+  })
+  .strict();
+
+export const readSkillSchema = z
+  .object({
+    id: z.string().trim().min(1).max(200).describe('Skill ID from firecrawl_find_skills; team:<slug> for a team skill.'),
+    path: z.string().trim().min(1).max(500).optional().describe('A file from the skill\'s files list; defaults to SKILL.md.'),
+    version: z.number().int().min(1).optional().describe('A team skill only: an earlier kept version; defaults to the current one.'),
+  })
+  .strict();
+
+/** Each listed skill names the call that reads it, as find-tools items name their next lookup. */
+export function withFindSkillsNavigation(envelope: any) {
+  const page = envelope?.data?.alexandria?.[0]?.data;
+  if (!page || !Array.isArray(page.skills)) return envelope;
+  for (const skill of page.skills)
+    if (typeof skill?.id === 'string') skill.nextTool = { name: 'firecrawl_read_skill', arguments: { id: skill.id } };
+  return envelope;
+}
+
 export const ALEXANDRIA_CATALOGUE_VERTICALS =
   'companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more';
 export const ALEXANDRIA_CATALOGUE_SENTENCE =
