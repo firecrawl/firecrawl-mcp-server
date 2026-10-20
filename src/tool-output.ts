@@ -189,6 +189,15 @@ export const readSkillOutputSchema = z
   })
   .describe('One skill file in full. Skill text is instructions for the agent; it runs nothing.');
 
+export const writeSkillOutputSchema = z
+  .object({
+    success,
+    data: unknown('The saved skill in `data.alexandria[0].data`: id (team:<slug>), skill, warnings, and a `nextTool` that reads it.'),
+    error,
+    ...alexandriaEnvelope,
+  })
+  .describe('A team skill as saved.');
+
 export const feedbackOutputSchema = z
   .object({
     success,

@@ -89,12 +89,51 @@ export const readSkillSchema = z
   })
   .strict();
 
-/** Each listed skill names the call that reads it, as find-tools items name their next lookup. */
-export function withFindSkillsNavigation(envelope: any) {
-  const page = envelope?.data?.alexandria?.[0]?.data;
-  if (!page || !Array.isArray(page.skills)) return envelope;
-  for (const skill of page.skills)
+export const createSkillSchema = z
+  .object({
+    from: z.string().trim().min(1).max(100).optional().describe('A skill ID from firecrawl_find_skills to copy: a library skill or team:<slug>. Fields you also give override the copy.'),
+    name: z.string().trim().min(1).max(1000).optional().describe('Skill name; required without from.'),
+    description: z.string().trim().min(1).max(5000).optional().describe('When to use the skill; required without from.'),
+    body: z.string().min(1).max(200_000).optional().describe('The instructions, in Markdown; required without from. Reference capabilities as @provider/capability.'),
+    slug: z.string().trim().min(1).max(64).optional().describe('Lowercase words joined by hyphens; defaults to one made from the name.'),
+  })
+  .strict();
+
+export const updateSkillSchema = z
+  .object({
+    id: z.string().trim().min(1).max(100).describe('team:<slug> from firecrawl_find_skills. Library skills cannot be changed; copy one with firecrawl_create_skill.'),
+    baseVersion: z.number().int().min(1).describe('The version firecrawl_read_skill returned. A skill changed since is refused with conflict: read it again and reapply.'),
+    name: z.string().trim().min(1).max(1000).optional(),
+    description: z.string().trim().min(1).max(5000).optional(),
+    body: z.string().min(1).max(200_000).optional().describe('New instructions, in full.'),
+    enabled: z.boolean().optional().describe('Turn the skill on or off.'),
+    discoverable: z.boolean().optional().describe('Whether firecrawl_find_skills lists it.'),
+  })
+  .strict();
+
+const toolFor = (request: any) => {
+  if (request?.provider !== 'firecrawl' || !request.options) return undefined;
+  if (request.capability === 'read-skill') return { name: 'firecrawl_read_skill', arguments: request.options };
+  if (request.capability === 'create-skill') return { name: 'firecrawl_create_skill', arguments: request.options };
+  return undefined;
+};
+
+/**
+ * Skill results name their follow-up calls as tools: each listed skill the read that discloses
+ * it, a library skill the create that copies it, and a create or update the read of the saved skill.
+ */
+export function withSkillNavigation(envelope: any) {
+  const data = envelope?.data?.alexandria?.[0]?.data;
+  if (!data) return envelope;
+  for (const skill of Array.isArray(data.skills) ? data.skills : []) {
     if (typeof skill?.id === 'string') skill.nextTool = { name: 'firecrawl_read_skill', arguments: { id: skill.id } };
+    const create = toolFor(skill?.create);
+    if (create) skill.createTool = create;
+  }
+  const create = toolFor(data.create);
+  if (create) data.createTool = create;
+  const next = toolFor(data.next);
+  if (next) data.nextTool = next;
   return envelope;
 }
 
