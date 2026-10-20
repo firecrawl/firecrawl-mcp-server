@@ -40,7 +40,7 @@
     "firecrawl_research_read_paper@b0cd84d8908a",
     "firecrawl_developer_search@e9810e540216",
     "firecrawl_gov_search@0bb788732250",
-    "firecrawl_credit_usage@4202fbda2421"
+    "firecrawl_credit_usage@de070cb40eef"
   ],
   "calls": {
     "firecrawl_extract": {

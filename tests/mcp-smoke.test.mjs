@@ -487,7 +487,32 @@ async function startFakeFirecrawlApi() {
 
     if (
       req.method === 'GET' &&
-      req.url === '/v2/team/credit-usage/historical'
+      req.url === '/v2/team/credit-usage/historical?byEndpoint=true&bin=day'
+    ) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          bin: 'day',
+          periods: [
+            {
+              creditsUsed: 12,
+              endDate: null,
+              endpoint: 'scrape',
+              startDate: '2026-09-14T00:00:00.000Z',
+            },
+          ],
+          success: true,
+        })
+      );
+      return;
+    }
+
+    // An API that predates the endpoint split and daily periods ignores
+    // them and answers with monthly totals, without echoing `bin`.
+    if (
+      req.method === 'GET' &&
+      (req.url === '/v2/team/credit-usage/historical' ||
+        req.url === '/v2/team/credit-usage/historical?byEndpoint=true&bin=month')
     ) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
@@ -1250,7 +1275,15 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   assert.equal(
     byName.get('firecrawl_credit_usage').inputSchema.properties.view.description,
-    'Select current balance or historical monthly usage. Defaults to current.'
+    'Select current balance or historical usage. Defaults to current.'
+  );
+  assert.match(
+    byName.get('firecrawl_credit_usage').description,
+    /byEndpoint.*cannot attribute credits to individual jobs/is
+  );
+  assert.deepEqual(
+    byName.get('firecrawl_credit_usage').inputSchema.properties.bin.enum,
+    ['month', 'day']
   );
   assert.equal(
     byName.get('firecrawl_credit_usage').inputSchema.properties.byApiKey
@@ -1487,10 +1520,60 @@ test('credit usage tool exposes current balance and both historical request shap
     /byApiKey can only be used with view "historical"/i
   );
 
+  const byEndpointDaily = await client.request('tools/call', {
+    arguments: { bin: 'day', byEndpoint: true },
+    name: 'firecrawl_credit_usage',
+  });
+  assert.deepEqual(JSON.parse(byEndpointDaily.content[0].text), {
+    bin: 'day',
+    periods: [
+      {
+        creditsUsed: 12,
+        endDate: null,
+        endpoint: 'scrape',
+        startDate: '2026-09-14T00:00:00.000Z',
+      },
+    ],
+    success: true,
+  });
+
+  const byEndpointOnOlderApi = await client.request('tools/call', {
+    arguments: { byEndpoint: true },
+    name: 'firecrawl_credit_usage',
+  });
+  assert.equal(byEndpointOnOlderApi.isError, undefined);
+  assert.deepEqual(JSON.parse(byEndpointOnOlderApi.content[0].text), {
+    notice:
+      'Firecrawl does not offer the endpoint split yet, so these periods are calendar-month totals.',
+    periods: [
+      {
+        creditsUsed: 654,
+        endDate: null,
+        startDate: '2026-09-01T00:00:00.000Z',
+      },
+    ],
+    success: true,
+  });
+
+  for (const [args, message] of [
+    [{ byEndpoint: true, view: 'current' }, /byEndpoint can only be used with view "historical"/i],
+    [{ bin: 'day', view: 'current' }, /bin can only be used with view "historical"/i],
+    [{ byApiKey: true, byEndpoint: true }, /byApiKey and byEndpoint cannot be combined/i],
+  ]) {
+    const rejected = await client.request('tools/call', {
+      arguments: args,
+      name: 'firecrawl_credit_usage',
+    });
+    assert.equal(rejected.isError, true, JSON.stringify(args));
+    assert.match(rejected.content[0].text, message);
+  }
+
   for (const path of [
     '/v2/team/credit-usage',
     '/v2/team/credit-usage/historical',
     '/v2/team/credit-usage/historical?byApiKey=true',
+    '/v2/team/credit-usage/historical?byEndpoint=true&bin=day',
+    '/v2/team/credit-usage/historical?byEndpoint=true&bin=month',
   ]) {
     const request = fakeApi.requests.find((candidate) => candidate.url === path);
     assert.ok(request, path);
