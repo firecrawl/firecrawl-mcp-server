@@ -8,6 +8,7 @@
 
 ### Fixed
 
+- `firecrawl_search` keeps its result under 900,000 bytes, text block and structured content together, for clients whose User-Agent names a platform that refuses tool results above 1 MB. A search with `scrapeOptions` could return several megabytes there and fail outright. When a result is over budget, every result's page content (`markdown`, `html`, `rawHtml`, `summary`, `description`, `links`, `images`) is cut to one shared length, the largest that fits; each cut text ends with a `[Truncated: ...]` line naming the URL to pass to `firecrawl_scrape`, the result gains a `truncated` field, and the response gains a `warning`. If even empty content does not fit, the lowest-ranked results are left out and the warning says how many. A result that already fits is returned unchanged, and every other client gets the same bytes as before.
 - The `firecrawl_scrape` sentence about provider discovery says again that it applies to authenticated sessions. Hosted keyless sessions list only `firecrawl_search`, `firecrawl_scrape` and `firecrawl_parse`, so they no longer read an unscoped pointer to `firecrawl_find_tools`.
 
 ## [3.33.4] - 2026-10-19
