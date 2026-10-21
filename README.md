@@ -529,7 +529,7 @@ Search the web and optionally extract content from search results.
 }
 ```
 
-To get the full text of a few results in the same call, add `"scrapeOptions": { "formats": ["markdown"], "onlyMainContent": true }` with a small `limit` (1 to 3). Each fetched result is billed as a scrape, so for most questions use the excerpts and `firecrawl_scrape` only the URLs you need.
+To get the full text of a few results in the same call, add `"scrapeOptions": { "formats": ["markdown"], "onlyMainContent": true }`. Each fetched result is billed as a scrape, so for most questions use the excerpts and `firecrawl_scrape` only the URLs you need.
 
 Set `highlights` to `true` to request query-relevant highlights or `false` to keep the original search snippets. Omit it to use the API's default behavior.
 
