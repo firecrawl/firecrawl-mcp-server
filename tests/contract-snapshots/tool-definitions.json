@@ -5070,7 +5070,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_scrape@5cda34cb58c3": {
+  "firecrawl_scrape@022f909153fa": {
     "annotations": {
       "title": "Firecrawl scrape",
       "readOnlyHint": true,
@@ -5486,6 +5486,9 @@
         "tools": {
           "description": "Domain-matched Alexandria tools for the page, when `domainTools` is set."
         },
+        "packs": {
+          "description": "Ready firecrawl_scrape calls from the Alexandria pack that covers this site, when one does."
+        },
         "warning": {
           "description": "Non-fatal warning about the result.",
           "anyOf": [
@@ -5651,7 +5654,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_scrape@a7b0032fa436": {
+  "firecrawl_scrape@87541e301dce": {
     "annotations": {
       "title": "Firecrawl scrape",
       "readOnlyHint": false,
@@ -6119,6 +6122,9 @@
         "tools": {
           "description": "Domain-matched Alexandria tools for the page, when `domainTools` is set."
         },
+        "packs": {
+          "description": "Ready firecrawl_scrape calls from the Alexandria pack that covers this site, when one does."
+        },
         "warning": {
           "description": "Non-fatal warning about the result.",
           "anyOf": [
@@ -6284,7 +6290,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_scrape@b558da31c10c": {
+  "firecrawl_scrape@b711d888f1ac": {
     "annotations": {
       "title": "Firecrawl scrape",
       "readOnlyHint": true,
@@ -6699,6 +6705,9 @@
         },
         "tools": {
           "description": "Domain-matched Alexandria tools for the page, when `domainTools` is set."
+        },
+        "packs": {
+          "description": "Ready firecrawl_scrape calls from the Alexandria pack that covers this site, when one does."
         },
         "warning": {
           "description": "Non-fatal warning about the result.",

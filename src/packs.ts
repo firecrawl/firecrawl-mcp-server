@@ -7,6 +7,7 @@ import marketing from './packs/marketing.json';
 import prospecting from './packs/prospecting.json';
 import shopping from './packs/shopping.json';
 import travel from './packs/travel.json';
+import callShapes from './packs/calls.json';
 
 const packSchema = z.object({
   id: z.string().regex(/^[a-z][a-z0-9-]*$/),
@@ -27,6 +28,11 @@ const packSchema = z.object({
 }).strict();
 
 const PACKS = [creators, marketing, prospecting, jobs, investing, shopping, travel, fantasy].map((pack) => packSchema.parse(pack));
+const CALL_SHAPES = z.record(z.string(), z.object({
+  name: z.string().min(1).optional(),
+  options: z.record(z.string(), z.string()),
+  inputs: z.string().min(1).optional(),
+}).strict()).parse(callShapes);
 const PACK_IDS = PACKS.map((pack) => pack.id) as [string, ...string[]];
 
 export const packsSchema = z.object({
@@ -71,12 +77,57 @@ export function packsResult({ pack: packId }: z.infer<typeof packsSchema>) {
   };
 }
 
-export function packPointers(providers: Iterable<unknown>) {
-  const found = new Set([...providers].filter((provider): provider is string => typeof provider === 'string'));
-  return PACKS.filter((pack) => pack.providers.some((provider) => found.has(provider.id))).map((pack) => ({
-    pack: pack.id,
-    title: pack.title,
-    note: `The ${pack.id} pack names the providers that hold this kind of data and how to use them.`,
-    nextTool: { name: 'firecrawl_packs', arguments: { pack: pack.id } },
-  }));
+type ToolRef = { provider?: unknown; capability?: unknown };
+
+const MAX_PACKS = 2;
+const MAX_PACK_CALLS = 4;
+
+/**
+ * Ready firecrawl_scrape calls from the packs whose providers appear in refs: the matched
+ * providers' pack capabilities, the matched capabilities first, at most four per pack.
+ */
+export function packCalls(refs: Iterable<ToolRef>) {
+  const found = [...refs].filter((ref): ref is { provider: string; capability?: unknown } => typeof ref?.provider === 'string');
+  return PACKS.map((pack) => {
+    const matched = found.filter((ref) => pack.providers.some((provider) => provider.id === ref.provider));
+    const candidates = pack.providers
+      .filter((provider) => matched.some((ref) => ref.provider === provider.id))
+      .flatMap((provider) => provider.capabilities.map((capability) => ({ provider: provider.id, capability })));
+    const hit = (tool: { provider: string; capability: string }) => matched.some((ref) => ref.provider === tool.provider && ref.capability === tool.capability);
+    const tools = [...candidates.filter(hit), ...candidates.filter((tool) => !hit(tool))].slice(0, MAX_PACK_CALLS);
+    return { pack, matched: matched.length, tools };
+  })
+    .filter((selection) => selection.matched)
+    .sort((a, b) => b.matched - a.matched)
+    .slice(0, MAX_PACKS)
+    .map(({ pack, tools }) => ({
+      pack: pack.id,
+      title: pack.title,
+      note: 'Alexandria providers return this kind of data as sourced records. Run a call below with firecrawl_scrape, replacing each <type> value; inputs names the other options, and several calls can go in one alexandria array.',
+      calls: tools.map(({ provider, capability }) => {
+        const { options = {}, ...shape } = CALL_SHAPES[`${provider}/${capability}`] ?? {};
+        return { ...('name' in shape ? { name: shape.name } : {}), call: { name: 'firecrawl_scrape', arguments: { alexandria: { provider, capability, options } } }, ...('inputs' in shape ? { inputs: shape.inputs } : {}) };
+      }),
+      guide: { name: 'firecrawl_packs', arguments: { pack: pack.id } },
+    }));
+}
+
+/** Pack providers named by a page URL's host: bestbuy.com is bestbuy-com, boards.greenhouse.io is greenhouse-io. */
+export function packProvidersForUrl(url: unknown): ToolRef[] {
+  let host: string;
+  try { host = new URL(String(url)).hostname.toLowerCase(); } catch { return []; }
+  const labels = host.split('.');
+  const candidates = new Set(labels.map((_, index) => labels.slice(index).join('-')));
+  if (labels.length >= 2) candidates.add(labels[labels.length - 2]);
+  return PACKS.flatMap((pack) => pack.providers.filter((provider) => candidates.has(provider.id)).map((provider) => ({ provider: provider.id })));
+}
+
+/** Web results count toward a pack only when at least two of them come from that pack's providers. */
+export function webPackRefs(web: unknown): ToolRef[] {
+  if (!Array.isArray(web)) return [];
+  const refs = web.flatMap((result) => packProvidersForUrl((result as { url?: unknown })?.url));
+  return PACKS.flatMap((pack) => {
+    const mine = refs.filter((ref) => pack.providers.some((provider) => provider.id === ref.provider));
+    return mine.length >= 2 ? mine : [];
+  });
 }

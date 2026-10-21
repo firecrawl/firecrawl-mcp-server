@@ -129,6 +129,7 @@ export const scrapeOutputSchema = z
     branding: unknown('Branding data extracted from the page.'),
     metadata: unknown('Page metadata; authenticated responses can include `metadata.scrapeId` for scrape feedback.'),
     tools: unknown('Domain-matched Alexandria tools for the page, when `domainTools` is set.'),
+    packs: unknown('Ready firecrawl_scrape calls from the Alexandria pack that covers this site, when one does.'),
     warning,
     // Alexandria mode and error envelopes.
     success,

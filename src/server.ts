@@ -58,7 +58,7 @@ import {
   ALEXANDRIA_SOURCES_ALWAYS_ON,
 } from './alexandria';
 import { alexandriaOutput } from './alexandria-output';
-import { packPointers, packsResult, packsSchema, PACKS_INSTRUCTIONS_SENTENCE, PACKS_TOOL_DESCRIPTION } from './packs';
+import { packCalls, packProvidersForUrl, packsResult, packsSchema, PACKS_INSTRUCTIONS_SENTENCE, PACKS_TOOL_DESCRIPTION, webPackRefs } from './packs';
 import { registerDeveloperTools } from './developer';
 import { registerGovTools } from './gov';
 import { registerMonitorTools } from './monitor';
@@ -1579,7 +1579,8 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
           } as any),
         { tool: 'firecrawl_scrape' }
       );
-      return structuredText(withoutDiscoveredToolPrices(res));
+      const packs = packCallsFor(packProvidersForUrl(url));
+      return structuredText(withoutDiscoveredToolPrices(packs.length ? { packs, ...res } : res));
     },
   };
   server.addTool({
@@ -1720,8 +1721,8 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       const httpRes = await relayExchangeError(postSearch, { tool: 'firecrawl_search' });
       const body = withoutDiscoveredToolPrices(httpRes?.data ?? {});
       const tools = body?.data?.tools;
-      if (packsAvailable() && Array.isArray(tools)) {
-        const packs = packPointers(tools.map((tool: any) => tool?.provider));
+      if (Array.isArray(tools)) {
+        const packs = packCallsFor([...tools, ...webPackRefs(body?.data?.web)]);
         if (packs.length) body.data = { packs, ...body.data };
       }
       return structuredCompact(body);
@@ -1825,8 +1826,8 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       const parsed = JSON.parse(result);
       const envelope = withFindToolsNavigation(carry.includeCosts ? parsed : withoutFindToolsPrices(parsed), carry);
       const page = envelope?.data?.alexandria?.[0]?.data;
-      if (packsAvailable() && Array.isArray(page?.items)) {
-        const packs = packPointers(page.items.map((item: any) => item?.provider ?? item?.id));
+      if (Array.isArray(page?.items)) {
+        const packs = packCallsFor(page.items.map((item: any) => ({ provider: item?.provider ?? item?.id, capability: item?.capability })));
         if (packs.length) envelope.data.alexandria[0].data = { packs, ...page };
       }
       return structuredCompact(envelope);
@@ -1837,6 +1838,11 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
   /** Whether firecrawl_packs is registered on this instance, so results only point at a tool that exists. */
   function packsAvailable(): boolean {
     return hooks.toolFilter?.('firecrawl_packs') ?? true;
+  }
+
+  /** Ready pack calls for matched providers, only where firecrawl_packs is registered. */
+  function packCallsFor(refs: Iterable<{ provider?: unknown; capability?: unknown }>) {
+    return packsAvailable() ? packCalls(refs) : [];
   }
 
   server.addTool({
