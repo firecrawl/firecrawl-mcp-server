@@ -19,7 +19,7 @@ test('packs are listed with a description that names each pack and its handoff',
   for (const definition of PACK_FILES) assert.ok(tool.description.includes(`- ${definition.id}: ${definition.when}`));
   assert.match(tool.description, /firecrawl_find_tools.*firecrawl_scrape/);
   assert.deepEqual(tool.inputSchema.properties.pack.enum, PACK_IDS);
-  assert.match(init.instructions, /For requests about creators and social media, marketing research, .*, fantasy football, call firecrawl_packs before searching/);
+  assert.match(init.instructions, /For requests about creators and social media, marketing research, .*, fantasy football, run the provider calls listed under packs in search results before reading pages/);
   assert.deepEqual(Object.keys(tool.inputSchema.properties), ['pack']);
   assert.deepEqual(Object.keys(tool.outputSchema.properties).sort(), ['examples', 'pack', 'packs', 'page', 'providers', 'skill', 'summary', 'title']);
 });
