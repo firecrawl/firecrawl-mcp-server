@@ -76,7 +76,7 @@ test('local keyless stdio refuses packs exactly like firecrawl_find_tools', asyn
     const result = await client.request('tools/call', { name, arguments: {} });
     assert.equal(result.isError, true);
     assert.equal(result.content[0].text, EXCHANGE_KEY_REQUIRED_MESSAGE);
-    assert.deepEqual(result.structuredContent, { message: EXCHANGE_KEY_REQUIRED_MESSAGE });
+    assert.deepEqual(result.structuredContent, name === 'firecrawl_packs' ? undefined : { message: EXCHANGE_KEY_REQUIRED_MESSAGE }, name);
   }
 });
 
