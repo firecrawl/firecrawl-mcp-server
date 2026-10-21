@@ -34,10 +34,10 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Use `firecrawl_scrape` when you have a known URL and want its content as markdown or as JSON matching a schema you supply.
 - Use `firecrawl_map` when you need to discover URLs on a site without fetching their content.
 - Use `firecrawl_crawl` when you need content from many pages under a site; set `limit`, `includePaths`/`excludePaths`, or `maxDiscoveryDepth` to bound it.
-- Use `firecrawl_search` when you're starting from a query rather than a URL and want ranked web results; add `scrapeOptions` if you also want page content fetched in the same call (the search-only endpoint never fetches content).
+- Use `firecrawl_search` when you're starting from a query rather than a URL and want ranked web results. Results carry excerpts; fetch full pages with `firecrawl_scrape` on the URLs you need. `scrapeOptions` fetches every result's page in the same call and bills each as a scrape, so keep it for the full text of a few results (the search-only endpoint never fetches content).
 - Use `firecrawl_interact` when a page needs a click, type, or navigate action before you can read it: pass a `url` for a fresh page or a `scrapeId` to continue on one you already scraped.
 - Use the `firecrawl_monitor_*` tools when the same page needs to be checked on a recurring schedule with diffs and change alerts, rather than fetched once.
-- Use `firecrawl_credit_usage` to check credits left or monthly consumption, optionally broken down by API key.
+- Use `firecrawl_credit_usage` to check credits left or what credits were spent on, by month or day, optionally broken down by endpoint or API key.
 - Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control. The session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
 
 This server lists 27 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 9 tools (search, developer, government, and research search, plus Alexandria catalogue lookup and execution).
@@ -526,15 +526,12 @@ Search the web and optionally extract content from search results.
     "highlights": true,
     "limit": 5,
     "lang": "en",
-    "country": "us",
-    "scrapeOptions": {
-      "formats": ["markdown"],
-      "onlyMainContent": true,
-      "redactPII": true
-    }
+    "country": "us"
   }
 }
 ```
+
+To get the full text of a few results in the same call, add `"scrapeOptions": { "formats": ["markdown"], "onlyMainContent": true }`. Each fetched result is billed as a scrape, so for most questions use the excerpts and `firecrawl_scrape` only the URLs you need.
 
 Set `highlights` to `true` to request query-relevant highlights or `false` to keep the original search snippets. Omit it to use the API's default behavior.
 
@@ -1193,7 +1190,7 @@ tool again with the identical payload and `requestId`.
 The tool requires an authenticated Firecrawl account and is read-only.
 
 - `firecrawl_credit_usage` defaults to `{ "view": "current" }` and returns `remainingCredits`, `planCredits`, `billingPeriodStart`, and `billingPeriodEnd`. Remaining credits can exceed plan credits when the team has top-ups or grants.
-- Pass `{ "view": "historical" }` for calendar-month periods containing `startDate`, `endDate`, and `creditsUsed`. Passing `{ "byApiKey": true }` also selects the historical view and splits periods by API key; each row then includes `apiKey`. Do not combine `byApiKey` with `{ "view": "current" }`. The latest period's `endDate` can be null.
+- Pass `{ "view": "historical" }` for calendar-month periods containing `startDate`, `endDate`, and `creditsUsed`. Passing `{ "byApiKey": true }` also selects the historical view and splits periods by API key; each row then includes `apiKey`. Passing `{ "byEndpoint": true }` instead splits periods by the endpoint that used the credits (scrape, search, crawl, map, agent, ...); each row then includes `endpoint`. Pass `{ "bin": "day" }` for one period per UTC day instead of per calendar month. Do not combine `byApiKey` with `byEndpoint`, or any of these with `{ "view": "current" }`. The latest period's `endDate` can be null. If the Firecrawl API does not offer the endpoint split or daily periods yet, the result carries a `notice` and monthly figures.
 
 ## Programmatic use (unstable)
 

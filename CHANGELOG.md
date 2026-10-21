@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `firecrawl_credit_usage` can say what credits were spent on. In the historical view, `byEndpoint: true` splits each period by the endpoint that used the credits (scrape, search, crawl, map, agent, ...), and `bin: "day"` returns one period per UTC day instead of per calendar month. Against an API that does not offer these yet, the tool returns the monthly figures with a `notice` saying so instead of failing. The description now also says what the tool cannot attribute (single jobs, URLs or MCP clients) and where per-call costs appear.
+
 ### Fixed
 
 - The `firecrawl_scrape` sentence about provider discovery says again that it applies to authenticated sessions. Hosted keyless sessions list only `firecrawl_search`, `firecrawl_scrape` and `firecrawl_parse`, so they no longer read an unscoped pointer to `firecrawl_find_tools`.

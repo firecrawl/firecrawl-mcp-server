@@ -17,7 +17,7 @@
       "tools": [
         "firecrawl_scrape@b711d888f1ac",
         "firecrawl_map@7d8108e2e8e7",
-        "firecrawl_search@249b1f104ce3",
+        "firecrawl_search@292a4deea1d7",
         "firecrawl_find_tools@c6c4aa217920",
         "firecrawl_packs@a971bb85cc1c",
         "firecrawl_search_feedback@3d7d2ef79f89",
@@ -43,7 +43,7 @@
         "firecrawl_research_read_paper@b0cd84d8908a",
         "firecrawl_developer_search@e9810e540216",
         "firecrawl_gov_search@0bb788732250",
-        "firecrawl_credit_usage@4202fbda2421"
+        "firecrawl_credit_usage@5b79f64c3f82"
       ]
     },
     "invalidCredential": {
@@ -62,7 +62,7 @@
       },
       "tools": [
         "firecrawl_scrape@b711d888f1ac",
-        "firecrawl_search@249b1f104ce3",
+        "firecrawl_search@292a4deea1d7",
         "firecrawl_parse@1acaf77898b6"
       ]
     }
@@ -114,13 +114,6 @@
           "text": "The Firecrawl API key is invalid or revoked.\nFix: Replace the key on the existing Firecrawl MCP server, then start a new session. Get an API key at https://www.firecrawl.dev/app/api-keys"
         }
       ],
-      "structuredContent": {
-        "code": "CREDENTIAL_INVALID",
-        "request_id": "<uuid>",
-        "auth_mode": "credential_error",
-        "message": "The Firecrawl API key is invalid or revoked.\nFix: Replace the key on the existing Firecrawl MCP server, then start a new session. Get an API key at https://www.firecrawl.dev/app/api-keys",
-        "docs_url": "https://docs.firecrawl.dev/mcp-server"
-      },
       "isError": true
     }
   },

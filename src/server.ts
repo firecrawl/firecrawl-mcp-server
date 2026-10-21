@@ -13,6 +13,9 @@ import {
   UserError as FastMcpUserError,
 } from 'fastmcp';
 import type { Hono } from 'hono';
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
+import type { JsonSchemaType, JsonSchemaValidator } from '@modelcontextprotocol/sdk/validation';
+import { strictJsonSchema, toJsonSchema } from 'xsschema';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -464,6 +467,7 @@ const structuredCompactResult: (data: unknown) => ToolResult =
 export { structuredCompactResult as structuredCompact };
 
 const authResultByRequest = Symbol('firecrawlMcpAuthResult');
+const outputSchemaValidator = new AjvJsonSchemaValidator();
 
 type CachedAuthRequest = AuthenticationRequest & {
   [authResultByRequest]?: Promise<SessionData>;
@@ -718,16 +722,57 @@ export function createFirecrawlMcpServer(
     const wrapped = hooks.wrapTool
       ? (hooks.wrapTool(instrumented as unknown as ToolDefinition) as unknown as RegisteredTool)
       : instrumented;
+    let advertisedOutput:
+      | Promise<{ keys?: Set<string>; validate: JsonSchemaValidator<unknown> }>
+      | undefined;
+    // MCP clients validate structuredContent against the advertised outputSchema
+    // even on an error, so an error keeps only the keys the schema declares, and
+    // nothing when those do not validate.
+    async function deliverError(result: ContentResult): Promise<ContentResult> {
+      const { structuredContent, ...rest } = result;
+      if (structuredContent === undefined || !wrapped.outputSchema) return result;
+      advertisedOutput ??= toJsonSchema(wrapped.outputSchema).then((schema) => {
+        const advertised = strictJsonSchema(schema) as JsonSchemaType;
+        return {
+          keys: advertised.additionalProperties === false
+            ? new Set(Object.keys(advertised.properties ?? {}))
+            : undefined,
+          validate: outputSchemaValidator.getValidator(advertised),
+        };
+      });
+      const { keys, validate } = await advertisedOutput;
+      const declared = keys
+        ? Object.fromEntries(Object.entries(structuredContent).filter(([key]) => keys.has(key)))
+        : structuredContent;
+      return Object.keys(declared).length > 0 && validate(declared).valid
+        ? { ...rest, structuredContent: declared }
+        : rest;
+    }
+    const isErrorResult = (value: unknown): value is ContentResult =>
+      typeof value === 'object' && value !== null && 'content' in value && (value as ContentResult).isError === true;
+    async function delivered<T>(run: () => T | Promise<T>): Promise<T | ContentResult> {
+      try {
+        const result = await run();
+        return isErrorResult(result) ? deliverError(result) : result;
+      } catch (error) {
+        if (!(error instanceof FastMcpUserError)) throw error;
+        return deliverError({
+          content: [{ type: 'text', text: error.message }],
+          isError: true,
+          ...(error.extras ? { structuredContent: error.extras } : {}),
+        });
+      }
+    }
     return {
       ...wrapped,
       beforeValidate: (args, session) => {
         normalizeToolArguments(wrapped.parameters, args);
-        return wrapped.beforeValidate?.(args, session);
+        return delivered(() => wrapped.beforeValidate?.(args, session));
       },
       execute: (args, context) => {
         const session = copySession(context.session);
         session.requestId = randomUUID();
-        return wrapped.execute(args, { ...context, session });
+        return delivered(() => wrapped.execute(args, { ...context, session }));
       },
     };
   }
@@ -1656,7 +1701,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
           .extend(SAFE_MODE ? { profile: readOnlyProfileSchema } : {})
           .partial()
           .optional()
-          .describe('Attach page content for web results in the same call. These fetches ignore maxAge, so use firecrawl_scrape when you need a live fetch. scrapeOptions fetches web pages, never Alexandria provider tools.'),
+          .describe('Fetches the full page of every web result in the same call, and each fetched result is billed as a scrape. Leave it unset unless the task needs the full text of a few results: highlights usually answer, and firecrawl_scrape can fetch only the URLs you need. These fetches ignore maxAge, so use firecrawl_scrape for a live fetch. scrapeOptions fetches web pages, never Alexandria provider tools.'),
       })
       .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE)
       .refine(searchCategoriesAreCompatible, SEARCH_CATEGORIES_CONFLICT_MESSAGE)

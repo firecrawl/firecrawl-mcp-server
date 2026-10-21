@@ -15,7 +15,7 @@
   "tools": [
     "firecrawl_scrape@87541e301dce",
     "firecrawl_map@7d8108e2e8e7",
-    "firecrawl_search@28d49b8cc72a",
+    "firecrawl_search@35d1bf4a871d",
     "firecrawl_find_tools@c6c4aa217920",
     "firecrawl_packs@a971bb85cc1c",
     "firecrawl_search_feedback@3d7d2ef79f89",
@@ -41,7 +41,7 @@
     "firecrawl_research_read_paper@b0cd84d8908a",
     "firecrawl_developer_search@e9810e540216",
     "firecrawl_gov_search@0bb788732250",
-    "firecrawl_credit_usage@4202fbda2421"
+    "firecrawl_credit_usage@5b79f64c3f82"
   ],
   "calls": {}
 }
