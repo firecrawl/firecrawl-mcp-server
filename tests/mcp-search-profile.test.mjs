@@ -892,9 +892,7 @@ test('search companion turns a Core credential rejection into recovery', async (
   const result = parseSseJson(await res.text()).result;
   assert.equal(result.isError, true);
   assert.equal(result.content[0].text, INVALID_API_KEY_MESSAGE);
-  assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID');
-  assert.equal(result.structuredContent.message, INVALID_API_KEY_MESSAGE);
-  assert.equal(result.structuredContent.next_actions, undefined);
+  assert.equal(result.structuredContent, undefined);
   assert.equal(backend.requests.some((request) => request.url === '/v2/search'), true);
   assert.equal(
     backend.requests.filter((request) => request.url === '/api/oauth/introspect').length,

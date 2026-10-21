@@ -113,13 +113,6 @@
           "text": "The Firecrawl API key is invalid or revoked.\nFix: Replace the key on the existing Firecrawl MCP server, then start a new session. Get an API key at https://www.firecrawl.dev/app/api-keys"
         }
       ],
-      "structuredContent": {
-        "code": "CREDENTIAL_INVALID",
-        "request_id": "<uuid>",
-        "auth_mode": "credential_error",
-        "message": "The Firecrawl API key is invalid or revoked.\nFix: Replace the key on the existing Firecrawl MCP server, then start a new session. Get an API key at https://www.firecrawl.dev/app/api-keys",
-        "docs_url": "https://docs.firecrawl.dev/mcp-server"
-      },
       "isError": true
     }
   },
