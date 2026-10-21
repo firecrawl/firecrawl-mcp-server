@@ -64,6 +64,7 @@ import { registerDeveloperTools } from './developer';
 import { registerGovTools } from './gov';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
+import { fitSearchResponse, searchByteBudget } from './search-budget';
 import { registerUsageTools } from './usage';
 import {
   DECLARED_ORIGIN_HEADER,
@@ -1737,6 +1738,11 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         ...(cleaned as any),
         origin: requestOrigin(mcpClient, session),
       };
+      const byteBudget = searchByteBudget(session?.clientUserAgent);
+      const searchResult = (response: unknown) => {
+        const shown = withoutDiscoveredToolPrices(response);
+        return structuredCompact(byteBudget ? fitSearchResponse(shown, byteBudget) : shown);
+      };
       const exchangeSource = hasAlexandria(searchBody.sources);
       if (exchangeSource || searchBody.domainTools)
         assertExchangeCredential(session);
@@ -1746,7 +1752,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         // identifier to keyless clients, where it would invite an unusable call.
         const keylessResponse = { ...(json ?? {}) };
         delete keylessResponse.id;
-        return structuredCompact(withoutDiscoveredToolPrices(keylessResponse));
+        return searchResult(keylessResponse);
       }
       // Call /v2/search through the SDK's HTTP layer (auth + retries) instead
       // of `client.search()` so we preserve the full response envelope. The
@@ -1761,7 +1767,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
           requestedSources
         );
       const httpRes = await relayExchangeError(postSearch, { tool: 'firecrawl_search' });
-      return structuredCompact(withoutDiscoveredToolPrices(httpRes?.data ?? {}));
+      return searchResult(httpRes?.data ?? {});
     },
   });
 
