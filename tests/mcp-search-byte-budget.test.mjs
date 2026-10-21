@@ -130,6 +130,16 @@ test('when results alone overflow the budget, the lowest-ranked ones are left ou
   assert.match(body.warning, new RegExp(`${100 - body.data.web.length} lower-ranked results were left out`));
 });
 
+test('when groups that are not cut overflow the budget, an empty bounded result comes back', async (t) => {
+  const alexandria = [{ provider: 'example', data: 'x'.repeat(1_000_000) }];
+  const search = await startServer(t, { success: true, data: { web: [{ url: 'https://example.com/' }], alexandria } });
+  const result = await search(CAPPED_USER_AGENT);
+  assert.ok(resultBytes(result) <= BUDGET, `result is ${resultBytes(result)} bytes`);
+  const body = JSON.parse(result.content[0].text);
+  assert.deepEqual(body.data, {});
+  assert.match(body.warning, /even without page content, so no results are returned/);
+});
+
 test('the capped client gets the same bytes back when the result already fits', async (t) => {
   const payload = smallSearchResponse();
   const search = await startServer(t, payload);

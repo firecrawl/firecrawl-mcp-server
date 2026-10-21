@@ -138,5 +138,11 @@ export function fitSearchResponse(response: unknown, budget: number): unknown {
   if (fits(0, total)) {
     return build(largestFitting(0, longest, (n) => fits(n, total)), total);
   }
-  return build(0, largestFitting(0, total, (n) => fits(0, n)));
+  const keep = largestFitting(0, total, (n) => fits(0, n));
+  if (fits(0, keep)) return build(0, keep);
+  return {
+    success: response.success,
+    data: {},
+    warning: `This search result was larger than ${budget} bytes even without page content, so no results are returned. Narrow the query or lower the limit.`,
+  };
 }
