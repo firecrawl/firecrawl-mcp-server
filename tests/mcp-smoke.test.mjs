@@ -1347,6 +1347,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.match(searchParams.query.description, /operators include.*related:host.*non-exhaustive/is);
   assert.match(byName.get('firecrawl_search').description, /each web result is a title, URL, and description/i);
   assert.match(searchParams.scrapeOptions.description, /ignore maxAge.*firecrawl_scrape/is);
+  assert.match(searchParams.scrapeOptions.description, /Leave it unset unless the task needs the full text of a few results/);
   assert.doesNotMatch(byName.get('firecrawl_search').description, /not the page/i);
   assert.match(
     byName.get('firecrawl_search').description,

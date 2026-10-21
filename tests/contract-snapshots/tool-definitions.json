@@ -7051,7 +7051,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_search@249b1f104ce3": {
+  "firecrawl_search@292a4deea1d7": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -7182,7 +7182,7 @@
           }
         },
         "scrapeOptions": {
-          "description": "Attach page content for web results in the same call. These fetches ignore maxAge, so use firecrawl_scrape when you need a live fetch. scrapeOptions fetches web pages, never Alexandria provider tools.",
+          "description": "Fetches the full page of every web result in the same call, and each fetched result is billed as a scrape. Leave it unset unless the task needs the full text of a few results: highlights usually answer, and firecrawl_scrape can fetch only the URLs you need. These fetches ignore maxAge, so use firecrawl_scrape for a live fetch. scrapeOptions fetches web pages, never Alexandria provider tools.",
           "type": "object",
           "properties": {
             "formats": {
@@ -7450,7 +7450,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_search@28d49b8cc72a": {
+  "firecrawl_search@35d1bf4a871d": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -7581,7 +7581,7 @@
           }
         },
         "scrapeOptions": {
-          "description": "Attach page content for web results in the same call. These fetches ignore maxAge, so use firecrawl_scrape when you need a live fetch. scrapeOptions fetches web pages, never Alexandria provider tools.",
+          "description": "Fetches the full page of every web result in the same call, and each fetched result is billed as a scrape. Leave it unset unless the task needs the full text of a few results: highlights usually answer, and firecrawl_scrape can fetch only the URLs you need. These fetches ignore maxAge, so use firecrawl_scrape for a live fetch. scrapeOptions fetches web pages, never Alexandria provider tools.",
           "type": "object",
           "properties": {
             "formats": {
