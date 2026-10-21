@@ -103,11 +103,17 @@ export function packCalls(refs: Iterable<ToolRef>) {
     .map(({ pack, tools }) => ({
       pack: pack.id,
       title: pack.title,
-      note: 'Alexandria providers return this kind of data as sourced records. Run a call below with firecrawl_scrape, replacing each <type> value; inputs names the other options, and several calls can go in one alexandria array.',
-      calls: tools.map(({ provider, capability }) => {
-        const { options = {}, ...shape } = CALL_SHAPES[`${provider}/${capability}`] ?? {};
-        return { ...('name' in shape ? { name: shape.name } : {}), call: { name: 'firecrawl_scrape', arguments: { alexandria: { provider, capability, options } } }, ...('inputs' in shape ? { inputs: shape.inputs } : {}) };
-      }),
+      note: `For this request, prefer these provider calls over reading web pages: each returns sourced records for ${pack.title.toLowerCase()}. Run one with firecrawl_scrape, replacing the <type> values; inputs names the other options, and several calls can go in one alexandria array.`,
+      providers: pack.providers
+        .filter((provider) => tools.some((tool) => tool.provider === provider.id))
+        .map((provider) => ({
+          provider: provider.id,
+          about: provider.summary,
+          calls: tools.filter((tool) => tool.provider === provider.id).map(({ capability }) => {
+            const { options = {}, ...shape } = CALL_SHAPES[`${provider.id}/${capability}`] ?? {};
+            return { ...('name' in shape ? { name: shape.name } : {}), call: { name: 'firecrawl_scrape', arguments: { alexandria: { provider: provider.id, capability, options } } }, ...('inputs' in shape ? { inputs: shape.inputs } : {}) };
+          }),
+        })),
       guide: { name: 'firecrawl_packs', arguments: { pack: pack.id } },
     }));
 }
