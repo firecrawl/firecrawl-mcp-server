@@ -15,11 +15,11 @@
         }
       },
       "tools": [
-        "firecrawl_scrape@b711d888f1ac",
+        "firecrawl_scrape@03916fd8be3d",
         "firecrawl_map@7d8108e2e8e7",
         "firecrawl_search@292a4deea1d7",
         "firecrawl_find_tools@c6c4aa217920",
-        "firecrawl_packs@a971bb85cc1c",
+        "firecrawl_packs@9848f3277931",
         "firecrawl_search_feedback@3d7d2ef79f89",
         "firecrawl_feedback@1336142abfd3",
         "firecrawl_crawl@c4ede2eb32b6",
@@ -61,7 +61,7 @@
         }
       },
       "tools": [
-        "firecrawl_scrape@b711d888f1ac",
+        "firecrawl_scrape@03916fd8be3d",
         "firecrawl_search@292a4deea1d7",
         "firecrawl_parse@1acaf77898b6"
       ]

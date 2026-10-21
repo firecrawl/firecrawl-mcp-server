@@ -23,10 +23,11 @@ async function findTools(options) {
 
 async function catalogue(provider) {
   const ids = new Set();
-  for (let offset = 0; ; offset += 100) {
+  for (let offset = 0; ; ) {
     const page = await findTools({ providers: [provider], limit: 100, offset, expand: [] });
     for (const item of page.items) ids.add(`${item.provider}/${item.capability}`);
-    if (!page.next) return ids;
+    if (!page.next || !page.items.length) return ids;
+    offset += page.items.length;
   }
 }
 
@@ -71,7 +72,9 @@ for (const file of readdirSync(dir).filter((name) => name.endsWith('.json') && n
   }
   console.log(`${pack.id}: ${refs.length} capabilities across ${pack.providers.length} providers checked`);
 }
-if (write) {
+if (write && missing) {
+  console.log('calls.json: not written, because the catalogue check failed');
+} else if (write) {
   const sorted = Object.fromEntries(Object.keys(calls).sort().map((key) => [key, calls[key]]));
   writeFileSync(new URL('calls.json', dir), JSON.stringify(sorted, null, 2) + '\n');
   console.log(`calls.json: ${Object.keys(sorted).length} call shapes written`);

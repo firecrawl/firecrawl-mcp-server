@@ -13,11 +13,11 @@
     }
   },
   "tools": [
-    "firecrawl_scrape@87541e301dce",
+    "firecrawl_scrape@b05b44c83e46",
     "firecrawl_map@7d8108e2e8e7",
     "firecrawl_search@35d1bf4a871d",
     "firecrawl_find_tools@c6c4aa217920",
-    "firecrawl_packs@a971bb85cc1c",
+    "firecrawl_packs@9848f3277931",
     "firecrawl_search_feedback@3d7d2ef79f89",
     "firecrawl_feedback@1336142abfd3",
     "firecrawl_crawl@4ca4a0262b5a",

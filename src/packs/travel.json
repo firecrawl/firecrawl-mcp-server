@@ -2,7 +2,7 @@
   "id": "travel",
   "title": "Travel",
   "summary": "Flight fares and cheap dates, hotel and vacation-rental prices and reviews, and restaurant availability for trip planning.",
-  "when": "flight prices or the cheapest dates to fly, hotel or vacation-rental options and prices for specific dates, hotel reviews, or restaurant reservations for a trip",
+  "when": "flight prices or the cheapest dates to fly, hotel or vacation-rental options and prices for specific dates, hotel reviews, or restaurant table availability for a trip",
   "providers": [
     {
       "id": "flights-google-com",

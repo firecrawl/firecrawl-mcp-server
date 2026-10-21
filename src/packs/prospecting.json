@@ -44,7 +44,7 @@
     },
     {
       "id": "ycombinator-com",
-      "summary": "Public YC company directory: search by batch, industry or location, company profiles with founders, and listed jobs.",
+      "summary": "Public YC company directory: search by batch, industry or location, and company profiles with founders.",
       "capabilities": [
         "companies/search",
         "companies/company"

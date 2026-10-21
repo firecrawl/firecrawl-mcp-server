@@ -103,7 +103,7 @@ export function packCalls(refs: Iterable<ToolRef>) {
     .map(({ pack, tools }) => ({
       pack: pack.id,
       title: pack.title,
-      note: `For this request, prefer these provider calls over reading web pages: each returns sourced records for ${pack.title.toLowerCase()}. Run one with firecrawl_scrape, replacing the <type> values; inputs names the other options, and several calls can go in one alexandria array.`,
+      note: `For this request, prefer these provider calls over reading web pages: each returns sourced records for ${pack.title.toLowerCase()}. Run one with firecrawl_scrape, replacing the <type> values; inputs names the other options, and several calls can go in one alexandria array. Calls are billed; firecrawl_find_tools with includeCosts shows each price.`,
       providers: pack.providers
         .filter((provider) => tools.some((tool) => tool.provider === provider.id))
         .map((provider) => ({
@@ -125,7 +125,8 @@ export function packProvidersForUrl(url: unknown): ToolRef[] {
   const labels = host.split('.');
   const candidates = new Set(labels.map((_, index) => labels.slice(index).join('-')));
   if (labels.length >= 2) candidates.add(labels[labels.length - 2]);
-  return PACKS.flatMap((pack) => pack.providers.filter((provider) => candidates.has(provider.id)).map((provider) => ({ provider: provider.id })));
+  const ids = new Set(PACKS.flatMap((pack) => pack.providers.map((provider) => provider.id)).filter((id) => candidates.has(id)));
+  return [...ids].map((provider) => ({ provider }));
 }
 
 /** Web results count toward a pack only when at least two of them come from that pack's providers. */

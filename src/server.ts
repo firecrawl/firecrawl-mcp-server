@@ -1772,7 +1772,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       const httpRes = await relayExchangeError(postSearch, { tool: 'firecrawl_search' });
       const body = httpRes?.data ?? {};
       const tools = body?.data?.tools;
-      const packs = Array.isArray(tools) ? packCallsFor([...tools, ...webPackRefs(body?.data?.web)]) : [];
+      const packs = packCallsFor([...(Array.isArray(tools) ? tools : []), ...webPackRefs(body?.data?.web)]);
       return searchResult(packs.length ? { ...body, data: { packs, ...body.data } } : body);
     },
   });

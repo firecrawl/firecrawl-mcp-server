@@ -16,7 +16,7 @@
     },
     {
       "id": "sec-gov",
-      "summary": "EDGAR filer lookup, filing lists, 10-K/10-Q sections, XBRL facts, 13F holdings and full-text search.",
+      "summary": "EDGAR filer lookup, filing lists, 10-K/10-Q sections and XBRL facts.",
       "capabilities": [
         "filings/company",
         "filings/filings",
@@ -36,7 +36,7 @@
     },
     {
       "id": "benzinga",
-      "summary": "Analyst rating changes and consensus, why-is-it-moving notes, news search and M&A calendar.",
+      "summary": "Analyst rating changes and consensus, why-is-it-moving notes and news search.",
       "capabilities": [
         "calendar/ratings",
         "calendar/consensus-ratings",
