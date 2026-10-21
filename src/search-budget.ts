@@ -142,6 +142,8 @@ export function fitSearchResponse(response: unknown, budget: number): unknown {
   if (fits(0, keep)) return build(0, keep);
   return {
     success: response.success,
+    id: response.id,
+    creditsUsed: response.creditsUsed,
     data: {},
     warning: `This search result was larger than ${budget} bytes even without page content, so no results are returned. Narrow the query or lower the limit.`,
   };
