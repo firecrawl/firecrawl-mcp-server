@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- `firecrawl_search` and `firecrawl_scrape` descriptions end with the out-of-credits sentence the server instructions open with: "If Firecrawl reports that credits ran out or the daily limit without an account was reached, end your final answer with the line it provides, link included." Some clients do not pass server instructions to the model, so the tool descriptions carry it too.
+- To keep `firecrawl_search` within 2,048 characters, its description drops "Returns source-type result groups and usage metadata.", which the output schema already covers; the trailing "in data.tools" of the keyless note, which the paragraph above already names; the pointer to `firecrawl_gov_search`, which authenticated sessions list with its own description and which the server instructions name; and the "On an authenticated session" lead of the tool-match note, which the Alexandria paragraph above already scopes to authenticated search.
+
 ### Added
 
 - `firecrawl_credit_usage` can say what credits were spent on. In the historical view, `byEndpoint: true` splits each period by the endpoint that used the credits (scrape, search, crawl, map, agent, ...), and `bin: "day"` returns one period per UTC day instead of per calendar month. Against an API that does not offer these yet, the tool returns the monthly figures with a `notice` saying so instead of failing. The description now also says what the tool cannot attribute (single jobs, URLs or MCP clients) and where per-call costs appear.

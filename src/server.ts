@@ -1520,6 +1520,8 @@ Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch
 On an authenticated session, \`firecrawl_search\` and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.
 
 With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capabilities instead of fetching a page. Provider discovery and execution require an API key on a team with Alexandria enabled.
+
+${OUT_OF_CREDITS_INSTRUCTION}
 `,
     outputSchema: scrapeOutputSchema,
     parameters: scrapeToolParamsSchema,
@@ -1640,9 +1642,11 @@ Search web, news, or image sources and return ranked results with query-relevant
 
 ${ALEXANDRIA_SEARCH_LEAD}
 
-On an authenticated session, tool matches describe available capabilities; \`firecrawl_find_tools\` returns their contracts and \`firecrawl_scrape\` with an \`alexandria\` body executes a selected capability. Keyless sessions get no Alexandria matches in data.tools.
+Tool matches describe available capabilities; \`firecrawl_find_tools\` returns their contracts and \`firecrawl_scrape\` with an \`alexandria\` body executes a selected capability. Keyless sessions get no Alexandria matches.
 
-For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`. For a legal or regulatory question, \`categories: ["gov"]\` returns hits in \`data.web\` with \`category: "gov"\` and cannot be combined with other categories; authenticated sessions also have \`firecrawl_gov_search\` as the dedicated tool. Verify gov results' issuer, jurisdiction, status, and version before citing current law. \`categories: ["research"]\` restricts web results to research-affiliated websites; the \`firecrawl_research_*\` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
+For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`. For a legal or regulatory question, \`categories: ["gov"]\` returns hits in \`data.web\` with \`category: "gov"\` and cannot be combined with other categories. Verify gov results' issuer, jurisdiction, status, and version before citing current law. \`categories: ["research"]\` restricts web results to research-affiliated websites; the \`firecrawl_research_*\` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Authenticated responses can include an \`id\` for optional search feedback.
+
+${OUT_OF_CREDITS_INSTRUCTION}
 `,
     outputSchema: searchOutputSchema,
     parameters: z

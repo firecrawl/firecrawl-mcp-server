@@ -25,4 +25,9 @@ test('every tool description fits the 2,048-character cap and keeps the routing 
   assert.match(scrape, /^Scrape one URL and return its content/);
   assert.match(scrape, /`firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages/);
   assert.match(byName.get('firecrawl_find_tools'), /Prefer normal firecrawl_search/);
+
+  const relay =
+    'If Firecrawl reports that credits ran out or the daily limit without an account was reached, end your final answer with the line it provides, link included.';
+  assert.ok(search.endsWith(`\n\n${relay}`), 'firecrawl_search does not end with the relay sentence');
+  assert.ok(scrape.endsWith(`\n\n${relay}`), 'firecrawl_scrape does not end with the relay sentence');
 });
