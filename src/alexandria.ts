@@ -74,6 +74,77 @@ export const findToolsSchema = z
   })
   .strict();
 
+export const findSkillsSchema = z
+  .object({
+    query: z.string().trim().min(1).max(2000).optional().describe('Words that must all appear in a skill\'s id, name or description. Omit to list every skill.'),
+    limit: z.number().int().min(1).max(50).optional().describe('Most skills to return; defaults to 20.'),
+  })
+  .strict();
+
+export const readSkillSchema = z
+  .object({
+    id: z.string().trim().min(1).max(200).describe('Skill ID from firecrawl_find_skills; team:<slug> for a team skill.'),
+    path: z.string().trim().min(1).max(500).optional().describe('A file from the skill\'s files list; defaults to SKILL.md.'),
+    version: z.number().int().min(1).optional().describe('A team skill only: an earlier kept version; defaults to the current one.'),
+  })
+  .strict();
+
+export const createSkillSchema = z
+  .object({
+    from: z.string().trim().min(1).max(100).optional().describe('A skill ID from firecrawl_find_skills to copy: a library skill or team:<slug>. Fields you also give override the copy.'),
+    name: z.string().trim().min(1).max(1000).optional().describe('Skill name; required without from.'),
+    description: z.string().trim().min(1).max(5000).optional().describe('When to use the skill; required without from.'),
+    body: z.string().min(1).max(200_000).optional().describe('The instructions, in Markdown; required without from. Reference capabilities as @provider/capability.'),
+    slug: z.string().trim().max(64).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'slug is lowercase letters and digits in words joined by single hyphens').optional().describe('Lowercase words joined by hyphens; defaults to one made from the name.'),
+  })
+  .strict()
+  .refine(
+    (value) => value.from !== undefined || (value.name !== undefined && value.description !== undefined && value.body !== undefined),
+    { message: 'Give name, description and body, or from to copy a skill.' }
+  );
+
+export const updateSkillSchema = z
+  .object({
+    id: z.string().trim().max(100).regex(/^team:[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Only team skills (team:<slug>) can be changed; copy a library skill with firecrawl_create_skill.').describe('team:<slug> from firecrawl_find_skills. Library skills cannot be changed; copy one with firecrawl_create_skill.'),
+    baseVersion: z.number().int().min(1).describe('The version firecrawl_read_skill returned. A skill changed since is refused with conflict: read it again and reapply.'),
+    name: z.string().trim().min(1).max(1000).optional(),
+    description: z.string().trim().min(1).max(5000).optional(),
+    body: z.string().min(1).max(200_000).optional().describe('New instructions, in full.'),
+    enabled: z.boolean().optional().describe('Turn the skill on or off.'),
+    discoverable: z.boolean().optional().describe('Whether firecrawl_find_skills lists it.'),
+  })
+  .strict()
+  .refine(
+    (value) => ['name', 'description', 'body', 'enabled', 'discoverable'].some((key) => value[key as keyof typeof value] !== undefined),
+    { message: 'Nothing to change: give name, description, body, enabled or discoverable.' }
+  );
+
+const toolFor = (request: any) => {
+  if (request?.provider !== 'firecrawl' || !request.options) return undefined;
+  if (request.capability === 'read-skill') return { name: 'firecrawl_read_skill', arguments: request.options };
+  if (request.capability === 'create-skill') return { name: 'firecrawl_create_skill', arguments: request.options };
+  return undefined;
+};
+
+/**
+ * Skill results name their follow-up calls as tools: each listed skill the read that discloses
+ * it, a library skill the create that copies it, and a create or update the read of the saved skill.
+ */
+export function withSkillNavigation(envelope: any) {
+  const data = envelope?.data?.alexandria?.[0]?.data;
+  if (!data) return envelope;
+  for (const skill of Array.isArray(data.skills) ? data.skills : []) {
+    if (typeof skill?.id === 'string') skill.nextTool = { name: 'firecrawl_read_skill', arguments: { id: skill.id } };
+    const create = toolFor(skill?.create);
+    if (create) skill.createTool = create;
+  }
+  const create = toolFor(data.create);
+  if (create) data.createTool = create;
+  const next = toolFor(data.next);
+  if (next) data.nextTool = next;
+  return envelope;
+}
+
 export const ALEXANDRIA_CATALOGUE_VERTICALS =
   'companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more';
 export const ALEXANDRIA_CATALOGUE_SENTENCE =

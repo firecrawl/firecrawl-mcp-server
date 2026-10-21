@@ -4,6 +4,8 @@
 
 ### Added
 
+- `firecrawl_find_skills` and `firecrawl_read_skill` expose Alexandria's skills the way `firecrawl_find_tools` exposes its catalogue. `firecrawl_find_skills` lists Firecrawl's skills and the team's own (`team:<slug>`, first) as metadata, each with a `nextTool` that reads it; `firecrawl_read_skill` returns one skill file in full. Both are free, read-only calls to `firecrawl/find-skills` and `firecrawl/read-skill`, on the full surface only (the search profile's tool set is unchanged).
+- `firecrawl_create_skill` saves a team skill, written out or copied `from` a listed skill (library results carry a `createTool` that does this), and `firecrawl_update_skill` changes one from the `baseVersion` last read. Both call `firecrawl/create-skill` and `firecrawl/update-skill`, are free, need an API key, and answer with a `nextTool` that reads the saved skill. There is no delete.
 - `firecrawl_credit_usage` can say what credits were spent on. In the historical view, `byEndpoint: true` splits each period by the endpoint that used the credits (scrape, search, crawl, map, agent, ...), and `bin: "day"` returns one period per UTC day instead of per calendar month. Against an API that does not offer these yet, the tool returns the monthly figures with a `notice` saying so instead of failing. The description now also says what the tool cannot attribute (single jobs, URLs or MCP clients) and where per-call costs appear.
 
 ### Fixed
