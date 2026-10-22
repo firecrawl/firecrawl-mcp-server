@@ -16,7 +16,9 @@ overrides:
   qs@<6.16.1: 6.16.1
 
 patchedDependencies:
-  fastmcp@4.3.2: 80fe4ce9d00ae53103307df5f0068ec3409e02476fc96dbef2b58058caf5b93e
+  fastmcp@4.3.2:
+    hash: 80fe4ce9d00ae53103307df5f0068ec3409e02476fc96dbef2b58058caf5b93e
+    path: patches/fastmcp@4.3.2.patch
 
 importers:
 
