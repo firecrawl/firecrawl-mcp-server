@@ -1,6 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [3.34.0] - 2026-10-19
+
+### Added
+
+- Keyless requests carry a World ID credential (`fcwid_...`) as `x-firecrawl-world-id` when one is set, so the API can count them against the verified human's own keyless bucket instead of the IP. Set it with `FIRECRAWL_WORLD_ID` for stdio, or send the `x-firecrawl-world-id` header on HTTP requests to an embedder that admits keyless sessions. It is never sent on requests that carry an API key, and the API ignores it unless World ID is enabled there.
 
 ### Added
 
