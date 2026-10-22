@@ -51,6 +51,10 @@ test('unmatched discovery inputs carry a ready fallback tool call', async (t) =>
   assert.deepEqual(mixed.inputs[1], { input: fred, type: 'url', status: 'matched', match: 'host', providers: ['fred'] });
   const query = toolText(await call({ query: 'Kazakhstan public procurement notices' })).data.alexandria[0].data;
   assert.deepEqual(query.inputs[0].fallbackTool, { name: 'firecrawl_search', arguments: { query: 'Kazakhstan public procurement notices' } });
+  const pdf = 'https://example.com/report.pdf';
+  const unmapped = toolText(await call({ urls: [pdf] })).data.alexandria[0].data.inputs[0];
+  assert.deepEqual(unmapped.fallback, { endpoint: '/v2/parse', body: { url: pdf } });
+  assert.equal('fallbackTool' in unmapped, false);
   const browse = toolText(await call({ providers: ['fred'] })).data.alexandria[0].data;
   assert.equal('inputs' in browse, false);
 });
