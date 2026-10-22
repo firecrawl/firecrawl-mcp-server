@@ -41,7 +41,7 @@
     "firecrawl": "4.50.0",
     "fuse.js": "^7.1.0",
     "hono": "^4.12.27",
-    "mcp-proxy": "^6.5.1",
+    "mcp-proxy": "^6.6.0",
     "undici": "^7.28.0",
     "uri-templates": "^0.2.0",
     "xsschema": "^0.4.4",
