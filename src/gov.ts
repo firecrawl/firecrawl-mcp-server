@@ -44,7 +44,7 @@ const COURT_TYPES = [
   'state-attorney-general',
 ] as const;
 
-const govSearchParameters = z.object({
+const govSearchParameters = z.strictObject({
   query: z
     .string()
     .min(1)
