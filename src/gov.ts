@@ -44,91 +44,58 @@ const COURT_TYPES = [
   'state-attorney-general',
 ] as const;
 
-const govSearchParameters = z
-  .object({
-    query: z
-      .string()
-      .min(1)
-      .describe(
-        'Natural-language legal or regulatory question or search phrase, including the jurisdiction, agency, or citation when relevant.'
-      ),
-    k: z
-      .number()
-      .int()
-      .min(1)
-      .max(100)
-      .optional()
-      .describe('Number of ranked results to return (default 10).'),
-    jurisdiction: z
-      .string()
-      .trim()
-      .toLowerCase()
-      .regex(
-        /^us(-[a-z]{2})?$/,
-        'jurisdiction must be "us" for federal, or "us-" plus a two-letter state or territory code, such as "us-ca" or "us-dc"'
-      )
-      .optional()
-      .describe(
-        'Keep only pages of one jurisdiction: "us" for federal, or "us-" plus a two-letter state or territory code, such as "us-ca" or "us-dc".'
-      ),
-    court: z
-      .string()
-      .min(1)
-      .optional()
-      .describe(
-        'Keep only pages labeled for one court, by CourtListener court id, such as "scotus", "ca9" or "nysd".'
-      ),
-    courtType: z
-      .enum(COURT_TYPES)
-      .optional()
-      .describe(
-        `Keep only pages from one type of court: ${COURT_TYPES.join(', ')}.`
-      ),
-    cites: z
-      .string()
-      .min(1)
-      .optional()
-      .describe(
-        'Keep only pages that cite one law or case, as a printed citation such as "42 U.S.C. § 1983" or "5 U.S. 137", or a citation id such as "us:usc:42:1983".'
-      ),
-    domain: z
-      .string()
-      .min(1)
-      .optional()
-      .describe('Keep only pages from one site, such as "irs.gov".'),
-    yearFrom: z
-      .number()
-      .int()
-      .min(1000)
-      .max(9999)
-      .optional()
-      .describe(
-        'Keep only documents published or filed in this year or later. Requires court or courtType.'
-      ),
-    yearTo: z
-      .number()
-      .int()
-      .min(1000)
-      .max(9999)
-      .optional()
-      .describe(
-        'Keep only documents published or filed in this year or earlier. Requires court or courtType.'
-      ),
-  })
-  .refine(
-    (args) =>
-      (args.yearFrom === undefined && args.yearTo === undefined) ||
-      args.court !== undefined ||
-      args.courtType !== undefined,
-    'yearFrom and yearTo require court or courtType: most pages other than court documents carry no reliable date, so a year filter alone would leave most of them out'
-  )
-  .refine(
-    (args) =>
-      args.yearFrom === undefined ||
-      args.yearTo === undefined ||
-      args.yearFrom <= args.yearTo,
-    'yearFrom must not be after yearTo'
-  );
+const govSearchParameters = z.object({
+  query: z
+    .string()
+    .min(1)
+    .describe(
+      'Natural-language legal or regulatory question or search phrase, including the jurisdiction, agency, or citation when relevant.'
+    ),
+  k: z
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .optional()
+    .describe('Number of ranked results to return (default 10).'),
+  jurisdiction: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(
+      /^us(-[a-z]{2})?$/,
+      'jurisdiction must be "us" for federal, or "us-" plus a two-letter state or territory code, such as "us-ca" or "us-dc"'
+    )
+    .optional()
+    .describe(
+      'Keep only pages of one jurisdiction: "us" for federal, or "us-" plus a two-letter state or territory code, such as "us-ca" or "us-dc".'
+    ),
+  court: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Keep only pages labeled for one court, by CourtListener court id, such as "scotus", "ca9" or "nysd".'
+    ),
+  courtType: z
+    .enum(COURT_TYPES)
+    .optional()
+    .describe(
+      `Keep only pages from one type of court: ${COURT_TYPES.join(', ')}.`
+    ),
+  cites: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Keep only pages that cite one law or case, as a printed citation such as "42 U.S.C. § 1983" or "5 U.S. 137", or a citation id such as "us:usc:42:1983".'
+    ),
+  domain: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Keep only pages from one site, such as "irs.gov".'),
+});
 
 interface GovHit {
   url?: string;
@@ -165,7 +132,7 @@ export function registerGovTools(
     description: `
 Search US federal, state, and local statutes, regulations, codes, court opinions, and other government publications for legal or regulatory questions that need primary text. Clarify a missing jurisdiction or ambiguous as-of date before identifying the governing rule.
 
-Optional filters narrow results by jurisdiction, court, court type, cited law or case, site, and publication or filing year; yearFrom and yearTo require court or courtType. Filters keep only pages the index has labeled, so a filtered search can leave out relevant pages, and no results does not mean none exist. Court labels are most complete for federal courts and case-law collections.
+Optional filters narrow results by jurisdiction, court, court type, cited law or case, and site. Filters keep only pages the index has labeled, so a filtered search can leave out relevant pages, and no results does not mean none exist. Court labels are most complete for federal courts and case-law collections.
 
 Returns ranked results with a position, title, URL, and matched snippet. Results may include historical versions, bill text, agency guidance, and third-party reproductions. Verify the issuer, jurisdiction, enacted/effective status, and version before citing current governing law. Read a known URL or additional page context with firecrawl_scrape. Use general search for non-US questions or missing coverage; no hits does not establish that no applicable law exists.
 `,

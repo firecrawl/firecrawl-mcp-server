@@ -51,8 +51,7 @@ other name not in the nine-tool set returns an unknown-tool error.
 matched passages; `firecrawl_search` with `categories: ["developer"]` reaches the
 same index beside ordinary web results. Both are available here.
 `firecrawl_gov_search` queries `/v2/search/gov` and takes optional filters
-(`jurisdiction`, `court`, `courtType`, `cites`, `domain`, `yearFrom`,
-`yearTo`; the year filters require `court` or `courtType`). `firecrawl_search`
+(`jurisdiction`, `court`, `courtType`, `cites`, `domain`). `firecrawl_search`
 with `categories: ["gov"]` reaches the same sources in the web group, takes no
 filters, and cannot be combined with other categories.
 

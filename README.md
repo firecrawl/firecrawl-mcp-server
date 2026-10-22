@@ -1056,8 +1056,7 @@ Search primary law and regulatory material from US federal, state, and local gov
     "query": "excessive force claims against police officers",
     "k": 10,
     "courtType": "federal-appellate",
-    "cites": "42 U.S.C. § 1983",
-    "yearFrom": 2020
+    "cites": "42 U.S.C. § 1983"
   }
 }
 ```
@@ -1069,7 +1068,6 @@ Search primary law and regulatory material from US federal, state, and local gov
 - `courtType`: keep only pages from one type of court: `federal-supreme`, `federal-appellate`, `federal-district`, `federal-bankruptcy`, `federal-special`, `military`, `state-supreme`, `state-appellate`, `state-trial`, `state-special` or `state-attorney-general`.
 - `cites`: keep only pages that cite one law or case, as a printed citation such as `"42 U.S.C. § 1983"` or `"5 U.S. 137"`, or a citation id such as `"us:usc:42:1983"`.
 - `domain`: keep only pages from one site, such as `"irs.gov"`.
-- `yearFrom` / `yearTo`: keep only documents published or filed in this year or later / in this year or earlier. Both require `court` or `courtType`: most pages other than court documents carry no reliable date, so a year filter alone would leave most of them out.
 
 The filters are optional and combine: a result must match every filter set. Filters keep only pages the index has labeled, so a filtered search can leave out relevant pages, and no results does not mean none exist. Court labels are most complete for federal courts and case-law collections.
 
