@@ -21,6 +21,18 @@ const PRICED_TOOL = {
   billing: { unitLabel: 'record' },
 };
 
+// Exchange's per-input accounting: fred.stlouisfed.org is covered, every other URL and any query is not.
+// A .pdf URL gets a fallback endpoint the MCP does not map, to check it passes through unchanged.
+function findToolsInputs({ urls = [], query } = {}) {
+  const inputs = [
+    ...(query ? [{ input: query, type: 'query', status: 'unmatched', reason: 'no_relevant_tools', message: 'No tool matched the query closely enough.', fallback: { endpoint: '/v2/search', body: { query } } }] : []),
+    ...urls.map(url => new URL(url).hostname === 'fred.stlouisfed.org'
+      ? { input: url, type: 'url', status: 'matched', match: 'host', providers: ['fred'] }
+      : { input: url, type: 'url', status: 'unmatched', reason: 'no_provider', message: 'No provider covers this URL.', fallback: { endpoint: url.endsWith('.pdf') ? '/v2/parse' : '/v2/scrape', body: { url } } }),
+  ];
+  return inputs.length ? { inputs } : {};
+}
+
 const EXCHANGE_CALL = {
   provider: 'fred',
   capability: 'series/observations',
@@ -103,7 +115,7 @@ async function startFakeExchangeApi(options = {}) {
         return json(200, { success: true, data: { alexandria: [{ provider: 'firecrawl', capability: 'bash', data: { workspaceId: 'retained-workspace', exitCode: 0, stdout: JSON.stringify(identities), idleTtlSeconds: 300 } }] } });
       }
       if (options.largeResult) return json(200, options.largeResult);
-      if (parsedBody.alexandria?.provider === 'firecrawl') return json(200, {success:true, data:{creditsCost:0, alexandria:[{provider:'firecrawl',capability:'find-tools',creditsCost:0,data:{level:'tools',items:[PRICED_TOOL],relatedTools:[{group:'alternative',label:'Alternative sources',tools:[{tool:{...PRICED_TOOL,id:'bls/series'},reason:'r'}]}],total:4,next:{provider:'firecrawl',capability:'find-tools',options:{...parsedBody.alexandria.options, offset:4}}}}]}});
+      if (parsedBody.alexandria?.provider === 'firecrawl') return json(200, {success:true, data:{creditsCost:0, alexandria:[{provider:'firecrawl',capability:'find-tools',creditsCost:0,data:{level:'tools',items:[PRICED_TOOL],relatedTools:[{group:'alternative',label:'Alternative sources',tools:[{tool:{...PRICED_TOOL,id:'bls/series'},reason:'r'}]}],total:4,next:{provider:'firecrawl',capability:'find-tools',options:{...parsedBody.alexandria.options, offset:4}},...findToolsInputs(parsedBody.alexandria.options)}}]}});
 
       if (parsedBody?.alexandria?.[0]?.provider === 'locked') {
         return json(403, {
