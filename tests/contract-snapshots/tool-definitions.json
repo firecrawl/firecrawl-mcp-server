@@ -2053,7 +2053,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_find_tools@a3e98b2d013a": {
+  "firecrawl_find_tools@8877bf94a3a2": {
     "annotations": {
       "title": "Find Tools",
       "readOnlyHint": true,
@@ -2123,7 +2123,7 @@
           }
         },
         "level": {
-          "description": "Usually omit: it follows the arguments (tools for query, urls, providers, capabilities or groups; providers for categories; categories with none). Set providers or groups to list those within a category or url scope instead of tools. query and expand always return tools.",
+          "description": "Usually omit: it follows the arguments (tools for query, urls, providers, capabilities or groups; providers for categories; categories with none). Set providers or groups to list those within a category or url scope instead of tools. query, or a non-empty expand with any other argument, returns tools.",
           "type": "string",
           "enum": [
             "categories",

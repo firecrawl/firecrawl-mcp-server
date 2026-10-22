@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- `firecrawl_find_tools` no longer fails when `level` conflicts with the other arguments. With `query` or a non-empty `expand`, an explicit `level` other than `tools` is sent as `tools`, since the catalogue returns tools for both and refused the call otherwise. With `capabilities` at `providers` or `groups` level and no `expand`, the call sends `expand: []`, because full contracts only exist at tools level. `level` now has a description that says to omit it in most calls and when to set `providers` or `groups`.
+- `firecrawl_find_tools` no longer fails when `level` conflicts with the other arguments. With `query`, or a non-empty `expand` alongside any selector, the call is sent at `tools` level whatever `level` says or defaults to, since the catalogue returns tools for both and refused the call otherwise. A non-empty `expand` with no selector still gets the category-index error. With `capabilities` at `providers` or `groups` level and no `expand`, the call sends `expand: []`, because full contracts only exist at tools level. `level` now has a description that says to omit it in most calls and when to set `providers` or `groups`.
 
 ## [3.34.0] - 2026-10-22
 
