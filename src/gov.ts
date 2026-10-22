@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import type { ContentResult, FastMCP } from 'fastmcp';
+import { type ContentResult, type FastMCP, UserError } from 'fastmcp';
 import { originHeaders, requestOrigin } from './origin';
 import { govSearchOutputSchema, withStructured } from './tool-output';
 
@@ -181,12 +181,25 @@ Returns ranked results with a position, title, URL, and matched snippet. Results
         if (value != null) params.append(key, String(value));
       }
       const client = getClient(session) as ClientLike;
-      const res = await client.http.get<{
-        data?: { web?: GovHit[] };
-      }>(
-        `${BASE}?${params.toString()}`,
-        originHeaders(requestOrigin(mcpClient, session))
-      );
+      const res = await client.http
+        .get<{
+          data?: { web?: GovHit[] };
+        }>(
+          `${BASE}?${params.toString()}`,
+          originHeaders(requestOrigin(mcpClient, session))
+        )
+        .catch((error: unknown) => {
+          const response = (
+            error as
+              | { response?: { status?: number; data?: { error?: unknown } } }
+              | undefined
+          )?.response;
+          const message = response?.data?.error;
+          if (response?.status !== 400 || typeof message !== 'string') {
+            throw error;
+          }
+          throw new UserError(message, { status: 400, error: message });
+        });
       const results = res.data?.data?.web ?? [];
       return withStructured(fmtGov(results), { results });
     },
