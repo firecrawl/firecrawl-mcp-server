@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- `firecrawl_gov_search` asks `/v2/search/gov` for `sources=law` and returns the `law` results. Each row in `structuredContent.results` keeps `url`, `title`, `description` and `position`, and also carries the index's legal labels when it has them: `jurisdiction`, `court`, `court_type`, `cites`, `cited_as` and `updated_at`. The text block, the tool description and the input schema are unchanged. Needs an API that accepts `sources` on `/v2/search/gov`.
+
 ## [3.34.1] - 2026-10-22
 
 ### Changed
