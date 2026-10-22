@@ -273,8 +273,9 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 - `FIRECRAWL_API_KEY`: Your Firecrawl API key
   - Required when using cloud API (default)
   - Optional when using self-hosted instance with `FIRECRAWL_API_URL`
-- `FIRECRAWL_API_URL` (Optional): Custom API endpoint for self-hosted instances
+- `FIRECRAWL_API_URL` (Optional): Custom API base URL for self-hosted instances
   - Example: `https://firecrawl.your-domain.com`
+  - Use the base URL without `/v1` or `/v2` (for example, `http://localhost:3002`), even if your cURL requests include a version. The Firecrawl SDK appends the API version to endpoint paths; including it in the base URL can cause `404 Not Found` errors (for example, `/v1/v2/scrape`).
   - If not provided, the cloud API will be used (requires API key)
 - `FIRECRAWL_INTEGRATION` (Optional): Integration tag for apps that launch this server, such as an editor extension
   - Sent as the `integration` field of scrape, batch scrape, crawl, map, search, extract, agent, parse, interact and feedback requests
