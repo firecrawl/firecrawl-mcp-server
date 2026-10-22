@@ -197,12 +197,16 @@ async function startFakeBackend(options = {}) {
         JSON.stringify({
           success: true,
           data: {
-            web: [
+            law: [
               {
                 description: 'The matched snippet.',
                 position: 1,
                 title: '21 CFR Part 101 -- Food Labeling',
                 url: 'https://www.ecfr.gov/current/title-21/part-101',
+                jurisdiction: 'us',
+                cites: ['us:usc:21:343'],
+                cited_as: ['us:cfr:21:101'],
+                updated_at: 1700000000000,
               },
             ],
           },
@@ -825,12 +829,24 @@ test('search firecrawl_gov_search queries the Government Index', async (t) => {
   const query = new URL(calls[0].url, 'http://localhost').searchParams;
   assert.equal(query.get('query'), 'food labeling requirements');
   assert.equal(query.get('k'), '1');
+  assert.deepEqual(query.getAll('sources'), ['law']);
 
   assert.equal(
     message.result.content[0].text,
     '## 1. 21 CFR Part 101 -- Food Labeling\nhttps://www.ecfr.gov/current/title-21/part-101\nThe matched snippet.'
   );
-  assert.equal(message.result.structuredContent.results.length, 1);
+  assert.deepEqual(message.result.structuredContent.results, [
+    {
+      description: 'The matched snippet.',
+      position: 1,
+      title: '21 CFR Part 101 -- Food Labeling',
+      url: 'https://www.ecfr.gov/current/title-21/part-101',
+      jurisdiction: 'us',
+      cites: ['us:usc:21:343'],
+      cited_as: ['us:cfr:21:101'],
+      updated_at: 1700000000000,
+    },
+  ]);
   assert.equal(backend.requests.some((request) => request.url === '/v2/search'), false);
 });
 
