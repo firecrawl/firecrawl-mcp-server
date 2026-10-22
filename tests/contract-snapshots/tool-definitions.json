@@ -2317,7 +2317,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_gov_search@0bb788732250": {
+  "firecrawl_gov_search@3ad3dcb4e27f": {
     "annotations": {
       "title": "Firecrawl Government Index search",
       "readOnlyHint": true,
@@ -2325,7 +2325,7 @@
       "destructiveHint": false
     },
     "title": "Firecrawl Government Index search",
-    "description": "\nSearch US federal, state, and local statutes, regulations, codes, court opinions, and other government publications for legal or regulatory questions that need primary text. Clarify a missing jurisdiction or ambiguous as-of date before identifying the governing rule.\n\nReturns ranked results with a position, title, URL, and matched snippet. Results may include historical versions, bill text, agency guidance, and third-party reproductions. Verify the issuer, jurisdiction, enacted/effective status, and version before citing current governing law. Read a known URL or additional page context with firecrawl_scrape. Use general search for non-US questions or missing coverage; no hits does not establish that no applicable law exists.\n",
+    "description": "\nSearch US federal, state, and local statutes, regulations, codes, court opinions, and other government publications for legal or regulatory questions that need primary text. Clarify a missing jurisdiction or ambiguous as-of date before identifying the governing rule.\n\nOptional filters narrow results by jurisdiction, court, court type, cited law or case, site, and publication or filing year; yearFrom and yearTo require court or courtType. Filters keep only pages the index has labeled, so a filtered search can leave out relevant pages, and no results does not mean none exist. Court labels are most complete for federal courts and case-law collections.\n\nReturns ranked results with a position, title, URL, and matched snippet. Results may include historical versions, bill text, agency guidance, and third-party reproductions. Verify the issuer, jurisdiction, enacted/effective status, and version before citing current governing law. Read a known URL or additional page context with firecrawl_scrape. Use general search for non-US questions or missing coverage; no hits does not establish that no applicable law exists.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2340,6 +2340,55 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 100
+        },
+        "jurisdiction": {
+          "description": "Keep only pages of one jurisdiction: \"us\" for federal, or \"us-\" plus a two-letter state or territory code, such as \"us-ca\" or \"us-dc\".",
+          "type": "string",
+          "pattern": "^us(-[a-z]{2})?$"
+        },
+        "court": {
+          "description": "Keep only pages labeled for one court, by CourtListener court id, such as \"scotus\", \"ca9\" or \"nysd\".",
+          "type": "string",
+          "minLength": 1
+        },
+        "courtType": {
+          "description": "Keep only pages from one type of court: federal-supreme, federal-appellate, federal-district, federal-bankruptcy, federal-special, military, state-supreme, state-appellate, state-trial, state-special, state-attorney-general.",
+          "type": "string",
+          "enum": [
+            "federal-supreme",
+            "federal-appellate",
+            "federal-district",
+            "federal-bankruptcy",
+            "federal-special",
+            "military",
+            "state-supreme",
+            "state-appellate",
+            "state-trial",
+            "state-special",
+            "state-attorney-general"
+          ]
+        },
+        "cites": {
+          "description": "Keep only pages that cite one law or case, as a printed citation such as \"42 U.S.C. § 1983\" or \"5 U.S. 137\", or a citation id such as \"us:usc:42:1983\".",
+          "type": "string",
+          "minLength": 1
+        },
+        "domain": {
+          "description": "Keep only pages from one site, such as \"irs.gov\".",
+          "type": "string",
+          "minLength": 1
+        },
+        "yearFrom": {
+          "description": "Keep only documents published or filed in this year or later. Requires court or courtType.",
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 9999
+        },
+        "yearTo": {
+          "description": "Keep only documents published or filed in this year or earlier. Requires court or courtType.",
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 9999
         }
       },
       "required": [
