@@ -2317,7 +2317,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_gov_search@0bb788732250": {
+  "firecrawl_gov_search@b020bd420f91": {
     "annotations": {
       "title": "Firecrawl Government Index search",
       "readOnlyHint": true,
@@ -2325,7 +2325,7 @@
       "destructiveHint": false
     },
     "title": "Firecrawl Government Index search",
-    "description": "\nSearch US federal, state, and local statutes, regulations, codes, court opinions, and other government publications for legal or regulatory questions that need primary text. Clarify a missing jurisdiction or ambiguous as-of date before identifying the governing rule.\n\nReturns ranked results with a position, title, URL, and matched snippet. Results may include historical versions, bill text, agency guidance, and third-party reproductions. Verify the issuer, jurisdiction, enacted/effective status, and version before citing current governing law. Read a known URL or additional page context with firecrawl_scrape. Use general search for non-US questions or missing coverage; no hits does not establish that no applicable law exists.\n",
+    "description": "\nSearch US federal, state, and local statutes, regulations, codes, court opinions, and other government publications for legal or regulatory questions that need primary text. Clarify a missing jurisdiction or ambiguous as-of date before identifying the governing rule.\n\nOptional filters narrow results by jurisdiction, court, court type, cited law or case, and site. Filters keep only pages the index has labeled, so a filtered search can leave out relevant pages, and no results does not mean none exist. Court labels are most complete for federal courts and case-law collections.\n\nReturns ranked results with a position, title, URL, and matched snippet. Results may include historical versions, bill text, agency guidance, and third-party reproductions. Verify the issuer, jurisdiction, enacted/effective status, and version before citing current governing law. Read a known URL or additional page context with firecrawl_scrape. Use general search for non-US questions or missing coverage; no hits does not establish that no applicable law exists.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2340,6 +2340,43 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 100
+        },
+        "jurisdiction": {
+          "description": "Keep only pages of one jurisdiction: \"us\" for federal, or \"us-\" plus a two-letter state or territory code, such as \"us-ca\" or \"us-dc\".",
+          "type": "string",
+          "pattern": "^us(-[a-z]{2})?$"
+        },
+        "court": {
+          "description": "Keep only pages labeled for one court, by CourtListener court id, such as \"scotus\", \"ca9\" or \"nysd\".",
+          "type": "string",
+          "minLength": 1
+        },
+        "courtType": {
+          "description": "Keep only pages from one type of court: federal-supreme, federal-appellate, federal-district, federal-bankruptcy, federal-special, military, state-supreme, state-appellate, state-trial, state-special, state-attorney-general.",
+          "type": "string",
+          "enum": [
+            "federal-supreme",
+            "federal-appellate",
+            "federal-district",
+            "federal-bankruptcy",
+            "federal-special",
+            "military",
+            "state-supreme",
+            "state-appellate",
+            "state-trial",
+            "state-special",
+            "state-attorney-general"
+          ]
+        },
+        "cites": {
+          "description": "Keep only pages that cite one law or case, as a printed citation such as \"42 U.S.C. § 1983\" or \"5 U.S. 137\", or a citation id such as \"us:usc:42:1983\".",
+          "type": "string",
+          "minLength": 1
+        },
+        "domain": {
+          "description": "Keep only pages from one site, such as \"irs.gov\".",
+          "type": "string",
+          "minLength": 1
         }
       },
       "required": [
@@ -5007,7 +5044,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_scrape@5cda34cb58c3": {
+  "firecrawl_scrape@1eb5e578ec04": {
     "annotations": {
       "title": "Firecrawl scrape",
       "readOnlyHint": true,
@@ -5015,7 +5052,7 @@
       "destructiveHint": false
     },
     "title": "Firecrawl scrape",
-    "description": "\nScrape one URL and return its content, or execute catalogued Alexandria capabilities. URL mode returns markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema, plus page metadata. Firecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it.\n\n`firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching Alexandria provider returns typed records in one call.\n\nAlexandria mode: `alexandria` selects catalogued capability execution and is mutually exclusive with `url`. Alexandria execution is billed per capability (pass includeCosts to firecrawl_find_tools to see prices if you need) and needs a team with Alexandria enabled.\n",
+    "description": "\nScrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session, `firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.\n\nWith `alexandria` in place of `url`, the tool runs catalogued provider capabilities instead of fetching a page. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5220,7 +5257,7 @@
           "pattern": "^[A-Za-z0-9._:-]{1,128}$"
         },
         "alexandria": {
-          "description": "Catalogued Alexandria capability invocation, mutually exclusive with url. One {provider, capability, options} object or an array of 1-10, with contracts available through firecrawl_search or firecrawl_find_tools. Each call may include version to pin a published workflow; omitting it uses latest. Only requestId and timeout are supported alongside alexandria. The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and response.key (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination. Returns per-capability results in data.alexandria with data, records, or an error with a code; individual capabilities can fail even when the outer response succeeds. Requires an API key on a team with Alexandria enabled. Some providers require accepted terms; blocked requests return the applicable requirements.",
+          "description": "Catalogued Alexandria capability invocation, mutually exclusive with url. One {provider, capability, options} object or an array of 1-10, with contracts available through firecrawl_search or firecrawl_find_tools. Each call may include version to pin a published workflow; omitting it uses latest. Only requestId and timeout are supported alongside alexandria. The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and response.key (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination. Returns per-capability results in data.alexandria with data, records, or an error with a code; individual capabilities can fail even when the outer response succeeds. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.",
           "anyOf": [
             {
               "type": "object",
@@ -5588,7 +5625,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_scrape@a7b0032fa436": {
+  "firecrawl_scrape@26c21845df18": {
     "annotations": {
       "title": "Firecrawl scrape",
       "readOnlyHint": false,
@@ -5596,7 +5633,7 @@
       "destructiveHint": false
     },
     "title": "Firecrawl scrape",
-    "description": "\nScrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. Browser actions can change the live page when interactive actions are enabled. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session, `firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.\n\nWith `alexandria` in place of `url`, the tool runs catalogued provider capabilities instead of fetching a page. Provider discovery and execution require an API key on a team with Alexandria enabled.\n",
+    "description": "\nScrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. Browser actions can change the live page when interactive actions are enabled. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session, `firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.\n\nWith `alexandria` in place of `url`, the tool runs catalogued provider capabilities instead of fetching a page. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5853,7 +5890,7 @@
           "pattern": "^[A-Za-z0-9._:-]{1,128}$"
         },
         "alexandria": {
-          "description": "Catalogued Alexandria capability invocation, mutually exclusive with url. One {provider, capability, options} object or an array of 1-10, with contracts available through firecrawl_search or firecrawl_find_tools. Each call may include version to pin a published workflow; omitting it uses latest. Only requestId and timeout are supported alongside alexandria. The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and response.key (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination. Returns per-capability results in data.alexandria with data, records, or an error with a code; individual capabilities can fail even when the outer response succeeds. Requires an API key on a team with Alexandria enabled. Some providers require accepted terms; blocked requests return the applicable requirements.",
+          "description": "Catalogued Alexandria capability invocation, mutually exclusive with url. One {provider, capability, options} object or an array of 1-10, with contracts available through firecrawl_search or firecrawl_find_tools. Each call may include version to pin a published workflow; omitting it uses latest. Only requestId and timeout are supported alongside alexandria. The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and response.key (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination. Returns per-capability results in data.alexandria with data, records, or an error with a code; individual capabilities can fail even when the outer response succeeds. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.",
           "anyOf": [
             {
               "type": "object",
@@ -6221,7 +6258,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_scrape@b558da31c10c": {
+  "firecrawl_scrape@4d495c7d2b51": {
     "annotations": {
       "title": "Firecrawl scrape",
       "readOnlyHint": true,
@@ -6229,7 +6266,7 @@
       "destructiveHint": false
     },
     "title": "Firecrawl scrape",
-    "description": "\nScrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session, `firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.\n\nWith `alexandria` in place of `url`, the tool runs catalogued provider capabilities instead of fetching a page. Provider discovery and execution require an API key on a team with Alexandria enabled.\n",
+    "description": "\nScrape one URL and return its content, or execute catalogued Alexandria capabilities. URL mode returns markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema, plus page metadata. Firecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it.\n\n`firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching Alexandria provider returns typed records in one call.\n\nAlexandria mode: `alexandria` selects catalogued capability execution and is mutually exclusive with `url`. Alexandria execution is billed per capability (pass includeCosts to firecrawl_find_tools to see prices if you need).\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6434,7 +6471,7 @@
           "pattern": "^[A-Za-z0-9._:-]{1,128}$"
         },
         "alexandria": {
-          "description": "Catalogued Alexandria capability invocation, mutually exclusive with url. One {provider, capability, options} object or an array of 1-10, with contracts available through firecrawl_search or firecrawl_find_tools. Each call may include version to pin a published workflow; omitting it uses latest. Only requestId and timeout are supported alongside alexandria. The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and response.key (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination. Returns per-capability results in data.alexandria with data, records, or an error with a code; individual capabilities can fail even when the outer response succeeds. Requires an API key on a team with Alexandria enabled. Some providers require accepted terms; blocked requests return the applicable requirements.",
+          "description": "Catalogued Alexandria capability invocation, mutually exclusive with url. One {provider, capability, options} object or an array of 1-10, with contracts available through firecrawl_search or firecrawl_find_tools. Each call may include version to pin a published workflow; omitting it uses latest. Only requestId and timeout are supported alongside alexandria. The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and response.key (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination. Returns per-capability results in data.alexandria with data, records, or an error with a code; individual capabilities can fail even when the outer response succeeds. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.",
           "anyOf": [
             {
               "type": "object",
