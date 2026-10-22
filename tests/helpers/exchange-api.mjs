@@ -22,12 +22,13 @@ const PRICED_TOOL = {
 };
 
 // Exchange's per-input accounting: fred.stlouisfed.org is covered, every other URL and any query is not.
+// A .pdf URL gets a fallback endpoint the MCP does not map, to check it passes through unchanged.
 function findToolsInputs({ urls = [], query } = {}) {
   const inputs = [
     ...(query ? [{ input: query, type: 'query', status: 'unmatched', reason: 'no_relevant_tools', message: 'No tool matched the query closely enough.', fallback: { endpoint: '/v2/search', body: { query } } }] : []),
-    ...urls.map(url => url.includes('fred.stlouisfed.org')
+    ...urls.map(url => new URL(url).hostname === 'fred.stlouisfed.org'
       ? { input: url, type: 'url', status: 'matched', match: 'host', providers: ['fred'] }
-      : { input: url, type: 'url', status: 'unmatched', reason: 'no_provider', message: 'No provider covers this URL.', fallback: { endpoint: '/v2/scrape', body: { url } } }),
+      : { input: url, type: 'url', status: 'unmatched', reason: 'no_provider', message: 'No provider covers this URL.', fallback: { endpoint: url.endsWith('.pdf') ? '/v2/parse' : '/v2/scrape', body: { url } } }),
   ];
   return inputs.length ? { inputs } : {};
 }

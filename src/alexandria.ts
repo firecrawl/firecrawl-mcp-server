@@ -103,7 +103,7 @@ export function findToolsOptions(args: z.infer<typeof findToolsSchema>) {
   };
 }
 
-const FALLBACK_TOOLS: Record<string, string> = { '/v2/scrape': 'firecrawl_scrape', '/v2/search': 'firecrawl_search' };
+const FALLBACK_TOOLS = new Map([['/v2/scrape', 'firecrawl_scrape'], ['/v2/search', 'firecrawl_search']]);
 
 export function withFindToolsNavigation(envelope: any, carry: Record<string, unknown> = {}) {
   const page = envelope?.data?.alexandria?.[0]?.data;
@@ -121,7 +121,7 @@ export function withFindToolsNavigation(envelope: any, carry: Record<string, unk
   }
   if (link(page.next)) page.nextTool = link(page.next);
   for (const input of Array.isArray(page.inputs) ? page.inputs : []) {
-    const name = FALLBACK_TOOLS[input?.fallback?.endpoint];
+    const name = FALLBACK_TOOLS.get(input?.fallback?.endpoint);
     if (name && input.fallback.body && typeof input.fallback.body === 'object') input.fallbackTool = { name, arguments: input.fallback.body };
   }
   return envelope;
