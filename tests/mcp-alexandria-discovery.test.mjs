@@ -40,6 +40,21 @@ test('discovery output never carries per-capability prices', async (t) => {
   assert.doesNotMatch(JSON.stringify(categories), /creditsCost/);
 });
 
+test('unmatched discovery inputs carry a ready fallback tool call', async (t) => {
+  const { client } = await startStdioWithApi(t);
+  const call = arguments_ => client.request('tools/call', { name: 'firecrawl_find_tools', arguments: arguments_ });
+  const reddit = 'https://www.reddit.com/r/programming/';
+  const fred = 'https://fred.stlouisfed.org/series/CPIAUCSL';
+  const mixed = toolText(await call({ urls: [reddit, fred] })).data.alexandria[0].data;
+  assert.deepEqual(mixed.inputs[0].fallbackTool, { name: 'firecrawl_scrape', arguments: { url: reddit } });
+  assert.equal(mixed.inputs[0].reason, 'no_provider');
+  assert.deepEqual(mixed.inputs[1], { input: fred, type: 'url', status: 'matched', match: 'host', providers: ['fred'] });
+  const query = toolText(await call({ query: 'Kazakhstan public procurement notices' })).data.alexandria[0].data;
+  assert.deepEqual(query.inputs[0].fallbackTool, { name: 'firecrawl_search', arguments: { query: 'Kazakhstan public procurement notices' } });
+  const browse = toolText(await call({ providers: ['fred'] })).data.alexandria[0].data;
+  assert.equal('inputs' in browse, false);
+});
+
 test('includeCosts returns per-capability prices and carries through navigation', async (t) => {
   const { api, client } = await startStdioWithApi(t);
   const call = arguments_ => client.request('tools/call', { name: 'firecrawl_find_tools', arguments: arguments_ });
