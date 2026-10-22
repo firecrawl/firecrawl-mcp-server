@@ -35,7 +35,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "dotenv": "^17.2.2",
     "fastmcp": "4.3.2",
     "firecrawl": "4.50.0",
