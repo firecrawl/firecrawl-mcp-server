@@ -1073,7 +1073,7 @@ The filters are optional and combine: a result must match every filter set. Filt
 
 **Returns:** Ranked results. Each result carries a position, a title, a URL, and the matched snippet. The search-only endpoint exposes this tool too.
 
-`firecrawl_search` with `categories: ["gov"]` searches the same sources and returns the hits in `data.web` with `category: "gov"`. The `gov` category takes no filters and cannot be combined with other categories.
+`firecrawl_search` with `categories: ["gov"]` searches the same sources and returns the hits in `data.web` with `category: "gov"`. The `gov` category does not take these filters and cannot be combined with other categories.
 
 ### 15. Alexandria Tools
 

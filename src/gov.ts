@@ -72,6 +72,7 @@ const govSearchParameters = z.object({
     ),
   court: z
     .string()
+    .trim()
     .min(1)
     .optional()
     .describe(
@@ -85,6 +86,7 @@ const govSearchParameters = z.object({
     ),
   cites: z
     .string()
+    .trim()
     .min(1)
     .optional()
     .describe(
@@ -92,6 +94,7 @@ const govSearchParameters = z.object({
     ),
   domain: z
     .string()
+    .trim()
     .min(1)
     .optional()
     .describe('Keep only pages from one site, such as "irs.gov".'),

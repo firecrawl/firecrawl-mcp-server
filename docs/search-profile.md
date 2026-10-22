@@ -52,8 +52,8 @@ matched passages; `firecrawl_search` with `categories: ["developer"]` reaches th
 same index beside ordinary web results. Both are available here.
 `firecrawl_gov_search` queries `/v2/search/gov` and takes optional filters
 (`jurisdiction`, `court`, `courtType`, `cites`, `domain`). `firecrawl_search`
-with `categories: ["gov"]` reaches the same sources in the web group, takes no
-filters, and cannot be combined with other categories.
+with `categories: ["gov"]` reaches the same sources in the web group, does not
+take these filters, and cannot be combined with other categories.
 
 ## `firecrawl_search` fetches no page content
 
