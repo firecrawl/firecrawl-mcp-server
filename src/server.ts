@@ -401,6 +401,8 @@ export type FirecrawlMcpServerStartArgs =
         /** Defaults to FastMCP's endpoint (`FASTMCP_ENDPOINT` or `/mcp`). */
         endpoint?: `/${string}`;
         stateless?: boolean;
+        /** Largest request body accepted, in bytes. Defaults to 1 MiB; larger bodies get 413. */
+        maxBodySize?: number;
       };
     };
 
@@ -3080,7 +3082,17 @@ Set \`redactPII\` to request redaction of personally identifiable information in
 
   return {
     start: (args) =>
-      server.start(args as Parameters<typeof server.start>[0]),
+      server.start(
+        (args.transportType === 'httpStream'
+          ? {
+              ...args,
+              httpStream: {
+                ...args.httpStream,
+                maxBodySize: args.httpStream.maxBodySize ?? 1_048_576,
+              },
+            }
+          : args) as Parameters<typeof server.start>[0]
+      ),
     stop: () => server.stop(),
   };
 }
