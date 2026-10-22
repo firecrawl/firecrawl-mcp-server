@@ -80,13 +80,13 @@ test('local keyless stdio refuses packs exactly like firecrawl_find_tools', asyn
   }
 });
 
-test('search, find_tools and page scrapes lead with ready calls from the packs of matched providers', async (t) => {
+test('search, find_tools and page scrapes end with ready calls from the packs of matched providers', async (t) => {
   const { client } = await startStdioWithApi(t, {
     searchTools: [CAPABILITY_HIT, { ...CAPABILITY_HIT, provider: 'similarweb', capability: 'web/traffic' }],
     findToolsItems: [{ id: 'startwho-com/fantasy-sports-rankings/projections', provider: 'startwho-com', capability: 'fantasy-sports-rankings/projections' }],
   });
   const search = toolText(await client.request('tools/call', { name: 'firecrawl_search', arguments: { query: 'competitor traffic' } }));
-  assert.equal(Object.keys(search.data)[0], 'packs');
+  assert.equal(Object.keys(search.data).at(-1), 'packs');
   assert.deepEqual(search.data.packs.map((pack) => pack.pack), ['marketing', 'investing']);
   const investing = search.data.packs[1];
   assert.equal(investing.title, 'Stocks, earnings and economic data');
@@ -101,14 +101,14 @@ test('search, find_tools and page scrapes lead with ready calls from the packs o
   assert.deepEqual(calls[0], { name: shape.name, call: { name: 'firecrawl_scrape', arguments: { alexandria: { provider: 'fred', capability: 'series/observations', options: shape.options } } }, inputs: shape.inputs });
 
   const page = toolText(await client.request('tools/call', { name: 'firecrawl_find_tools', arguments: { query: 'half-PPR projections' } })).data.alexandria[0].data;
-  assert.equal(Object.keys(page)[0], 'packs');
+  assert.equal(Object.keys(page).at(-1), 'packs');
   assert.deepEqual(page.packs.map((pack) => pack.pack), ['fantasy']);
   assert.deepEqual(page.packs[0].providers[0].calls[0].call.arguments.alexandria, { provider: 'startwho-com', capability: 'fantasy-sports-rankings/projections', options: CALL_SHAPES['startwho-com/fantasy-sports-rankings/projections'].options });
   const providers = toolText(await client.request('tools/call', { name: 'firecrawl_find_tools', arguments: { categories: ['sports'] } })).data.alexandria[0].data;
   assert.deepEqual(providers.packs.map((pack) => pack.pack), ['fantasy']);
 
   const scraped = toolText(await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { url: 'https://www.bestbuy.com/site/switch-2' } }));
-  assert.equal(Object.keys(scraped)[0], 'packs');
+  assert.equal(Object.keys(scraped).at(-1), 'packs');
   assert.deepEqual(scraped.packs.map((pack) => pack.pack), ['shopping']);
   assert.deepEqual(scraped.packs[0].providers.map((entry) => entry.provider), ['bestbuy-com']);
   const other = toolText(await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { url: 'https://example.com/' } }));

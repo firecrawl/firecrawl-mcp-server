@@ -1628,7 +1628,7 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
         { tool: 'firecrawl_scrape' }
       );
       const packs = packCallsFor(packProvidersForUrl(url));
-      return structuredText(withoutDiscoveredToolPrices(packs.length ? { packs, ...res } : res));
+      return structuredText(withoutDiscoveredToolPrices(packs.length ? { ...res, packs } : res));
     },
   };
   server.addTool({
@@ -1775,7 +1775,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       const body = httpRes?.data ?? {};
       const tools = body?.data?.tools;
       const packs = packCallsFor([...(Array.isArray(tools) ? tools : []), ...webPackRefs(body?.data?.web)]);
-      return searchResult(packs.length ? { ...body, data: { packs, ...body.data } } : body);
+      return searchResult(packs.length ? { ...body, data: { ...body.data, packs } } : body);
     },
   });
 
@@ -1878,7 +1878,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       const page = envelope?.data?.alexandria?.[0]?.data;
       if (Array.isArray(page?.items)) {
         const packs = packCallsFor(page.items.map((item: any) => ({ provider: item?.provider ?? item?.id, capability: item?.capability })));
-        if (packs.length) envelope.data.alexandria[0].data = { packs, ...page };
+        if (packs.length) envelope.data.alexandria[0].data = { ...page, packs };
       }
       return structuredCompact(envelope);
     },
