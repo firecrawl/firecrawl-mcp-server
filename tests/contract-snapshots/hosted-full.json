@@ -11,7 +11,26 @@
         "protocolVersion": "2025-06-18",
         "serverInfo": {
           "name": "firecrawl-fastmcp",
-          "version": "<version>"
+          "version": "<version>",
+          "description": "Search the web and scrape pages or parse documents; when signed in or with an API key, also crawl, map, interact and extract structured data, and with an API key on a team with Alexandria enabled, run its providers. Alexandria is Firecrawl's catalogue of data providers and workflows across companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more; providers return typed, sourced records through published contracts. Built for AI agents.",
+          "icons": [
+            {
+              "src": "https://www.firecrawl.dev/logo.svg",
+              "mimeType": "image/svg+xml",
+              "sizes": [
+                "any"
+              ]
+            },
+            {
+              "src": "https://www.firecrawl.dev/apple-touch-icon.png",
+              "mimeType": "image/png",
+              "sizes": [
+                "180x180"
+              ]
+            }
+          ],
+          "title": "Firecrawl",
+          "websiteUrl": "https://docs.firecrawl.dev/mcp-server?utm_source=mcp-server&utm_medium=server-info"
         }
       },
       "tools": [
@@ -56,7 +75,26 @@
         "protocolVersion": "2025-06-18",
         "serverInfo": {
           "name": "firecrawl-fastmcp",
-          "version": "<version>"
+          "version": "<version>",
+          "description": "Search the web and scrape pages or parse documents; when signed in or with an API key, also crawl, map, interact and extract structured data, and with an API key on a team with Alexandria enabled, run its providers. Alexandria is Firecrawl's catalogue of data providers and workflows across companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more; providers return typed, sourced records through published contracts. Built for AI agents.",
+          "icons": [
+            {
+              "src": "https://www.firecrawl.dev/logo.svg",
+              "mimeType": "image/svg+xml",
+              "sizes": [
+                "any"
+              ]
+            },
+            {
+              "src": "https://www.firecrawl.dev/apple-touch-icon.png",
+              "mimeType": "image/png",
+              "sizes": [
+                "180x180"
+              ]
+            }
+          ],
+          "title": "Firecrawl",
+          "websiteUrl": "https://docs.firecrawl.dev/mcp-server?utm_source=mcp-server&utm_medium=server-info"
         }
       },
       "tools": [

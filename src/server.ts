@@ -317,6 +317,11 @@ export type ExtraToolsContext = {
   builtInTool(name: string): ToolDefinition | undefined;
 };
 
+const DEFAULT_SERVER_DESCRIPTION =
+  'Search the web and scrape pages or parse documents; when signed in or with an API key, also crawl, map, interact and extract structured data, and with an API key on a team with Alexandria enabled, run its providers. ' +
+  ALEXANDRIA_CATALOGUE_SENTENCE +
+  ' Built for AI agents.';
+
 export type InstructionDefaults = {
   /** Instructions for sessions with a credential. */
   authenticated: string;
@@ -337,6 +342,8 @@ export interface FirecrawlMcpServerHooks {
   wrapTool?: (tool: ToolDefinition) => ToolDefinition;
   /** Observes each tool call. Must not throw. */
   onToolResult?: (event: ToolCallEvent) => void;
+  /** Server description shown to clients and directories, replacing the default. */
+  description?: string;
   /** Server instructions, or a function choosing them from the defaults. */
   instructions?: string | ((defaults: InstructionDefaults) => string);
   /** Adds tools after the built-in ones. They bypass `toolFilter`. */
@@ -431,6 +438,7 @@ export {
   recoveryPayload,
 } from './recovery.js';
 export {
+  ALEXANDRIA_CATALOGUE_SENTENCE,
   ALEXANDRIA_CATALOGUE_VERTICALS,
   ALEXANDRIA_SEARCH_INSTRUCTIONS,
   defaultDomainTools,
@@ -636,6 +644,24 @@ export function createFirecrawlMcpServer(
   const server = new FastMCP<SessionData>({
     name: 'firecrawl-fastmcp',
     version: packageVersion as `${number}.${number}.${number}`,
+    // MCP Implementation fields beyond name and version; clients and directories
+    // show them. The name stays as is: origin attribution keys on it.
+    title: 'Firecrawl',
+    description: hooks.description ?? DEFAULT_SERVER_DESCRIPTION,
+    websiteUrl:
+      'https://docs.firecrawl.dev/mcp-server?utm_source=mcp-server&utm_medium=server-info',
+    icons: [
+      {
+        src: 'https://www.firecrawl.dev/logo.svg',
+        mimeType: 'image/svg+xml',
+        sizes: ['any'],
+      },
+      {
+        src: 'https://www.firecrawl.dev/apple-touch-icon.png',
+        mimeType: 'image/png',
+        sizes: ['180x180'],
+      },
+    ],
     instructions,
     logger: new ConsoleLogger(logging),
     roots: { enabled: false },

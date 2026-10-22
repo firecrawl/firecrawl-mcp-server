@@ -3,8 +3,9 @@
  * to the core server through its hooks. Only the CLI imports this directory;
  * nothing in the core depends on it.
  */
-import type {
-  FirecrawlMcpServerHooks,
+import {
+  ALEXANDRIA_CATALOGUE_SENTENCE,
+  type FirecrawlMcpServerHooks,
 } from '../server.js';
 import { createServiceAuthenticate } from './auth.js';
 import {
@@ -46,6 +47,14 @@ export function createServiceHooks(
 ): FirecrawlMcpServerHooks {
   const searchSurface = profile.id === 'search';
   const hooks: FirecrawlMcpServerHooks = {
+    ...(searchSurface
+      ? {
+          description:
+            'Search the web and developer, government and research indexes, scrape pages, and discover and run Alexandria providers where the team has access. ' +
+            ALEXANDRIA_CATALOGUE_SENTENCE +
+            ' Built for AI agents.',
+        }
+      : {}),
     instructions: (defaults) =>
       searchSurface
         ? SEARCH_PROFILE_INSTRUCTIONS
