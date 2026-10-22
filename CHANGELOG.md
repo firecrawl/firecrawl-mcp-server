@@ -4,8 +4,8 @@
 
 ### Changed
 
-- `mcp-proxy` moves from 6.5.1 to 6.6.0. In the HTTP stream transports (`HTTP_STREAMABLE_SERVER=true` and `CLOUD_SERVICE=true`), the server now accepts request bodies up to 1 MiB and answers a larger one with HTTP 413; it used to read the whole body with no limit. A caller of `start()` can pass `httpStream.maxBodySize` to set a different limit. stdio is unchanged.
-- `body-parser` resolves to 1.20.9 and 2.4.0 through pnpm overrides.
+- `mcp-proxy` moves from 6.5.1 to 6.6.0. In the HTTP stream transports (`CLOUD_SERVICE=true`, `HTTP_STREAMABLE_SERVER=true`, or `SSE_LOCAL=true`), the server now accepts request bodies up to 1 MiB and answers a larger one with HTTP 413; it used to read the whole body with no limit. A caller of `start()` can pass `httpStream.maxBodySize` to set a different limit. stdio is unchanged.
+- `body-parser` adds pnpm overrides: versions below 1.20.9 resolve to 1.20.9, and 2.x versions below 2.4.0 resolve to 2.4.0.
 
 ## [3.34.0] - 2026-10-22
 
