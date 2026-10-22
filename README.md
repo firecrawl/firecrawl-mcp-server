@@ -1053,18 +1053,27 @@ Search primary law and regulatory material from US federal, state, and local gov
 {
   "name": "firecrawl_gov_search",
   "arguments": {
-    "query": "federal food labeling requirements for allergens",
-    "k": 10
+    "query": "excessive force claims against police officers",
+    "k": 10,
+    "courtType": "federal-appellate",
+    "cites": "42 U.S.C. § 1983"
   }
 }
 ```
 
 - `query` (required): the legal or regulatory question or search phrase.
 - `k`: number of ranked results. The default is 10 and the maximum is 100.
+- `jurisdiction`: keep only pages of one jurisdiction: `"us"` for federal, or `"us-"` plus a two-letter state or territory code, such as `"us-ca"` or `"us-dc"`.
+- `court`: keep only pages labeled for one court, by CourtListener court id, such as `"scotus"`, `"ca9"` or `"nysd"`.
+- `courtType`: keep only pages from one type of court: `federal-supreme`, `federal-appellate`, `federal-district`, `federal-bankruptcy`, `federal-special`, `military`, `state-supreme`, `state-appellate`, `state-trial`, `state-special` or `state-attorney-general`.
+- `cites`: keep only pages that cite one law or case, as a printed citation such as `"42 U.S.C. § 1983"` or `"5 U.S. 137"`, or a citation id such as `"us:usc:42:1983"`.
+- `domain`: keep only pages from one site, such as `"irs.gov"`.
+
+The filters are optional and combine: a result must match every filter set. Filters keep only pages the index has labeled, so a filtered search can leave out relevant pages, and no results does not mean none exist. Court labels are most complete for federal courts and case-law collections.
 
 **Returns:** Ranked results. Each result carries a position, a title, a URL, and the matched snippet. The search-only endpoint exposes this tool too.
 
-`firecrawl_search` with `categories: ["gov"]` searches the same sources and returns the hits in `data.web` with `category: "gov"`. The `gov` category cannot be combined with other categories.
+`firecrawl_search` with `categories: ["gov"]` searches the same sources and returns the hits in `data.web` with `category: "gov"`. The `gov` category does not take these filters and cannot be combined with other categories.
 
 ### 15. Alexandria Tools
 

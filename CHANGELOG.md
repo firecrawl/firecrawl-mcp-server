@@ -5,6 +5,7 @@
 ### Added
 
 - `firecrawl_credit_usage` can say what credits were spent on. In the historical view, `byEndpoint: true` splits each period by the endpoint that used the credits (scrape, search, crawl, map, agent, ...), and `bin: "day"` returns one period per UTC day instead of per calendar month. Against an API that does not offer these yet, the tool returns the monthly figures with a `notice` saying so instead of failing. The description now also says what the tool cannot attribute (single jobs, URLs or MCP clients) and where per-call costs appear.
+- `firecrawl_gov_search` takes optional Government Index filters: `jurisdiction`, `court`, `courtType`, `cites` and `domain`. They combine, and only the filters a call sets are sent to `/v2/search/gov`, as query parameters with the same names; a call without filters sends the same request as before. `jurisdiction` is trimmed and lowercased and must be `us` or `us-` plus a two-letter code. The description notes that filters keep only pages the index has labeled, so a filtered search can leave out relevant pages. Filtered calls need an API that accepts these parameters. When the API refuses a call with a 400 and a reason, such as an unknown court id, the tool returns that reason instead of a generic request failure; other errors are handled as before. `firecrawl_search` with `categories: ["gov"]` is unchanged and does not take these filters.
 
 ### Fixed
 
