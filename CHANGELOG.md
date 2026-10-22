@@ -6,6 +6,13 @@
 
 - `firecrawl_find_tools` no longer fails when `level` conflicts with the other arguments. With `query`, or a non-empty `expand` alongside any selector, the call is sent at `tools` level whatever `level` says or defaults to, since the catalogue returns tools for both and refused the call otherwise. A non-empty `expand` with no selector still gets the category-index error. With `capabilities` at `providers` or `groups` level and no `expand`, the call sends `expand: []`, because full contracts only exist at tools level. `level` now has a description that says to omit it in most calls and when to set `providers` or `groups`.
 
+## [3.34.1] - 2026-10-22
+
+### Changed
+
+- `mcp-proxy` moves from 6.5.1 to 6.6.0. In the HTTP stream transports (`CLOUD_SERVICE=true`, `HTTP_STREAMABLE_SERVER=true`, or `SSE_LOCAL=true`), the server now accepts request bodies up to 1 MiB and answers a larger one with HTTP 413; it used to read the whole body with no limit. A caller of `start()` can pass `httpStream.maxBodySize` to set a different limit. stdio is unchanged.
+- `body-parser` adds pnpm overrides: versions below 1.20.9 resolve to 1.20.9, and 2.x versions below 2.4.0 resolve to 2.4.0.
+
 ## [3.34.0] - 2026-10-22
 
 ### Added
