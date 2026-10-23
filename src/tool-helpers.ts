@@ -307,6 +307,8 @@ export async function relayExchangeError(
         }
       );
     }
+    const retryAfterSeconds =
+      response.status === 429 ? retryAfterSecondsOf(response) : undefined;
     throw new UserError(message, {
       code: typeof data?.code === 'string' ? data.code : 'exchange_error',
       status: response.status,
@@ -314,8 +316,34 @@ export async function relayExchangeError(
       ...(typeof data?.chargeId === 'string'
         ? { chargeId: data.chargeId }
         : {}),
+      ...(retryAfterSeconds ? { retryAfterSeconds } : {}),
     });
   }
+}
+
+/**
+ * The wait a 429 reports: the body's `retryAfterSeconds`, else a
+ * delta-seconds `Retry-After` header. Undefined when neither is a positive
+ * integer.
+ */
+function retryAfterSecondsOf(response: {
+  data?: unknown;
+  headers?: unknown;
+}): number | undefined {
+  const reported = (response.data as { retryAfterSeconds?: unknown } | undefined)
+    ?.retryAfterSeconds;
+  if (typeof reported === 'number' && Number.isInteger(reported) && reported > 0) {
+    return reported;
+  }
+  const headers = response.headers as
+    | { get?: (name: string) => unknown; [name: string]: unknown }
+    | undefined;
+  const header =
+    typeof headers?.get === 'function'
+      ? headers.get('retry-after')
+      : headers?.['retry-after'];
+  const seconds = /^\d+$/.test(String(header ?? '').trim()) ? Number(header) : 0;
+  return seconds > 0 ? seconds : undefined;
 }
 
 /** Retries without Alexandria, on fallbackSources, when tools the caller did not ask for are refused. */

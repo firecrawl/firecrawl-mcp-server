@@ -261,6 +261,57 @@ test('a custom authenticate session reaches tool handlers with a per-call reques
   assert.match(body.requestId, /^[0-9a-f-]{36}$/);
 });
 
+test('a relayed 429 from search carries the reported wait in the error extras', async (t) => {
+  const responses = [
+    [{ 'content-type': 'application/json' }, { success: false, error: 'Rate limit exceeded.', retryAfterSeconds: 23 }],
+    [{ 'content-type': 'application/json', 'retry-after': '41' }, { success: false, error: 'Rate limit exceeded.' }],
+    [{ 'content-type': 'application/json' }, { success: false, error: 'Rate limit exceeded.' }],
+  ];
+  const api = createServer((req, res) => {
+    req.resume();
+    req.on('end', () => {
+      const [headers, body] = responses.shift();
+      res.writeHead(429, headers);
+      res.end(JSON.stringify(body));
+    });
+  });
+  await new Promise((resolve) => api.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => api.close(resolve)));
+  const errors = [];
+  const port = await startEmbedded(t, {
+    apiUrl: `http://127.0.0.1:${api.address().port}`,
+    unstable_hooks: {
+      authenticate: async () => ({ authType: 'api-key', firecrawlApiKey: 'fc-embedded' }),
+      wrapTool: (tool) =>
+        tool.name === 'firecrawl_search'
+          ? {
+              ...tool,
+              execute: async (args, context) => {
+                try {
+                  return await tool.execute(args, context);
+                } catch (error) {
+                  errors.push(error.extras);
+                  throw error;
+                }
+              },
+            }
+          : tool,
+    },
+  });
+  for (let i = 0; i < 3; i++) {
+    const result = await callTool(port, 'firecrawl_search', { query: 'q' });
+    assert.equal(result.isError, true);
+  }
+  assert.deepEqual(
+    errors.map(({ status, retryAfterSeconds }) => ({ status, retryAfterSeconds })),
+    [
+      { status: 429, retryAfterSeconds: 23 },
+      { status: 429, retryAfterSeconds: 41 },
+      { status: 429, retryAfterSeconds: undefined },
+    ]
+  );
+});
+
 test('wrapTool sees built-in, module and extra tools', async (t) => {
   const seen = [];
   await startEmbedded(t, {
