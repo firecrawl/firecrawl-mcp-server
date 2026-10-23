@@ -10,5 +10,7 @@ overrides:
   "body-parser@<1.20.9": "1.20.9"
   "body-parser@>=2.0.0 <2.4.0": "2.4.0"
 
+minimumReleaseAge: 4320 # 3 days
 minimumReleaseAgeExclude:
   - body-parser@2.4.0
+  - firecrawl
