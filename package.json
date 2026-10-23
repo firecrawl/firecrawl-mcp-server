@@ -36,7 +36,6 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
-    "dotenv": "^17.2.2",
     "fastmcp": "4.3.2",
     "firecrawl": "4.50.0",
     "fuse.js": "^7.1.0",
