@@ -86,6 +86,8 @@ test('added alexandria falls back to the requested sources on discovery refusal;
     assert.equal(api.requests.length, before + 2);
     assert.deepEqual(api.requests.at(-1).body.sources, fallback);
     assert.equal(api.requests.at(-1).body.domainTools, false);
+    assert.equal(api.requests.at(-2).headers['x-firecrawl-implicit-alexandria'], '1');
+    assert.equal(api.requests.at(-1).headers['x-firecrawl-implicit-alexandria'], undefined);
   }
   for (const explicit of [{ sources: ['alexandria'] }, { sources: ['web', 'alexandria'] }, { domainTools: true }]) {
     const before = api.requests.length;
