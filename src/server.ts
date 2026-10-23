@@ -1768,7 +1768,8 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
           client,
           searchBody,
           addsAlexandria && opts.domainTools !== true,
-          requestedSources
+          requestedSources,
+          addsAlexandria
         );
       const httpRes = await relayExchangeError(postSearch, { tool: 'firecrawl_search' });
       return searchResult(httpRes?.data ?? {});
