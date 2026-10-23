@@ -92,16 +92,12 @@ const args: FirecrawlMcpServerStartArgs =
       }
     : { transportType: 'stdio' };
 
-if (
-  transport === 'stdio' &&
-  !process.env.FIRECRAWL_API_KEY &&
-  !process.env.FIRECRAWL_API_URL
-) {
+if (transport === 'stdio' && !apiKey && !apiUrl) {
   // No credential and no self-hosted URL: run in keyless mode. scrape and
   // search work for free (rate-limited per IP) against the Firecrawl cloud;
   // every other tool needs an API key and will return Unauthorized.
   console.error(
-    'No FIRECRAWL_API_KEY or FIRECRAWL_API_URL set — running in keyless mode. ' +
+    'No FIRECRAWL_API_KEY, FIRECRAWL_OAUTH_TOKEN or FIRECRAWL_API_URL set — running in keyless mode. ' +
       'firecrawl_scrape and firecrawl_search are free (rate-limited per IP) against the Firecrawl cloud; ' +
       'other tools require an API key (get one free at https://firecrawl.dev).'
   );
