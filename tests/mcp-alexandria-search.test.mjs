@@ -32,6 +32,11 @@ test('authenticated search always adds alexandria and keeps the requested source
     assert.equal('creditsCost' in toolText(result).data.tools[0], false);
     assert.deepEqual(api.requests.at(-1).body.sources, sources, JSON.stringify(overrides));
     assert.equal(api.requests.at(-1).body.domainTools, domainTools, JSON.stringify(overrides));
+    assert.equal(
+      api.requests.at(-1).headers['x-firecrawl-implicit-alexandria'],
+      (overrides.sources ?? []).some((source) => ['alexandria', 'exchange'].includes(source.type ?? source)) ? undefined : '1',
+      JSON.stringify(overrides)
+    );
   }
 });
 
@@ -44,6 +49,7 @@ test('zero data retention and anonymous searches do not get alexandria added', a
     });
     assert.deepEqual(api.requests.at(-1).body.sources, ['web']);
     assert.equal(api.requests.at(-1).body.domainTools, false);
+    assert.equal(api.requests.at(-1).headers['x-firecrawl-implicit-alexandria'], undefined);
   }
 });
 
