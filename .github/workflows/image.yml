@@ -45,6 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: release
     permissions:
+      contents: read
       packages: write
       id-token: write
       attestations: write
@@ -63,14 +64,9 @@ jobs:
 
       - name: 'Push Server Image'
         id: push
-        env:
-          VERSION: ${{ needs.build.outputs.version }}
         run: |
           docker load < "$RUNNER_TEMP/image.tar.gz"
-          for tag in "sha-$GITHUB_SHA" "v$VERSION" latest; do
-            docker tag "$IMAGE:sha-$GITHUB_SHA" "$IMAGE:$tag"
-            docker push "$IMAGE:$tag"
-          done
+          docker push "$IMAGE:sha-$GITHUB_SHA"
           digest=$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE:sha-$GITHUB_SHA" | cut -d@ -f2)
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
           echo "Pushed $IMAGE@$digest" >> "$GITHUB_STEP_SUMMARY"
@@ -88,3 +84,12 @@ jobs:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
+
+      - name: 'Tag the signed image'
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          for tag in "v$VERSION" latest; do
+            docker tag "$IMAGE:sha-$GITHUB_SHA" "$IMAGE:$tag"
+            docker push "$IMAGE:$tag"
+          done
