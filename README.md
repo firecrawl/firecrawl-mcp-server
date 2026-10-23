@@ -346,6 +346,7 @@ Use this guide to select the right tool for your task:
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
 - **If you need interactive browser automation** (click, type, navigate): use **interact** with a URL for a fresh page, or **scrape** + **interact** when you already scraped the page or need tighter scrape control
 - **If you need data from a catalogued provider** (Alexandria): search with `sources: ["alexandria"]`, inspect the selected contract with **find_tools**, and execute it with **scrape** `alexandria`
+- **If the task matches an Alexandria pack** (creators and social media, marketing research, company research and prospecting, job search, stocks and earnings, shopping, travel, fantasy football): use **packs** for provider context and guidance, **find_tools** for selected contracts, and **scrape** for execution
 
 ### Quick Reference Table
 
@@ -358,6 +359,7 @@ Use this guide to select the right tool for your task:
 | parse     | Files and hosted upload refs                   | markdown, JSON, or document output               |
 | search    | Web search for info                            | results[]                                        |
 | find_tools | Alexandria catalogue browsing and URL lookup | providers, tool contracts and nextTool navigation |
+| packs     | Curated Alexandria context                     | provider summaries, short guidance and examples    |
 | developer | Programming questions over developer sources   | results[] with passages                          |
 | gov       | US primary law and regulatory material         | results[] with snippets                          |
 | agent     | Multi-source research, unknown or many sites   | JSON (structured data)                           |
@@ -1367,6 +1369,27 @@ The CLI discovery sequence maps to these MCP calls:
 | Execute | `firecrawl_scrape` | `{"alexandria":{"provider":"<provider-id>","capability":"<capability-id>","options":{"<required-field>":"<value>"}}}` |
 
 Find Tools and execution are available on both the full surface and the search surface. Reuse a complete contract from search when present rather than making another discovery call. Follow returned `nextTool` navigation only when more results are needed.
+
+### Alexandria packs
+
+`firecrawl_packs` supplies agent-facing context for common Alexandria tasks. It is read-only, free, and makes no API call. Users can ask normally; the pack helps the assistant choose useful sources rather than requiring a questionnaire or a fixed workflow.
+
+| Pack | Covers |
+| --- | --- |
+| `creators` | YouTube transcripts, X posts and profiles, Instagram and TikTok creators, podcasts and newsletters |
+| `marketing` | Competitor traffic and channels, search demand and keywords, ad libraries, archived messaging and app-store presence |
+| `prospecting` | Company and people search, enrichment and verified work contacts, funding signals and local businesses |
+| `jobs` | Openings across job boards and company career sites, salaries and pay benchmarks |
+| `investing` | Quotes and price history, SEC filings and financial statements, transcripts, analyst ratings, market news and economic data |
+| `shopping` | Product search, prices and stock, specifications, reviews and bestsellers across retailers, plus wholesale sourcing |
+| `travel` | Flight fares and cheap dates, hotels and vacation rentals, reviews and restaurant availability |
+| `fantasy` | Fantasy football projections, rankings, rosters and injury context |
+
+`{}` lists the packs with a `nextTool` to load each one. `{"pack": "<id>"}` returns provider IDs, purpose summaries and representative capability IDs; a short skill on using them accurately; and two illustrative examples.
+
+Each provider has a `nextTool` to browse compact live capabilities with `includeCosts: true`. Select the capabilities relevant to the request and inspect their contracts through `firecrawl_find_tools` before execution with `firecrawl_scrape`. Packs contain neither frozen prices nor full contracts. The guidance says to reuse information already supplied, ask only for materially missing details, and avoid calling every provider.
+
+Pack definitions live in `src/packs/<id>.json`, one file per pack. `scripts/check-packs.mjs` checks their representative capability IDs against the live catalogue, and with `--write` refreshes `src/packs/calls.json`, the call shape of each one. When `firecrawl_search` or `firecrawl_find_tools` returns a provider that belongs to a pack, or `firecrawl_scrape` reads a page on a pack provider's site, the result leads with `packs`: that pack's matched providers, each with what it returns, `firecrawl_scrape` call templates with their required options as `<type>` placeholders to fill before running them, and a `guide` call that loads the pack. Like `firecrawl_find_tools`, `firecrawl_packs` needs an API key.
 
 ### Alexandria session feedback
 
