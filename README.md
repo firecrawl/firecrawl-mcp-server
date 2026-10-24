@@ -1252,7 +1252,7 @@ Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`,
 | `configureHttp(app)` | Add HTTP routes. |
 | `oauth.protectedResource` | Serve OAuth protected-resource metadata. |
 
-FastMCP is bundled inside the package, so use the types exported from `firecrawl-mcp/server` (`Session`, `ToolDefinition`, `ToolRegistrar`, `FirecrawlMcpServerHooks` and others) rather than importing `fastmcp` yourself.
+The server is built on the official MCP TypeScript SDK (`@modelcontextprotocol/server`). Use the types exported from `firecrawl-mcp/server` (`Session`, `ToolDefinition`, `ToolRegistrar`, `FirecrawlMcpServerHooks` and others) rather than the SDK's own.
 
 The entry point also exports the helpers the built-in tools use, such as `recoveryPayload`, `normalizeHeader`, `requestOrigin`, `isRuntimeUserAgent`, `initializeClientSlug`, `searchToolBaseFields`, `searchOutputSchema` and `structuredCompact`, so extra tools and hooks can match the built-in behaviour. They are unstable as well.
 

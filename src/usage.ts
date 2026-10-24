@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import type { ContentResult, FastMCP } from 'fastmcp';
+import type { ContentResult, McpRuntime } from './mcp/runtime.js';
 import { originHeaders, requestOrigin, type McpClient } from './origin';
 import { creditUsageOutputSchema, structuredText } from './tool-output';
 
@@ -61,7 +61,7 @@ function assertSuccessful(
 }
 
 export function registerUsageTools(
-  server: Pick<FastMCP<SessionData>, 'addTool'>,
+  server: Pick<McpRuntime<SessionData>, 'addTool'>,
   getClient: GetClient
 ): void {
   server.addTool({
