@@ -11,7 +11,7 @@
  */
 
 import { z } from 'zod';
-import type { ContentResult, FastMCP } from 'fastmcp';
+import type { ContentResult, McpRuntime } from './mcp/runtime.js';
 import { originHeaders, requestOrigin } from './origin';
 import { developerSearchOutputSchema, withStructured } from './tool-output';
 
@@ -78,7 +78,7 @@ function fmtDeveloper(
 }
 
 export function registerDeveloperTools(
-  server: Pick<FastMCP<SessionData>, 'addTool'>,
+  server: Pick<McpRuntime<SessionData>, 'addTool'>,
   getClient: GetClient
 ): void {
   // --- developer search ---

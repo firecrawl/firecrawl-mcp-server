@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- The server is built on the official MCP TypeScript SDK (`@modelcontextprotocol/server` 2.3.1) instead of `fastmcp` and `mcp-proxy`. stdio and the HTTP stream transports now also serve protocol revision 2026-07-28 (`server/discover`, per-request metadata) next to 2025-11-25, 2025-06-18, 2025-03-26 and 2024-11-05, from the same tools. Tool names, input and output schemas, descriptions, server instructions, `serverInfo` and the advertised capabilities are unchanged, as are the HTTP routes (`/health`, `/ready`, `/ping`, OAuth protected-resource metadata, the legacy `/sse` and `/messages` endpoints), the 1 MiB body limit and the error responses. HTTP serving is stateless: no `Mcp-Session-Id` is issued.
+- `start()` with `httpStream.stateless: false` (or `FASTMCP_STATELESS` unset) logs a warning and serves every request statelessly; session-based HTTP serving is no longer available. Stateless serving answers every protocol revision.
+- `fastmcp`, `mcp-proxy`, `fuse.js`, `uri-templates` and `undici` are no longer dependencies, and the local `fastmcp` patch is gone.
+
 ## [3.34.1] - 2026-10-22
 
 ### Changed
