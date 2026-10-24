@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- A tool call that fails because the Firecrawl API refused the request now carries a machine-readable error next to its message. When the tool's `outputSchema` declares `success` and `error`, `structuredContent` is `{ success: false, error: { code, status, message, retryAfterSeconds? } }`: `code` is the API's own error code when it sent one, otherwise a name for the HTTP status (`insufficient_credits` for 402, `rate_limited` for 429, `server_error` for 5xx, and so on), and `retryAfterSeconds` is set when the API says how long to wait. A caller, such as code that calls the tools in a loop, can branch on the code instead of parsing the message. The text block is unchanged, and errors that already carried structured content, as well as tools whose schema has no `error` field, are unchanged.
+
 ## [3.34.1] - 2026-10-22
 
 ### Changed
