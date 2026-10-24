@@ -147,7 +147,7 @@ test('an API failure keeps its text alone when the outputSchema cannot carry the
 });
 
 test('an API error code the API sends is kept over the status name', async (t) => {
-  const apiUrl = await startRefusingApi(t, 408, { success: false, error: 'Scrape timed out.', code: 'SCRAPE_TIMEOUT' });
+  const apiUrl = await startRefusingApi(t, 408, { success: false, error: 'Scrape timed out.', code: 'EXPIRED' });
   const result = await assertReadableError(t, {
     apiUrl,
     session: apiKey,
@@ -155,7 +155,7 @@ test('an API error code the API sends is kept over the status name', async (t) =
     args: { url: 'https://example.com' },
     includes: 'Scrape timed out.',
   });
-  assert.equal(result.structuredContent.error.code, 'SCRAPE_TIMEOUT');
+  assert.equal(result.structuredContent.error.code, 'EXPIRED');
   assert.equal(result.structuredContent.error.status, 408);
 });
 

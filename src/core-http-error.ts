@@ -16,7 +16,8 @@ export class CoreHttpError extends Error {
 const API_CODE = /^[A-Za-z][A-Za-z0-9_]{2,63}$/;
 // Node and axios transport codes (ECONNRESET, ERR_BAD_REQUEST) name the
 // transport, not the failure, so they never stand in for an API code.
-const TRANSPORT_CODE = /^(?:ERR_[A-Z0-9_]+|E[A-Z]+)$/;
+const TRANSPORT_CODE =
+  /^(?:ERR_[A-Z0-9_]+|ECONN[A-Z]+|ETIMEDOUT|ENOTFOUND|EPIPE|EAI_AGAIN|EHOSTUNREACH|ENETUNREACH)$/;
 
 const STATUS_CODES: Readonly<Record<number, string>> = {
   400: 'invalid_request',
@@ -49,8 +50,8 @@ function retryAfterSeconds(details: unknown, message: string): number | undefine
   const body = (details ?? {}) as { retryAfterSeconds?: unknown; retry_after_seconds?: unknown };
   const value = body.retryAfterSeconds ?? body.retry_after_seconds;
   if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value;
-  const match = /retry after (\d+)\s*s/i.exec(message);
-  return match ? Number(match[1]) : undefined;
+  const match = /retry after (\d+)\s*s(?:ec(?:ond)?s?)?\b/i.exec(message);
+  return match && Number(match[1]) > 0 ? Number(match[1]) : undefined;
 }
 
 /**
