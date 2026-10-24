@@ -103,6 +103,7 @@ import {
   termsWriteError,
 } from './tool-helpers.js';
 import { normalizeToolArguments } from './tool-arguments.js';
+import { tasksExtension } from './tasks.js';
 
 /**
  * Library entry point: `import { createFirecrawlMcpServer } from 'firecrawl-mcp/server'`.
@@ -207,6 +208,11 @@ export type ToolContext = {
   log: ToolLogger;
   /** The connected client; `version` is the clientInfo sent at initialize. */
   client?: { version?: { name?: string; version?: string } };
+  /**
+   * Set when the call runs as an MCP task: a tool that starts a Firecrawl job
+   * returns as soon as the job is accepted instead of waiting for it.
+   */
+  task?: boolean;
   [key: string]: unknown;
 };
 
@@ -642,6 +648,14 @@ export function createFirecrawlMcpServer(
     logger: new ConsoleLogger(logging),
     ...(hooks.oauth ? { oauth: { protectedResource: hooks.oauth.protectedResource } } : {}),
     authenticate,
+    extensions: [
+      tasksExtension<SessionData>({
+        getClient,
+        agentResult: agentStatusResult,
+        crawlResult: async (client, jobId, origin, body) =>
+          structuredText(await collectCrawlPages(client, jobId, origin, body as never)),
+      }),
+    ],
     // Lightweight health endpoint for LB checks
     health: {
       message: 'ok',
@@ -2444,7 +2458,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
       scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
     }),
     outputSchema: crawlOutputSchema,
-    execute: async (args, { session, log, client: mcpClient }): Promise<ContentResult> => {
+    execute: async (args, { session, log, client: mcpClient, task }): Promise<ContentResult> => {
       const origin = requestOrigin(mcpClient, session);
       const { url, ...options } = args as Record<string, unknown>;
       const client = getClient(session);
@@ -2483,7 +2497,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
         { tool: 'firecrawl_crawl' }
       );
       const crawlId = started?.data?.id;
-      if (!crawlId) {
+      if (!crawlId || task) {
         return structuredText(started?.data ?? {});
       }
       const res = await waitForCrawlCompletionWithOrigin(
