@@ -683,12 +683,16 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     const logger = this.#options.logger;
 
     const sessionKey = Symbol('session');
+    const sessionIdKey = Symbol('sessionId');
     type KeyedAuthInfo = { token: string; clientId: string; scopes: string[]; extra: Record<symbol, unknown> };
-    const factory: McpServerFactory = (context) =>
-      this.createServer(
-        (context.authInfo as KeyedAuthInfo | undefined)?.extra?.[sessionKey] as Auth | undefined,
-        context.era === 'modern'
+    const factory: McpServerFactory = (context) => {
+      const extra = (context.authInfo as KeyedAuthInfo | undefined)?.extra;
+      return this.createServer(
+        extra?.[sessionKey] as Auth | undefined,
+        context.era === 'modern',
+        extra?.[sessionIdKey] as string | undefined
       );
+    };
     const mcp = createMcpHandler(factory, {
       legacy: 'stateless',
       maxRequestBodySize: Number.MAX_SAFE_INTEGER,
@@ -743,7 +747,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
         return;
       }
       if (req.method === 'POST') {
-        await this.#serveStream(req, res, { mcp, maxBodySize, sessionKey });
+        await this.#serveStream(req, res, { mcp, maxBodySize, sessionKey, sessionIdKey });
         return;
       }
       if (req.method === 'GET' || req.method === 'DELETE') {
@@ -804,7 +808,17 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
   async #serveStream(
     req: IncomingMessage,
     res: ServerResponse,
-    { mcp, maxBodySize, sessionKey }: { mcp: ReturnType<typeof createMcpHandler>; maxBodySize: number; sessionKey: symbol }
+    {
+      mcp,
+      maxBodySize,
+      sessionKey,
+      sessionIdKey,
+    }: {
+      mcp: ReturnType<typeof createMcpHandler>;
+      maxBodySize: number;
+      sessionKey: symbol;
+      sessionIdKey: symbol;
+    }
   ): Promise<void> {
     const bodyResult = await readBody(req, maxBodySize);
     if ('tooLarge' in bodyResult) {
@@ -856,7 +870,12 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     });
     try {
       const response = await mcp.fetch(request, {
-        authInfo: { token: '', clientId: '', scopes: [], extra: { [sessionKey]: session } } as never,
+        authInfo: {
+          token: '',
+          clientId: '',
+          scopes: [],
+          extra: { [sessionKey]: session, [sessionIdKey]: [req.headers['mcp-session-id']].flat()[0] },
+        } as never,
       });
       await writeWebResponse(response, res);
       this.#options.logger.debug('[MCP debug] Stateless HTTP Stream request handled');
