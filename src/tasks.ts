@@ -4,12 +4,17 @@ import {
   MissingRequiredClientCapabilityError,
   ProtocolError,
   type ServerContext,
+  type StandardSchemaV1,
 } from '@modelcontextprotocol/server';
 import type FirecrawlApp from 'firecrawl';
 import { z } from 'zod';
 import type { ContentResult, McpExtension } from './mcp/runtime.js';
-import { originHeaders, requestOrigin, type OriginSession } from './origin.js';
-import { agentStatusOutputSchema, crawlOutputSchema } from './tool-output.js';
+import {
+  originHeaders,
+  requestOrigin,
+  type McpClient,
+  type OriginSession,
+} from './origin.js';
 
 /**
  * The MCP Tasks extension (`io.modelcontextprotocol/tasks`, protocol revision
@@ -46,19 +51,14 @@ const TASK_TOOLS: Record<string, Kind> = {
   firecrawl_agent: 'agent',
   firecrawl_crawl: 'crawl',
 };
+const TOOL_OF: Record<Kind, string> = {
+  agent: 'firecrawl_agent',
+  crawl: 'firecrawl_crawl',
+};
 const POLL_INTERVAL_MS: Record<Kind, number> = { agent: 5000, crawl: 3000 };
 const JOB_PATH: Record<Kind, string> = {
   agent: '/v2/agent/',
   crawl: '/v2/crawl/',
-};
-/**
- * The schema a task's result follows. A crawl task ends with what a blocking
- * `firecrawl_crawl` returns; an agent task ends with the research result
- * `firecrawl_agent_status` returns, which names every key the submission does.
- */
-const RESULT_SCHEMA = {
-  agent: agentStatusOutputSchema,
-  crawl: crawlOutputSchema,
 };
 const TASK_ID = /^fc-(agent|crawl)-([0-9a-z]{1,12})-([A-Za-z0-9-]{1,100})$/;
 
@@ -73,6 +73,32 @@ export interface TaskJobs<Session> {
     jobId: string,
     origin: string,
     body: unknown
+  ): Promise<ContentResult>;
+  /**
+   * The schema a completed task's result follows: what a blocking
+   * `firecrawl_crawl` returns for a crawl, and the research result
+   * `firecrawl_agent_status` returns for an agent run, which names every key
+   * the submission does.
+   */
+  resultSchema(kind: Kind): StandardSchemaV1;
+  /**
+   * Runs a task method the way a tool call runs, on a per-call copy of the
+   * session, and reports it to the embedder as `tool` (`<method>:<tool>`).
+   */
+  report<T>(
+    tool: string,
+    session: Session | undefined,
+    run: (session: Session | undefined) => Promise<T>
+  ): Promise<T>;
+  /** The result a completed task returns, as the embedder decorates it. */
+  completed(
+    call: {
+      tool: string;
+      jobId: string;
+      session: Session | undefined;
+      client: McpClient;
+    },
+    result: ContentResult
   ): Promise<ContentResult>;
 }
 
@@ -122,16 +148,14 @@ function httpStatus(error: unknown): number | undefined {
 }
 
 async function conform(
-  kind: Kind,
+  schema: StandardSchemaV1,
   result: ContentResult
 ): Promise<ContentResult> {
   if (result.structuredContent === undefined) return result;
-  const parsed = await RESULT_SCHEMA[kind]['~standard'].validate(
-    result.structuredContent
-  );
+  const parsed = await schema['~standard'].validate(result.structuredContent);
   return parsed.issues
     ? result
-    : { ...result, structuredContent: parsed.value };
+    : { ...result, structuredContent: parsed.value as Record<string, unknown> };
 }
 
 function progressMessage(kind: Kind, body: Record<string, unknown>): string {
@@ -210,7 +234,7 @@ async function readTask<Session extends OriginSession>(
   // A failed job is a tool error, not a protocol error: the task completes
   // with an `isError` result.
   const result = await conform(
-    kind,
+    jobs.resultSchema(kind),
     kind === 'agent'
       ? jobs.agentResult(body)
       : await jobs.crawlResult(client, jobId, origin, body)
@@ -220,7 +244,10 @@ async function readTask<Session extends OriginSession>(
     ttlMs,
     status: 'completed',
     statusMessage: `The ${kind} job ${status}.`,
-    result: status === 'failed' ? { ...result, isError: true } : result,
+    result: await jobs.completed(
+      { tool: TOOL_OF[kind], jobId, session, client: clientOf(context) },
+      status === 'failed' ? { ...result, isError: true } : result
+    ),
   };
 }
 
@@ -259,7 +286,7 @@ export function tasksExtension<Session extends OriginSession>(
   };
   return {
     id: TASKS_EXTENSION,
-    outputSchemas: { firecrawl_agent: agentStatusOutputSchema },
+    outputSchemas: () => ({ firecrawl_agent: jobs.resultSchema('agent') }),
     async callTool({ name, run }, context) {
       const kind = Object.hasOwn(TASK_TOOLS, name)
         ? TASK_TOOLS[name]
@@ -289,7 +316,12 @@ export function tasksExtension<Session extends OriginSession>(
         { params: taskParams, result: anyResult },
         async (params, context) => {
           requireDeclared(context);
-          return readTask(jobs, params.taskId, session, context);
+          const { kind } = decodeTaskId(params.taskId);
+          return jobs.report(
+            `tasks/get:${TOOL_OF[kind]}`,
+            session,
+            (callSession) => readTask(jobs, params.taskId, callSession, context)
+          );
         }
       );
       // No task ever needs input, so an update only has to name a task.
@@ -307,7 +339,13 @@ export function tasksExtension<Session extends OriginSession>(
         { params: taskParams, result: anyResult },
         async (params, context) => {
           requireDeclared(context);
-          await cancelTask(jobs, params.taskId, session, context);
+          const { kind } = decodeTaskId(params.taskId);
+          await jobs.report(
+            `tasks/cancel:${TOOL_OF[kind]}`,
+            session,
+            (callSession) =>
+              cancelTask(jobs, params.taskId, callSession, context)
+          );
           return {};
         }
       );

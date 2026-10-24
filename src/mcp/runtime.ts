@@ -163,7 +163,7 @@ export interface McpExtension<Auth> {
    * Output schemas by tool name, advertised and enforced in place of the
    * tool's own on the instances the extension is set up on.
    */
-  outputSchemas?: Record<string, StandardSchemaV1>;
+  outputSchemas?(): Record<string, StandardSchemaV1>;
   /** Registers the extension's own methods on a server instance. */
   register?(server: Server, session: Auth | undefined): void;
   /**
@@ -448,7 +448,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     );
     const outputSchemas: Record<string, StandardSchemaV1> = Object.assign(
       {},
-      ...extensions.map((extension) => extension.outputSchemas)
+      ...extensions.map((extension) => extension.outputSchemas?.())
     );
     const outputSchemaOf = (tool: Tool<Auth>) =>
       Object.hasOwn(outputSchemas, tool.name) ? outputSchemas[tool.name] : tool.outputSchema;

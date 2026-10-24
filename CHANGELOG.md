@@ -5,6 +5,10 @@
 ### Added
 
 - On protocol revision 2026-07-28, `firecrawl_agent` and `firecrawl_crawl` can run as MCP tasks (`io.modelcontextprotocol/tasks`) over stdio and the HTTP stream transports. `server/discover` advertises the extension. When a client declares it on a `tools/call`, either tool returns `resultType: "task"` as soon as the Firecrawl API accepts the job, and a crawl no longer waits for the crawl to finish. `tasks/get` reads the job and returns the task. A running job is `working` with a progress message. A finished job is `completed` with the result `firecrawl_agent_status` or a blocking `firecrawl_crawl` would return, and a failed job also completes, with `isError: true` on that result. A cancelled job is `cancelled`. A status read that fails with a 429, a 5xx or a network error leaves the task `working`. `tasks/cancel` calls `DELETE /v2/agent/{id}` or `DELETE /v2/crawl/{id}`. An unknown or expired task is `-32602`, and a caller that doesn't declare the extension gets `-32021`. The task id carries the job kind, the job id and the creation time, so the server stores no task state and any instance can answer for a task. On 2026-07-28 the advertised `firecrawl_agent` output schema is the `firecrawl_agent_status` schema, because an agent task ends with the research result. Clients on the 2025 revisions get the same tools and schemas as before, and a 2026-07-28 client that doesn't declare the extension gets the usual tool calls.
+- Embedders see task methods through `unstable_hooks`:
+  - `onToolResult` reports each `tasks/get` and `tasks/cancel` with a request ID of its own, as `tasks/get:<tool>` or `tasks/cancel:<tool>`, where `<tool>` is the tool that started the task.
+  - The new `taskResult` hook can decorate a completed task's result each time `tasks/get` returns it. It is never called for a task that is still running.
+  - On 2026-07-28, `firecrawl_agent` advertises the output schema of the served `firecrawl_agent_status`, including any `wrapTool` changes, and a completed crawl task follows the served `firecrawl_crawl` schema.
 
 ### Changed
 

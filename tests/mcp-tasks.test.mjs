@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import test from 'node:test';
+import { createFirecrawlMcpServer } from '../dist/server.js';
 import {
   getFreePort,
   parseSseJson,
@@ -126,12 +127,15 @@ async function connectHttp(t, api, { tasks = true, legacy = false } = {}) {
   });
   t.after(() => stopChild(child));
   await waitForHealth(port, child);
+  return httpClient(port, '/v2/mcp', { tasks, legacy });
+}
+
+function httpClient(port, endpoint, { tasks = true, legacy = false } = {}) {
   let id = 0;
   return {
-    url: `http://127.0.0.1:${port}/v2/mcp`,
     async rpc(method, params = {}) {
       const name = params[NAME_FIELD[method]];
-      const response = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
+      const response = await fetch(`http://127.0.0.1:${port}${endpoint}`, {
         method: 'POST',
         headers: {
           accept: 'application/json, text/event-stream',
@@ -404,3 +408,90 @@ for (const [transport, connect] of [
     assert.ok(error, 'tasks/get is not served on the 2025 revisions');
   });
 }
+
+test('task methods reach onToolResult, and taskResult decorates only a completed task', async (t) => {
+  const api = await startApi(t);
+  const events = [];
+  const decorated = [];
+  const port = await getFreePort();
+  const instance = createFirecrawlMcpServer({
+    apiUrl: api.url,
+    apiKey: 'fc-task-test',
+    transport: 'httpStream',
+    unstable_hooks: {
+      onToolResult: (event) =>
+        events.push({
+          tool: event.tool,
+          status: event.status,
+          requestId: event.requestId,
+        }),
+      taskResult: async ({ tool, jobId, result, session, client }) => {
+        decorated.push({
+          tool,
+          jobId,
+          hasSession: Boolean(session),
+          client: client.version?.name,
+        });
+        return {
+          ...result,
+          structuredContent: {
+            ...result.structuredContent,
+            agent_hints: ['decorated'],
+          },
+        };
+      },
+    },
+  });
+  await instance.start({
+    transportType: 'httpStream',
+    httpStream: { port, host: '127.0.0.1', endpoint: '/mcp', stateless: true },
+  });
+  t.after(() => instance.stop());
+  const mcp = httpClient(port, '/mcp');
+
+  const task = await callTool(mcp, 'firecrawl_agent', { prompt: 'p' });
+  assert.equal(task.resultType, 'task');
+  assert.equal((await getTask(mcp, task.taskId)).status, 'working');
+  assert.equal(decorated.length, 0, 'a running task is not decorated');
+
+  api.state.agent = { status: 'completed', data: { answer: 42 } };
+  const done = await getTask(mcp, task.taskId);
+  assert.deepEqual(done.result.structuredContent.agent_hints, ['decorated']);
+  assert.deepEqual(decorated, [
+    {
+      tool: 'firecrawl_agent',
+      jobId: AGENT_ID,
+      hasSession: true,
+      client: 'tasks-test',
+    },
+  ]);
+  result(await mcp.rpc('tasks/cancel', { taskId: task.taskId }));
+
+  assert.deepEqual(
+    events.map(({ tool, status }) => `${tool} ${status}`),
+    [
+      'firecrawl_agent started',
+      'firecrawl_agent success',
+      'tasks/get:firecrawl_agent started',
+      'tasks/get:firecrawl_agent success',
+      'tasks/get:firecrawl_agent started',
+      'tasks/get:firecrawl_agent success',
+      'tasks/cancel:firecrawl_agent started',
+      'tasks/cancel:firecrawl_agent success',
+    ]
+  );
+  assert.equal(
+    new Set(events.map((event) => event.requestId)).size,
+    4,
+    'one request ID per call'
+  );
+
+  const { error } = await mcp.rpc('tasks/get', {
+    taskId: `fc-crawl-${Date.now().toString(36)}-missing-job`,
+  });
+  assert.equal(error?.code, -32602);
+  assert.deepEqual(
+    events.slice(-2).map(({ tool, status }) => `${tool} ${status}`),
+    ['tasks/get:firecrawl_crawl started', 'tasks/get:firecrawl_crawl error']
+  );
+});

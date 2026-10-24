@@ -1249,7 +1249,8 @@ Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`,
 |---|---|
 | `authenticate(request)` | Resolve the session for a request; throw a `Response` to reject it. |
 | `wrapTool(tool)` | Decorate every registered tool. |
-| `onToolResult(event)` | Observe the start and outcome of each tool call. |
+| `onToolResult(event)` | Observe the start and outcome of each tool call, and of each MCP task method as `tasks/get:<tool>` or `tasks/cancel:<tool>`. |
+| `taskResult(event)` | Decorate the result of a completed MCP task before `tasks/get` returns it. |
 | `instructions` | Server instructions, or a function choosing from the defaults. |
 | `registerExtraTools(registrar, context)` | Add tools after the built-in ones. |
 | `outboundRequest(session)` | Credential and extra headers for each Firecrawl API request. |

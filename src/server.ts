@@ -298,6 +298,18 @@ export type ToolCallEvent = {
   | { status: 'error'; error: unknown }
 );
 
+/** A completed MCP task's result, for {@link FirecrawlMcpServerHooks.taskResult}. */
+export type TaskResultEvent = {
+  /** The tool whose call started the task. */
+  tool: string;
+  /** The Firecrawl job behind the task. */
+  jobId: string;
+  result: ToolResult;
+  session: SessionData;
+  /** The client, from the request's `clientInfo` metadata. */
+  client: { version?: { name?: string; version?: string } };
+};
+
 /** Per-request credential and extra headers for calls to the Firecrawl API. */
 export type OutboundRequest = {
   /** Replaces the session's API key as the bearer credential. */
@@ -341,8 +353,17 @@ export interface FirecrawlMcpServerHooks {
   ) => Promise<SessionData>;
   /** Decorates every registered tool, including tools from `registerExtraTools`. */
   wrapTool?: (tool: ToolDefinition) => ToolDefinition;
-  /** Observes each tool call. Must not throw. */
+  /**
+   * Observes each tool call, and each MCP task method as
+   * `tasks/get:<tool>` or `tasks/cancel:<tool>`. Must not throw.
+   */
   onToolResult?: (event: ToolCallEvent) => void;
+  /**
+   * Decorates the result of a completed MCP task (protocol revision
+   * 2026-07-28) each time `tasks/get` returns it. Never called for a task
+   * that is still running.
+   */
+  taskResult?: (event: TaskResultEvent) => Promise<ToolResult>;
   /** Server instructions, or a function choosing them from the defaults. */
   instructions?: string | ((defaults: InstructionDefaults) => string);
   /** Adds tools after the built-in ones. They bypass `toolFilter`. */
@@ -654,6 +675,19 @@ export function createFirecrawlMcpServer(
         agentResult: agentStatusResult,
         crawlResult: async (client, jobId, origin, body) =>
           structuredText(await collectCrawlPages(client, jobId, origin, body as never)),
+        resultSchema: (kind) =>
+          kind === 'agent'
+            ? (servedTools.get('firecrawl_agent_status')?.outputSchema ?? agentStatusOutputSchema)
+            : (servedTools.get('firecrawl_crawl')?.outputSchema ?? crawlOutputSchema),
+        report: (tool, session, run) => {
+          const callSession = copySession(session);
+          callSession.requestId = randomUUID();
+          return reported(tool, callSession, () => run(callSession));
+        },
+        completed: async (call, result) =>
+          hooks.taskResult
+            ? ((await hooks.taskResult({ ...call, result } as TaskResultEvent)) as ContentResult)
+            : result,
       }),
     ],
     // Lightweight health endpoint for LB checks
@@ -715,20 +749,9 @@ export function createFirecrawlMcpServer(
       execute: async (args, context) => {
         const session = context.session as SessionData;
         const requestId = session.requestId as string;
-        const call = { tool: tool.name, session, requestId };
-        hooks.onToolResult?.({ ...call, status: 'started' });
-        try {
-          const result = await runWithCredentialRecovery(
-            () => execute(args, context),
-            requestId,
-            session
-          );
-          hooks.onToolResult?.({ ...call, status: 'success', result });
-          return result;
-        } catch (error) {
-          hooks.onToolResult?.({ ...call, status: 'error', error });
-          throw error;
-        }
+        return reported(tool.name, session, () =>
+          runWithCredentialRecovery(() => execute(args, context), requestId, session)
+        );
       },
     };
     const wrapped = hooks.wrapTool
@@ -789,12 +812,29 @@ export function createFirecrawlMcpServer(
     };
   }
 
+  /** Reports a call on a session that carries its request ID to `onToolResult`. */
+  async function reported<T>(tool: string, session: SessionData, run: () => Promise<T>): Promise<T> {
+    const call = { tool, session, requestId: session.requestId as string };
+    hooks.onToolResult?.({ ...call, status: 'started' });
+    try {
+      const result = await run();
+      hooks.onToolResult?.({ ...call, status: 'success', result });
+      return result;
+    } catch (error) {
+      hooks.onToolResult?.({ ...call, status: 'error', error });
+      throw error;
+    }
+  }
+
   const builtInTools = new Map<string, RegisteredTool>();
+  const servedTools = new Map<string, RegisteredTool>();
   const addTool = server.addTool.bind(server);
   server.addTool = ((tool: RegisteredTool) => {
     builtInTools.set(tool.name, tool);
     if (hooks.toolFilter && !hooks.toolFilter(tool.name)) return;
-    addTool(prepareTool(tool));
+    const prepared = prepareTool(tool);
+    servedTools.set(tool.name, prepared);
+    addTool(prepared);
   }) as typeof server.addTool;
 
   function createClient(apiKey?: string): FirecrawlApp {
