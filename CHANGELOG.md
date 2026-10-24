@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `createFirecrawlMcpServer()` returns `tasks`, for embedders that serve the MCP Tasks extension (`io.modelcontextprotocol/tasks`, protocol revision 2026-07-28). `tasks.start` runs `firecrawl_agent` or `firecrawl_crawl` through the same pipeline as a tool call and returns a task as soon as the API accepts the job. A crawl started this way does not wait for the crawl to finish. `tasks.get` reads the job and returns the task: `working` with a progress message, `completed` with the result `firecrawl_agent_status` or `firecrawl_crawl` would return (`isError: true` for a failed job), or `cancelled`. A status read that fails with a 429, a 5xx or a network error reports the task as still `working`. `tasks.cancel` calls `DELETE /v2/agent/{id}` or `DELETE /v2/crawl/{id}`. The task id carries the job kind, the job id and the creation time, so no task state is stored and any instance can answer for a task. Each call authenticates the caller, and the API scopes the job to its team. An unknown or expired task raises `TaskNotFoundError`. The stdio and HTTP transports this package starts still serve the 2025 protocol revisions, and their tools behave as before.
+
 ## [3.34.1] - 2026-10-22
 
 ### Changed

@@ -102,6 +102,14 @@ import {
   termsWriteError,
 } from './tool-helpers.js';
 import { normalizeToolArguments } from './tool-arguments.js';
+import {
+  cancelTask,
+  readTask,
+  startedTask,
+  taskKind,
+  type FirecrawlTask,
+  type TaskJobs,
+} from './tasks.js';
 
 /**
  * Library entry point: `import { createFirecrawlMcpServer } from 'firecrawl-mcp/server'`.
@@ -207,6 +215,11 @@ export type ToolContext = {
   log: ToolLogger;
   /** The connected client; `version` is the clientInfo sent at initialize. */
   client?: { version?: { name?: string; version?: string } };
+  /**
+   * Set when the call starts an MCP task: a tool that runs a Firecrawl job
+   * returns as soon as the job is accepted instead of waiting for it.
+   */
+  task?: boolean;
   [key: string]: unknown;
 };
 
@@ -407,9 +420,42 @@ export type FirecrawlMcpServerStartArgs =
       };
     };
 
+export { TaskNotFoundError } from './tasks.js';
+export type { FirecrawlTask, TaskStatus } from './tasks.js';
+
+/** Who a task method runs for: the HTTP request to authenticate and the client it names. */
+export type TaskCaller = {
+  request: AuthenticationRequest;
+  client?: { name?: string; version?: string };
+};
+
+/**
+ * Firecrawl jobs served as MCP tasks (`io.modelcontextprotocol/tasks`).
+ * `firecrawl_agent` and `firecrawl_crawl` can start a task. Unstable.
+ */
+export interface FirecrawlTasks {
+  /**
+   * Starts a task-capable tool call. `task` when the job was accepted;
+   * `result` when the call ended without a job (a refusal or an error result);
+   * undefined when the call must run as a plain tool call instead (the tool
+   * cannot run as a task, is not available to this caller, or its arguments
+   * are invalid, which the plain call reports).
+   */
+  start(
+    name: string,
+    args: unknown,
+    caller: TaskCaller
+  ): Promise<{ task: FirecrawlTask } | { result: ToolResult } | undefined>;
+  /** The task's current state. Throws `TaskNotFoundError` for an unknown or expired task. */
+  get(taskId: string, caller: TaskCaller): Promise<FirecrawlTask>;
+  /** Asks the API to stop the task's job. Throws `TaskNotFoundError` for an unknown task. */
+  cancel(taskId: string, caller: TaskCaller): Promise<void>;
+}
+
 export interface FirecrawlMcpServer {
   start(args: FirecrawlMcpServerStartArgs): Promise<void>;
   stop(): Promise<void>;
+  tasks: FirecrawlTasks;
 }
 
 /*
@@ -780,11 +826,14 @@ export function createFirecrawlMcpServer(
   }
 
   const builtInTools = new Map<string, RegisteredTool>();
+  const servedTools = new Map<string, RegisteredTool>();
   const addTool = server.addTool.bind(server);
   server.addTool = ((tool: RegisteredTool) => {
     builtInTools.set(tool.name, tool);
     if (hooks.toolFilter && !hooks.toolFilter(tool.name)) return;
-    addTool(prepareTool(tool));
+    const prepared = prepareTool(tool);
+    servedTools.set(tool.name, prepared);
+    addTool(prepared);
   }) as typeof server.addTool;
 
   function createClient(apiKey?: string): FirecrawlApp {
@@ -2448,7 +2497,8 @@ Crawl results can be large; use conservative limits when full-site coverage is u
       scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
     }),
     outputSchema: crawlOutputSchema,
-    execute: async (args, { session, log, client: mcpClient }): Promise<ContentResult> => {
+    execute: async (args, context): Promise<ContentResult> => {
+      const { session, log, client: mcpClient } = context;
       const origin = requestOrigin(mcpClient, session);
       const { url, ...options } = args as Record<string, unknown>;
       const client = getClient(session);
@@ -2487,7 +2537,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
         { tool: 'firecrawl_crawl' }
       );
       const crawlId = started?.data?.id;
-      if (!crawlId) {
+      if (!crawlId || (context as ToolContext).task) {
         return structuredText(started?.data ?? {});
       }
       const res = await waitForCrawlCompletionWithOrigin(
@@ -3082,7 +3132,66 @@ Set \`redactPII\` to request redaction of personally identifiable information in
     addResource: (resource) => server.addResource(resource),
   });
 
+  const taskJobs: TaskJobs = {
+    getClient: (session) => getClient(session as SessionData),
+    agentResult: agentStatusResult,
+    crawlResult: async (client, jobId, origin, body) =>
+      structuredText(await collectCrawlPages(client, jobId, origin, body)),
+  };
+  const silentLog: ToolLogger = { debug() {}, error() {}, info() {}, warn() {} };
+
+  const tasks: FirecrawlTasks = {
+    async start(name, args, caller) {
+      const kind = taskKind(name);
+      const tool = kind ? servedTools.get(name) : undefined;
+      if (!kind || !tool) return undefined;
+      const session = await authenticate(caller.request);
+      if (tool.canAccess && !tool.canAccess(session)) return undefined;
+      const early = await tool.beforeValidate?.(args, session);
+      if (early !== undefined) return { result: early as ToolResult };
+      const parsed = tool.parameters
+        ? await tool.parameters['~standard'].validate(args)
+        : { value: args };
+      if (parsed.issues) return undefined;
+      const client = { version: caller.client };
+      let result: ContentResult;
+      try {
+        result = (await tool.execute(parsed.value as never, {
+          session,
+          log: silentLog,
+          client,
+          reportProgress: async () => {},
+          streamContent: async () => {},
+          task: true,
+        } as never)) as ContentResult;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          result: {
+            content: [{ type: 'text', text: `Tool '${name}' execution failed: ${message}` }],
+            isError: true,
+          },
+        };
+      }
+      const jobId = result?.structuredContent?.id;
+      const task =
+        !result?.isError && typeof jobId === 'string'
+          ? startedTask(kind, jobId, Date.now())
+          : undefined;
+      return task ? { task } : { result: result as ToolResult };
+    },
+    async get(taskId, caller) {
+      const session = await authenticate(caller.request);
+      return readTask(taskJobs, taskId, session, { version: caller.client });
+    },
+    async cancel(taskId, caller) {
+      const session = await authenticate(caller.request);
+      await cancelTask(taskJobs, taskId, session, { version: caller.client });
+    },
+  };
+
   return {
+    tasks,
     start: (args) =>
       server.start(
         (args.transportType === 'httpStream'
