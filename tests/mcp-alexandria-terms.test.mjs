@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { TERMS_REQUIRED_BODY } from './helpers/exchange-api.mjs';
-import { startStdioWithApi, callExpectingError, toolText } from './helpers/exchange-mcp.mjs';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { createFirecrawlMcpServer } from '../dist/server.js';
+import { startFakeExchangeApi, TERMS_REQUIRED_BODY } from './helpers/exchange-api.mjs';
+import { getFreePort, startStdioWithApi, callExpectingError, toolText } from './helpers/exchange-mcp.mjs';
 
 test('terms are read through scrape and accepted by an organization admin in the dashboard', async (t) => {
   const { api, client } = await startStdioWithApi(t);
@@ -10,22 +13,16 @@ test('terms are read through scrape and accepted by an organization admin in the
 
   const blocked = await callExpectingError(client, { name: 'firecrawl_scrape', arguments: { alexandria: [{ provider: 'benzinga', capability: 'news/search' }] } });
   assert.equal(api.requests.length, 1, 'blocked requests never auto-accept');
-  const { code, status, requiresAction, requestId, next_actions } = blocked.structuredContent;
+  const { requiresAction } = TERMS_REQUIRED_BODY;
+  const { requestId } = blocked.structuredContent;
+  assert.deepEqual(Object.keys(blocked.structuredContent).sort(), ['message', 'nextTool', 'requestId']);
   assert.match(blocked.content[0].text, /Terms are accepted in the Firecrawl dashboard, not through this connection: ask an organization admin to accept them at /);
   assert.ok(blocked.content[0].text.includes(requiresAction.url), 'names the admin accept page');
   assert.match(blocked.content[0].text, /Never infer acceptance from a data request/);
   assert.match(blocked.content[0].text, /Reuse this ID only with the identical payload/);
   assert.doesNotMatch(blocked.content[0].text, /terms\/accept|confirmed: ?true/);
-  assert.equal(code, TERMS_REQUIRED_BODY.code);
-  assert.equal(status, 403);
-  assert.deepEqual(requiresAction, TERMS_REQUIRED_BODY.requiresAction);
   assert.equal(requestId, api.requests[0].headers['x-request-id']);
   assert.ok(requestId);
-  assert.deepEqual(next_actions, [
-    { kind: 'human_action_required', action: 'accept_terms', who: 'organization_admin',
-      url: requiresAction.url, provider: requiresAction.terms, version: requiresAction.version },
-    { kind: 'retry_same_request', tool: 'firecrawl_scrape', requestId, after: 'human_action_required' },
-  ]);
   assert.doesNotMatch(JSON.stringify(blocked), /fc-exchange-test/);
 
   const next = blocked.structuredContent.nextTool;
@@ -63,10 +60,7 @@ test('firecrawl_scrape relays a reserved 409 billing error with its code and cha
     /A request with this x-request-id is still in flight/
   );
   assert.deepEqual(result.structuredContent, {
-    code: 'request_in_flight',
-    status: 409,
     message: 'A request with this x-request-id is still in flight.',
-    chargeId: 'chg_0123456789',
     requestId: api.requests[0].headers['x-request-id'],
   });
 });
@@ -81,7 +75,6 @@ test('disabled provider offers read-only terms recovery without treating other r
     const { api, client } = await startStdioWithApi(t, { providerRefusal: message });
     const blocked = await callExpectingError(client, { name: 'firecrawl_scrape', arguments: { alexandria: [{ provider: 'benzinga', capability: 'news/search' }] } });
     assert.equal(api.requests.length, 1);
-    assert.equal(blocked.structuredContent.status, 403);
     assert.equal(Boolean(blocked.structuredContent.nextTool), expected, message);
     if (expected) {
       assert.match(blocked.content[0].text, /Terms are accepted in the Firecrawl dashboard, not through this connection/);
@@ -92,4 +85,46 @@ test('disabled provider offers read-only terms recovery without treating other r
       assert.equal(api.requests[1].body.alexandria[0].capability, 'terms/show');
     }
   }
+});
+
+test('the terms refusal keeps its full recovery contract for hooks while the client gets the declared fields', async (t) => {
+  const api = await startFakeExchangeApi();
+  t.after(() => api.close());
+  const events = [];
+  const port = await getFreePort();
+  const instance = createFirecrawlMcpServer({
+    transport: 'httpStream',
+    apiUrl: api.url,
+    unstable_hooks: {
+      authenticate: async () => ({ authType: 'api-key', firecrawlApiKey: 'fc-exchange-test' }),
+      onToolResult: (event) => events.push(event),
+    },
+  });
+  await instance.start({
+    transportType: 'httpStream',
+    httpStream: { port, host: '127.0.0.1', endpoint: '/mcp', stateless: true },
+  });
+  t.after(() => instance.stop());
+  const client = new Client({ name: 'terms-contract-test', version: '1.0.0' });
+  await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`)));
+  t.after(() => client.close());
+  await client.listTools();
+
+  const result = await client.callTool({
+    name: 'firecrawl_scrape',
+    arguments: { alexandria: [{ provider: 'benzinga', capability: 'news/search' }] },
+  });
+  assert.equal(result.isError, true);
+  assert.deepEqual(Object.keys(result.structuredContent).sort(), ['message', 'nextTool', 'requestId']);
+
+  const { requiresAction } = TERMS_REQUIRED_BODY;
+  const { code, status, requestId, next_actions } = events.find((event) => event.status === 'error').error.extras;
+  assert.equal(code, TERMS_REQUIRED_BODY.code);
+  assert.equal(status, 403);
+  assert.equal(requestId, result.structuredContent.requestId);
+  assert.deepEqual(next_actions, [
+    { kind: 'human_action_required', action: 'accept_terms', who: 'organization_admin',
+      url: requiresAction.url, provider: requiresAction.terms, version: requiresAction.version },
+    { kind: 'retry_same_request', tool: 'firecrawl_scrape', requestId, after: 'human_action_required' },
+  ]);
 });

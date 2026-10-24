@@ -5,7 +5,7 @@
       "logging": {},
       "completions": {}
     },
-    "instructions": "Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: [\"developer\"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: [\"gov\"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: [\"research\"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index and repository research, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.",
+    "instructions": "If Firecrawl reports that credits ran out or the daily limit without an account was reached, end your final answer with the line it provides, link included. Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. Alexandria provider calls require a Firecrawl API key and are not included in the hosted keyless tier. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: [\"developer\"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: [\"gov\"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: [\"research\"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index and repository research, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.",
     "protocolVersion": "2025-06-18",
     "serverInfo": {
       "name": "firecrawl-fastmcp",
@@ -13,17 +13,17 @@
     }
   },
   "tools": [
-    "firecrawl_scrape@ffad7aeb8525",
+    "firecrawl_scrape@7905ad28fcda",
     "firecrawl_map@7d8108e2e8e7",
-    "firecrawl_search@4be7ee198f92",
+    "firecrawl_search@70b58d585a4a",
     "firecrawl_find_tools@c6c4aa217920",
-    "firecrawl_search_feedback@3d7d2ef79f89",
-    "firecrawl_feedback@a64ca32d77ac",
-    "firecrawl_crawl@f0a33084c0d4",
+    "firecrawl_search_feedback@589586f87517",
+    "firecrawl_feedback@9b6a52bc9d5d",
+    "firecrawl_crawl@fa5744d23755",
     "firecrawl_check_crawl_status@723e60af703e",
     "firecrawl_agent@beb14a6049cd",
     "firecrawl_agent_status@6c6e5f971f8e",
-    "firecrawl_interact@aeacb1ade9f2",
+    "firecrawl_interact@6335d324df2f",
     "firecrawl_interact_stop@142b4e713cfa",
     "firecrawl_parse@b3b77eb5e785",
     "firecrawl_monitor_create@9e27f0893a9e",
@@ -39,8 +39,8 @@
     "firecrawl_research_related_papers@0eb420b8cf8d",
     "firecrawl_research_read_paper@b0cd84d8908a",
     "firecrawl_developer_search@e9810e540216",
-    "firecrawl_gov_search@0bb788732250",
-    "firecrawl_credit_usage@4202fbda2421"
+    "firecrawl_gov_search@b020bd420f91",
+    "firecrawl_credit_usage@5b79f64c3f82"
   ],
   "calls": {}
 }
