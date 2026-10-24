@@ -233,6 +233,7 @@ export function registerMonitorTools(
       readOnlyHint: false, // Creates a new recurring monitor configuration on the Firecrawl API.
       openWorldHint: true, // Monitors user-specified URLs on the public web on a recurring schedule.
       destructiveHint: false, // Additive; creates a new monitor without deleting existing monitors or external content.
+      idempotentHint: false, // Each call creates another monitor.
     },
     description: `
 Create a recurring scrape, crawl, or search monitor that compares each check with its retained predecessor. The simple form accepts \`page\`/\`pages\` or \`queries\` plus a plain-language \`goal\`; the advanced \`body\` form controls targets, schedule, change-tracking formats, judging, retention, webhook, and notifications.
@@ -340,6 +341,7 @@ Retrieve one monitor by ID, including its configuration and current state. This 
       readOnlyHint: false, // PATCHes an existing monitor (status, schedule, targets, webhooks, etc.).
       openWorldHint: true, // Can change which external URLs are monitored and how recurring scrapes run.
       destructiveHint: true, // Can pause, replace, or remove monitor configuration; changes overwrite prior settings.
+      idempotentHint: true, // Applying the same changes again leaves the monitor in the same state.
     },
     description: `
 Patch an existing monitor by ID. The body can change its name, active/paused status, schedule, targets, goal, judging, webhook, notifications, or retention; these changes affect future scheduled checks.
@@ -377,6 +379,7 @@ Returns the updated monitor.
       readOnlyHint: false, // Permanently deletes a monitor via DELETE on the API.
       openWorldHint: true, // Deletes a monitor that tracked open-web URLs.
       destructiveHint: true, // Irreversibly removes the monitor and stops its schedule.
+      idempotentHint: true, // Deleting a monitor that is already gone changes nothing further.
     },
     description: `
 Permanently delete a monitor by ID and stop its future schedule. This operation cannot be undone and returns deletion status.
@@ -407,6 +410,7 @@ Permanently delete a monitor by ID and stop its future schedule. This operation 
       readOnlyHint: false, // Triggers an immediate monitor check, queueing a new scrape/diff run.
       openWorldHint: true, // The triggered check scrapes external URLs configured on the monitor.
       destructiveHint: false, // Starts a read-only check job; does not delete the monitor or external sites.
+      idempotentHint: false, // Each call queues another check.
     },
     description: `
 Queue an immediate check for a monitor outside its normal schedule. This starts network work for the monitor's configured targets and returns the queued check.
