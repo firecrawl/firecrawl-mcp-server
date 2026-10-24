@@ -74,17 +74,51 @@ diff --git a/dist/chunk-LWU5CQGW.js b/dist/chunk-LWU5CQGW.js
 index 474670585c1fff7d9609d0f900d0743df14a7688..bc8986dc0f840634151d30c1b2643ccd52d00395 100644
 --- a/dist/chunk-LWU5CQGW.js
 +++ b/dist/chunk-LWU5CQGW.js
-@@ -986,6 +986,9 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
+@@ -986,6 +986,43 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
    }
    setupToolHandlers(tools) {
      const toolsMap = new Map(tools.map((tool) => [tool.name, tool]));
++    const strictToolInputSchema = (schema, nested = false) => {
++      if (!schema || typeof schema !== "object")
++        return schema;
++      if (Array.isArray(schema))
++        return schema.map((value) => strictToolInputSchema(value, true));
++      const schemaMapKeys = new Set(["properties", "$defs", "definitions", "patternProperties", "dependentSchemas"]);
++      const schemaValueKeys = new Set(["items", "additionalProperties", "not", "if", "then", "else", "contains", "propertyNames"]);
++      const schemaArrayKeys = new Set(["anyOf", "oneOf", "allOf", "prefixItems"]);
++      const strict = Object.fromEntries(
++        Object.entries(schema).map(([key, value]) => {
++          if (schemaMapKeys.has(key) && value && typeof value === "object" && !Array.isArray(value))
++            return [key, Object.fromEntries(Object.entries(value).map(([name, child]) => [name, strictToolInputSchema(child, true)]))];
++          if (schemaValueKeys.has(key) && value && typeof value === "object")
++            return [key, strictToolInputSchema(value, true)];
++          if (schemaArrayKeys.has(key) && Array.isArray(value))
++            return [key, value.map((child) => strictToolInputSchema(child, true))];
++          return [key, value];
++        })
++      );
++      const { additionalProperties, properties } = strict;
++      const objectSchema =
++        strict.type === "object" ||
++        (Array.isArray(strict.type) && strict.type.includes("object")) ||
++        properties !== void 0 ||
++        additionalProperties !== void 0 ||
++        strict.patternProperties !== void 0;
++      if (!objectSchema)
++        return strict;
++      const keepOpen =
++        additionalProperties === true ||
++        !!additionalProperties && typeof additionalProperties === "object" ||
++        nested && additionalProperties === void 0 && properties === void 0;
++      return keepOpen ? strict : { ...strict, additionalProperties: false };
++    };
 +    const listedTools = tools.filter(
 +      (tool) => tool.canList ? tool.canList(this.#auth) : true
 +    );
      let cachedToolsList = null;
      this.#server.setRequestHandler(ListToolsRequestSchema, async () => {
        if (cachedToolsList) {
-@@ -994,9 +997,13 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
+@@ -994,9 +1031,13 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
          };
        }
        cachedToolsList = await Promise.all(
@@ -97,9 +131,10 @@ index 474670585c1fff7d9609d0f900d0743df14a7688..bc8986dc0f840634151d30c1b2643ccd
 +            ...tool.annotations?.title && { title: tool.annotations.title },
 +            ...tool.icons && { icons: tool.icons },
              description: tool.description,
-             inputSchema: tool.parameters ? strictJsonSchema(await toJsonSchema(tool.parameters)) : {
+-            inputSchema: tool.parameters ? strictJsonSchema(await toJsonSchema(tool.parameters)) : {
++            inputSchema: tool.parameters ? strictToolInputSchema(await toJsonSchema(tool.parameters)) : {
                additionalProperties: false,
-@@ -1026,6 +1033,15 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
+@@ -1026,6 +1067,15 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
            `Unknown tool: ${request.params.name}`
          );
        }
@@ -115,7 +150,7 @@ index 474670585c1fff7d9609d0f900d0743df14a7688..bc8986dc0f840634151d30c1b2643ccd
        let args = void 0;
        if (tool.parameters) {
          const parsed = await tool.parameters["~standard"].validate(
-@@ -1617,6 +1633,7 @@ var FastMCP = class extends FastMCPEventEmitter {
+@@ -1617,6 +1667,7 @@ var FastMCP = class extends FastMCPEventEmitter {
            enableJsonResponse: httpConfig.enableJsonResponse,
            eventStore: httpConfig.eventStore,
            host: httpConfig.host,
@@ -123,7 +158,7 @@ index 474670585c1fff7d9609d0f900d0743df14a7688..bc8986dc0f840634151d30c1b2643ccd
            ...this.#options.oauth?.enabled && this.#options.oauth.protectedResource?.resource ? {
              oauth: {
                protectedResource: {
-@@ -1663,6 +1680,7 @@ var FastMCP = class extends FastMCPEventEmitter {
+@@ -1663,6 +1714,7 @@ var FastMCP = class extends FastMCPEventEmitter {
            enableJsonResponse: httpConfig.enableJsonResponse,
            eventStore: httpConfig.eventStore,
            host: httpConfig.host,
@@ -131,7 +166,7 @@ index 474670585c1fff7d9609d0f900d0743df14a7688..bc8986dc0f840634151d30c1b2643ccd
            ...this.#options.oauth?.enabled && this.#options.oauth.protectedResource?.resource ? {
              oauth: {
                protectedResource: {
-@@ -2099,6 +2117,7 @@ var FastMCP = class extends FastMCPEventEmitter {
+@@ -2099,6 +2151,7 @@ var FastMCP = class extends FastMCPEventEmitter {
        const stateless = overrides?.httpStream?.stateless || statelessArg === "true" || envStateless === "true" || false;
        const cors = overrides?.httpStream?.cors;
        const eventStore = overrides?.httpStream?.eventStore;
@@ -139,7 +174,7 @@ index 474670585c1fff7d9609d0f900d0743df14a7688..bc8986dc0f840634151d30c1b2643ccd
        const sslCa = overrides?.httpStream?.sslCa;
        const sslCert = overrides?.httpStream?.sslCert;
        const sslKey = overrides?.httpStream?.sslKey;
-@@ -2109,6 +2128,7 @@ var FastMCP = class extends FastMCPEventEmitter {
+@@ -2109,6 +2162,7 @@ var FastMCP = class extends FastMCPEventEmitter {
            endpoint,
            eventStore,
            host,
@@ -151,17 +186,51 @@ diff --git a/dist/chunk-UYG7NPM6.cjs b/dist/chunk-UYG7NPM6.cjs
 index 3b695bf493c4f54fd970e145cf14fdd8effc9c6d..c0009aa548260fd18a2528948bfe5e0efaf8224a 100644
 --- a/dist/chunk-UYG7NPM6.cjs
 +++ b/dist/chunk-UYG7NPM6.cjs
-@@ -986,6 +986,9 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
+@@ -986,6 +986,43 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
    }
    setupToolHandlers(tools) {
      const toolsMap = new Map(tools.map((tool) => [tool.name, tool]));
++    const strictToolInputSchema = (schema, nested = false) => {
++      if (!schema || typeof schema !== "object")
++        return schema;
++      if (Array.isArray(schema))
++        return schema.map((value) => strictToolInputSchema(value, true));
++      const schemaMapKeys = new Set(["properties", "$defs", "definitions", "patternProperties", "dependentSchemas"]);
++      const schemaValueKeys = new Set(["items", "additionalProperties", "not", "if", "then", "else", "contains", "propertyNames"]);
++      const schemaArrayKeys = new Set(["anyOf", "oneOf", "allOf", "prefixItems"]);
++      const strict = Object.fromEntries(
++        Object.entries(schema).map(([key, value]) => {
++          if (schemaMapKeys.has(key) && value && typeof value === "object" && !Array.isArray(value))
++            return [key, Object.fromEntries(Object.entries(value).map(([name, child]) => [name, strictToolInputSchema(child, true)]))];
++          if (schemaValueKeys.has(key) && value && typeof value === "object")
++            return [key, strictToolInputSchema(value, true)];
++          if (schemaArrayKeys.has(key) && Array.isArray(value))
++            return [key, value.map((child) => strictToolInputSchema(child, true))];
++          return [key, value];
++        })
++      );
++      const { additionalProperties, properties } = strict;
++      const objectSchema =
++        strict.type === "object" ||
++        (Array.isArray(strict.type) && strict.type.includes("object")) ||
++        properties !== void 0 ||
++        additionalProperties !== void 0 ||
++        strict.patternProperties !== void 0;
++      if (!objectSchema)
++        return strict;
++      const keepOpen =
++        additionalProperties === true ||
++        !!additionalProperties && typeof additionalProperties === "object" ||
++        nested && additionalProperties === void 0 && properties === void 0;
++      return keepOpen ? strict : { ...strict, additionalProperties: false };
++    };
 +    const listedTools = tools.filter(
 +      (tool) => tool.canList ? tool.canList(this.#auth) : true
 +    );
      let cachedToolsList = null;
      this.#server.setRequestHandler(_typesjs.ListToolsRequestSchema, async () => {
        if (cachedToolsList) {
-@@ -994,9 +997,13 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
+@@ -994,9 +1031,13 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
          };
        }
        cachedToolsList = await Promise.all(
@@ -174,9 +243,10 @@ index 3b695bf493c4f54fd970e145cf14fdd8effc9c6d..c0009aa548260fd18a2528948bfe5e0e
 +            ...tool.annotations?.title && { title: tool.annotations.title },
 +            ...tool.icons && { icons: tool.icons },
              description: tool.description,
-             inputSchema: tool.parameters ? _xsschema.strictJsonSchema.call(void 0, await _xsschema.toJsonSchema.call(void 0, tool.parameters)) : {
+-            inputSchema: tool.parameters ? _xsschema.strictJsonSchema.call(void 0, await _xsschema.toJsonSchema.call(void 0, tool.parameters)) : {
++            inputSchema: tool.parameters ? strictToolInputSchema(await _xsschema.toJsonSchema.call(void 0, tool.parameters)) : {
                additionalProperties: false,
-@@ -1026,6 +1033,15 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
+@@ -1026,6 +1067,15 @@ ${error instanceof Error ? error.stack : JSON.stringify(error)}`
            `Unknown tool: ${request.params.name}`
          );
        }
@@ -192,7 +262,7 @@ index 3b695bf493c4f54fd970e145cf14fdd8effc9c6d..c0009aa548260fd18a2528948bfe5e0e
        let args = void 0;
        if (tool.parameters) {
          const parsed = await tool.parameters["~standard"].validate(
-@@ -1617,6 +1633,7 @@ var FastMCP = class extends FastMCPEventEmitter {
+@@ -1617,6 +1667,7 @@ var FastMCP = class extends FastMCPEventEmitter {
            enableJsonResponse: httpConfig.enableJsonResponse,
            eventStore: httpConfig.eventStore,
            host: httpConfig.host,
@@ -200,7 +270,7 @@ index 3b695bf493c4f54fd970e145cf14fdd8effc9c6d..c0009aa548260fd18a2528948bfe5e0e
            ..._optionalChain([this, 'access', _27 => _27.#options, 'access', _28 => _28.oauth, 'optionalAccess', _29 => _29.enabled]) && _optionalChain([this, 'access', _30 => _30.#options, 'access', _31 => _31.oauth, 'access', _32 => _32.protectedResource, 'optionalAccess', _33 => _33.resource]) ? {
              oauth: {
                protectedResource: {
-@@ -1663,6 +1680,7 @@ var FastMCP = class extends FastMCPEventEmitter {
+@@ -1663,6 +1714,7 @@ var FastMCP = class extends FastMCPEventEmitter {
            enableJsonResponse: httpConfig.enableJsonResponse,
            eventStore: httpConfig.eventStore,
            host: httpConfig.host,
@@ -208,7 +278,7 @@ index 3b695bf493c4f54fd970e145cf14fdd8effc9c6d..c0009aa548260fd18a2528948bfe5e0e
            ..._optionalChain([this, 'access', _34 => _34.#options, 'access', _35 => _35.oauth, 'optionalAccess', _36 => _36.enabled]) && _optionalChain([this, 'access', _37 => _37.#options, 'access', _38 => _38.oauth, 'access', _39 => _39.protectedResource, 'optionalAccess', _40 => _40.resource]) ? {
              oauth: {
                protectedResource: {
-@@ -2099,6 +2117,7 @@ var FastMCP = class extends FastMCPEventEmitter {
+@@ -2099,6 +2151,7 @@ var FastMCP = class extends FastMCPEventEmitter {
        const stateless = _optionalChain([overrides, 'optionalAccess', _67 => _67.httpStream, 'optionalAccess', _68 => _68.stateless]) || statelessArg === "true" || envStateless === "true" || false;
        const cors = _optionalChain([overrides, 'optionalAccess', _69 => _69.httpStream, 'optionalAccess', _70 => _70.cors]);
        const eventStore = _optionalChain([overrides, 'optionalAccess', _71 => _71.httpStream, 'optionalAccess', _72 => _72.eventStore]);
@@ -216,7 +286,7 @@ index 3b695bf493c4f54fd970e145cf14fdd8effc9c6d..c0009aa548260fd18a2528948bfe5e0e
        const sslCa = _optionalChain([overrides, 'optionalAccess', _73 => _73.httpStream, 'optionalAccess', _74 => _74.sslCa]);
        const sslCert = _optionalChain([overrides, 'optionalAccess', _75 => _75.httpStream, 'optionalAccess', _76 => _76.sslCert]);
        const sslKey = _optionalChain([overrides, 'optionalAccess', _77 => _77.httpStream, 'optionalAccess', _78 => _78.sslKey]);
-@@ -2109,6 +2128,7 @@ var FastMCP = class extends FastMCPEventEmitter {
+@@ -2109,6 +2162,7 @@ var FastMCP = class extends FastMCPEventEmitter {
            endpoint,
            eventStore,
            host,

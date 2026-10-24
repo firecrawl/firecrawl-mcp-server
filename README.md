@@ -500,6 +500,8 @@ Map a website to discover all indexed URLs on the site.
 
 Search the web and optionally extract content from search results.
 
+**MCP safety annotations:** Full-surface `firecrawl_search` is not declared read-only when `scrapeOptions.actions` can perform browser writes. Hosted safe-mode and dedicated search-only endpoints remain read-only. Tool annotations help clients request confirmation; they are not a substitute for runtime authorization.
+
 **Best for:**
 
 - Finding specific information across multiple websites, when you don't know which website has the information.

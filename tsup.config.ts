@@ -14,6 +14,7 @@ export default defineConfig({
     integration: 'src/integration.ts',
     'introspection-cache': 'src/service/introspection-cache.ts',
     'keyless-signup-link': 'src/keyless-signup-link.ts',
+    'mcp-json-schemas': 'src/mcp-json-schemas.ts',
   },
   format: ['esm'],
   platform: 'node',
