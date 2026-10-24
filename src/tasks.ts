@@ -67,8 +67,11 @@ export function startedTask(kind: Kind, jobId: string, createdAtMs: number): Fir
 
 function decodeTaskId(taskId: string): { kind: Kind; jobId: string; createdAtMs: number } {
   const match = TASK_ID.exec(typeof taskId === 'string' ? taskId : '');
-  if (!match) throw new TaskNotFoundError(String(taskId));
-  return { kind: match[1] as Kind, jobId: match[3], createdAtMs: parseInt(match[2], 36) };
+  const createdAtMs = match ? parseInt(match[2], 36) : NaN;
+  if (!match || Number.isNaN(new Date(createdAtMs).getTime())) {
+    throw new TaskNotFoundError(String(taskId));
+  }
+  return { kind: match[1] as Kind, jobId: match[3], createdAtMs };
 }
 
 function httpStatus(error: unknown): number | undefined {

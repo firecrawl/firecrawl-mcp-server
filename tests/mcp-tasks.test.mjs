@@ -9,7 +9,7 @@ const EXPIRES_AT = '2099-01-01T00:00:00.000Z';
 
 async function startApi(t) {
   const requests = [];
-  const state = { agent: { status: 'processing', creditsUsed: 12 }, crawl: 'scraping', agentStatusCode: 200, cancelCode: 200 };
+  const state = { agent: { status: 'processing', creditsUsed: 12 }, crawl: 'scraping', agentStatusCode: 200, cancelCode: 200, agentExpired: false };
   const server = createServer(async (req, res) => {
     let body = '';
     for await (const chunk of req) body += chunk;
@@ -22,6 +22,10 @@ async function startApi(t) {
     if (req.method === 'POST' && req.url === '/v2/agent') {
       if (body.includes('refuse-me')) return json(402, { success: false, error: 'Insufficient credits.' });
       return json(200, { success: true, id: AGENT_ID });
+    }
+    if (state.agentExpired && req.url === `/v2/agent/${AGENT_ID}`) {
+      // The API answers a job past its expiresAt with 404, as for an unknown job.
+      return json(404, { success: false, error: 'Agent job not found' });
     }
     if (req.method === 'GET' && req.url === `/v2/agent/${AGENT_ID}`) {
       if (state.agentStatusCode !== 200) return json(state.agentStatusCode, { success: false, error: 'unavailable' });
@@ -110,13 +114,23 @@ test('a status read the API cannot answer leaves the task working', async (t) =>
   assert.equal(read.pollIntervalMs, 10_000);
 });
 
-test('unknown, malformed and expired task ids are TaskNotFoundError', async (t) => {
+test('unknown and malformed task ids are TaskNotFoundError', async (t) => {
   const api = await startApi(t);
   const tasks = tasksFor(api);
   await assert.rejects(tasks.get('not-a-task', caller), TaskNotFoundError);
   await assert.rejects(tasks.get('fc-agent-abc-../../v2/crawl', caller), TaskNotFoundError);
+  await assert.rejects(tasks.get('fc-agent-zzzzzzzzzzzz-00000000-0000-7000-8000-000000000000', caller), TaskNotFoundError, 'a creation time outside the Date range');
   await assert.rejects(tasks.get('fc-agent-mh2abcd-00000000-0000-7000-8000-000000000000', caller), TaskNotFoundError);
   await assert.rejects(tasks.cancel('fc-crawl-mh2abcd-00000000-0000-7000-8000-000000000000', caller), TaskNotFoundError);
+});
+
+test('a task whose job has expired is TaskNotFoundError', async (t) => {
+  const api = await startApi(t);
+  const tasks = tasksFor(api);
+  const { task } = await tasks.start('firecrawl_agent', { prompt: 'p' }, caller);
+  api.state.agentExpired = true;
+  await assert.rejects(tasks.get(task.taskId, caller), TaskNotFoundError);
+  await assert.rejects(tasks.cancel(task.taskId, caller), TaskNotFoundError);
 });
 
 test('cancel maps to DELETE on the job and accepts a job that already finished', async (t) => {
