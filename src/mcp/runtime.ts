@@ -19,8 +19,9 @@ import { LegacySseTransport } from './sse.js';
  * One server definition backs every transport: stdio, stateless Streamable
  * HTTP and the HTTP+SSE transport of the 2024-11-05 revision. They serve the
  * `initialize` handshake of protocol revisions 2024-11-05 through 2025-11-25.
- * HTTP serving is stateless: every request is answered by a fresh server
- * instance and no `Mcp-Session-Id` is issued.
+ * Streamable HTTP is stateless: every request is answered by a fresh server
+ * instance and no `Mcp-Session-Id` is issued. Each legacy SSE connection
+ * keeps its own server for as long as the stream is open.
  */
 
 export class UserError extends Error {
