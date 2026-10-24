@@ -336,6 +336,14 @@ async function writeThrownResponse(thrown: Response, res: ServerResponse): Promi
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * A JSON-RPC error whose message keeps the `MCP error <code>: ` prefix the
+ * server's errors have always carried on the wire.
+ */
+function mcpError(code: number, message: string, data?: unknown): ProtocolError {
+  return new ProtocolError(code, `MCP error ${code}: ${message}`, data);
+}
+
 /** Tool, resource and HTTP route registry that serves MCP. */
 export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
   readonly #options: RuntimeOptions<Auth>;
@@ -461,7 +469,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
       const { name } = request.params;
       const tool = toolsByName.get(name);
       if (!tool) {
-        throw new ProtocolError(-32601, `Unknown tool: ${name}`);
+        throw mcpError(-32601, `Unknown tool: ${name}`);
       }
       for (const extension of extensions) {
         const answered = await extension.callTool?.(request.params, context, session);
@@ -475,7 +483,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
       if (tool.parameters) {
         const parsed = await tool.parameters['~standard'].validate(request.params.arguments);
         if (parsed.issues) {
-          throw new ProtocolError(
+          throw mcpError(
             -32602,
             `Tool '${name}' parameter validation failed: ${formatIssues(parsed.issues)}. Please check the parameter types and values according to the tool's schema.`
           );
@@ -591,7 +599,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     server.setRequestHandler('resources/read', async (request) => {
       const resource = resources.get(request.params.uri);
       if (!resource) {
-        throw new ProtocolError(
+        throw mcpError(
           -32601,
           `Resource not found: '${request.params.uri}'. Available resources: ${[...resources.keys()].join(', ') || 'none'}`
         );
@@ -601,7 +609,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
         loaded = await resource.load(session);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        throw new ProtocolError(
+        throw mcpError(
           -32603,
           `Failed to load resource '${resource.name}' (${resource.uri}): ${message}`,
           { uri: resource.uri }
