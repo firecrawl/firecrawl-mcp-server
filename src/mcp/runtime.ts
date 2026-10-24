@@ -104,6 +104,11 @@ export type ToolExecuteContext<Auth> = {
   streamContent: (content: Content | Content[]) => Promise<void>;
   /** The request context of the 2026-07-28 revision; absent for 2025-era calls. */
   mcpRequest?: ServerContext;
+  /**
+   * Set when the call runs as an MCP task: a tool that starts a job returns
+   * once the job is accepted instead of waiting for it.
+   */
+  task?: boolean;
 };
 
 export type ToolIcon = {
@@ -154,14 +159,23 @@ export interface McpExtension<Auth> {
   id: string;
   /** Settings advertised with the identifier. */
   settings?: Record<string, unknown>;
+  /**
+   * Output schemas by tool name, advertised and enforced in place of the
+   * tool's own on the instances the extension is set up on.
+   */
+  outputSchemas?(): Record<string, StandardSchemaV1>;
   /** Registers the extension's own methods on a server instance. */
   register?(server: Server, session: Auth | undefined): void;
   /**
-   * Answers a `tools/call` before the tool runs; undefined lets the tool run
-   * as usual.
+   * Answers a `tools/call` whose arguments passed validation. `run` runs the
+   * tool with the given context additions and returns its result; undefined
+   * lets the tool run as usual.
    */
   callTool?(
-    request: { name: string; arguments?: Record<string, unknown> },
+    call: {
+      name: string;
+      run(extra?: Pick<ToolExecuteContext<Auth>, 'task'>): Promise<ContentResult>;
+    },
     context: ServerContext,
     session: Auth | undefined
   ): Promise<Record<string, unknown> | undefined>;
@@ -432,6 +446,12 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     const listed = tools.filter((tool) =>
       tool.canList ? tool.canList(session as Auth) : true
     );
+    const outputSchemas: Record<string, StandardSchemaV1> = Object.assign(
+      {},
+      ...extensions.map((extension) => extension.outputSchemas?.())
+    );
+    const outputSchemaOf = (tool: Tool<Auth>) =>
+      Object.hasOwn(outputSchemas, tool.name) ? outputSchemas[tool.name] : tool.outputSchema;
     let toolList: Record<string, unknown>[] | undefined;
 
     server.setRequestHandler('tools/list', async () => {
@@ -445,8 +465,8 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
             ? strictJsonSchema(await toJsonSchema(tool.parameters as never))
             : { additionalProperties: false, properties: {}, type: 'object' },
           name: tool.name,
-          ...(tool.outputSchema && {
-            outputSchema: strictJsonSchema(await toJsonSchema(tool.outputSchema as never)),
+          ...(outputSchemaOf(tool) && {
+            outputSchema: strictJsonSchema(await toJsonSchema(outputSchemaOf(tool) as never)),
           }),
           ...(tool._meta && { _meta: tool._meta }),
         }))
@@ -455,8 +475,9 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     });
 
     const validateOutput = async (tool: Tool<Auth>, value: unknown) => {
-      if (!tool.outputSchema) return value;
-      const parsed = await tool.outputSchema['~standard'].validate(value);
+      const outputSchema = outputSchemaOf(tool);
+      if (!outputSchema) return value;
+      const parsed = await outputSchema['~standard'].validate(value);
       if (parsed.issues) {
         throw new UserError(
           `Tool '${tool.name}' structured output validation failed: ${formatIssues(parsed.issues)}. Please check the result matches the tool's outputSchema.`
@@ -470,10 +491,6 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
       const tool = toolsByName.get(name);
       if (!tool) {
         throw mcpError(-32601, `Unknown tool: ${name}`);
-      }
-      for (const extension of extensions) {
-        const answered = await extension.callTool?.(request.params, context, session);
-        if (answered) return answered as never;
       }
       if (tool.beforeValidate) {
         const early = await tool.beforeValidate(request.params.arguments, session as Auth);
@@ -510,79 +527,89 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
       const envelopeClient = envelope?.['io.modelcontextprotocol/clientInfo'] as
         | { name?: string; version?: string }
         | undefined;
-      let result: ContentResult;
-      try {
-        const value = await tool.execute(args, {
-          client: { version: envelopeClient ?? server.getClientVersion() },
-          log: {
-            debug: sendLog('debug'),
-            error: sendLog('error'),
-            info: sendLog('info'),
-            warn: sendLog('warning'),
-          },
-          reportProgress: async (progress) => {
-            if (meta?.progressToken === undefined) return;
-            await notify(
-              {
-                method: 'notifications/progress',
-                params: { ...progress, progressToken: meta.progressToken },
-              },
-              'report progress'
-            );
-          },
-          requestId: typeof meta?.requestId === 'string' ? meta.requestId : undefined,
-          session,
-          sessionId,
-          streamContent: async (content) => {
-            await notify(
-              {
-                method: 'notifications/tool/streamContent',
-                params: { content: Array.isArray(content) ? content : [content], toolName: name },
-              },
-              'stream content'
-            );
-          },
-          ...(envelope ? { mcpRequest: context } : {}),
-        });
-        await delay(1);
-        if (value === undefined || value === null) {
-          result = ContentResultSchema.parse({ content: [] });
-        } else if (typeof value === 'string') {
-          result = ContentResultSchema.parse({ content: [{ text: value, type: 'text' }] });
-        } else if (typeof value === 'object' && 'type' in value) {
-          result = ContentResultSchema.parse({ content: [value] });
-        } else if (typeof value === 'object' && 'content' in value) {
-          result = ContentResultSchema.parse(value);
-          if (result.structuredContent !== undefined && tool.outputSchema) {
-            result.structuredContent = (await validateOutput(
-              tool,
-              result.structuredContent
-            )) as Record<string, unknown>;
-          }
-        } else if (tool.outputSchema) {
-          const structuredContent = (await validateOutput(tool, value)) as Record<string, unknown>;
-          result = ContentResultSchema.parse({
-            content: [{ text: JSON.stringify(structuredContent), type: 'text' }],
-            structuredContent,
+      const run = async (
+        extra: Pick<ToolExecuteContext<Auth>, 'task'> = {}
+      ): Promise<ContentResult> => {
+        let result: ContentResult;
+        try {
+          const value = await tool.execute(args, {
+            ...extra,
+            client: { version: envelopeClient ?? server.getClientVersion() },
+            log: {
+              debug: sendLog('debug'),
+              error: sendLog('error'),
+              info: sendLog('info'),
+              warn: sendLog('warning'),
+            },
+            reportProgress: async (progress) => {
+              if (meta?.progressToken === undefined) return;
+              await notify(
+                {
+                  method: 'notifications/progress',
+                  params: { ...progress, progressToken: meta.progressToken },
+                },
+                'report progress'
+              );
+            },
+            requestId: typeof meta?.requestId === 'string' ? meta.requestId : undefined,
+            session,
+            sessionId,
+            streamContent: async (content) => {
+              await notify(
+                {
+                  method: 'notifications/tool/streamContent',
+                  params: { content: Array.isArray(content) ? content : [content], toolName: name },
+                },
+                'stream content'
+              );
+            },
+            ...(envelope ? { mcpRequest: context } : {}),
           });
-        } else {
-          result = ContentResultSchema.parse(value);
-        }
-      } catch (error) {
-        if (error instanceof UserError) {
+          await delay(1);
+          if (value === undefined || value === null) {
+            result = ContentResultSchema.parse({ content: [] });
+          } else if (typeof value === 'string') {
+            result = ContentResultSchema.parse({ content: [{ text: value, type: 'text' }] });
+          } else if (typeof value === 'object' && 'type' in value) {
+            result = ContentResultSchema.parse({ content: [value] });
+          } else if (typeof value === 'object' && 'content' in value) {
+            result = ContentResultSchema.parse(value);
+            if (result.structuredContent !== undefined && outputSchemaOf(tool)) {
+              result.structuredContent = (await validateOutput(
+                tool,
+                result.structuredContent
+              )) as Record<string, unknown>;
+            }
+          } else if (outputSchemaOf(tool)) {
+            const structuredContent = (await validateOutput(tool, value)) as Record<string, unknown>;
+            result = ContentResultSchema.parse({
+              content: [{ text: JSON.stringify(structuredContent), type: 'text' }],
+              structuredContent,
+            });
+          } else {
+            result = ContentResultSchema.parse(value);
+          }
+        } catch (error) {
+          if (error instanceof UserError) {
+            return {
+              content: [{ text: error.message, type: 'text' }],
+              isError: true,
+              ...(error.extras ? { structuredContent: error.extras } : {}),
+            } as ContentResult;
+          }
+          const message = error instanceof Error ? error.message : String(error);
           return {
-            content: [{ text: error.message, type: 'text' }],
+            content: [{ text: `Tool '${name}' execution failed: ${message}`, type: 'text' }],
             isError: true,
-            ...(error.extras ? { structuredContent: error.extras } : {}),
-          } as never;
+          } as ContentResult;
         }
-        const message = error instanceof Error ? error.message : String(error);
-        return {
-          content: [{ text: `Tool '${name}' execution failed: ${message}`, type: 'text' }],
-          isError: true,
-        } as never;
+        return result;
+      };
+      for (const extension of extensions) {
+        const answered = await extension.callTool?.({ name, run }, context, session);
+        if (answered) return answered as never;
       }
-      return result as never;
+      return (await run()) as never;
     });
   }
 

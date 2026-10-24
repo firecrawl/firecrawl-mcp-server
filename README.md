@@ -1199,6 +1199,12 @@ The tool requires an authenticated Firecrawl account and is read-only.
 - `firecrawl_credit_usage` defaults to `{ "view": "current" }` and returns `remainingCredits`, `planCredits`, `billingPeriodStart`, and `billingPeriodEnd`. Remaining credits can exceed plan credits when the team has top-ups or grants.
 - Pass `{ "view": "historical" }` for calendar-month periods containing `startDate`, `endDate`, and `creditsUsed`. Passing `{ "byApiKey": true }` also selects the historical view and splits periods by API key; each row then includes `apiKey`. Passing `{ "byEndpoint": true }` instead splits periods by the endpoint that used the credits (scrape, search, crawl, map, agent, ...); each row then includes `endpoint`. Pass `{ "bin": "day" }` for one period per UTC day instead of per calendar month. Do not combine `byApiKey` with `byEndpoint`, or any of these with `{ "view": "current" }`. The latest period's `endDate` can be null. If the Firecrawl API does not offer the endpoint split or daily periods yet, the result carries a `notice` and monthly figures.
 
+### Long-running jobs as MCP tasks
+
+On protocol revision 2026-07-28, over stdio and HTTP, the server supports the MCP Tasks extension (`io.modelcontextprotocol/tasks`). When a client declares the extension on a `tools/call`, `firecrawl_agent` and `firecrawl_crawl` return a task as soon as the job starts. The client then polls it with `tasks/get` and can stop it with `tasks/cancel`. A completed task carries the result `firecrawl_agent_status` or a finished `firecrawl_crawl` would return, and a failed job completes with an `isError` result. Clients that don't declare the extension, and clients on earlier revisions, get the usual tool calls. `firecrawl_agent_status` and `firecrawl_check_crawl_status` stay available either way.
+
+A task id names its Firecrawl job, so the server keeps no task state. Every task request is authenticated with the caller's credential, and the job is read from the Firecrawl API.
+
 ## Programmatic use (unstable)
 
 The package also exposes a library entry point for embedding the server in another runtime. It is **unstable**: the API, its options and its types may change in any release, including minor and patch releases, so pin an exact version.
@@ -1243,7 +1249,8 @@ Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`,
 |---|---|
 | `authenticate(request)` | Resolve the session for a request; throw a `Response` to reject it. |
 | `wrapTool(tool)` | Decorate every registered tool. |
-| `onToolResult(event)` | Observe the start and outcome of each tool call. |
+| `onToolResult(event)` | Observe the start and outcome of each tool call, and of each MCP task method as `tasks/get:<tool>` or `tasks/cancel:<tool>`. |
+| `taskResult(event)` | Decorate the result of a completed MCP task before `tasks/get` returns it. |
 | `instructions` | Server instructions, or a function choosing from the defaults. |
 | `registerExtraTools(registrar, context)` | Add tools after the built-in ones. |
 | `outboundRequest(session)` | Credential and extra headers for each Firecrawl API request. |
