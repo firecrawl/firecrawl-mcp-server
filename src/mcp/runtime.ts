@@ -4,27 +4,23 @@ import { Hono } from 'hono';
 import { strictJsonSchema, toJsonSchema } from 'xsschema';
 import { z } from 'zod';
 import {
-  createMcpHandler,
   ProtocolError,
   Server,
-  type McpRequestContext,
-  type McpServerFactory,
-  type ServerContext,
   type StandardSchemaV1,
+  WebStandardStreamableHTTPServerTransport,
 } from '@modelcontextprotocol/server';
-import { serveStdio } from '@modelcontextprotocol/server/stdio';
+import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { LegacySseTransport } from './sse.js';
 
 /**
  * The MCP serving layer of the core, built on the official TypeScript SDK
  * (`@modelcontextprotocol/server`).
  *
- * One server factory backs every transport and every protocol revision: stdio
- * and Streamable HTTP each answer both the 2025-era `initialize` handshake and
- * the 2026-07-28 `server/discover` revision, and the HTTP+SSE transport of the
- * 2024-11-05 revision is kept for older clients. HTTP serving is stateless:
- * every request is answered by a fresh server instance and no
- * `Mcp-Session-Id` is issued.
+ * One server definition backs every transport: stdio, stateless Streamable
+ * HTTP and the HTTP+SSE transport of the 2024-11-05 revision. They serve the
+ * `initialize` handshake of protocol revisions 2024-11-05 through 2025-11-25.
+ * HTTP serving is stateless: every request is answered by a fresh server
+ * instance and no `Mcp-Session-Id` is issued.
  */
 
 export class UserError extends Error {
@@ -102,8 +98,6 @@ export type ToolExecuteContext<Auth> = {
   session: Auth | undefined;
   sessionId?: string;
   streamContent: (content: Content | Content[]) => Promise<void>;
-  /** The request context of the 2026-07-28 revision; absent for 2025-era calls. */
-  mcpRequest?: ServerContext;
 };
 
 export type ToolIcon = {
@@ -144,29 +138,6 @@ export interface Resource<Auth> {
   load(auth?: Auth): Promise<ResourceResult | ResourceResult[]>;
 }
 
-/**
- * An extension of the 2026-07-28 revision. It is advertised in
- * `server/discover` and set up on every 2026-07-28 server instance; 2025-era
- * instances never see it.
- */
-export interface McpExtension<Auth> {
-  /** The identifier advertised under `capabilities.extensions`. */
-  id: string;
-  /** Settings advertised with the identifier. */
-  settings?: Record<string, unknown>;
-  /** Registers the extension's own methods on a server instance. */
-  register?(server: Server, session: Auth | undefined): void;
-  /**
-   * Answers a `tools/call` before the tool runs; undefined lets the tool run
-   * as usual.
-   */
-  callTool?(
-    request: { name: string; arguments?: Record<string, unknown> },
-    context: ServerContext,
-    session: Auth | undefined
-  ): Promise<Record<string, unknown> | undefined>;
-}
-
 export type ProtectedResource = {
   authorizationServers: string[];
   bearerMethodsSupported?: string[];
@@ -186,7 +157,6 @@ export interface RuntimeOptions<Auth> {
   authenticate?: (request: AuthenticateRequest) => Promise<Auth>;
   oauth?: { protectedResource: ProtectedResource };
   health?: { message?: string; path?: string; status?: number };
-  extensions?: McpExtension<Auth>[];
 }
 
 export type StartOptions =
@@ -370,13 +340,9 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     return this.#app;
   }
 
-  /**
-   * A server instance for one HTTP request or one connection. `modern` is the
-   * 2026-07-28 revision, which adds the extensions.
-   */
-  createServer(session: Auth | undefined, modern: boolean, sessionId?: string): Server {
+  /** A server instance for one HTTP request or one connection. */
+  createServer(session: Auth | undefined, sessionId?: string): Server {
     const options = this.#options;
-    const extensions = modern ? (options.extensions ?? []) : [];
     const resources = this.#resources;
     const server = new Server(
       { name: options.name, version: options.version },
@@ -386,13 +352,6 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
           ...(resources.length ? { resources: {} } : {}),
           logging: {},
           completions: {},
-          ...(extensions.length
-            ? {
-                extensions: Object.fromEntries(
-                  extensions.map((extension) => [extension.id, extension.settings ?? {}])
-                ) as never,
-              }
-            : {}),
         },
         instructions: options.instructions,
       }
@@ -412,16 +371,14 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
         { request }
       );
     });
-    if (this.#tools.length) this.#setUpTools(server, session, extensions, sessionId);
+    if (this.#tools.length) this.#setUpTools(server, session, sessionId);
     if (resources.length) this.#setUpResources(server, session);
-    for (const extension of extensions) extension.register?.(server, session);
     return server;
   }
 
   #setUpTools(
     server: Server,
     session: Auth | undefined,
-    extensions: McpExtension<Auth>[],
     sessionId: string | undefined
   ): void {
     const logger = this.#options.logger;
@@ -465,15 +422,11 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
       return parsed.value;
     };
 
-    server.setRequestHandler('tools/call', async (request, context) => {
+    server.setRequestHandler('tools/call', async (request) => {
       const { name } = request.params;
       const tool = toolsByName.get(name);
       if (!tool) {
         throw mcpError(-32601, `Unknown tool: ${name}`);
-      }
-      for (const extension of extensions) {
-        const answered = await extension.callTool?.(request.params, context, session);
-        if (answered) return answered as never;
       }
       if (tool.beforeValidate) {
         const early = await tool.beforeValidate(request.params.arguments, session as Auth);
@@ -506,14 +459,10 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
           .sendLoggingMessage({ data: { context: logContext, message }, level } as never)
           .catch(() => {});
       };
-      const envelope = context.mcpReq.envelope as Record<string, unknown> | undefined;
-      const envelopeClient = envelope?.['io.modelcontextprotocol/clientInfo'] as
-        | { name?: string; version?: string }
-        | undefined;
       let result: ContentResult;
       try {
         const value = await tool.execute(args, {
-          client: { version: envelopeClient ?? server.getClientVersion() },
+          client: { version: server.getClientVersion() },
           log: {
             debug: sendLog('debug'),
             error: sendLog('error'),
@@ -542,7 +491,6 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
               'stream content'
             );
           },
-          ...(envelope ? { mcpRequest: context } : {}),
         });
         await delay(1);
         if (value === undefined || value === null) {
@@ -638,8 +586,9 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     await this.#stdio?.close();
     const server = this.#httpServer;
     if (!server) return;
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-    server.closeAllConnections?.();
+    const closed = new Promise<void>((resolve) => server.close(() => resolve()));
+    server.closeAllConnections();
+    await closed;
   }
 
   async #startStdio(): Promise<void> {
@@ -654,10 +603,9 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
         );
       }
     }
-    this.#stdio = serveStdio(
-      (context: McpRequestContext) => this.createServer(session, context.era === 'modern'),
-      { onerror: (error) => this.#options.logger.error('[MCP error]', error) }
-    );
+    const server = this.createServer(session);
+    await server.connect(new StdioServerTransport());
+    this.#stdio = server;
   }
 
   async #startHttp(overrides: Extract<StartOptions, { transportType: 'httpStream' }>['httpStream']): Promise<void> {
@@ -682,22 +630,6 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     const maxBodySize = overrides.maxBodySize ?? 10 * 1024 * 1024;
     const logger = this.#options.logger;
 
-    const sessionKey = Symbol('session');
-    const sessionIdKey = Symbol('sessionId');
-    type KeyedAuthInfo = { token: string; clientId: string; scopes: string[]; extra: Record<symbol, unknown> };
-    const factory: McpServerFactory = (context) => {
-      const extra = (context.authInfo as KeyedAuthInfo | undefined)?.extra;
-      return this.createServer(
-        extra?.[sessionKey] as Auth | undefined,
-        context.era === 'modern',
-        extra?.[sessionIdKey] as string | undefined
-      );
-    };
-    const mcp = createMcpHandler(factory, {
-      legacy: 'stateless',
-      maxRequestBodySize: Number.MAX_SAFE_INTEGER,
-      onerror: (error) => logger.debug('[MCP debug] request error', error.message),
-    });
     const sseSessions = new Map<string, LegacySseTransport>();
 
     const requestListener = async (req: IncomingMessage, res: ServerResponse) => {
@@ -747,7 +679,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
         return;
       }
       if (req.method === 'POST') {
-        await this.#serveStream(req, res, { mcp, maxBodySize, sessionKey, sessionIdKey });
+        await this.#serveStream(req, res, maxBodySize);
         return;
       }
       if (req.method === 'GET' || req.method === 'DELETE') {
@@ -808,17 +740,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
   async #serveStream(
     req: IncomingMessage,
     res: ServerResponse,
-    {
-      mcp,
-      maxBodySize,
-      sessionKey,
-      sessionIdKey,
-    }: {
-      mcp: ReturnType<typeof createMcpHandler>;
-      maxBodySize: number;
-      sessionKey: symbol;
-      sessionIdKey: symbol;
-    }
+    maxBodySize: number
   ): Promise<void> {
     const bodyResult = await readBody(req, maxBodySize);
     if ('tooLarge' in bodyResult) {
@@ -868,15 +790,14 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
       body: text,
       signal: controller.signal,
     });
+    const server = this.createServer(session, [req.headers['mcp-session-id']].flat()[0]);
+    const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    res.on('close', () => {
+      server.close().catch(() => {});
+    });
     try {
-      const response = await mcp.fetch(request, {
-        authInfo: {
-          token: '',
-          clientId: '',
-          scopes: [],
-          extra: { [sessionKey]: session, [sessionIdKey]: [req.headers['mcp-session-id']].flat()[0] },
-        } as never,
-      });
+      await server.connect(transport);
+      const response = await transport.handleRequest(request);
       await writeWebResponse(response, res);
       this.#options.logger.debug('[MCP debug] Stateless HTTP Stream request handled');
     } catch (error) {
@@ -905,7 +826,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
       return;
     }
     const transport = new LegacySseTransport('/messages', res);
-    const server = this.createServer(session, false, transport.sessionId);
+    const server = this.createServer(session, transport.sessionId);
     sessions.set(transport.sessionId, transport);
     let ping: NodeJS.Timeout | undefined;
     let closed = false;

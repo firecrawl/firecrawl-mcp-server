@@ -194,7 +194,7 @@ export async function stopChild(child) {
   child.kill('SIGTERM');
   await Promise.race([
     new Promise((resolve) => child.once('exit', resolve)),
-    delay(2_000).then(() => {
+    delay(2_000, undefined, { ref: false }).then(() => {
       if (child.exitCode === null) child.kill('SIGKILL');
     }),
   ]);
@@ -335,8 +335,8 @@ export function diffValues(a, b, at = '$', out = []) {
     const child = /^[A-Za-z_$][\w$]*$/.test(key)
       ? `${at}.${key}`
       : `${at}[${JSON.stringify(key)}]`;
-    if (!(key in b)) out.push({ path: child, a: a[key], b: undefined });
-    else if (!(key in a)) out.push({ path: child, a: undefined, b: b[key] });
+    if (!Object.hasOwn(b, key)) out.push({ path: child, a: a[key], b: undefined });
+    else if (!Object.hasOwn(a, key)) out.push({ path: child, a: undefined, b: b[key] });
     else diffValues(a[key], b[key], child, out);
   }
   return out;

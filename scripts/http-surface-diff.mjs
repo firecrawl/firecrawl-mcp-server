@@ -91,6 +91,7 @@ function exchange(port, { method = 'GET', path, headers = {}, body, maxFrames, t
         },
       },
       (response) => {
+        clearTimeout(headerTimer);
         let text = '';
         let settled = false;
         response.setEncoding('utf8');
@@ -122,7 +123,14 @@ function exchange(port, { method = 'GET', path, headers = {}, body, maxFrames, t
         response.on('error', () => finish('error'));
       }
     );
-    request.on('error', reject);
+    const headerTimer = setTimeout(
+      () => request.destroy(new Error(`${method} ${path}: no response within ${timeoutMs} ms`)),
+      timeoutMs
+    );
+    request.on('error', (error) => {
+      clearTimeout(headerTimer);
+      reject(error);
+    });
     if (payload !== undefined) request.write(payload);
     request.end();
   });
@@ -140,10 +148,11 @@ function createFrameReader(response, consumed) {
   });
   function flush() {
     while (waiters.length) {
-      const end = buffer.indexOf('\n\n');
-      if (end === -1) return;
-      const block = buffer.slice(0, end + 2);
-      buffer = buffer.slice(end + 2);
+      const match = /\r?\n\r?\n/.exec(buffer);
+      if (!match) return;
+      const end = match.index + match[0].length;
+      const block = buffer.slice(0, end);
+      buffer = buffer.slice(end);
       waiters.shift().resolve(parseSseFrames(block)[0] ?? null);
     }
   }

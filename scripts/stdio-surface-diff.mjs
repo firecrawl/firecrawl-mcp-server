@@ -67,7 +67,10 @@ class RawStdio {
     this.write(JSON.stringify({ jsonrpc: '2.0', id, method, ...(params === undefined ? {} : { params }) }));
     const done = () => this.#inbox.slice(start).some((message) => message.id === id && !message.method);
     if (!(await this.#waitFor(done, timeoutMs))) {
-      return { messages: this.#inbox.slice(start), timedOut: true, exited: this.#exitInfo() };
+      const result = { messages: this.#inbox.slice(start), timedOut: true };
+      const exited = this.#exitInfo();
+      if (exited) result.exited = exited;
+      return result;
     }
     return { messages: this.#inbox.slice(start) };
   }

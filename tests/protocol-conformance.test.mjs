@@ -3,9 +3,8 @@
 // requested revision, the tool list matches the contract snapshot for the
 // mode, and a tool call round-trips content and structuredContent.
 //
-// The 2026-07-28 tests use the 2.x client with a pinned revision. They are
-// marked todo while the server does not offer 2026-07-28 from server/discover,
-// and run as ordinary tests once it does.
+// Protocol revision 2026-07-28 is not served: server/discover is refused as
+// it always was, and a 2.x client that probes for it falls back to 2025-11-25.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
@@ -306,7 +305,7 @@ for (const revision of REVISIONS) {
 }
 
 // ---------------------------------------------------------------------------
-// 2026-07-28 through the 2.x client, gated on what server/discover offers.
+// 2026-07-28 is not served.
 
 const DISCOVER_META = {
   'io.modelcontextprotocol/protocolVersion': MODERN_REVISION,
@@ -314,71 +313,44 @@ const DISCOVER_META = {
   'io.modelcontextprotocol/clientCapabilities': {},
 };
 
-function offersModernRevision(message) {
-  const versions = message?.result?.supportedVersions;
-  return Array.isArray(versions) && versions.includes(MODERN_REVISION);
-}
-
-async function httpOffersModernRevision() {
-  try {
-    const response = await fetch(HTTP_URL, {
-      method: 'POST',
-      headers: {
-        accept: 'application/json, text/event-stream',
-        'content-type': 'application/json',
-        'mcp-protocol-version': MODERN_REVISION,
-        'mcp-method': 'server/discover',
-      },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'server/discover',
-        params: { _meta: DISCOVER_META },
-      }),
-    });
-    const body = await response.text();
-    return response.ok && offersModernRevision(responseMessage(response, body, 1));
-  } catch {
-    return false;
-  }
-}
-
-async function stdioOffersModernRevision() {
-  const child = spawnServer(STDIO_ENV);
-  try {
-    const client = new RawStdioClient(child);
-    return offersModernRevision(
-      await client.send('server/discover', { _meta: DISCOVER_META }, 5_000)
-    );
-  } catch {
-    return false;
-  } finally {
-    await stopChild(child);
-  }
-}
-
-const MODERN_SUPPORT = {
-  http: await httpOffersModernRevision(),
-  stdio: await stdioOffersModernRevision(),
-};
-
-function todoUnlessModern(transport) {
-  return MODERN_SUPPORT[transport]
-    ? false
-    : `server/discover over ${transport} does not offer ${MODERN_REVISION} yet`;
-}
-
-function modernClient() {
-  return new Client(CLIENT_INFO, {
-    versionNegotiation: {
-      mode: { pin: MODERN_REVISION },
-      probe: { timeoutMs: 10_000 },
+test(`Streamable HTTP ${MODERN_REVISION}: server/discover is refused as an unsupported revision`, async () => {
+  const response = await fetch(HTTP_URL, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json, text/event-stream',
+      'content-type': 'application/json',
+      'mcp-protocol-version': MODERN_REVISION,
+      'mcp-method': 'server/discover',
     },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'server/discover', params: { _meta: DISCOVER_META } }),
+  });
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    jsonrpc: '2.0',
+    error: {
+      code: -32000,
+      message: `Bad Request: Unsupported protocol version: ${MODERN_REVISION} (supported versions: 2025-11-25, 2025-06-18, 2025-03-26, 2024-11-05, 2024-10-07)`,
+    },
+    id: null,
+  });
+});
+
+test(`stdio ${MODERN_REVISION}: server/discover is an unknown method`, async (t) => {
+  const child = spawnServer(STDIO_ENV);
+  t.after(() => stopChild(child));
+  const client = new RawStdioClient(child);
+  const message = await client.send('server/discover', { _meta: DISCOVER_META }, 5_000);
+  assert.deepEqual(message.error, { code: -32601, message: 'Method not found' });
+});
+
+function probingClient() {
+  return new Client(CLIENT_INFO, {
+    versionNegotiation: { mode: 'auto', probe: { timeoutMs: 10_000 } },
   });
 }
 
-async function assertModernSession(client, toolNames) {
-  assert.equal(client.getNegotiatedProtocolVersion(), MODERN_REVISION);
+async function assertFallback(client, toolNames) {
+  assert.equal(client.getNegotiatedProtocolVersion(), '2025-11-25');
   const { tools } = await client.listTools();
   assert.deepEqual(tools.map((tool) => tool.name), toolNames);
   assertScrapeResult(
@@ -386,37 +358,29 @@ async function assertModernSession(client, toolNames) {
   );
 }
 
-test(
-  `Streamable HTTP ${MODERN_REVISION}: pinned 2.x client connects, lists and calls`,
-  { todo: todoUnlessModern('http'), timeout: 60_000 },
-  async (t) => {
-    const client = modernClient();
-    t.after(() => client.close());
-    await client.connect(new StreamableHTTPClientTransport(new URL(HTTP_URL)));
-    await assertModernSession(client, HTTP_CONTRACT.toolNames);
-  }
-);
+test('Streamable HTTP: a 2.x client probing for 2026-07-28 falls back to 2025-11-25', { timeout: 60_000 }, async (t) => {
+  const client = probingClient();
+  t.after(() => client.close());
+  await client.connect(new StreamableHTTPClientTransport(new URL(HTTP_URL)));
+  await assertFallback(client, HTTP_CONTRACT.toolNames);
+});
 
-test(
-  `stdio ${MODERN_REVISION}: pinned 2.x client connects, lists and calls`,
-  { todo: todoUnlessModern('stdio'), timeout: 60_000 },
-  async (t) => {
-    const env = {
-      ...process.env,
-      MCP_DELEGATED_CREDENTIAL_SECRET: 'test-mcp-delegated-credential-secret-32',
-      ...STDIO_ENV,
-    };
-    const client = modernClient();
-    t.after(() => client.close());
-    await client.connect(
-      new StdioClientTransport({
-        command: process.execPath,
-        args: ['dist/index.js'],
-        cwd: process.cwd(),
-        env: Object.fromEntries(Object.entries(env).filter(([, value]) => value !== undefined)),
-        stderr: 'ignore',
-      })
-    );
-    await assertModernSession(client, STDIO_CONTRACT.toolNames);
-  }
-);
+test('stdio: a 2.x client probing for 2026-07-28 falls back to 2025-11-25', { timeout: 60_000 }, async (t) => {
+  const env = {
+    ...process.env,
+    MCP_DELEGATED_CREDENTIAL_SECRET: 'test-mcp-delegated-credential-secret-32',
+    ...STDIO_ENV,
+  };
+  const client = probingClient();
+  t.after(() => client.close());
+  await client.connect(
+    new StdioClientTransport({
+      command: process.execPath,
+      args: ['dist/index.js'],
+      cwd: process.cwd(),
+      env: Object.fromEntries(Object.entries(env).filter(([, value]) => value !== undefined)),
+      stderr: 'ignore',
+    })
+  );
+  await assertFallback(client, STDIO_CONTRACT.toolNames);
+});

@@ -91,7 +91,8 @@ function readText(request: IncomingMessage): Promise<string> {
         size += chunk.length;
         if (size > MAXIMUM_MESSAGE_SIZE) {
           reject(new Error('request entity too large'));
-          request.destroy();
+          request.removeAllListeners('data');
+          request.pause();
           return;
         }
         chunks.push(chunk);
