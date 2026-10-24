@@ -4,7 +4,7 @@
 
 ### Changed
 
-- Every tool that changes state now states `idempotentHint`. `firecrawl_interact_stop`, `firecrawl_monitor_update` and `firecrawl_monitor_delete` are idempotent: repeating a call with the same arguments changes nothing further. `firecrawl_crawl`, `firecrawl_agent`, `firecrawl_interact`, `firecrawl_monitor_create` and `firecrawl_monitor_run` are not: each call starts another job, acts on the page again or creates another record. Clients that retry, replay or resume tool calls can use the hint to decide whether a repeat is safe. Read-only tools are unchanged.
+- The crawl, agent, interact and monitor tools that change state now state `idempotentHint`. `firecrawl_interact_stop`, `firecrawl_monitor_update` and `firecrawl_monitor_delete` are idempotent: repeating a call with the same arguments changes nothing further. `firecrawl_crawl`, `firecrawl_agent`, `firecrawl_interact`, `firecrawl_monitor_create` and `firecrawl_monitor_run` are not: each call starts another job, acts on the page again or creates another record. Clients that retry, replay or resume tool calls can use the hint to decide whether a repeat is safe. Read-only tools and the two feedback tools are unchanged.
 
 ## [3.34.1] - 2026-10-22
 
