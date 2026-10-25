@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { JSONRPCMessage, Transport } from '@modelcontextprotocol/server';
+import { type JSONRPCMessage, type Transport, parseJSONRPCMessage } from '@modelcontextprotocol/server';
 
 const MAXIMUM_MESSAGE_SIZE = 4 * 1024 * 1024;
 
@@ -58,9 +58,12 @@ export class LegacySseTransport implements Transport {
     }
     let message: JSONRPCMessage;
     try {
-      message = JSON.parse(body) as JSONRPCMessage;
-      if (typeof message !== 'object' || message === null || (message as { jsonrpc?: unknown }).jsonrpc !== '2.0') {
-        throw new Error('Invalid JSON-RPC message');
+      const parsed: unknown = JSON.parse(body);
+      try {
+        message = parseJSONRPCMessage(parsed);
+      } catch (error) {
+        this.onerror?.(error as Error);
+        throw error;
       }
     } catch {
       response.writeHead(400).end(`Invalid message: ${body}`);

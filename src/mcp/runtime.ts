@@ -174,7 +174,6 @@ export type StartOptions =
     };
 
 const DEFAULT_KEEP_ALIVE_TIMEOUT = 300_000;
-const SSE_PING_INTERVAL_MS = 5_000;
 const CORS_HEADERS = {
   'Access-Control-Allow-Credentials': 'true',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -190,6 +189,37 @@ function snakeCaseKeys(value: Record<string, unknown>): Record<string, unknown> 
       entry,
     ])
   );
+}
+
+function isRejected(auth: unknown): boolean {
+  return typeof auth === 'object' && auth !== null && 'authenticated' in auth && !auth.authenticated;
+}
+
+function rejectionMessage(auth: unknown): string | undefined {
+  return typeof auth === 'object' && auth !== null && 'error' in auth && typeof auth.error === 'string'
+    ? auth.error
+    : undefined;
+}
+
+function requestUrl(req: IncomingMessage): URL | undefined {
+  const target = req.url || '';
+  if (target.startsWith('http://') || target.startsWith('https://')) {
+    try {
+      return new URL(target);
+    } catch {
+      return undefined;
+    }
+  }
+  const host = req.headers.host;
+  if (!host) return undefined;
+  const scheme = (req.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http';
+  try {
+    const url = new URL(`${scheme}://${host}${target}`);
+    if (url.hostname.length !== host.length && url.hostname !== host.replace(/:\d+$/, '')) return undefined;
+    return url;
+  } catch {
+    return undefined;
+  }
 }
 
 function jsonRpcError(code: number, message: string, id: unknown = null): string {
@@ -358,7 +388,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
       }
     );
     server.onerror = (error) => {
-      options.logger.error('[MCP error]', error);
+      options.logger.error('[FastMCP error]', error);
     };
     server.setRequestHandler('logging/setLevel', async () => ({}));
     server.setRequestHandler('completion/complete', async (request) => {
@@ -450,7 +480,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
           await server.notification(notification as never);
         } catch (error) {
           logger.warn(
-            `[MCP warning] Failed to ${what} for tool '${name}':`,
+            `[FastMCP warning] Failed to ${what} for tool '${name}':`,
             error instanceof Error ? error.message : String(error)
           );
         }
@@ -599,7 +629,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
         session = await this.#options.authenticate(undefined);
       } catch (error) {
         this.#options.logger.error(
-          '[MCP error] Authentication failed for stdio transport:',
+          '[FastMCP error] Authentication failed for stdio transport:',
           error instanceof Error ? error.message : String(error)
         );
       }
@@ -625,7 +655,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
       overrides.stateless || arg('stateless') === 'true' || process.env.FASTMCP_STATELESS === 'true';
     if (!stateless) {
       this.#options.logger.warn(
-        '[MCP warning] Session-based HTTP serving is no longer available; serving every request statelessly.'
+        '[FastMCP warning] Session-based HTTP serving is no longer available; serving every request statelessly.'
       );
     }
     const maxBodySize = overrides.maxBodySize ?? 10 * 1024 * 1024;
@@ -640,7 +670,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
           res.setHeader('Access-Control-Allow-Origin', '*');
           for (const [key, value] of Object.entries(CORS_HEADERS)) res.setHeader(key, value);
         } catch (error) {
-          logger.error('[MCP error] error parsing origin', error);
+          console.error('[mcp-proxy] error parsing origin', error);
         }
       }
       if (req.method === 'OPTIONS') {
@@ -700,7 +730,17 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
       res.writeHead(404).end();
     };
 
-    const server = http.createServer(requestListener);
+    const server = http.createServer((req, res) => {
+      requestListener(req, res).catch((error) => {
+        console.error('[mcp-proxy] error handling request', error);
+        if (!res.headersSent) {
+          res.setHeader('Content-Type', 'application/json');
+          res.writeHead(500).end(jsonRpcError(-32603, 'Internal Server Error'));
+        } else {
+          res.destroy();
+        }
+      });
+    });
     server.keepAliveTimeout = DEFAULT_KEEP_ALIVE_TIMEOUT;
     server.headersTimeout = Math.max(server.headersTimeout, DEFAULT_KEEP_ALIVE_TIMEOUT + 1000);
     await new Promise<void>((resolve, reject) => {
@@ -712,7 +752,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     });
     this.#httpServer = server;
     logger.info(
-      `[MCP info] Starting server in stateless mode on HTTP Stream at http://${host}:${port}${endpoint}`
+      `[FastMCP info] Starting server in stateless mode on HTTP Stream at http://${host}:${port}${endpoint}`
     );
   }
 
@@ -745,7 +785,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
   ): Promise<void> {
     const bodyResult = await readBody(req, maxBodySize);
     if ('tooLarge' in bodyResult) {
-      this.#options.logger.error(`[MCP error] request body too large (exceeds ${maxBodySize} bytes)`);
+      console.error(`[mcp-proxy] request body too large (exceeds ${maxBodySize} bytes)`);
       req.pause();
       if (res.headersSent) {
         req.destroy();
@@ -767,8 +807,9 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     if (this.#options.authenticate) {
       try {
         session = await this.#options.authenticate(req);
-        if (session === undefined || session === null) {
-          throw new Error('Authentication required');
+        if (!session || isRejected(session)) {
+          this.#sendUnauthorized(res, rejectionMessage(session) ?? 'Unauthorized: Authentication failed', id ?? null);
+          return;
         }
       } catch (thrown) {
         if (isResponse(thrown)) {
@@ -785,7 +826,12 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     res.on('close', () => {
       if (!res.writableFinished) controller.abort();
     });
-    const request = new Request(new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`), {
+    const url = requestUrl(req);
+    if (!url) {
+      res.writeHead(400, { 'Content-Type': 'text/plain; charset=UTF-8' }).end();
+      return;
+    }
+    const request = new Request(url, {
       method: 'POST',
       headers: webHeaders(req),
       body: text,
@@ -800,9 +846,9 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
       await server.connect(transport);
       const response = await transport.handleRequest(request);
       await writeWebResponse(response, res);
-      this.#options.logger.debug('[MCP debug] Stateless HTTP Stream request handled');
+      this.#options.logger.debug('[FastMCP debug] Stateless HTTP Stream request handled');
     } catch (error) {
-      this.#options.logger.error('[MCP error] error handling request', error);
+      console.error('[mcp-proxy] error handling request', error);
       if (!res.headersSent) {
         res.setHeader('Content-Type', 'application/json');
         res.writeHead(500).end(jsonRpcError(-32603, 'Internal Server Error'));
@@ -820,6 +866,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
       if (this.#options.authenticate) {
         session = await this.#options.authenticate(req);
         if (session === undefined || session === null) throw new Error('Authentication required');
+        if (isRejected(session)) throw new Error(rejectionMessage(session) ?? 'Authentication failed');
       }
     } catch (thrown) {
       if (isResponse(thrown)) await writeThrownResponse(thrown, res);
@@ -829,16 +876,14 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     const transport = new LegacySseTransport('/messages', res);
     const server = this.createServer(session, transport.sessionId);
     sessions.set(transport.sessionId, transport);
-    let ping: NodeJS.Timeout | undefined;
     let closed = false;
     res.on('close', async () => {
       closed = true;
-      if (ping) clearInterval(ping);
       sessions.delete(transport.sessionId);
       try {
         await server.close();
       } catch (error) {
-        this.#options.logger.error('[MCP error] error closing server', error);
+        console.error('[mcp-proxy] error closing server', error);
       }
     });
     try {
@@ -848,14 +893,9 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
         method: 'notifications/message',
         params: { data: 'SSE Connection established', level: 'info' },
       });
-      server.oninitialized = () => {
-        ping = setInterval(() => {
-          server.ping().catch(() => this.#options.logger.debug('[MCP debug] server ping failed'));
-        }, SSE_PING_INTERVAL_MS);
-      };
     } catch (error) {
       if (!closed) {
-        this.#options.logger.error('[MCP error] error connecting to server', error);
+        console.error('[mcp-proxy] error connecting to server', error);
         if (!res.headersSent) res.writeHead(500).end('Error connecting to server');
       }
     }
@@ -877,7 +917,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
         return;
       }
     } catch (error) {
-      this.#options.logger.debug('[MCP debug] route not matched', error);
+      this.#options.logger.debug('[FastMCP debug] Hono route not matched', error);
     }
     const isRead = req.method === 'GET' || req.method === 'HEAD';
     const health = this.#options.health ?? {};
