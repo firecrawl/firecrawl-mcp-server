@@ -2822,7 +2822,7 @@ Returns job status, progress information, and result data when completed.
       title: 'Firecrawl interact',
       readOnlyHint: false, // Executes browser interactions (clicks, form input, scripts) in a live session.
       openWorldHint: true, // Interacts with pages on the public web via the scraped session.
-      destructiveHint: false, // Transient page interactions only; does not delete monitors, jobs, or external sites.
+      destructiveHint: true, // Clicks and form submissions can change or delete data on live sites.
     },
     description: `
 Open or reuse a live browser session to navigate a page, click controls, fill fields, or run browser code. Provide either \`url\` or \`scrapeId\`, and either a natural-language \`prompt\` or executable \`code\`; code can run as Bash, Python, or Node with a bounded timeout.
