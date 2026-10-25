@@ -1,16 +1,33 @@
 # Changelog
 
-## [Unreleased]
+## [3.34.1] - 2026-10-22
+
+### Changed
+
+- `mcp-proxy` moves from 6.5.1 to 6.6.0. In the HTTP stream transports (`CLOUD_SERVICE=true`, `HTTP_STREAMABLE_SERVER=true`, or `SSE_LOCAL=true`), the server now accepts request bodies up to 1 MiB and answers a larger one with HTTP 413; it used to read the whole body with no limit. A caller of `start()` can pass `httpStream.maxBodySize` to set a different limit. stdio is unchanged.
+- `body-parser` adds pnpm overrides: versions below 1.20.9 resolve to 1.20.9, and 2.x versions below 2.4.0 resolve to 2.4.0.
+
+## [3.34.0] - 2026-10-22
 
 ### Added
 
 - `firecrawl_find_skills` and `firecrawl_read_skill` expose Alexandria's skills the way `firecrawl_find_tools` exposes its catalogue. `firecrawl_find_skills` lists Firecrawl's skills and the team's own (`team:<slug>`, first) as metadata, each with a `nextTool` that reads it; `firecrawl_read_skill` returns one skill file in full. Both are free, read-only calls to `firecrawl/find-skills` and `firecrawl/read-skill`, on the full surface only (the search profile's tool set is unchanged).
 - `firecrawl_create_skill` saves a team skill, written out or copied `from` a listed skill (library results carry a `createTool` that does this), and `firecrawl_update_skill` changes one from the `baseVersion` last read. Both call `firecrawl/create-skill` and `firecrawl/update-skill`, are free, need an API key, and answer with a `nextTool` that reads the saved skill. There is no delete.
 - `firecrawl_credit_usage` can say what credits were spent on. In the historical view, `byEndpoint: true` splits each period by the endpoint that used the credits (scrape, search, crawl, map, agent, ...), and `bin: "day"` returns one period per UTC day instead of per calendar month. Against an API that does not offer these yet, the tool returns the monthly figures with a `notice` saying so instead of failing. The description now also says what the tool cannot attribute (single jobs, URLs or MCP clients) and where per-call costs appear.
+- `firecrawl_gov_search` takes optional Government Index filters: `jurisdiction`, `court`, `courtType`, `cites` and `domain`. They combine, and only the filters a call sets are sent to `/v2/search/gov`, as query parameters with the same names; a call without filters sends the same request as before. `jurisdiction` is trimmed and lowercased and must be `us` or `us-` plus a two-letter code. The description notes that filters keep only pages the index has labeled, so a filtered search can leave out relevant pages. Filtered calls need an API that accepts these parameters. When the API refuses a call with a 400 and a reason, such as an unknown court id, the tool returns that reason instead of a generic request failure; other errors are handled as before. `firecrawl_search` with `categories: ["gov"]` is unchanged and does not take these filters.
+
+### Changed
+
+- The `firecrawl_search` description of `scrapeOptions` says it is opt-in: every web result is then fetched and billed as a scrape, so leave it unset unless the task needs the full text of a few results.
+- Server instructions and tool descriptions no longer warn that Alexandria needs an API key on a team with it enabled. Runtime credential and entitlement checks are unchanged, and a provider that requires accepted terms still points the user to the Firecrawl dashboard URL in its response.
+- `@modelcontextprotocol/sdk` moves from 1.29.0 to 1.32.1.
 
 ### Fixed
 
+- `firecrawl_search` keeps its result under 900,000 bytes, text block and structured content together, for clients whose User-Agent names a platform that refuses tool results above 1 MB. A search with `scrapeOptions` could return several megabytes there and fail outright. When a result is over budget, every result's page content (`markdown`, `html`, `rawHtml`, `summary`, `description`, `links`, `images`) is cut to one shared length, the largest that fits; each cut text ends with a `[Truncated: ...]` line naming the URL to pass to `firecrawl_scrape`, the result gains a `truncated` field, and the response gains a `warning`. If even empty content does not fit, the lowest-ranked results are left out and the warning says how many. A result that already fits is returned unchanged, and every other client gets the same bytes as before.
 - The `firecrawl_scrape` sentence about provider discovery says again that it applies to authenticated sessions. Hosted keyless sessions list only `firecrawl_search`, `firecrawl_scrape` and `firecrawl_parse`, so they no longer read an unscoped pointer to `firecrawl_find_tools`.
+- A tool error carries `structuredContent` only when it matches the tool's declared `outputSchema`. Clients that validate structured content against that schema, such as those built on the official TypeScript SDK, now show the error message instead of failing with `Structured content does not match the tool's output schema`. The message text is unchanged.
+- `firecrawl_gov_search` refuses an argument it does not define, such as `yearFrom` or `court_type`, with a validation error that names it, as `/v2/search/gov` does. It used to drop the argument and run the search without that filter. The advertised input schema is unchanged; it already disallowed additional properties.
 
 ## [3.33.4] - 2026-10-19
 

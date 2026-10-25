@@ -1347,6 +1347,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.match(searchParams.query.description, /operators include.*related:host.*non-exhaustive/is);
   assert.match(byName.get('firecrawl_search').description, /each web result is a title, URL, and description/i);
   assert.match(searchParams.scrapeOptions.description, /ignore maxAge.*firecrawl_scrape/is);
+  assert.match(searchParams.scrapeOptions.description, /Leave it unset unless the task needs the full text of a few results/);
   assert.doesNotMatch(byName.get('firecrawl_search').description, /not the page/i);
   assert.match(
     byName.get('firecrawl_search').description,
@@ -2298,7 +2299,7 @@ test('local HTTP header API keys receive Core credential recovery', async (t) =>
   const result = parseSseJson(await response.text()).result;
   assert.equal(result.isError, true);
   assert.equal(result.content[0].text, INVALID_API_KEY_MESSAGE);
-  assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID');
+  assert.equal(result.structuredContent, undefined);
   assert.equal(backend.requests.some((request) => request.url === '/v2/search'), true);
   assert.equal(
     backend.requests.filter((request) => request.url === '/api/oauth/introspect').length,
@@ -2732,8 +2733,7 @@ test('an invalid API key gets recovery from Core without introspection', async (
   const result = parseSseJson(await call.text()).result;
   assert.equal(result.isError, true);
   assert.equal(result.content[0].text, INVALID_API_KEY_MESSAGE);
-  assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID');
-  assert.equal(result.structuredContent.message, INVALID_API_KEY_MESSAGE);
+  assert.equal(result.structuredContent, undefined);
   assert.equal(
     backend.requests.filter((request) => request.url === '/api/oauth/introspect').length,
     0,
@@ -2800,7 +2800,7 @@ test('feedback tools map a Core 401 to API-key recovery without introspection', 
     const result = parseSseJson(await call.text()).result;
     assert.equal(result.isError, true, testCase.name);
     assert.equal(result.content[0].text, INVALID_API_KEY_MESSAGE, testCase.name);
-    assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID', testCase.name);
+    assert.deepEqual(result.structuredContent, { message: INVALID_API_KEY_MESSAGE }, testCase.name);
     assert.equal(
       backend.requests.some((request) => request.url === testCase.path),
       true,
@@ -2853,7 +2853,11 @@ test('fetch-based tools map a Core rejection to recovery like SDK tools do', asy
     const result = parseSseJson(await call.text()).result;
     assert.equal(result.isError, true, testCase.name);
     assert.equal(result.content[0].text, INVALID_API_KEY_MESSAGE, testCase.name);
-    assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID', testCase.name);
+    assert.deepEqual(
+      result.structuredContent,
+      testCase.name === 'firecrawl_parse' ? { message: INVALID_API_KEY_MESSAGE } : undefined,
+      testCase.name
+    );
   }
 
   assert.equal(
@@ -3455,21 +3459,17 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
   });
   assert.equal(invalidCall.status, 200);
   const invalidCallJson = parseSseJson(await invalidCall.text());
-  const invalidRecovery = invalidCallJson.result.structuredContent;
+  const invalidMessage = invalidCallJson.result.content[0].text;
   assert.equal(invalidCallJson.result.isError, true);
-  assert.equal(invalidCallJson.result.content[0].text, INVALID_API_KEY_MESSAGE);
-  assert.equal(invalidRecovery.code, 'CREDENTIAL_INVALID');
-  assert.equal(invalidRecovery.message, INVALID_API_KEY_MESSAGE);
-  assert.equal(invalidCallJson.result.content[0].text, invalidRecovery.message);
-  assert.equal(invalidRecovery.next_actions, undefined);
-  assert.doesNotMatch(invalidRecovery.message, /ask the human/i);
-  assert.doesNotMatch(invalidRecovery.message, /never ask/i);
-  assert.doesNotMatch(invalidRecovery.message, /outside this chat/i);
-  assert.doesNotMatch(invalidRecovery.message, /Authorization: Bearer/);
-  // The rejected credential cannot call any tool, so the recovery payload must
-  // not advertise keyless tools as available.
+  assert.equal(invalidMessage, INVALID_API_KEY_MESSAGE);
+  assert.doesNotMatch(invalidMessage, /ask the human/i);
+  assert.doesNotMatch(invalidMessage, /never ask/i);
+  assert.doesNotMatch(invalidMessage, /outside this chat/i);
+  assert.doesNotMatch(invalidMessage, /Authorization: Bearer/);
+  // The rejected credential cannot call any tool, so the result must not
+  // advertise keyless tools as available.
   assert.equal(
-    invalidRecovery.available_tools,
+    invalidCallJson.result.structuredContent,
     undefined,
     'CREDENTIAL_INVALID must not advertise tools the agent cannot call'
   );

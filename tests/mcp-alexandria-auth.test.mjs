@@ -29,10 +29,10 @@ test('local keyless stdio refuses every Exchange path with the explanatory error
       EXCHANGE_KEY_REQUIRED_MESSAGE,
       params.name
     );
-    assert.equal(result.structuredContent.code, 'EXCHANGE_API_KEY_REQUIRED');
-    assert.equal(
-      result.structuredContent.message,
-      EXCHANGE_KEY_REQUIRED_MESSAGE
+    assert.deepEqual(
+      result.structuredContent,
+      params.name === 'firecrawl_search' ? undefined : { message: EXCHANGE_KEY_REQUIRED_MESSAGE },
+      params.name
     );
   }
 });

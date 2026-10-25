@@ -439,14 +439,18 @@ test('a keyless quota 429 tells the agent to finish the task and end with the si
   ]) {
     const result = await callTool(port, name, args);
     assert.equal(result.isError, true, name);
-    assert.equal(result.structuredContent?.code, 'KEYLESS_QUOTA_EXHAUSTED', name);
+    if (name === 'firecrawl_search') {
+      assert.equal(result.structuredContent, undefined, name);
+    } else {
+      assert.deepEqual(result.structuredContent, { message: result.content[0].text }, name);
+    }
     assert.ok(result.content[0].text.endsWith(`\n\n${relay}`), `${name}: ${result.content[0].text}`);
   }
 
   // A 429 without a known reason may be transient: no daily limit, no relay line.
   reason = undefined;
   const fallback = await callTool(port, 'firecrawl_search', { query: 'example' });
-  assert.equal(fallback.structuredContent?.code, 'KEYLESS_LIMIT_REACHED');
+  assert.ok(fallback.content[0].text.startsWith('Firecrawl limited this request made without an account.'));
   assert.doesNotMatch(fallback.content[0].text, /daily limit|end your answer/);
 });
 
@@ -691,6 +695,7 @@ test('a keyless session on a hooked stdio embedder neither lists nor runs the fe
     },
   });
   assert.equal(called.isError, true);
-  assert.equal(called.structuredContent?.code, 'KEYLESS_TOOL_NOT_AVAILABLE');
+  assert.ok(called.content[0].text.startsWith('This tool needs a Firecrawl account.'));
+  assert.deepEqual(called.structuredContent, { message: called.content[0].text });
   assert.deepEqual(outboundRequests(), []);
 });
