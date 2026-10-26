@@ -42,6 +42,7 @@ test('state-changing tools list idempotentHint to a 2.x SDK client', async (t) =
     assert.equal(annotations[name].readOnlyHint, false, `${name} changes state`);
   }
   for (const name of ['firecrawl_feedback', 'firecrawl_search_feedback']) {
-    if (annotations[name]) assert.equal(annotations[name].idempotentHint, undefined, `${name} states no idempotentHint`);
+    assert.ok(annotations[name], `${name} is listed`);
+    assert.equal(annotations[name].idempotentHint, undefined, `${name} states no idempotentHint`);
   }
 });
