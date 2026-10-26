@@ -263,9 +263,9 @@ test('a custom authenticate session reaches tool handlers with a per-call reques
 
 test('a relayed 429 from search carries the reported wait in the error extras', async (t) => {
   const responses = [
-    [{ 'content-type': 'application/json' }, { success: false, error: 'Rate limit exceeded.', retryAfterSeconds: 23 }],
+    [{ 'content-type': 'application/json', 'retry-after': '99' }, { success: false, error: 'Rate limit exceeded.', retryAfterSeconds: 23 }],
     [{ 'content-type': 'application/json', 'retry-after': '41' }, { success: false, error: 'Rate limit exceeded.' }],
-    [{ 'content-type': 'application/json' }, { success: false, error: 'Rate limit exceeded.' }],
+    [{ 'content-type': 'application/json', 'retry-after': '9'.repeat(400) }, { success: false, error: 'Rate limit exceeded.' }],
   ];
   const api = createServer((req, res) => {
     req.resume();

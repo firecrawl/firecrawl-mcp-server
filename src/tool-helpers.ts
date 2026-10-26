@@ -343,7 +343,7 @@ function retryAfterSecondsOf(response: {
       ? headers.get('retry-after')
       : headers?.['retry-after'];
   const seconds = /^\d+$/.test(String(header ?? '').trim()) ? Number(header) : 0;
-  return seconds > 0 ? seconds : undefined;
+  return Number.isSafeInteger(seconds) && seconds > 0 ? seconds : undefined;
 }
 
 /** Retries without Alexandria, on fallbackSources, when tools the caller did not ask for are refused. */
