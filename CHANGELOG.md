@@ -13,6 +13,10 @@
 - `fastmcp`, `mcp-proxy`, `fuse.js`, `uri-templates` and `undici` are no longer dependencies, and the local `fastmcp` patch is gone.
 - The crawl, agent, interact and monitor tools that change state now state `idempotentHint`. `firecrawl_interact_stop`, `firecrawl_monitor_update` and `firecrawl_monitor_delete` are idempotent: repeating a call with the same arguments changes nothing further. `firecrawl_crawl`, `firecrawl_agent`, `firecrawl_interact`, `firecrawl_monitor_create` and `firecrawl_monitor_run` are not: each call starts another job, acts on the page again or creates another record. Clients that retry, replay or resume tool calls can use the hint to decide whether a repeat is safe. Read-only tools and the two feedback tools are unchanged.
 
+### Fixed
+
+- `firecrawl_find_tools` no longer fails when `level` conflicts with the other arguments. With `query`, or a non-empty `expand` alongside any selector, the call is sent at `tools` level whatever `level` says or defaults to, since the catalogue returns tools for both and refused the call otherwise. A non-empty `expand` with no selector still gets the category-index error. With `capabilities` at `providers` or `groups` level and no `expand`, the call sends `expand: []`, because full contracts only exist at tools level. `level` now has a description that says to omit it in most calls and when to set `providers` or `groups`.
+
 ## [3.34.1] - 2026-10-22
 
 ### Changed
