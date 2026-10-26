@@ -4,7 +4,11 @@
 
 ### Added
 
-- A tool call that fails because the Firecrawl API refused the request now carries a machine-readable error next to its message. When the tool's `outputSchema` declares `success` and `error`, `structuredContent` is `{ success: false, error: { code, status, message, retryAfterSeconds? } }`: `code` is the API's own error code when the SDK reports one, otherwise a name for the HTTP status (`insufficient_credits` for 402, `rate_limited` for 429, `server_error` for 5xx, and so on), and `retryAfterSeconds` is set when the response body or the message says how long to wait. A caller, such as code that calls the tools in a loop, can branch on the code instead of parsing the message. The text block is unchanged, and errors that already carried structured content, as well as tools whose schema has no `error` field, are unchanged.
+- A tool call that fails because the Firecrawl API refused the request now carries a machine-readable error next to its message when the tool's `outputSchema` declares `success` and `error`: `structuredContent` is `{ success: false, error: { code, status, message, retryAfterSeconds? } }`. Two kinds of failure get it:
+  - An error from the Firecrawl SDK with a 4xx or 5xx status. `code` is the code in the API's error response when it is a plain identifier, otherwise the status name; a network code the SDK reports, such as `ECONNRESET` or `ERR_BAD_RESPONSE`, is never used. `retryAfterSeconds` comes from `retryAfterSeconds` or `retry_after_seconds` in the error details the SDK reports, or else from a `retry after <n>s` phrase in the message.
+  - A `CoreHttpError`, which the server raises where it calls the API without the SDK, such as the monitor and feedback tools. `code` is always the status name, and `retryAfterSeconds` comes only from a `retry after <n>s` phrase in the message.
+
+  Status names are `invalid_request` (400, 422), `unauthorized` (401), `insufficient_credits` (402), `forbidden` (403), `not_found` (404), `timeout` (408), `conflict` (409), `payload_too_large` (413), `rate_limited` (429), `server_error` (any 5xx) and `http_<status>` for any other 4xx. The text block is unchanged. Every other error keeps its current result, including network failures with no status, bugs, and errors of other types that a tool added through `unstable_hooks.registerExtraTools` throws, as do errors that already carried structured content and tools whose schema has no `error` field.
 
 ### Changed
 

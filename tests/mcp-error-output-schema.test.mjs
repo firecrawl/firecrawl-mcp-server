@@ -159,6 +159,31 @@ test('an API error code the API sends is kept over the status name', async (t) =
   assert.equal(result.structuredContent.error.status, 408);
 });
 
+test("an embedder tool's own HTTP-like error keeps today's result", async (t) => {
+  const result = await assertReadableError(t, {
+    apiUrl: 'http://127.0.0.1:9',
+    session: apiKey,
+    name: 'embed_upstream',
+    args: {},
+    includes: 'Upstream refused.',
+    registerExtraTools: (registrar) =>
+      registrar.addTool({
+        name: 'embed_upstream',
+        description: 'Calls a service of its own.',
+        parameters: z.object({}),
+        outputSchema: z.object({
+          success: z.boolean().optional(),
+          error: z.object({ code: z.string(), status: z.number(), message: z.string() }).optional(),
+        }),
+        execute: async () => {
+          throw Object.assign(new Error('Upstream refused.'), { status: 402, code: 'payment_required' });
+        },
+      }),
+  });
+  assert.deepEqual(result.content, [{ type: 'text', text: "Tool 'embed_upstream' execution failed: Upstream refused." }]);
+  assert.equal(result.structuredContent, undefined);
+});
+
 for (const { name, payload, delivered } of [
   {
     name: 'keeps a payload that matches the outputSchema',
