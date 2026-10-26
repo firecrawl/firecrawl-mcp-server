@@ -6,6 +6,12 @@
 
 - A tool call that fails because the Firecrawl API refused the request now carries a machine-readable error next to its message. When the tool's `outputSchema` declares `success` and `error`, `structuredContent` is `{ success: false, error: { code, status, message, retryAfterSeconds? } }`: `code` is the API's own error code when the SDK reports one, otherwise a name for the HTTP status (`insufficient_credits` for 402, `rate_limited` for 429, `server_error` for 5xx, and so on), and `retryAfterSeconds` is set when the response body or the message says how long to wait. A caller, such as code that calls the tools in a loop, can branch on the code instead of parsing the message. The text block is unchanged, and errors that already carried structured content, as well as tools whose schema has no `error` field, are unchanged.
 
+### Changed
+
+- The server is built on the official MCP TypeScript SDK (`@modelcontextprotocol/server` 2.3.1) instead of `fastmcp` and `mcp-proxy`. It negotiates the same protocol revisions as before (2025-11-25, 2025-06-18, 2025-03-26, 2024-11-05 and 2024-10-07) over stdio, Streamable HTTP and the legacy HTTP+SSE endpoints. Tool names, input and output schemas, descriptions, server instructions, `serverInfo`, the advertised capabilities, the HTTP routes (`/health`, `/ready`, `/ping`, OAuth protected-resource metadata, the legacy `/sse` and `/messages` endpoints) and the 1 MiB body limit are unchanged. HTTP serving is stateless: no `Mcp-Session-Id` is issued. Streamable HTTP responses differ only in framing: SSE events no longer carry an `id` or an empty priming event, `Cache-Control` is `no-cache, no-transform`, a `202 Accepted` has no `Content-Type`, and a body that is not valid JSON is answered with `Parse error: Invalid JSON` instead of `Parse error: Invalid JSON-RPC message`.
+- `start()` with `httpStream.stateless: false` (or `FASTMCP_STATELESS` unset) logs a warning and serves every request statelessly; session-based HTTP serving is no longer available. Stateless serving answers every protocol revision.
+- `fastmcp`, `mcp-proxy`, `fuse.js`, `uri-templates` and `undici` are no longer dependencies, and the local `fastmcp` patch is gone.
+
 ## [3.34.1] - 2026-10-22
 
 ### Changed

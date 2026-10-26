@@ -10,7 +10,7 @@
  */
 
 import { z } from 'zod';
-import { type ContentResult, type FastMCP, UserError } from 'fastmcp';
+import { type ContentResult, type McpRuntime, UserError } from './mcp/runtime.js';
 import { originHeaders, requestOrigin } from './origin';
 import {
   deprecatedToolOutputSchema,
@@ -197,7 +197,7 @@ function deprecatedGithubPayload() {
 }
 
 export function registerResearchTools(
-  server: Pick<FastMCP<SessionData>, 'addTool'>,
+  server: Pick<McpRuntime<SessionData>, 'addTool'>,
   getClient: GetClient
 ): void {
   // --- search_papers ---

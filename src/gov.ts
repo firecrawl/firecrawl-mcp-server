@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import { type ContentResult, type FastMCP, UserError } from 'fastmcp';
+import { type ContentResult, type McpRuntime, UserError } from './mcp/runtime.js';
 import { originHeaders, requestOrigin } from './origin';
 import { govSearchOutputSchema, withStructured } from './tool-output';
 
@@ -121,7 +121,7 @@ function fmtGov(results?: GovHit[]): string {
 }
 
 export function registerGovTools(
-  server: Pick<FastMCP<SessionData>, 'addTool'>,
+  server: Pick<McpRuntime<SessionData>, 'addTool'>,
   getClient: GetClient
 ): void {
   server.addTool({
