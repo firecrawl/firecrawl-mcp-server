@@ -78,7 +78,7 @@ function send(port, method, path, headers = {}, body, connectHost = '127.0.0.1')
 function openSse(port, headers = {}) {
   return new Promise((resolve, reject) => {
     const request = http.request(
-      { host: '127.0.0.1', port, method: 'GET', path: '/sse', headers },
+      { host: '127.0.0.1', port, method: 'GET', path: '/sse', headers, setHost: !('host' in headers) },
       (response) => {
         let text = '';
         response.setEncoding('utf8');
@@ -143,6 +143,16 @@ test('the Host header is validated before credentials are checked', async (t) =>
     assert.equal(response.status, 400, JSON.stringify(host));
     assert.equal(response.body, '');
   }
+  const absolute = await send(
+    port,
+    'POST',
+    `http://127.0.0.1:${port}${ENDPOINT}`,
+    { ...STREAM_HEADERS, host: 'a^b', 'x-test-auth': 'rejected' },
+    INITIALIZE
+  );
+  assert.equal(absolute.status, 400);
+  const sse = await openSse(port, { host: 'a^b', 'x-test-auth': 'rejected' });
+  assert.equal(sse.status, 400);
   assert.deepEqual(calls, []);
 });
 

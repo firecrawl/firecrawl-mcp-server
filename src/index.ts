@@ -113,9 +113,7 @@ if (
 try {
   await start(args);
 } catch (error) {
-  console.error(
-    `[firecrawl-mcp] ${error instanceof Error ? error.message : String(error)}`
-  );
+  console.error('[firecrawl-mcp] Failed to start:', error);
   process.exit(1);
 }
 

@@ -206,6 +206,8 @@ const HOST_HEADER = /^(?:\[[0-9a-f:.]+\]|[a-z0-9\-._~!$&'()*+,;=%]+)(?::\d*)?$/i
 
 function requestUrl(req: IncomingMessage): URL | undefined {
   const target = req.url || '';
+  const host = req.headers.host;
+  if (host !== undefined && !HOST_HEADER.test(host)) return undefined;
   if (target.startsWith('http://') || target.startsWith('https://')) {
     try {
       return new URL(target);
@@ -213,8 +215,7 @@ function requestUrl(req: IncomingMessage): URL | undefined {
       return undefined;
     }
   }
-  const host = req.headers.host;
-  if (!host || !HOST_HEADER.test(host)) return undefined;
+  if (!host) return undefined;
   const scheme = (req.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http';
   try {
     const authority = new URL(`${scheme}://${host}`).host;
@@ -873,6 +874,10 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     res: ServerResponse,
     sessions: Map<string, LegacySseTransport>
   ): Promise<void> {
+    if (!requestUrl(req)) {
+      res.writeHead(400, { 'Content-Type': 'text/plain; charset=UTF-8' }).end();
+      return;
+    }
     let session: Auth | undefined;
     if (this.#options.authenticate) {
       try {
