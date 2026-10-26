@@ -75,7 +75,7 @@ import {
   type McpClient,
 } from './origin';
 import { integrationFrom, withIntegration } from './integration';
-import { CoreHttpError } from './core-http-error.js';
+import { apiErrorDetails, CoreHttpError } from './core-http-error.js';
 import { normalizeHeader } from './headers.js';
 import {
   FIRECRAWL_CREDENTIAL_REJECTED,
@@ -753,11 +753,21 @@ export function createFirecrawlMcpServer(
         const result = await run();
         return isErrorResult(result) ? deliverError(result) : result;
       } catch (error) {
-        if (!(error instanceof RuntimeUserError)) throw error;
+        if (error instanceof RuntimeUserError) {
+          return deliverError({
+            content: [{ type: 'text', text: error.message }],
+            isError: true,
+            ...(error.extras ? { structuredContent: error.extras } : {}),
+          });
+        }
+        // A failed API request keeps the text the MCP framework would write
+        // and adds its code and status, so a caller can branch on them.
+        const apiError = apiErrorDetails(error);
+        if (!apiError) throw error;
         return deliverError({
-          content: [{ type: 'text', text: error.message }],
+          content: [{ type: 'text', text: `Tool '${wrapped.name}' execution failed: ${apiError.message}` }],
           isError: true,
-          ...(error.extras ? { structuredContent: error.extras } : {}),
+          structuredContent: { success: false, error: apiError },
         });
       }
     }
