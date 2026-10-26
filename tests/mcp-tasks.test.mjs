@@ -24,6 +24,7 @@ async function startApi(t) {
     agent: { status: 'processing', creditsUsed: 12 },
     crawl: 'scraping',
     agentStatusCode: 200,
+    crawlPageCode: 200,
   };
   const server = createServer(async (req, res) => {
     let body = '';
@@ -77,7 +78,7 @@ async function startApi(t) {
       });
     }
     if (req.method === 'GET' && req.url === `/v2/crawl/${CRAWL_ID}?skip=1`)
-      return json(200, {
+      return json(state.crawlPageCode, {
         success: true,
         data: [{ markdown: 'page two' }],
         next: null,
@@ -322,6 +323,12 @@ for (const [transport, connect] of [
     assert.equal(working.statusMessage, 'Crawling: 1 of 2 pages done.');
 
     api.state.crawl = 'completed';
+    api.state.crawlPageCode = 503;
+    const unreadable = await getTask(mcp, task.taskId);
+    assert.equal(unreadable.status, 'working', 'a failed page read leaves the task working');
+    assert.match(unreadable.statusMessage, /HTTP 503/);
+
+    api.state.crawlPageCode = 200;
     const done = await getTask(mcp, task.taskId);
     assert.equal(done.status, 'completed');
     assert.deepEqual(done.result.structuredContent.data, [
@@ -413,7 +420,7 @@ for (const [transport, connect] of [
     const { error } = await mcp.rpc('tasks/get', {
       taskId: `fc-crawl-${Date.now().toString(36)}-${CRAWL_ID}`,
     });
-    assert.ok(error, 'tasks/get is not served on the 2025 revisions');
+    assert.equal(error?.code, -32601, 'tasks/get is not served on the 2025 revisions');
   });
 }
 

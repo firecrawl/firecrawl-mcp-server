@@ -316,7 +316,7 @@ function jsonRpcError(code: number, message: string, id: unknown = null): string
   return JSON.stringify({ error: { code, message }, id, jsonrpc: '2.0' });
 }
 
-function formatIssues(issues: ReadonlyArray<StandardSchemaV1.Issue>): string {
+export function formatIssues(issues: ReadonlyArray<StandardSchemaV1.Issue>): string {
   return issues
     .map((issue) => {
       const path =

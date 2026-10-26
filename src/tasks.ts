@@ -9,6 +9,7 @@ import {
 import type FirecrawlApp from 'firecrawl';
 import { z } from 'zod';
 import {
+  formatIssues,
   isDeferred,
   TASKS_EXTENSION,
   type ContentResult,
@@ -190,14 +191,40 @@ function httpStatus(error: unknown): number | undefined {
 }
 
 async function conform(
+  tool: string,
   schema: StandardSchemaV1,
   result: ContentResult
 ): Promise<ContentResult> {
   if (result.structuredContent === undefined) return result;
   const parsed = await schema['~standard'].validate(result.structuredContent);
-  return parsed.issues
-    ? result
-    : { ...result, structuredContent: parsed.value as Record<string, unknown> };
+  if (!parsed.issues) {
+    return { ...result, structuredContent: parsed.value as Record<string, unknown> };
+  }
+  return {
+    content: [
+      {
+        type: 'text',
+        text: `Tool '${tool}' structured output validation failed: ${formatIssues(parsed.issues)}. Please check the result matches the tool's outputSchema.`,
+      },
+    ],
+    isError: true,
+  };
+}
+
+/** A status or result read that failed for a reason that says nothing about the job, or undefined. */
+function unreadable(
+  error: unknown,
+  kind: Kind,
+  base: { pollIntervalMs: number }
+): { status: 'working'; statusMessage: string; ttlMs: null; pollIntervalMs: number } | undefined {
+  const status = httpStatus(error);
+  if (status !== undefined && status !== 429 && status < 500) return undefined;
+  return {
+    status: 'working',
+    statusMessage: `Could not read the ${kind} status${status ? ` (HTTP ${status})` : ''}; checking again.`,
+    ttlMs: null,
+    pollIntervalMs: Math.max(base.pollIntervalMs, 10_000),
+  };
 }
 
 function progressMessage(kind: Kind, body: Record<string, unknown>): string {
@@ -236,19 +263,11 @@ async function readTask<Session extends OriginSession>(
     );
     body = (res?.data ?? {}) as Record<string, unknown>;
   } catch (error) {
-    const status = httpStatus(error);
-    if (status === 404) throw new TaskNotFound(taskId);
-    if (status === undefined || status === 429 || status >= 500) {
-      // A failed status read says nothing about the job: report it as still
-      // running and let the client ask again.
-      return {
-        ...base,
-        status: 'working',
-        statusMessage: `Could not read the ${kind} status${status ? ` (HTTP ${status})` : ''}; checking again.`,
-        ttlMs: null,
-        pollIntervalMs: Math.max(base.pollIntervalMs, 10_000),
-      };
-    }
+    if (httpStatus(error) === 404) throw new TaskNotFound(taskId);
+    // A failed status read says nothing about the job: report it as still
+    // running and let the client ask again.
+    const working = unreadable(error, kind, base);
+    if (working) return { ...base, ...working };
     throw error;
   }
   const expiresAt =
@@ -275,12 +294,18 @@ async function readTask<Session extends OriginSession>(
   }
   // A failed job is a tool error, not a protocol error: the task completes
   // with an `isError` result.
-  const result = await conform(
-    jobs.resultSchema(kind),
-    kind === 'agent'
-      ? jobs.agentResult(body)
-      : await jobs.crawlResult(client, jobId, origin, body)
-  );
+  let raw: ContentResult;
+  try {
+    raw =
+      kind === 'agent'
+        ? jobs.agentResult(body)
+        : await jobs.crawlResult(client, jobId, origin, body);
+  } catch (error) {
+    const working = unreadable(error, kind, base);
+    if (working) return { ...base, ...working };
+    throw error;
+  }
+  const result = await conform(TOOL_OF[kind], jobs.resultSchema(kind), raw);
   return {
     ...base,
     ttlMs,
