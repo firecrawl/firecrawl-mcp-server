@@ -2,9 +2,6 @@ allowBuilds:
   esbuild: true
   tldjs: true
 
-patchedDependencies:
-  fastmcp@4.3.2: patches/fastmcp@4.3.2.patch
-
 overrides:
   # GHSA-27r3-jxmh-p828: patch both supported body-parser lines.
   "body-parser@<1.20.9": "1.20.9"
