@@ -1,3 +1,5 @@
+import { SdkError } from 'firecrawl';
+
 /**
  * A non-2xx answer from Core on a path that does not go through the SDK. The
  * status travels with the error so a credential rejection stays recognisable
@@ -39,13 +41,6 @@ export type ApiErrorDetails = {
   retryAfterSeconds?: number;
 };
 
-type HttpErrorShape = {
-  status?: unknown;
-  code?: unknown;
-  details?: unknown;
-  response?: { status?: unknown; data?: unknown };
-};
-
 function retryAfterSeconds(details: unknown, message: string): number | undefined {
   const body = (details ?? {}) as { retryAfterSeconds?: unknown; retry_after_seconds?: unknown };
   const value = body.retryAfterSeconds ?? body.retry_after_seconds;
@@ -55,22 +50,19 @@ function retryAfterSeconds(details: unknown, message: string): number | undefine
 }
 
 /**
- * The machine-readable shape of a failed Firecrawl API request: the API's own
- * error code when it sent one, else a name for the HTTP status. Undefined for
- * anything that is not an HTTP failure, such as a bug or a network error.
+ * The machine-readable shape of a failed Firecrawl API request, for a
+ * CoreHttpError or an SDK error with an HTTP status: the API's own error code
+ * when the SDK reports one, else a name for the status. Undefined for any other
+ * error, such as a bug, a network error or an error an embedder's tool throws.
  */
 export function apiErrorDetails(error: unknown): ApiErrorDetails | undefined {
-  if (!(error instanceof Error)) return undefined;
-  const source = error as HttpErrorShape;
-  const status = [source.status, source.response?.status].find(
-    (value): value is number => typeof value === 'number' && value >= 400 && value < 600
-  );
-  if (status === undefined) return undefined;
+  if (!(error instanceof CoreHttpError || error instanceof SdkError)) return undefined;
+  const status = error.status;
+  if (status === undefined || status < 400 || status >= 600) return undefined;
+  const sdk = error instanceof SdkError ? error : undefined;
   const apiCode =
-    typeof source.code === 'string' && API_CODE.test(source.code) && !TRANSPORT_CODE.test(source.code)
-      ? source.code
-      : undefined;
-  const retryAfter = retryAfterSeconds(source.details ?? source.response?.data, error.message);
+    sdk?.code && API_CODE.test(sdk.code) && !TRANSPORT_CODE.test(sdk.code) ? sdk.code : undefined;
+  const retryAfter = retryAfterSeconds(sdk?.details, error.message);
   return {
     code: apiCode ?? STATUS_CODES[status] ?? (status >= 500 ? 'server_error' : `http_${status}`),
     status,
