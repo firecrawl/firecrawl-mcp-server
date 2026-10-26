@@ -265,6 +265,7 @@ test('a relayed 429 from search carries the reported wait in the error extras', 
   const responses = [
     [{ 'content-type': 'application/json', 'retry-after': '99' }, { success: false, error: 'Rate limit exceeded.', retryAfterSeconds: 23 }],
     [{ 'content-type': 'application/json', 'retry-after': '41' }, { success: false, error: 'Rate limit exceeded.' }],
+    [{ 'content-type': 'application/json' }, { success: false, error: 'Rate limit exceeded.' }],
     [{ 'content-type': 'application/json', 'retry-after': '9'.repeat(400) }, { success: false, error: 'Rate limit exceeded.' }],
   ];
   const api = createServer((req, res) => {
@@ -298,7 +299,7 @@ test('a relayed 429 from search carries the reported wait in the error extras', 
           : tool,
     },
   });
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 4; i++) {
     const result = await callTool(port, 'firecrawl_search', { query: 'q' });
     assert.equal(result.isError, true);
   }
@@ -307,6 +308,7 @@ test('a relayed 429 from search carries the reported wait in the error extras', 
     [
       { status: 429, retryAfterSeconds: 23 },
       { status: 429, retryAfterSeconds: 41 },
+      { status: 429, retryAfterSeconds: undefined },
       { status: 429, retryAfterSeconds: undefined },
     ]
   );
