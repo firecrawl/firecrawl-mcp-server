@@ -233,7 +233,7 @@ export type ToolIcon = {
 };
 
 /** A tool as registered on the server. */
-export interface ToolDefinition {
+export interface ToolDefinition<Result = ToolResult | DeferredResult> {
   name: string;
   description?: string;
   icons?: ToolIcon[];
@@ -267,7 +267,7 @@ export interface ToolDefinition {
   execute(
     args: any,
     context: ToolContext
-  ): Promise<ToolResult | DeferredResult | string | void>;
+  ): Promise<Result | string | void>;
 }
 
 /** The runtime shape of a tool, used inside the core. */
@@ -348,7 +348,8 @@ export type ExtraToolsContext = {
   /** Whether a session will send a credential to the Firecrawl API. */
   hasCredential(session?: SessionData): boolean;
   /** A built-in tool definition, including one `toolFilter` excluded. */
-  builtInTool(name: string): ToolDefinition | undefined;
+  /** Built-in tools always answer a complete result. */
+  builtInTool(name: string): ToolDefinition<ToolResult> | undefined;
   /**
    * Serves the tasks the embedder's tools return with `resultType: "task"`
    * (protocol revision 2026-07-28, with `modernProtocol` on).
@@ -3176,7 +3177,7 @@ Set \`redactPII\` to request redaction of personally identifiable information in
       getClient,
       hasCredential,
       builtInTool: (name) =>
-        builtInTools.get(name) as unknown as ToolDefinition | undefined,
+        builtInTools.get(name) as unknown as ToolDefinition<ToolResult> | undefined,
       addTaskHandler: (handler) => {
         taskHandlers.push(handler);
       },
