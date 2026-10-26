@@ -131,7 +131,7 @@ jobs:
         if: needs.build.outputs.on_npm != 'true'
         env:
           TARBALL: ${{ needs.build.outputs.tarball }}
-        run: npm publish "release/$TARBALL" --provenance --access public
+        run: npm publish "./release/$TARBALL" --provenance --access public
 
       # npm takes a few minutes to serve a new version, and the MCP registry checks npm for the
       # version before it accepts a server.json; publishing to it straight after npm fails with
