@@ -2,19 +2,19 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-// npm does not apply pnpm patches, so an external fastmcp import would load the
-// unpatched registry copy for `npx firecrawl-mcp` users.
-test('dist bundles the patched fastmcp instead of importing it', async () => {
+// The server is served by the official MCP SDK; nothing may load fastmcp.
+test('dist serves MCP through the official SDK and never imports fastmcp', async () => {
   const dist = await readFile(
     new URL('../dist/index.js', import.meta.url),
     'utf8'
   );
   assert.doesNotMatch(dist, /from\s+["']fastmcp["']/);
+  assert.match(dist, /from\s+["']@modelcontextprotocol\/server["']/);
   assert.match(dist, /title: tool\.annotations\.title/);
   assert.match(dist, /tool\.canList/);
 });
 
-test('the library entry bundles the patched fastmcp and its types do not reference it', async () => {
+test('the library entry and its types never reference fastmcp', async () => {
   const dist = await readFile(
     new URL('../dist/server.js', import.meta.url),
     'utf8'
@@ -28,7 +28,7 @@ test('the library entry bundles the patched fastmcp and its types do not referen
   assert.doesNotMatch(types, /from\s+["']fastmcp["']/);
 });
 
-test('every package the bundled fastmcp imports is a direct dependency', async () => {
+test('every package dist imports is a direct dependency', async () => {
   const dist = await readFile(
     new URL('../dist/index.js', import.meta.url),
     'utf8'

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { UserError } from 'fastmcp';
+import { UserError } from './mcp/runtime.js';
 import { CoreHttpError } from './core-http-error.js';
 import { checkKeylessSignupUrl } from './keyless-signup-link';
 
@@ -15,7 +15,7 @@ export const KEYLESS_TOOL_NAMES = new Set([
   'firecrawl_parse',
 ]);
 
-// FastMCP copies UserError.message onto both content[0].text and
+// The server copies UserError.message onto both content[0].text and
 // structuredContent.message. Hosts forward the text block, not
 // structured next_actions, so bearer and OAuth recovery strings live here.
 //

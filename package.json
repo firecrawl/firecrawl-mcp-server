@@ -35,15 +35,10 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/server": "2.3.1",
     "dotenv": "^17.2.2",
-    "fastmcp": "4.3.2",
     "firecrawl": "4.50.0",
-    "fuse.js": "^7.1.0",
     "hono": "^4.12.27",
-    "mcp-proxy": "^6.6.0",
-    "undici": "^7.28.0",
-    "uri-templates": "^0.2.0",
     "xsschema": "^0.4.4",
     "zod": "^4.2.1"
   },
@@ -73,6 +68,8 @@
   },
   "homepage": "https://github.com/firecrawl/firecrawl-mcp-server#readme",
   "devDependencies": {
+    "@modelcontextprotocol/client": "2.3.1",
+    "@modelcontextprotocol/sdk": "1.32.1",
     "@types/node": "^24.3.1",
     "@typescript-eslint/eslint-plugin": "8.48.1",
     "@typescript-eslint/parser": "8.48.1",
