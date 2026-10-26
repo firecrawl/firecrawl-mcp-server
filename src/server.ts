@@ -6,15 +6,16 @@ import {
   withAlexandriaFeedbackHint,
 } from './alexandria-feedback.js';
 import FirecrawlApp from 'firecrawl';
+import type { Hono } from 'hono';
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/server/validators/ajv';
+import type { JsonSchemaType, JsonSchemaValidator } from '@modelcontextprotocol/server';
 import {
   type ContentResult,
-  FastMCP,
   type Logger,
-  UserError as FastMcpUserError,
-} from 'fastmcp';
-import type { Hono } from 'hono';
-import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
-import type { JsonSchemaType, JsonSchemaValidator } from '@modelcontextprotocol/sdk/validation';
+  McpRuntime,
+  type Tool,
+  UserError as RuntimeUserError,
+} from './mcp/runtime.js';
 import { strictJsonSchema, toJsonSchema } from 'xsschema';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
@@ -107,9 +108,8 @@ import { normalizeToolArguments } from './tool-arguments.js';
  * Library entry point: `import { createFirecrawlMcpServer } from 'firecrawl-mcp/server'`.
  *
  * Unstable: this API, its options and the types below may change in any
- * release, including minor and patch releases. FastMCP is bundled (with local
- * patches), so embedders use the types exported here rather than importing
- * `fastmcp` themselves.
+ * release, including minor and patch releases. Embedders use the types
+ * exported here rather than the MCP SDK's own.
  * @packageDocumentation
  */
 
@@ -120,7 +120,7 @@ import { normalizeToolArguments } from './tool-arguments.js';
 export const UserError: new (
   message: string,
   extras?: Record<string, unknown>
-) => Error & { extras?: Record<string, unknown> } = FastMcpUserError;
+) => Error & { extras?: Record<string, unknown> } = RuntimeUserError;
 
 /** What a tool's `execute` or `beforeValidate` may return. */
 export type ToolResult = {
@@ -248,8 +248,8 @@ export interface ToolDefinition {
   ): Promise<ToolResult | string | void>;
 }
 
-/** The FastMCP shape of a tool, used inside the core. */
-type RegisteredTool = Parameters<FastMCP<SessionData>['addTool']>[0];
+/** The runtime shape of a tool, used inside the core. */
+type RegisteredTool = Tool<SessionData>;
 
 /** Registers a tool onto an instance. */
 export type ToolRegistrar = { addTool(tool: ToolDefinition): void };
@@ -399,7 +399,7 @@ export type FirecrawlMcpServerStartArgs =
          * `127.0.0.1`, `::` or `0.0.0.0` to choose explicitly.
          */
         host?: string;
-        /** Defaults to FastMCP's endpoint (`FASTMCP_ENDPOINT` or `/mcp`). */
+        /** Defaults to `FASTMCP_ENDPOINT`, then `/mcp`. */
         endpoint?: `/${string}`;
         stateless?: boolean;
         /** Largest request body accepted, in bytes. Defaults to 1 MiB; larger bodies get 413. */
@@ -612,7 +612,7 @@ export function createFirecrawlMcpServer(
 
   const authenticateSession = hooks.authenticate ?? defaultAuthenticate;
 
-  // FastMCP may authenticate one HTTP request more than once; resolve it once.
+  // One HTTP request may be authenticated more than once; resolve it once.
   function authenticate(request?: CachedAuthRequest): Promise<SessionData> {
     const cached = request?.[authResultByRequest];
     if (cached) return cached;
@@ -635,19 +635,15 @@ export function createFirecrawlMcpServer(
     return authResult;
   }
 
-  const server = new FastMCP<SessionData>({
+  const server = new McpRuntime<SessionData>({
     name: 'firecrawl-fastmcp',
-    version: packageVersion as `${number}.${number}.${number}`,
+    version: packageVersion,
     instructions,
     logger: new ConsoleLogger(logging),
-    roots: { enabled: false },
-    ...(hooks.oauth
-      ? { oauth: { enabled: true, protectedResource: hooks.oauth.protectedResource } }
-      : {}),
+    ...(hooks.oauth ? { oauth: { protectedResource: hooks.oauth.protectedResource } } : {}),
     authenticate,
     // Lightweight health endpoint for LB checks
     health: {
-      enabled: true,
       message: 'ok',
       path: '/health',
       status: 200,
@@ -757,7 +753,7 @@ export function createFirecrawlMcpServer(
         const result = await run();
         return isErrorResult(result) ? deliverError(result) : result;
       } catch (error) {
-        if (!(error instanceof FastMcpUserError)) throw error;
+        if (!(error instanceof RuntimeUserError)) throw error;
         return deliverError({
           content: [{ type: 'text', text: error.message }],
           isError: true,

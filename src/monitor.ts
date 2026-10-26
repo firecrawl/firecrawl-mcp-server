@@ -10,7 +10,7 @@
  */
 
 import { z } from 'zod';
-import type { ContentResult, FastMCP } from 'fastmcp';
+import type { ContentResult, McpRuntime } from './mcp/runtime.js';
 import { originHeaders, requestOrigin } from './origin';
 import {
   monitorCheckOutputSchema,
@@ -223,7 +223,7 @@ function buildMonitorCreateBody(
 }
 
 export function registerMonitorTools(
-  server: Pick<FastMCP<SessionData>, 'addTool'>,
+  server: Pick<McpRuntime<SessionData>, 'addTool'>,
   api: MonitorApiConfig
 ): void {
   server.addTool({
