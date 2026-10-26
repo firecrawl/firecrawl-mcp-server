@@ -75,7 +75,7 @@ import {
   type McpClient,
 } from './origin';
 import { integrationFrom, withIntegration } from './integration';
-import { CoreHttpError } from './core-http-error.js';
+import { apiErrorDetails, CoreHttpError } from './core-http-error.js';
 import { normalizeHeader } from './headers.js';
 import {
   FIRECRAWL_CREDENTIAL_REJECTED,
@@ -753,11 +753,21 @@ export function createFirecrawlMcpServer(
         const result = await run();
         return isErrorResult(result) ? deliverError(result) : result;
       } catch (error) {
-        if (!(error instanceof RuntimeUserError)) throw error;
+        if (error instanceof RuntimeUserError) {
+          return deliverError({
+            content: [{ type: 'text', text: error.message }],
+            isError: true,
+            ...(error.extras ? { structuredContent: error.extras } : {}),
+          });
+        }
+        // A failed API request keeps the text the MCP framework would write
+        // and adds its code and status, so a caller can branch on them.
+        const apiError = apiErrorDetails(error);
+        if (!apiError) throw error;
         return deliverError({
-          content: [{ type: 'text', text: error.message }],
+          content: [{ type: 'text', text: `Tool '${wrapped.name}' execution failed: ${apiError.message}` }],
           isError: true,
-          ...(error.extras ? { structuredContent: error.extras } : {}),
+          structuredContent: { success: false, error: apiError },
         });
       }
     }
@@ -2414,6 +2424,7 @@ Returns submission status, feedback ID, and accounting fields.
       readOnlyHint: false, // Starts a server-side crawl job and polls until the job reaches a terminal state.
       openWorldHint: true, // Crawls user-specified URLs across the public web.
       destructiveHint: false, // Reads pages from target sites; does not delete or alter external websites.
+      idempotentHint: false, // Each call starts a new crawl job and is billed again.
     },
     description: `
 Start a multi-page crawl at a website URL, poll it to a terminal state, and return the final status and collected data. Scope can be bounded with include/exclude paths, depth, page limit, subdomain/external-link controls, sitemap handling, delay, and scrape options.
@@ -2624,6 +2635,7 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
       readOnlyHint: false, // Starts an autonomous research agent job on the Firecrawl API.
       openWorldHint: true, // The agent browses and searches the open web to fulfill the prompt.
       destructiveHint: false, // Gathers information only; does not delete external data or user resources.
+      idempotentHint: false, // Each call starts a new research job and is billed again.
     },
     description: `
 Run web research that returns structured data when the URLs are not known or the answer spans several sites. Describe the fields you need in \`prompt\`, optionally pass a JSON \`schema\` and seed \`urls\`, and the research agent searches, navigates, reads pages, and returns JSON assembled across sources. Use it to research an entity plus its fields (founders, pricing, contact details), to build lists and datasets (companies, people, products, jobs, papers), and for pages that need navigation or interaction to reach the data. Optional \`effort\` sets the reasoning budget, \`maxCredits\` caps spend, and \`strictConstrainToURLs\` keeps the agent to the supplied \`urls\`.
@@ -2819,6 +2831,7 @@ Returns job status, progress information, and result data when completed.
       readOnlyHint: false, // Executes browser interactions (clicks, form input, scripts) in a live session.
       openWorldHint: true, // Interacts with pages on the public web via the scraped session.
       destructiveHint: false, // Transient page interactions only; does not delete monitors, jobs, or external sites.
+      idempotentHint: false, // Repeating an interaction can act on the page again.
     },
     description: `
 Open or reuse a live browser session to navigate a page, click controls, fill fields, or run browser code. Provide either \`url\` or \`scrapeId\`, and either a natural-language \`prompt\` or executable \`code\`; code can run as Bash, Python, or Node with a bounded timeout.
@@ -2923,6 +2936,7 @@ This acts on the live site, so actions such as form submission can create persis
       readOnlyHint: false, // Calls the API to stop and tear down an active interact session.
       openWorldHint: false, // Operates only on a known Firecrawl scrape/interact session ID.
       destructiveHint: true, // Terminates the live browser session; this end state cannot be resumed.
+      idempotentHint: true, // Stopping a session that is already stopped leaves it stopped.
     },
     description: `
 Stop the live interact session associated with a \`scrapeId\` and release its resources. Returns a success confirmation.

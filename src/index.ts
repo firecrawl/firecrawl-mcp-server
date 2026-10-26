@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import dotenv from 'dotenv';
 import {
   createFirecrawlMcpServer,
   type FirecrawlMcpServerOptions,
@@ -12,7 +11,11 @@ import {
   resolveCredentialFromEnv,
 } from './service/index.js';
 
-dotenv.config({ debug: false, quiet: true });
+try {
+  process.loadEnvFile();
+} catch (error) {
+  if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+}
 
 const FEEDBACK_DISABLED_VALUES = new Set(['1', 'true', 'yes', 'on']);
 

@@ -4,10 +4,28 @@
 
 ### Changed
 
+- `firecrawl_gov_search` asks `/v2/search/gov` for `sources=law` and returns the `law` results. Each row in `structuredContent.results` keeps `url`, `title`, `description` and `position`, and also carries the index's legal labels when it has them: `jurisdiction`, `court`, `court_type`, `cites`, `cited_as` and `updated_at`. The text block, the tool description and the input schema are unchanged. Needs an API that accepts `sources` on `/v2/search/gov`.
+
+## [3.35.0] - 2026-10-26
+
+### Added
+
+- A tool call that fails because the Firecrawl API refused the request now carries a machine-readable error next to its message when the tool's `outputSchema` declares `success` and `error`: `structuredContent` is `{ success: false, error: { code, status, message, retryAfterSeconds? } }`. Two kinds of failure get it:
+  - An error from the Firecrawl SDK with a 4xx or 5xx status. `code` is the code in the API's error response when it is a plain identifier, otherwise the status name; a network code the SDK reports, such as `ECONNRESET` or `ERR_BAD_RESPONSE`, is never used. `retryAfterSeconds` comes from `retryAfterSeconds` or `retry_after_seconds` in the error details the SDK reports, or else from a `retry after <n>s` phrase in the message.
+  - A `CoreHttpError`, which the server raises where it calls the API without the SDK, such as the monitor and feedback tools. `code` is always the status name, and `retryAfterSeconds` comes only from a `retry after <n>s` phrase in the message.
+
+  Status names are `invalid_request` (400, 422), `unauthorized` (401), `insufficient_credits` (402), `forbidden` (403), `not_found` (404), `timeout` (408), `conflict` (409), `payload_too_large` (413), `rate_limited` (429), `server_error` (any 5xx) and `http_<status>` for any other 4xx. The text block is unchanged. Refusals the server already turns into a recovery result keep that result, such as an API key the API rejects in an API-key session (`CREDENTIAL_INVALID`) or a keyless limit. Every other error keeps its current result, including network failures with no status, bugs, and errors of other types that a tool added through `unstable_hooks.registerExtraTools` throws, as do errors that already carried structured content and tools whose schema has no `error` field.
+
+### Changed
+
 - The server is built on the official MCP TypeScript SDK (`@modelcontextprotocol/server` 2.3.1) instead of `fastmcp` and `mcp-proxy`. It negotiates the same protocol revisions as before (2025-11-25, 2025-06-18, 2025-03-26, 2024-11-05 and 2024-10-07) over stdio, Streamable HTTP and the legacy HTTP+SSE endpoints. Tool names, input and output schemas, descriptions, server instructions, `serverInfo`, the advertised capabilities, the HTTP routes (`/health`, `/ready`, `/ping`, OAuth protected-resource metadata, the legacy `/sse` and `/messages` endpoints) and the 1 MiB body limit are unchanged. HTTP serving is stateless: no `Mcp-Session-Id` is issued. Streamable HTTP responses differ only in framing: SSE events no longer carry an `id` or an empty priming event, `Cache-Control` is `no-cache, no-transform`, a `202 Accepted` has no `Content-Type`, and a body that is not valid JSON is answered with `Parse error: Invalid JSON` instead of `Parse error: Invalid JSON-RPC message`.
 - `start()` with `httpStream.stateless: false` (or `FASTMCP_STATELESS` unset) logs a warning and serves every request statelessly; session-based HTTP serving is no longer available. Stateless serving answers every protocol revision.
 - `fastmcp`, `mcp-proxy`, `fuse.js`, `uri-templates` and `undici` are no longer dependencies, and the local `fastmcp` patch is gone.
-- `firecrawl_gov_search` asks `/v2/search/gov` for `sources=law` and returns the `law` results. Each row in `structuredContent.results` keeps `url`, `title`, `description` and `position`, and also carries the index's legal labels when it has them: `jurisdiction`, `court`, `court_type`, `cites`, `cited_as` and `updated_at`. The text block, the tool description and the input schema are unchanged. Needs an API that accepts `sources` on `/v2/search/gov`.
+- The crawl, agent, interact and monitor tools that change state now state `idempotentHint`. `firecrawl_interact_stop`, `firecrawl_monitor_update` and `firecrawl_monitor_delete` are idempotent: repeating a call with the same arguments changes nothing further. `firecrawl_crawl`, `firecrawl_agent`, `firecrawl_interact`, `firecrawl_monitor_create` and `firecrawl_monitor_run` are not: each call starts another job, acts on the page again or creates another record. Clients that retry, replay or resume tool calls can use the hint to decide whether a repeat is safe. Read-only tools and the two feedback tools are unchanged.
+
+### Fixed
+
+- `firecrawl_find_tools` no longer fails when `level` conflicts with the other arguments. With `query`, or a non-empty `expand` alongside any selector, the call is sent at `tools` level whatever `level` says or defaults to, since the catalogue returns tools for both and refused the call otherwise. A non-empty `expand` with no selector still gets the category-index error. With `capabilities` at `providers` or `groups` level and no `expand`, the call sends `expand: []`, because full contracts only exist at tools level. `level` now has a description that says to omit it in most calls and when to set `providers` or `groups`.
 
 ## [3.34.1] - 2026-10-22
 
