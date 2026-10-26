@@ -1,0 +1,71 @@
+{
+  "id": "creators",
+  "title": "Creators and social media",
+  "summary": "YouTube videos and transcripts, X posts and profiles, Instagram and TikTok creators, podcasts and newsletters for content, influencer and audience research.",
+  "when": "a YouTube video or its transcript, what people say on X/Twitter, Instagram or TikTok creators and influencers, podcasts and their guests or sponsors, or newsletters",
+  "providers": [
+    {
+      "id": "youtube",
+      "summary": "Metadata, description and any available transcript for one video URL. Not channel listings, comments or search; find video URLs with firecrawl_search first.",
+      "capabilities": [
+        "read"
+      ]
+    },
+    {
+      "id": "x-com",
+      "summary": "Public X posts and profiles: a sourced summary of posts on a topic, one known post, one profile, or a dated sample of an account's posts. Not a complete timeline; unknown metrics stay null.",
+      "capabilities": [
+        "posts/search",
+        "posts/lookup",
+        "users/lookup",
+        "users/posts"
+      ]
+    },
+    {
+      "id": "oriane",
+      "summary": "Indexed Instagram and TikTok profiles and posts: bios, follower counts, captions and engagement. Coverage depends on the index; an empty result does not prove absence.",
+      "capabilities": [
+        "instagram/profiles-search",
+        "tiktok/profiles-search",
+        "instagram/posts-search",
+        "tiktok/posts-search",
+        "instagram/profile-lookup"
+      ]
+    },
+    {
+      "id": "particle",
+      "summary": "Podcast shows and episodes, transcripts, guests, and sponsor and ad-read data. Show search resolves a show; episode search finds discussions of a topic.",
+      "capabilities": [
+        "podcasts/search",
+        "podcasts/episodes/search",
+        "people/guests",
+        "advertising/show/sponsors"
+      ]
+    },
+    {
+      "id": "substack-com",
+      "summary": "A Substack publication's archive, archive search and individual posts; paid posts are partial.",
+      "capabilities": [
+        "newsletters/archive",
+        "newsletters/search",
+        "newsletters/post"
+      ]
+    }
+  ],
+  "skill": [
+    "Work from the request as written and reuse any supplied handles, URLs, topics, niche, audience or dates. Ask only for details that materially change the answer. Pick the platforms the request is about; not every provider is needed.",
+    "Provider nextTool calls browse compact capabilities with prices. For a selected capability, call firecrawl_find_tools with providers: [provider ID], capabilities: [capability ID], expand: [options, response] and includeCosts: true. Use the live contract for inputs, coverage and credit costs; explain costs before paid execution through firecrawl_scrape with alexandria: {provider, capability, options}. Reading a known YouTube URL or X post is usually one call; creator searches can page, so keep the shortlist small.",
+    "Treat follower counts and engagement as reported by the source at retrieval time, not audited audience data. Followers do not establish audience geography or fit. An empty index search does not prove a creator or post is absent; say so and fall back to firecrawl_search for discovery.",
+    "Quote transcripts and posts accurately with links and dates. Separate what a creator said from your summary, and flag missing transcripts or partial results. If a provider requires data terms, show them and ask an organization admin to accept them in the Firecrawl dashboard; a request for data is not acceptance."
+  ],
+  "examples": [
+    {
+      "request": "Summarize what this YouTube video says about pricing.",
+      "approach": "youtube read on the URL returns the transcript when available; quote the relevant passages with timestamps if present. If no transcript exists, say so rather than inferring from the title."
+    },
+    {
+      "request": "Find a few mid-size TikTok creators who review budget skincare.",
+      "approach": "Oriane tiktok/profiles-search with the niche terms, then compare followers and recent engagement for a short list. Flag that coverage is index-dependent and that audience demographics are not provided."
+    }
+  ]
+}

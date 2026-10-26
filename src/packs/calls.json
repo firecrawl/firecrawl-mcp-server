@@ -1,0 +1,1053 @@
+{
+  "adstransparency-google-com/ad-transparency/get_ad": {
+    "name": "Get ad",
+    "options": {},
+    "inputs": "advertiser_id, creative_id, region, topic, url"
+  },
+  "adstransparency-google-com/ad-transparency/list_ads": {
+    "name": "List ads",
+    "options": {},
+    "inputs": "advertiser_id, continuation, domain, end_date, format, limit, platforms, region, …"
+  },
+  "adstransparency-google-com/ad-transparency/suggest": {
+    "name": "Suggest",
+    "options": {
+      "query": "<string>"
+    },
+    "inputs": "query (required), limit, region, topic"
+  },
+  "alibaba/retail/price_tiers": {
+    "name": "Price tiers",
+    "options": {
+      "url": "<string>"
+    },
+    "inputs": "url (required)"
+  },
+  "alibaba/retail/search": {
+    "name": "Search",
+    "options": {
+      "query": "<string>"
+    },
+    "inputs": "query (required), cursor"
+  },
+  "alibaba/retail/supplier": {
+    "name": "Supplier",
+    "options": {
+      "url": "<string>"
+    },
+    "inputs": "url (required)"
+  },
+  "amazon-com/products/bestsellers": {
+    "name": "Bestsellers",
+    "options": {
+      "url": "<string>"
+    },
+    "inputs": "one of url | department, node, page"
+  },
+  "amazon-com/products/prices": {
+    "name": "Prices",
+    "options": {
+      "asins": "<string[]>"
+    },
+    "inputs": "asins (required)"
+  },
+  "amazon-com/products/product": {
+    "name": "Product",
+    "options": {
+      "asin": "<string>"
+    },
+    "inputs": "one of asin | url"
+  },
+  "amazon-com/products/reviews": {
+    "name": "Reviews",
+    "options": {
+      "asin": "<string>"
+    },
+    "inputs": "one of asin | url, include_international, order, stars, verified_only"
+  },
+  "amazon-com/products/search": {
+    "name": "Search",
+    "options": {
+      "query": "<string>"
+    },
+    "inputs": "query (required), page"
+  },
+  "answerthepublic-com/search-suggestions/get_keyword_research": {
+    "name": "Get keyword research",
+    "options": {
+      "keyword": "<string>"
+    },
+    "inputs": "keyword (required), max_rows_per_modifier, sources"
+  },
+  "apollo/companies/enrich": {
+    "name": "Company enrichment",
+    "options": {
+      "domain": "<string>"
+    },
+    "inputs": "one of domain | linkedin_url"
+  },
+  "apollo/companies/search": {
+    "name": "Company search",
+    "options": {},
+    "inputs": "q_organization_name, organization_num_employees_ranges, organization_locations, currently_using_any_of_technology_uids, page, per_page"
+  },
+  "apollo/people/match": {
+    "name": "Person match",
+    "options": {
+      "id": "<string>"
+    },
+    "inputs": "one of id | linkedin_url | email | name, domain, reveal_personal_emails, reveal_phone_number"
+  },
+  "apollo/people/search": {
+    "name": "Person search",
+    "options": {},
+    "inputs": "person_titles, q_keywords, q_organization_domains_list, person_locations, page, per_page"
+  },
+  "apps-apple-com/apps/app": {
+    "name": "App",
+    "options": {},
+    "inputs": "app_id, bundle_id, country, locale, url"
+  },
+  "apps-apple-com/apps/reviews": {
+    "name": "Reviews",
+    "options": {
+      "app_id": "<string>"
+    },
+    "inputs": "app_id (required), country, limit, locale, offset, sort"
+  },
+  "apps-apple-com/apps/search": {
+    "name": "Search",
+    "options": {
+      "term": "<string>"
+    },
+    "inputs": "term (required), country, limit"
+  },
+  "apps-apple-com/apps/top_charts": {
+    "name": "Top charts",
+    "options": {},
+    "inputs": "chart, country, genre_id, limit"
+  },
+  "bbb-business-profiles-ratings-complaint/businesses/profile": {
+    "name": "Business profile",
+    "options": {
+      "url": "<string>"
+    },
+    "inputs": "one of url | bbb_id, one of url | business_id, country"
+  },
+  "bbb-business-profiles-ratings-complaint/businesses/search": {
+    "name": "Business search",
+    "options": {
+      "query": "<string>"
+    },
+    "inputs": "query (required), location, country, page, sort"
+  },
+  "benzinga/calendar/consensus-ratings": {
+    "name": "Consensus ratings",
+    "options": {},
+    "inputs": "parameters[tickers], parameters[date_from], parameters[date_to], simplify, aggregate_type, pagesize"
+  },
+  "benzinga/calendar/ratings": {
+    "name": "Analyst ratings",
+    "options": {},
+    "inputs": "fields, parameters[tickers], parameters[analyst_id], parameters[firm_id], parameters[action], parameters[date], parameters[date_from], parameters[date_to], …"
+  },
+  "benzinga/news/search": {
+    "name": "News search",
+    "options": {},
+    "inputs": "page, pageSize, displayOutput, date, dateFrom, dateTo, updatedSince, publishedSince, …"
+  },
+  "benzinga/news/wiims": {
+    "name": "Why Is It Moving",
+    "options": {},
+    "inputs": "page, pageSize, displayOutput, date, dateFrom, dateTo, updatedSince, publishedSince, …"
+  },
+  "bestbuy-com/products/availability": {
+    "name": "Availability",
+    "options": {
+      "sku": "<string>",
+      "store_id": "<string>",
+      "zip_code": "<string>"
+    },
+    "inputs": "sku (required), store_id (required), zip_code (required)"
+  },
+  "bestbuy-com/products/pricing": {
+    "name": "Pricing",
+    "options": {
+      "sku": "<string>"
+    },
+    "inputs": "sku (required)"
+  },
+  "bestbuy-com/products/reviews": {
+    "name": "Reviews",
+    "options": {
+      "sku": "<string>"
+    },
+    "inputs": "one of sku | url, cursor, pages, sort"
+  },
+  "bestbuy-com/products/search": {
+    "name": "Search",
+    "options": {
+      "query": "<string>"
+    },
+    "inputs": "query (required), page"
+  },
+  "booking-com/hotels/availability": {
+    "name": "Availability",
+    "options": {
+      "hotel_id": "<number>"
+    },
+    "inputs": "hotel_id (required), adults, checkin, checkout, children_ages, currency, lang, rooms"
+  },
+  "booking-com/hotels/locations": {
+    "name": "Locations",
+    "options": {
+      "query": "<string>"
+    },
+    "inputs": "query (required), count, lang"
+  },
+  "booking-com/hotels/reviews": {
+    "name": "Reviews",
+    "options": {
+      "hotel_id": "<number>"
+    },
+    "inputs": "hotel_id (required), country_code, lang, limit, skip, sort, text, ufi"
+  },
+  "booking-com/hotels/search": {
+    "name": "Search",
+    "options": {},
+    "inputs": "adults, checkin, checkout, children_ages, currency, dest_id, dest_type, filters, …"
+  },
+  "builtin-com/jobs/job": {
+    "name": "Job",
+    "options": {
+      "url": "<string>"
+    },
+    "inputs": "url (required)"
+  },
+  "builtin-com/jobs/search": {
+    "name": "Search",
+    "options": {},
+    "inputs": "page, query"
+  },
+  "cbssports-com/fantasy-sports-rankings/projections": {
+    "name": "Projections",
+    "options": {
+      "position": "<string>"
+    },
+    "inputs": "position (required), limit, scoring, sport, type, week"
+  },
+  "cbssports-com/fantasy-sports-rankings/rankings": {
+    "name": "Rankings",
+    "options": {
+      "position": "<string>"
+    },
+    "inputs": "position (required), limit, scoring, sport, type"
+  },
+  "cbssports-com/fantasy-sports-rankings/stats": {
+    "name": "Stats",
+    "options": {
+      "position": "<string>"
+    },
+    "inputs": "position (required), limit, period, scoring, season, sport, week"
+  },
+  "draftsharks-com/fantasy-sports-rankings/ros_rankings": {
+    "name": "Ros rankings",
+    "options": {
+      "position": "<string>"
+    },
+    "inputs": "position (required), limit, scoring, superflex"
+  },
+  "draftsharks-com/fantasy-sports-rankings/weekly_rankings": {
+    "name": "Weekly rankings",
+    "options": {
+      "position": "<string>"
+    },
+    "inputs": "position (required), limit, scoring, superflex, week"
+  },
+  "ebay-com/listings/item": {
+    "name": "Item",
+    "options": {},
+    "inputs": "item_id, url"
+  },
+  "ebay-com/listings/item_shipping": {
+    "name": "Item shipping",
+    "options": {},
+    "inputs": "item_id, url"
+  },
+  "ebay-com/listings/suggest": {
+    "name": "Suggest",
+    "options": {
+      "prefix": "<string>"
+    },
+    "inputs": "prefix (required)"
+  },
+  "etsy-com/listings/listing": {
+    "name": "Listing",
+    "options": {
+      "listing_id": "<number>"
+    },
+    "inputs": "one of listing_id | url, currency"
+  },
+  "etsy-com/listings/similar_listings": {
+    "name": "Similar listings",
+    "options": {
+      "listing_id": "<number>"
+    },
+    "inputs": "listing_id (required), currency, limit"
+  },
+  "expedia-co-uk/hotels/availability": {
+    "name": "Availability",
+    "options": {
+      "hotel_id": "<string>"
+    },
+    "inputs": "hotel_id (required), adults, checkin, checkout, children_ages"
+  },
+  "expedia-co-uk/hotels/locations": {
+    "name": "Locations",
+    "options": {
+      "query": "<string>"
+    },
+    "inputs": "query (required)"
+  },
+  "expedia-co-uk/hotels/search": {
+    "name": "Search",
+    "options": {
+      "region_id": "<string>"
+    },
+    "inputs": "region_id (required), adults, checkin, checkout, children_ages, limit, offset"
+  },
+  "fantasydata-com/fantasy-sports-rankings/rankings": {
+    "name": "Rankings",
+    "options": {
+      "position": "<string>"
+    },
+    "inputs": "position (required), scoring"
+  },
+  "fantasyfootballcalculator-com/fantasy-sports-rankings/adp": {
+    "name": "Adp",
+    "options": {},
+    "inputs": "format, limit, position, teams, year"
+  },
+  "fantasyfootballcalculator-com/fantasy-sports-rankings/rankings": {
+    "name": "Rankings",
+    "options": {
+      "position": "<string>"
+    },
+    "inputs": "position (required), format, limit"
+  },
+  "fftoday-com/fantasy-sports-rankings/season_projections": {
+    "name": "Season projections",
+    "options": {
+      "position": "<string>"
+    },
+    "inputs": "position (required), limit, scoring, season"
+  },
+  "fftoday-com/fantasy-sports-rankings/weekly_projections": {
+    "name": "Weekly projections",
+    "options": {
+      "position": "<string>"
+    },
+    "inputs": "position (required), limit, scoring, season, week"
+  },
+  "finance-yahoo-com/equities/earnings": {
+    "name": "Earnings",
+    "options": {
+      "symbol": "<string>"
+    },
+    "inputs": "symbol (required)"
+  },
+  "finance-yahoo-com/equities/history": {
+    "name": "History",
+    "options": {
+      "symbol": "<string>"
+    },
+    "inputs": "symbol (required), end, include_prepost, interval, range, start"
+  },
+  "finance-yahoo-com/equities/quote": {
+    "name": "Quote",
+    "options": {
+      "symbol": "<string>"
+    },
+    "inputs": "symbol (required)"
+  },
+  "finance-yahoo-com/equities/search": {
+    "name": "Search",
+    "options": {
+      "query": "<string>"
+    },
+    "inputs": "query (required), count, quote_types"
+  },
+  "firecrawl-maps/businesses/reviews": {
+    "name": "Reviews",
+    "options": {
+      "feature_id": "<string>"
+    },
+    "inputs": "feature_id (required), count, cursor, language, sort"
+  },
+  "firecrawl-maps/businesses/search": {
+    "name": "Search",
+    "options": {
+      "query": "<string>"
+    },
+    "inputs": "query (required), country, cursor, language, latitude, longitude"
+  },
+  "firecrawl-trends/trends/interest_by_region": {
+    "name": "Interest by region",
+    "options": {
+      "keywords": "<string[]>"
+    },
+    "inputs": "keywords (required), category, geo, property, resolution, time"
+  },
+  "firecrawl-trends/trends/interest_over_time": {
+    "name": "Interest over time",
+    "options": {
+      "keywords": "<string[]>"
+    },
+    "inputs": "keywords (required), category, geo, property, time"
+  },
+  "firecrawl-trends/trends/related_queries": {
+    "name": "Related queries",
+    "options": {
+      "keyword": "<string>"
+    },
+    "inputs": "keyword (required), category, geo, property, time"
+  },
+  "firecrawl-trends/trends/suggestions": {
+    "name": "Suggestions",
+    "options": {
+      "query": "<string>"
+    },
+    "inputs": "query (required)"
+  },
+  "fireround/companies/rounds": {
+    "name": "A company's funding rounds",
+    "options": {
+      "company": "<string>"
+    },
+    "inputs": "company (required), certainty, limit, cursor"
+  },
+  "fireround/companies/search": {
+    "name": "Search funded companies",
+    "options": {},
+    "inputs": "q, sector, stage, since, sort, page, limit"
+  },
+  "fireround/investors/profile": {
+    "name": "An investor's profile",
+    "options": {
+      "id": "<string>"
+    },
+    "inputs": "id (required)"
+  },
+  "fireround/rounds/search": {
+    "name": "Search funding rounds",
+    "options": {},
+    "inputs": "q, since, stage, certainty, sector, min_usd, sort, limit, …"
+  },
+  "fiscal-ai/company/profile": {
+    "name": "Company profile",
+    "options": {
+      "fscl": "<string>"
+    },
+    "inputs": "one of fscl | companyKey | ticker | cusip | isin | figi | cik, exchange"
+  },
+  "fiscal-ai/company/segments-and-kpis": {
+    "name": "Segments and KPIs",
+    "options": {
+      "fscl": "<string>"
+    },
+    "inputs": "one of fscl | companyKey | ticker | cusip | isin | figi | cik, exchange, periodType, currency"
+  },
+  "fiscal-ai/events/transcript": {
+    "name": "Earnings call transcript",
+    "options": {
+      "eventKey": "<string>",
+      "fscl": "<string>"
+    },
+    "inputs": "eventKey (required), one of fscl | companyKey | ticker | cusip | isin | figi | cik, exchange"
+  },
+  "fiscal-ai/financials/income-statement": {
+    "name": "Income statement",
+    "options": {
+      "fscl": "<string>"
+    },
+    "inputs": "one of fscl | companyKey | ticker | cusip | isin | figi | cik, exchange, periodType, currency, includeReportingTemplates, includeMappingAlternatives"
+  },
+  "flights-google-com/flights/search_flights": {
+    "name": "Search flights",
+    "options": {
+      "destination": "<string>",
+      "origin": "<string>"
+    },
+    "inputs": "destination (required), origin (required), adults, cabin_class, carry_on_bags, checked_bags, children, currency, departure_date, infants_in_seat, …"
+  },
+  "flights-google-com/flights/suggest_places": {
+    "name": "Suggest places",
+    "options": {
+      "query": "<string>"
+    },
+    "inputs": "query (required)"
+  },
+  "football-fantasysports-yahoo-com/fantasy-football-players/list_players": {
+    "name": "List players",
+    "options": {
+      "league_id": "<string>"
+    },
+    "inputs": "one of league_id | league_url, fantasy_team_id, nfl_team, offset, position, sdir, sort, stat_period, status"
+  },
+  "football-fantasysports-yahoo-com/fantasy-football-players/public_team_roster": {
+    "name": "Public team roster",
+    "options": {
+      "league_id": "<string>"
+    },
+    "inputs": "one of league_id | team_id | team_url, include_stats, week"
+  },
+  "fred/series/observations": {
+    "name": "Series observations",
+    "options": {
+      "series_id": "<string>"
+    },
+    "inputs": "series_id (required), realtime_start, realtime_end, limit, offset, sort_order, observation_start, observation_end, units, …"
+  },
+  "fred/series/search": {
+    "name": "Series search",
+    "options": {
+      "search_text": "<string>"
+    },
+    "inputs": "search_text (required), search_type, realtime_start, realtime_end, limit, offset, order_by, sort_order, filter_variable, …"
+  },
+  "fullenrich/companies/lookup": {
+    "name": "Company lookup",
+    "options": {
+      "domain": "<string>"
+    },
+    "inputs": "one of domain | professional_network_url | professional_network_id"
+  },
+  "fullenrich/companies/search": {
+    "name": "Company search",
+    "options": {},
+    "inputs": "limit, offset, search_after, names, domains, company_ids, professional_network_urls, professional_network_ids, …"
+  },
+  "fullenrich/contacts/work-email": {
+    "name": "Work email",
+    "options": {
+      "linkedin_url": "<string>"
+    },
+    "inputs": "one of linkedin_url | first_name, one of linkedin_url | last_name, one of linkedin_url | domain | company_name"
+  },
+  "fullenrich/people/search": {
+    "name": "People search",
+    "options": {},
+    "inputs": "limit, offset, search_after, person_names, person_ids, person_professional_network_urls, person_professional_network_ids, person_locations, …"
+  },
+  "glassdoor-com/jobs/search_jobs": {
+    "name": "Search jobs",
+    "options": {
+      "keyword": "<string>"
+    },
+    "inputs": "keyword (required), cursor, easy_apply_only, employer_id, employer_size, industry_id, location_id, location_type, min_rating, …"
+  },
+  "glassdoor-com/jobs/suggest_employers": {
+    "name": "Suggest employers",
+    "options": {
+      "term": "<string>"
+    },
+    "inputs": "term (required)"
+  },
+  "glassdoor-com/jobs/suggest_locations": {
+    "name": "Suggest locations",
+    "options": {
+      "term": "<string>"
+    },
+    "inputs": "term (required)"
+  },
+  "greenhouse-io/jobs/job": {
+    "name": "Job",
+    "options": {
+      "board_token": "<string>"
+    },
+    "inputs": "one of board_token | job_id | url"
+  },
+  "greenhouse-io/jobs/jobs": {
+    "name": "Jobs",
+    "options": {
+      "board_token": "<string>"
+    },
+    "inputs": "one of board_token | url, keyword, page, per_page"
+  },
+  "greenhouse-io/jobs/search": {
+    "name": "Search",
+    "options": {
+      "board_token": "<string>"
+    },
+    "inputs": "one of board_token | url, department_id, keyword, office_id, page"
+  },
+  "indeed-com/jobs/employer": {
+    "name": "Employer",
+    "options": {
+      "employer_key": "<string>"
+    },
+    "inputs": "one of employer_key | company | url, country"
+  },
+  "indeed-com/jobs/job": {
+    "name": "Job",
+    "options": {
+      "job_key": "<string>"
+    },
+    "inputs": "one of job_key | url"
+  },
+  "indeed-com/jobs/search": {
+    "name": "Search",
+    "options": {
+      "query": "<string>"
+    },
+    "inputs": "one of query | title | location, country, cursor, exclude_reposts, job_type, limit, posted_at_within_days, posted_within_days, radius_miles, …"
+  },
+  "myworkdayjobs-com/jobs/get_job": {
+    "name": "Get job",
+    "options": {},
+    "inputs": "career_site, external_path, url"
+  },
+  "myworkdayjobs-com/jobs/search_jobs": {
+    "name": "Search jobs",
+    "options": {
+      "career_site": "<string>"
+    },
+    "inputs": "career_site (required), facets, limit, offset, query"
+  },
+  "nasdaq-com/news/article": {
+    "name": "Article",
+    "options": {
+      "url": "<string>"
+    },
+    "inputs": "url (required)"
+  },
+  "nasdaq-com/news/press_releases": {
+    "name": "Press releases",
+    "options": {
+      "ticker": "<string>"
+    },
+    "inputs": "ticker (required), asset_class, limit, offset"
+  },
+  "nasdaq-com/news/ticker_news": {
+    "name": "Ticker news",
+    "options": {
+      "ticker": "<string>"
+    },
+    "inputs": "ticker (required), asset_class, include_press_releases, limit, offset, with_publish_times"
+  },
+  "newegg-com/products/open_box": {
+    "name": "Open box",
+    "options": {
+      "query": "<string>"
+    },
+    "inputs": "query (required), in_stock_only, page"
+  },
+  "newegg-com/products/product": {
+    "name": "Product",
+    "options": {
+      "item_number": "<string>"
+    },
+    "inputs": "item_number (required)"
+  },
+  "newegg-com/products/search": {
+    "name": "Search",
+    "options": {
+      "query": "<string>"
+    },
+    "inputs": "query (required), condition, in_stock_only, page"
+  },
+  "nfl-com/sports-league-data/injury_report": {
+    "name": "Injury report",
+    "options": {},
+    "inputs": "season, season_type, team, week"
+  },
+  "nfl-com/sports-league-data/schedule": {
+    "name": "Schedule",
+    "options": {},
+    "inputs": "season, season_type, week"
+  },
+  "oriane/instagram/posts-search": {
+    "name": "Search Instagram posts and reels",
+    "options": {
+      "handle": "<string>"
+    },
+    "inputs": "one of handle | caption, limit, offset, sort, aiSearchAnchor, projection"
+  },
+  "oriane/instagram/profile-lookup": {
+    "name": "Look up Instagram profile",
+    "options": {
+      "url": "<string>"
+    },
+    "inputs": "url (required), projection"
+  },
+  "oriane/instagram/profiles-search": {
+    "name": "Search Instagram profiles",
+    "options": {
+      "handle": "<string>"
+    },
+    "inputs": "one of handle | displayName | bio, limit, offset, sort, projection"
+  },
+  "oriane/tiktok/posts-search": {
+    "name": "Search TikTok videos",
+    "options": {
+      "handle": "<string>"
+    },
+    "inputs": "one of handle | caption, limit, offset, sort, aiSearchAnchor, projection"
+  },
+  "oriane/tiktok/profiles-search": {
+    "name": "Search TikTok profiles",
+    "options": {
+      "handle": "<string>"
+    },
+    "inputs": "one of handle | displayName | bio, limit, offset, sort, projection"
+  },
+  "particle/advertising/show/sponsors": {
+    "name": "Sponsors of a show",
+    "options": {
+      "id": "<string>"
+    },
+    "inputs": "id (required), company_id, since, until, limit, cursor"
+  },
+  "particle/people/guests": {
+    "name": "Guest directory",
+    "options": {},
+    "inputs": "q, min_appearances, podcast_id, topic_id, appeared_since, suitability_tier_max, sort, limit, …"
+  },
+  "particle/podcasts/episodes/search": {
+    "name": "Episode search",
+    "options": {
+      "semantic_search": "<string>"
+    },
+    "inputs": "one of semantic_search | keyword_search, keyword_match, entity_id, entity_type, company_id, episode_id, podcast_id, type, role, …"
+  },
+  "particle/podcasts/search": {
+    "name": "Show search",
+    "options": {
+      "q": "<string>"
+    },
+    "inputs": "q (required), topic_id, language, sort, suitability_tier, popularity_threshold, guest_frequency, format_signal, has_ads, …"
+  },
+  "people-data-labs/company/enrich": {
+    "name": "Company enrichment",
+    "options": {
+      "pdl_id": "<string>"
+    },
+    "inputs": "one of pdl_id | name | ticker | website | profile, location, street_address, locality, region, country, postal_code, min_likelihood, required, …"
+  },
+  "people-data-labs/company/search": {
+    "name": "Company search",
+    "options": {
+      "query": "<object>"
+    },
+    "inputs": "one of query | sql, size, scroll_token, titlecase"
+  },
+  "resy-com/restaurants/availability": {
+    "name": "Availability",
+    "options": {
+      "day": "<string>",
+      "venue_id": "<number>"
+    },
+    "inputs": "day (required), venue_id (required), party_size, time_filter"
+  },
+  "resy-com/restaurants/locations": {
+    "name": "Locations",
+    "options": {},
+    "inputs": "country_code, latitude, limit, longitude, query"
+  },
+  "resy-com/restaurants/search_venues": {
+    "name": "Search venues",
+    "options": {
+      "day": "<string>",
+      "latitude": "<number>",
+      "longitude": "<number>"
+    },
+    "inputs": "day (required), latitude (required), longitude (required), include_tock_inventory, page, party_size, per_page, query, radius_m, time_filter"
+  },
+  "sec-gov/filings/company": {
+    "name": "Company",
+    "options": {},
+    "inputs": "cik, name, ticker"
+  },
+  "sec-gov/filings/concept": {
+    "name": "Concept",
+    "options": {
+      "concept": "<string>"
+    },
+    "inputs": "concept (required), cik, form, limit, name, taxonomy, ticker, unit"
+  },
+  "sec-gov/filings/filings": {
+    "name": "Filings",
+    "options": {},
+    "inputs": "cik, forms, from, include_amendments, limit, name, ticker, to"
+  },
+  "sec-gov/filings/sections": {
+    "name": "Sections",
+    "options": {},
+    "inputs": "accession_number, cik, form, items, max_chars, name, ticker"
+  },
+  "similarweb/channels/share": {
+    "name": "Marketing channel shares",
+    "options": {
+      "domain": "<string>",
+      "start_date": "<string>",
+      "end_date": "<string>"
+    },
+    "inputs": "domain (required), start_date (required), end_date (required), granularity, country, web_source, main_domain_only, limit, offset, asc, sort"
+  },
+  "similarweb/web/geography": {
+    "name": "Traffic geography",
+    "options": {
+      "domain": "<string>",
+      "start_date": "<string>",
+      "end_date": "<string>",
+      "metrics": "<string>"
+    },
+    "inputs": "domain (required), start_date (required), end_date (required), metrics (required), granularity, web_source, main_domain_only, limit, offset, asc, sort"
+  },
+  "similarweb/web/ppc-spend": {
+    "name": "Paid search spend",
+    "options": {
+      "domain": "<string>",
+      "start_date": "<string>",
+      "end_date": "<string>"
+    },
+    "inputs": "domain (required), start_date (required), end_date (required), granularity, country, web_source, main_domain_only, currency"
+  },
+  "similarweb/web/traffic": {
+    "name": "Traffic and engagement",
+    "options": {
+      "domain": "<string>",
+      "start_date": "<string>",
+      "end_date": "<string>",
+      "metrics": "<string>"
+    },
+    "inputs": "domain (required), start_date (required), end_date (required), metrics (required), granularity, country, web_source, main_domain_only"
+  },
+  "skyscanner-net/flights/monthly_prices": {
+    "name": "Monthly prices",
+    "options": {
+      "destination_entity_id": "<string>",
+      "origin_entity_id": "<string>"
+    },
+    "inputs": "destination_entity_id (required), origin_entity_id (required), currency, direct_only, locale, market, trip_type"
+  },
+  "skyscanner-net/flights/price_calendar": {
+    "name": "Price calendar",
+    "options": {
+      "destination": "<string>",
+      "origin": "<string>"
+    },
+    "inputs": "destination (required), origin (required), currency, locale, market, max_days"
+  },
+  "skyscanner-net/flights/search_flights": {
+    "name": "Search flights",
+    "options": {
+      "origin_entity_id": "<string>"
+    },
+    "inputs": "one of origin_entity_id | destination_entity_id | legs, adults, cabin_class, child_ages, currency, inbound_date, locale, market, marketing_airlines, …"
+  },
+  "skyscanner-net/flights/suggest_places": {
+    "name": "Suggest places",
+    "options": {
+      "query": "<string>"
+    },
+    "inputs": "query (required), is_destination, locale, market"
+  },
+  "startwho-com/fantasy-sports-rankings/injury_report": {
+    "name": "Injury report",
+    "options": {},
+    "inputs": "position, team"
+  },
+  "startwho-com/fantasy-sports-rankings/projections": {
+    "name": "Projections",
+    "options": {
+      "position": "<string>"
+    },
+    "inputs": "position (required), limit, scoring, week"
+  },
+  "startwho-com/fantasy-sports-rankings/weekly_results": {
+    "name": "Weekly results",
+    "options": {
+      "position": "<string>",
+      "week": "<number>"
+    },
+    "inputs": "position (required), week (required), limit, scoring"
+  },
+  "substack-com/newsletters/archive": {
+    "name": "Archive",
+    "options": {
+      "publication": "<string>"
+    },
+    "inputs": "publication (required), limit, offset, sort"
+  },
+  "substack-com/newsletters/post": {
+    "name": "Post",
+    "options": {
+      "url": "<string>"
+    },
+    "inputs": "one of url | publication | slug"
+  },
+  "substack-com/newsletters/search": {
+    "name": "Search",
+    "options": {
+      "publication": "<string>",
+      "query": "<string>"
+    },
+    "inputs": "publication (required), query (required), limit, offset, sort"
+  },
+  "upspring/ads/browse": {
+    "name": "Browse ads",
+    "options": {},
+    "inputs": "vertical, category, advertiser_id, is_active, recency_days, has_product, min_impressions, media_type, …"
+  },
+  "upspring/advertisers/brief": {
+    "name": "Advertiser brief",
+    "options": {
+      "id": "<string>"
+    },
+    "inputs": "id (required)"
+  },
+  "upspring/advertisers/by-domain": {
+    "name": "Advertiser by domain",
+    "options": {
+      "domain": "<string>"
+    },
+    "inputs": "domain (required), sync"
+  },
+  "upspring/advertisers/compare": {
+    "name": "Compare advertisers",
+    "options": {
+      "id": "<string>",
+      "otherId": "<string>"
+    },
+    "inputs": "id (required), otherId (required)"
+  },
+  "vrbo-com/vacation-rentals/locations": {
+    "name": "Locations",
+    "options": {
+      "query": "<string>"
+    },
+    "inputs": "query (required)"
+  },
+  "vrbo-com/vacation-rentals/offers": {
+    "name": "Offers",
+    "options": {
+      "property_id": "<string>"
+    },
+    "inputs": "property_id (required), adults, checkin, checkout, children_ages"
+  },
+  "vrbo-com/vacation-rentals/search": {
+    "name": "Search",
+    "options": {
+      "region_id": "<string>"
+    },
+    "inputs": "region_id (required), adults, checkin, checkout, children_ages, limit, offset, sort"
+  },
+  "walmart-com/products/product": {
+    "name": "Product",
+    "options": {},
+    "inputs": "url, us_item_id"
+  },
+  "walmart-com/products/reviews": {
+    "name": "Reviews",
+    "options": {},
+    "inputs": "page, sort, url, us_item_id"
+  },
+  "walmart-com/products/search": {
+    "name": "Search",
+    "options": {
+      "query": "<string>"
+    },
+    "inputs": "query (required), facet, limit, max_price, min_price, page, sort"
+  },
+  "web-archive-org/captures/content": {
+    "name": "Content",
+    "options": {
+      "timestamp": "<string>",
+      "url": "<string>"
+    },
+    "inputs": "timestamp (required), url (required)"
+  },
+  "web-archive-org/captures/history": {
+    "name": "History",
+    "options": {
+      "url": "<string>"
+    },
+    "inputs": "url (required), date, limit"
+  },
+  "x-com/posts/lookup": {
+    "name": "Inspect a post",
+    "options": {
+      "post_id": "<string>"
+    },
+    "inputs": "post_id (required)"
+  },
+  "x-com/posts/search": {
+    "name": "Search posts",
+    "options": {
+      "query": "<string>"
+    },
+    "inputs": "query (required), limit, from_date, to_date"
+  },
+  "x-com/users/lookup": {
+    "name": "Inspect a profile",
+    "options": {
+      "username": "<string>"
+    },
+    "inputs": "username (required)"
+  },
+  "x-com/users/posts": {
+    "name": "Research account posts",
+    "options": {
+      "username": "<string>"
+    },
+    "inputs": "username (required), limit, from_date, to_date"
+  },
+  "ycombinator-com/companies/company": {
+    "name": "Company",
+    "options": {
+      "slug": "<string>"
+    },
+    "inputs": "slug (required)"
+  },
+  "ycombinator-com/companies/jobs": {
+    "name": "Jobs",
+    "options": {
+      "slug": "<string>"
+    },
+    "inputs": "slug (required)"
+  },
+  "ycombinator-com/companies/search": {
+    "name": "Search",
+    "options": {},
+    "inputs": "batch, hiring, industry, nonprofit, page, query, region, status, …"
+  },
+  "youtube/read": {
+    "name": "Read YouTube video",
+    "options": {
+      "url": "<string>"
+    },
+    "inputs": "url (required), formats, language, country, maxAge, proxy, timeout, waitFor, mobile, …"
+  },
+  "ziprecruiter-com/jobs/job": {
+    "name": "Job",
+    "options": {
+      "url": "<string>"
+    },
+    "inputs": "url (required)"
+  },
+  "ziprecruiter-com/jobs/salary": {
+    "name": "Salary",
+    "options": {
+      "title": "<string>"
+    },
+    "inputs": "title (required), location"
+  },
+  "ziprecruiter-com/jobs/search_jobs": {
+    "name": "Search jobs",
+    "options": {
+      "title": "<string>"
+    },
+    "inputs": "title (required), location, min_annual_pay, page, posted_within_days"
+  }
+}

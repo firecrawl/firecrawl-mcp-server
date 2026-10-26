@@ -3899,6 +3899,103 @@
       "additionalProperties": false
     }
   },
+  "firecrawl_packs@9848f3277931": {
+    "annotations": {
+      "title": "Alexandria packs",
+      "readOnlyHint": true,
+      "openWorldHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true
+    },
+    "title": "Alexandria packs",
+    "description": "Start here when the task fits one of these packs. A pack names the Alexandria providers that hold the data for that kind of task, what each returns, and short guidance on using them, so you can query them directly instead of assembling the answer from web pages.\n- creators: a YouTube video or its transcript, what people say on X/Twitter, Instagram or TikTok creators and influencers, podcasts and their guests or sponsors, or newsletters\n- marketing: competitor website traffic or channels, what topics or keywords people search for and which are rising, Google Trends, competitors' ads, how a site's messaging or pricing changed over time, or app-store reviews\n- prospecting: researching companies (firmographics, headcount, funding rounds and investors, startup directories such as Y Combinator), building a lead or prospect list, finding decision-makers, or listing local businesses by category and city\n- jobs: finding job openings or roles to apply to, jobs at a specific company, salary ranges or pay benchmarks, or which companies are hiring for a role\n- investing: a stock's price or why it moved, a company's quarterly revenue, segment results, earnings call or SEC filings, analyst ratings, or economic data such as unemployment, CPI inflation or interest rates\n- shopping: comparing products or prices across stores, current price or stock for an item, product reviews and ratings, bestsellers in a category, or wholesale suppliers for sourcing\n- travel: flight prices or the cheapest dates to fly, hotel or vacation-rental options and prices for specific dates, hotel reviews, or restaurant table availability for a trip\n- fantasy: who to start or sit, a fantasy lineup, waiver pickups, trade value or draft rankings\nCall with {pack} to load one, or {} to list them. Read-only, free, and it does not run providers or ask the user questions. Then follow a provider's nextTool to browse its live capabilities and prices with firecrawl_find_tools, and execute selected capabilities through firecrawl_scrape.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "pack": {
+          "description": "Pack ID. Omit to list the packs.",
+          "type": "string",
+          "enum": [
+            "creators",
+            "marketing",
+            "prospecting",
+            "jobs",
+            "investing",
+            "shopping",
+            "travel",
+            "fantasy"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "name": "firecrawl_packs",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "The pack list, or agent-facing provider context and guidance for one pack.",
+      "type": "object",
+      "properties": {
+        "packs": {
+          "description": "Available packs, each with a nextTool that loads its context."
+        },
+        "pack": {
+          "description": "Pack ID.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "description": "Pack title.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "summary": {
+          "description": "What the pack helps with.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "providers": {
+          "description": "Provider IDs, compact summaries, representative capability IDs and nextTool calls for live discovery with costs."
+        },
+        "skill": {
+          "description": "Short guidance on choosing sources and using them accurately, including access and cost requirements."
+        },
+        "examples": {
+          "description": "Illustrative requests and useful provider combinations, not mandatory sequences."
+        },
+        "page": {
+          "description": "Public page describing the pack.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
   "firecrawl_parse@1acaf77898b6": {
     "annotations": {
       "title": "Firecrawl file parsing",
@@ -5054,588 +5151,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_scrape@1eb5e578ec04": {
-    "annotations": {
-      "title": "Firecrawl scrape",
-      "readOnlyHint": true,
-      "openWorldHint": true,
-      "destructiveHint": false
-    },
-    "title": "Firecrawl scrape",
-    "description": "\nScrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session, `firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.\n\nWith `alexandria` in place of `url`, the tool runs catalogued provider capabilities instead of fetching a page. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.\n",
-    "inputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "type": "object",
-      "properties": {
-        "url": {
-          "type": "string",
-          "format": "uri"
-        },
-        "formats": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "markdown",
-              "html",
-              "rawHtml",
-              "screenshot",
-              "links",
-              "images",
-              "summary",
-              "changeTracking",
-              "branding",
-              "json",
-              "query",
-              "audio"
-            ]
-          }
-        },
-        "jsonOptions": {
-          "type": "object",
-          "properties": {
-            "prompt": {
-              "type": "string"
-            },
-            "schema": {
-              "type": "object",
-              "propertyNames": {
-                "type": "string"
-              },
-              "additionalProperties": false
-            }
-          },
-          "additionalProperties": false
-        },
-        "queryOptions": {
-          "type": "object",
-          "properties": {
-            "prompt": {
-              "type": "string",
-              "maxLength": 10000
-            },
-            "mode": {
-              "default": "freeform",
-              "type": "string",
-              "enum": [
-                "directQuote",
-                "freeform"
-              ]
-            }
-          },
-          "required": [
-            "prompt"
-          ],
-          "additionalProperties": false
-        },
-        "screenshotOptions": {
-          "type": "object",
-          "properties": {
-            "fullPage": {
-              "type": "boolean"
-            },
-            "quality": {
-              "type": "number"
-            },
-            "viewport": {
-              "type": "object",
-              "properties": {
-                "width": {
-                  "type": "number"
-                },
-                "height": {
-                  "type": "number"
-                }
-              },
-              "required": [
-                "width",
-                "height"
-              ],
-              "additionalProperties": false
-            }
-          },
-          "additionalProperties": false
-        },
-        "parsers": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "pdf"
-            ]
-          }
-        },
-        "pdfOptions": {
-          "type": "object",
-          "properties": {
-            "maxPages": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 10000
-            }
-          },
-          "additionalProperties": false
-        },
-        "onlyMainContent": {
-          "type": "boolean"
-        },
-        "redactPII": {
-          "type": "boolean"
-        },
-        "includeTags": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "excludeTags": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "waitFor": {
-          "type": "number"
-        },
-        "mobile": {
-          "type": "boolean"
-        },
-        "skipTlsVerification": {
-          "type": "boolean"
-        },
-        "removeBase64Images": {
-          "type": "boolean"
-        },
-        "location": {
-          "type": "object",
-          "properties": {
-            "country": {
-              "type": "string"
-            },
-            "languages": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          },
-          "additionalProperties": false
-        },
-        "storeInCache": {
-          "type": "boolean"
-        },
-        "zeroDataRetention": {
-          "type": "boolean"
-        },
-        "maxAge": {
-          "type": "number"
-        },
-        "lockdown": {
-          "type": "boolean"
-        },
-        "proxy": {
-          "type": "string",
-          "enum": [
-            "basic",
-            "stealth",
-            "enhanced",
-            "auto"
-          ]
-        },
-        "profile": {
-          "description": "Loads a saved browser profile without saving changes to it.",
-          "type": "object",
-          "properties": {
-            "name": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "name"
-          ],
-          "additionalProperties": false
-        },
-        "timeout": {
-          "description": "Execution timeout in milliseconds.",
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
-        },
-        "requestId": {
-          "description": "Idempotency key bound to one Alexandria execution payload. Generated when omitted and returned with the result.",
-          "type": "string",
-          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
-        },
-        "alexandria": {
-          "description": "Catalogued Alexandria capability invocation, mutually exclusive with url. One {provider, capability, options} object or an array of 1-10, with contracts available through firecrawl_search or firecrawl_find_tools. Each call may include version to pin a published workflow; omitting it uses latest. Only requestId and timeout are supported alongside alexandria. The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and response.key (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination. Returns per-capability results in data.alexandria with data, records, or an error with a code; individual capabilities can fail even when the outer response succeeds. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.",
-          "anyOf": [
-            {
-              "type": "object",
-              "properties": {
-                "provider": {
-                  "description": "Provider slug, e.g. \"fred\".",
-                  "type": "string",
-                  "minLength": 1
-                },
-                "capability": {
-                  "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
-                  "type": "string",
-                  "minLength": 1
-                },
-                "version": {
-                  "description": "Optional published workflow version. Omit to use the latest version.",
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 128
-                },
-                "options": {
-                  "description": "Capability options as declared by its contract.",
-                  "type": "object",
-                  "propertyNames": {
-                    "type": "string"
-                  },
-                  "additionalProperties": {}
-                }
-              },
-              "required": [
-                "provider",
-                "capability"
-              ]
-            },
-            {
-              "minItems": 1,
-              "maxItems": 10,
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "provider": {
-                    "description": "Provider slug, e.g. \"fred\".",
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "capability": {
-                    "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "version": {
-                    "description": "Optional published workflow version. Omit to use the latest version.",
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 128
-                  },
-                  "options": {
-                    "description": "Capability options as declared by its contract.",
-                    "type": "object",
-                    "propertyNames": {
-                      "type": "string"
-                    },
-                    "additionalProperties": {}
-                  }
-                },
-                "required": [
-                  "provider",
-                  "capability"
-                ]
-              }
-            }
-          ]
-        },
-        "toolDetail": {
-          "description": "URL mode only: domain discovery detail, summary by default; compact returns provider/capability/description, full includes contracts. Ignored with alexandria.",
-          "type": "string",
-          "enum": [
-            "compact",
-            "summary",
-            "full"
-          ]
-        },
-        "domainTools": {
-          "description": "URL mode only: include domain-matched Alexandria tools for the page in tools on the returned document. Ignored with alexandria.",
-          "type": "boolean"
-        }
-      },
-      "additionalProperties": false
-    },
-    "name": "firecrawl_scrape",
-    "outputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "description": "A scraped document, or the Alexandria execution envelope when `alexandria` was passed.",
-      "type": "object",
-      "properties": {
-        "markdown": {
-          "description": "Page content as markdown.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "html": {
-          "description": "Processed HTML of the page.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "rawHtml": {
-          "description": "Unprocessed HTML of the page.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "summary": {
-          "description": "Summary of the page content.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "links": {
-          "description": "Links found on the page."
-        },
-        "screenshot": {
-          "description": "Screenshot of the page."
-        },
-        "images": {
-          "description": "Images found on the page."
-        },
-        "audio": {
-          "description": "Audio extracted from the page."
-        },
-        "video": {
-          "description": "Video extracted from the page."
-        },
-        "answer": {
-          "description": "Targeted answer to the question that was asked of the page.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "highlights": {
-          "description": "Highlighted passages from the page."
-        },
-        "pages": {
-          "description": "Physical PDF pages, when `parsers[].pages` is set."
-        },
-        "blocks": {
-          "description": "Typed PDF layout blocks, when `parsers[].blocks` is set."
-        },
-        "product": {
-          "description": "Product data extracted from the page."
-        },
-        "menu": {
-          "description": "Menu data extracted from the page."
-        },
-        "json": {
-          "description": "Structured data matching the requested JSON schema or prompt."
-        },
-        "attributes": {
-          "description": "Values collected by the requested attribute selectors."
-        },
-        "actions": {
-          "description": "Results of the browser actions that ran during the scrape."
-        },
-        "changeTracking": {
-          "description": "Change-tracking comparison against the previous scrape."
-        },
-        "branding": {
-          "description": "Branding data extracted from the page."
-        },
-        "metadata": {
-          "description": "Page metadata; authenticated responses can include `metadata.scrapeId` for scrape feedback."
-        },
-        "tools": {
-          "description": "Domain-matched Alexandria tools for the page, when `domainTools` is set."
-        },
-        "warning": {
-          "description": "Non-fatal warning about the result.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "success": {
-          "description": "Whether the API call succeeded.",
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "error": {
-          "description": "Error message or error object when the call did not succeed."
-        },
-        "data": {
-          "description": "Alexandria mode: per-capability results in `data.alexandria`, each with `data`, `records`, or an `error`."
-        },
-        "requestId": {
-          "description": "Identifier of this Alexandria execution.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "scrape_id": {
-          "description": "Identifier of the underlying scrape.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "receipt": {
-          "description": "Billing receipt for the execution."
-        },
-        "creditsCost": {
-          "description": "Credits this call consumed.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "delivery": {
-          "description": "`retained` when the full result stayed server-side instead of being inlined.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "responseBytes": {
-          "description": "Size of the full result in bytes.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "estimatedTokens": {
-          "description": "Estimated token cost of the full result.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "tokenEstimateMethod": {
-          "description": "How `estimatedTokens` was derived.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "inlineTokenBudget": {
-          "description": "Token budget above which a result is retained rather than inlined.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "workspaceId": {
-          "description": "Workspace holding a retained result, for inspection through virtual Bash.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "idleTtlSeconds": {
-          "description": "Seconds a retained workspace stays available while idle.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "message": {
-          "description": "Guidance that accompanies the result.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "nextTool": {
-          "description": "A follow-up tool call (`{name, arguments}`) that continues or inspects this result."
-        },
-        "feedbackTool": {
-          "description": "Pointer to the feedback tool for reporting how this result served the task."
-        }
-      },
-      "additionalProperties": false
-    },
-    "_meta": {
-      "anthropic/alwaysLoad": true
-    }
-  },
-  "firecrawl_scrape@26c21845df18": {
+  "firecrawl_scrape@36105c300cf5": {
     "annotations": {
       "title": "Firecrawl scrape",
       "readOnlyHint": false,
@@ -6103,6 +5619,9 @@
         "tools": {
           "description": "Domain-matched Alexandria tools for the page, when `domainTools` is set."
         },
+        "packs": {
+          "description": "firecrawl_scrape call templates from the Alexandria packs that cover this site, when any do."
+        },
         "warning": {
           "description": "Non-fatal warning about the result.",
           "anyOf": [
@@ -6268,7 +5787,591 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_scrape@4d495c7d2b51": {
+  "firecrawl_scrape@3b88791ac2af": {
+    "annotations": {
+      "title": "Firecrawl scrape",
+      "readOnlyHint": true,
+      "openWorldHint": true,
+      "destructiveHint": false
+    },
+    "title": "Firecrawl scrape",
+    "description": "\nScrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session, `firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.\n\nWith `alexandria` in place of `url`, the tool runs catalogued provider capabilities instead of fetching a page. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.\n",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "formats": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "markdown",
+              "html",
+              "rawHtml",
+              "screenshot",
+              "links",
+              "images",
+              "summary",
+              "changeTracking",
+              "branding",
+              "json",
+              "query",
+              "audio"
+            ]
+          }
+        },
+        "jsonOptions": {
+          "type": "object",
+          "properties": {
+            "prompt": {
+              "type": "string"
+            },
+            "schema": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "queryOptions": {
+          "type": "object",
+          "properties": {
+            "prompt": {
+              "type": "string",
+              "maxLength": 10000
+            },
+            "mode": {
+              "default": "freeform",
+              "type": "string",
+              "enum": [
+                "directQuote",
+                "freeform"
+              ]
+            }
+          },
+          "required": [
+            "prompt"
+          ],
+          "additionalProperties": false
+        },
+        "screenshotOptions": {
+          "type": "object",
+          "properties": {
+            "fullPage": {
+              "type": "boolean"
+            },
+            "quality": {
+              "type": "number"
+            },
+            "viewport": {
+              "type": "object",
+              "properties": {
+                "width": {
+                  "type": "number"
+                },
+                "height": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "width",
+                "height"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "parsers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "pdf"
+            ]
+          }
+        },
+        "pdfOptions": {
+          "type": "object",
+          "properties": {
+            "maxPages": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            }
+          },
+          "additionalProperties": false
+        },
+        "onlyMainContent": {
+          "type": "boolean"
+        },
+        "redactPII": {
+          "type": "boolean"
+        },
+        "includeTags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "excludeTags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "waitFor": {
+          "type": "number"
+        },
+        "mobile": {
+          "type": "boolean"
+        },
+        "skipTlsVerification": {
+          "type": "boolean"
+        },
+        "removeBase64Images": {
+          "type": "boolean"
+        },
+        "location": {
+          "type": "object",
+          "properties": {
+            "country": {
+              "type": "string"
+            },
+            "languages": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "storeInCache": {
+          "type": "boolean"
+        },
+        "zeroDataRetention": {
+          "type": "boolean"
+        },
+        "maxAge": {
+          "type": "number"
+        },
+        "lockdown": {
+          "type": "boolean"
+        },
+        "proxy": {
+          "type": "string",
+          "enum": [
+            "basic",
+            "stealth",
+            "enhanced",
+            "auto"
+          ]
+        },
+        "profile": {
+          "description": "Loads a saved browser profile without saving changes to it.",
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false
+        },
+        "timeout": {
+          "description": "Execution timeout in milliseconds.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "requestId": {
+          "description": "Idempotency key bound to one Alexandria execution payload. Generated when omitted and returned with the result.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+        },
+        "alexandria": {
+          "description": "Catalogued Alexandria capability invocation, mutually exclusive with url. One {provider, capability, options} object or an array of 1-10, with contracts available through firecrawl_search or firecrawl_find_tools. Each call may include version to pin a published workflow; omitting it uses latest. Only requestId and timeout are supported alongside alexandria. The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and response.key (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination. Returns per-capability results in data.alexandria with data, records, or an error with a code; individual capabilities can fail even when the outer response succeeds. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "description": "Provider slug, e.g. \"fred\".",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "capability": {
+                  "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "description": "Optional published workflow version. Omit to use the latest version.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "options": {
+                  "description": "Capability options as declared by its contract.",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
+              },
+              "required": [
+                "provider",
+                "capability"
+              ]
+            },
+            {
+              "minItems": 1,
+              "maxItems": 10,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "description": "Provider slug, e.g. \"fred\".",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "capability": {
+                    "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "version": {
+                    "description": "Optional published workflow version. Omit to use the latest version.",
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "options": {
+                    "description": "Capability options as declared by its contract.",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "provider",
+                  "capability"
+                ]
+              }
+            }
+          ]
+        },
+        "toolDetail": {
+          "description": "URL mode only: domain discovery detail, summary by default; compact returns provider/capability/description, full includes contracts. Ignored with alexandria.",
+          "type": "string",
+          "enum": [
+            "compact",
+            "summary",
+            "full"
+          ]
+        },
+        "domainTools": {
+          "description": "URL mode only: include domain-matched Alexandria tools for the page in tools on the returned document. Ignored with alexandria.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "name": "firecrawl_scrape",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "A scraped document, or the Alexandria execution envelope when `alexandria` was passed.",
+      "type": "object",
+      "properties": {
+        "markdown": {
+          "description": "Page content as markdown.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "html": {
+          "description": "Processed HTML of the page.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rawHtml": {
+          "description": "Unprocessed HTML of the page.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "summary": {
+          "description": "Summary of the page content.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "links": {
+          "description": "Links found on the page."
+        },
+        "screenshot": {
+          "description": "Screenshot of the page."
+        },
+        "images": {
+          "description": "Images found on the page."
+        },
+        "audio": {
+          "description": "Audio extracted from the page."
+        },
+        "video": {
+          "description": "Video extracted from the page."
+        },
+        "answer": {
+          "description": "Targeted answer to the question that was asked of the page.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "highlights": {
+          "description": "Highlighted passages from the page."
+        },
+        "pages": {
+          "description": "Physical PDF pages, when `parsers[].pages` is set."
+        },
+        "blocks": {
+          "description": "Typed PDF layout blocks, when `parsers[].blocks` is set."
+        },
+        "product": {
+          "description": "Product data extracted from the page."
+        },
+        "menu": {
+          "description": "Menu data extracted from the page."
+        },
+        "json": {
+          "description": "Structured data matching the requested JSON schema or prompt."
+        },
+        "attributes": {
+          "description": "Values collected by the requested attribute selectors."
+        },
+        "actions": {
+          "description": "Results of the browser actions that ran during the scrape."
+        },
+        "changeTracking": {
+          "description": "Change-tracking comparison against the previous scrape."
+        },
+        "branding": {
+          "description": "Branding data extracted from the page."
+        },
+        "metadata": {
+          "description": "Page metadata; authenticated responses can include `metadata.scrapeId` for scrape feedback."
+        },
+        "tools": {
+          "description": "Domain-matched Alexandria tools for the page, when `domainTools` is set."
+        },
+        "packs": {
+          "description": "firecrawl_scrape call templates from the Alexandria packs that cover this site, when any do."
+        },
+        "warning": {
+          "description": "Non-fatal warning about the result.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "success": {
+          "description": "Whether the API call succeeded.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "description": "Error message or error object when the call did not succeed."
+        },
+        "data": {
+          "description": "Alexandria mode: per-capability results in `data.alexandria`, each with `data`, `records`, or an `error`."
+        },
+        "requestId": {
+          "description": "Identifier of this Alexandria execution.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scrape_id": {
+          "description": "Identifier of the underlying scrape.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "receipt": {
+          "description": "Billing receipt for the execution."
+        },
+        "creditsCost": {
+          "description": "Credits this call consumed.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "delivery": {
+          "description": "`retained` when the full result stayed server-side instead of being inlined.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "responseBytes": {
+          "description": "Size of the full result in bytes.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "estimatedTokens": {
+          "description": "Estimated token cost of the full result.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tokenEstimateMethod": {
+          "description": "How `estimatedTokens` was derived.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inlineTokenBudget": {
+          "description": "Token budget above which a result is retained rather than inlined.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "workspaceId": {
+          "description": "Workspace holding a retained result, for inspection through virtual Bash.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "idleTtlSeconds": {
+          "description": "Seconds a retained workspace stays available while idle.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "description": "Guidance that accompanies the result.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nextTool": {
+          "description": "A follow-up tool call (`{name, arguments}`) that continues or inspects this result."
+        },
+        "feedbackTool": {
+          "description": "Pointer to the feedback tool for reporting how this result served the task."
+        }
+      },
+      "additionalProperties": false
+    },
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    }
+  },
+  "firecrawl_scrape@9dcd925c13ad": {
     "annotations": {
       "title": "Firecrawl scrape",
       "readOnlyHint": true,
@@ -6683,6 +6786,9 @@
         },
         "tools": {
           "description": "Domain-matched Alexandria tools for the page, when `domainTools` is set."
+        },
+        "packs": {
+          "description": "firecrawl_scrape call templates from the Alexandria packs that cover this site, when any do."
         },
         "warning": {
           "description": "Non-fatal warning about the result.",
