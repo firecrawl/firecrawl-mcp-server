@@ -6,15 +6,16 @@ import {
   withAlexandriaFeedbackHint,
 } from './alexandria-feedback.js';
 import FirecrawlApp from 'firecrawl';
+import type { Hono } from 'hono';
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/server/validators/ajv';
+import type { JsonSchemaType, JsonSchemaValidator } from '@modelcontextprotocol/server';
 import {
   type ContentResult,
-  FastMCP,
   type Logger,
-  UserError as FastMcpUserError,
-} from 'fastmcp';
-import type { Hono } from 'hono';
-import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
-import type { JsonSchemaType, JsonSchemaValidator } from '@modelcontextprotocol/sdk/validation';
+  McpRuntime,
+  type Tool,
+  UserError as RuntimeUserError,
+} from './mcp/runtime.js';
 import { strictJsonSchema, toJsonSchema } from 'xsschema';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
@@ -82,7 +83,7 @@ import {
   type McpClient,
 } from './origin';
 import { integrationFrom, withIntegration } from './integration';
-import { CoreHttpError } from './core-http-error.js';
+import { apiErrorDetails, CoreHttpError } from './core-http-error.js';
 import { normalizeHeader } from './headers.js';
 import {
   FIRECRAWL_CREDENTIAL_REJECTED,
@@ -115,9 +116,8 @@ import { normalizeToolArguments } from './tool-arguments.js';
  * Library entry point: `import { createFirecrawlMcpServer } from 'firecrawl-mcp/server'`.
  *
  * Unstable: this API, its options and the types below may change in any
- * release, including minor and patch releases. FastMCP is bundled (with local
- * patches), so embedders use the types exported here rather than importing
- * `fastmcp` themselves.
+ * release, including minor and patch releases. Embedders use the types
+ * exported here rather than the MCP SDK's own.
  * @packageDocumentation
  */
 
@@ -128,7 +128,7 @@ import { normalizeToolArguments } from './tool-arguments.js';
 export const UserError: new (
   message: string,
   extras?: Record<string, unknown>
-) => Error & { extras?: Record<string, unknown> } = FastMcpUserError;
+) => Error & { extras?: Record<string, unknown> } = RuntimeUserError;
 
 /** What a tool's `execute` or `beforeValidate` may return. */
 export type ToolResult = {
@@ -256,8 +256,8 @@ export interface ToolDefinition {
   ): Promise<ToolResult | string | void>;
 }
 
-/** The FastMCP shape of a tool, used inside the core. */
-type RegisteredTool = Parameters<FastMCP<SessionData>['addTool']>[0];
+/** The runtime shape of a tool, used inside the core. */
+type RegisteredTool = Tool<SessionData>;
 
 /** Registers a tool onto an instance. */
 export type ToolRegistrar = { addTool(tool: ToolDefinition): void };
@@ -407,7 +407,7 @@ export type FirecrawlMcpServerStartArgs =
          * `127.0.0.1`, `::` or `0.0.0.0` to choose explicitly.
          */
         host?: string;
-        /** Defaults to FastMCP's endpoint (`FASTMCP_ENDPOINT` or `/mcp`). */
+        /** Defaults to `FASTMCP_ENDPOINT`, then `/mcp`. */
         endpoint?: `/${string}`;
         stateless?: boolean;
         /** Largest request body accepted, in bytes. Defaults to 1 MiB; larger bodies get 413. */
@@ -620,7 +620,7 @@ export function createFirecrawlMcpServer(
 
   const authenticateSession = hooks.authenticate ?? defaultAuthenticate;
 
-  // FastMCP may authenticate one HTTP request more than once; resolve it once.
+  // One HTTP request may be authenticated more than once; resolve it once.
   function authenticate(request?: CachedAuthRequest): Promise<SessionData> {
     const cached = request?.[authResultByRequest];
     if (cached) return cached;
@@ -643,19 +643,15 @@ export function createFirecrawlMcpServer(
     return authResult;
   }
 
-  const server = new FastMCP<SessionData>({
+  const server = new McpRuntime<SessionData>({
     name: 'firecrawl-fastmcp',
-    version: packageVersion as `${number}.${number}.${number}`,
+    version: packageVersion,
     instructions,
     logger: new ConsoleLogger(logging),
-    roots: { enabled: false },
-    ...(hooks.oauth
-      ? { oauth: { enabled: true, protectedResource: hooks.oauth.protectedResource } }
-      : {}),
+    ...(hooks.oauth ? { oauth: { protectedResource: hooks.oauth.protectedResource } } : {}),
     authenticate,
     // Lightweight health endpoint for LB checks
     health: {
-      enabled: true,
       message: 'ok',
       path: '/health',
       status: 200,
@@ -765,11 +761,21 @@ export function createFirecrawlMcpServer(
         const result = await run();
         return isErrorResult(result) ? deliverError(result) : result;
       } catch (error) {
-        if (!(error instanceof FastMcpUserError)) throw error;
+        if (error instanceof RuntimeUserError) {
+          return deliverError({
+            content: [{ type: 'text', text: error.message }],
+            isError: true,
+            ...(error.extras ? { structuredContent: error.extras } : {}),
+          });
+        }
+        // A failed API request keeps the text the MCP framework would write
+        // and adds its code and status, so a caller can branch on them.
+        const apiError = apiErrorDetails(error);
+        if (!apiError) throw error;
         return deliverError({
-          content: [{ type: 'text', text: error.message }],
+          content: [{ type: 'text', text: `Tool '${wrapped.name}' execution failed: ${apiError.message}` }],
           isError: true,
-          ...(error.extras ? { structuredContent: error.extras } : {}),
+          structuredContent: { success: false, error: apiError },
         });
       }
     }
@@ -2516,6 +2522,7 @@ Returns submission status, feedback ID, and accounting fields.
       readOnlyHint: false, // Starts a server-side crawl job and polls until the job reaches a terminal state.
       openWorldHint: true, // Crawls user-specified URLs across the public web.
       destructiveHint: false, // Reads pages from target sites; does not delete or alter external websites.
+      idempotentHint: false, // Each call starts a new crawl job and is billed again.
     },
     description: `
 Start a multi-page crawl at a website URL, poll it to a terminal state, and return the final status and collected data. Scope can be bounded with include/exclude paths, depth, page limit, subdomain/external-link controls, sitemap handling, delay, and scrape options.
@@ -2726,6 +2733,7 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
       readOnlyHint: false, // Starts an autonomous research agent job on the Firecrawl API.
       openWorldHint: true, // The agent browses and searches the open web to fulfill the prompt.
       destructiveHint: false, // Gathers information only; does not delete external data or user resources.
+      idempotentHint: false, // Each call starts a new research job and is billed again.
     },
     description: `
 Run web research that returns structured data when the URLs are not known or the answer spans several sites. Describe the fields you need in \`prompt\`, optionally pass a JSON \`schema\` and seed \`urls\`, and the research agent searches, navigates, reads pages, and returns JSON assembled across sources. Use it to research an entity plus its fields (founders, pricing, contact details), to build lists and datasets (companies, people, products, jobs, papers), and for pages that need navigation or interaction to reach the data. Optional \`effort\` sets the reasoning budget, \`maxCredits\` caps spend, and \`strictConstrainToURLs\` keeps the agent to the supplied \`urls\`.
@@ -2921,6 +2929,7 @@ Returns job status, progress information, and result data when completed.
       readOnlyHint: false, // Executes browser interactions (clicks, form input, scripts) in a live session.
       openWorldHint: true, // Interacts with pages on the public web via the scraped session.
       destructiveHint: false, // Transient page interactions only; does not delete monitors, jobs, or external sites.
+      idempotentHint: false, // Repeating an interaction can act on the page again.
     },
     description: `
 Open or reuse a live browser session to navigate a page, click controls, fill fields, or run browser code. Provide either \`url\` or \`scrapeId\`, and either a natural-language \`prompt\` or executable \`code\`; code can run as Bash, Python, or Node with a bounded timeout.
@@ -3025,6 +3034,7 @@ This acts on the live site, so actions such as form submission can create persis
       readOnlyHint: false, // Calls the API to stop and tear down an active interact session.
       openWorldHint: false, // Operates only on a known Firecrawl scrape/interact session ID.
       destructiveHint: true, // Terminates the live browser session; this end state cannot be resumed.
+      idempotentHint: true, // Stopping a session that is already stopped leaves it stopped.
     },
     description: `
 Stop the live interact session associated with a \`scrapeId\` and release its resources. Returns a success confirmation.
