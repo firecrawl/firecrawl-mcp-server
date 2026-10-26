@@ -11,11 +11,14 @@ import { AjvJsonSchemaValidator } from '@modelcontextprotocol/server/validators/
 import type { JsonSchemaType, JsonSchemaValidator } from '@modelcontextprotocol/server';
 import {
   type ContentResult,
+  type DeferredResult,
   type Logger,
   McpRuntime,
+  type ModernRequest,
   type Tool,
   UserError as RuntimeUserError,
 } from './mcp/runtime.js';
+import { tasksExtension, type TaskHandler } from './tasks.js';
 import { strictJsonSchema, toJsonSchema } from 'xsschema';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
@@ -207,6 +210,18 @@ export type ToolContext = {
   log: ToolLogger;
   /** The connected client; `version` is the clientInfo sent at initialize. */
   client?: { version?: { name?: string; version?: string } };
+  /**
+   * The protocol revision 2026-07-28 details of the call: the client
+   * capabilities it declared, and the input responses and request state of a
+   * retried multi round-trip call. Absent on 2025-era calls, which can only
+   * take a complete result.
+   */
+  mcp?: ModernRequest;
+  /**
+   * Set when the call runs as an MCP task: a tool that starts a Firecrawl job
+   * returns as soon as the job is accepted instead of waiting for it.
+   */
+  task?: boolean;
   [key: string]: unknown;
 };
 
@@ -242,10 +257,17 @@ export interface ToolDefinition {
     args: unknown,
     session: Session
   ): ToolResult | undefined | Promise<ToolResult | undefined>;
+  /**
+   * Runs the call. On protocol revision 2026-07-28 (`context.mcp` is set) it
+   * may answer `inputRequired(...)` to ask the client for input, or a task
+   * (`resultType: "task"`) when the client declared the tasks extension; a
+   * {@link TaskHandler} added with `ExtraToolsContext.addTaskHandler` then
+   * serves the task.
+   */
   execute(
     args: any,
     context: ToolContext
-  ): Promise<ToolResult | string | void>;
+  ): Promise<ToolResult | DeferredResult | string | void>;
 }
 
 /** The runtime shape of a tool, used inside the core. */
@@ -292,6 +314,18 @@ export type ToolCallEvent = {
   | { status: 'error'; error: unknown }
 );
 
+/** A completed MCP task's result, for {@link FirecrawlMcpServerHooks.taskResult}. */
+export type TaskResultEvent = {
+  /** The tool whose call started the task. */
+  tool: string;
+  /** The Firecrawl job behind the task. */
+  jobId: string;
+  result: ToolResult;
+  session: SessionData;
+  /** The client, from the request's `clientInfo` metadata. */
+  client: { version?: { name?: string; version?: string } };
+};
+
 /** Per-request credential and extra headers for calls to the Firecrawl API. */
 export type OutboundRequest = {
   /** Replaces the session's API key as the bearer credential. */
@@ -315,6 +349,11 @@ export type ExtraToolsContext = {
   hasCredential(session?: SessionData): boolean;
   /** A built-in tool definition, including one `toolFilter` excluded. */
   builtInTool(name: string): ToolDefinition | undefined;
+  /**
+   * Serves the tasks the embedder's tools return with `resultType: "task"`
+   * (protocol revision 2026-07-28, with `modernProtocol` on).
+   */
+  addTaskHandler(handler: TaskHandler<SessionData>): void;
 };
 
 export type InstructionDefaults = {
@@ -335,8 +374,17 @@ export interface FirecrawlMcpServerHooks {
   ) => Promise<SessionData>;
   /** Decorates every registered tool, including tools from `registerExtraTools`. */
   wrapTool?: (tool: ToolDefinition) => ToolDefinition;
-  /** Observes each tool call. Must not throw. */
+  /**
+   * Observes each tool call, and each built-in MCP task method as
+   * `tasks/get:<tool>` or `tasks/cancel:<tool>`. Must not throw.
+   */
   onToolResult?: (event: ToolCallEvent) => void;
+  /**
+   * Decorates the result of a completed `firecrawl_agent` or
+   * `firecrawl_crawl` task each time `tasks/get` returns it. Never called
+   * for a task that is still running.
+   */
+  taskResult?: (event: TaskResultEvent) => Promise<ToolResult>;
   /** Server instructions, or a function choosing them from the defaults. */
   instructions?: string | ((defaults: InstructionDefaults) => string);
   /** Adds tools after the built-in ones. They bypass `toolFilter`. */
@@ -383,6 +431,14 @@ export interface FirecrawlMcpServerOptions {
   endpointFeedback?: boolean;
   /** Tag sent as the `integration` field of API requests that accept one, such as `_zed`. */
   integration?: string;
+  /**
+   * Also serve protocol revision 2026-07-28 over stdio and Streamable HTTP:
+   * `server/discover`, per-request capabilities, multi round-trip requests
+   * and MCP Tasks (`firecrawl_agent` and `firecrawl_crawl` run as tasks for
+   * clients that declare the extension). Every 2025-era request is served as
+   * before. Defaults to false.
+   */
+  modernProtocol?: boolean;
   /** Extension hooks. Unstable: may change in any release. */
   unstable_hooks?: FirecrawlMcpServerHooks;
 }
@@ -418,6 +474,10 @@ export interface FirecrawlMcpServer {
  * entry point.
  */
 export { normalizeHeader, withoutTrailingSlash } from './headers.js';
+export { acceptedContent, inputRequired, inputResponse } from '@modelcontextprotocol/server';
+export type { DeferredResult, ModernRequest } from './mcp/runtime.js';
+export type { TaskCaller, TaskHandler, TaskState } from './tasks.js';
+export { TASKS_EXTENSION } from './tasks.js';
 export {
   DECLARED_ORIGIN_HEADER,
   initializeClientSlug,
@@ -635,6 +695,7 @@ export function createFirecrawlMcpServer(
     return authResult;
   }
 
+  const taskHandlers: TaskHandler<SessionData>[] = [];
   const server = new McpRuntime<SessionData>({
     name: 'firecrawl-fastmcp',
     version: packageVersion,
@@ -642,6 +703,31 @@ export function createFirecrawlMcpServer(
     logger: new ConsoleLogger(logging),
     ...(hooks.oauth ? { oauth: { protectedResource: hooks.oauth.protectedResource } } : {}),
     authenticate,
+    modern: options.modernProtocol ?? false,
+    extensions: [
+      tasksExtension<SessionData>(
+        {
+          getClient,
+          agentResult: agentStatusResult,
+          crawlResult: async (client, jobId, origin, body) =>
+            structuredText(await collectCrawlPages(client, jobId, origin, body as never)),
+          resultSchema: (kind) =>
+            kind === 'agent'
+              ? (servedTools.get('firecrawl_agent_status')?.outputSchema ?? agentStatusOutputSchema)
+              : (servedTools.get('firecrawl_crawl')?.outputSchema ?? crawlOutputSchema),
+          report: (tool, session, run) => {
+            const callSession = copySession(session);
+            callSession.requestId = randomUUID();
+            return reported(tool, callSession, () => run(callSession));
+          },
+          completed: async (call, result) =>
+            hooks.taskResult
+              ? ((await hooks.taskResult({ ...call, result } as TaskResultEvent)) as ContentResult)
+              : result,
+        },
+        taskHandlers
+      ),
+    ],
     // Lightweight health endpoint for LB checks
     health: {
       message: 'ok',
@@ -701,20 +787,9 @@ export function createFirecrawlMcpServer(
       execute: async (args, context) => {
         const session = context.session as SessionData;
         const requestId = session.requestId as string;
-        const call = { tool: tool.name, session, requestId };
-        hooks.onToolResult?.({ ...call, status: 'started' });
-        try {
-          const result = await runWithCredentialRecovery(
-            () => execute(args, context),
-            requestId,
-            session
-          );
-          hooks.onToolResult?.({ ...call, status: 'success', result });
-          return result;
-        } catch (error) {
-          hooks.onToolResult?.({ ...call, status: 'error', error });
-          throw error;
-        }
+        return reported(tool.name, session, () =>
+          runWithCredentialRecovery(() => execute(args, context), requestId, session)
+        );
       },
     };
     const wrapped = hooks.wrapTool
@@ -785,12 +860,29 @@ export function createFirecrawlMcpServer(
     };
   }
 
+  /** Reports a call on a session that carries its request ID to `onToolResult`. */
+  async function reported<T>(tool: string, session: SessionData, run: () => Promise<T>): Promise<T> {
+    const call = { tool, session, requestId: session.requestId as string };
+    hooks.onToolResult?.({ ...call, status: 'started' });
+    try {
+      const result = await run();
+      hooks.onToolResult?.({ ...call, status: 'success', result });
+      return result;
+    } catch (error) {
+      hooks.onToolResult?.({ ...call, status: 'error', error });
+      throw error;
+    }
+  }
+
   const builtInTools = new Map<string, RegisteredTool>();
+  const servedTools = new Map<string, RegisteredTool>();
   const addTool = server.addTool.bind(server);
   server.addTool = ((tool: RegisteredTool) => {
     builtInTools.set(tool.name, tool);
     if (hooks.toolFilter && !hooks.toolFilter(tool.name)) return;
-    addTool(prepareTool(tool));
+    const prepared = prepareTool(tool);
+    servedTools.set(tool.name, prepared);
+    addTool(prepared);
   }) as typeof server.addTool;
 
   function createClient(apiKey?: string): FirecrawlApp {
@@ -2455,7 +2547,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
       scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
     }),
     outputSchema: crawlOutputSchema,
-    execute: async (args, { session, log, client: mcpClient }): Promise<ContentResult> => {
+    execute: async (args, { session, log, client: mcpClient, task }): Promise<ContentResult> => {
       const origin = requestOrigin(mcpClient, session);
       const { url, ...options } = args as Record<string, unknown>;
       const client = getClient(session);
@@ -2494,7 +2586,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
         { tool: 'firecrawl_crawl' }
       );
       const crawlId = started?.data?.id;
-      if (!crawlId) {
+      if (!crawlId || task) {
         return structuredText(started?.data ?? {});
       }
       const res = await waitForCrawlCompletionWithOrigin(
@@ -3085,6 +3177,9 @@ Set \`redactPII\` to request redaction of personally identifiable information in
       hasCredential,
       builtInTool: (name) =>
         builtInTools.get(name) as unknown as ToolDefinition | undefined,
+      addTaskHandler: (handler) => {
+        taskHandlers.push(handler);
+      },
     }
   );
 
