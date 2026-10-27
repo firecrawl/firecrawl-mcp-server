@@ -1,6 +1,7 @@
-// HTTP transport edge cases that must behave as they did before the move to
-// the official SDK: malformed Host headers, authentication results that
-// reject the request, and the legacy HTTP+SSE message endpoint.
+// HTTP transport edge cases kept from before the move to the official SDK:
+// malformed Host headers, authentication results that reject the request, and
+// the legacy HTTP+SSE message endpoint. A rejected /sse request now answers
+// 401 like the stream endpoint (see http-auth.test.mjs).
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import test from 'node:test';
@@ -130,7 +131,7 @@ test('an authentication result with authenticated: false is rejected', async (t)
   assert.equal(JSON.parse(silent.body).error.message, 'Unauthorized: Authentication failed');
   const sse = await openSse(port, { 'x-test-auth': 'rejected' });
   sse.close();
-  assert.equal(sse.status, 500);
+  assert.equal(sse.status, 401);
 });
 
 test('legacy SSE: invalid JSON-RPC messages are refused and no pings are sent', async (t) => {

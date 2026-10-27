@@ -479,6 +479,7 @@ export { acceptedContent, inputRequired, inputResponse } from '@modelcontextprot
 export type { DeferredResult, ModernRequest } from './mcp/runtime.js';
 export type { TaskCaller, TaskHandler, TaskState } from './tasks.js';
 export { TASKS_EXTENSION } from './tasks.js';
+export { escapeWWWAuthenticateValue } from './mcp/www-authenticate.js';
 export {
   DECLARED_ORIGIN_HEADER,
   initializeClientSlug,
