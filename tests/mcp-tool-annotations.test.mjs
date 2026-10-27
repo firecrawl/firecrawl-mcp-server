@@ -2,7 +2,10 @@
 // tools/list annotations, so the hint must reach an official 2.x SDK client.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
+import {
+  Client,
+  StreamableHTTPClientTransport,
+} from '@modelcontextprotocol/client';
 import { createFirecrawlMcpServer } from '../dist/server.js';
 import { getFreePort } from './helpers/exchange-mcp.mjs';
 
@@ -22,7 +25,10 @@ test('state-changing tools list idempotentHint to a 2.x SDK client', async (t) =
   const instance = createFirecrawlMcpServer({
     transport: 'httpStream',
     unstable_hooks: {
-      authenticate: async () => ({ authType: 'api-key', firecrawlApiKey: 'fc-test' }),
+      authenticate: async () => ({
+        authType: 'api-key',
+        firecrawlApiKey: 'fc-test',
+      }),
     },
   });
   await instance.start({
@@ -30,19 +36,43 @@ test('state-changing tools list idempotentHint to a 2.x SDK client', async (t) =
     httpStream: { port, host: '127.0.0.1', endpoint: '/mcp', stateless: true },
   });
   t.after(() => instance.stop());
-  const client = new Client({ name: 'tool-annotations-test', version: '1.0.0' });
-  await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`)));
+  const client = new Client({
+    name: 'tool-annotations-test',
+    version: '1.0.0',
+  });
+  await client.connect(
+    new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`))
+  );
   t.after(() => client.close());
 
   const { tools } = await client.listTools();
-  const annotations = Object.fromEntries(tools.map((tool) => [tool.name, tool.annotations ?? {}]));
+  const annotations = Object.fromEntries(
+    tools.map((tool) => [tool.name, tool.annotations ?? {}])
+  );
   for (const [name, idempotent] of Object.entries(IDEMPOTENT)) {
     assert.ok(annotations[name], `${name} is listed`);
-    assert.equal(annotations[name].idempotentHint, idempotent, `${name} idempotentHint`);
-    assert.equal(annotations[name].readOnlyHint, false, `${name} changes state`);
+    assert.equal(
+      annotations[name].idempotentHint,
+      idempotent,
+      `${name} idempotentHint`
+    );
+    assert.equal(
+      annotations[name].readOnlyHint,
+      false,
+      `${name} changes state`
+    );
   }
+  assert.equal(
+    annotations.firecrawl_interact.destructiveHint,
+    true,
+    'firecrawl_interact can change data on the target site'
+  );
   for (const name of ['firecrawl_feedback', 'firecrawl_search_feedback']) {
     assert.ok(annotations[name], `${name} is listed`);
-    assert.equal(annotations[name].idempotentHint, undefined, `${name} states no idempotentHint`);
+    assert.equal(
+      annotations[name].idempotentHint,
+      undefined,
+      `${name} states no idempotentHint`
+    );
   }
 });

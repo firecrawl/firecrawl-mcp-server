@@ -2831,7 +2831,7 @@ Returns job status, progress information, and result data when completed.
       title: 'Firecrawl interact',
       readOnlyHint: false, // Executes browser interactions (clicks, form input, scripts) in a live session.
       openWorldHint: true, // Interacts with pages on the public web via the scraped session.
-      destructiveHint: false, // Transient page interactions only; does not delete monitors, jobs, or external sites.
+      destructiveHint: true, // Clicks, form input and scripts can submit forms or change data on the target site.
       idempotentHint: false, // Repeating an interaction can act on the page again.
     },
     description: `

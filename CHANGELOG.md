@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- `firecrawl_interact` now states `destructiveHint: true`. Its clicks, form input and scripts act on the live site and can submit forms or change data there, as its description already says. Clients that ask for approval before destructive tools now ask before `firecrawl_interact`. No other annotation changes; hosted `firecrawl_scrape` stays read-only.
+
 ### Fixed
 
 - stdio no longer starts when authentication fails. If an `unstable_hooks.authenticate` hook throws, returns nothing or returns `{ authenticated: false }`, `start({ transportType: 'stdio' })` now rejects with `Authentication failed for stdio transport: <reason>`, and the `firecrawl-mcp` command prints `[firecrawl-mcp] Failed to start:` with that error and exits with status 1. Before, the server logged the failure and served every tool without a session. The built-in stdio authentication doesn't fail, so the command is unaffected unless a hook is supplied: a missing `FIRECRAWL_API_KEY` still starts keyless mode, and a key the API rejects is still reported on each tool call.

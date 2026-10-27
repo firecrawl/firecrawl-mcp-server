@@ -2524,12 +2524,12 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_interact@8b0e3a838df9": {
+  "firecrawl_interact@093bb88289f8": {
     "annotations": {
       "title": "Firecrawl interact",
       "readOnlyHint": false,
       "openWorldHint": true,
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false
     },
     "title": "Firecrawl interact",
@@ -2922,12 +2922,12 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_interact@cfb8cdda229c": {
+  "firecrawl_interact@c69fa50fefd1": {
     "annotations": {
       "title": "Firecrawl interact",
       "readOnlyHint": false,
       "openWorldHint": true,
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false
     },
     "title": "Firecrawl interact",
