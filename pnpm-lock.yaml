@@ -16,8 +16,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       firecrawl:
-        specifier: 4.50.0
-        version: 4.50.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
+        specifier: 4.51.0
+        version: 4.51.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
       hono:
         specifier: ^4.12.27
         version: 4.12.27
@@ -803,8 +803,8 @@ packages:
     resolution: {integrity: sha512-78/PXT1wlLLDgTzDs7sjq9hzz0vXD+zn+7wypEe4fXQxCmdmqfGsEPQxmiCSQI3ajFV91bVSsvNtrJRiW6nGng==}
     engines: {node: '>=10'}
 
-  firecrawl@4.50.0:
-    resolution: {integrity: sha512-8XKMYKjofhBjdii/0DZON7J9ISVVDAdJ3z2g/GdRhseWMANT5ELMI4Ov4WKs6bTrAH3n5+n0vRo+xd2evf0OcQ==}
+  firecrawl@4.51.0:
+    resolution: {integrity: sha512-QHYNtPAOuyR3/JaA1aI1lrB6VSfzDnfBUGMdXS7Qvqcs5Vxlye1zepShq5KN8iEaTlc+gAoYrSKxxNPxHyzh1w==}
     engines: {node: '>=18.0.0'}
 
   fix-dts-default-cjs-exports@1.0.1:
@@ -2172,7 +2172,7 @@ snapshots:
       locate-path: 6.0.0
       path-exists: 4.0.0
 
-  firecrawl@4.50.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0):
+  firecrawl@4.51.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0):
     dependencies:
       axios: 1.20.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
       typescript-event-target: 1.1.1
