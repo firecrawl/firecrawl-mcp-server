@@ -18,7 +18,7 @@ import {
   type Tool,
   UserError as RuntimeUserError,
 } from './mcp/runtime.js';
-import { tasksExtension, type TaskHandler } from './tasks.js';
+import { jobFailed, tasksExtension, type TaskHandler } from './tasks.js';
 import { strictJsonSchema, toJsonSchema } from 'xsschema';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
@@ -753,11 +753,11 @@ export function createFirecrawlMcpServer(
               | undefined;
             if (task?.status === 'working' || task?.status === 'input_required') return result;
             hooks.onToolResult?.({ ...call, status: 'started' });
-            if (task?.status === 'completed' && task.result?.isError) {
+            if (jobFailed(task)) {
               hooks.onToolResult?.({
                 ...call,
                 status: 'error',
-                error: new TaskJobFailedError(task.result.content?.[0]?.text ?? 'The job failed.'),
+                error: new TaskJobFailedError(task?.result?.content?.[0]?.text ?? 'The job failed.'),
               });
             } else {
               hooks.onToolResult?.({ ...call, status: 'success', result });

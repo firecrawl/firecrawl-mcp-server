@@ -240,6 +240,13 @@ function progressMessage(kind: Kind, body: Record<string, unknown>): string {
     : `Crawl in progress${credits}.`;
 }
 
+const failedJobs = new WeakSet<object>();
+
+/** Whether `tasks/get` returned this task for a Firecrawl job that failed. */
+export function jobFailed(task: unknown): boolean {
+  return typeof task === 'object' && task !== null && failedJobs.has(task);
+}
+
 async function readTask<Session extends OriginSession>(
   jobs: TaskJobs<Session>,
   taskId: string,
@@ -306,7 +313,7 @@ async function readTask<Session extends OriginSession>(
     throw error;
   }
   const result = await conform(TOOL_OF[kind], jobs.resultSchema(kind), raw);
-  return {
+  const task: FirecrawlTask = {
     ...base,
     ttlMs,
     status: 'completed',
@@ -316,6 +323,8 @@ async function readTask<Session extends OriginSession>(
       status === 'failed' ? { ...result, isError: true } : result
     ),
   };
+  if (status === 'failed') failedJobs.add(task);
+  return task;
 }
 
 async function cancelTask<Session extends OriginSession>(

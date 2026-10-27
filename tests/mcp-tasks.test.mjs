@@ -531,6 +531,26 @@ test('a task whose job failed reaches onToolResult as an error', async (t) => {
   assert.equal(failed.error.name, 'TaskJobFailed');
 });
 
+test('a finished job whose result is an error is not reported as a failed job', async (t) => {
+  const api = await startApi(t);
+  const events = [];
+  const port = await startEmbedded(t, {
+    apiUrl: api.url,
+    apiKey: 'fc-task-test',
+    unstable_hooks: {
+      onToolResult: (event) => events.push(event),
+      taskResult: ({ result }) => ({ ...result, isError: true }),
+    },
+  });
+  const mcp = httpClient(port, '/v2/mcp');
+  const task = await callTool(mcp, 'firecrawl_agent', { prompt: 'p' });
+  api.state.agent = { status: 'completed', data: { answer: 42 } };
+  const done = await getTask(mcp, task.taskId);
+  assert.equal(done.result.isError, true);
+  assert.equal(events.at(-1).tool, 'tasks/get:firecrawl_agent');
+  assert.equal(events.at(-1).status, 'success');
+});
+
 test('any server instance answers tasks/get and tasks/cancel for a task another instance started', async (t) => {
   const api = await startApi(t);
   const starter = httpClient(await startEmbedded(t, { apiUrl: api.url, apiKey: 'fc-task-test' }), '/v2/mcp');
