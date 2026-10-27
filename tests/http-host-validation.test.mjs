@@ -75,13 +75,46 @@ test('a rebinding-style request whose Host names another site is rejected', asyn
   );
   assertForbidden(await initialize(port, { host: 'evil.com' }), 'Forbidden: Host "evil.com" is not allowed');
   assertForbidden(
-    await send(port, 'GET', '/health', { host: `evil.com:${port}` }),
+    await send(port, 'GET', '/ready', { host: `evil.com:${port}` }),
+    `Forbidden: Host "evil.com:${port}" is not allowed`
+  );
+  assertForbidden(
+    await send(port, 'POST', '/health', { host: `evil.com:${port}` }),
     `Forbidden: Host "evil.com:${port}" is not allowed`
   );
   assertForbidden(
     await send(port, 'GET', '/sse', { host: 'localhost.evil.com' }),
     'Forbidden: Host "localhost.evil.com" is not allowed'
   );
+});
+
+test('/health answers any host, without a CORS allow for other origins', async (t) => {
+  const port = await start(t, LOOPBACK);
+  for (const method of ['GET', 'HEAD']) {
+    const response = await send(port, method, '/health', {
+      host: `10.1.2.3:${port}`,
+      origin: 'https://evil.com',
+    });
+    assert.equal(response.status, 200, method);
+    assert.equal(response.headers['access-control-allow-origin'], undefined, method);
+  }
+  const query = await send(port, 'GET', '/health?probe=1', { host: 'evil.com' });
+  assert.equal(query.status, 200);
+});
+
+test('a rejected request logs a hint naming FIRECRAWL_MCP_ALLOWED_HOSTS', async (t) => {
+  const port = await start(t, LOOPBACK);
+  const warnings = [];
+  const original = console.warn;
+  console.warn = (...args) => warnings.push(args.join(' '));
+  t.after(() => (console.warn = original));
+  await initialize(port, { host: 'mcp.lan' });
+  await initialize(port, { host: 'localhost', origin: 'https://evil.com' });
+  console.warn = original;
+  assert.equal(warnings.length, 2, warnings.join('\n'));
+  assert.match(warnings[0], /Forbidden: Host "mcp\.lan" is not allowed; to allow it, add its host name to FIRECRAWL_MCP_ALLOWED_HOSTS/);
+  assert.match(warnings[1], /Forbidden: Origin "https:\/\/evil\.com" is not allowed; to allow it, add its host name to FIRECRAWL_MCP_ALLOWED_HOSTS/);
+  for (const warning of warnings) assert.doesNotMatch(warning, /\n/);
 });
 
 test('loopback hosts are served in every port form', async (t) => {

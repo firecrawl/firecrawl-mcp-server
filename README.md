@@ -173,13 +173,20 @@ env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecra
 
 Use the url: http://localhost:3000/mcp
 
-In this mode the server only answers requests addressed to `localhost`, `127.0.0.1` or `[::1]` (on any port), plus the address in `HOST` when it isn't `0.0.0.0` or `::`. A request whose `Host` header names another host, or whose `Origin` header names another site, gets `403`, and CORS headers echo an allowed origin instead of `*`. This stops web pages you visit from calling the local server through DNS rebinding or cross-origin requests and using its `FIRECRAWL_API_KEY`.
+In this mode the server only answers requests addressed to `localhost`, `127.0.0.1` or `[::1]` (on any port), plus the address in `HOST` when it isn't `0.0.0.0` or `::`. A request whose `Host` header names another host, or whose `Origin` header names another site, gets `403`, and CORS headers echo an allowed origin instead of `*`. `GET` and `HEAD` requests to `/health` are answered whatever the host, so health checks keep working, and the server logs a line naming `FIRECRAWL_MCP_ALLOWED_HOSTS` for every request it refuses. This stops web pages you visit from calling the local server through DNS rebinding or cross-origin requests and using its `FIRECRAWL_API_KEY`.
 
-To reach the server under another name or address, such as a LAN IP or a hostname behind a reverse proxy, list it in `FIRECRAWL_MCP_ALLOWED_HOSTS` (comma-separated; ports are ignored). The same list decides which browser origins may call the server:
+To reach the server under another name or address, such as a hostname behind a reverse proxy or a LAN IP, list it in `FIRECRAWL_MCP_ALLOWED_HOSTS` (comma-separated; ports are ignored). The same list decides which browser origins may call the server. A reverse proxy on the same machine can keep the default bind address:
 
 ```bash
 env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY \
-  FIRECRAWL_MCP_ALLOWED_HOSTS=mcp.home.lan,192.168.1.20 npx -y firecrawl-mcp
+  FIRECRAWL_MCP_ALLOWED_HOSTS=mcp.home.lan npx -y firecrawl-mcp
+```
+
+Clients on other machines also need the server to listen on a non-loopback address, so set `HOST` too. Every client that can reach the port is then served with the server's `FIRECRAWL_API_KEY`, so do this only on a network you trust:
+
+```bash
+env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY HOST=0.0.0.0 \
+  FIRECRAWL_MCP_ALLOWED_HOSTS=192.168.1.20 npx -y firecrawl-mcp
 ```
 
 `FIRECRAWL_MCP_ALLOWED_HOSTS=*` turns the check off and restores the wildcard CORS header. Only do that when something in front of the server checks hosts and origins itself.
@@ -295,7 +302,7 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 
 - `FIRECRAWL_MCP_ALLOWED_HOSTS` (Optional): Extra host names or addresses the server answers with `HTTP_STREAMABLE_SERVER=true` or `SSE_LOCAL=true`, comma-separated
   - `localhost`, `127.0.0.1`, `[::1]` and a non-wildcard `HOST` are always allowed; ports are ignored
-  - Requests whose `Host` or `Origin` header names any other host get `403`
+  - Requests whose `Host` or `Origin` header names any other host get `403`, except `GET` and `HEAD` requests to `/health`
   - `*` turns the check off; not used with `CLOUD_SERVICE=true`, which answers every host
 
 #### MCP OAuth (Bearer access tokens)
@@ -1255,7 +1262,7 @@ await server.start({
 
 Set `host` explicitly. Without it the server listens on `localhost`, which Node binds to a single address (often only `::1`), so requests to `127.0.0.1` are refused. Use `0.0.0.0` or `::` to accept connections from other machines only behind network access controls or an `unstable_hooks.authenticate` check: without one, every caller that can reach the port is served with the configured `apiKey`.
 
-The library doesn't check `Host` or `Origin` unless asked, and its CORS headers allow any origin. A server reachable from a browser on the same machine should pass `httpStream.allowedHosts` (for example `['localhost', '127.0.0.1', '[::1]']`): requests whose `Host` or `Origin` header names another host then get `403`, and CORS headers echo the allowed origin. The command line sets this list in local HTTP mode.
+The library doesn't check `Host` or `Origin` unless asked, and its CORS headers allow any origin. A server reachable from a browser on the same machine should pass `httpStream.allowedHosts` (for example `['localhost', '127.0.0.1', '[::1]']`): requests whose `Host` or `Origin` header names another host then get `403` (except `GET` and `HEAD` on the health path), and CORS headers echo the allowed origin. The command line sets this list in local HTTP mode.
 
 Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`, `logging`, `safeMode`, `fileAccess` (`local` or `upload`), `requireCredential`, `searchFeedback` and `endpointFeedback`. `unstable_hooks` accepts:
 

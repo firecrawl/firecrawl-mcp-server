@@ -81,7 +81,7 @@ const { start } = createFirecrawlMcpServer({
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = hosted ? '0.0.0.0' : process.env.HOST || 'localhost';
-const WILDCARD_ADDRESSES = new Set(['0.0.0.0', '::', '[::]']);
+const WILDCARD_ADDRESSES = new Set(['0.0.0.0', '::']);
 const allowedHosts = hosted
   ? undefined
   : [
