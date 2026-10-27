@@ -13,7 +13,7 @@
     }
   },
   "tools": [
-    "firecrawl_scrape@9ef5a4f1c3a5",
+    "firecrawl_scrape@40bd7d5ac064",
     "firecrawl_map@7d8108e2e8e7",
     "firecrawl_search@2c80d5dd86b9",
     "firecrawl_find_tools@8877bf94a3a2",
