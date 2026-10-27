@@ -377,7 +377,10 @@ export interface FirecrawlMcpServerHooks {
   wrapTool?: (tool: ToolDefinition) => ToolDefinition;
   /**
    * Observes each tool call, and each built-in MCP task method as
-   * `tasks/get:<tool>` or `tasks/cancel:<tool>`. Must not throw.
+   * `tasks/get:<tool>` or `tasks/cancel:<tool>`. A `tasks/get` is reported
+   * only when it fails or returns a finished task, so polling a running task
+   * adds no events; a task whose job failed is reported as an error
+   * (`TaskJobFailed`). Must not throw.
    */
   onToolResult?: (event: ToolCallEvent) => void;
   /**
@@ -572,6 +575,11 @@ function copySession(session: SessionData | undefined): SessionData {
   ) as SessionData;
 }
 
+/** The `onToolResult` error for a `tasks/get` that returns a task whose Firecrawl job failed. */
+class TaskJobFailedError extends Error {
+  override name = 'TaskJobFailed';
+}
+
 class ConsoleLogger implements Logger {
   constructor(private readonly shouldLog: boolean) {}
 
@@ -728,10 +736,33 @@ export function createFirecrawlMcpServer(
             kind === 'agent'
               ? (servedTools.get('firecrawl_agent_status')?.outputSchema ?? agentStatusOutputSchema)
               : (servedTools.get('firecrawl_crawl')?.outputSchema ?? crawlOutputSchema),
-          report: (tool, session, run) => {
+          report: async (tool, session, run) => {
             const callSession = copySession(session);
             callSession.requestId = randomUUID();
-            return reported(tool, callSession, () => run(callSession));
+            const call = { tool, session: callSession, requestId: callSession.requestId as string };
+            let result: Awaited<ReturnType<typeof run>>;
+            try {
+              result = await run(callSession);
+            } catch (error) {
+              hooks.onToolResult?.({ ...call, status: 'started' });
+              hooks.onToolResult?.({ ...call, status: 'error', error });
+              throw error;
+            }
+            const task = result as
+              | { status?: string; result?: { isError?: boolean; content?: Array<{ text?: string }> } }
+              | undefined;
+            if (task?.status === 'working' || task?.status === 'input_required') return result;
+            hooks.onToolResult?.({ ...call, status: 'started' });
+            if (task?.status === 'completed' && task.result?.isError) {
+              hooks.onToolResult?.({
+                ...call,
+                status: 'error',
+                error: new TaskJobFailedError(task.result.content?.[0]?.text ?? 'The job failed.'),
+              });
+            } else {
+              hooks.onToolResult?.({ ...call, status: 'success', result });
+            }
+            return result;
           },
           completed: async (call, result) =>
             hooks.taskResult

@@ -490,15 +490,14 @@ test('task methods reach onToolResult, and taskResult decorates only a completed
       'firecrawl_agent success',
       'tasks/get:firecrawl_agent started',
       'tasks/get:firecrawl_agent success',
-      'tasks/get:firecrawl_agent started',
-      'tasks/get:firecrawl_agent success',
       'tasks/cancel:firecrawl_agent started',
       'tasks/cancel:firecrawl_agent success',
-    ]
+    ],
+    'polling a running task reports nothing'
   );
   assert.equal(
     new Set(events.map((event) => event.requestId)).size,
-    4,
+    3,
     'one request ID per call'
   );
 
@@ -510,6 +509,52 @@ test('task methods reach onToolResult, and taskResult decorates only a completed
     events.slice(-2).map(({ tool, status }) => `${tool} ${status}`),
     ['tasks/get:firecrawl_crawl started', 'tasks/get:firecrawl_crawl error']
   );
+});
+
+test('a task whose job failed reaches onToolResult as an error', async (t) => {
+  const api = await startApi(t);
+  const events = [];
+  const port = await startEmbedded(t, {
+    apiUrl: api.url,
+    apiKey: 'fc-task-test',
+    unstable_hooks: { onToolResult: (event) => events.push(event) },
+  });
+  const mcp = httpClient(port, '/v2/mcp');
+  const task = await callTool(mcp, 'firecrawl_agent', { prompt: 'p' });
+  api.state.agent = { status: 'failed', error: 'The agent could not finish.' };
+  const done = await getTask(mcp, task.taskId);
+  assert.equal(done.status, 'completed');
+  assert.equal(done.result.isError, true);
+  const failed = events.at(-1);
+  assert.equal(failed.tool, 'tasks/get:firecrawl_agent');
+  assert.equal(failed.status, 'error');
+  assert.equal(failed.error.name, 'TaskJobFailed');
+});
+
+test('any server instance answers tasks/get and tasks/cancel for a task another instance started', async (t) => {
+  const api = await startApi(t);
+  const starter = httpClient(await startEmbedded(t, { apiUrl: api.url, apiKey: 'fc-task-test' }), '/v2/mcp');
+  const other = httpClient(await startEmbedded(t, { apiUrl: api.url, apiKey: 'fc-task-test' }), '/v2/mcp');
+
+  const crawl = await callTool(starter, 'firecrawl_crawl', { url: 'https://example.com' });
+  assert.equal((await getTask(other, crawl.taskId)).status, 'working');
+  api.state.crawl = 'completed';
+  const done = await getTask(other, crawl.taskId);
+  assert.equal(done.status, 'completed');
+  assert.deepEqual(done.result.structuredContent.data, [
+    { markdown: 'page one' },
+    { markdown: 'page two' },
+  ]);
+
+  const agent = await callTool(starter, 'firecrawl_agent', { prompt: 'p' });
+  result(await other.rpc('tasks/cancel', { taskId: agent.taskId }));
+  assert.ok(
+    api.requests.some((r) => r.method === 'DELETE' && r.url === `/v2/agent/${AGENT_ID}`),
+    'the other instance cancels the job through the API'
+  );
+
+  const { error } = await other.rpc('tasks/result', { taskId: crawl.taskId });
+  assert.equal(error?.code, -32601, 'tasks/result is not part of the extension');
 });
 
 const CONFIRM_SCHEMA = {
