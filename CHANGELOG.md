@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Local HTTP mode (`HTTP_STREAMABLE_SERVER=true` or `SSE_LOCAL=true` without `CLOUD_SERVICE=true`) checks the `Host` and `Origin` headers. It answers `localhost`, `127.0.0.1` and `[::1]` on any port, the address in `HOST` unless it is `0.0.0.0` or `::`, and the hosts listed in the new `FIRECRAWL_MCP_ALLOWED_HOSTS` (comma-separated). Any other `Host`, or an `Origin` naming any other host (including `null`), gets `403` with a JSON-RPC error, and the server logs a warning that names `FIRECRAWL_MCP_ALLOWED_HOSTS`, so a web page can't reach the server through DNS rebinding or a cross-origin request and spend the configured `FIRECRAWL_API_KEY`. CORS headers echo an allowed origin, with `Vary: Origin`, instead of `Access-Control-Allow-Origin: *`. `GET` and `HEAD` requests to `/health` are answered for any host, so health checks that address the server by IP keep working; they get no CORS allow for other origins. Clients that reach the server under another name, such as a LAN address or a reverse-proxy hostname, need that name in `FIRECRAWL_MCP_ALLOWED_HOSTS`; `FIRECRAWL_MCP_ALLOWED_HOSTS=*` restores the previous behaviour. `CLOUD_SERVICE=true` and stdio are unchanged.
+
 ### Fixed
 
 - Free-form object inputs are listed as open objects. The extraction schema (`jsonOptions.schema` on `firecrawl_scrape` and `firecrawl_parse`, `scrapeOptions.jsonOptions.schema` on `firecrawl_crawl`, `firecrawl_search` and `firecrawl_interact`, and `schema` on `firecrawl_agent`), monitor `body`, crawl `webhookHeaders` and feedback `metadata` used to be listed with `additionalProperties: false` and no properties, which told clients the object had to be empty. They now list `additionalProperties: {}` (or `{ "type": "string" }` for header maps), so a client that validates or types arguments from the listing accepts any JSON Schema. Nothing else in the input schemas changes, and output schemas are unchanged. The advertised `inputSchema` of these tools changes, including `firecrawl_scrape` on the hosted `/v2/mcp-search` listing.
@@ -15,6 +19,7 @@
 ### Added
 
 - `escapeWWWAuthenticateValue` is exported from `firecrawl-mcp/server`.
+- `httpStream.allowedHosts` on `start()` in `firecrawl-mcp/server`: the host names the server answers in `Host` and `Origin`, with the behaviour described under Changed. Unset, the server answers every host and CORS allows any origin, as before.
 
 ## [3.35.0] - 2026-10-26
 
