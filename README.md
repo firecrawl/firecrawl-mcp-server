@@ -173,6 +173,24 @@ env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecra
 
 Use the url: http://localhost:3000/mcp
 
+In this mode the server only answers requests addressed to `localhost`, `127.0.0.1` or `[::1]` (on any port), plus the address in `HOST` when it isn't `0.0.0.0` or `::`. A request whose `Host` header names another host, or whose `Origin` header names another site, gets `403`, and CORS headers echo an allowed origin instead of `*`. `GET` and `HEAD` requests to `/health` are answered whatever the host, so health checks keep working, and the server logs a line naming `FIRECRAWL_MCP_ALLOWED_HOSTS` for every request it refuses. This stops web pages you visit from calling the local server through DNS rebinding or cross-origin requests and using its `FIRECRAWL_API_KEY`.
+
+To reach the server under another name or address, such as a hostname behind a reverse proxy or a LAN IP, list it in `FIRECRAWL_MCP_ALLOWED_HOSTS` (comma-separated; ports are ignored). The same list decides which browser origins may call the server. A reverse proxy on the same machine can keep the default bind address:
+
+```bash
+env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY \
+  FIRECRAWL_MCP_ALLOWED_HOSTS=mcp.home.lan npx -y firecrawl-mcp
+```
+
+Clients on other machines also need the server to listen on a non-loopback address, so set `HOST` too. Every client that can reach the port is then served with the server's `FIRECRAWL_API_KEY`, so do this only on a network you trust:
+
+```bash
+env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY HOST=0.0.0.0 \
+  FIRECRAWL_MCP_ALLOWED_HOSTS=192.168.1.20 npx -y firecrawl-mcp
+```
+
+`FIRECRAWL_MCP_ALLOWED_HOSTS=*` turns the check off and restores the wildcard CORS header. Only do that when something in front of the server checks hosts and origins itself.
+
 ### Running with Docker
 
 The `ghcr.io/firecrawl/firecrawl-mcp-server` image runs the same server as `npx -y firecrawl-mcp`. Every build from `main` is tagged `latest`, `v<package version>` and `sha-<commit sha>`. `v<package version>` moves to the newest build of that version, so pin `sha-<commit sha>` (or a digest) when you need a fixed image.
@@ -206,7 +224,7 @@ docker run --rm -p 127.0.0.1:3000:3000 \
   ghcr.io/firecrawl/firecrawl-mcp-server:latest
 ```
 
-The image sets `HOST=0.0.0.0` and `PORT=3000`; override `PORT` (and the `-p` mapping) to listen elsewhere. The server uses the container's `FIRECRAWL_API_KEY` for requests that don't send their own credential, so the example publishes the port on `127.0.0.1` only; don't expose it more widely unless clients must supply their own key. Set `FIRECRAWL_API_URL` to use a self-hosted Firecrawl API. The container runs as the unprivileged `node` user.
+The image sets `HOST=0.0.0.0` and `PORT=3000`; override `PORT` (and the `-p` mapping) to listen elsewhere. The server uses the container's `FIRECRAWL_API_KEY` for requests that don't send their own credential, so the example publishes the port on `127.0.0.1` only; don't expose it more widely unless clients must supply their own key. Set `FIRECRAWL_API_URL` to use a self-hosted Firecrawl API. The container runs as the unprivileged `node` user. The server answers only `localhost`, `127.0.0.1` and `[::1]` in the `Host` and `Origin` headers, so the `-p 127.0.0.1:3000:3000` mapping works as is; to reach it under another name, set `-e FIRECRAWL_MCP_ALLOWED_HOSTS=<host>` (see [Streamable HTTP local mode](#running-with-streamable-http-local-mode)).
 
 ### Running on VS Code
 
@@ -279,6 +297,13 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 - `FIRECRAWL_INTEGRATION` (Optional): Integration tag for apps that launch this server, such as an editor extension
   - Sent as the `integration` field of scrape, batch scrape, crawl, map, search, extract, agent, parse, interact and feedback requests
   - Use a value that starts with `_`, for example `_zed`
+
+#### Local HTTP mode
+
+- `FIRECRAWL_MCP_ALLOWED_HOSTS` (Optional): Extra host names or addresses the server answers with `HTTP_STREAMABLE_SERVER=true` or `SSE_LOCAL=true`, comma-separated
+  - `localhost`, `127.0.0.1`, `[::1]` and a non-wildcard `HOST` are always allowed; ports are ignored
+  - Requests whose `Host` or `Origin` header names any other host get `403`, except `GET` and `HEAD` requests to `/health`
+  - `*` turns the check off; not used with `CLOUD_SERVICE=true`, which answers every host
 
 #### MCP OAuth (Bearer access tokens)
 
@@ -1236,6 +1261,8 @@ await server.start({
 ```
 
 Set `host` explicitly. Without it the server listens on `localhost`, which Node binds to a single address (often only `::1`), so requests to `127.0.0.1` are refused. Use `0.0.0.0` or `::` to accept connections from other machines only behind network access controls or an `unstable_hooks.authenticate` check: without one, every caller that can reach the port is served with the configured `apiKey`.
+
+The library doesn't check `Host` or `Origin` unless asked, and its CORS headers allow any origin. A server reachable from a browser on the same machine should pass `httpStream.allowedHosts` (for example `['localhost', '127.0.0.1', '[::1]']`): requests whose `Host` or `Origin` header names another host then get `403` (except `GET` and `HEAD` on the health path), and CORS headers echo the allowed origin. The command line sets this list in local HTTP mode.
 
 Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`, `logging`, `safeMode`, `fileAccess` (`local` or `upload`), `requireCredential`, `searchFeedback` and `endpointFeedback`. `unstable_hooks` accepts:
 
