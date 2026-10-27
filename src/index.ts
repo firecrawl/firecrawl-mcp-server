@@ -81,6 +81,19 @@ const { start } = createFirecrawlMcpServer({
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = hosted ? '0.0.0.0' : process.env.HOST || 'localhost';
+const WILDCARD_ADDRESSES = new Set(['0.0.0.0', '::']);
+const allowedHosts = hosted
+  ? undefined
+  : [
+      'localhost',
+      '127.0.0.1',
+      '[::1]',
+      ...(WILDCARD_ADDRESSES.has(HOST) ? [] : [HOST]),
+      ...(process.env.FIRECRAWL_MCP_ALLOWED_HOSTS || '')
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean),
+    ];
 
 const args: FirecrawlMcpServerStartArgs =
   transport === 'httpStream'
@@ -91,6 +104,7 @@ const args: FirecrawlMcpServerStartArgs =
           host: HOST,
           endpoint: primaryProfile.endpoint,
           stateless: true,
+          allowedHosts,
         },
       }
     : { transportType: 'stdio' };
