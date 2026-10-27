@@ -25,6 +25,27 @@ import { escapeWWWAuthenticateValue } from './www-authenticate.js';
  * keeps its own server for as long as the stream is open.
  */
 
+type JsonObject = Record<string, unknown>;
+
+const isObjectSchema = (value: unknown): value is JsonObject =>
+  typeof value === 'object' && value !== null && (value as JsonObject).type === 'object';
+
+/**
+ * strictJsonSchema for input schemas, except an object with no declared properties (a z.record, such as
+ * jsonOptions.schema) stays open: closing it would forbid every key and make schema-validating clients refuse the call.
+ */
+function closeObjects(schema: JsonObject): JsonObject {
+  const properties = schema.properties as JsonObject | undefined;
+  if (!properties) return schema;
+  return {
+    ...schema,
+    additionalProperties: false,
+    properties: Object.fromEntries(
+      Object.entries(properties).map(([key, value]) => [key, isObjectSchema(value) ? closeObjects(value) : value])
+    ),
+  };
+}
+
 export class UserError extends Error {
   extras?: Record<string, unknown>;
 
@@ -438,7 +459,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
           ...(tool.icons && { icons: tool.icons }),
           description: tool.description,
           inputSchema: tool.parameters
-            ? strictJsonSchema(await toJsonSchema(tool.parameters as never))
+            ? closeObjects((await toJsonSchema(tool.parameters as never)) as JsonObject)
             : { additionalProperties: false, properties: {}, type: 'object' },
           name: tool.name,
           ...(tool.outputSchema && {
