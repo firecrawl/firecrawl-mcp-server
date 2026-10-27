@@ -11,6 +11,7 @@ import {
 } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { LegacySseTransport } from './sse.js';
+import { escapeWWWAuthenticateValue } from './www-authenticate.js';
 
 /**
  * The MCP serving layer of the core, built on the official TypeScript SDK
@@ -201,8 +202,12 @@ function rejectionMessage(auth: unknown): string | undefined {
     : undefined;
 }
 
+const HOST_HEADER = /^(?:\[[0-9a-f:.]+\]|[a-z0-9\-._~!$&'()*+,;=%]+)(?::\d*)?$/i;
+
 function requestUrl(req: IncomingMessage): URL | undefined {
   const target = req.url || '';
+  const host = req.headers.host;
+  if (host !== undefined && !HOST_HEADER.test(host)) return undefined;
   if (target.startsWith('http://') || target.startsWith('https://')) {
     try {
       return new URL(target);
@@ -210,16 +215,19 @@ function requestUrl(req: IncomingMessage): URL | undefined {
       return undefined;
     }
   }
-  const host = req.headers.host;
   if (!host) return undefined;
   const scheme = (req.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http';
   try {
+    const authority = new URL(`${scheme}://${host}`).host;
     const url = new URL(`${scheme}://${host}${target}`);
-    if (url.hostname.length !== host.length && url.hostname !== host.replace(/:\d+$/, '')) return undefined;
-    return url;
+    return url.host === authority ? url : undefined;
   } catch {
     return undefined;
   }
+}
+
+function urlHost(host: string): string {
+  return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
 }
 
 function jsonRpcError(code: number, message: string, id: unknown = null): string {
@@ -625,13 +633,18 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
   async #startStdio(): Promise<void> {
     let session: Auth | undefined;
     if (this.#options.authenticate) {
+      let failure: string | undefined;
       try {
         session = await this.#options.authenticate(undefined);
+        if (!session || isRejected(session)) {
+          failure = rejectionMessage(session) ?? 'Authentication failed';
+        }
       } catch (error) {
-        this.#options.logger.error(
-          '[FastMCP error] Authentication failed for stdio transport:',
-          error instanceof Error ? error.message : String(error)
-        );
+        failure = error instanceof Error ? error.message : String(error);
+      }
+      if (failure !== undefined) {
+        this.#options.logger.error('[FastMCP error] Authentication failed for stdio transport:', failure);
+        throw new Error(`Authentication failed for stdio transport: ${failure}`);
       }
     }
     const server = this.createServer(session);
@@ -690,7 +703,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
       }
       const isMcpEndpoint = url.pathname === '/sse' || url.pathname === endpoint;
       if (!isMcpEndpoint) {
-        await this.#serveRoute(req, res, host, endpoint);
+        await this.#serveRoute(req, res, urlHost(host), endpoint);
         if (res.writableEnded) return;
       }
       if (req.method === 'GET' && url.pathname === '/sse') {
@@ -752,15 +765,15 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     });
     this.#httpServer = server;
     logger.info(
-      `[FastMCP info] Starting server in stateless mode on HTTP Stream at http://${host}:${port}${endpoint}`
+      `[FastMCP info] Starting server in stateless mode on HTTP Stream at http://${urlHost(host)}:${port}${endpoint}`
     );
   }
 
   #wwwAuthenticate(error: string, description: string): string | undefined {
     const resource = this.#options.oauth?.protectedResource?.resource;
     if (!resource) return undefined;
-    const escaped = description.replace(/"/g, '\\"');
-    return `Bearer resource_metadata="${resource}/.well-known/oauth-protected-resource", error="${error}", error_description="${escaped}"`;
+    const metadata = escapeWWWAuthenticateValue(`${resource}/.well-known/oauth-protected-resource`);
+    return `Bearer resource_metadata="${metadata}", error="${error}", error_description="${escapeWWWAuthenticateValue(description)}"`;
   }
 
   #sendUnauthorized(res: ServerResponse, message: string, id: unknown): void {
@@ -783,6 +796,11 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     res: ServerResponse,
     maxBodySize: number
   ): Promise<void> {
+    const url = requestUrl(req);
+    if (!url) {
+      res.writeHead(400, { 'Content-Type': 'text/plain; charset=UTF-8' }).end();
+      return;
+    }
     const bodyResult = await readBody(req, maxBodySize);
     if ('tooLarge' in bodyResult) {
       console.error(`[mcp-proxy] request body too large (exceeds ${maxBodySize} bytes)`);
@@ -817,7 +835,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
           return;
         }
         const message = thrown instanceof Error ? thrown.message : 'Unauthorized: Authentication error';
-        console.error('Authentication error:', thrown);
+        this.#options.logger.error('[FastMCP error] Authentication error:', thrown);
         this.#sendUnauthorized(res, message, id ?? null);
         return;
       }
@@ -826,11 +844,6 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     res.on('close', () => {
       if (!res.writableFinished) controller.abort();
     });
-    const url = requestUrl(req);
-    if (!url) {
-      res.writeHead(400, { 'Content-Type': 'text/plain; charset=UTF-8' }).end();
-      return;
-    }
     const request = new Request(url, {
       method: 'POST',
       headers: webHeaders(req),
@@ -861,17 +874,31 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     res: ServerResponse,
     sessions: Map<string, LegacySseTransport>
   ): Promise<void> {
-    let session: Auth | undefined;
-    try {
-      if (this.#options.authenticate) {
-        session = await this.#options.authenticate(req);
-        if (session === undefined || session === null) throw new Error('Authentication required');
-        if (isRejected(session)) throw new Error(rejectionMessage(session) ?? 'Authentication failed');
-      }
-    } catch (thrown) {
-      if (isResponse(thrown)) await writeThrownResponse(thrown, res);
-      else res.writeHead(500).end('Error creating server');
+    if (!requestUrl(req)) {
+      res.writeHead(400, { 'Content-Type': 'text/plain; charset=UTF-8' }).end();
       return;
+    }
+    let session: Auth | undefined;
+    if (this.#options.authenticate) {
+      try {
+        session = await this.#options.authenticate(req);
+      } catch (thrown) {
+        if (isResponse(thrown)) {
+          await writeThrownResponse(thrown, res);
+          return;
+        }
+        this.#options.logger.error('[FastMCP error] Authentication error:', thrown);
+        this.#sendUnauthorized(
+          res,
+          thrown instanceof Error ? thrown.message : 'Unauthorized: Authentication error',
+          null
+        );
+        return;
+      }
+      if (!session || isRejected(session)) {
+        this.#sendUnauthorized(res, rejectionMessage(session) ?? 'Unauthorized: Authentication failed', null);
+        return;
+      }
     }
     const transport = new LegacySseTransport('/messages', res);
     const server = this.createServer(session, transport.sessionId);
