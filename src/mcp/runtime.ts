@@ -25,6 +25,38 @@ import { escapeWWWAuthenticateValue } from './www-authenticate.js';
  * keeps its own server for as long as the stream is open.
  */
 
+type JsonSchemaNode = {
+  type?: unknown;
+  properties?: Record<string, unknown>;
+  propertyNames?: unknown;
+  additionalProperties?: unknown;
+};
+
+/**
+ * Closes every object of an input schema to unlisted keys, as
+ * `strictJsonSchema` does, except a free-form object such as a JSON Schema
+ * or a header map (a `z.record`, listed with `propertyNames`): that one keeps
+ * its `additionalProperties`, so clients see an open object, not one that
+ * must be empty.
+ */
+function strictInputSchema(schema: JsonSchemaNode): JsonSchemaNode {
+  if (schema.propertyNames !== undefined) return schema;
+  return {
+    ...schema,
+    additionalProperties: false,
+    properties:
+      schema.properties &&
+      Object.fromEntries(
+        Object.entries(schema.properties).map(([key, value]) => [
+          key,
+          value !== null && typeof value === 'object' && (value as JsonSchemaNode).type === 'object'
+            ? strictInputSchema(value as JsonSchemaNode)
+            : value,
+        ])
+      ),
+  };
+}
+
 export class UserError extends Error {
   extras?: Record<string, unknown>;
 
@@ -438,7 +470,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
           ...(tool.icons && { icons: tool.icons }),
           description: tool.description,
           inputSchema: tool.parameters
-            ? strictJsonSchema(await toJsonSchema(tool.parameters as never))
+            ? strictInputSchema(await toJsonSchema(tool.parameters as never))
             : { additionalProperties: false, properties: {}, type: 'object' },
           name: tool.name,
           ...(tool.outputSchema && {
