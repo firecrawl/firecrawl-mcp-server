@@ -17,9 +17,9 @@
       "tools": [
         "firecrawl_scrape@1eb5e578ec04",
         "firecrawl_map@7d8108e2e8e7",
-        "firecrawl_search@292a4deea1d7",
+        "firecrawl_search@d3c22f6fd8c9",
         "firecrawl_find_tools@8877bf94a3a2",
-        "firecrawl_search_feedback@3d7d2ef79f89",
+        "firecrawl_search_feedback@89ed89c8e729",
         "firecrawl_feedback@1336142abfd3",
         "firecrawl_crawl@83b9a7a869b4",
         "firecrawl_check_crawl_status@723e60af703e",
@@ -61,7 +61,7 @@
       },
       "tools": [
         "firecrawl_scrape@1eb5e578ec04",
-        "firecrawl_search@292a4deea1d7",
+        "firecrawl_search@d3c22f6fd8c9",
         "firecrawl_parse@1acaf77898b6"
       ]
     }

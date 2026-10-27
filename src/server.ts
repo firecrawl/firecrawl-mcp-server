@@ -97,6 +97,8 @@ import {
   removeEmptyTopLevel,
   SEARCH_CATEGORIES_CONFLICT_MESSAGE,
   SEARCH_DOMAINS_CONFLICT_MESSAGE,
+  SEARCH_RESULT_SOURCES,
+  annotateResultPositions,
   searchCategoriesAreCompatible,
   searchDomainsAreExclusive,
   searchToolBaseFields,
@@ -466,6 +468,8 @@ export {
   searchCategoriesAreCompatible,
   searchDomainsAreExclusive,
   searchToolBaseFields,
+  SEARCH_RESULT_SOURCES,
+  annotateResultPositions,
 } from './tool-helpers.js';
 
 /**
@@ -1762,7 +1766,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       };
       const byteBudget = searchByteBudget(session?.clientUserAgent);
       const searchResult = (response: unknown) => {
-        const shown = withoutDiscoveredToolPrices(response);
+        const shown = annotateResultPositions(withoutDiscoveredToolPrices(response));
         return structuredCompact(byteBudget ? fitSearchResponse(shown, byteBudget) : shown);
       };
       const exchangeSource = hasAlexandria(searchBody.sources);
@@ -1772,6 +1776,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         const json = await keylessPost('/v2/search', searchBody, session);
         // Search feedback requires an authenticated account. Do not expose its
         // identifier to keyless clients, where it would invite an unusable call.
+        // Positions are still stamped: they identify a result regardless of auth.
         const keylessResponse = { ...(json ?? {}) };
         delete keylessResponse.id;
         return searchResult(keylessResponse);
@@ -2112,9 +2117,11 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         destructiveHint: false, // Additive only; records feedback and may refund credits, does not delete data.
       },
       description: `
-Records schema-validated quality feedback for a prior \`firecrawl_search\` UUID \`searchId\`. A \`good\` rating requires a valuable source, \`partial\` a valuable source or at least one \`missingContent\` entry, and \`bad\` at least one \`missingContent\` entry or a query suggestion; caps are 50 \`valuableSources\` and 20 \`missingContent\` entries.
+Records schema-validated quality feedback for a prior \`firecrawl_search\` UUID \`searchId\`. A \`good\` rating requires a valuable result or a valuable source, \`partial\` either of those or at least one \`missingContent\` entry, and \`bad\` at least one \`missingContent\` entry or a query suggestion; caps are 50 \`valuableResults\`, 50 \`valuableSources\`, and 20 \`missingContent\` entries.
 
 Eligibility is limited to successful searches within the feedback age window. The record is idempotent per search ID. Eligible first feedback for a search can refund 1 credit; refunds are subject to the team's daily cap. The response reports whether a refund was applied, along with submission and daily-cap status.
+
+Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\` copied off the result. Groups are numbered from 1 independently, so \`{"source":"web","position":1}\` and \`{"source":"news","position":1}\` are different results. Be exhaustive — results you do not list are treated as not useful. Reserve \`valuableSources\` for useful URLs that were NOT among the returned results; never report one result in both fields.
 `,
       outputSchema: feedbackOutputSchema,
       parameters: z.object({
@@ -2131,6 +2138,24 @@ Eligibility is limited to successful searches within the feedback age window. Th
           )
           .max(50)
           .optional(),
+        valuableResults: z
+          .array(
+            z.object({
+              source: z.enum(SEARCH_RESULT_SOURCES),
+              position: z.number().int().positive(),
+              reason: z.string().max(1000).optional(),
+            })
+          )
+          .max(50)
+          .optional()
+          .describe(
+            'Every result that was actually useful, copied from the `source` and `position` ' +
+              'stamped on each result. Each group is numbered from 1 independently, so the ' +
+              'source is required — `{"source":"web","position":1}` and ' +
+              '`{"source":"news","position":1}` are different results. Be exhaustive — ' +
+              'unlisted results are treated as not useful. Do not also list the same results ' +
+              'in valuableSources.'
+          ),
         missingContent: z
           .array(
             z.object({
@@ -2160,12 +2185,18 @@ Eligibility is limited to successful searches within the feedback age window. Th
           searchId,
           rating,
           valuableSources,
+          valuableResults,
           missingContent,
           querySuggestions,
         } = args as {
           searchId: string;
           rating: 'good' | 'bad' | 'partial';
           valuableSources?: { url: string; reason?: string }[];
+          valuableResults?: {
+            source: (typeof SEARCH_RESULT_SOURCES)[number];
+            position: number;
+            reason?: string;
+          }[];
           missingContent?: { topic: string; description?: string }[];
           querySuggestions?: string;
         };
@@ -2181,6 +2212,9 @@ Eligibility is limited to successful searches within the feedback age window. Th
         };
         if (valuableSources && valuableSources.length > 0) {
           body.valuableSources = valuableSources;
+        }
+        if (valuableResults && valuableResults.length > 0) {
+          body.valuableResults = valuableResults;
         }
         if (missingContent && missingContent.length > 0) {
           body.missingContent = missingContent;
