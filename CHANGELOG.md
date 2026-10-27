@@ -1,5 +1,25 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Local HTTP mode (`HTTP_STREAMABLE_SERVER=true` or `SSE_LOCAL=true` without `CLOUD_SERVICE=true`) checks the `Host` and `Origin` headers. It answers `localhost`, `127.0.0.1` and `[::1]` on any port, the address in `HOST` unless it is `0.0.0.0` or `::`, and the hosts listed in the new `FIRECRAWL_MCP_ALLOWED_HOSTS` (comma-separated). Any other `Host`, or an `Origin` naming any other host (including `null`), gets `403` with a JSON-RPC error, and the server logs a warning that names `FIRECRAWL_MCP_ALLOWED_HOSTS`, so a web page can't reach the server through DNS rebinding or a cross-origin request and spend the configured `FIRECRAWL_API_KEY`. CORS headers echo an allowed origin, with `Vary: Origin`, instead of `Access-Control-Allow-Origin: *`. `GET` and `HEAD` requests to `/health` are answered for any host, so health checks that address the server by IP keep working; they get no CORS allow for other origins. Clients that reach the server under another name, such as a LAN address or a reverse-proxy hostname, need that name in `FIRECRAWL_MCP_ALLOWED_HOSTS`; `FIRECRAWL_MCP_ALLOWED_HOSTS=*` restores the previous behaviour. `CLOUD_SERVICE=true` and stdio are unchanged.
+
+### Fixed
+
+- stdio no longer starts when authentication fails. If an `unstable_hooks.authenticate` hook throws, returns nothing or returns `{ authenticated: false }`, `start({ transportType: 'stdio' })` now rejects with `Authentication failed for stdio transport: <reason>`, and the `firecrawl-mcp` command prints `[firecrawl-mcp] Failed to start:` with that error and exits with status 1. Before, the server logged the failure and served every tool without a session. The built-in stdio authentication doesn't fail, so the command is unaffected unless a hook is supplied: a missing `FIRECRAWL_API_KEY` still starts keyless mode, and a key the API rejects is still reported on each tool call.
+- `GET /sse` answers an authentication failure with `401` and the same JSON-RPC error body and `WWW-Authenticate` challenge as the Streamable HTTP endpoint. It used to answer `500 Error creating server` when the hook threw an error that wasn't a `Response`, returned nothing or returned `{ authenticated: false }`. A `Response` thrown by the hook is still sent as is.
+- The Streamable HTTP endpoint and `GET /sse` check the `Host` header before they call the authentication hook, so a malformed `Host` gets `400` without a credential check, also when the request target is in absolute form. `/sse` didn't check `Host` before. It accepts IPv6 literals in any valid spelling (`[::1]`, `[0:0:0:0:0:0:0:1]:8080`) and host names in any case with a port (`EXAMPLE.COM:8080`), which used to get `400`.
+- A server bound to an IPv6 address (`httpStream.host: '::'`) serves `/health`, `/ready` and the protected-resource metadata. They used to fail with `500`.
+- `WWW-Authenticate` challenges escape backslashes as well as quotes, and turn line breaks, other control characters and non-ASCII characters into spaces. An error message with a line break used to make the response fail with `500`. The JSON-RPC error message keeps the original text.
+- Authentication errors on the HTTP endpoints are logged through the server logger (`[ERROR] <time> [FastMCP error] Authentication error: …`) instead of a bare `console.error`.
+
+### Added
+
+- `escapeWWWAuthenticateValue` is exported from `firecrawl-mcp/server`.
+- `httpStream.allowedHosts` on `start()` in `firecrawl-mcp/server`: the host names the server answers in `Host` and `Origin`, with the behaviour described under Changed. Unset, the server answers every host and CORS allows any origin, as before.
+
 ## [3.35.0] - 2026-10-26
 
 ### Added
