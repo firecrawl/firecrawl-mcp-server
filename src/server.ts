@@ -404,6 +404,16 @@ export type FirecrawlMcpServerStartArgs =
         stateless?: boolean;
         /** Largest request body accepted, in bytes. Defaults to 1 MiB; larger bodies get 413. */
         maxBodySize?: number;
+        /**
+         * Host names the server answers. When set, a request whose `Host`
+         * header, or `Origin` header when present, names another host gets
+         * `403`, and CORS headers echo the request's origin instead of `*`.
+         * Entries are host names or IP addresses (`localhost`, `127.0.0.1`,
+         * `[::1]`); ports are ignored, and a URL entry counts as its host name.
+         * `['*']` turns the check off. Unset, every host is answered and CORS
+         * allows any origin.
+         */
+        allowedHosts?: string[];
       };
     };
 

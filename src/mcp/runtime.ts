@@ -171,6 +171,7 @@ export type StartOptions =
         endpoint?: `/${string}`;
         stateless?: boolean;
         maxBodySize?: number;
+        allowedHosts?: string[];
       };
     };
 
@@ -224,6 +225,20 @@ function requestUrl(req: IncomingMessage): URL | undefined {
   } catch {
     return undefined;
   }
+}
+
+function hostnameOf(url: string): string | undefined {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/\.$/, '') || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function allowedHostname(entry: string): string | undefined {
+  const value = entry.trim();
+  if (value.includes('://')) return hostnameOf(value);
+  return hostnameOf(`http://${value}`) ?? hostnameOf(`http://[${value}]`);
 }
 
 function urlHost(host: string): string {
@@ -673,14 +688,33 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     }
     const maxBodySize = overrides.maxBodySize ?? 10 * 1024 * 1024;
     const logger = this.#options.logger;
+    const allowedHosts =
+      overrides.allowedHosts && !overrides.allowedHosts.some((entry) => entry.trim() === '*')
+        ? new Set(overrides.allowedHosts.map(allowedHostname).filter((entry) => entry !== undefined))
+        : undefined;
 
     const sseSessions = new Map<string, LegacySseTransport>();
 
     const requestListener = async (req: IncomingMessage, res: ServerResponse) => {
+      if (allowedHosts) {
+        const { host, origin } = req.headers;
+        const hostAllowed =
+          host !== undefined && HOST_HEADER.test(host) && allowedHosts.has(hostnameOf(`http://${host}`) ?? '');
+        const originAllowed = origin === undefined || allowedHosts.has(hostnameOf(origin) ?? '');
+        if (!hostAllowed || !originAllowed) {
+          const message = hostAllowed
+            ? `Forbidden: Origin ${JSON.stringify(origin)} is not allowed`
+            : `Forbidden: Host ${JSON.stringify(host ?? '')} is not allowed`;
+          logger.warn(`[FastMCP warning] ${message}`);
+          res.writeHead(403, { 'Content-Type': 'application/json' }).end(jsonRpcError(-32000, message));
+          return;
+        }
+      }
       if (req.headers.origin) {
         try {
           new URL(req.headers.origin);
-          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Access-Control-Allow-Origin', allowedHosts ? req.headers.origin : '*');
+          if (allowedHosts) res.setHeader('Vary', 'Origin');
           for (const [key, value] of Object.entries(CORS_HEADERS)) res.setHeader(key, value);
         } catch (error) {
           console.error('[mcp-proxy] error parsing origin', error);
