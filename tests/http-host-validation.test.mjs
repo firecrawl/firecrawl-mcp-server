@@ -25,12 +25,12 @@ const STREAM_HEADERS = {
   accept: 'application/json, text/event-stream',
 };
 
-async function start(t, allowedHosts) {
+async function start(t, allowedHosts, endpoint = '/mcp') {
   const port = await getFreePort();
   const instance = createFirecrawlMcpServer({ transport: 'httpStream', apiKey: 'fc-test' });
   await instance.start({
     transportType: 'httpStream',
-    httpStream: { port, host: '127.0.0.1', endpoint: '/mcp', stateless: true, allowedHosts },
+    httpStream: { port, host: '127.0.0.1', endpoint, stateless: true, allowedHosts },
   });
   t.after(() => instance.stop());
   return port;
@@ -100,6 +100,14 @@ test('/health answers any host, without a CORS allow for other origins', async (
   }
   const query = await send(port, 'GET', '/health?probe=1', { host: 'evil.com' });
   assert.equal(query.status, 200);
+});
+
+test('the health exception never covers an MCP endpoint served at the health path', async (t) => {
+  const port = await start(t, LOOPBACK, '/health');
+  assertForbidden(
+    await send(port, 'GET', '/health', { host: 'evil.com', 'mcp-session-id': 'abc' }),
+    'Forbidden: Host "evil.com" is not allowed'
+  );
 });
 
 test('a rejected request logs a hint naming FIRECRAWL_MCP_ALLOWED_HOSTS', async (t) => {

@@ -704,10 +704,14 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
         const hostAllowed =
           host !== undefined && HOST_HEADER.test(host) && allowedHosts.has(hostnameOf(`http://${host}`) ?? '');
         originAllowed = origin === undefined || allowedHosts.has(hostnameOf(origin) ?? '');
+        const path = URL.canParse(req.url || '', 'http://localhost')
+          ? new URL(req.url || '', 'http://localhost').pathname
+          : undefined;
         const isHealthCheck =
           (req.method === 'GET' || req.method === 'HEAD') &&
-          URL.canParse(req.url || '', 'http://localhost') &&
-          new URL(req.url || '', 'http://localhost').pathname === healthPath;
+          path === healthPath &&
+          path !== '/sse' &&
+          path !== endpoint;
         if ((!hostAllowed || !originAllowed) && !isHealthCheck) {
           const message = hostAllowed
             ? `Forbidden: Origin ${JSON.stringify(origin)} is not allowed`
