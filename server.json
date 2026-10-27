@@ -3,7 +3,7 @@
   "name": "io.github.firecrawl/firecrawl-mcp-server",
   "title": "Firecrawl MCP Server",
   "description": "Firecrawl, the context API for AI agents: search, scrape, interact with the web, plus paper search.",
-  "version": "3.33.3",
+  "version": "3.35.0",
   "repository": {
     "url": "https://github.com/firecrawl/firecrawl-mcp-server.git",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "npm",
       "identifier": "firecrawl-mcp",
-      "version": "3.33.3",
+      "version": "3.35.0",
       "transport": {
         "type": "stdio"
       },
@@ -34,7 +34,7 @@
       "headers": [
         {
           "name": "Authorization",
-          "description": "Optional. Bearer <FIRECRAWL_API_KEY>. Omit for the keyless tier.",
+          "description": "Optional. Bearer <FIRECRAWL_API_KEY>. Get a key at https://firecrawl.dev/app/api-keys",
           "isRequired": false,
           "isSecret": true
         }

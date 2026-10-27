@@ -8,6 +8,11 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { assertAgentMetadataPolicy } from '../scripts/agent-metadata-policy.mjs';
 import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
 
+// Both instruction profiles open with the guidance for running out of credits, so clients
+// that cut server instructions short still keep it.
+const OUT_OF_CREDITS_LEAD =
+  /^If Firecrawl reports that credits ran out or the daily limit without an account was reached, end your final answer with the line it provides, link included\. /;
+
 const { version: serverVersion } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
 );
@@ -463,7 +468,8 @@ async function startFakeFirecrawlApi({ searchResponse } = {}) {
 
     if (
       req.method === 'GET' &&
-      req.url === '/v2/team/credit-usage/historical?byApiKey=true'
+      (req.url === '/v2/team/credit-usage/historical?byApiKey=true' ||
+        req.url === '/v2/team/credit-usage/historical?byApiKey=true&bin=day')
     ) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
@@ -484,7 +490,33 @@ async function startFakeFirecrawlApi({ searchResponse } = {}) {
 
     if (
       req.method === 'GET' &&
-      req.url === '/v2/team/credit-usage/historical'
+      req.url === '/v2/team/credit-usage/historical?byEndpoint=true&bin=day'
+    ) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          bin: 'day',
+          periods: [
+            {
+              creditsUsed: 12,
+              endDate: null,
+              endpoint: 'scrape',
+              startDate: '2026-09-14T00:00:00.000Z',
+            },
+          ],
+          success: true,
+        })
+      );
+      return;
+    }
+
+    // An API that predates the endpoint split and daily periods ignores
+    // them and answers with monthly totals, without echoing `bin`.
+    if (
+      req.method === 'GET' &&
+      (req.url === '/v2/team/credit-usage/historical' ||
+        req.url === '/v2/team/credit-usage/historical?bin=day' ||
+        req.url === '/v2/team/credit-usage/historical?byEndpoint=true&bin=month')
     ) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
@@ -1251,7 +1283,15 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   assert.equal(
     byName.get('firecrawl_credit_usage').inputSchema.properties.view.description,
-    'Select current balance or historical monthly usage. Defaults to current.'
+    'Select current balance or historical usage. Defaults to current.'
+  );
+  assert.match(
+    byName.get('firecrawl_credit_usage').description,
+    /byEndpoint.*cannot attribute credits to individual jobs/is
+  );
+  assert.deepEqual(
+    byName.get('firecrawl_credit_usage').inputSchema.properties.bin.enum,
+    ['month', 'day']
   );
   assert.equal(
     byName.get('firecrawl_credit_usage').inputSchema.properties.byApiKey
@@ -1264,6 +1304,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   // Keep Alexandria routing within the truncated server instructions. The search
   // description also carries developer and research routing (asserted below).
   const instructionsHead = init.instructions.slice(0, CLAUDE_CODE_TEXT_CAP);
+  assert.match(instructionsHead, OUT_OF_CREDITS_LEAD);
   assert.match(instructionsHead, /Alexandria is Firecrawl's catalogue of data providers/);
   assert.match(instructionsHead, /For the same fields across multiple pages/);
   assert.match(instructionsHead, /Authenticated searches always add alexandria to the sources/);
@@ -1312,6 +1353,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.match(searchParams.query.description, /operators include.*related:host.*non-exhaustive/is);
   assert.match(byName.get('firecrawl_search').description, /each web result is a title, URL, and description/i);
   assert.match(searchParams.scrapeOptions.description, /ignore maxAge.*firecrawl_scrape/is);
+  assert.match(searchParams.scrapeOptions.description, /Leave it unset unless the task needs the full text of a few results/);
   assert.doesNotMatch(byName.get('firecrawl_search').description, /not the page/i);
   assert.match(
     byName.get('firecrawl_search').description,
@@ -1487,10 +1529,97 @@ test('credit usage tool exposes current balance and both historical request shap
     /byApiKey can only be used with view "historical"/i
   );
 
+  const byEndpointDaily = await client.request('tools/call', {
+    arguments: { bin: 'day', byEndpoint: true },
+    name: 'firecrawl_credit_usage',
+  });
+  assert.deepEqual(JSON.parse(byEndpointDaily.content[0].text), {
+    bin: 'day',
+    periods: [
+      {
+        creditsUsed: 12,
+        endDate: null,
+        endpoint: 'scrape',
+        startDate: '2026-09-14T00:00:00.000Z',
+      },
+    ],
+    success: true,
+  });
+
+  const byEndpointOnOlderApi = await client.request('tools/call', {
+    arguments: { byEndpoint: true },
+    name: 'firecrawl_credit_usage',
+  });
+  assert.equal(byEndpointOnOlderApi.isError, undefined);
+  assert.deepEqual(JSON.parse(byEndpointOnOlderApi.content[0].text), {
+    notice:
+      'Firecrawl does not offer the endpoint split yet, so these periods are calendar-month totals.',
+    periods: [
+      {
+        creditsUsed: 654,
+        endDate: null,
+        startDate: '2026-09-01T00:00:00.000Z',
+      },
+    ],
+    success: true,
+  });
+
+  const dailyOnOlderApi = await client.request('tools/call', {
+    arguments: { bin: 'day' },
+    name: 'firecrawl_credit_usage',
+  });
+  assert.deepEqual(JSON.parse(dailyOnOlderApi.content[0].text), {
+    notice:
+      'Firecrawl does not offer daily periods yet, so these periods are calendar-month totals.',
+    periods: [
+      {
+        creditsUsed: 654,
+        endDate: null,
+        startDate: '2026-09-01T00:00:00.000Z',
+      },
+    ],
+    success: true,
+  });
+
+  const dailyByApiKeyOnOlderApi = await client.request('tools/call', {
+    arguments: { bin: 'day', byApiKey: true },
+    name: 'firecrawl_credit_usage',
+  });
+  assert.deepEqual(JSON.parse(dailyByApiKeyOnOlderApi.content[0].text), {
+    notice:
+      'Firecrawl does not offer daily periods yet, so these periods are calendar-month totals per API key.',
+    periods: [
+      {
+        apiKey: 'Production key',
+        creditsUsed: 321,
+        endDate: null,
+        startDate: '2026-09-01T00:00:00.000Z',
+      },
+    ],
+    success: true,
+  });
+
+  for (const [args, message] of [
+    [{ byEndpoint: true, view: 'current' }, /byEndpoint can only be used with view "historical"/i],
+    [{ bin: 'day', view: 'current' }, /bin can only be used with view "historical"/i],
+    [{ byApiKey: true, byEndpoint: true }, /byApiKey and byEndpoint cannot be combined/i],
+  ]) {
+    const rejected = await client.request('tools/call', {
+      arguments: args,
+      name: 'firecrawl_credit_usage',
+    });
+    assert.equal(rejected.isError, true, JSON.stringify(args));
+    assert.match(rejected.content[0].text, message);
+  }
+
   for (const path of [
     '/v2/team/credit-usage',
     '/v2/team/credit-usage/historical',
     '/v2/team/credit-usage/historical?byApiKey=true',
+    '/v2/team/credit-usage/historical?byEndpoint=true&bin=day',
+    '/v2/team/credit-usage/historical?byEndpoint=true&bin=month',
+    '/v2/team/credit-usage/historical?bin=day',
+    '/v2/team/credit-usage/historical?byApiKey=true&bin=day',
   ]) {
     const request = fakeApi.requests.find((candidate) => candidate.url === path);
     assert.ok(request, path);
@@ -1527,6 +1656,7 @@ test('local keyless stdio keeps profile guidance keyless-scoped and omits feedba
   assert.notEqual(apiKeyBoundaryIndex, -1);
   const keylessGuidance = init.instructions.slice(0, apiKeyBoundaryIndex);
   const apiKeyGuidance = init.instructions.slice(apiKeyBoundaryIndex);
+  assert.match(keylessGuidance, OUT_OF_CREDITS_LEAD);
   assert.match(
     keylessGuidance,
     /Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits/i
@@ -2248,7 +2378,7 @@ test('local HTTP header API keys receive Core credential recovery', async (t) =>
   const result = parseSseJson(await response.text()).result;
   assert.equal(result.isError, true);
   assert.equal(result.content[0].text, INVALID_API_KEY_MESSAGE);
-  assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID');
+  assert.equal(result.structuredContent, undefined);
   assert.equal(backend.requests.some((request) => request.url === '/v2/search'), true);
   assert.equal(
     backend.requests.filter((request) => request.url === '/api/oauth/introspect').length,
@@ -2682,8 +2812,7 @@ test('an invalid API key gets recovery from Core without introspection', async (
   const result = parseSseJson(await call.text()).result;
   assert.equal(result.isError, true);
   assert.equal(result.content[0].text, INVALID_API_KEY_MESSAGE);
-  assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID');
-  assert.equal(result.structuredContent.message, INVALID_API_KEY_MESSAGE);
+  assert.equal(result.structuredContent, undefined);
   assert.equal(
     backend.requests.filter((request) => request.url === '/api/oauth/introspect').length,
     0,
@@ -2750,7 +2879,7 @@ test('feedback tools map a Core 401 to API-key recovery without introspection', 
     const result = parseSseJson(await call.text()).result;
     assert.equal(result.isError, true, testCase.name);
     assert.equal(result.content[0].text, INVALID_API_KEY_MESSAGE, testCase.name);
-    assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID', testCase.name);
+    assert.deepEqual(result.structuredContent, { message: INVALID_API_KEY_MESSAGE }, testCase.name);
     assert.equal(
       backend.requests.some((request) => request.url === testCase.path),
       true,
@@ -2803,7 +2932,11 @@ test('fetch-based tools map a Core rejection to recovery like SDK tools do', asy
     const result = parseSseJson(await call.text()).result;
     assert.equal(result.isError, true, testCase.name);
     assert.equal(result.content[0].text, INVALID_API_KEY_MESSAGE, testCase.name);
-    assert.equal(result.structuredContent.code, 'CREDENTIAL_INVALID', testCase.name);
+    assert.deepEqual(
+      result.structuredContent,
+      testCase.name === 'firecrawl_parse' ? { message: INVALID_API_KEY_MESSAGE } : undefined,
+      testCase.name
+    );
   }
 
   assert.equal(
@@ -3405,21 +3538,17 @@ test('account OAuth tokens cannot replay on keyless and invalid keys get correct
   });
   assert.equal(invalidCall.status, 200);
   const invalidCallJson = parseSseJson(await invalidCall.text());
-  const invalidRecovery = invalidCallJson.result.structuredContent;
+  const invalidMessage = invalidCallJson.result.content[0].text;
   assert.equal(invalidCallJson.result.isError, true);
-  assert.equal(invalidCallJson.result.content[0].text, INVALID_API_KEY_MESSAGE);
-  assert.equal(invalidRecovery.code, 'CREDENTIAL_INVALID');
-  assert.equal(invalidRecovery.message, INVALID_API_KEY_MESSAGE);
-  assert.equal(invalidCallJson.result.content[0].text, invalidRecovery.message);
-  assert.equal(invalidRecovery.next_actions, undefined);
-  assert.doesNotMatch(invalidRecovery.message, /ask the human/i);
-  assert.doesNotMatch(invalidRecovery.message, /never ask/i);
-  assert.doesNotMatch(invalidRecovery.message, /outside this chat/i);
-  assert.doesNotMatch(invalidRecovery.message, /Authorization: Bearer/);
-  // The rejected credential cannot call any tool, so the recovery payload must
-  // not advertise keyless tools as available.
+  assert.equal(invalidMessage, INVALID_API_KEY_MESSAGE);
+  assert.doesNotMatch(invalidMessage, /ask the human/i);
+  assert.doesNotMatch(invalidMessage, /never ask/i);
+  assert.doesNotMatch(invalidMessage, /outside this chat/i);
+  assert.doesNotMatch(invalidMessage, /Authorization: Bearer/);
+  // The rejected credential cannot call any tool, so the result must not
+  // advertise keyless tools as available.
   assert.equal(
-    invalidRecovery.available_tools,
+    invalidCallJson.result.structuredContent,
     undefined,
     'CREDENTIAL_INVALID must not advertise tools the agent cannot call'
   );

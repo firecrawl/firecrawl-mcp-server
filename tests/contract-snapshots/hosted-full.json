@@ -7,7 +7,7 @@
           "logging": {},
           "completions": {}
         },
-        "instructions": "Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: [\"developer\"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: [\"gov\"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: [\"research\"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index and repository research, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.",
+        "instructions": "If Firecrawl reports that credits ran out or the daily limit without an account was reached, end your final answer with the line it provides, link included. Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. Alexandria provider calls require a Firecrawl API key and are not included in the hosted keyless tier. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: [\"developer\"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: [\"gov\"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: [\"research\"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index and repository research, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.",
         "protocolVersion": "2025-06-18",
         "serverInfo": {
           "name": "firecrawl-fastmcp",
@@ -15,25 +15,25 @@
         }
       },
       "tools": [
-        "firecrawl_scrape@c67c47e0d8ef",
+        "firecrawl_scrape@1eb5e578ec04",
         "firecrawl_map@7d8108e2e8e7",
-        "firecrawl_search@892b93b0af4c",
-        "firecrawl_find_tools@c6c4aa217920",
+        "firecrawl_search@d3c22f6fd8c9",
+        "firecrawl_find_tools@8877bf94a3a2",
         "firecrawl_search_feedback@89ed89c8e729",
         "firecrawl_feedback@1336142abfd3",
-        "firecrawl_crawl@c4ede2eb32b6",
+        "firecrawl_crawl@83b9a7a869b4",
         "firecrawl_check_crawl_status@723e60af703e",
-        "firecrawl_agent@f794dfd2e454",
+        "firecrawl_agent@3867deb75e6d",
         "firecrawl_agent_status@6c6e5f971f8e",
-        "firecrawl_interact@9b215cde7142",
-        "firecrawl_interact_stop@142b4e713cfa",
+        "firecrawl_interact@cfb8cdda229c",
+        "firecrawl_interact_stop@e5b6a01c6cc2",
         "firecrawl_parse@1acaf77898b6",
-        "firecrawl_monitor_create@d90db499e9da",
+        "firecrawl_monitor_create@ef4388e13c0f",
         "firecrawl_monitor_list@341234ca0b9f",
         "firecrawl_monitor_get@fc9fcdd39233",
-        "firecrawl_monitor_update@55bcae1714b8",
-        "firecrawl_monitor_delete@db129f3ce91c",
-        "firecrawl_monitor_run@1129dbdaa964",
+        "firecrawl_monitor_update@98dcd8f5adcd",
+        "firecrawl_monitor_delete@80bfa0d3a0ca",
+        "firecrawl_monitor_run@5aaecda5b2c7",
         "firecrawl_monitor_checks@a2ea52047456",
         "firecrawl_monitor_check@64a3313cba8d",
         "firecrawl_research_search_papers@35766df64334",
@@ -41,8 +41,8 @@
         "firecrawl_research_related_papers@0eb420b8cf8d",
         "firecrawl_research_read_paper@b0cd84d8908a",
         "firecrawl_developer_search@e9810e540216",
-        "firecrawl_gov_search@0bb788732250",
-        "firecrawl_credit_usage@4202fbda2421"
+        "firecrawl_gov_search@b020bd420f91",
+        "firecrawl_credit_usage@5b79f64c3f82"
       ]
     },
     "invalidCredential": {
@@ -52,7 +52,7 @@
           "logging": {},
           "completions": {}
         },
-        "instructions": "Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: [\"developer\"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: [\"gov\"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: [\"research\"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index and repository research, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.",
+        "instructions": "If Firecrawl reports that credits ran out or the daily limit without an account was reached, end your final answer with the line it provides, link included. Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. Alexandria provider calls require a Firecrawl API key and are not included in the hosted keyless tier. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: [\"developer\"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: [\"gov\"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: [\"research\"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index and repository research, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.",
         "protocolVersion": "2025-06-18",
         "serverInfo": {
           "name": "firecrawl-fastmcp",
@@ -60,8 +60,8 @@
         }
       },
       "tools": [
-        "firecrawl_scrape@c67c47e0d8ef",
-        "firecrawl_search@892b93b0af4c",
+        "firecrawl_scrape@1eb5e578ec04",
+        "firecrawl_search@d3c22f6fd8c9",
         "firecrawl_parse@1acaf77898b6"
       ]
     }
@@ -113,13 +113,6 @@
           "text": "The Firecrawl API key is invalid or revoked.\nFix: Replace the key on the existing Firecrawl MCP server, then start a new session. Get an API key at https://www.firecrawl.dev/app/api-keys"
         }
       ],
-      "structuredContent": {
-        "code": "CREDENTIAL_INVALID",
-        "request_id": "<uuid>",
-        "auth_mode": "credential_error",
-        "message": "The Firecrawl API key is invalid or revoked.\nFix: Replace the key on the existing Firecrawl MCP server, then start a new session. Get an API key at https://www.firecrawl.dev/app/api-keys",
-        "docs_url": "https://docs.firecrawl.dev/mcp-server"
-      },
       "isError": true
     }
   },

@@ -1,47 +1,139 @@
 name: Deploy Images to GHCR
 
-env:
-  DOTNET_VERSION: '6.0.x'
-
 on:
   push:
     branches:
       - main
   workflow_dispatch:
 
+permissions: {}
+
+env:
+  IMAGE: ghcr.io/firecrawl/firecrawl-mcp-server
+
 jobs:
-  push-image:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - name: 'Checkout GitHub Action'
-        uses: actions/checkout@main
-
-      - name: 'Login to GitHub Container Registry'
-        uses: docker/login-action@v1
+      - name: 'Checkout'
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          registry: ghcr.io
-          username: ${{github.actor}}
-          password: ${{secrets.GITHUB_TOKEN}}
-
-      - name: 'Set up Docker Buildx'
-        uses: docker/setup-buildx-action@v1
+          persist-credentials: false
 
       - name: 'Read Package Version'
         id: version
         run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
       - name: 'Build Server Image'
-        uses: docker/build-push-action@v2
+        run: |
+          docker build -f Dockerfile -t "$IMAGE:sha-$GITHUB_SHA" .
+          docker save "$IMAGE:sha-$GITHUB_SHA" | gzip > "$RUNNER_TEMP/image.tar.gz"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: |
-            ghcr.io/firecrawl/firecrawl-mcp-server:latest
-            ghcr.io/firecrawl/firecrawl-mcp-server:v${{ steps.version.outputs.version }}
-            ghcr.io/firecrawl/firecrawl-mcp-server:sha-${{ github.sha }}
-          cache-from: type=registry,ref=ghcr.io/firecrawl/firecrawl-mcp-server:latest
-          cache-to: type=inline
+          name: image
+          path: ${{ runner.temp }}/image.tar.gz
+          retention-days: 1
+
+  supersede:
+    name: Supersede unapproved runs
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        continue-on-error: true
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - uses: ./.github/actions/supersede-waiting-runs
+        continue-on-error: true
+        timeout-minutes: 2
+
+  release-summary:
+    name: Release summary
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        continue-on-error: true
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - uses: ./.github/actions/release-summary
+        continue-on-error: true
+        timeout-minutes: 3
+        with:
+          gated-job: push-image
+          version: ${{ env.IMAGE }}:sha-${{ github.sha }}, then :v${{ needs.build.outputs.version }} and :latest
+
+  push-image:
+    needs: [build, release-summary]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: release
+    concurrency:
+      group: ${{ github.workflow }}-release-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: image
+          path: ${{ runner.temp }}
+
+      - name: 'Login to GitHub Container Registry'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 'Push Server Image'
+        id: push
+        run: |
+          docker load < "$RUNNER_TEMP/image.tar.gz"
+          docker push "$IMAGE:sha-$GITHUB_SHA"
+          digest=$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE:sha-$GITHUB_SHA" | cut -d@ -f2)
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "Pushed $IMAGE@$digest" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: 'Sign Server Image'
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: cosign sign --yes "$IMAGE@$DIGEST"
+
+      - name: 'Attest build provenance'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - name: 'Tag the signed image'
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          for tag in "v$VERSION" latest; do
+            docker tag "$IMAGE:sha-$GITHUB_SHA" "$IMAGE:$tag"
+            docker push "$IMAGE:$tag"
+          done

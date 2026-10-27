@@ -16,3 +16,7 @@ test('WWW-Authenticate values preserve ordinary text', () => {
     'Invalid OAuth access token'
   );
 });
+
+test('WWW-Authenticate values flatten line breaks and non-ASCII characters', () => {
+  assert.equal(escapeWWWAuthenticateValue('a\r\nb\tc\u00e9d'), 'a b c d');
+});

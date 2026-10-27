@@ -1,5 +1,82 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Local HTTP mode (`HTTP_STREAMABLE_SERVER=true` or `SSE_LOCAL=true` without `CLOUD_SERVICE=true`) checks the `Host` and `Origin` headers. It answers `localhost`, `127.0.0.1` and `[::1]` on any port, the address in `HOST` unless it is `0.0.0.0` or `::`, and the hosts listed in the new `FIRECRAWL_MCP_ALLOWED_HOSTS` (comma-separated). Any other `Host`, or an `Origin` naming any other host (including `null`), gets `403` with a JSON-RPC error, and the server logs a warning that names `FIRECRAWL_MCP_ALLOWED_HOSTS`, so a web page can't reach the server through DNS rebinding or a cross-origin request and spend the configured `FIRECRAWL_API_KEY`. CORS headers echo an allowed origin, with `Vary: Origin`, instead of `Access-Control-Allow-Origin: *`. `GET` and `HEAD` requests to `/health` are answered for any host, so health checks that address the server by IP keep working; they get no CORS allow for other origins. Clients that reach the server under another name, such as a LAN address or a reverse-proxy hostname, need that name in `FIRECRAWL_MCP_ALLOWED_HOSTS`; `FIRECRAWL_MCP_ALLOWED_HOSTS=*` restores the previous behaviour. `CLOUD_SERVICE=true` and stdio are unchanged.
+
+### Fixed
+
+- stdio no longer starts when authentication fails. If an `unstable_hooks.authenticate` hook throws, returns nothing or returns `{ authenticated: false }`, `start({ transportType: 'stdio' })` now rejects with `Authentication failed for stdio transport: <reason>`, and the `firecrawl-mcp` command prints `[firecrawl-mcp] Failed to start:` with that error and exits with status 1. Before, the server logged the failure and served every tool without a session. The built-in stdio authentication doesn't fail, so the command is unaffected unless a hook is supplied: a missing `FIRECRAWL_API_KEY` still starts keyless mode, and a key the API rejects is still reported on each tool call.
+- `GET /sse` answers an authentication failure with `401` and the same JSON-RPC error body and `WWW-Authenticate` challenge as the Streamable HTTP endpoint. It used to answer `500 Error creating server` when the hook threw an error that wasn't a `Response`, returned nothing or returned `{ authenticated: false }`. A `Response` thrown by the hook is still sent as is.
+- The Streamable HTTP endpoint and `GET /sse` check the `Host` header before they call the authentication hook, so a malformed `Host` gets `400` without a credential check, also when the request target is in absolute form. `/sse` didn't check `Host` before. It accepts IPv6 literals in any valid spelling (`[::1]`, `[0:0:0:0:0:0:0:1]:8080`) and host names in any case with a port (`EXAMPLE.COM:8080`), which used to get `400`.
+- A server bound to an IPv6 address (`httpStream.host: '::'`) serves `/health`, `/ready` and the protected-resource metadata. They used to fail with `500`.
+- `WWW-Authenticate` challenges escape backslashes as well as quotes, and turn line breaks, other control characters and non-ASCII characters into spaces. An error message with a line break used to make the response fail with `500`. The JSON-RPC error message keeps the original text.
+- Authentication errors on the HTTP endpoints are logged through the server logger (`[ERROR] <time> [FastMCP error] Authentication error: …`) instead of a bare `console.error`.
+
+### Added
+
+- `escapeWWWAuthenticateValue` is exported from `firecrawl-mcp/server`.
+- `httpStream.allowedHosts` on `start()` in `firecrawl-mcp/server`: the host names the server answers in `Host` and `Origin`, with the behaviour described under Changed. Unset, the server answers every host and CORS allows any origin, as before.
+
+## [3.35.0] - 2026-10-26
+
+### Added
+
+- A tool call that fails because the Firecrawl API refused the request now carries a machine-readable error next to its message when the tool's `outputSchema` declares `success` and `error`: `structuredContent` is `{ success: false, error: { code, status, message, retryAfterSeconds? } }`. Two kinds of failure get it:
+  - An error from the Firecrawl SDK with a 4xx or 5xx status. `code` is the code in the API's error response when it is a plain identifier, otherwise the status name; a network code the SDK reports, such as `ECONNRESET` or `ERR_BAD_RESPONSE`, is never used. `retryAfterSeconds` comes from `retryAfterSeconds` or `retry_after_seconds` in the error details the SDK reports, or else from a `retry after <n>s` phrase in the message.
+  - A `CoreHttpError`, which the server raises where it calls the API without the SDK, such as the monitor and feedback tools. `code` is always the status name, and `retryAfterSeconds` comes only from a `retry after <n>s` phrase in the message.
+
+  Status names are `invalid_request` (400, 422), `unauthorized` (401), `insufficient_credits` (402), `forbidden` (403), `not_found` (404), `timeout` (408), `conflict` (409), `payload_too_large` (413), `rate_limited` (429), `server_error` (any 5xx) and `http_<status>` for any other 4xx. The text block is unchanged. Refusals the server already turns into a recovery result keep that result, such as an API key the API rejects in an API-key session (`CREDENTIAL_INVALID`) or a keyless limit. Every other error keeps its current result, including network failures with no status, bugs, and errors of other types that a tool added through `unstable_hooks.registerExtraTools` throws, as do errors that already carried structured content and tools whose schema has no `error` field.
+
+### Changed
+
+- The server is built on the official MCP TypeScript SDK (`@modelcontextprotocol/server` 2.3.1) instead of `fastmcp` and `mcp-proxy`. It negotiates the same protocol revisions as before (2025-11-25, 2025-06-18, 2025-03-26, 2024-11-05 and 2024-10-07) over stdio, Streamable HTTP and the legacy HTTP+SSE endpoints. Tool names, input and output schemas, descriptions, server instructions, `serverInfo`, the advertised capabilities, the HTTP routes (`/health`, `/ready`, `/ping`, OAuth protected-resource metadata, the legacy `/sse` and `/messages` endpoints) and the 1 MiB body limit are unchanged. HTTP serving is stateless: no `Mcp-Session-Id` is issued. Streamable HTTP responses differ only in framing: SSE events no longer carry an `id` or an empty priming event, `Cache-Control` is `no-cache, no-transform`, a `202 Accepted` has no `Content-Type`, and a body that is not valid JSON is answered with `Parse error: Invalid JSON` instead of `Parse error: Invalid JSON-RPC message`.
+- `start()` with `httpStream.stateless: false` (or `FASTMCP_STATELESS` unset) logs a warning and serves every request statelessly; session-based HTTP serving is no longer available. Stateless serving answers every protocol revision.
+- `fastmcp`, `mcp-proxy`, `fuse.js`, `uri-templates` and `undici` are no longer dependencies, and the local `fastmcp` patch is gone.
+- The crawl, agent, interact and monitor tools that change state now state `idempotentHint`. `firecrawl_interact_stop`, `firecrawl_monitor_update` and `firecrawl_monitor_delete` are idempotent: repeating a call with the same arguments changes nothing further. `firecrawl_crawl`, `firecrawl_agent`, `firecrawl_interact`, `firecrawl_monitor_create` and `firecrawl_monitor_run` are not: each call starts another job, acts on the page again or creates another record. Clients that retry, replay or resume tool calls can use the hint to decide whether a repeat is safe. Read-only tools and the two feedback tools are unchanged.
+
+### Fixed
+
+- `firecrawl_find_tools` no longer fails when `level` conflicts with the other arguments. With `query`, or a non-empty `expand` alongside any selector, the call is sent at `tools` level whatever `level` says or defaults to, since the catalogue returns tools for both and refused the call otherwise. A non-empty `expand` with no selector still gets the category-index error. With `capabilities` at `providers` or `groups` level and no `expand`, the call sends `expand: []`, because full contracts only exist at tools level. `level` now has a description that says to omit it in most calls and when to set `providers` or `groups`.
+
+## [3.34.1] - 2026-10-22
+
+### Changed
+
+- `mcp-proxy` moves from 6.5.1 to 6.6.0. In the HTTP stream transports (`CLOUD_SERVICE=true`, `HTTP_STREAMABLE_SERVER=true`, or `SSE_LOCAL=true`), the server now accepts request bodies up to 1 MiB and answers a larger one with HTTP 413; it used to read the whole body with no limit. A caller of `start()` can pass `httpStream.maxBodySize` to set a different limit. stdio is unchanged.
+- `body-parser` adds pnpm overrides: versions below 1.20.9 resolve to 1.20.9, and 2.x versions below 2.4.0 resolve to 2.4.0.
+
+## [3.34.0] - 2026-10-22
+
+### Added
+
+- `firecrawl_credit_usage` can say what credits were spent on. In the historical view, `byEndpoint: true` splits each period by the endpoint that used the credits (scrape, search, crawl, map, agent, ...), and `bin: "day"` returns one period per UTC day instead of per calendar month. Against an API that does not offer these yet, the tool returns the monthly figures with a `notice` saying so instead of failing. The description now also says what the tool cannot attribute (single jobs, URLs or MCP clients) and where per-call costs appear.
+- `firecrawl_gov_search` takes optional Government Index filters: `jurisdiction`, `court`, `courtType`, `cites` and `domain`. They combine, and only the filters a call sets are sent to `/v2/search/gov`, as query parameters with the same names; a call without filters sends the same request as before. `jurisdiction` is trimmed and lowercased and must be `us` or `us-` plus a two-letter code. The description notes that filters keep only pages the index has labeled, so a filtered search can leave out relevant pages. Filtered calls need an API that accepts these parameters. When the API refuses a call with a 400 and a reason, such as an unknown court id, the tool returns that reason instead of a generic request failure; other errors are handled as before. `firecrawl_search` with `categories: ["gov"]` is unchanged and does not take these filters.
+
+### Changed
+
+- The `firecrawl_search` description of `scrapeOptions` says it is opt-in: every web result is then fetched and billed as a scrape, so leave it unset unless the task needs the full text of a few results.
+- Server instructions and tool descriptions no longer warn that Alexandria needs an API key on a team with it enabled. Runtime credential and entitlement checks are unchanged, and a provider that requires accepted terms still points the user to the Firecrawl dashboard URL in its response.
+- `@modelcontextprotocol/sdk` moves from 1.29.0 to 1.32.1.
+
+### Fixed
+
+- `firecrawl_search` keeps its result under 900,000 bytes, text block and structured content together, for clients whose User-Agent names a platform that refuses tool results above 1 MB. A search with `scrapeOptions` could return several megabytes there and fail outright. When a result is over budget, every result's page content (`markdown`, `html`, `rawHtml`, `summary`, `description`, `links`, `images`) is cut to one shared length, the largest that fits; each cut text ends with a `[Truncated: ...]` line naming the URL to pass to `firecrawl_scrape`, the result gains a `truncated` field, and the response gains a `warning`. If even empty content does not fit, the lowest-ranked results are left out and the warning says how many. A result that already fits is returned unchanged, and every other client gets the same bytes as before.
+- The `firecrawl_scrape` sentence about provider discovery says again that it applies to authenticated sessions. Hosted keyless sessions list only `firecrawl_search`, `firecrawl_scrape` and `firecrawl_parse`, so they no longer read an unscoped pointer to `firecrawl_find_tools`.
+- A tool error carries `structuredContent` only when it matches the tool's declared `outputSchema`. Clients that validate structured content against that schema, such as those built on the official TypeScript SDK, now show the error message instead of failing with `Structured content does not match the tool's output schema`. The message text is unchanged.
+- `firecrawl_gov_search` refuses an argument it does not define, such as `yearFrom` or `court_type`, with a validation error that names it, as `/v2/search/gov` does. It used to drop the argument and run the search without that filter. The advertised input schema is unchanged; it already disallowed additional properties.
+
+## [3.33.4] - 2026-10-19
+
+### Changed
+
+- When use without an account reaches its daily limit, `firecrawl_search`, `firecrawl_scrape` and `firecrawl_parse` tell the agent to finish the task without Firecrawl and end its answer with one line for the user: `You've reached Firecrawl's daily limit without an account. Sign up free for 1,000 credits a month: <signup link>`. That line closes the message; the setup steps before it are unchanged. The previous text called the limit a rate limit and gave the agent no line to pass on. A 429 without a known reason keeps a generic message, since its cause may be transient.
+- The default server instructions, for sessions with and without a credential, now open with one sentence: if Firecrawl reports that credits ran out or the daily limit without an account was reached, end the final answer with the line it provides, link included. It comes first so clients that cut server instructions short still keep it; the rest of the instructions are unchanged.
+- The `firecrawl_search` description says when to use it: for current information, or to list businesses, people, products, jobs or events with websites, prices or contacts. The sentence pointing to the parameter descriptions is removed to stay inside the 2,048-character description budget. Behavior is unchanged.
+- The `firecrawl_scrape` description says when to use it: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Its Alexandria lines state what the `alexandria` argument does and that it needs an API key on a team with Alexandria enabled, instead of reading as access rules. Behavior is unchanged.
+
 ## [3.33.3] - 2026-10-19
 
 ### Changed

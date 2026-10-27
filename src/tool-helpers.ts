@@ -1,4 +1,4 @@
-import { UserError } from 'fastmcp';
+import { UserError } from './mcp/runtime.js';
 import { z } from 'zod';
 import { searchSourceSchema, ALEXANDRIA_SOURCES_ALWAYS_ON } from './alexandria';
 import { MCP_CONNECTION_GUIDE_URL } from './recovery.js';

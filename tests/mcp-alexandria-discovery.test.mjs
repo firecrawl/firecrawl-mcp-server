@@ -23,6 +23,32 @@ test('discovery progresses from categories to compact tools and selected contrac
   assert.deepEqual(api.requests.at(-1).body.alexandria.options.expand, ['options', 'response', 'examples']);
 });
 
+test('discovery sends a level the catalogue accepts for the other arguments', async (t) => {
+  const { api, client } = await startStdioWithApi(t);
+  const sent = async arguments_ => {
+    const before = api.requests.length;
+    const result = await client.request('tools/call', { name: 'firecrawl_find_tools', arguments: arguments_ });
+    assert.notEqual(result.isError, true, JSON.stringify(arguments_));
+    assert.equal(api.requests.length, before + 1, JSON.stringify(arguments_));
+    return api.requests.at(-1).body.alexandria.options;
+  };
+  for (const level of ['providers', 'groups', 'categories']) {
+    const options = await sent({ query: 'stock quotes', level });
+    assert.equal(options.level, 'tools', level);
+    assert.equal(options.query, 'stock quotes');
+  }
+  assert.equal((await sent({ providers: ['fred'], level: 'providers', expand: ['options'] })).level, 'tools');
+  assert.equal((await sent({ categories: ['finance'], expand: ['options'] })).level, 'tools');
+  const index = await client.request('tools/call', { name: 'firecrawl_find_tools', arguments: { level: 'categories', expand: ['options'] } });
+  assert.equal(index.isError, true);
+  const scoped = await sent({ capabilities: ['series/observations'], level: 'providers' });
+  assert.equal(scoped.level, 'providers');
+  assert.deepEqual(scoped.expand, []);
+  assert.equal((await sent({ categories: ['finance'], level: 'providers', expand: [] })).level, 'providers');
+  assert.equal((await sent({ categories: ['finance'], level: 'groups' })).level, 'groups');
+  assert.equal((await sent({ query: 'stock quotes', level: 'tools' })).level, 'tools');
+});
+
 test('discovery output never carries per-capability prices', async (t) => {
   const { client } = await startStdioWithApi(t);
   const call = arguments_ => client.request('tools/call', { name: 'firecrawl_find_tools', arguments: arguments_ });

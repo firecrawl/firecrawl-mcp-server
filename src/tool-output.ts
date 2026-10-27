@@ -8,12 +8,12 @@
  * so the helpers here attach the structured payload without touching the text
  * a tool already returned: existing clients keep reading the exact same string.
  *
- * Two fastmcp behaviours shape the schemas below.
+ * Two server behaviours (src/mcp/runtime.ts) shape the schemas below.
  *
- * 1. fastmcp advertises an output schema through `strictJsonSchema`, which
+ * 1. The server advertises an output schema through `strictJsonSchema`, which
  *    sets `additionalProperties: false` on every object it emits. A schema
  *    therefore has to name each top-level key the tool can return.
- * 2. fastmcp validates `structuredContent` against the schema and keeps the
+ * 2. The server validates `structuredContent` against the schema and keeps the
  *    parsed value, so a key the schema does not name is dropped from the
  *    structured payload. The text block still carries the whole response.
  *
@@ -26,7 +26,7 @@
  */
 
 import { z } from 'zod';
-import type { ContentResult } from 'fastmcp';
+import type { ContentResult } from './mcp/runtime.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -462,6 +462,8 @@ export const creditUsageOutputSchema = z
     // Historical view.
     success,
     error,
-    periods: unknown('Historical periods sorted by start date, each with `startDate`, `endDate`, `creditsUsed`, and `apiKey` when broken down by key.'),
+    bin: str('Period length the API applied, `month` or `day`; present when the API applied a requested endpoint split or daily periods.'),
+    periods: unknown('Historical periods sorted by start date, each with `startDate`, `endDate`, `creditsUsed`, and `endpoint` or `apiKey` when split.'),
+    notice: str('Present when the requested split or daily periods are not available yet; the periods are then calendar-month figures.'),
   })
   .describe('The team credit balance, or historical credit consumption by period.');

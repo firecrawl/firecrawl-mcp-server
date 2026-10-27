@@ -66,7 +66,7 @@ export const findToolsSchema = z
     categories: z.array(z.string().min(1)).min(1).max(50).optional().describe('Category IDs returned by an empty call. Lists providers by default.'),
     groups: z.array(z.string().min(1)).min(1).max(50).optional().describe('Optional group IDs for explicit group browsing.'),
     capabilities: z.array(z.string().min(1)).min(1).max(50).optional().describe('Values from each listed tool\'s `capability` field (e.g. "apps/app"). Put the provider in `providers`: {"providers": ["apps-apple-com"], "capabilities": ["apps/app"]}. A selected capability expands its complete contract by default.'),
-    level: z.enum(['categories', 'providers', 'groups', 'tools']).optional(),
+    level: z.enum(['categories', 'providers', 'groups', 'tools']).optional().describe('Usually omit: it follows the arguments (tools for query, urls, providers, capabilities or groups; providers for categories; categories with none). Set providers or groups to list those within a category or url scope instead of tools. query, or a non-empty expand with any other argument, returns tools.'),
     expand: z.array(z.enum(['options', 'response', 'examples'])).optional().describe('Use ["options", "response"] for inputs and output shape without example payloads; [] keeps results compact. Omit for full contracts on selected capabilities.'),
     limit: z.number().int().min(1).max(100).optional(),
     offset: z.number().int().nonnegative().optional(),
@@ -88,16 +88,19 @@ export const ALEXANDRIA_SEARCH_LEAD =
   'Authenticated search also returns matching Alexandria data providers in data.tools (' + ALEXANDRIA_CATALOGUE_VERTICALS + '). Prefer a provider over scraping pages when the task needs the same fields across several entities, exact figures or timestamps, provenance, or many records; use web results when they already answer the question. ' + ALEXANDRIA_SOURCES_ALWAYS_ON;
 export const ALEXANDRIA_CONTRACT_GUIDANCE =
   'The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and response.key (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination.';
+export const ALEXANDRIA_TERMS_GUIDANCE =
+  'Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.';
 
 export function findToolsOptions(args: z.infer<typeof findToolsSchema>) {
-  const level = args.level ?? (args.query || args.capabilities?.length || args.providers?.length || args.groups?.length || args.urls?.length ? 'tools' : args.categories?.length ? 'providers' : 'categories');
-  if (level === 'categories' && (args.query || args.providers?.length || args.categories?.length || args.groups?.length || args.capabilities?.length || args.urls?.length || args.expand !== undefined)) {
+  const selected = Boolean(args.query || args.providers?.length || args.categories?.length || args.groups?.length || args.capabilities?.length || args.urls?.length);
+  const level = selected && (args.query || args.expand?.length) ? 'tools' : args.level ?? (args.capabilities?.length || args.providers?.length || args.groups?.length || args.urls?.length ? 'tools' : args.categories?.length ? 'providers' : 'categories');
+  if (level === 'categories' && (selected || args.expand !== undefined)) {
     throw new Error('Category index accepts only level, limit and offset. Select a category to browse providers.');
   }
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { expand, includeCosts, ...selectors } = args;
   return { ...selectors, ...(expand !== undefined ? { expand } : {}), level, limit: args.limit ?? 20,
-    ...(args.expand === undefined && level === 'tools' && args.capabilities?.length ? { expand: ['options', 'response', 'examples'] as const } : {}),
+    ...(args.expand === undefined && args.capabilities?.length ? { expand: level === 'tools' ? ['options', 'response', 'examples'] as const : [] } : {}),
   };
 }
 

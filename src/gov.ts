@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import type { ContentResult, FastMCP } from 'fastmcp';
+import { type ContentResult, type McpRuntime, UserError } from './mcp/runtime.js';
 import { originHeaders, requestOrigin } from './origin';
 import { govSearchOutputSchema, withStructured } from './tool-output';
 
@@ -30,6 +30,76 @@ type GetClient = (session?: SessionData) => unknown;
 
 const BASE = '/v2/search/gov';
 
+const COURT_TYPES = [
+  'federal-supreme',
+  'federal-appellate',
+  'federal-district',
+  'federal-bankruptcy',
+  'federal-special',
+  'military',
+  'state-supreme',
+  'state-appellate',
+  'state-trial',
+  'state-special',
+  'state-attorney-general',
+] as const;
+
+const govSearchParameters = z.strictObject({
+  query: z
+    .string()
+    .min(1)
+    .describe(
+      'Natural-language legal or regulatory question or search phrase, including the jurisdiction, agency, or citation when relevant.'
+    ),
+  k: z
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .optional()
+    .describe('Number of ranked results to return (default 10).'),
+  jurisdiction: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(
+      /^us(-[a-z]{2})?$/,
+      'jurisdiction must be "us" for federal, or "us-" plus a two-letter state or territory code, such as "us-ca" or "us-dc"'
+    )
+    .optional()
+    .describe(
+      'Keep only pages of one jurisdiction: "us" for federal, or "us-" plus a two-letter state or territory code, such as "us-ca" or "us-dc".'
+    ),
+  court: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe(
+      'Keep only pages labeled for one court, by CourtListener court id, such as "scotus", "ca9" or "nysd".'
+    ),
+  courtType: z
+    .enum(COURT_TYPES)
+    .optional()
+    .describe(
+      `Keep only pages from one type of court: ${COURT_TYPES.join(', ')}.`
+    ),
+  cites: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe(
+      'Keep only pages that cite one law or case, as a printed citation such as "42 U.S.C. § 1983" or "5 U.S. 137", or a citation id such as "us:usc:42:1983".'
+    ),
+  domain: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe('Keep only pages from one site, such as "irs.gov".'),
+});
+
 interface GovHit {
   url?: string;
   title?: string;
@@ -51,7 +121,7 @@ function fmtGov(results?: GovHit[]): string {
 }
 
 export function registerGovTools(
-  server: Pick<FastMCP<SessionData>, 'addTool'>,
+  server: Pick<McpRuntime<SessionData>, 'addTool'>,
   getClient: GetClient
 ): void {
   server.addTool({
@@ -65,39 +135,41 @@ export function registerGovTools(
     description: `
 Search US federal, state, and local statutes, regulations, codes, court opinions, and other government publications for legal or regulatory questions that need primary text. Clarify a missing jurisdiction or ambiguous as-of date before identifying the governing rule.
 
+Optional filters narrow results by jurisdiction, court, court type, cited law or case, and site. Filters keep only pages the index has labeled, so a filtered search can leave out relevant pages, and no results does not mean none exist. Court labels are most complete for federal courts and case-law collections.
+
 Returns ranked results with a position, title, URL, and matched snippet. Results may include historical versions, bill text, agency guidance, and third-party reproductions. Verify the issuer, jurisdiction, enacted/effective status, and version before citing current governing law. Read a known URL or additional page context with firecrawl_scrape. Use general search for non-US questions or missing coverage; no hits does not establish that no applicable law exists.
 `,
     outputSchema: govSearchOutputSchema,
-    parameters: z.object({
-      query: z
-        .string()
-        .min(1)
-        .describe(
-          'Natural-language legal or regulatory question or search phrase, including the jurisdiction, agency, or citation when relevant.'
-        ),
-      k: z
-        .number()
-        .int()
-        .min(1)
-        .max(100)
-        .optional()
-        .describe('Number of ranked results to return (default 10).'),
-    }),
+    parameters: govSearchParameters,
     execute: async (
       args: unknown,
       { session, client: mcpClient }
     ): Promise<ContentResult> => {
-      const { query, k } = args as { query: string; k?: number };
-      const params = new URLSearchParams();
-      params.append('query', query);
-      if (k != null) params.append('k', String(k));
+      const { query, ...options } = args as z.infer<typeof govSearchParameters>;
+      const params = new URLSearchParams({ query });
+      for (const [key, value] of Object.entries(options)) {
+        if (value != null) params.append(key, String(value));
+      }
       const client = getClient(session) as ClientLike;
-      const res = await client.http.get<{
-        data?: { web?: GovHit[] };
-      }>(
-        `${BASE}?${params.toString()}`,
-        originHeaders(requestOrigin(mcpClient, session))
-      );
+      const res = await client.http
+        .get<{
+          data?: { web?: GovHit[] };
+        }>(
+          `${BASE}?${params.toString()}`,
+          originHeaders(requestOrigin(mcpClient, session))
+        )
+        .catch((error: unknown) => {
+          const response = (
+            error as
+              | { response?: { status?: number; data?: { error?: unknown } } }
+              | undefined
+          )?.response;
+          const message = response?.data?.error;
+          if (response?.status !== 400 || typeof message !== 'string') {
+            throw error;
+          }
+          throw new UserError(message, { status: 400, error: message });
+        });
       const results = res.data?.data?.web ?? [];
       return withStructured(fmtGov(results), { results });
     },
