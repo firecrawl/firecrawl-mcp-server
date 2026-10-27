@@ -6,6 +6,19 @@
 
 - `firecrawl_gov_search` asks `/v2/search/gov` for `sources=law` and returns the `law` results. Each row in `structuredContent.results` keeps `url`, `title`, `description` and `position`, and also carries the index's legal labels when it has them: `jurisdiction`, `court`, `court_type`, `cites`, `cited_as` and `updated_at`. The text block, the tool description and the input schema are unchanged. Needs an API that accepts `sources` on `/v2/search/gov`.
 
+### Fixed
+
+- stdio no longer starts when authentication fails. If an `unstable_hooks.authenticate` hook throws, returns nothing or returns `{ authenticated: false }`, `start({ transportType: 'stdio' })` now rejects with `Authentication failed for stdio transport: <reason>`, and the `firecrawl-mcp` command prints `[firecrawl-mcp] Failed to start:` with that error and exits with status 1. Before, the server logged the failure and served every tool without a session. The built-in stdio authentication doesn't fail, so the command is unaffected unless a hook is supplied: a missing `FIRECRAWL_API_KEY` still starts keyless mode, and a key the API rejects is still reported on each tool call.
+- `GET /sse` answers an authentication failure with `401` and the same JSON-RPC error body and `WWW-Authenticate` challenge as the Streamable HTTP endpoint. It used to answer `500 Error creating server` when the hook threw an error that wasn't a `Response`, returned nothing or returned `{ authenticated: false }`. A `Response` thrown by the hook is still sent as is.
+- The Streamable HTTP endpoint and `GET /sse` check the `Host` header before they call the authentication hook, so a malformed `Host` gets `400` without a credential check, also when the request target is in absolute form. `/sse` didn't check `Host` before. It accepts IPv6 literals in any valid spelling (`[::1]`, `[0:0:0:0:0:0:0:1]:8080`) and host names in any case with a port (`EXAMPLE.COM:8080`), which used to get `400`.
+- A server bound to an IPv6 address (`httpStream.host: '::'`) serves `/health`, `/ready` and the protected-resource metadata. They used to fail with `500`.
+- `WWW-Authenticate` challenges escape backslashes as well as quotes, and turn line breaks, other control characters and non-ASCII characters into spaces. An error message with a line break used to make the response fail with `500`. The JSON-RPC error message keeps the original text.
+- Authentication errors on the HTTP endpoints are logged through the server logger (`[ERROR] <time> [FastMCP error] Authentication error: …`) instead of a bare `console.error`.
+
+### Added
+
+- `escapeWWWAuthenticateValue` is exported from `firecrawl-mcp/server`.
+
 ## [3.35.0] - 2026-10-26
 
 ### Added

@@ -110,7 +110,12 @@ if (
   );
 }
 
-await start(args);
+try {
+  await start(args);
+} catch (error) {
+  console.error('[firecrawl-mcp] Failed to start:', error);
+  process.exit(1);
+}
 
 // Bring up the search surface as a second in-process instance on its own port
 // (FIRECRAWL_MCP_SEARCH_PORT); a reverse proxy in front of the process routes

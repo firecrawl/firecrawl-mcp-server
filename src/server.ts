@@ -418,6 +418,7 @@ export interface FirecrawlMcpServer {
  * entry point.
  */
 export { normalizeHeader, withoutTrailingSlash } from './headers.js';
+export { escapeWWWAuthenticateValue } from './mcp/www-authenticate.js';
 export {
   DECLARED_ORIGIN_HEADER,
   initializeClientSlug,
