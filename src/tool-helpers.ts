@@ -342,3 +342,30 @@ export async function postSearchWithFallback(
     });
   }
 }
+
+export const SEARCH_RESULT_SOURCES = ['web', 'images', 'news'] as const;
+
+// Stamp each search result with its `source` and 1-indexed `position` so the
+// model can copy both straight into `firecrawl_search_feedback.valuableResults`
+// without counting array elements (miscounts silently corrupt feedback data).
+// Results come back grouped and each group is numbered from 1 independently, so
+// the position alone does not identify a result — always carry the source with
+// it. The stamps stay derived from each array's order, so never reorder or
+// filter between here and the returned envelope. The stamps are spread last on
+// purpose: they address the result for feedback, so they must win over any
+// same-named field the API returns rather than being silently overwritten.
+export function annotateResultPositions<T>(envelope: T): T {
+  const data = (envelope as { data?: Record<string, unknown> } | null)?.data;
+  if (!data) return envelope;
+
+  for (const source of SEARCH_RESULT_SOURCES) {
+    const results = data[source];
+    if (!Array.isArray(results)) continue;
+    data[source] = results.map((result, i) =>
+      result && typeof result === 'object'
+        ? { ...result, source, position: i + 1 }
+        : result
+    );
+  }
+  return envelope;
+}

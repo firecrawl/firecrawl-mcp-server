@@ -6852,7 +6852,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_search_feedback@3d7d2ef79f89": {
+  "firecrawl_search_feedback@89ed89c8e729": {
     "annotations": {
       "title": "Firecrawl search feedback",
       "readOnlyHint": false,
@@ -6860,7 +6860,7 @@
       "destructiveHint": false
     },
     "title": "Firecrawl search feedback",
-    "description": "\nRecords schema-validated quality feedback for a prior `firecrawl_search` UUID `searchId`. A `good` rating requires a valuable source, `partial` a valuable source or at least one `missingContent` entry, and `bad` at least one `missingContent` entry or a query suggestion; caps are 50 `valuableSources` and 20 `missingContent` entries.\n\nEligibility is limited to successful searches within the feedback age window. The record is idempotent per search ID. Eligible first feedback for a search can refund 1 credit; refunds are subject to the team's daily cap. The response reports whether a refund was applied, along with submission and daily-cap status.\n",
+    "description": "\nRecords schema-validated quality feedback for a prior `firecrawl_search` UUID `searchId`. A `good` rating requires a valuable result or a valuable source, `partial` either of those or at least one `missingContent` entry, and `bad` at least one `missingContent` entry or a query suggestion; caps are 50 `valuableResults`, 50 `valuableSources`, and 20 `missingContent` entries.\n\nEligibility is limited to successful searches within the feedback age window. The record is idempotent per search ID. Eligible first feedback for a search can refund 1 credit; refunds are subject to the team's daily cap. The response reports whether a refund was applied, along with submission and daily-cap status.\n\nMark useful returned results in `valuableResults` as `{\"source\", \"position\"}` copied off the result. Groups are numbered from 1 independently, so `{\"source\":\"web\",\"position\":1}` and `{\"source\":\"news\",\"position\":1}` are different results. Be exhaustive — results you do not list are treated as not useful. Reserve `valuableSources` for useful URLs that were NOT among the returned results; never report one result in both fields.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6895,6 +6895,37 @@
             },
             "required": [
               "url"
+            ]
+          }
+        },
+        "valuableResults": {
+          "description": "Every result that was actually useful, copied from the `source` and `position` stamped on each result. Each group is numbered from 1 independently, so the source is required — `{\"source\":\"web\",\"position\":1}` and `{\"source\":\"news\",\"position\":1}` are different results. Be exhaustive — unlisted results are treated as not useful. Do not also list the same results in valuableSources.",
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string",
+                "enum": [
+                  "web",
+                  "images",
+                  "news"
+                ]
+              },
+              "position": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "reason": {
+                "type": "string",
+                "maxLength": 1000
+              }
+            },
+            "required": [
+              "source",
+              "position"
             ]
           }
         },
@@ -7101,7 +7132,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_search@4fcbee946ec1": {
+  "firecrawl_search@2c80d5dd86b9": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -7498,7 +7529,7 @@
           ]
         },
         "data": {
-          "description": "Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`."
+          "description": "Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`. Each result carries its `source` and a 1-indexed `position` within that group; pass those pairs to `firecrawl_search_feedback`."
         },
         "error": {
           "description": "Error message or error object when the call did not succeed."
@@ -7552,7 +7583,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_search@66b064573b77": {
+  "firecrawl_search@573b5142c485": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -7897,7 +7928,7 @@
           ]
         },
         "data": {
-          "description": "Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`."
+          "description": "Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`. Each result carries its `source` and a 1-indexed `position` within that group; pass those pairs to `firecrawl_search_feedback`."
         },
         "error": {
           "description": "Error message or error object when the call did not succeed."
@@ -7951,7 +7982,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_search@96903afee503": {
+  "firecrawl_search@7035ea6860de": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -8105,7 +8136,7 @@
           ]
         },
         "data": {
-          "description": "Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`."
+          "description": "Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`. Each result carries its `source` and a 1-indexed `position` within that group; pass those pairs to `firecrawl_search_feedback`."
         },
         "error": {
           "description": "Error message or error object when the call did not succeed."

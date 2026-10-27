@@ -16,9 +16,9 @@
     "tools": [
       "firecrawl_scrape@d244268f4275",
       "firecrawl_map@7d8108e2e8e7",
-      "firecrawl_search@66b064573b77",
+      "firecrawl_search@573b5142c485",
       "firecrawl_find_tools@8877bf94a3a2",
-      "firecrawl_search_feedback@3d7d2ef79f89",
+      "firecrawl_search_feedback@89ed89c8e729",
       "firecrawl_feedback@3781d950aa2d",
       "firecrawl_crawl@0844d076cbbd",
       "firecrawl_check_crawl_status@723e60af703e",
