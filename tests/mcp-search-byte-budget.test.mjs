@@ -86,6 +86,10 @@ async function startServer(t, searchResponse) {
 
 const resultBytes = (result) => Buffer.byteLength(JSON.stringify(result));
 
+// Every web result comes back stamped with its `source` and 1-indexed `position`.
+const stamped = (web) => web.map((result, i) => ({ ...result, source: 'web', position: i + 1 }));
+const withStamps = (payload) => ({ ...payload, data: { ...payload.data, web: stamped(payload.data.web) } });
+
 test('a 1.8 MB search result comes back under the byte budget for a capped client', async (t) => {
   const payload = largeSearchResponse();
   const search = await startServer(t, payload);
@@ -126,7 +130,7 @@ test('when results alone overflow the budget, the lowest-ranked ones are left ou
   assert.ok(resultBytes(result) <= BUDGET, `result is ${resultBytes(result)} bytes`);
   const body = JSON.parse(result.content[0].text);
   assert.ok(body.data.web.length > 0 && body.data.web.length < 100);
-  assert.deepEqual(body.data.web, web.slice(0, body.data.web.length));
+  assert.deepEqual(body.data.web, stamped(web.slice(0, body.data.web.length)));
   assert.match(body.warning, new RegExp(`${100 - body.data.web.length} lower-ranked results were left out`));
 });
 
@@ -144,16 +148,18 @@ test('the capped client gets the same bytes back when the result already fits', 
   const payload = smallSearchResponse();
   const search = await startServer(t, payload);
   const result = await search(CAPPED_USER_AGENT);
-  assert.equal(result.content[0].text, JSON.stringify(payload));
-  assert.deepEqual(result.structuredContent, payload);
+  const expected = withStamps(payload);
+  assert.equal(result.content[0].text, JSON.stringify(expected));
+  assert.deepEqual(result.structuredContent, expected);
 });
 
 test('every other client gets the large result byte for byte unchanged', async (t) => {
   const payload = largeSearchResponse();
+  const expected = withStamps(payload);
   const search = await startServer(t, payload);
   for (const userAgent of [undefined, 'node', 'Claude-User/1.0', 'python-httpx/0.28.1', 'baseten/1.0', 'tool-bank/1.0']) {
     const result = await search(userAgent);
-    assert.equal(result.content[0].text, JSON.stringify(payload), String(userAgent));
-    assert.deepEqual(result.structuredContent, payload, String(userAgent));
+    assert.equal(result.content[0].text, JSON.stringify(expected), String(userAgent));
+    assert.deepEqual(result.structuredContent, expected, String(userAgent));
   }
 });
