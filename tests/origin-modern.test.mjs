@@ -130,6 +130,7 @@ test('a client named by its User-Agent keeps the same origin on 2026-07-28 as on
       await scrape(port, { userAgent, clientInfo, modern });
       assert.ok(api.origins.length > 0, `${client}: no API request`);
       for (const stamped of api.origins) {
+        assert.ok(stamped.header || stamped.body, `${client}: API request missing origin`);
         for (const value of [stamped.header, stamped.body].filter(Boolean)) {
           assert.equal(
             value.split('@')[0],

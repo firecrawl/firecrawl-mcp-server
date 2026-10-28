@@ -168,7 +168,7 @@ function clientOf(context: ServerContext) {
   return {
     version: envelope?.[CLIENT_INFO_META_KEY] as
       { name: string; version: string } | undefined,
-    perRequest: true,
+    perRequest: Boolean(envelope?.[CLIENT_INFO_META_KEY]),
   };
 }
 
