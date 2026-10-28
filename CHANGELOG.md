@@ -1,10 +1,15 @@
 # Changelog
 
-## [3.36.0] - 2026-10-27
+## [Unreleased]
 
 ### Changed
 
 - `firecrawl_gov_search` asks `/v2/search/gov` for `sources=law` and returns the `law` results. Each row in `structuredContent.results` keeps `url`, `title`, `description` and `position`, and also carries the index's legal labels when it has them: `jurisdiction`, `court`, `court_type`, `cites`, `cited_as` and `updated_at`. The text block, the tool description and the input schema are unchanged. Needs an API that accepts `sources` on `/v2/search/gov`.
+
+## [3.36.0] - 2026-10-27
+
+### Changed
+
 - Local HTTP mode (`HTTP_STREAMABLE_SERVER=true` or `SSE_LOCAL=true` without `CLOUD_SERVICE=true`) checks the `Host` and `Origin` headers. It answers `localhost`, `127.0.0.1` and `[::1]` on any port, the address in `HOST` unless it is `0.0.0.0` or `::`, and the hosts listed in the new `FIRECRAWL_MCP_ALLOWED_HOSTS` (comma-separated). Any other `Host`, or an `Origin` naming any other host (including `null`), gets `403` with a JSON-RPC error, and the server logs a warning that names `FIRECRAWL_MCP_ALLOWED_HOSTS`, so a web page can't reach the server through DNS rebinding or a cross-origin request and spend the configured `FIRECRAWL_API_KEY`. CORS headers echo an allowed origin, with `Vary: Origin`, instead of `Access-Control-Allow-Origin: *`. `GET` and `HEAD` requests to `/health` are answered for any host, so health checks that address the server by IP keep working; they get no CORS allow for other origins. Clients that reach the server under another name, such as a LAN address or a reverse-proxy hostname, need that name in `FIRECRAWL_MCP_ALLOWED_HOSTS`; `FIRECRAWL_MCP_ALLOWED_HOSTS=*` restores the previous behaviour. `CLOUD_SERVICE=true` and stdio are unchanged.
 - The `firecrawl_scrape` description's Alexandria contract guidance says "a key field under response" instead of `response.key`. Some MCP gateways scan tool descriptions for sensitive file names, read `response.key` as a private key file, and flagged the tool.
 
