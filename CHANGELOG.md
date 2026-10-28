@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- `firecrawl_find_tools` carries `_meta['anthropic/alwaysLoad']` in `tools/list`, like `firecrawl_search` and `firecrawl_scrape`, so clients that defer tool definitions load it on connect with the other two Alexandria tools. Its name, description and schemas are unchanged, and every other tool stays deferrable.
+
 ## [3.36.0] - 2026-10-27
 
 ### Changed

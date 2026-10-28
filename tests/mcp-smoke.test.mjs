@@ -1273,7 +1273,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
 
   const byName = new Map(tools.tools.map((tool) => [tool.name, tool]));
-  for (const name of ['firecrawl_search', 'firecrawl_scrape']) {
+  for (const name of ['firecrawl_search', 'firecrawl_scrape', 'firecrawl_find_tools']) {
     assert.equal(byName.get(name)?._meta?.['anthropic/alwaysLoad'], true, name);
   }
   assert.equal(byName.get('firecrawl_map')?._meta?.['anthropic/alwaysLoad'], undefined);

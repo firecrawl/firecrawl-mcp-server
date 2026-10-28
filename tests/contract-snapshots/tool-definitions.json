@@ -2058,7 +2058,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_find_tools@8877bf94a3a2": {
+  "firecrawl_find_tools@5c02cb633aba": {
     "annotations": {
       "title": "Find Tools",
       "readOnlyHint": true,
@@ -2321,6 +2321,9 @@
         }
       },
       "additionalProperties": false
+    },
+    "_meta": {
+      "anthropic/alwaysLoad": true
     }
   },
   "firecrawl_gov_search@b020bd420f91": {

@@ -411,14 +411,16 @@ test('search surface lists exactly the nine contracted tools', async (t) => {
   const names = tools.map((tool) => tool.name);
   const search = tools.find((tool) => tool.name === 'firecrawl_search');
   assert.ok(search);
-  for (const name of ['firecrawl_search', 'firecrawl_scrape']) {
+  // The Alexandria loop (search, find tools, scrape) is always loaded; the
+  // other search tools stay deferrable.
+  const alwaysLoaded = new Set(['firecrawl_search', 'firecrawl_find_tools', 'firecrawl_scrape']);
+  for (const name of alwaysLoaded) {
     const tool = tools.find((item) => item.name === name);
     assert.equal(tool?._meta?.['anthropic/alwaysLoad'], true, name);
   }
-  assert.equal(
-    tools.find((tool) => tool.name === 'firecrawl_find_tools')?._meta?.['anthropic/alwaysLoad'],
-    undefined
-  );
+  for (const tool of tools.filter((item) => !alwaysLoaded.has(item.name))) {
+    assert.equal(tool._meta?.['anthropic/alwaysLoad'], undefined, tool.name);
+  }
   assert.match(
     search.description,
     /categories: \["developer"\].*data\.web.*category.*developer/is

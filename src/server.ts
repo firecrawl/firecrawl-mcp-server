@@ -1979,6 +1979,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
 
   const findToolsTool: RegisteredTool = {
     name: 'firecrawl_find_tools',
+    _meta: { 'anthropic/alwaysLoad': true },
     annotations: {
       title: 'Find Tools',
       readOnlyHint: true,
