@@ -258,10 +258,13 @@ const { version: serverVersion } = createRequire(import.meta.url)(
 
 /**
  * The client as fastmcp hands it to a tool call (`context.client`); its
- * `version` is the `clientInfo` the client sent at initialize.
+ * `version` is the `clientInfo` the client sent at initialize, or, with
+ * `perRequest` set, the `clientInfo` a protocol revision 2026-07-28 call
+ * carries in its own `_meta`.
  */
 export type McpClient =
-  { version?: ClientImplementation | undefined } | undefined;
+  | { version?: ClientImplementation | undefined; perRequest?: boolean }
+  | undefined;
 
 /** The client signals the authenticated session carries (see SessionData). */
 export type OriginSession = {
@@ -277,18 +280,24 @@ export type OriginSession = {
  * The origin of every request a tool call makes: the call's client, the
  * client signals of the request the session was authenticated with
  * (stateless HTTP calls carry no client name), and this server's version.
+ * A 2026-07-28 call's own `clientInfo` ranks with an earlier initialize's
+ * client name, below a User-Agent that names a client, so a client keeps the
+ * origin it had on the 2025 revisions.
  */
 export function requestOrigin(
   client: McpClient,
   session?: OriginSession | undefined
 ): string {
+  const perRequest = client?.perRequest === true;
   return originForClient(
-    client?.version ?? null,
+    perRequest ? null : (client?.version ?? null),
     serverVersion,
     session?.clientUserAgent,
     {
       declaredOrigin: session?.clientOrigin,
-      initializeClient: session?.initializeClient,
+      initializeClient: perRequest
+        ? (client?.version ?? session?.initializeClient)
+        : session?.initializeClient,
       oauthClientId: session?.oauthClientId,
       oauthClientName: session?.oauthClientName,
       referrer: session?.clientReferrer,

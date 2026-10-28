@@ -210,8 +210,11 @@ export type ToolLogger = {
 export type ToolContext = {
   session?: Session;
   log: ToolLogger;
-  /** The connected client; `version` is the clientInfo sent at initialize. */
-  client?: { version?: { name?: string; version?: string } };
+  /**
+   * The connected client; `version` is the clientInfo sent at initialize, or
+   * with `perRequest` set, the clientInfo a 2026-07-28 call carries itself.
+   */
+  client?: { version?: { name?: string; version?: string }; perRequest?: boolean };
   /**
    * The protocol revision 2026-07-28 details of the call: the client
    * capabilities it declared, and the input responses and request state of a
@@ -325,7 +328,7 @@ export type TaskResultEvent = {
   result: ToolResult;
   session: SessionData;
   /** The client, from the request's `clientInfo` metadata. */
-  client: { version?: { name?: string; version?: string } };
+  client: { version?: { name?: string; version?: string }; perRequest?: boolean };
 };
 
 /** Per-request credential and extra headers for calls to the Firecrawl API. */
