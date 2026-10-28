@@ -4,12 +4,19 @@ import { Hono } from 'hono';
 import { strictJsonSchema, toJsonSchema } from 'xsschema';
 import { z } from 'zod';
 import {
+  CLIENT_CAPABILITIES_META_KEY,
+  CLIENT_INFO_META_KEY,
+  createMcpHandler,
+  isLegacyRequest,
+  type McpRequestContext,
+  MissingRequiredClientCapabilityError,
   ProtocolError,
   Server,
+  type ServerContext,
   type StandardSchemaV1,
   WebStandardStreamableHTTPServerTransport,
 } from '@modelcontextprotocol/server';
-import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
+import { serveStdio, StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { LegacySseTransport } from './sse.js';
 import { escapeWWWAuthenticateValue } from './www-authenticate.js';
 
@@ -20,10 +27,34 @@ import { escapeWWWAuthenticateValue } from './www-authenticate.js';
  * One server definition backs every transport: stdio, stateless Streamable
  * HTTP and the HTTP+SSE transport of the 2024-11-05 revision. They serve the
  * `initialize` handshake of protocol revisions 2024-11-05 through 2025-11-25.
+ * With `modern` set, stdio and Streamable HTTP also serve the 2026-07-28
+ * revision (`server/discover`, per-request capabilities, multi round-trip
+ * requests and the extensions); every 2025-era request is served as before.
  * Streamable HTTP is stateless: every request is answered by a fresh server
  * instance and no `Mcp-Session-Id` is issued. Each legacy SSE connection
  * keeps its own server for as long as the stream is open.
  */
+
+type JsonObject = Record<string, unknown>;
+
+const isObjectSchema = (value: unknown): value is JsonObject =>
+  typeof value === 'object' && value !== null && (value as JsonObject).type === 'object';
+
+/**
+ * strictJsonSchema for input schemas, except an object with no declared properties (a z.record, such as
+ * jsonOptions.schema) stays open: closing it would forbid every key and make schema-validating clients refuse the call.
+ */
+function closeObjects(schema: JsonObject): JsonObject {
+  const properties = schema.properties as JsonObject | undefined;
+  if (!properties) return schema;
+  return {
+    ...schema,
+    additionalProperties: false,
+    properties: Object.fromEntries(
+      Object.entries(properties).map(([key, value]) => [key, isObjectSchema(value) ? closeObjects(value) : value])
+    ),
+  };
+}
 
 export class UserError extends Error {
   extras?: Record<string, unknown>;
@@ -92,8 +123,31 @@ type ToolLog = Record<
   (message: string, context?: unknown) => void
 >;
 
+/** The 2026-07-28 details of a `tools/call`; absent on 2025-era calls. */
+export type ModernRequest = {
+  /** The client capabilities declared on this request. */
+  clientCapabilities: Record<string, unknown>;
+  /** The client's responses to the input requests of an earlier `input_required` result. */
+  inputResponses?: Record<string, unknown>;
+  /**
+   * The `requestState` of that result, as the client echoed it. It comes back
+   * from the client, so treat it as untrusted input.
+   */
+  requestState?: string;
+};
+
+/** The extension a client declares to receive `resultType: "task"` results. */
+export const TASKS_EXTENSION = 'io.modelcontextprotocol/tasks';
+
 export type ToolExecuteContext<Auth> = {
   client: { version?: { name?: string; version?: string } };
+  /** The 2026-07-28 request details; absent on 2025-era calls. */
+  mcp?: ModernRequest;
+  /**
+   * Set when the call runs as an MCP task: a tool that starts a job returns
+   * once the job is accepted instead of waiting for it.
+   */
+  task?: boolean;
   log: ToolLog;
   reportProgress: (progress: { progress: number; total?: number; message?: string }) => Promise<void>;
   requestId?: string;
@@ -151,6 +205,52 @@ export type ProtectedResource = {
 
 export type AuthenticateRequest = IncomingMessage | undefined;
 
+/**
+ * A result a tool returns on protocol revision 2026-07-28 in place of a
+ * complete result: an MCP task, or a request for more client input.
+ */
+export type DeferredResult = Record<string, unknown> & { resultType: 'task' | 'input_required' };
+
+/** What running a tool answers: a complete result or a deferred one. */
+export type ToolCallResult = ContentResult | DeferredResult;
+
+export function isDeferred(result: unknown): result is DeferredResult {
+  const type = (result as { resultType?: unknown } | null)?.resultType;
+  return typeof result === 'object' && result !== null && (type === 'task' || type === 'input_required');
+}
+
+/**
+ * An extension of the 2026-07-28 revision. It is advertised in
+ * `server/discover` and set up on every 2026-07-28 server instance; 2025-era
+ * instances never see it.
+ */
+export interface McpExtension<Auth> {
+  /** The identifier advertised under `capabilities.extensions`. */
+  id: string;
+  /** Settings advertised with the identifier. */
+  settings?: Record<string, unknown>;
+  /**
+   * Output schemas by tool name, advertised and enforced in place of the
+   * tool's own on the instances the extension is set up on.
+   */
+  outputSchemas?(): Record<string, StandardSchemaV1>;
+  /** Registers the extension's own methods on a server instance. */
+  register?(server: Server, session: Auth | undefined): void;
+  /**
+   * Answers a `tools/call` whose arguments passed validation. `run` runs the
+   * tool with the given context additions and returns its result; undefined
+   * lets the tool run as usual.
+   */
+  callTool?(
+    call: {
+      name: string;
+      run(extra?: Pick<ToolExecuteContext<Auth>, 'task'>): Promise<ToolCallResult>;
+    },
+    context: ServerContext,
+    session: Auth | undefined
+  ): Promise<Record<string, unknown> | undefined>;
+}
+
 export interface RuntimeOptions<Auth> {
   name: string;
   version: string;
@@ -159,6 +259,10 @@ export interface RuntimeOptions<Auth> {
   authenticate?: (request: AuthenticateRequest) => Promise<Auth>;
   oauth?: { protectedResource: ProtectedResource };
   health?: { message?: string; path?: string; status?: number };
+  /** Also serve protocol revision 2026-07-28. Off by default. */
+  modern?: boolean;
+  /** Extensions of the 2026-07-28 revision. */
+  extensions?: McpExtension<Auth>[];
 }
 
 export type StartOptions =
@@ -176,6 +280,8 @@ export type StartOptions =
     };
 
 const DEFAULT_KEEP_ALIVE_TIMEOUT = 300_000;
+const SESSION_KEY = Symbol('session');
+const SESSION_ID_KEY = Symbol('sessionId');
 const CORS_HEADERS = {
   'Access-Control-Allow-Credentials': 'true',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -227,6 +333,11 @@ function requestUrl(req: IncomingMessage): URL | undefined {
   }
 }
 
+function declaresExtension(request: ModernRequest, id: string): boolean {
+  const extensions = request.clientCapabilities.extensions;
+  return typeof extensions === 'object' && extensions !== null && Object.hasOwn(extensions, id);
+}
+
 function hostnameOf(url: string): string | undefined {
   try {
     return new URL(url).hostname.toLowerCase().replace(/\.$/, '') || undefined;
@@ -249,7 +360,7 @@ function jsonRpcError(code: number, message: string, id: unknown = null): string
   return JSON.stringify({ error: { code, message }, id, jsonrpc: '2.0' });
 }
 
-function formatIssues(issues: ReadonlyArray<StandardSchemaV1.Issue>): string {
+export function formatIssues(issues: ReadonlyArray<StandardSchemaV1.Issue>): string {
   return issues
     .map((issue) => {
       const path =
@@ -394,9 +505,13 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     return this.#app;
   }
 
-  /** A server instance for one HTTP request or one connection. */
-  createServer(session: Auth | undefined, sessionId?: string): Server {
+  /**
+   * A server instance for one HTTP request or one connection. `modern` is the
+   * 2026-07-28 revision, which adds the extensions.
+   */
+  createServer(session: Auth | undefined, sessionId?: string, modern = false): Server {
     const options = this.#options;
+    const extensions = modern ? (options.extensions ?? []) : [];
     const resources = this.#resources;
     const server = new Server(
       { name: options.name, version: options.version },
@@ -406,6 +521,13 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
           ...(resources.length ? { resources: {} } : {}),
           logging: {},
           completions: {},
+          ...(extensions.length
+            ? {
+                extensions: Object.fromEntries(
+                  extensions.map((extension) => [extension.id, extension.settings ?? {}])
+                ) as never,
+              }
+            : {}),
         },
         instructions: options.instructions,
       }
@@ -425,15 +547,17 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
         { request }
       );
     });
-    if (this.#tools.length) this.#setUpTools(server, session, sessionId);
+    if (this.#tools.length) this.#setUpTools(server, session, sessionId, extensions);
     if (resources.length) this.#setUpResources(server, session);
+    for (const extension of extensions) extension.register?.(server, session);
     return server;
   }
 
   #setUpTools(
     server: Server,
     session: Auth | undefined,
-    sessionId: string | undefined
+    sessionId: string | undefined,
+    extensions: McpExtension<Auth>[]
   ): void {
     const logger = this.#options.logger;
     const tools = session
@@ -443,6 +567,12 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     const listed = tools.filter((tool) =>
       tool.canList ? tool.canList(session as Auth) : true
     );
+    const outputSchemas: Record<string, StandardSchemaV1> = Object.assign(
+      {},
+      ...extensions.map((extension) => extension.outputSchemas?.())
+    );
+    const outputSchemaOf = (tool: Tool<Auth>) =>
+      Object.hasOwn(outputSchemas, tool.name) ? outputSchemas[tool.name] : tool.outputSchema;
     let toolList: Record<string, unknown>[] | undefined;
 
     server.setRequestHandler('tools/list', async () => {
@@ -453,11 +583,11 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
           ...(tool.icons && { icons: tool.icons }),
           description: tool.description,
           inputSchema: tool.parameters
-            ? strictJsonSchema(await toJsonSchema(tool.parameters as never))
+            ? closeObjects((await toJsonSchema(tool.parameters as never)) as JsonObject)
             : { additionalProperties: false, properties: {}, type: 'object' },
           name: tool.name,
-          ...(tool.outputSchema && {
-            outputSchema: strictJsonSchema(await toJsonSchema(tool.outputSchema as never)),
+          ...(outputSchemaOf(tool) && {
+            outputSchema: strictJsonSchema(await toJsonSchema(outputSchemaOf(tool) as never)),
           }),
           ...(tool._meta && { _meta: tool._meta }),
         }))
@@ -466,8 +596,9 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     });
 
     const validateOutput = async (tool: Tool<Auth>, value: unknown) => {
-      if (!tool.outputSchema) return value;
-      const parsed = await tool.outputSchema['~standard'].validate(value);
+      const outputSchema = outputSchemaOf(tool);
+      if (!outputSchema) return value;
+      const parsed = await outputSchema['~standard'].validate(value);
       if (parsed.issues) {
         throw new UserError(
           `Tool '${tool.name}' structured output validation failed: ${formatIssues(parsed.issues)}. Please check the result matches the tool's outputSchema.`
@@ -476,7 +607,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
       return parsed.value;
     };
 
-    server.setRequestHandler('tools/call', async (request) => {
+    server.setRequestHandler('tools/call', async (request, context) => {
       const { name } = request.params;
       const tool = toolsByName.get(name);
       if (!tool) {
@@ -513,78 +644,117 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
           .sendLoggingMessage({ data: { context: logContext, message }, level } as never)
           .catch(() => {});
       };
-      let result: ContentResult;
-      try {
-        const value = await tool.execute(args, {
-          client: { version: server.getClientVersion() },
-          log: {
-            debug: sendLog('debug'),
-            error: sendLog('error'),
-            info: sendLog('info'),
-            warn: sendLog('warning'),
-          },
-          reportProgress: async (progress) => {
-            if (meta?.progressToken === undefined) return;
-            await notify(
-              {
-                method: 'notifications/progress',
-                params: { ...progress, progressToken: meta.progressToken },
-              },
-              'report progress'
-            );
-          },
-          requestId: typeof meta?.requestId === 'string' ? meta.requestId : undefined,
-          session,
-          sessionId,
-          streamContent: async (content) => {
-            await notify(
-              {
-                method: 'notifications/tool/streamContent',
-                params: { content: Array.isArray(content) ? content : [content], toolName: name },
-              },
-              'stream content'
-            );
-          },
-        });
-        await delay(1);
-        if (value === undefined || value === null) {
-          result = ContentResultSchema.parse({ content: [] });
-        } else if (typeof value === 'string') {
-          result = ContentResultSchema.parse({ content: [{ text: value, type: 'text' }] });
-        } else if (typeof value === 'object' && 'type' in value) {
-          result = ContentResultSchema.parse({ content: [value] });
-        } else if (typeof value === 'object' && 'content' in value) {
-          result = ContentResultSchema.parse(value);
-          if (result.structuredContent !== undefined && tool.outputSchema) {
-            result.structuredContent = (await validateOutput(
-              tool,
-              result.structuredContent
-            )) as Record<string, unknown>;
+      const envelope = context.mcpReq.envelope as Record<string, unknown> | undefined;
+      const requestState = context.mcpReq.requestState?.<string>();
+      const modern: ModernRequest | undefined = envelope
+        ? {
+            clientCapabilities:
+              (envelope[CLIENT_CAPABILITIES_META_KEY] as Record<string, unknown> | undefined) ?? {},
+            ...(context.mcpReq.inputResponses ? { inputResponses: context.mcpReq.inputResponses } : {}),
+            ...(requestState !== undefined ? { requestState } : {}),
           }
-        } else if (tool.outputSchema) {
-          const structuredContent = (await validateOutput(tool, value)) as Record<string, unknown>;
-          result = ContentResultSchema.parse({
-            content: [{ text: JSON.stringify(structuredContent), type: 'text' }],
-            structuredContent,
+        : undefined;
+      const run = async (
+        extra: Pick<ToolExecuteContext<Auth>, 'task'> = {}
+      ): Promise<ToolCallResult> => {
+        let result: ToolCallResult;
+        try {
+          const value = await tool.execute(args, {
+            ...extra,
+            client: {
+              version:
+                (envelope?.[CLIENT_INFO_META_KEY] as { name?: string; version?: string } | undefined) ??
+                server.getClientVersion(),
+            },
+            log: {
+              debug: sendLog('debug'),
+              error: sendLog('error'),
+              info: sendLog('info'),
+              warn: sendLog('warning'),
+            },
+            reportProgress: async (progress) => {
+              if (meta?.progressToken === undefined) return;
+              await notify(
+                {
+                  method: 'notifications/progress',
+                  params: { ...progress, progressToken: meta.progressToken },
+                },
+                'report progress'
+              );
+            },
+            requestId: typeof meta?.requestId === 'string' ? meta.requestId : undefined,
+            session,
+            sessionId,
+            streamContent: async (content) => {
+              await notify(
+                {
+                  method: 'notifications/tool/streamContent',
+                  params: { content: Array.isArray(content) ? content : [content], toolName: name },
+                },
+                'stream content'
+              );
+            },
+            ...(modern ? { mcp: modern } : {}),
           });
-        } else {
-          result = ContentResultSchema.parse(value);
-        }
-      } catch (error) {
-        if (error instanceof UserError) {
+          await delay(1);
+          if (isDeferred(value)) {
+            if (!modern) {
+              throw new UserError(
+                `Tool '${name}' returned a '${value.resultType}' result, which needs protocol revision 2026-07-28.`
+              );
+            }
+            if (value.resultType === 'task' && !declaresExtension(modern, TASKS_EXTENSION)) {
+              throw new MissingRequiredClientCapabilityError({
+                requiredCapabilities: { extensions: { [TASKS_EXTENSION]: {} } },
+              } as never);
+            }
+            return value;
+          }
+          if (value === undefined || value === null) {
+            result = ContentResultSchema.parse({ content: [] });
+          } else if (typeof value === 'string') {
+            result = ContentResultSchema.parse({ content: [{ text: value, type: 'text' }] });
+          } else if (typeof value === 'object' && 'type' in value) {
+            result = ContentResultSchema.parse({ content: [value] });
+          } else if (typeof value === 'object' && 'content' in value) {
+            result = ContentResultSchema.parse(value);
+            if (result.structuredContent !== undefined && outputSchemaOf(tool)) {
+              result.structuredContent = (await validateOutput(
+                tool,
+                result.structuredContent
+              )) as Record<string, unknown>;
+            }
+          } else if (outputSchemaOf(tool)) {
+            const structuredContent = (await validateOutput(tool, value)) as Record<string, unknown>;
+            result = ContentResultSchema.parse({
+              content: [{ text: JSON.stringify(structuredContent), type: 'text' }],
+              structuredContent,
+            });
+          } else {
+            result = ContentResultSchema.parse(value);
+          }
+        } catch (error) {
+          if (error instanceof MissingRequiredClientCapabilityError) throw error;
+          if (error instanceof UserError) {
+            return {
+              content: [{ text: error.message, type: 'text' }],
+              isError: true,
+              ...(error.extras ? { structuredContent: error.extras } : {}),
+            } as ContentResult;
+          }
+          const message = error instanceof Error ? error.message : String(error);
           return {
-            content: [{ text: error.message, type: 'text' }],
+            content: [{ text: `Tool '${name}' execution failed: ${message}`, type: 'text' }],
             isError: true,
-            ...(error.extras ? { structuredContent: error.extras } : {}),
-          } as never;
+          } as ContentResult;
         }
-        const message = error instanceof Error ? error.message : String(error);
-        return {
-          content: [{ text: `Tool '${name}' execution failed: ${message}`, type: 'text' }],
-          isError: true,
-        } as never;
+        return result;
+      };
+      for (const extension of extensions) {
+        const answered = await extension.callTool?.({ name, run }, context, session);
+        if (answered) return answered as never;
       }
-      return result as never;
+      return (await run()) as never;
     });
   }
 
@@ -662,6 +832,13 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
         throw new Error(`Authentication failed for stdio transport: ${failure}`);
       }
     }
+    if (this.#options.modern) {
+      this.#stdio = serveStdio(
+        (context: McpRequestContext) => this.createServer(session, undefined, context.era === 'modern'),
+        { onerror: (error) => this.#options.logger.error('[FastMCP error]', error) }
+      );
+      return;
+    }
     const server = this.createServer(session);
     await server.connect(new StdioServerTransport());
     this.#stdio = server;
@@ -694,6 +871,23 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
         : undefined;
 
     const sseSessions = new Map<string, LegacySseTransport>();
+    const modern = this.#options.modern
+      ? createMcpHandler(
+          (context: McpRequestContext) => {
+            const extra = context.authInfo?.extra as Record<symbol, unknown> | undefined;
+            return this.createServer(
+              extra?.[SESSION_KEY] as Auth | undefined,
+              extra?.[SESSION_ID_KEY] as string | undefined,
+              true
+            );
+          },
+          {
+            legacy: 'reject',
+            maxRequestBodySize: maxBodySize,
+            onerror: (error) => logger.debug('[FastMCP debug] request error', error.message),
+          }
+        )
+      : undefined;
 
     const healthPath = this.#options.health?.path ?? '/health';
 
@@ -770,7 +964,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
         return;
       }
       if (req.method === 'POST') {
-        await this.#serveStream(req, res, maxBodySize);
+        await this.#serveStream(req, res, maxBodySize, modern);
         return;
       }
       if (req.method === 'GET' || req.method === 'DELETE') {
@@ -841,7 +1035,8 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
   async #serveStream(
     req: IncomingMessage,
     res: ServerResponse,
-    maxBodySize: number
+    maxBodySize: number,
+    modern?: ReturnType<typeof createMcpHandler>
   ): Promise<void> {
     const url = requestUrl(req);
     if (!url) {
@@ -897,7 +1092,29 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
       body: text,
       signal: controller.signal,
     });
-    const server = this.createServer(session, [req.headers['mcp-session-id']].flat()[0]);
+    const sessionId = [req.headers['mcp-session-id']].flat()[0];
+    if (modern && !(await isLegacyRequest(request.clone(), body ?? undefined, { maxRequestBodySize: maxBodySize }))) {
+      try {
+        const response = await modern.fetch(request, {
+          ...(body === null ? {} : { parsedBody: body }),
+          authInfo: {
+            token: '',
+            clientId: '',
+            scopes: [],
+            extra: { [SESSION_KEY]: session, [SESSION_ID_KEY]: sessionId },
+          } as never,
+        });
+        await writeWebResponse(response, res);
+      } catch (error) {
+        console.error('[mcp-proxy] error handling request', error);
+        if (!res.headersSent) {
+          res.setHeader('Content-Type', 'application/json');
+          res.writeHead(500).end(jsonRpcError(-32603, 'Internal Server Error'));
+        }
+      }
+      return;
+    }
+    const server = this.createServer(session, sessionId);
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     res.on('close', () => {
       server.close().catch(() => {});
