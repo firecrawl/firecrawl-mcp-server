@@ -164,7 +164,7 @@ Returns ranked results with a position, title, URL, and matched snippet. Results
       const client = getClient(session) as ClientLike;
       const res = await client.http
         .get<{
-          data?: { law?: LawHit[] };
+          data?: { law?: LawHit[]; web?: GovHit[] };
         }>(
           `${BASE}?${params.toString()}`,
           originHeaders(requestOrigin(mcpClient, session))
@@ -181,7 +181,8 @@ Returns ranked results with a position, title, URL, and matched snippet. Results
           }
           throw new UserError(message, { status: 400, error: message });
         });
-      const results = res.data?.data?.law ?? [];
+      // An API without `sources` answers only `web`.
+      const results = res.data?.data?.law ?? res.data?.data?.web ?? [];
       return withStructured(fmtGov(results), { results });
     },
   });

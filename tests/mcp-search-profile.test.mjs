@@ -197,7 +197,7 @@ async function startFakeBackend(options = {}) {
         JSON.stringify({
           success: true,
           data: {
-            law: [
+            [options.govGroup ?? 'law']: [
               {
                 description: 'The matched snippet.',
                 position: 1,
@@ -803,6 +803,31 @@ test('search firecrawl_developer_search queries the developer index and returns 
     .searchParams;
   assert.equal(skillsQuery.get('skills'), 'only');
   assert.equal(skillsQuery.get('query'), 'retry loop backoff');
+});
+
+test('search firecrawl_gov_search reads web results from an API without sources', async (t) => {
+  const backend = await startFakeBackend({ govGroup: 'web' });
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+  });
+
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 45,
+    method: 'tools/call',
+    params: {
+      arguments: { query: 'food labeling requirements', k: 1 },
+      name: 'firecrawl_gov_search',
+    },
+    headers: { 'x-api-key': 'fc-search-key' },
+  });
+  assert.equal(res.status, 200);
+  const message = parseSseJson(await res.text());
+  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+  assert.deepEqual(
+    message.result.structuredContent.results.map((result) => result.url),
+    ['https://www.ecfr.gov/current/title-21/part-101']
+  );
 });
 
 test('search firecrawl_gov_search queries the Government Index', async (t) => {
