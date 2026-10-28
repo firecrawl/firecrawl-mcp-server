@@ -8,12 +8,12 @@
  * so the helpers here attach the structured payload without touching the text
  * a tool already returned: existing clients keep reading the exact same string.
  *
- * Two fastmcp behaviours shape the schemas below.
+ * Two server behaviours (src/mcp/runtime.ts) shape the schemas below.
  *
- * 1. fastmcp advertises an output schema through `strictJsonSchema`, which
+ * 1. The server advertises an output schema through `strictJsonSchema`, which
  *    sets `additionalProperties: false` on every object it emits. A schema
  *    therefore has to name each top-level key the tool can return.
- * 2. fastmcp validates `structuredContent` against the schema and keeps the
+ * 2. The server validates `structuredContent` against the schema and keeps the
  *    parsed value, so a key the schema does not name is dropped from the
  *    structured payload. The text block still carries the whole response.
  *
@@ -26,7 +26,7 @@
  */
 
 import { z } from 'zod';
-import type { ContentResult } from 'fastmcp';
+import type { ContentResult } from './mcp/runtime.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -151,7 +151,7 @@ export const mapOutputSchema = z
 export const searchOutputSchema = z
   .object({
     success,
-    data: unknown('Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`.'),
+    data: unknown('Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`. Each result carries its `source` and a 1-indexed `position` within that group; pass those pairs to `firecrawl_search_feedback`.'),
     error,
     warning,
     id: str('Search identifier, for optional `firecrawl_search_feedback`.'),

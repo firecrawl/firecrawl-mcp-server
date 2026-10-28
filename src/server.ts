@@ -6,15 +6,19 @@ import {
   withAlexandriaFeedbackHint,
 } from './alexandria-feedback.js';
 import FirecrawlApp from 'firecrawl';
+import type { Hono } from 'hono';
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/server/validators/ajv';
+import type { JsonSchemaType, JsonSchemaValidator } from '@modelcontextprotocol/server';
 import {
   type ContentResult,
-  FastMCP,
+  type DeferredResult,
   type Logger,
-  UserError as FastMcpUserError,
-} from 'fastmcp';
-import type { Hono } from 'hono';
-import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
-import type { JsonSchemaType, JsonSchemaValidator } from '@modelcontextprotocol/sdk/validation';
+  McpRuntime,
+  type ModernRequest,
+  type Tool,
+  UserError as RuntimeUserError,
+} from './mcp/runtime.js';
+import { jobFailed, tasksExtension, type TaskHandler } from './tasks.js';
 import { strictJsonSchema, toJsonSchema } from 'xsschema';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
@@ -74,7 +78,7 @@ import {
   type McpClient,
 } from './origin';
 import { integrationFrom, withIntegration } from './integration';
-import { CoreHttpError } from './core-http-error.js';
+import { apiErrorDetails, CoreHttpError } from './core-http-error.js';
 import { normalizeHeader } from './headers.js';
 import {
   FIRECRAWL_CREDENTIAL_REJECTED,
@@ -96,6 +100,8 @@ import {
   removeEmptyTopLevel,
   SEARCH_CATEGORIES_CONFLICT_MESSAGE,
   SEARCH_DOMAINS_CONFLICT_MESSAGE,
+  SEARCH_RESULT_SOURCES,
+  annotateResultPositions,
   searchCategoriesAreCompatible,
   searchDomainsAreExclusive,
   searchToolBaseFields,
@@ -107,9 +113,8 @@ import { normalizeToolArguments } from './tool-arguments.js';
  * Library entry point: `import { createFirecrawlMcpServer } from 'firecrawl-mcp/server'`.
  *
  * Unstable: this API, its options and the types below may change in any
- * release, including minor and patch releases. FastMCP is bundled (with local
- * patches), so embedders use the types exported here rather than importing
- * `fastmcp` themselves.
+ * release, including minor and patch releases. Embedders use the types
+ * exported here rather than the MCP SDK's own.
  * @packageDocumentation
  */
 
@@ -120,7 +125,7 @@ import { normalizeToolArguments } from './tool-arguments.js';
 export const UserError: new (
   message: string,
   extras?: Record<string, unknown>
-) => Error & { extras?: Record<string, unknown> } = FastMcpUserError;
+) => Error & { extras?: Record<string, unknown> } = RuntimeUserError;
 
 /** What a tool's `execute` or `beforeValidate` may return. */
 export type ToolResult = {
@@ -207,6 +212,18 @@ export type ToolContext = {
   log: ToolLogger;
   /** The connected client; `version` is the clientInfo sent at initialize. */
   client?: { version?: { name?: string; version?: string } };
+  /**
+   * The protocol revision 2026-07-28 details of the call: the client
+   * capabilities it declared, and the input responses and request state of a
+   * retried multi round-trip call. Absent on 2025-era calls, which can only
+   * take a complete result.
+   */
+  mcp?: ModernRequest;
+  /**
+   * Set when the call runs as an MCP task: a tool that starts a Firecrawl job
+   * returns as soon as the job is accepted instead of waiting for it.
+   */
+  task?: boolean;
   [key: string]: unknown;
 };
 
@@ -218,7 +235,7 @@ export type ToolIcon = {
 };
 
 /** A tool as registered on the server. */
-export interface ToolDefinition {
+export interface ToolDefinition<Result = ToolResult | DeferredResult> {
   name: string;
   description?: string;
   icons?: ToolIcon[];
@@ -242,14 +259,21 @@ export interface ToolDefinition {
     args: unknown,
     session: Session
   ): ToolResult | undefined | Promise<ToolResult | undefined>;
+  /**
+   * Runs the call. On protocol revision 2026-07-28 (`context.mcp` is set) it
+   * may answer `inputRequired(...)` to ask the client for input, or a task
+   * (`resultType: "task"`) when the client declared the tasks extension; a
+   * {@link TaskHandler} added with `ExtraToolsContext.addTaskHandler` then
+   * serves the task.
+   */
   execute(
     args: any,
     context: ToolContext
-  ): Promise<ToolResult | string | void>;
+  ): Promise<Result | string | void>;
 }
 
-/** The FastMCP shape of a tool, used inside the core. */
-type RegisteredTool = Parameters<FastMCP<SessionData>['addTool']>[0];
+/** The runtime shape of a tool, used inside the core. */
+type RegisteredTool = Tool<SessionData>;
 
 /** Registers a tool onto an instance. */
 export type ToolRegistrar = { addTool(tool: ToolDefinition): void };
@@ -292,6 +316,18 @@ export type ToolCallEvent = {
   | { status: 'error'; error: unknown }
 );
 
+/** A completed MCP task's result, for {@link FirecrawlMcpServerHooks.taskResult}. */
+export type TaskResultEvent = {
+  /** The tool whose call started the task. */
+  tool: string;
+  /** The Firecrawl job behind the task. */
+  jobId: string;
+  result: ToolResult;
+  session: SessionData;
+  /** The client, from the request's `clientInfo` metadata. */
+  client: { version?: { name?: string; version?: string } };
+};
+
 /** Per-request credential and extra headers for calls to the Firecrawl API. */
 export type OutboundRequest = {
   /** Replaces the session's API key as the bearer credential. */
@@ -314,7 +350,13 @@ export type ExtraToolsContext = {
   /** Whether a session will send a credential to the Firecrawl API. */
   hasCredential(session?: SessionData): boolean;
   /** A built-in tool definition, including one `toolFilter` excluded. */
-  builtInTool(name: string): ToolDefinition | undefined;
+  /** Built-in tools always answer a complete result. */
+  builtInTool(name: string): ToolDefinition<ToolResult> | undefined;
+  /**
+   * Serves the tasks the embedder's tools return with `resultType: "task"`
+   * (protocol revision 2026-07-28, with `modernProtocol` on).
+   */
+  addTaskHandler(handler: TaskHandler<SessionData>): void;
 };
 
 export type InstructionDefaults = {
@@ -335,8 +377,20 @@ export interface FirecrawlMcpServerHooks {
   ) => Promise<SessionData>;
   /** Decorates every registered tool, including tools from `registerExtraTools`. */
   wrapTool?: (tool: ToolDefinition) => ToolDefinition;
-  /** Observes each tool call. Must not throw. */
+  /**
+   * Observes each tool call, and each built-in MCP task method as
+   * `tasks/get:<tool>` or `tasks/cancel:<tool>`. A `tasks/get` is reported
+   * only when it fails or returns a finished task, so polling a running task
+   * adds no events; a task whose job failed is reported as an error
+   * (`TaskJobFailed`). Must not throw.
+   */
   onToolResult?: (event: ToolCallEvent) => void;
+  /**
+   * Decorates the result of a completed `firecrawl_agent` or
+   * `firecrawl_crawl` task each time `tasks/get` returns it. Never called
+   * for a task that is still running.
+   */
+  taskResult?: (event: TaskResultEvent) => Promise<ToolResult>;
   /** Server instructions, or a function choosing them from the defaults. */
   instructions?: string | ((defaults: InstructionDefaults) => string);
   /** Adds tools after the built-in ones. They bypass `toolFilter`. */
@@ -383,6 +437,14 @@ export interface FirecrawlMcpServerOptions {
   endpointFeedback?: boolean;
   /** Tag sent as the `integration` field of API requests that accept one, such as `_zed`. */
   integration?: string;
+  /**
+   * Also serve protocol revision 2026-07-28 over stdio and Streamable HTTP:
+   * `server/discover`, per-request capabilities, multi round-trip requests
+   * and MCP Tasks (`firecrawl_agent` and `firecrawl_crawl` run as tasks for
+   * clients that declare the extension). Every 2025-era request is served as
+   * before. Defaults to false.
+   */
+  modernProtocol?: boolean;
   /** Extension hooks. Unstable: may change in any release. */
   unstable_hooks?: FirecrawlMcpServerHooks;
 }
@@ -399,11 +461,22 @@ export type FirecrawlMcpServerStartArgs =
          * `127.0.0.1`, `::` or `0.0.0.0` to choose explicitly.
          */
         host?: string;
-        /** Defaults to FastMCP's endpoint (`FASTMCP_ENDPOINT` or `/mcp`). */
+        /** Defaults to `FASTMCP_ENDPOINT`, then `/mcp`. */
         endpoint?: `/${string}`;
         stateless?: boolean;
         /** Largest request body accepted, in bytes. Defaults to 1 MiB; larger bodies get 413. */
         maxBodySize?: number;
+        /**
+         * Host names the server answers. When set, a request whose `Host`
+         * header, or `Origin` header when present, names another host gets
+         * `403` (`GET` and `HEAD` on the health path excepted), and CORS
+         * headers echo the request's origin instead of `*`.
+         * Entries are host names or IP addresses (`localhost`, `127.0.0.1`,
+         * `[::1]`); ports are ignored, and a URL entry counts as its host name.
+         * `['*']` turns the check off. Unset, every host is answered and CORS
+         * allows any origin.
+         */
+        allowedHosts?: string[];
       };
     };
 
@@ -418,6 +491,11 @@ export interface FirecrawlMcpServer {
  * entry point.
  */
 export { normalizeHeader, withoutTrailingSlash } from './headers.js';
+export { acceptedContent, inputRequired, inputResponse } from '@modelcontextprotocol/server';
+export type { DeferredResult, ModernRequest } from './mcp/runtime.js';
+export type { TaskCaller, TaskHandler, TaskState } from './tasks.js';
+export { TASKS_EXTENSION } from './tasks.js';
+export { escapeWWWAuthenticateValue } from './mcp/www-authenticate.js';
 export {
   DECLARED_ORIGIN_HEADER,
   initializeClientSlug,
@@ -454,6 +532,8 @@ export {
   searchCategoriesAreCompatible,
   searchDomainsAreExclusive,
   searchToolBaseFields,
+  SEARCH_RESULT_SOURCES,
+  annotateResultPositions,
 } from './tool-helpers.js';
 
 /**
@@ -497,6 +577,11 @@ function copySession(session: SessionData | undefined): SessionData {
     {},
     Object.getOwnPropertyDescriptors(session ?? {})
   ) as SessionData;
+}
+
+/** The `onToolResult` error for a `tasks/get` that returns a task whose Firecrawl job failed. */
+class TaskJobFailedError extends Error {
+  override name = 'TaskJobFailed';
 }
 
 class ConsoleLogger implements Logger {
@@ -612,7 +697,7 @@ export function createFirecrawlMcpServer(
 
   const authenticateSession = hooks.authenticate ?? defaultAuthenticate;
 
-  // FastMCP may authenticate one HTTP request more than once; resolve it once.
+  // One HTTP request may be authenticated more than once; resolve it once.
   function authenticate(request?: CachedAuthRequest): Promise<SessionData> {
     const cached = request?.[authResultByRequest];
     if (cached) return cached;
@@ -635,19 +720,64 @@ export function createFirecrawlMcpServer(
     return authResult;
   }
 
-  const server = new FastMCP<SessionData>({
+  const taskHandlers: TaskHandler<SessionData>[] = [];
+  const server = new McpRuntime<SessionData>({
     name: 'firecrawl-fastmcp',
-    version: packageVersion as `${number}.${number}.${number}`,
+    version: packageVersion,
     instructions,
     logger: new ConsoleLogger(logging),
-    roots: { enabled: false },
-    ...(hooks.oauth
-      ? { oauth: { enabled: true, protectedResource: hooks.oauth.protectedResource } }
-      : {}),
+    ...(hooks.oauth ? { oauth: { protectedResource: hooks.oauth.protectedResource } } : {}),
     authenticate,
+    modern: options.modernProtocol ?? false,
+    extensions: [
+      tasksExtension<SessionData>(
+        {
+          getClient,
+          agentResult: agentStatusResult,
+          crawlResult: async (client, jobId, origin, body) =>
+            structuredText(await collectCrawlPages(client, jobId, origin, body as never)),
+          resultSchema: (kind) =>
+            kind === 'agent'
+              ? (servedTools.get('firecrawl_agent_status')?.outputSchema ?? agentStatusOutputSchema)
+              : (servedTools.get('firecrawl_crawl')?.outputSchema ?? crawlOutputSchema),
+          report: async (tool, session, run) => {
+            const callSession = copySession(session);
+            callSession.requestId = randomUUID();
+            const call = { tool, session: callSession, requestId: callSession.requestId as string };
+            let result: Awaited<ReturnType<typeof run>>;
+            try {
+              result = await run(callSession);
+            } catch (error) {
+              hooks.onToolResult?.({ ...call, status: 'started' });
+              hooks.onToolResult?.({ ...call, status: 'error', error });
+              throw error;
+            }
+            const task = result as
+              | { status?: string; result?: { isError?: boolean; content?: Array<{ text?: string }> } }
+              | undefined;
+            if (task?.status === 'working' || task?.status === 'input_required') return result;
+            hooks.onToolResult?.({ ...call, status: 'started' });
+            if (jobFailed(task)) {
+              hooks.onToolResult?.({
+                ...call,
+                status: 'error',
+                error: new TaskJobFailedError(task?.result?.content?.[0]?.text ?? 'The job failed.'),
+              });
+            } else {
+              hooks.onToolResult?.({ ...call, status: 'success', result });
+            }
+            return result;
+          },
+          completed: async (call, result) =>
+            hooks.taskResult
+              ? ((await hooks.taskResult({ ...call, result } as TaskResultEvent)) as ContentResult)
+              : result,
+        },
+        taskHandlers
+      ),
+    ],
     // Lightweight health endpoint for LB checks
     health: {
-      enabled: true,
       message: 'ok',
       path: '/health',
       status: 200,
@@ -705,20 +835,9 @@ export function createFirecrawlMcpServer(
       execute: async (args, context) => {
         const session = context.session as SessionData;
         const requestId = session.requestId as string;
-        const call = { tool: tool.name, session, requestId };
-        hooks.onToolResult?.({ ...call, status: 'started' });
-        try {
-          const result = await runWithCredentialRecovery(
-            () => execute(args, context),
-            requestId,
-            session
-          );
-          hooks.onToolResult?.({ ...call, status: 'success', result });
-          return result;
-        } catch (error) {
-          hooks.onToolResult?.({ ...call, status: 'error', error });
-          throw error;
-        }
+        return reported(tool.name, session, () =>
+          runWithCredentialRecovery(() => execute(args, context), requestId, session)
+        );
       },
     };
     const wrapped = hooks.wrapTool
@@ -757,11 +876,21 @@ export function createFirecrawlMcpServer(
         const result = await run();
         return isErrorResult(result) ? deliverError(result) : result;
       } catch (error) {
-        if (!(error instanceof FastMcpUserError)) throw error;
+        if (error instanceof RuntimeUserError) {
+          return deliverError({
+            content: [{ type: 'text', text: error.message }],
+            isError: true,
+            ...(error.extras ? { structuredContent: error.extras } : {}),
+          });
+        }
+        // A failed API request keeps the text the MCP framework would write
+        // and adds its code and status, so a caller can branch on them.
+        const apiError = apiErrorDetails(error);
+        if (!apiError) throw error;
         return deliverError({
-          content: [{ type: 'text', text: error.message }],
+          content: [{ type: 'text', text: `Tool '${wrapped.name}' execution failed: ${apiError.message}` }],
           isError: true,
-          ...(error.extras ? { structuredContent: error.extras } : {}),
+          structuredContent: { success: false, error: apiError },
         });
       }
     }
@@ -779,12 +908,29 @@ export function createFirecrawlMcpServer(
     };
   }
 
+  /** Reports a call on a session that carries its request ID to `onToolResult`. */
+  async function reported<T>(tool: string, session: SessionData, run: () => Promise<T>): Promise<T> {
+    const call = { tool, session, requestId: session.requestId as string };
+    hooks.onToolResult?.({ ...call, status: 'started' });
+    try {
+      const result = await run();
+      hooks.onToolResult?.({ ...call, status: 'success', result });
+      return result;
+    } catch (error) {
+      hooks.onToolResult?.({ ...call, status: 'error', error });
+      throw error;
+    }
+  }
+
   const builtInTools = new Map<string, RegisteredTool>();
+  const servedTools = new Map<string, RegisteredTool>();
   const addTool = server.addTool.bind(server);
   server.addTool = ((tool: RegisteredTool) => {
     builtInTools.set(tool.name, tool);
     if (hooks.toolFilter && !hooks.toolFilter(tool.name)) return;
-    addTool(prepareTool(tool));
+    const prepared = prepareTool(tool);
+    servedTools.set(tool.name, prepared);
+    addTool(prepared);
   }) as typeof server.addTool;
 
   function createClient(apiKey?: string): FirecrawlApp {
@@ -1744,7 +1890,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       };
       const byteBudget = searchByteBudget(session?.clientUserAgent);
       const searchResult = (response: unknown) => {
-        const shown = withoutDiscoveredToolPrices(response);
+        const shown = annotateResultPositions(withoutDiscoveredToolPrices(response));
         return structuredCompact(byteBudget ? fitSearchResponse(shown, byteBudget) : shown);
       };
       const exchangeSource = hasAlexandria(searchBody.sources);
@@ -1754,6 +1900,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         const json = await keylessPost('/v2/search', searchBody, session);
         // Search feedback requires an authenticated account. Do not expose its
         // identifier to keyless clients, where it would invite an unusable call.
+        // Positions are still stamped: they identify a result regardless of auth.
         const keylessResponse = { ...(json ?? {}) };
         delete keylessResponse.id;
         return searchResult(keylessResponse);
@@ -2095,9 +2242,11 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         destructiveHint: false, // Additive only; records feedback and may refund credits, does not delete data.
       },
       description: `
-Records schema-validated quality feedback for a prior \`firecrawl_search\` UUID \`searchId\`. A \`good\` rating requires a valuable source, \`partial\` a valuable source or at least one \`missingContent\` entry, and \`bad\` at least one \`missingContent\` entry or a query suggestion; caps are 50 \`valuableSources\` and 20 \`missingContent\` entries.
+Records schema-validated quality feedback for a prior \`firecrawl_search\` UUID \`searchId\`. A \`good\` rating requires a valuable result or a valuable source, \`partial\` either of those or at least one \`missingContent\` entry, and \`bad\` at least one \`missingContent\` entry or a query suggestion; caps are 50 \`valuableResults\`, 50 \`valuableSources\`, and 20 \`missingContent\` entries.
 
 Eligibility is limited to successful searches within the feedback age window. The record is idempotent per search ID. Eligible first feedback for a search can refund 1 credit; refunds are subject to the team's daily cap. The response reports whether a refund was applied, along with submission and daily-cap status.
+
+Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\` copied off the result. Groups are numbered from 1 independently, so \`{"source":"web","position":1}\` and \`{"source":"news","position":1}\` are different results. Be exhaustive — results you do not list are treated as not useful. Reserve \`valuableSources\` for useful URLs that were NOT among the returned results; never report one result in both fields.
 `,
       outputSchema: feedbackOutputSchema,
       parameters: z.object({
@@ -2114,6 +2263,24 @@ Eligibility is limited to successful searches within the feedback age window. Th
           )
           .max(50)
           .optional(),
+        valuableResults: z
+          .array(
+            z.object({
+              source: z.enum(SEARCH_RESULT_SOURCES),
+              position: z.number().int().positive(),
+              reason: z.string().max(1000).optional(),
+            })
+          )
+          .max(50)
+          .optional()
+          .describe(
+            'Every result that was actually useful, copied from the `source` and `position` ' +
+              'stamped on each result. Each group is numbered from 1 independently, so the ' +
+              'source is required — `{"source":"web","position":1}` and ' +
+              '`{"source":"news","position":1}` are different results. Be exhaustive — ' +
+              'unlisted results are treated as not useful. Do not also list the same results ' +
+              'in valuableSources.'
+          ),
         missingContent: z
           .array(
             z.object({
@@ -2143,12 +2310,18 @@ Eligibility is limited to successful searches within the feedback age window. Th
           searchId,
           rating,
           valuableSources,
+          valuableResults,
           missingContent,
           querySuggestions,
         } = args as {
           searchId: string;
           rating: 'good' | 'bad' | 'partial';
           valuableSources?: { url: string; reason?: string }[];
+          valuableResults?: {
+            source: (typeof SEARCH_RESULT_SOURCES)[number];
+            position: number;
+            reason?: string;
+          }[];
           missingContent?: { topic: string; description?: string }[];
           querySuggestions?: string;
         };
@@ -2164,6 +2337,9 @@ Eligibility is limited to successful searches within the feedback age window. Th
         };
         if (valuableSources && valuableSources.length > 0) {
           body.valuableSources = valuableSources;
+        }
+        if (valuableResults && valuableResults.length > 0) {
+          body.valuableResults = valuableResults;
         }
         if (missingContent && missingContent.length > 0) {
           body.missingContent = missingContent;
@@ -2419,6 +2595,7 @@ Returns submission status, feedback ID, and accounting fields.
       readOnlyHint: false, // Starts a server-side crawl job and polls until the job reaches a terminal state.
       openWorldHint: true, // Crawls user-specified URLs across the public web.
       destructiveHint: false, // Reads pages from target sites; does not delete or alter external websites.
+      idempotentHint: false, // Each call starts a new crawl job and is billed again.
     },
     description: `
 Start a multi-page crawl at a website URL, poll it to a terminal state, and return the final status and collected data. Scope can be bounded with include/exclude paths, depth, page limit, subdomain/external-link controls, sitemap handling, delay, and scrape options.
@@ -2449,7 +2626,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
       scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
     }),
     outputSchema: crawlOutputSchema,
-    execute: async (args, { session, log, client: mcpClient }): Promise<ContentResult> => {
+    execute: async (args, { session, log, client: mcpClient, task }): Promise<ContentResult> => {
       const origin = requestOrigin(mcpClient, session);
       const { url, ...options } = args as Record<string, unknown>;
       const client = getClient(session);
@@ -2488,7 +2665,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
         { tool: 'firecrawl_crawl' }
       );
       const crawlId = started?.data?.id;
-      if (!crawlId) {
+      if (!crawlId || task) {
         return structuredText(started?.data ?? {});
       }
       const res = await waitForCrawlCompletionWithOrigin(
@@ -2629,6 +2806,7 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
       readOnlyHint: false, // Starts an autonomous research agent job on the Firecrawl API.
       openWorldHint: true, // The agent browses and searches the open web to fulfill the prompt.
       destructiveHint: false, // Gathers information only; does not delete external data or user resources.
+      idempotentHint: false, // Each call starts a new research job and is billed again.
     },
     description: `
 Run web research that returns structured data when the URLs are not known or the answer spans several sites. Describe the fields you need in \`prompt\`, optionally pass a JSON \`schema\` and seed \`urls\`, and the research agent searches, navigates, reads pages, and returns JSON assembled across sources. Use it to research an entity plus its fields (founders, pricing, contact details), to build lists and datasets (companies, people, products, jobs, papers), and for pages that need navigation or interaction to reach the data. Optional \`effort\` sets the reasoning budget, \`maxCredits\` caps spend, and \`strictConstrainToURLs\` keeps the agent to the supplied \`urls\`.
@@ -2824,6 +3002,7 @@ Returns job status, progress information, and result data when completed.
       readOnlyHint: false, // Executes browser interactions (clicks, form input, scripts) in a live session.
       openWorldHint: true, // Interacts with pages on the public web via the scraped session.
       destructiveHint: false, // Transient page interactions only; does not delete monitors, jobs, or external sites.
+      idempotentHint: false, // Repeating an interaction can act on the page again.
     },
     description: `
 Open or reuse a live browser session to navigate a page, click controls, fill fields, or run browser code. Provide either \`url\` or \`scrapeId\`, and either a natural-language \`prompt\` or executable \`code\`; code can run as Bash, Python, or Node with a bounded timeout.
@@ -2928,6 +3107,7 @@ This acts on the live site, so actions such as form submission can create persis
       readOnlyHint: false, // Calls the API to stop and tear down an active interact session.
       openWorldHint: false, // Operates only on a known Firecrawl scrape/interact session ID.
       destructiveHint: true, // Terminates the live browser session; this end state cannot be resumed.
+      idempotentHint: true, // Stopping a session that is already stopped leaves it stopped.
     },
     description: `
 Stop the live interact session associated with a \`scrapeId\` and release its resources. Returns a success confirmation.
@@ -3075,7 +3255,10 @@ Set \`redactPII\` to request redaction of personally identifiable information in
       getClient,
       hasCredential,
       builtInTool: (name) =>
-        builtInTools.get(name) as unknown as ToolDefinition | undefined,
+        builtInTools.get(name) as unknown as ToolDefinition<ToolResult> | undefined,
+      addTaskHandler: (handler) => {
+        taskHandlers.push(handler);
+      },
     }
   );
 

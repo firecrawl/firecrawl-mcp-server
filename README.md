@@ -173,6 +173,24 @@ env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY npx -y firecra
 
 Use the url: http://localhost:3000/mcp
 
+In this mode the server only answers requests addressed to `localhost`, `127.0.0.1` or `[::1]` (on any port), plus the address in `HOST` when it isn't `0.0.0.0` or `::`. A request whose `Host` header names another host, or whose `Origin` header names another site, gets `403`, and CORS headers echo an allowed origin instead of `*`. `GET` and `HEAD` requests to `/health` are answered whatever the host, so health checks keep working, and the server logs a line naming `FIRECRAWL_MCP_ALLOWED_HOSTS` for every request it refuses. This stops web pages you visit from calling the local server through DNS rebinding or cross-origin requests and using its `FIRECRAWL_API_KEY`.
+
+To reach the server under another name or address, such as a hostname behind a reverse proxy or a LAN IP, list it in `FIRECRAWL_MCP_ALLOWED_HOSTS` (comma-separated; ports are ignored). The same list decides which browser origins may call the server. A reverse proxy on the same machine can keep the default bind address:
+
+```bash
+env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY \
+  FIRECRAWL_MCP_ALLOWED_HOSTS=mcp.home.lan npx -y firecrawl-mcp
+```
+
+Clients on other machines also need the server to listen on a non-loopback address, so set `HOST` too. Every client that can reach the port is then served with the server's `FIRECRAWL_API_KEY`, so do this only on a network you trust:
+
+```bash
+env HTTP_STREAMABLE_SERVER=true FIRECRAWL_API_KEY=fc-YOUR_API_KEY HOST=0.0.0.0 \
+  FIRECRAWL_MCP_ALLOWED_HOSTS=192.168.1.20 npx -y firecrawl-mcp
+```
+
+`FIRECRAWL_MCP_ALLOWED_HOSTS=*` turns the check off and restores the wildcard CORS header. Only do that when something in front of the server checks hosts and origins itself.
+
 ### Running with Docker
 
 The `ghcr.io/firecrawl/firecrawl-mcp-server` image runs the same server as `npx -y firecrawl-mcp`. Every build from `main` is tagged `latest`, `v<package version>` and `sha-<commit sha>`. `v<package version>` moves to the newest build of that version, so pin `sha-<commit sha>` (or a digest) when you need a fixed image.
@@ -206,7 +224,7 @@ docker run --rm -p 127.0.0.1:3000:3000 \
   ghcr.io/firecrawl/firecrawl-mcp-server:latest
 ```
 
-The image sets `HOST=0.0.0.0` and `PORT=3000`; override `PORT` (and the `-p` mapping) to listen elsewhere. The server uses the container's `FIRECRAWL_API_KEY` for requests that don't send their own credential, so the example publishes the port on `127.0.0.1` only; don't expose it more widely unless clients must supply their own key. Set `FIRECRAWL_API_URL` to use a self-hosted Firecrawl API. The container runs as the unprivileged `node` user.
+The image sets `HOST=0.0.0.0` and `PORT=3000`; override `PORT` (and the `-p` mapping) to listen elsewhere. The server uses the container's `FIRECRAWL_API_KEY` for requests that don't send their own credential, so the example publishes the port on `127.0.0.1` only; don't expose it more widely unless clients must supply their own key. Set `FIRECRAWL_API_URL` to use a self-hosted Firecrawl API. The container runs as the unprivileged `node` user. The server answers only `localhost`, `127.0.0.1` and `[::1]` in the `Host` and `Origin` headers, so the `-p 127.0.0.1:3000:3000` mapping works as is; to reach it under another name, set `-e FIRECRAWL_MCP_ALLOWED_HOSTS=<host>` (see [Streamable HTTP local mode](#running-with-streamable-http-local-mode)).
 
 ### Running on VS Code
 
@@ -279,6 +297,13 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 - `FIRECRAWL_INTEGRATION` (Optional): Integration tag for apps that launch this server, such as an editor extension
   - Sent as the `integration` field of scrape, batch scrape, crawl, map, search, extract, agent, parse, interact and feedback requests
   - Use a value that starts with `_`, for example `_zed`
+
+#### Local HTTP mode
+
+- `FIRECRAWL_MCP_ALLOWED_HOSTS` (Optional): Extra host names or addresses the server answers with `HTTP_STREAMABLE_SERVER=true` or `SSE_LOCAL=true`, comma-separated
+  - `localhost`, `127.0.0.1`, `[::1]` and a non-wildcard `HOST` are always allowed; ports are ignored
+  - Requests whose `Host` or `Origin` header names any other host get `403`, except `GET` and `HEAD` requests to `/health`
+  - `*` turns the check off; not used with `CLOUD_SERVICE=true`, which answers every host
 
 #### MCP OAuth (Bearer access tokens)
 
@@ -539,7 +564,7 @@ For scientific papers, see [Research Tools](#12-research-tools-firecrawl_researc
 
 **Returns:**
 
-- Array of search results (with optional scraped content), plus an `id` field. Pass that `id` to `firecrawl_search_feedback` after you've used the results to refund 1 credit (search costs 2) and improve search quality.
+- Search results grouped by source (`data.web`, `data.images`, `data.news`), with optional scraped content, plus an `id` field. Every result carries a `source` and a 1-indexed `position`, numbered from 1 within its own group — copy the pair straight into `firecrawl_search_feedback`'s `valuableResults` rather than counting array elements. Pass that `id` to `firecrawl_search_feedback` after you've used the results to refund 1 credit (search costs 2) and improve search quality.
 
 **Prompt Example:**
 
@@ -553,7 +578,7 @@ Sends structured feedback on a previous `firecrawl_search` result. The first fee
 
 **Opt out:** set `FIRECRAWL_NO_SEARCH_FEEDBACK=1` (or `FIRECRAWL_DISABLE_SEARCH_FEEDBACK=1`) in the environment when starting the MCP server. The `firecrawl_search_feedback` tool will not be registered, so agents can't call it. Team admins can also disable feedback server-side; in that case the tool is registered but always returns `feedbackErrorCode: "TEAM_OPTED_OUT"`.
 
-**Most important field:** `missingContent`. It's an array of specific pieces of content the agent expected to find but did not. One entry per missing topic; these aggregate across teams and tell us what to index next.
+**Most important field:** `missingContent`. It's an array of specific pieces of content the agent expected to find but did not. One entry per missing topic; these aggregate across teams and tell us what to index next. For useful results, use `valuableResults` with the `source`/`position` pair stamped on each result — results are grouped and each group is numbered from 1 independently, so both are required. List **every** useful result (unlisted results are treated as not useful), and reserve `valuableSources` for useful URLs that were not among the returned results.
 
 **Daily refund cap (per team, per UTC day, default 100 credits).** Once a team's `creditsRefundedToday` reaches `dailyRefundCap`, further submissions still record feedback but no longer refund credits. The response sets `dailyCapReached: true`. Agents should stop calling this tool for the rest of the UTC day when they see that flag.
 
@@ -565,10 +590,15 @@ Sends structured feedback on a previous `firecrawl_search` result. The first fee
   "arguments": {
     "searchId": "0193f6c5-1234-7890-abcd-1234567890ab",
     "rating": "good",
+    "valuableResults": [
+      { "source": "web", "position": 1 },
+      { "source": "web", "position": 3 },
+      { "source": "news", "position": 2, "reason": "Broke the pricing change." }
+    ],
     "valuableSources": [
       {
-        "url": "https://docs.firecrawl.dev/features/search",
-        "reason": "Most up-to-date description of /search."
+        "url": "https://docs.firecrawl.dev/pricing",
+        "reason": "Not in the results; found via a result's pricing link. Answered the question."
       }
     ],
     "missingContent": [
@@ -1237,6 +1267,8 @@ await server.start({
 
 Set `host` explicitly. Without it the server listens on `localhost`, which Node binds to a single address (often only `::1`), so requests to `127.0.0.1` are refused. Use `0.0.0.0` or `::` to accept connections from other machines only behind network access controls or an `unstable_hooks.authenticate` check: without one, every caller that can reach the port is served with the configured `apiKey`.
 
+The library doesn't check `Host` or `Origin` unless asked, and its CORS headers allow any origin. A server reachable from a browser on the same machine should pass `httpStream.allowedHosts` (for example `['localhost', '127.0.0.1', '[::1]']`): requests whose `Host` or `Origin` header names another host then get `403` (except `GET` and `HEAD` on the health path), and CORS headers echo the allowed origin. The command line sets this list in local HTTP mode.
+
 Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`, `logging`, `safeMode`, `fileAccess` (`local` or `upload`), `requireCredential`, `searchFeedback` and `endpointFeedback`. `unstable_hooks` accepts:
 
 | Hook | Purpose |
@@ -1252,7 +1284,7 @@ Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`,
 | `configureHttp(app)` | Add HTTP routes. |
 | `oauth.protectedResource` | Serve OAuth protected-resource metadata. |
 
-FastMCP is bundled inside the package, so use the types exported from `firecrawl-mcp/server` (`Session`, `ToolDefinition`, `ToolRegistrar`, `FirecrawlMcpServerHooks` and others) rather than importing `fastmcp` yourself.
+The server is built on the official MCP TypeScript SDK (`@modelcontextprotocol/server`). Use the types exported from `firecrawl-mcp/server` (`Session`, `ToolDefinition`, `ToolRegistrar`, `FirecrawlMcpServerHooks` and others) rather than the SDK's own.
 
 The entry point also exports the helpers the built-in tools use, such as `recoveryPayload`, `normalizeHeader`, `requestOrigin`, `isRuntimeUserAgent`, `initializeClientSlug`, `searchToolBaseFields`, `searchOutputSchema` and `structuredCompact`, so extra tools and hooks can match the built-in behaviour. They are unstable as well.
 

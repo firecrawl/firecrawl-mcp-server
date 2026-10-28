@@ -1,12 +1,12 @@
 import type { IncomingHttpHeaders } from 'http';
 import { randomUUID } from 'node:crypto';
 import {
+  escapeWWWAuthenticateValue,
   invalidApiKeyRecoveryPayload,
   invalidOAuthRecoveryPayload,
   normalizeHeader,
   withoutTrailingSlash,
 } from '../server.js';
-import { escapeWWWAuthenticateValue } from './www-authenticate.js';
 import {
   createIntrospectionCache,
   INTROSPECTION_ACTIVE_TTL_MS,

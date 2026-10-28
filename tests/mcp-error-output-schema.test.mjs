@@ -110,7 +110,79 @@ for (const { status, error } of [
     });
     assert.equal(result.structuredContent, undefined);
   });
+
+  test(`an API ${status} from an SDK call keeps its text and adds its code`, async (t) => {
+    const apiUrl = await startRefusingApi(t, status, { success: false, error });
+    const result = await assertReadableError(t, {
+      apiUrl,
+      session: apiKey,
+      name: 'firecrawl_scrape',
+      args: { url: 'https://example.com' },
+      includes: error,
+    });
+    assert.equal(result.content[0].text, `Tool 'firecrawl_scrape' execution failed: ${result.structuredContent.error.message}`);
+    assert.deepEqual(result.structuredContent, {
+      success: false,
+      error: {
+        code: status === 402 ? 'insufficient_credits' : 'rate_limited',
+        status,
+        message: result.structuredContent.error.message,
+        ...(status === 429 ? { retryAfterSeconds: 30 } : {}),
+      },
+    });
+    assert.ok(result.structuredContent.error.message.includes(error));
+  });
 }
+
+test('an API failure keeps its text alone when the outputSchema cannot carry the code', async (t) => {
+  const apiUrl = await startRefusingApi(t, 402, { success: false, error: CREDITS_ERROR });
+  const result = await assertReadableError(t, {
+    apiUrl,
+    session: apiKey,
+    name: 'firecrawl_gov_search',
+    args: { query: 'clean air act' },
+    includes: '402',
+  });
+  assert.equal(result.structuredContent, undefined);
+});
+
+test('an API error code the API sends is kept over the status name', async (t) => {
+  const apiUrl = await startRefusingApi(t, 408, { success: false, error: 'Scrape timed out.', code: 'EXPIRED' });
+  const result = await assertReadableError(t, {
+    apiUrl,
+    session: apiKey,
+    name: 'firecrawl_scrape',
+    args: { url: 'https://example.com' },
+    includes: 'Scrape timed out.',
+  });
+  assert.equal(result.structuredContent.error.code, 'EXPIRED');
+  assert.equal(result.structuredContent.error.status, 408);
+});
+
+test("an embedder tool's own HTTP-like error keeps today's result", async (t) => {
+  const result = await assertReadableError(t, {
+    apiUrl: 'http://127.0.0.1:9',
+    session: apiKey,
+    name: 'embed_upstream',
+    args: {},
+    includes: 'Upstream refused.',
+    registerExtraTools: (registrar) =>
+      registrar.addTool({
+        name: 'embed_upstream',
+        description: 'Calls a service of its own.',
+        parameters: z.object({}),
+        outputSchema: z.object({
+          success: z.boolean().optional(),
+          error: z.object({ code: z.string(), status: z.number(), message: z.string() }).optional(),
+        }),
+        execute: async () => {
+          throw Object.assign(new Error('Upstream refused.'), { status: 402, code: 'payment_required' });
+        },
+      }),
+  });
+  assert.deepEqual(result.content, [{ type: 'text', text: "Tool 'embed_upstream' execution failed: Upstream refused." }]);
+  assert.equal(result.structuredContent, undefined);
+});
 
 for (const { name, payload, delivered } of [
   {

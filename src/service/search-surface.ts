@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   ALEXANDRIA_CATALOGUE_VERTICALS,
   ALEXANDRIA_SEARCH_INSTRUCTIONS,
+  annotateResultPositions,
   assertExchangeCredential,
   defaultDomainTools,
   enterpriseAllowsAlexandria,
@@ -175,7 +176,7 @@ Returns result groups in \`data\` and an operation \`id\`.
           addsAlexandria
         );
       const httpRes = await relayExchangeError(postSearch, { tool: 'firecrawl_search' });
-      return structuredCompact(httpRes?.data ?? {});
+      return structuredCompact(annotateResultPositions(httpRes?.data ?? {}));
     },
   });
 }
