@@ -1832,7 +1832,7 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
       destructiveHint: false, // Query-only; no destructive side effects on external entities.
     },
     description: `
-Web search for pages, news, and images. Returns ranked results with titles, URLs, and query-relevant highlights. Use it to find sources for a question; use scrapeOptions to include page content in the same call. If highlights are not enough, or you need a live fetch, call \`firecrawl_scrape\` on the relevant URLs. Authenticated searches may also return matching Alexandria data providers alongside web results.
+Web search for pages, news, and images. Returns ranked results with titles, URLs, and query-relevant highlights. Use it to find sources for a question; use scrapeOptions to include page content in the same call. If highlights are not enough, or you need a live fetch, call \`firecrawl_scrape\` on the relevant URLs. Authenticated searches may also return matching Alexandria data providers alongside web results. For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`.
 `,
     outputSchema: searchOutputSchema,
     parameters: z
