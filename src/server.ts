@@ -57,7 +57,6 @@ import {
   withAlexandriaSource,
   enterpriseAllowsAlexandria,
   searchQueryIsValid,
-  ALEXANDRIA_SEARCH_LEAD,
   ALEXANDRIA_CONTRACT_GUIDANCE,
   ALEXANDRIA_TERMS_GUIDANCE,
   ALEXANDRIA_CATALOGUE_SENTENCE,
@@ -1716,9 +1715,7 @@ Scrape one URL and return its content: markdown by default, or HTML, links, scre
 
 Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch or a smaller \`maxAge\` to bound staleness. A successful response does not by itself confirm the page is still current. ${SAFE_MODE ? 'A named browser profile loads saved session data without saving changes to it.' : 'Browser actions can change the live page when interactive actions are enabled.'} Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback.
 
-On an authenticated session, \`firecrawl_search\` and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.
-
-With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capabilities instead of fetching a page. ${ALEXANDRIA_TERMS_GUIDANCE}
+On an authenticated session with Alexandria access, if you are about to scrape the same fields from several pages, first run \`firecrawl_search\` with \`sources\` unset (or \`firecrawl_find_tools\`): a matching Alexandria provider returns those fields as typed records in one call; run it by passing \`alexandria\` instead of \`url\`. Keyless sessions have no provider matches; scrape directly.
 `,
     outputSchema: scrapeOutputSchema,
     parameters: scrapeToolParamsSchema,
@@ -1835,13 +1832,7 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
       destructiveHint: false, // Query-only; no destructive side effects on external entities.
     },
     description: `
-Search web, news, or image sources and return ranked results with query-relevant highlights. Use it for current information, or to list businesses, people, products, jobs or events with websites, prices or contacts. Each web result is a title, URL, and description; use \`firecrawl_scrape\` on a result URL when the excerpt is not enough.
-
-${ALEXANDRIA_SEARCH_LEAD}
-
-On an authenticated session, tool matches describe available capabilities; \`firecrawl_find_tools\` returns their contracts and \`firecrawl_scrape\` with an \`alexandria\` body executes a selected capability. Keyless sessions get no Alexandria matches in data.tools.
-
-For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`. For a legal or regulatory question, \`categories: ["gov"]\` returns hits in \`data.web\` with \`category: "gov"\` and cannot be combined with other categories; authenticated sessions also have \`firecrawl_gov_search\` as the dedicated tool. Verify gov results' issuer, jurisdiction, status, and version before citing current law. \`categories: ["research"]\` restricts web results to research-affiliated websites; the \`firecrawl_research_*\` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
+Web search for pages, news, and images. Returns ranked results with titles, URLs, and query-relevant highlights. Use it to find sources for a question; use scrapeOptions to include page content in the same call. If highlights are not enough, or you need a live fetch, call \`firecrawl_scrape\` on the relevant URLs. Authenticated searches may also return matching Alexandria data providers alongside web results. For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`. \`categories: ["research"]\` restricts web results to research-affiliated websites; the \`firecrawl_research_*\` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv).
 `,
     outputSchema: searchOutputSchema,
     parameters: z
