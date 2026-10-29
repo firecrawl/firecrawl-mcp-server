@@ -19,6 +19,8 @@ test('authenticated search always adds alexandria and keeps the requested source
     [{ sources: ['alexandria'] }, ['alexandria'], false],
     [{ sources: [{ type: 'alexandria' }] }, [{ type: 'alexandria' }], false],
     [{ sources: ['alexandria'], domainTools: true }, ['alexandria'], true],
+    [{ domainTools: true }, ['web', 'alexandria'], true],
+    [{ sources: ['news'], domainTools: true }, ['news', 'alexandria'], true],
     [{ categories: ['gov'] }, ['web', 'alexandria'], true],
     [{ sources: ['web'], categories: ['developer'] }, ['web', 'alexandria'], true],
   ]) {
@@ -34,7 +36,7 @@ test('authenticated search always adds alexandria and keeps the requested source
     assert.equal(api.requests.at(-1).body.domainTools, domainTools, JSON.stringify(overrides));
     assert.equal(
       api.requests.at(-1).headers['x-firecrawl-implicit-alexandria'],
-      (overrides.sources ?? []).some((source) => ['alexandria', 'exchange'].includes(source.type ?? source)) ? undefined : '1',
+      overrides.domainTools === true || (overrides.sources ?? []).some((source) => ['alexandria', 'exchange'].includes(source.type ?? source)) ? undefined : '1',
       JSON.stringify(overrides)
     );
   }
@@ -95,6 +97,7 @@ test('added alexandria falls back to the requested sources on discovery refusal;
       name: 'firecrawl_search', arguments: { query: 'company news', ...explicit },
     });
     assert.equal(api.requests.length, before + 1);
+    assert.equal(api.requests.at(-1).headers['x-firecrawl-implicit-alexandria'], undefined);
   }
   const other = await startStdioWithApi(t, { searchRefusal: 'Permission denied.' });
   await callExpectingError(other.client, {

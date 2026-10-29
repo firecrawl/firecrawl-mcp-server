@@ -172,8 +172,7 @@ Returns result groups in \`data\` and an operation \`id\`.
           client,
           searchBody,
           addsAlexandria && domainTools !== true,
-          requestedSources,
-          addsAlexandria
+          requestedSources
         );
       const httpRes = await relayExchangeError(postSearch, { tool: 'firecrawl_search' });
       return structuredCompact(annotateResultPositions(httpRes?.data ?? {}));
