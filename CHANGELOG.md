@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- The `firecrawl` JS SDK dependency moves from 4.50.0 to 4.51.0. That release adds Government Index filters (`jurisdiction`, `court`, `courtType`, `cites`, `domain`) to the SDK's gov search options, an `insufficient_credits` agent error code, and `location` and `zeroDataRetention` agent options. `firecrawl_gov_search` already sends those filters through the SDK's HTTP client, and the server doesn't use the new agent options, so its requests and behaviour are unchanged.
+
 ## [3.36.0] - 2026-10-27
 
 ### Changed
