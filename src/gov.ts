@@ -107,6 +107,16 @@ interface GovHit {
   position?: number;
 }
 
+/** A `law` result: a hit plus the index's legal labels, each absent when unknown. */
+interface LawHit extends GovHit {
+  jurisdiction?: string;
+  court?: string;
+  court_type?: string;
+  cites?: string[];
+  cited_as?: string[];
+  updated_at?: number;
+}
+
 /** Render hits as `## <position>. <title>` / url / description blocks. */
 function fmtGov(results?: GovHit[]): string {
   if (!results || results.length === 0) return '(no results)';
@@ -150,10 +160,11 @@ Returns ranked results with a position, title, URL, and matched snippet. Results
       for (const [key, value] of Object.entries(options)) {
         if (value != null) params.append(key, String(value));
       }
+      params.append('sources', 'law');
       const client = getClient(session) as ClientLike;
       const res = await client.http
         .get<{
-          data?: { web?: GovHit[] };
+          data?: { law?: LawHit[]; web?: GovHit[] };
         }>(
           `${BASE}?${params.toString()}`,
           originHeaders(requestOrigin(mcpClient, session))
@@ -170,7 +181,8 @@ Returns ranked results with a position, title, URL, and matched snippet. Results
           }
           throw new UserError(message, { status: 400, error: message });
         });
-      const results = res.data?.data?.web ?? [];
+      // An API without `sources` answers only `web`.
+      const results = res.data?.data?.law ?? res.data?.data?.web ?? [];
       return withStructured(fmtGov(results), { results });
     },
   });
