@@ -1645,7 +1645,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_feedback@3781d950aa2d": {
+  "firecrawl_feedback@e4c5a9f53955": {
     "annotations": {
       "title": "Firecrawl feedback",
       "readOnlyHint": false,
@@ -1929,6 +1929,9 @@
               "type": "null"
             }
           ]
+        },
+        "details": {
+          "description": "Field-level validation errors when the submission was rejected as `INVALID_BODY`."
         },
         "retryable": {
           "description": "Whether retrying the submission can succeed.",
@@ -6852,7 +6855,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_search_feedback@89ed89c8e729": {
+  "firecrawl_search_feedback@8685ffbee848": {
     "annotations": {
       "title": "Firecrawl search feedback",
       "readOnlyHint": false,
@@ -7003,6 +7006,9 @@
               "type": "null"
             }
           ]
+        },
+        "details": {
+          "description": "Field-level validation errors when the submission was rejected as `INVALID_BODY`."
         },
         "retryable": {
           "description": "Whether retrying the submission can succeed.",

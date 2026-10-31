@@ -177,6 +177,7 @@ export const feedbackOutputSchema = z
     error,
     status: num('HTTP status when the submission was rejected.'),
     feedbackErrorCode: str('Machine-readable reason the submission was rejected.'),
+    details: unknown('Field-level validation errors when the submission was rejected as `INVALID_BODY`.'),
     retryable: bool('Whether retrying the submission can succeed.'),
     message: str('Human-readable result of the submission.'),
     feedbackId: str('Identifier of the recorded feedback.'),
