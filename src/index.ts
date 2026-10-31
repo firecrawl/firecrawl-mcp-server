@@ -91,7 +91,7 @@ const args: FirecrawlMcpServerStartArgs =
       }
     : { transportType: 'stdio' };
 
-if (transport === 'stdio' && !apiKey && !apiUrl) {
+if (transport === 'stdio' && !apiKey && !apiUrl?.trim()) {
   // No credential and no self-hosted URL: run in keyless mode. scrape and
   // search work for free (rate-limited per IP) against the Firecrawl cloud;
   // every other tool needs an API key and will return Unauthorized.

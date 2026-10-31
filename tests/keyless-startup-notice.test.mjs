@@ -21,6 +21,15 @@ test('stdio without a credential announces keyless mode', async (t) => {
   assert.ok(!names.includes('firecrawl_search_feedback'), names.join(', '));
 });
 
+test('stdio with whitespace-only settings announces keyless mode', async (t) => {
+  const { stderr, names } = await startupNotice(t, {
+    FIRECRAWL_API_KEY: '   ',
+    FIRECRAWL_API_URL: '   ',
+  });
+  assert.ok(stderr.includes(KEYLESS_NOTICE), stderr);
+  assert.ok(!names.includes('firecrawl_search_feedback'), names.join(', '));
+});
+
 test('stdio with FIRECRAWL_OAUTH_TOKEN does not announce keyless mode', async (t) => {
   const { stderr, names } = await startupNotice(t, {
     FIRECRAWL_OAUTH_TOKEN: 'fco_test-token',
