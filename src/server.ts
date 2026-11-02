@@ -188,6 +188,11 @@ export interface SessionData {
   /** The registered name of that client; read when the id is not a URL. */
   oauthClientName?: string;
   authType?: 'api-key' | 'oauth' | 'env' | 'keyless' | 'none';
+  /**
+   * World ID credential (`fcwid_...`) from the request's
+   * `x-firecrawl-world-id` header, sent on keyless requests only.
+   */
+  worldIdCredential?: string;
   /** Admitted, but the supplied credential cannot be used. */
   credentialError?: 'CREDENTIAL_INVALID';
   /** Set per tool call. */
@@ -434,6 +439,11 @@ export interface FirecrawlMcpServerOptions {
   fileAccess?: 'local' | 'upload';
   /** Refuse Firecrawl API calls from sessions without a credential. */
   requireCredential?: boolean;
+  /**
+   * World ID credential (`fcwid_...`) sent as `x-firecrawl-world-id` on
+   * keyless requests when the session carries none.
+   */
+  worldIdCredential?: string;
   /** Register firecrawl_search_feedback. Defaults to true. */
   searchFeedback?: boolean;
   /** Register firecrawl_feedback. Defaults to true. */
@@ -664,6 +674,7 @@ export function createFirecrawlMcpServer(
     searchFeedback: options.searchFeedback ?? true,
     endpointFeedback: options.endpointFeedback ?? true,
     integration: integrationFrom(options.integration),
+    worldIdCredential: normalizeHeader(options.worldIdCredential),
   };
   const logging = options.logging ?? config.transport === 'httpStream';
 
@@ -717,6 +728,10 @@ export function createFirecrawlMcpServer(
         normalizeHeader(headers?.['referer']),
       ].find((value) => value && value !== 'null');
       if (referrer) session.clientReferrer = referrer;
+      const worldIdCredential = normalizeHeader(
+        headers?.['x-firecrawl-world-id']
+      );
+      if (worldIdCredential) session.worldIdCredential = worldIdCredential;
       return session;
     });
     if (request) request[authResultByRequest] = authResult;
@@ -2060,9 +2075,14 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         ? body.origin
         : requestOrigin(undefined, session));
     await hooks.beforeKeylessRequest?.(session, origin);
+    const worldIdCredential =
+      session?.worldIdCredential ?? config.worldIdCredential;
     const headers: Record<string, string> = {
       ...originHeaders(origin),
       'Content-Type': 'application/json',
+      ...(worldIdCredential
+        ? { 'x-firecrawl-world-id': worldIdCredential }
+        : {}),
       ...resolveOutbound(session).headers,
     };
     const response = await fetch(`${resolveApiBaseUrl()}${path}`, {
