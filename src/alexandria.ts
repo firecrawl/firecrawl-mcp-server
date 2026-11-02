@@ -82,11 +82,6 @@ const skillSlug = z
   .max(64)
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'slug is lowercase letters and digits in words joined by single hyphens');
 
-/** Who can read a team skill, forwarded as the Exchange `sharing` option. */
-export const skillSharingSchema = z
-  .enum(['private', 'team', 'public'])
-  .describe('Who can read this team skill. "private" is the people who edit it, "team" is the whole team, and "public" is any Firecrawl team. Omit on create for the team default, and on update to leave sharing unchanged.');
-
 const skillRequestId = z
   .string()
   .trim()
@@ -105,7 +100,7 @@ export const findSkillsSchema = z
   .object({
     query: z.string().trim().min(1).max(2000).optional().describe('Words that must all appear in a skill\'s id, name or description. Omit to list every matching skill.'),
     limit: z.number().int().min(1).max(50).optional().describe('Most skills to return; defaults to 20.'),
-    provider: skillPathSegment.optional().describe('List skills published by this Alexandria provider instead of Firecrawl and team skills. Execution-only skills are omitted.'),
+    provider: skillPathSegment.optional().describe('List skills published by this Alexandria provider instead of Firecrawl and team skills. Sent to Exchange as provider; a query is sent as q. Later pages are read until limit is filled.'),
   })
   .strict();
 
@@ -171,7 +166,6 @@ const createSkillShape = z.object({
   description: createSkillDescription.optional(),
   body: createSkillBody.optional(),
   slug: createSkillSlug,
-  sharing: skillSharingSchema.optional(),
   requestId: skillRequestId,
 }).strict();
 
@@ -183,7 +177,6 @@ export const createSkillSchema = advertiseAnyOf(z.union([
     description: createSkillDescription.optional(),
     body: createSkillBody.optional(),
     slug: createSkillSlug,
-    sharing: skillSharingSchema.optional(),
     requestId: skillRequestId,
   }).strict(),
   z.object({
@@ -192,7 +185,6 @@ export const createSkillSchema = advertiseAnyOf(z.union([
     description: createSkillDescription,
     body: createSkillBody,
     slug: createSkillSlug,
-    sharing: skillSharingSchema.optional(),
     requestId: skillRequestId,
   }).strict(),
 ]), createSkillShape, [{ required: ['from'] }, { required: ['name', 'description', 'body'] }]);
@@ -206,7 +198,7 @@ const updateSkillEnabled = z.boolean().describe('Turn the skill on or off. A tea
 const updateSkillDiscoverable = z.boolean().describe('Whether firecrawl_find_skills lists it.');
 
 function updateSkillBranch(
-  change: 'name' | 'description' | 'body' | 'enabled' | 'discoverable' | 'sharing'
+  change: 'name' | 'description' | 'body' | 'enabled' | 'discoverable'
 ) {
   return z.object({
     id: updateSkillId,
@@ -216,7 +208,6 @@ function updateSkillBranch(
     body: change === 'body' ? updateSkillBody : updateSkillBody.optional(),
     enabled: change === 'enabled' ? updateSkillEnabled : updateSkillEnabled.optional(),
     discoverable: change === 'discoverable' ? updateSkillDiscoverable : updateSkillDiscoverable.optional(),
-    sharing: change === 'sharing' ? skillSharingSchema : skillSharingSchema.optional(),
     requestId: skillRequestId,
   }).strict();
 }
@@ -229,7 +220,6 @@ const updateSkillShape = z.object({
   body: updateSkillBody.optional(),
   enabled: updateSkillEnabled.optional(),
   discoverable: updateSkillDiscoverable.optional(),
-  sharing: skillSharingSchema.optional(),
   requestId: skillRequestId,
 }).strict();
 
@@ -240,14 +230,12 @@ export const updateSkillSchema = advertiseAnyOf(z.union([
   updateSkillBranch('body'),
   updateSkillBranch('enabled'),
   updateSkillBranch('discoverable'),
-  updateSkillBranch('sharing'),
 ]), updateSkillShape, [
   { required: ['id', 'baseVersion', 'name'] },
   { required: ['id', 'baseVersion', 'description'] },
   { required: ['id', 'baseVersion', 'body'] },
   { required: ['id', 'baseVersion', 'enabled'] },
   { required: ['id', 'baseVersion', 'discoverable'] },
-  { required: ['id', 'baseVersion', 'sharing'] },
 ]);
 
 const toolFor = (request: any) => {
@@ -257,12 +245,26 @@ const toolFor = (request: any) => {
   return undefined;
 };
 
+const TEAM_SKILL_PAGE = 'https://www.firecrawl.dev/app/alexandria/skills/';
+
+/** Slug for the web app page. Prefers `skill.slug`, then `team:<slug>` with the prefix removed. */
+function teamSkillPage(data: any): { url: string; message: string } | undefined {
+  const fromSkill = typeof data?.skill?.slug === 'string' ? data.skill.slug.trim() : '';
+  const fromId = typeof data?.id === 'string' && data.id.startsWith('team:') ? data.id.slice('team:'.length) : '';
+  const slug = /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(fromSkill) ? fromSkill : fromId;
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return undefined;
+  const url = `${TEAM_SKILL_PAGE}${slug}`;
+  return { url, message: `Open it in Firecrawl: ${url}` };
+}
+
 /**
  * Skill results name their follow-up calls as tools: each listed skill the read that discloses
  * it, a library skill the create that copies it, and a create or update the read of the saved skill.
+ * A successful create or update also names the skill's page in the web app.
  */
 export function withSkillNavigation(envelope: any) {
-  const data = envelope?.data?.alexandria?.[0]?.data;
+  const item = envelope?.data?.alexandria?.[0];
+  const data = item?.data;
   if (!data) return envelope;
   for (const skill of Array.isArray(data.skills) ? data.skills : []) {
     if (typeof skill?.id === 'string') skill.nextTool = { name: 'firecrawl_read_skill', arguments: { id: skill.id } };
@@ -273,94 +275,82 @@ export function withSkillNavigation(envelope: any) {
   if (create) data.createTool = create;
   const next = toolFor(data.next);
   if (next) data.nextTool = next;
+  if (!item.error && (item.capability === 'create-skill' || item.capability === 'update-skill')) {
+    const page = teamSkillPage(data);
+    if (page) {
+      data.openUrl = page.url;
+      data.message = page.message;
+      envelope.message = page.message;
+    }
+  }
   return envelope;
 }
 
-/** A provider skill that may be executed but must not be offered in a listing. */
-export function isExecutionOnlySkill(skill: any): boolean {
-  if (!skill || typeof skill !== 'object' || Array.isArray(skill)) return false;
-  if (skill.executionOnly === true || skill.execution_only === true) return true;
-  const visibility = skill.visibility ?? skill.listing ?? skill.mode;
-  return visibility === 'execution' || visibility === 'execution-only' || visibility === 'execute';
+function providerSkillSegment(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const segment = value.trim();
+  if (!segment || segment === '.' || segment === '..' || /[/\\]/.test(segment)) return undefined;
+  return segment;
 }
 
-/** Drops execution-only skills from every list in a provider-skills payload. */
-export function withoutExecutionOnlySkills(value: any): any {
-  if (Array.isArray(value)) return value.filter((item) => !isExecutionOnlySkill(item)).map(withoutExecutionOnlySkills);
-  if (!value || typeof value !== 'object') return value;
-  const copy: any = {};
-  for (const [key, entry] of Object.entries(value)) copy[key] = withoutExecutionOnlySkills(entry);
-  return copy;
+/**
+ * Read path for one provider skill. Exchange sends `provider` as `{slug, name}` and
+ * `plugin` as `{id, displayName}`, and the skill slug is the last segment of `id`.
+ */
+export function providerSkillAddress(skill: any): { provider: string; plugin: string; skill: string } | undefined {
+  const provider = providerSkillSegment(typeof skill?.provider === 'string' ? skill.provider : skill?.provider?.slug);
+  const plugin = providerSkillSegment(typeof skill?.plugin === 'string' ? skill.plugin : skill?.plugin?.id);
+  const named = providerSkillSegment(skill?.skill);
+  const id = typeof skill?.id === 'string' ? skill.id : '';
+  const last = providerSkillSegment(id.split('/').filter(Boolean).at(-1));
+  const name = named ?? last;
+  if (!provider || !plugin || !name) return undefined;
+  return { provider, plugin, skill: name };
 }
 
-function providerSkillAddress(skill: any): { provider: string; plugin: string; skill: string } | undefined {
-  const provider = typeof skill?.provider === 'string' ? skill.provider : undefined;
-  const plugin = typeof skill?.plugin === 'string' ? skill.plugin : undefined;
-  const name = typeof skill?.skill === 'string' ? skill.skill : undefined;
-  if (provider && plugin && name && !provider.includes('/') && !plugin.includes('/') && !name.includes('/')) {
-    return { provider, plugin, skill: name };
-  }
-  return undefined;
+function providerSkillRecords(body: any): any[] {
+  if (Array.isArray(body)) return body;
+  if (Array.isArray(body?.skills)) return body.skills;
+  if (Array.isArray(body?.items)) return body.items;
+  return [];
 }
 
-/** Each listed provider skill gets the read that returns it. Execution-only skills are already gone. */
-export function withProviderSkillNavigation(body: any) {
-  const root = body && typeof body === 'object' && !Array.isArray(body) ? withoutExecutionOnlySkills(body) : { data: withoutExecutionOnlySkills(body) };
-  const visit = (node: any) => {
-    if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) {
-      node.forEach(visit);
-      return;
-    }
-    for (const key of ['skills', 'items'] as const) {
-      if (!Array.isArray(node[key])) continue;
-      node[key] = node[key].map((skill: any) => {
-        const address = providerSkillAddress(skill);
-        return address ? { ...skill, nextTool: { name: 'firecrawl_read_skill', arguments: address } } : skill;
-      });
-    }
-    for (const value of Object.values(node)) visit(value);
-  };
-  visit(root);
-  return root.success === undefined ? { success: true, ...root } : root;
-}
-
-/** Provider skills for one provider, from a GET /provider-skills payload. Execution-only skills are omitted. */
-export function listedProviderSkills(body: any, options: { provider: string; query?: string; limit?: number }) {
-  const cleaned = withoutExecutionOnlySkills(body);
-  const lists: any[] = [];
-  const visit = (node: any) => {
-    if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) {
-      node.forEach(visit);
-      return;
-    }
-    for (const key of ['skills', 'items'] as const) {
-      if (Array.isArray(node[key])) lists.push(...node[key]);
-    }
-    for (const value of Object.values(node)) {
-      if (value && typeof value === 'object') visit(value);
-    }
-  };
-  if (Array.isArray(cleaned)) lists.push(...cleaned);
-  else visit(cleaned);
-  const words = options.query?.toLowerCase().split(/\s+/).filter(Boolean) ?? [];
-  const matched = lists.filter((skill) => {
-    if (skill?.provider !== options.provider) return false;
-    if (!words.length) return true;
-    const haystack = [skill.id, skill.name, skill.description, skill.skill, skill.plugin]
-      .filter((value) => typeof value === 'string')
-      .join(' ')
-      .toLowerCase();
-    return words.every((word) => haystack.includes(word));
+/** Skills on one provider-skills page whose provider slug matches, each with the read that returns it. */
+export function providerSkillsOnPage(body: any, provider: string): any[] {
+  return providerSkillRecords(body).flatMap((skill) => {
+    const address = providerSkillAddress(skill);
+    if (!address || address.provider !== provider) return [];
+    return [{ ...skill, nextTool: { name: 'firecrawl_read_skill', arguments: address } }];
   });
-  const limit = options.limit ?? 20;
-  return withProviderSkillNavigation({
+}
+
+/** Page fields from a provider-skills response. `limit` is the server page size, defaulting to 20. */
+export function providerSkillsPageInfo(body: any): { page: number; limit: number; total?: number } {
+  const page = Number.isInteger(body?.page) && body.page >= 1 ? body.page : 1;
+  const limit = Number.isInteger(body?.limit) && body.limit >= 1 ? body.limit : 20;
+  const total = Number.isInteger(body?.total) && body.total >= 0 ? body.total : undefined;
+  return { page, limit, total };
+}
+
+/**
+ * A provider skill read, with string `provider`, `plugin` and `skill` for the read path.
+ * The Exchange objects stay on `providerDetail` and `pluginDetail`.
+ */
+export function presentProviderSkillRead(body: any) {
+  const root = body && typeof body === 'object' && !Array.isArray(body) ? { ...body } : { data: body };
+  const address = providerSkillAddress(root);
+  if (!address) return root.success === undefined ? { success: true, ...root } : root;
+  const providerDetail = root.provider;
+  const pluginDetail = root.plugin;
+  return {
+    ...root,
     success: true,
-    provider: options.provider,
-    skills: matched.slice(0, limit),
-    total: matched.length,
-  });
+    provider: address.provider,
+    plugin: address.plugin,
+    skill: address.skill,
+    ...(providerDetail && typeof providerDetail === 'object' ? { providerDetail } : {}),
+    ...(pluginDetail && typeof pluginDetail === 'object' ? { pluginDetail } : {}),
+  };
 }
 
 export const ALEXANDRIA_CATALOGUE_VERTICALS =

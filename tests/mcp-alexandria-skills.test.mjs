@@ -65,7 +65,7 @@ test('skill tools refuse unknown or missing arguments before calling Exchange', 
 test('credentialless self-hosted sessions do not list the skill tools', async (t) => {
   const { client } = await startStdio(t, { CLOUD_SERVICE: 'false', FIRECRAWL_API_KEY: '', FIRECRAWL_API_URL: 'http://127.0.0.1:9' });
   const { tools } = await client.request('tools/list', {});
-  for (const name of ['firecrawl_find_skills', 'firecrawl_read_skill', 'firecrawl_create_skill', 'firecrawl_update_skill', 'firecrawl_list_provider_skills', 'firecrawl_read_provider_skill']) {
+  for (const name of ['firecrawl_find_skills', 'firecrawl_read_skill', 'firecrawl_create_skill', 'firecrawl_update_skill']) {
     assert.equal(tools.some(tool => tool.name === name), false, name);
   }
 });
@@ -73,29 +73,47 @@ test('credentialless self-hosted sessions do not list the skill tools', async (t
 test('keyless sessions do not list the skill tools', async (t) => {
   const { client } = await startStdio(t, { CLOUD_SERVICE: 'false', FIRECRAWL_API_KEY: '', FIRECRAWL_API_URL: '' });
   const { tools } = await client.request('tools/list', {});
-  for (const name of ['firecrawl_find_skills', 'firecrawl_read_skill', 'firecrawl_create_skill', 'firecrawl_update_skill', 'firecrawl_list_provider_skills', 'firecrawl_read_provider_skill']) {
+  for (const name of ['firecrawl_find_skills', 'firecrawl_read_skill', 'firecrawl_create_skill', 'firecrawl_update_skill']) {
     assert.equal(tools.some(tool => tool.name === name), false, name);
   }
 });
 
-test('create_skill copies or writes a skill, including sharing, and links to reading it', async (t) => {
+test('create_skill copies or writes a skill and links to reading it', async (t) => {
   const { api, client } = await startStdioWithApi(t);
   const call = arguments_ => client.request('tools/call', { name: 'firecrawl_create_skill', arguments: arguments_ });
-  const copied = toolText(await call({ from: 'deep-research', slug: 'our-research', sharing: 'public' })).data.alexandria[0].data;
-  assert.deepEqual(api.requests.at(-1).body.alexandria, { provider: 'firecrawl', capability: 'create-skill', options: { from: 'deep-research', slug: 'our-research', sharing: 'public' } });
+  const created = toolText(await call({ from: 'deep-research', slug: 'our-research' }));
+  const copied = created.data.alexandria[0].data;
+  assert.deepEqual(api.requests.at(-1).body.alexandria, { provider: 'firecrawl', capability: 'create-skill', options: { from: 'deep-research', slug: 'our-research' } });
   assert.equal(copied.id, 'team:our-research');
+  assert.equal(copied.skill.enabled, true);
+  assert.equal(copied.skill.discoverable, true);
+  assert.equal(copied.skill.sharing, undefined);
+  assert.equal(copied.skill.shared, undefined);
+  assert.equal(copied.openUrl, 'https://www.firecrawl.dev/app/alexandria/skills/our-research');
+  assert.equal(copied.message, 'Open it in Firecrawl: https://www.firecrawl.dev/app/alexandria/skills/our-research');
+  assert.equal(created.message, copied.message);
+  assert.equal(copied.openUrl.includes('not-a-page'), false);
+  assert.equal(copied.openUrl.includes('/skills/s/'), false);
   assert.deepEqual(copied.nextTool, { name: 'firecrawl_read_skill', arguments: { id: 'team:our-research' } });
   await call({ name: 'Digest', description: 'Summarise.', body: 'Run @fred/series/observations.', requestId: 'save-1' });
   assert.deepEqual(api.requests.at(-1).body.alexandria.options, { name: 'Digest', description: 'Summarise.', body: 'Run @fred/series/observations.' });
   assert.equal(api.requests.at(-1).headers['x-request-id'], 'save-1');
 });
 
-test('update_skill sends the change with its baseVersion and sharing', async (t) => {
+test('update_skill sends enabled and discoverable with its baseVersion', async (t) => {
   const { api, client } = await startStdioWithApi(t);
-  const saved = toolText(await client.request('tools/call', { name: 'firecrawl_update_skill', arguments: { id: 'team:weekly-digest', baseVersion: 2, enabled: false, sharing: 'private' } })).data.alexandria[0].data;
-  assert.deepEqual(api.requests.at(-1).body.alexandria, { provider: 'firecrawl', capability: 'update-skill', options: { id: 'team:weekly-digest', baseVersion: 2, enabled: false, sharing: 'private' } });
+  const updated = toolText(await client.request('tools/call', { name: 'firecrawl_update_skill', arguments: { id: 'team:weekly-digest', baseVersion: 2, enabled: false, discoverable: false } }));
+  const saved = updated.data.alexandria[0].data;
+  assert.deepEqual(api.requests.at(-1).body.alexandria, { provider: 'firecrawl', capability: 'update-skill', options: { id: 'team:weekly-digest', baseVersion: 2, enabled: false, discoverable: false } });
   assert.equal(saved.skill.version, 3);
-  assert.equal(saved.skill.sharing, 'private');
+  assert.equal(saved.skill.enabled, false);
+  assert.equal(saved.skill.discoverable, false);
+  assert.equal(saved.skill.sharing, undefined);
+  assert.equal(saved.skill.shared, undefined);
+  assert.equal(saved.openUrl, 'https://www.firecrawl.dev/app/alexandria/skills/weekly-digest');
+  assert.equal(saved.message, 'Open it in Firecrawl: https://www.firecrawl.dev/app/alexandria/skills/weekly-digest');
+  assert.equal(updated.message, saved.message);
+  assert.equal(saved.openUrl.includes('/skills/s/'), false);
   assert.deepEqual(saved.nextTool, { name: 'firecrawl_read_skill', arguments: { id: 'team:weekly-digest' } });
 });
 
@@ -108,7 +126,10 @@ test('write tools refuse bad arguments before calling Exchange', async (t) => {
   await callExpectingError(client, { name: 'firecrawl_create_skill', arguments: {} });
   await callExpectingError(client, { name: 'firecrawl_create_skill', arguments: { name: 'Digest', description: 'Summarise.' } });
   await callExpectingError(client, { name: 'firecrawl_create_skill', arguments: { from: 'deep-research', slug: 'Our Research' } });
-  await callExpectingError(client, { name: 'firecrawl_create_skill', arguments: { from: 'deep-research', sharing: 'link' } });
+  await callExpectingError(client, { name: 'firecrawl_create_skill', arguments: { from: 'deep-research', sharing: 'public' } });
+  await callExpectingError(client, { name: 'firecrawl_create_skill', arguments: { from: 'deep-research', shared: true } });
+  await callExpectingError(client, { name: 'firecrawl_update_skill', arguments: { id: 'team:weekly-digest', baseVersion: 1, sharing: 'team' } });
+  await callExpectingError(client, { name: 'firecrawl_update_skill', arguments: { id: 'team:weekly-digest', baseVersion: 1, shared: false } });
   await callExpectingError(client, { name: 'firecrawl_update_skill', arguments: { id: 'team:weekly-digest', baseVersion: 1 } });
   await callExpectingError(client, { name: 'firecrawl_update_skill', arguments: { id: 'deep-research', baseVersion: 1, name: 'x' } });
   await callExpectingError(client, { name: 'firecrawl_read_skill', arguments: { id: 'deep-research', provider: 'acme', plugin: 'research', skill: 'brief' } });
@@ -121,18 +142,28 @@ test('find_skills lists one provider and read_skill reads that skill', async (t)
   const { api, client } = await startStdioWithApi(t);
   const { tools } = await client.request('tools/list', {});
   assert.equal(tools.filter(tool => /skill/.test(tool.name)).map(tool => tool.name).sort().join(','), 'firecrawl_create_skill,firecrawl_find_skills,firecrawl_read_skill,firecrawl_update_skill');
-  const listed = toolText(await client.request('tools/call', { name: 'firecrawl_find_skills', arguments: { provider: 'acme' } }));
+  const listed = toolText(await client.request('tools/call', { name: 'firecrawl_find_skills', arguments: { provider: 'acme', limit: 5 } }));
   assert.equal(api.requests.at(-1).method, 'GET');
-  assert.equal(api.requests.at(-1).url, '/exchange/provider-skills');
-  assert.equal(listed.skills.length, 1);
-  assert.equal(listed.skills[0].skill, 'brief');
-  assert.equal(JSON.stringify(listed).includes('executionOnly'), false);
-  assert.equal(JSON.stringify(listed).includes('"skill":"run"'), false);
+  const firstPage = new URL(api.requests.at(-1).url, 'http://127.0.0.1');
+  assert.equal(firstPage.pathname, '/exchange/provider-skills');
+  assert.equal(firstPage.searchParams.get('provider'), 'acme');
+  assert.equal(firstPage.searchParams.get('page'), '1');
+  assert.equal(firstPage.searchParams.get('q'), null);
+  assert.equal(api.requests.filter(request => request.url.startsWith('/exchange/provider-skills')).length, 1);
+  assert.equal(listed.total, 21);
+  assert.equal(listed.skills.length, 5);
+  assert.equal(listed.skills[0].skill, undefined);
+  assert.deepEqual(listed.skills[0].provider, { slug: 'acme', name: 'Acme' });
+  assert.deepEqual(listed.skills[0].plugin, { id: 'research', displayName: 'Research' });
+  assert.equal(listed.skills[0].visibility, 'execution-only');
   assert.deepEqual(listed.skills[0].nextTool, { name: 'firecrawl_read_skill', arguments: { provider: 'acme', plugin: 'research', skill: 'brief' } });
   const readResult = await client.request('tools/call', { name: 'firecrawl_read_skill', arguments: { provider: 'acme', plugin: 'research', skill: 'brief' } });
   const read = toolText(readResult);
   assert.equal(api.requests.at(-1).url, '/exchange/provider-skills/acme/research/brief');
   assert.equal(read.content, '# Brief');
+  assert.equal(read.skill, 'brief');
+  assert.deepEqual(read.providerDetail, { slug: 'acme', name: 'Acme' });
+  assert.deepEqual(read.pluginDetail, { id: 'research', displayName: 'research' });
   assert.equal(readResult.structuredContent.content, '# Brief');
   assert.equal(readResult.structuredContent.provider, 'acme');
   assert.equal(readResult.structuredContent.plugin, 'research');
@@ -141,6 +172,17 @@ test('find_skills lists one provider and read_skill reads that skill', async (t)
   assert.equal(api.requests.at(-1).url, '/exchange/provider-skills/acme/research/brief/file');
   assert.equal(file.content, '# Brief file');
   const filtered = toolText(await client.request('tools/call', { name: 'firecrawl_find_skills', arguments: { provider: 'fiber', query: 'people' } }));
+  const filteredUrl = new URL(api.requests.at(-1).url, 'http://127.0.0.1');
+  assert.equal(filteredUrl.searchParams.get('provider'), 'fiber');
+  assert.equal(filteredUrl.searchParams.get('q'), 'people');
   assert.equal(filtered.skills.length, 1);
-  assert.equal(filtered.skills[0].skill, 'search');
+  assert.equal(filtered.skills[0].id, 'provider:fiber/people/search');
+  assert.deepEqual(filtered.skills[0].nextTool, { name: 'firecrawl_read_skill', arguments: { provider: 'fiber', plugin: 'people', skill: 'search' } });
+  const paged = toolText(await client.request('tools/call', { name: 'firecrawl_find_skills', arguments: { provider: 'acme', limit: 50 } }));
+  const providerGets = api.requests.filter(request => request.method === 'GET' && request.url.startsWith('/exchange/provider-skills?'));
+  const pages = providerGets.slice(-2).map(request => new URL(request.url, 'http://127.0.0.1').searchParams.get('page'));
+  assert.deepEqual(pages, ['1', '2']);
+  assert.equal(paged.skills.length, 21);
+  assert.equal(paged.skills.at(-1).id, 'provider:acme/research/later');
+  assert.deepEqual(paged.skills.at(-1).nextTool.arguments, { provider: 'acme', plugin: 'research', skill: 'later' });
 });

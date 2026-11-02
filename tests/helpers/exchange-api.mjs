@@ -21,6 +21,30 @@ const PRICED_TOOL = {
   billing: { unitLabel: 'record' },
 };
 
+function providerSkillRecord(slug, providerName, plugin, pluginName, skill, name, description) {
+  return {
+    id: `provider:${slug}/${plugin}/${skill}`,
+    name,
+    description,
+    provider: { slug, name: providerName },
+    plugin: { id: plugin, displayName: pluginName },
+    visibility: 'execution-only',
+  };
+}
+
+function providerSkillDetail(slug, plugin, skill, content) {
+  return {
+    id: `provider:${slug}/${plugin}/${skill}`,
+    name: skill,
+    description: 'Write a brief.',
+    provider: { slug, name: slug === 'acme' ? 'Acme' : slug },
+    plugin: { id: plugin, displayName: plugin },
+    files: [{ path: `${skill}/SKILL.md`, bytes: content.length, kind: 'md' }],
+    content,
+    visibility: 'execution-only',
+  };
+}
+
 const EXCHANGE_CALL = {
   provider: 'fred',
   capability: 'series/observations',
@@ -121,7 +145,8 @@ async function startFakeExchangeApi(options = {}) {
       if (options.largeResult) return json(200, options.largeResult);
       if (parsedBody.alexandria?.provider === 'firecrawl' && ['create-skill', 'update-skill'].includes(parsedBody.alexandria.capability)) {
         const id = parsedBody.alexandria.options.id ?? `team:${parsedBody.alexandria.options.slug ?? 'our-research'}`;
-        return json(200, { success: true, data: { creditsCost: 0, alexandria: [{ provider: 'firecrawl', capability: parsedBody.alexandria.capability, creditsCost: 0, data: { id, skill: { slug: id.slice(5), version: parsedBody.alexandria.capability === 'update-skill' ? parsedBody.alexandria.options.baseVersion + 1 : 1, sharing: parsedBody.alexandria.options.sharing ?? 'team' }, warnings: [], next: { provider: 'firecrawl', capability: 'read-skill', options: { id } } } }] } });
+        const options = parsedBody.alexandria.options;
+        return json(200, { success: true, data: { creditsCost: 0, alexandria: [{ provider: 'firecrawl', capability: parsedBody.alexandria.capability, creditsCost: 0, data: { id, skill: { slug: id.slice(5), version: parsedBody.alexandria.capability === 'update-skill' ? options.baseVersion + 1 : 1, enabled: options.enabled ?? true, discoverable: options.discoverable ?? true, sharePath: '/skills/s/not-a-page', publicId: 'not-a-page' }, warnings: [], next: { provider: 'firecrawl', capability: 'read-skill', options: { id } } } }] } });
       }
       if (parsedBody.alexandria?.provider === 'firecrawl' && parsedBody.alexandria.capability === 'find-skills') {
         return json(200, { success: true, data: { creditsCost: 0, alexandria: [{ provider: 'firecrawl', capability: 'find-skills', creditsCost: 0, data: { skills: [{ id: 'team:weekly-digest', name: 'Weekly digest', description: 'Summarise the week.', files: ['SKILL.md'], source: 'team', version: 2 }, { id: 'deep-research', name: 'Deep research', description: 'Research a topic.', files: ['SKILL.md', 'references/sources.md'], source: 'library', create: { provider: 'firecrawl', capability: 'create-skill', options: { from: 'deep-research' } } }], total: 2 } }] } });
@@ -194,19 +219,40 @@ async function startFakeExchangeApi(options = {}) {
     }
 
     if (req.method === 'GET' && url.pathname === '/exchange/provider-skills') {
+      // Prod shape: provider and plugin are objects, there is no skill field, and a page is 20.
+      // Without ?provider= the index leaves execution-only skills out, which is every skill here.
+      const providerFilter = url.searchParams.get('provider');
+      const q = (url.searchParams.get('q') ?? '').toLowerCase();
+      const page = Number(url.searchParams.get('page') ?? '1');
+      const pageSize = 20;
+      if (!providerFilter) return json(200, { providers: [], plugins: [], skills: [], page: 1, limit: pageSize, total: 0 });
+      const catalog = [
+        providerSkillRecord('acme', 'Acme', 'research', 'Research', 'brief', 'Brief', 'Write a brief.'),
+        providerSkillRecord('acme', 'Acme', 'research', 'Research', 'run', 'Run', 'Execute only.'),
+        ...Array.from({ length: 18 }, (_, index) => providerSkillRecord('acme', 'Acme', 'research', 'Research', `pad-${index + 1}`, `Pad ${index + 1}`, 'Padding.')),
+        providerSkillRecord('acme', 'Acme', 'research', 'Research', 'later', 'Later', 'On the second page.'),
+        providerSkillRecord('fiber', 'Fiber', 'people', 'People', 'search', 'Search', 'Find people.'),
+      ];
+      const matched = catalog.filter((skill) => {
+        if (skill.provider.slug !== providerFilter) return false;
+        if (!q) return true;
+        return `${skill.id} ${skill.name} ${skill.description}`.toLowerCase().includes(q);
+      });
+      const start = Math.max(0, page - 1) * pageSize;
       return json(200, {
-        skills: [
-          { provider: 'acme', plugin: 'research', skill: 'brief', name: 'Brief', description: 'Write a brief.' },
-          { provider: 'acme', plugin: 'research', skill: 'run', name: 'Run', description: 'Execute only.', executionOnly: true },
-          { provider: 'fiber', plugin: 'people', skill: 'search', name: 'Search', description: 'Find people.' },
-        ],
+        provider: { slug: providerFilter, name: providerFilter === 'acme' ? 'Acme' : 'Fiber' },
+        plugins: [{ id: providerFilter === 'fiber' ? 'people' : 'research', displayName: providerFilter === 'fiber' ? 'People' : 'Research', visibility: 'execution-only' }],
+        skills: matched.slice(start, start + pageSize),
+        page,
+        limit: pageSize,
+        total: matched.length,
       });
     }
     if (req.method === 'GET' && url.pathname === '/exchange/provider-skills/acme/research/brief') {
-      return json(200, { provider: 'acme', plugin: 'research', skill: 'brief', name: 'Brief', content: '# Brief' });
+      return json(200, providerSkillDetail('acme', 'research', 'brief', '# Brief'));
     }
     if (req.method === 'GET' && url.pathname === '/exchange/provider-skills/acme/research/brief/file') {
-      return json(200, { provider: 'acme', plugin: 'research', skill: 'brief', path: 'SKILL.md', content: '# Brief file' });
+      return json(200, { ...providerSkillDetail('acme', 'research', 'brief', '# Brief file'), path: 'brief/SKILL.md' });
     }
 
     if (req.method === 'GET' && url.pathname.startsWith('/exchange/discover')) {

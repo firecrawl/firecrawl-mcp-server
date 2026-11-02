@@ -1398,7 +1398,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_create_skill@80d2ae65d118": {
+  "firecrawl_create_skill@d5193a2a0bfe": {
     "annotations": {
       "title": "Create Skill",
       "readOnlyHint": false,
@@ -1407,7 +1407,7 @@
       "idempotentHint": false
     },
     "title": "Create Skill",
-    "description": "Save a new skill for the user's team: instructions an agent follows, naming capabilities as @provider/capability. Write name, description and body, or copy a skill with from (a library skill's createTool from firecrawl_find_skills or firecrawl_read_skill does this); fields you also give override the copy. sharing sets who can read it: private, team, or public. A library skill copies its SKILL.md only. The new skill is enabled and listed by firecrawl_find_skills as team:<slug>; a taken slug is a conflict. Save only what the user asked for. Free.",
+    "description": "Save a new skill for the user's team: instructions an agent follows, naming capabilities as @provider/capability. Write name, description and body, or copy a skill with from (a library skill's createTool from firecrawl_find_skills or firecrawl_read_skill does this); fields you also give override the copy. A library skill copies its SKILL.md only. The new skill is enabled and listed by firecrawl_find_skills as team:<slug>; a taken slug is a conflict. On success, show the user the result message, which begins \"Open it in Firecrawl:\" and links to the skill. Save only what the user asked for. Free.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1442,15 +1442,6 @@
           "minLength": 1,
           "maxLength": 64,
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
-        },
-        "sharing": {
-          "description": "Who can read this team skill. \"private\" is the people who edit it, \"team\" is the whole team, and \"public\" is any Firecrawl team. Omit on create for the team default, and on update to leave sharing unchanged.",
-          "type": "string",
-          "enum": [
-            "private",
-            "team",
-            "public"
-          ]
         },
         "requestId": {
           "description": "Reuse after a timeout to recover the same save. A completed save replays instead of running again.",
@@ -1492,7 +1483,7 @@
           ]
         },
         "data": {
-          "description": "The saved skill in `data.alexandria[0].data`: id (team:<slug>), skill, warnings, and a `nextTool` that reads it."
+          "description": "The saved skill in `data.alexandria[0].data`: id (team:<slug>), skill, warnings, openUrl (https://www.firecrawl.dev/app/alexandria/skills/<slug>), message (\"Open it in Firecrawl: <url>\"), and a `nextTool` that reads it."
         },
         "error": {
           "description": "Error message or error object when the call did not succeed."
@@ -2291,7 +2282,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_find_skills@3fce77e194ac": {
+  "firecrawl_find_skills@3c66b8f7d394": {
     "annotations": {
       "title": "Find Skills",
       "readOnlyHint": true,
@@ -2300,7 +2291,7 @@
       "idempotentHint": true
     },
     "title": "Find Skills",
-    "description": "List skills: written instructions for a task that name the Alexandria capabilities to call. Returns Firecrawl's own skills and your team's own skills (ids team:<slug>, listed first), as name, description and file list only. Set provider to list that provider's published skills instead; skills that exist only to be executed are omitted. Choose one and read it with firecrawl_read_skill (each result's nextTool). Use query to match words in a skill's id, name or description; omit it to list every skill. Free.",
+    "description": "List skills: written instructions for a task that name the Alexandria capabilities to call. Returns Firecrawl's own skills and your team's own skills (ids team:<slug>, listed first), as name, description and file list only. Set provider to list that provider's skills instead: provider and any query (sent as q) go to Exchange, and later pages are read until limit is filled. Choose one and read it with firecrawl_read_skill (each result's nextTool). Use query to match words in a skill's id, name or description; omit it to list every skill. Free.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2318,7 +2309,7 @@
           "maximum": 50
         },
         "provider": {
-          "description": "List skills published by this Alexandria provider instead of Firecrawl and team skills. Execution-only skills are omitted.",
+          "description": "List skills published by this Alexandria provider instead of Firecrawl and team skills. Sent to Exchange as provider; a query is sent as q. Later pages are read until limit is filled.",
           "type": "string",
           "minLength": 1,
           "maxLength": 200,
@@ -2362,10 +2353,10 @@
           ]
         },
         "skills": {
-          "description": "That provider's skills. Execution-only skills are omitted. Each has a `nextTool` that reads it with `firecrawl_read_skill`."
+          "description": "That provider's skills in Exchange's shape: `provider` is {slug, name} and `plugin` is {id, displayName}. Each has a `nextTool` that reads it with `firecrawl_read_skill`."
         },
         "total": {
-          "description": "How many provider skills matched before limit.",
+          "description": "How many skills Exchange reported for this provider and query, before limit.",
           "anyOf": [
             {
               "type": "number"
@@ -9011,7 +9002,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_update_skill@13e9c5979e93": {
+  "firecrawl_update_skill@66743de64b0b": {
     "annotations": {
       "title": "Update Skill",
       "readOnlyHint": false,
@@ -9020,7 +9011,7 @@
       "idempotentHint": false
     },
     "title": "Update Skill",
-    "description": "Change one of the user's team skills (team:<slug>): its name, description or body (a new version), whether it is enabled or listed, or its sharing (private, team or public). Pass baseVersion, the version firecrawl_read_skill returned; a skill changed since is refused with conflict, so read it again and reapply. Library skills cannot be changed; copy one with firecrawl_create_skill. Deleting a skill, or turning a disabled skill back on, is done by a team admin in the Firecrawl dashboard. Change only what the user asked for. Free.",
+    "description": "Change one of the user's team skills (team:<slug>): its name, description or body (a new version), or whether it is enabled or listed (discoverable). Pass baseVersion, the version firecrawl_read_skill returned; a skill changed since is refused with conflict, so read it again and reapply. Library skills cannot be changed; copy one with firecrawl_create_skill. Deleting a skill, or turning a disabled skill back on, is done by a team admin in the Firecrawl dashboard. On success, show the user the result message, which begins \"Open it in Firecrawl:\" and links to the skill. Change only what the user asked for. Free.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -9060,15 +9051,6 @@
         "discoverable": {
           "description": "Whether firecrawl_find_skills lists it.",
           "type": "boolean"
-        },
-        "sharing": {
-          "description": "Who can read this team skill. \"private\" is the people who edit it, \"team\" is the whole team, and \"public\" is any Firecrawl team. Omit on create for the team default, and on update to leave sharing unchanged.",
-          "type": "string",
-          "enum": [
-            "private",
-            "team",
-            "public"
-          ]
         },
         "requestId": {
           "description": "Reuse after a timeout to recover the same save. A completed save replays instead of running again.",
@@ -9116,13 +9098,6 @@
             "baseVersion",
             "discoverable"
           ]
-        },
-        {
-          "required": [
-            "id",
-            "baseVersion",
-            "sharing"
-          ]
         }
       ]
     },
@@ -9144,7 +9119,7 @@
           ]
         },
         "data": {
-          "description": "The saved skill in `data.alexandria[0].data`: id (team:<slug>), skill, warnings, and a `nextTool` that reads it."
+          "description": "The saved skill in `data.alexandria[0].data`: id (team:<slug>), skill, warnings, openUrl (https://www.firecrawl.dev/app/alexandria/skills/<slug>), message (\"Open it in Firecrawl: <url>\"), and a `nextTool` that reads it."
         },
         "error": {
           "description": "Error message or error object when the call did not succeed."

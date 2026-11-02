@@ -1191,10 +1191,10 @@ These four tools are the whole skills surface. Team and library skills use the s
 | --- | --- |
 | `firecrawl_find_skills` | `{}`, `{"query":"digest","limit":5}`, or `{"provider":"acme"}` |
 | `firecrawl_read_skill` | `{"id":"team:weekly-digest"}`, `{"id":"deep-research","path":"references/sources.md"}`, or `{"provider":"acme","plugin":"research","skill":"brief"}` |
-| `firecrawl_create_skill` | `{"from":"deep-research","sharing":"team"}` or `{"name":"...","description":"...","body":"..."}` |
-| `firecrawl_update_skill` | `{"id":"team:weekly-digest","baseVersion":2,"sharing":"private"}` |
+| `firecrawl_create_skill` | `{"from":"deep-research"}` or `{"name":"...","description":"...","body":"..."}` |
+| `firecrawl_update_skill` | `{"id":"team:weekly-digest","baseVersion":2,"enabled":false,"discoverable":false}` |
 
-`sharing` is `private`, `team`, or `public`. A library skill cannot be edited; copy it with `firecrawl_create_skill`. There is no delete here. A provider list omits execution-only skills. Set `file: true` on read to fetch that skill's file. The Firecrawl API forwards `GET /exchange/provider-skills` and `GET /exchange/provider-skills/:provider/:plugin/:skill` to Exchange `/v1/provider-skills`.
+A library skill cannot be edited; copy it with `firecrawl_create_skill`. There is no delete here. Update can set `enabled` and `discoverable`. A successful create or update includes `Open it in Firecrawl: https://www.firecrawl.dev/app/alexandria/skills/<slug>` (`<slug>` has no `team:` prefix). Show that line to the user. A provider filter is sent as `provider`, and `query` is sent as `q`; the tool reads later pages until `limit` is filled. Exchange returns `provider` as `{slug, name}` and `plugin` as `{id, displayName}`, with no `skill` field. The read path uses `provider.slug`, `plugin.id`, and the last segment of the skill id. Set `file: true` on read to fetch that skill's file. The Firecrawl API forwards `GET /exchange/provider-skills` and `GET /exchange/provider-skills/:provider/:plugin/:skill` to Exchange `/v1/provider-skills`.
 
 **Execute (`firecrawl_scrape` with `alexandria`):** pass `alexandria` instead of `url` (exactly one of the two; requestId and timeout may also be supplied). A single call or an array of up to ten calls is accepted.
 

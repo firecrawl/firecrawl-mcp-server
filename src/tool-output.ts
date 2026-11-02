@@ -177,8 +177,8 @@ export const findSkillsOutputSchema = z
     data: unknown('Firecrawl and team skills in `data.alexandria[0].data.skills` (team skills first), each with id, name, description, files and a `nextTool` that reads it; `total` counts every match. Absent when provider is set.'),
     error,
     provider: str('Provider whose published skills are in `skills`, when the provider filter was set.'),
-    skills: unknown('That provider\'s skills. Execution-only skills are omitted. Each has a `nextTool` that reads it with `firecrawl_read_skill`.'),
-    total: num('How many provider skills matched before limit.'),
+    skills: unknown('That provider\'s skills in Exchange\'s shape: `provider` is {slug, name} and `plugin` is {id, displayName}. Each has a `nextTool` that reads it with `firecrawl_read_skill`.'),
+    total: num('How many skills Exchange reported for this provider and query, before limit.'),
     ...alexandriaEnvelope,
   })
   .describe('Firecrawl\'s agent skills, the team\'s own, or one provider\'s published skills, as metadata without file contents.');
@@ -203,7 +203,7 @@ export const readSkillOutputSchema = z
 export const writeSkillOutputSchema = z
   .object({
     success,
-    data: unknown('The saved skill in `data.alexandria[0].data`: id (team:<slug>), skill, warnings, and a `nextTool` that reads it.'),
+    data: unknown('The saved skill in `data.alexandria[0].data`: id (team:<slug>), skill, warnings, openUrl (https://www.firecrawl.dev/app/alexandria/skills/<slug>), message ("Open it in Firecrawl: <url>"), and a `nextTool` that reads it.'),
     error,
     ...alexandriaEnvelope,
   })
