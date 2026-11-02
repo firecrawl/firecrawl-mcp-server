@@ -24,7 +24,7 @@
       "firecrawl_check_crawl_status@723e60af703e",
       "firecrawl_agent@abee4c283b19",
       "firecrawl_agent_status@6c6e5f971f8e",
-      "firecrawl_interact@991a480a7fc3",
+      "firecrawl_interact@87c854b2afe3",
       "firecrawl_interact_stop@e5b6a01c6cc2",
       "firecrawl_parse@3238dc451bc0",
       "firecrawl_monitor_create@ff55452c06b2",
