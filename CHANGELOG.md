@@ -1,11 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
-### Changed
-
-- `firecrawl_interact` lists `destructiveHint: true` in its tool annotations. Its clicks, form submissions and scripts run against the live site and can make changes there that are hard to reverse, such as submitting a form, so clients that ask for confirmation before destructive tools now ask before this one. The other annotations are unchanged.
-
 ## [3.36.0] - 2026-10-27
 
 ### Changed
