@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `firecrawl_research_search_papers` takes `sort`: `relevance` (default) or `date_desc`, which returns the newest of the most relevant matches.
+- `firecrawl_research_search_papers` and `firecrawl_research_related_papers` print authors and created and updated dates when the result includes them.
+
 ## [3.36.0] - 2026-10-27
 
 ### Changed
