@@ -62,6 +62,14 @@ test('skill tools refuse unknown or missing arguments before calling Exchange', 
   assert.equal(api.requests.length, before);
 });
 
+test('credentialless self-hosted sessions do not list the skill tools', async (t) => {
+  const { client } = await startStdio(t, { CLOUD_SERVICE: 'false', FIRECRAWL_API_KEY: '', FIRECRAWL_API_URL: 'http://127.0.0.1:9' });
+  const { tools } = await client.request('tools/list', {});
+  for (const name of ['firecrawl_find_skills', 'firecrawl_read_skill', 'firecrawl_create_skill', 'firecrawl_update_skill', 'firecrawl_list_provider_skills', 'firecrawl_read_provider_skill']) {
+    assert.equal(tools.some(tool => tool.name === name), false, name);
+  }
+});
+
 test('keyless sessions do not list the skill tools', async (t) => {
   const { client } = await startStdio(t, { CLOUD_SERVICE: 'false', FIRECRAWL_API_KEY: '', FIRECRAWL_API_URL: '' });
   const { tools } = await client.request('tools/list', {});
@@ -103,6 +111,8 @@ test('write tools refuse bad arguments before calling Exchange', async (t) => {
   await callExpectingError(client, { name: 'firecrawl_create_skill', arguments: { from: 'deep-research', sharing: 'link' } });
   await callExpectingError(client, { name: 'firecrawl_update_skill', arguments: { id: 'team:weekly-digest', baseVersion: 1 } });
   await callExpectingError(client, { name: 'firecrawl_update_skill', arguments: { id: 'deep-research', baseVersion: 1, name: 'x' } });
+  await callExpectingError(client, { name: 'firecrawl_read_provider_skill', arguments: { provider: '..', plugin: 'research', skill: 'brief' } });
+  await callExpectingError(client, { name: 'firecrawl_read_provider_skill', arguments: { provider: 'acme', plugin: '.', skill: 'brief' } });
   assert.equal(api.requests.length, before);
 });
 
@@ -116,9 +126,14 @@ test('provider skills are listed and read through the exchange proxy, without ex
   assert.equal(JSON.stringify(listed).includes('executionOnly'), false);
   assert.equal(JSON.stringify(listed).includes('"skill":"run"'), false);
   assert.deepEqual(listed.skills[0].nextTool, { name: 'firecrawl_read_provider_skill', arguments: { provider: 'acme', plugin: 'research', skill: 'brief' } });
-  const read = toolText(await client.request('tools/call', { name: 'firecrawl_read_provider_skill', arguments: { provider: 'acme', plugin: 'research', skill: 'brief' } }));
+  const readResult = await client.request('tools/call', { name: 'firecrawl_read_provider_skill', arguments: { provider: 'acme', plugin: 'research', skill: 'brief' } });
+  const read = toolText(readResult);
   assert.equal(api.requests.at(-1).url, '/exchange/provider-skills/acme/research/brief');
   assert.equal(read.content, '# Brief');
+  assert.equal(readResult.structuredContent.content, '# Brief');
+  assert.equal(readResult.structuredContent.provider, 'acme');
+  assert.equal(readResult.structuredContent.plugin, 'research');
+  assert.equal(readResult.structuredContent.skill, 'brief');
   const file = toolText(await client.request('tools/call', { name: 'firecrawl_read_provider_skill', arguments: { provider: 'acme', plugin: 'research', skill: 'brief', file: true } }));
   assert.equal(api.requests.at(-1).url, '/exchange/provider-skills/acme/research/brief/file');
   assert.equal(file.content, '# Brief file');

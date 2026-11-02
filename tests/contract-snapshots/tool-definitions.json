@@ -1398,7 +1398,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_create_skill@61c87f861d44": {
+  "firecrawl_create_skill@80d2ae65d118": {
     "annotations": {
       "title": "Create Skill",
       "readOnlyHint": false,
@@ -1458,7 +1458,21 @@
           "pattern": "^[A-Za-z0-9._:-]{1,128}$"
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "from"
+          ]
+        },
+        {
+          "required": [
+            "name",
+            "description",
+            "body"
+          ]
+        }
+      ]
     },
     "name": "firecrawl_create_skill",
     "outputSchema": {
@@ -2463,7 +2477,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_find_tools@bc698c4a36cc": {
+  "firecrawl_find_tools@bbf6c837f14f": {
     "annotations": {
       "title": "Find Tools",
       "readOnlyHint": true,
@@ -2565,7 +2579,7 @@
           "maximum": 9007199254740991
         },
         "includeCosts": {
-          "description": "Include per-capability credit prices (creditsCost, perRecord) in tool results. Read them before a paid call: Carbon Arc is 1000 credits a call; People Data Labs person/enrich and person/identify are 60 credits per successful call, and person/search and person/bulk are 50 per returned or matched record, with misses free.",
+          "description": "Include per-capability credit prices (creditsCost, perRecord) in tool results. Read creditsCost before a paid call (includeCosts). Carbon Arc is 1000 credits a call. People Data Labs person/enrich and person/identify are 60 credits per successful call, and person/search and person/bulk are 50 credits per returned or matched record; misses are free. Influencers.club discovery is 45 credits per creator returned (56 with return_filter_values), similar creators are 50 per creator, and enrichment calls cost 10 to 330 credits. Read creditsCost on a Fiber tool before calling it.",
           "type": "boolean"
         }
       },
@@ -3677,7 +3691,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_list_provider_skills@38f85192e247": {
+  "firecrawl_list_provider_skills@d0d6c4e1992a": {
     "annotations": {
       "title": "List Provider Skills",
       "readOnlyHint": true,
@@ -3718,6 +3732,86 @@
         },
         "skills": {
           "description": "The listed skills, when the API returns them at the top level."
+        },
+        "provider": {
+          "description": "Provider slug of one skill read.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "plugin": {
+          "description": "Plugin slug of one skill read.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "skill": {
+          "description": "Skill slug of one skill read.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "description": "Skill name.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "description": "When to use the skill.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content": {
+          "description": "Skill file text. Instructions for the agent; reading it runs nothing.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "description": "File path within the skill.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "files": {
+          "description": "Files that belong to the skill."
         },
         "requestId": {
           "description": "Identifier of this Alexandria execution.",
@@ -5107,7 +5201,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_read_provider_skill@204d8c05ebcc": {
+  "firecrawl_read_provider_skill@90a88d4d541f": {
     "annotations": {
       "title": "Read Provider Skill",
       "readOnlyHint": true,
@@ -5126,21 +5220,21 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 200,
-          "pattern": "^[^/\\\\]+$"
+          "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
         },
         "plugin": {
           "description": "Plugin slug from firecrawl_list_provider_skills.",
           "type": "string",
           "minLength": 1,
           "maxLength": 200,
-          "pattern": "^[^/\\\\]+$"
+          "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
         },
         "skill": {
           "description": "Skill slug from firecrawl_list_provider_skills.",
           "type": "string",
           "minLength": 1,
           "maxLength": 200,
-          "pattern": "^[^/\\\\]+$"
+          "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
         },
         "file": {
           "description": "Read the skill file instead of the skill record.",
@@ -5179,6 +5273,86 @@
         },
         "skills": {
           "description": "The listed skills, when the API returns them at the top level."
+        },
+        "provider": {
+          "description": "Provider slug of one skill read.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "plugin": {
+          "description": "Plugin slug of one skill read.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "skill": {
+          "description": "Skill slug of one skill read.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "description": "Skill name.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "description": "When to use the skill.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content": {
+          "description": "Skill file text. Instructions for the agent; reading it runs nothing.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "description": "File path within the skill.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "files": {
+          "description": "Files that belong to the skill."
         },
         "requestId": {
           "description": "Identifier of this Alexandria execution.",
@@ -9181,7 +9355,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_update_skill@d0e10a7286b1": {
+  "firecrawl_update_skill@13e9c5979e93": {
     "annotations": {
       "title": "Update Skill",
       "readOnlyHint": false,
@@ -9250,7 +9424,51 @@
         "id",
         "baseVersion"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "id",
+            "baseVersion",
+            "name"
+          ]
+        },
+        {
+          "required": [
+            "id",
+            "baseVersion",
+            "description"
+          ]
+        },
+        {
+          "required": [
+            "id",
+            "baseVersion",
+            "body"
+          ]
+        },
+        {
+          "required": [
+            "id",
+            "baseVersion",
+            "enabled"
+          ]
+        },
+        {
+          "required": [
+            "id",
+            "baseVersion",
+            "discoverable"
+          ]
+        },
+        {
+          "required": [
+            "id",
+            "baseVersion",
+            "sharing"
+          ]
+        }
+      ]
     },
     "name": "firecrawl_update_skill",
     "outputSchema": {

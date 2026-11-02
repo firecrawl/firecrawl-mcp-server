@@ -204,6 +204,14 @@ export const providerSkillsOutputSchema = z
     data: unknown('Provider-published skills. Execution-only skills are omitted. Each listed skill has a `nextTool` that reads it.'),
     error,
     skills: unknown('The listed skills, when the API returns them at the top level.'),
+    provider: str('Provider slug of one skill read.'),
+    plugin: str('Plugin slug of one skill read.'),
+    skill: str('Skill slug of one skill read.'),
+    name: str('Skill name.'),
+    description: str('When to use the skill.'),
+    content: str('Skill file text. Instructions for the agent; reading it runs nothing.'),
+    path: str('File path within the skill.'),
+    files: unknown('Files that belong to the skill.'),
     ...alexandriaEnvelope,
   })
   .describe('Provider-published skills an agent can read. Execution-only skills are not listed.');

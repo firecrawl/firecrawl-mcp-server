@@ -344,8 +344,11 @@ export function queryEmbedRetryDelayMs(retryAfter: string | undefined, now = Dat
   const raw = retryAfter?.trim();
   let ms = QUERY_EMBED_RETRY_DEFAULT_MS;
   if (raw) {
-    if (/^\d+$/.test(raw)) ms = Number(raw) * 1000;
-    else {
+    if (/^\d+$/.test(raw)) {
+      const seconds = Number(raw);
+      // A huge digit string is Infinity. Clamp before multiplying so it still waits the cap, not zero.
+      ms = Number.isFinite(seconds) ? Math.min(seconds * 1000, QUERY_EMBED_RETRY_CAP_MS) : QUERY_EMBED_RETRY_CAP_MS;
+    } else {
       const at = Date.parse(raw);
       ms = Number.isFinite(at) ? at - now : QUERY_EMBED_RETRY_DEFAULT_MS;
     }

@@ -11,4 +11,5 @@ test('query embed retry waits for Retry-After and caps the wait at about 3s', ()
   assert.equal(queryEmbedRetryDelayMs(new Date(now + 2000).toUTCString(), now), 2000);
   assert.equal(queryEmbedRetryDelayMs(new Date(now + 10_000).toUTCString(), now), QUERY_EMBED_RETRY_CAP_MS);
   assert.equal(queryEmbedRetryDelayMs(new Date(now - 1000).toUTCString(), now), 0);
+  assert.equal(queryEmbedRetryDelayMs('9'.repeat(400)), QUERY_EMBED_RETRY_CAP_MS);
 });

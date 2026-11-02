@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { toJSONSchema } from 'zod/v4/core';
 import { httpUrl } from './tool-arguments.js';
 
 const catalogueTypes = ['alexandria', 'exchange'] as const;
@@ -50,6 +51,10 @@ export function searchQueryIsValid(args: { query?: string }): boolean {
   return !!args.query?.trim();
 }
 
+/** Prices from merged catalogue changes. Not a full price list. Declared before the schemas that quote it. */
+export const ALEXANDRIA_NOTABLE_PRICES =
+  'Read creditsCost before a paid call (includeCosts). Carbon Arc is 1000 credits a call. People Data Labs person/enrich and person/identify are 60 credits per successful call, and person/search and person/bulk are 50 credits per returned or matched record; misses are free. Influencers.club discovery is 45 credits per creator returned (56 with return_filter_values), similar creators are 50 per creator, and enrichment calls cost 10 to 330 credits. Read creditsCost on a Fiber tool before calling it.';
+
 export const findToolsSchema = z
   .object({
     query: z.string().trim().min(1).max(2000).optional().describe('Semantic lookup of tools for the data you need. Selectors constrain the search.'),
@@ -66,7 +71,7 @@ export const findToolsSchema = z
     expand: z.array(z.enum(['options', 'response', 'examples'])).optional().describe('Use ["options", "response"] for inputs and output shape without example payloads; [] keeps results compact. Omit for full contracts on selected capabilities.'),
     limit: z.number().int().min(1).max(100).optional(),
     offset: z.number().int().nonnegative().optional(),
-    includeCosts: z.boolean().optional().describe('Include per-capability credit prices (creditsCost, perRecord) in tool results. Read them before a paid call: Carbon Arc is 1000 credits a call; People Data Labs person/enrich and person/identify are 60 credits per successful call, and person/search and person/bulk are 50 per returned or matched record, with misses free.'),
+    includeCosts: z.boolean().optional().describe('Include per-capability credit prices (creditsCost, perRecord) in tool results. ' + ALEXANDRIA_NOTABLE_PRICES),
   })
   .strict();
 
@@ -104,48 +109,117 @@ export const readSkillSchema = z
   })
   .strict();
 
-export const createSkillSchema = z
-  .object({
-    from: z.string().trim().min(1).max(200).optional().describe('A skill ID from firecrawl_find_skills to copy: a library skill or team:<slug>. Fields you also give override the copy.'),
-    name: z.string().trim().min(1).max(1000).optional().describe('Skill name; required without from.'),
-    description: z.string().trim().min(1).max(5000).optional().describe('When to use the skill; required without from.'),
-    body: z.string().min(1).max(200_000).optional().describe('The instructions, in Markdown; required without from. Reference capabilities as @provider/capability.'),
-    slug: skillSlug.optional().describe('Lowercase words joined by hyphens; defaults to one made from the name.'),
+const createSkillFrom = z.string().trim().min(1).max(200).describe('A skill ID from firecrawl_find_skills to copy: a library skill or team:<slug>. Fields you also give override the copy.');
+const createSkillName = z.string().trim().min(1).max(1000).describe('Skill name; required without from.');
+const createSkillDescription = z.string().trim().min(1).max(5000).describe('When to use the skill; required without from.');
+const createSkillBody = z.string().min(1).max(200_000).describe('The instructions, in Markdown; required without from. Reference capabilities as @provider/capability.');
+const createSkillSlug = skillSlug.optional().describe('Lowercase words joined by hyphens; defaults to one made from the name.');
+
+/**
+ * Runtime validation stays a union. The advertised schema stays `type: object`
+ * (clients reject a bare anyOf) and adds anyOf required-sets for the same rule.
+ */
+function advertiseAnyOf<T extends z.ZodType>(schema: T, shape: z.ZodType, requirements: { required: string[] }[]): T {
+  const json = toJSONSchema(shape, { target: 'draft-7' }) as Record<string, unknown>;
+  delete json.$schema;
+  json.anyOf = requirements;
+  // A fresh copy each time: JSON Schema conversion mutates the object it is given,
+  // and tools/list can run concurrently.
+  (schema._zod as { toJSONSchema?: () => unknown }).toJSONSchema = () => structuredClone(json);
+  return schema;
+}
+
+const createSkillShape = z.object({
+  from: createSkillFrom.optional(),
+  name: createSkillName.optional(),
+  description: createSkillDescription.optional(),
+  body: createSkillBody.optional(),
+  slug: createSkillSlug,
+  sharing: skillSharingSchema.optional(),
+  requestId: skillRequestId,
+}).strict();
+
+// A union, not a refine, so callers cannot send {} or a partial write. The advertised schema repeats that rule.
+export const createSkillSchema = advertiseAnyOf(z.union([
+  z.object({
+    from: createSkillFrom,
+    name: createSkillName.optional(),
+    description: createSkillDescription.optional(),
+    body: createSkillBody.optional(),
+    slug: createSkillSlug,
     sharing: skillSharingSchema.optional(),
     requestId: skillRequestId,
-  })
-  .strict()
-  .refine(
-    (value) => value.from !== undefined || (value.name !== undefined && value.description !== undefined && value.body !== undefined),
-    { message: 'Give name, description and body, or from to copy a skill.' }
-  );
-
-const skillChangeKeys = ['name', 'description', 'body', 'enabled', 'discoverable', 'sharing'] as const;
-
-export const updateSkillSchema = z
-  .object({
-    id: z.string().trim().max(100).regex(/^team:[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Only team skills (team:<slug>) can be changed; copy a library skill with firecrawl_create_skill.').describe('team:<slug> from firecrawl_find_skills. Library skills cannot be changed; copy one with firecrawl_create_skill.'),
-    baseVersion: z.number().int().min(1).describe('The version firecrawl_read_skill returned. A skill changed since is refused with conflict: read it again and reapply.'),
-    name: z.string().trim().min(1).max(1000).optional(),
-    description: z.string().trim().min(1).max(5000).optional(),
-    body: z.string().min(1).max(200_000).optional().describe('New instructions, in full.'),
-    enabled: z.boolean().optional().describe('Turn the skill on or off. A team admin turns a skill back on, or deletes one, in the Firecrawl dashboard.'),
-    discoverable: z.boolean().optional().describe('Whether firecrawl_find_skills lists it.'),
+  }).strict(),
+  z.object({
+    from: createSkillFrom.optional(),
+    name: createSkillName,
+    description: createSkillDescription,
+    body: createSkillBody,
+    slug: createSkillSlug,
     sharing: skillSharingSchema.optional(),
     requestId: skillRequestId,
-  })
-  .strict()
-  .refine(
-    (value) => skillChangeKeys.some((key) => value[key] !== undefined),
-    { message: 'Nothing to change: give name, description, body, enabled, discoverable or sharing.' }
-  );
+  }).strict(),
+]), createSkillShape, [{ required: ['from'] }, { required: ['name', 'description', 'body'] }]);
+
+const updateSkillId = z.string().trim().max(100).regex(/^team:[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Only team skills (team:<slug>) can be changed; copy a library skill with firecrawl_create_skill.').describe('team:<slug> from firecrawl_find_skills. Library skills cannot be changed; copy one with firecrawl_create_skill.');
+const updateSkillBaseVersion = z.number().int().min(1).describe('The version firecrawl_read_skill returned. A skill changed since is refused with conflict: read it again and reapply.');
+const updateSkillName = z.string().trim().min(1).max(1000);
+const updateSkillDescription = z.string().trim().min(1).max(5000);
+const updateSkillBody = z.string().min(1).max(200_000).describe('New instructions, in full.');
+const updateSkillEnabled = z.boolean().describe('Turn the skill on or off. A team admin turns a skill back on, or deletes one, in the Firecrawl dashboard.');
+const updateSkillDiscoverable = z.boolean().describe('Whether firecrawl_find_skills lists it.');
+
+function updateSkillBranch(
+  change: 'name' | 'description' | 'body' | 'enabled' | 'discoverable' | 'sharing'
+) {
+  return z.object({
+    id: updateSkillId,
+    baseVersion: updateSkillBaseVersion,
+    name: change === 'name' ? updateSkillName : updateSkillName.optional(),
+    description: change === 'description' ? updateSkillDescription : updateSkillDescription.optional(),
+    body: change === 'body' ? updateSkillBody : updateSkillBody.optional(),
+    enabled: change === 'enabled' ? updateSkillEnabled : updateSkillEnabled.optional(),
+    discoverable: change === 'discoverable' ? updateSkillDiscoverable : updateSkillDiscoverable.optional(),
+    sharing: change === 'sharing' ? skillSharingSchema : skillSharingSchema.optional(),
+    requestId: skillRequestId,
+  }).strict();
+}
+
+const updateSkillShape = z.object({
+  id: updateSkillId,
+  baseVersion: updateSkillBaseVersion,
+  name: updateSkillName.optional(),
+  description: updateSkillDescription.optional(),
+  body: updateSkillBody.optional(),
+  enabled: updateSkillEnabled.optional(),
+  discoverable: updateSkillDiscoverable.optional(),
+  sharing: skillSharingSchema.optional(),
+  requestId: skillRequestId,
+}).strict();
+
+// Each branch requires one change, so a call with only id and baseVersion is rejected. The advertised schema stays an object.
+export const updateSkillSchema = advertiseAnyOf(z.union([
+  updateSkillBranch('name'),
+  updateSkillBranch('description'),
+  updateSkillBranch('body'),
+  updateSkillBranch('enabled'),
+  updateSkillBranch('discoverable'),
+  updateSkillBranch('sharing'),
+]), updateSkillShape, [
+  { required: ['id', 'baseVersion', 'name'] },
+  { required: ['id', 'baseVersion', 'description'] },
+  { required: ['id', 'baseVersion', 'body'] },
+  { required: ['id', 'baseVersion', 'enabled'] },
+  { required: ['id', 'baseVersion', 'discoverable'] },
+  { required: ['id', 'baseVersion', 'sharing'] },
+]);
 
 const skillPathSegment = z
   .string()
   .trim()
   .min(1)
   .max(200)
-  .regex(/^[^/\\]+$/, 'A skill address segment cannot contain a slash.');
+  .regex(/^(?!\.{1,2}$)[^/\\]+$/, 'A skill address segment cannot contain a slash or be . or ..');
 
 export const listProviderSkillsSchema = z.object({}).strict();
 
@@ -249,10 +323,6 @@ export const ALEXANDRIA_CONTRACT_GUIDANCE =
   'The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and a key field under response (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination.';
 export const ALEXANDRIA_TERMS_GUIDANCE =
   'Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.';
-
-/** Prices and limits from merged catalogue changes. Not a full price list. */
-export const ALEXANDRIA_NOTABLE_PRICES =
-  'Read creditsCost before a paid call (includeCosts). Carbon Arc is 1000 credits a call. People Data Labs person/enrich and person/identify are 60 credits per successful call, and person/search and person/bulk are 50 credits per returned or matched record; misses are free. Influencers.club discovery is 45 credits per creator returned (56 with return_filter_values), similar creators are 50 per creator, and enrichment calls cost 10 to 330 credits. Read creditsCost on a Fiber tool before calling it.';
 
 export const INDEX_DAILY_LIMIT_NOTE =
   'These calls are free. This index allows 1000 calls a day on Free, Hobby and Standard, 2000 on Growth, and unlimited calls on Scale and Enterprise. Past the limit the response is HTTP 429 with Retry-After until 00:00 UTC.';

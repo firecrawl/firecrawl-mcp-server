@@ -1183,6 +1183,8 @@ are 50 per creator, and enrichment calls cost 10 to 330 credits. Read
 Index calls are free and count toward a daily plan limit: 1000 a day on Free,
 Hobby and Standard, 2000 on Growth, and unlimited on Scale and Enterprise.
 
+These controls require the matching Alexandria API deployment.
+
 **Skills (`firecrawl_find_skills`, `firecrawl_read_skill`, `firecrawl_create_skill`, `firecrawl_update_skill`):**
 
 These call the same `/v2/scrape` capabilities as the Firecrawl CLI (`find-skills`, `read-skill`, `create-skill`, `update-skill`). They are free, need an API key, and are not on the search-only endpoint.
@@ -1199,8 +1201,6 @@ These call the same `/v2/scrape` capabilities as the Firecrawl CLI (`find-skills
 **Provider skills (`firecrawl_list_provider_skills`, `firecrawl_read_provider_skill`):**
 
 These read `GET /exchange/provider-skills` and `GET /exchange/provider-skills/:provider/:plugin/:skill` (the Firecrawl API forwards those to Exchange `/v1/provider-skills`). Skills marked execution-only are left out of the list. Set `file: true` to read the skill file.
-
-These controls require the matching Alexandria API deployment.
 
 **Execute (`firecrawl_scrape` with `alexandria`):** pass `alexandria` instead of `url` (exactly one of the two; requestId and timeout may also be supplied). A single call or an array of up to ten calls is accepted.
 
