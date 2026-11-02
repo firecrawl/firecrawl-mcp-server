@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- `firecrawl_feedback` and `firecrawl_search_feedback` forward the API's `details` when a submission is rejected as `INVALID_BODY`, in both the text block and `structuredContent`, so an agent can see which field to correct instead of retrying the same payload. Other rejections are unchanged: the API sends no `details` for them, so the key is left out.
+
 ## [3.36.0] - 2026-10-27
 
 ### Changed
