@@ -11,6 +11,7 @@
 
 import { z } from 'zod';
 import { type ContentResult, type McpRuntime, UserError } from './mcp/runtime.js';
+import { INDEX_DAILY_LIMIT_NOTE } from './alexandria';
 import { originHeaders, requestOrigin } from './origin';
 import {
   deprecatedToolOutputSchema,
@@ -236,6 +237,8 @@ Search paper metadata and abstracts with a natural-language query across the ind
 Several distinct framings of the same question surface different papers than a single query does.
 
 Returns ranked papers with canonical IDs, titles, authors, and abstracts.
+
+${INDEX_DAILY_LIMIT_NOTE}
 `,
     outputSchema: researchSearchOutputSchema,
     parameters: z.object({
@@ -326,6 +329,8 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
     },
     description: `
 Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DOI identifier. Returns the title, abstract, authors, categories, source IDs, and dates as markdown.
+
+${INDEX_DAILY_LIMIT_NOTE}
 `,
     outputSchema: researchPaperOutputSchema,
     parameters: z.object({
@@ -370,6 +375,8 @@ Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DO
 Find citation-graph candidates from one to ten \`seed_ids\`; the first ID is the primary seed and later IDs are anchors. \`mode\` defaults to \`similar\` (co-citation/bibliographic coupling); \`citers\` returns papers citing a seed and \`references\` papers cited by a seed. \`intent\` ranks candidates.
 
 Returns ranked candidates and the evaluated pool size.
+
+${INDEX_DAILY_LIMIT_NOTE}
 `,
     outputSchema: researchRelatedOutputSchema,
     parameters: z.object({
@@ -437,6 +444,8 @@ Returns ranked candidates and the evaluated pool size.
 Retrieve in-body passages from one paper that are relevant to a specific question. Full text is available only for indexed papers; \`k\` controls the number of passages.
 
 Returns matching passages or a notice when full text is unavailable.
+
+${INDEX_DAILY_LIMIT_NOTE}
 `,
     outputSchema: researchReadOutputSchema,
     parameters: z.object({

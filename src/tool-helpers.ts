@@ -318,6 +318,74 @@ export async function relayExchangeError(
   }
 }
 
+export const QUERY_EMBED_RETRY_CAP_MS = 3_000;
+const QUERY_EMBED_RETRY_DEFAULT_MS = 1_000;
+
+export function isQueryEmbedUnavailable(error: unknown): boolean {
+  const response = (error as { response?: { status?: number; data?: { code?: unknown } } } | null)?.response;
+  return response?.status === 503 && response.data?.code === 'query_embed_unavailable';
+}
+
+function headerValue(headers: unknown, name: string): string | undefined {
+  if (!headers || typeof headers !== 'object') return undefined;
+  const record = headers as Record<string, unknown> & { get?: (header: string) => unknown };
+  const direct = record[name] ?? record[name.toLowerCase()];
+  const value = Array.isArray(direct) ? direct[0] : direct;
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (typeof record.get === 'function') {
+    const got = record.get(name);
+    if (typeof got === 'string' && got.trim()) return got.trim();
+  }
+  return undefined;
+}
+
+/** Wait implied by Retry-After, usually 1s, never more than about 3s. */
+export function queryEmbedRetryDelayMs(retryAfter: string | undefined, now = Date.now()): number {
+  const raw = retryAfter?.trim();
+  let ms = QUERY_EMBED_RETRY_DEFAULT_MS;
+  if (raw) {
+    if (/^\d+$/.test(raw)) ms = Number(raw) * 1000;
+    else {
+      const at = Date.parse(raw);
+      ms = Number.isFinite(at) ? at - now : QUERY_EMBED_RETRY_DEFAULT_MS;
+    }
+  }
+  if (!Number.isFinite(ms) || ms < 0) ms = 0;
+  return Math.min(ms, QUERY_EMBED_RETRY_CAP_MS);
+}
+
+const queryEmbedRetryMessage =
+  'Alexandria discovery could not embed the query (query_embed_unavailable) after one retry. This is temporary; retry the same call in a few seconds.';
+
+/**
+ * One retry when find-tools or discovery answers 503 query_embed_unavailable.
+ * The second failure is a retryable error and is not attempted again.
+ */
+export async function retryQueryEmbedUnavailable<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (!isQueryEmbedUnavailable(error)) throw error;
+    const headers = (error as { response?: { headers?: unknown } }).response?.headers;
+    const delayMs = queryEmbedRetryDelayMs(headerValue(headers, 'retry-after'));
+    if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+    try {
+      return await run();
+    } catch (again) {
+      if (!isQueryEmbedUnavailable(again)) throw again;
+      throw new UserError(queryEmbedRetryMessage, {
+        success: false,
+        error: {
+          code: 'query_embed_unavailable',
+          status: 503,
+          message: queryEmbedRetryMessage,
+          retryable: true,
+        },
+      });
+    }
+  }
+}
+
 /** Retries without Alexandria, on fallbackSources, when tools the caller did not ask for are refused. */
 export async function postSearchWithFallback(
   client: any,

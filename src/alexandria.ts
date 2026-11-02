@@ -66,9 +66,172 @@ export const findToolsSchema = z
     expand: z.array(z.enum(['options', 'response', 'examples'])).optional().describe('Use ["options", "response"] for inputs and output shape without example payloads; [] keeps results compact. Omit for full contracts on selected capabilities.'),
     limit: z.number().int().min(1).max(100).optional(),
     offset: z.number().int().nonnegative().optional(),
-    includeCosts: z.boolean().optional().describe('Include per-capability credit prices (creditsCost, perRecord) in tool results.'),
+    includeCosts: z.boolean().optional().describe('Include per-capability credit prices (creditsCost, perRecord) in tool results. Read them before a paid call: Carbon Arc is 1000 credits a call; People Data Labs person/enrich and person/identify are 60 credits per successful call, and person/search and person/bulk are 50 per returned or matched record, with misses free.'),
   })
   .strict();
+
+const skillSlug = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'slug is lowercase letters and digits in words joined by single hyphens');
+
+/** Who can read a team skill, forwarded as the Exchange `sharing` option. */
+export const skillSharingSchema = z
+  .enum(['private', 'team', 'public'])
+  .describe('Who can read this team skill. "private" is the people who edit it, "team" is the whole team, and "public" is any Firecrawl team. Omit on create for the team default, and on update to leave sharing unchanged.');
+
+const skillRequestId = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z0-9._:-]{1,128}$/, 'requestId is 1-128 letters, digits, dots, underscores, colons or hyphens')
+  .optional()
+  .describe('Reuse after a timeout to recover the same save. A completed save replays instead of running again.');
+
+export const findSkillsSchema = z
+  .object({
+    query: z.string().trim().min(1).max(2000).optional().describe('Words that must all appear in a skill\'s id, name or description. Omit to list every skill.'),
+    limit: z.number().int().min(1).max(50).optional().describe('Most skills to return; defaults to 20.'),
+  })
+  .strict();
+
+export const readSkillSchema = z
+  .object({
+    id: z.string().trim().min(1).max(200).describe('Skill ID from firecrawl_find_skills; team:<slug> for a team skill.'),
+    path: z.string().trim().min(1).max(500).optional().describe('A file from the skill\'s files list; defaults to SKILL.md.'),
+    version: z.number().int().min(1).optional().describe('A team skill only: an earlier kept version; defaults to the current one.'),
+  })
+  .strict();
+
+export const createSkillSchema = z
+  .object({
+    from: z.string().trim().min(1).max(200).optional().describe('A skill ID from firecrawl_find_skills to copy: a library skill or team:<slug>. Fields you also give override the copy.'),
+    name: z.string().trim().min(1).max(1000).optional().describe('Skill name; required without from.'),
+    description: z.string().trim().min(1).max(5000).optional().describe('When to use the skill; required without from.'),
+    body: z.string().min(1).max(200_000).optional().describe('The instructions, in Markdown; required without from. Reference capabilities as @provider/capability.'),
+    slug: skillSlug.optional().describe('Lowercase words joined by hyphens; defaults to one made from the name.'),
+    sharing: skillSharingSchema.optional(),
+    requestId: skillRequestId,
+  })
+  .strict()
+  .refine(
+    (value) => value.from !== undefined || (value.name !== undefined && value.description !== undefined && value.body !== undefined),
+    { message: 'Give name, description and body, or from to copy a skill.' }
+  );
+
+const skillChangeKeys = ['name', 'description', 'body', 'enabled', 'discoverable', 'sharing'] as const;
+
+export const updateSkillSchema = z
+  .object({
+    id: z.string().trim().max(100).regex(/^team:[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Only team skills (team:<slug>) can be changed; copy a library skill with firecrawl_create_skill.').describe('team:<slug> from firecrawl_find_skills. Library skills cannot be changed; copy one with firecrawl_create_skill.'),
+    baseVersion: z.number().int().min(1).describe('The version firecrawl_read_skill returned. A skill changed since is refused with conflict: read it again and reapply.'),
+    name: z.string().trim().min(1).max(1000).optional(),
+    description: z.string().trim().min(1).max(5000).optional(),
+    body: z.string().min(1).max(200_000).optional().describe('New instructions, in full.'),
+    enabled: z.boolean().optional().describe('Turn the skill on or off. A team admin turns a skill back on, or deletes one, in the Firecrawl dashboard.'),
+    discoverable: z.boolean().optional().describe('Whether firecrawl_find_skills lists it.'),
+    sharing: skillSharingSchema.optional(),
+    requestId: skillRequestId,
+  })
+  .strict()
+  .refine(
+    (value) => skillChangeKeys.some((key) => value[key] !== undefined),
+    { message: 'Nothing to change: give name, description, body, enabled, discoverable or sharing.' }
+  );
+
+const skillPathSegment = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .regex(/^[^/\\]+$/, 'A skill address segment cannot contain a slash.');
+
+export const listProviderSkillsSchema = z.object({}).strict();
+
+export const readProviderSkillSchema = z
+  .object({
+    provider: skillPathSegment.describe('Provider slug from firecrawl_list_provider_skills.'),
+    plugin: skillPathSegment.describe('Plugin slug from firecrawl_list_provider_skills.'),
+    skill: skillPathSegment.describe('Skill slug from firecrawl_list_provider_skills.'),
+    file: z.boolean().optional().describe('Read the skill file instead of the skill record.'),
+  })
+  .strict();
+
+const toolFor = (request: any) => {
+  if (request?.provider !== 'firecrawl' || !request.options) return undefined;
+  if (request.capability === 'read-skill') return { name: 'firecrawl_read_skill', arguments: request.options };
+  if (request.capability === 'create-skill') return { name: 'firecrawl_create_skill', arguments: request.options };
+  return undefined;
+};
+
+/**
+ * Skill results name their follow-up calls as tools: each listed skill the read that discloses
+ * it, a library skill the create that copies it, and a create or update the read of the saved skill.
+ */
+export function withSkillNavigation(envelope: any) {
+  const data = envelope?.data?.alexandria?.[0]?.data;
+  if (!data) return envelope;
+  for (const skill of Array.isArray(data.skills) ? data.skills : []) {
+    if (typeof skill?.id === 'string') skill.nextTool = { name: 'firecrawl_read_skill', arguments: { id: skill.id } };
+    const create = toolFor(skill?.create);
+    if (create) skill.createTool = create;
+  }
+  const create = toolFor(data.create);
+  if (create) data.createTool = create;
+  const next = toolFor(data.next);
+  if (next) data.nextTool = next;
+  return envelope;
+}
+
+/** A provider skill that may be executed but must not be offered in a listing. */
+export function isExecutionOnlySkill(skill: any): boolean {
+  if (!skill || typeof skill !== 'object' || Array.isArray(skill)) return false;
+  if (skill.executionOnly === true || skill.execution_only === true) return true;
+  const visibility = skill.visibility ?? skill.listing ?? skill.mode;
+  return visibility === 'execution' || visibility === 'execution-only' || visibility === 'execute';
+}
+
+/** Drops execution-only skills from every list in a provider-skills payload. */
+export function withoutExecutionOnlySkills(value: any): any {
+  if (Array.isArray(value)) return value.filter((item) => !isExecutionOnlySkill(item)).map(withoutExecutionOnlySkills);
+  if (!value || typeof value !== 'object') return value;
+  const copy: any = {};
+  for (const [key, entry] of Object.entries(value)) copy[key] = withoutExecutionOnlySkills(entry);
+  return copy;
+}
+
+function providerSkillAddress(skill: any): { provider: string; plugin: string; skill: string } | undefined {
+  const provider = typeof skill?.provider === 'string' ? skill.provider : undefined;
+  const plugin = typeof skill?.plugin === 'string' ? skill.plugin : undefined;
+  const name = typeof skill?.skill === 'string' ? skill.skill : undefined;
+  if (provider && plugin && name && !provider.includes('/') && !plugin.includes('/') && !name.includes('/')) {
+    return { provider, plugin, skill: name };
+  }
+  return undefined;
+}
+
+/** Each listed provider skill gets the read that returns it. Execution-only skills are already gone. */
+export function withProviderSkillNavigation(body: any) {
+  const root = body && typeof body === 'object' && !Array.isArray(body) ? withoutExecutionOnlySkills(body) : { data: withoutExecutionOnlySkills(body) };
+  const visit = (node: any) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+      return;
+    }
+    for (const key of ['skills', 'items'] as const) {
+      if (!Array.isArray(node[key])) continue;
+      node[key] = node[key].map((skill: any) => {
+        const address = providerSkillAddress(skill);
+        return address ? { ...skill, nextTool: { name: 'firecrawl_read_provider_skill', arguments: address } } : skill;
+      });
+    }
+    for (const value of Object.values(node)) visit(value);
+  };
+  visit(root);
+  return root.success === undefined ? { success: true, ...root } : root;
+}
 
 export const ALEXANDRIA_CATALOGUE_VERTICALS =
   'companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more';
@@ -86,6 +249,13 @@ export const ALEXANDRIA_CONTRACT_GUIDANCE =
   'The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and a key field under response (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination.';
 export const ALEXANDRIA_TERMS_GUIDANCE =
   'Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.';
+
+/** Prices and limits from merged catalogue changes. Not a full price list. */
+export const ALEXANDRIA_NOTABLE_PRICES =
+  'Read creditsCost before a paid call (includeCosts). Carbon Arc is 1000 credits a call. People Data Labs person/enrich and person/identify are 60 credits per successful call, and person/search and person/bulk are 50 credits per returned or matched record; misses are free. Influencers.club discovery is 45 credits per creator returned (56 with return_filter_values), similar creators are 50 per creator, and enrichment calls cost 10 to 330 credits. Read creditsCost on a Fiber tool before calling it.';
+
+export const INDEX_DAILY_LIMIT_NOTE =
+  'These calls are free. This index allows 1000 calls a day on Free, Hobby and Standard, 2000 on Growth, and unlimited calls on Scale and Enterprise. Past the limit the response is HTTP 429 with Retry-After until 00:00 UTC.';
 
 export function findToolsOptions(args: z.infer<typeof findToolsSchema>) {
   const selected = Boolean(args.query || args.providers?.length || args.categories?.length || args.groups?.length || args.capabilities?.length || args.urls?.length);

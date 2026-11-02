@@ -15,25 +15,15 @@
 - `firecrawl_feedback` and `firecrawl_search_feedback` add the API's validation messages to `error` when it rejects a body with `INVALID_BODY`, for example `Invalid request body: Feedback must be substantive. 'good' requires valuableSources or valuableResults; ...`. The error used to read only `Invalid request body`, so an agent could not tell which rule its call broke and sent the same call again. Other rejections read as before, and the output schema is unchanged.
 
 ## [3.37.0] - 2026-11-04
-
 ### Added
 
-- `firecrawl_research_search_papers` takes `sort`: `relevance` (default) or `date_desc`, which returns the newest of the most relevant matches.
-- `firecrawl_research_search_papers` and `firecrawl_research_related_papers` print authors and created and updated dates when the result includes them.
+- `firecrawl_find_skills`, `firecrawl_read_skill`, `firecrawl_create_skill` and `firecrawl_update_skill` expose Alexandria skills the way `firecrawl_find_tools` exposes the catalogue. They call `firecrawl/find-skills`, `firecrawl/read-skill`, `firecrawl/create-skill` and `firecrawl/update-skill` through `POST /v2/scrape`, the same route as the Firecrawl CLI. Create and update take `sharing` (`private`, `team` or `public`). All four are free, need an API key, and are absent from keyless sessions and the search-only surface.
+- `firecrawl_list_provider_skills` and `firecrawl_read_provider_skill` read provider-published skills through `GET /exchange/provider-skills` and `GET /exchange/provider-skills/:provider/:plugin/:skill`, which the Firecrawl API forwards to Exchange `/v1/provider-skills`. Execution-only skills are omitted from the list.
+- `firecrawl_find_tools` and Alexandria discovery retry once when the API returns HTTP 503 `query_embed_unavailable`. The retry waits for `Retry-After` (usually 1 second) and never longer than 3 seconds. A second failure is returned as a retryable error and is not attempted again.
 
 ### Changed
 
-- The server instructions for keyless sessions list `firecrawl_research_*` for paper-index research only and name `firecrawl_developer_search` among the tools an API key exposes. The README points GitHub repository, issue and pull request research to `firecrawl_developer_search`.
-
-## [3.36.1] - 2026-11-03
-
-### Changed
-
-- The `firecrawl` JS SDK dependency moves from 4.50.0 to 4.51.0. That release adds the Government Index filters (`jurisdiction`, `court`, `courtType`, `cites`, `domain`) to the SDK's `govSearch`, `location` and `zeroDataRetention` to agent requests, and `insufficient_credits` and `zeroDataRetention` to the agent trace types. The server uses none of them: `firecrawl_gov_search` already sends its filters through the SDK's HTTP client, and `firecrawl_agent` offers neither `location` nor `zeroDataRetention`, so tools, schemas and results are unchanged.
-
-### Fixed
-
-- The Gemini CLI extension starts the firecrawl-mcp release it ships, `npx -y firecrawl-mcp@3.36.1`, instead of `npx -y firecrawl-mcp`. Without a version, npm picks the newest release whose `engines` accepts the running Node, so on Node 20, which Gemini CLI supports, the extension ran firecrawl-mcp 3.22.2. npm installs an exact version as asked, and 3.36.1 starts on Node 20 with an engine warning. The pin moves with each release: a test checks that it matches the package version.
+- Tool descriptions name the merged catalogue prices and limits: Carbon Arc is 1000 credits a call; People Data Labs `person/enrich` and `person/identify` are 60 credits per successful call, and `person/search` and `person/bulk` are 50 credits per returned or matched record, with misses free; Influencers.club discovery is 45 credits per creator returned. Fiber's price stays on the tool's `creditsCost`. Government Index and Research Index calls are free within a daily plan limit (1000 a day on Free, Hobby and Standard, 2000 on Growth, unlimited on Scale and Enterprise).
 
 ## [3.36.0] - 2026-10-27
 
