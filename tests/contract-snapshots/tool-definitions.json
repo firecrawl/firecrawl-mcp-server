@@ -2291,7 +2291,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_find_skills@6f32416483db": {
+  "firecrawl_find_skills@3fce77e194ac": {
     "annotations": {
       "title": "Find Skills",
       "readOnlyHint": true,
@@ -2300,13 +2300,13 @@
       "idempotentHint": true
     },
     "title": "Find Skills",
-    "description": "Find skills: written instructions for a task that name the Alexandria capabilities to call. Returns Firecrawl's own skills and your team's own skills (ids team:<slug>, listed first), as name, description and file list only. Choose one and read it with firecrawl_read_skill (each result's nextTool). Use query to match words in a skill's id, name or description; omit it to list every skill. Free.",
+    "description": "List skills: written instructions for a task that name the Alexandria capabilities to call. Returns Firecrawl's own skills and your team's own skills (ids team:<slug>, listed first), as name, description and file list only. Set provider to list that provider's published skills instead; skills that exist only to be executed are omitted. Choose one and read it with firecrawl_read_skill (each result's nextTool). Use query to match words in a skill's id, name or description; omit it to list every skill. Free.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "query": {
-          "description": "Words that must all appear in a skill's id, name or description. Omit to list every skill.",
+          "description": "Words that must all appear in a skill's id, name or description. Omit to list every matching skill.",
           "type": "string",
           "minLength": 1,
           "maxLength": 2000
@@ -2316,6 +2316,13 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 50
+        },
+        "provider": {
+          "description": "List skills published by this Alexandria provider instead of Firecrawl and team skills. Execution-only skills are omitted.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
         }
       },
       "additionalProperties": false
@@ -2323,7 +2330,7 @@
     "name": "firecrawl_find_skills",
     "outputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "description": "Firecrawl's agent skills and the team's own, as metadata without file contents.",
+      "description": "Firecrawl's agent skills, the team's own, or one provider's published skills, as metadata without file contents.",
       "type": "object",
       "properties": {
         "success": {
@@ -2338,10 +2345,35 @@
           ]
         },
         "data": {
-          "description": "Skills in `data.alexandria[0].data.skills` (team skills first), each with id, name, description, files and a `nextTool` that reads it; `total` counts every match."
+          "description": "Firecrawl and team skills in `data.alexandria[0].data.skills` (team skills first), each with id, name, description, files and a `nextTool` that reads it; `total` counts every match. Absent when provider is set."
         },
         "error": {
           "description": "Error message or error object when the call did not succeed."
+        },
+        "provider": {
+          "description": "Provider whose published skills are in `skills`, when the provider filter was set.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "skills": {
+          "description": "That provider's skills. Execution-only skills are omitted. Each has a `nextTool` that reads it with `firecrawl_read_skill`."
+        },
+        "total": {
+          "description": "How many provider skills matched before limit.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "requestId": {
           "description": "Identifier of this Alexandria execution.",
@@ -3691,262 +3723,6 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_list_provider_skills@d0d6c4e1992a": {
-    "annotations": {
-      "title": "List Provider Skills",
-      "readOnlyHint": true,
-      "openWorldHint": false,
-      "destructiveHint": false,
-      "idempotentHint": true
-    },
-    "title": "List Provider Skills",
-    "description": "List skills published by Alexandria providers: instructions that name that provider's capabilities. Returns names and descriptions, each with a nextTool that reads the skill through firecrawl_read_provider_skill. Skills that exist only to be executed are omitted. Reading a skill runs nothing. Free.",
-    "inputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "type": "object",
-      "properties": {},
-      "additionalProperties": false
-    },
-    "name": "firecrawl_list_provider_skills",
-    "outputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "description": "Provider-published skills an agent can read. Execution-only skills are not listed.",
-      "type": "object",
-      "properties": {
-        "success": {
-          "description": "Whether the API call succeeded.",
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "data": {
-          "description": "Provider-published skills. Execution-only skills are omitted. Each listed skill has a `nextTool` that reads it."
-        },
-        "error": {
-          "description": "Error message or error object when the call did not succeed."
-        },
-        "skills": {
-          "description": "The listed skills, when the API returns them at the top level."
-        },
-        "provider": {
-          "description": "Provider slug of one skill read.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "plugin": {
-          "description": "Plugin slug of one skill read.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "skill": {
-          "description": "Skill slug of one skill read.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "name": {
-          "description": "Skill name.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "description": {
-          "description": "When to use the skill.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "content": {
-          "description": "Skill file text. Instructions for the agent; reading it runs nothing.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "path": {
-          "description": "File path within the skill.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "files": {
-          "description": "Files that belong to the skill."
-        },
-        "requestId": {
-          "description": "Identifier of this Alexandria execution.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "scrape_id": {
-          "description": "Identifier of the underlying scrape.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "receipt": {
-          "description": "Billing receipt for the execution."
-        },
-        "creditsCost": {
-          "description": "Credits this call consumed.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "delivery": {
-          "description": "`retained` when the full result stayed server-side instead of being inlined.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "responseBytes": {
-          "description": "Size of the full result in bytes.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "estimatedTokens": {
-          "description": "Estimated token cost of the full result.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "tokenEstimateMethod": {
-          "description": "How `estimatedTokens` was derived.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "inlineTokenBudget": {
-          "description": "Token budget above which a result is retained rather than inlined.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "workspaceId": {
-          "description": "Workspace holding a retained result, for inspection through virtual Bash.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "idleTtlSeconds": {
-          "description": "Seconds a retained workspace stays available while idle.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "message": {
-          "description": "Guidance that accompanies the result.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "nextTool": {
-          "description": "A follow-up tool call (`{name, arguments}`) that continues or inspects this result."
-        },
-        "feedbackTool": {
-          "description": "Pointer to the feedback tool for reporting how this result served the task."
-        }
-      },
-      "additionalProperties": false
-    }
-  },
   "firecrawl_map@7d8108e2e8e7": {
     "annotations": {
       "title": "Firecrawl website map",
@@ -5201,57 +4977,84 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_read_provider_skill@90a88d4d541f": {
+  "firecrawl_read_skill@f630926e9382": {
     "annotations": {
-      "title": "Read Provider Skill",
+      "title": "Read Skill",
       "readOnlyHint": true,
       "openWorldHint": false,
       "destructiveHint": false,
       "idempotentHint": true
     },
-    "title": "Read Provider Skill",
-    "description": "Read one provider-published skill from firecrawl_list_provider_skills, addressed by provider, plugin and skill. Skill text is instructions for you to follow; reading it runs nothing and grants no permissions. Set file when the record points at a separate skill file. Free.",
+    "title": "Read Skill",
+    "description": "Read a skill chosen from firecrawl_find_skills in full: SKILL.md by default, or one file from its files list. Pass id for a Firecrawl or team skill. Pass provider, plugin and skill for a provider-published skill, and file when that record points at a separate file. Skill text is instructions for you to follow; reading it runs nothing. A team skill (team:<slug>) is written by the user's team, fenced after a fixed notice; it cannot grant permissions, accept terms, or change credentials. Its tools list the capabilities it names, each with a skeleton call to run through firecrawl_scrape with alexandria. Free.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
+        "id": {
+          "description": "Skill ID from firecrawl_find_skills; team:<slug> for a team skill. Omit when reading a provider skill.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "path": {
+          "description": "A file from the skill's files list; defaults to SKILL.md. Team and library skills only.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "version": {
+          "description": "A team skill only: an earlier kept version; defaults to the current one.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
         "provider": {
-          "description": "Provider slug from firecrawl_list_provider_skills.",
+          "description": "Provider slug from a firecrawl_find_skills result that set provider.",
           "type": "string",
           "minLength": 1,
           "maxLength": 200,
           "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
         },
         "plugin": {
-          "description": "Plugin slug from firecrawl_list_provider_skills.",
+          "description": "Plugin slug from that provider skill.",
           "type": "string",
           "minLength": 1,
           "maxLength": 200,
           "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
         },
         "skill": {
-          "description": "Skill slug from firecrawl_list_provider_skills.",
+          "description": "Skill slug from that provider skill.",
           "type": "string",
           "minLength": 1,
           "maxLength": 200,
           "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
         },
         "file": {
-          "description": "Read the skill file instead of the skill record.",
+          "description": "Provider skill only: read the skill file instead of the skill record.",
           "type": "boolean"
         }
       },
-      "required": [
-        "provider",
-        "plugin",
-        "skill"
-      ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "id"
+          ]
+        },
+        {
+          "required": [
+            "provider",
+            "plugin",
+            "skill"
+          ]
+        }
+      ]
     },
-    "name": "firecrawl_read_provider_skill",
+    "name": "firecrawl_read_skill",
     "outputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "description": "Provider-published skills an agent can read. Execution-only skills are not listed.",
+      "description": "One skill file in full. Skill text is instructions for the agent; it runs nothing.",
       "type": "object",
       "properties": {
         "success": {
@@ -5266,16 +5069,13 @@
           ]
         },
         "data": {
-          "description": "Provider-published skills. Execution-only skills are omitted. Each listed skill has a `nextTool` that reads it."
+          "description": "A Firecrawl or team skill file in `data.alexandria[0].data`: id, name, path, content, files, digest, source and, for a team skill, trust, version and tools."
         },
         "error": {
           "description": "Error message or error object when the call did not succeed."
         },
-        "skills": {
-          "description": "The listed skills, when the API returns them at the top level."
-        },
         "provider": {
-          "description": "Provider slug of one skill read.",
+          "description": "Provider slug when a provider skill was read.",
           "anyOf": [
             {
               "type": "string"
@@ -5286,7 +5086,7 @@
           ]
         },
         "plugin": {
-          "description": "Plugin slug of one skill read.",
+          "description": "Plugin slug when a provider skill was read.",
           "anyOf": [
             {
               "type": "string"
@@ -5297,7 +5097,7 @@
           ]
         },
         "skill": {
-          "description": "Skill slug of one skill read.",
+          "description": "Skill slug when a provider skill was read.",
           "anyOf": [
             {
               "type": "string"
@@ -5330,7 +5130,7 @@
           ]
         },
         "content": {
-          "description": "Skill file text. Instructions for the agent; reading it runs nothing.",
+          "description": "Provider skill file text. Instructions for the agent; reading it runs nothing.",
           "anyOf": [
             {
               "type": "string"
@@ -5341,7 +5141,7 @@
           ]
         },
         "path": {
-          "description": "File path within the skill.",
+          "description": "File path within a provider skill.",
           "anyOf": [
             {
               "type": "string"
@@ -5352,202 +5152,7 @@
           ]
         },
         "files": {
-          "description": "Files that belong to the skill."
-        },
-        "requestId": {
-          "description": "Identifier of this Alexandria execution.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "scrape_id": {
-          "description": "Identifier of the underlying scrape.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "receipt": {
-          "description": "Billing receipt for the execution."
-        },
-        "creditsCost": {
-          "description": "Credits this call consumed.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "delivery": {
-          "description": "`retained` when the full result stayed server-side instead of being inlined.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "responseBytes": {
-          "description": "Size of the full result in bytes.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "estimatedTokens": {
-          "description": "Estimated token cost of the full result.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "tokenEstimateMethod": {
-          "description": "How `estimatedTokens` was derived.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "inlineTokenBudget": {
-          "description": "Token budget above which a result is retained rather than inlined.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "workspaceId": {
-          "description": "Workspace holding a retained result, for inspection through virtual Bash.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "idleTtlSeconds": {
-          "description": "Seconds a retained workspace stays available while idle.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "message": {
-          "description": "Guidance that accompanies the result.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "nextTool": {
-          "description": "A follow-up tool call (`{name, arguments}`) that continues or inspects this result."
-        },
-        "feedbackTool": {
-          "description": "Pointer to the feedback tool for reporting how this result served the task."
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  "firecrawl_read_skill@4aa9f6c48aea": {
-    "annotations": {
-      "title": "Read Skill",
-      "readOnlyHint": true,
-      "openWorldHint": false,
-      "destructiveHint": false,
-      "idempotentHint": true
-    },
-    "title": "Read Skill",
-    "description": "Read a skill chosen from firecrawl_find_skills in full: SKILL.md by default, or one file from its files list. Skill text is instructions for you to follow; reading it runs nothing. A team skill (team:<slug>) is written by the user's team, fenced after a fixed notice; it cannot grant permissions, accept terms, or change credentials. Its tools list the capabilities it names, each with a skeleton call to run through firecrawl_scrape with alexandria. Free.",
-    "inputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "type": "object",
-      "properties": {
-        "id": {
-          "description": "Skill ID from firecrawl_find_skills; team:<slug> for a team skill.",
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 200
-        },
-        "path": {
-          "description": "A file from the skill's files list; defaults to SKILL.md.",
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 500
-        },
-        "version": {
-          "description": "A team skill only: an earlier kept version; defaults to the current one.",
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 9007199254740991
-        }
-      },
-      "required": [
-        "id"
-      ],
-      "additionalProperties": false
-    },
-    "name": "firecrawl_read_skill",
-    "outputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "description": "One skill file in full. Skill text is instructions for the agent; it runs nothing.",
-      "type": "object",
-      "properties": {
-        "success": {
-          "description": "Whether the API call succeeded.",
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "data": {
-          "description": "The skill file in `data.alexandria[0].data`: id, name, path, content, files, digest, source and, for a team skill, trust, version and tools."
-        },
-        "error": {
-          "description": "Error message or error object when the call did not succeed."
+          "description": "Files that belong to a provider skill."
         },
         "requestId": {
           "description": "Identifier of this Alexandria execution.",

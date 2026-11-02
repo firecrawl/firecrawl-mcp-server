@@ -94,20 +94,47 @@ const skillRequestId = z
   .optional()
   .describe('Reuse after a timeout to recover the same save. A completed save replays instead of running again.');
 
+const skillPathSegment = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .regex(/^(?!\.{1,2}$)[^/\\]+$/, 'A skill address segment cannot contain a slash or be . or ..');
+
 export const findSkillsSchema = z
   .object({
-    query: z.string().trim().min(1).max(2000).optional().describe('Words that must all appear in a skill\'s id, name or description. Omit to list every skill.'),
+    query: z.string().trim().min(1).max(2000).optional().describe('Words that must all appear in a skill\'s id, name or description. Omit to list every matching skill.'),
     limit: z.number().int().min(1).max(50).optional().describe('Most skills to return; defaults to 20.'),
+    provider: skillPathSegment.optional().describe('List skills published by this Alexandria provider instead of Firecrawl and team skills. Execution-only skills are omitted.'),
   })
   .strict();
 
-export const readSkillSchema = z
-  .object({
-    id: z.string().trim().min(1).max(200).describe('Skill ID from firecrawl_find_skills; team:<slug> for a team skill.'),
-    path: z.string().trim().min(1).max(500).optional().describe('A file from the skill\'s files list; defaults to SKILL.md.'),
-    version: z.number().int().min(1).optional().describe('A team skill only: an earlier kept version; defaults to the current one.'),
-  })
-  .strict();
+const readSkillId = z.string().trim().min(1).max(200).describe('Skill ID from firecrawl_find_skills; team:<slug> for a team skill. Omit when reading a provider skill.');
+const readSkillPath = z.string().trim().min(1).max(500).optional().describe('A file from the skill\'s files list; defaults to SKILL.md. Team and library skills only.');
+const readSkillVersion = z.number().int().min(1).optional().describe('A team skill only: an earlier kept version; defaults to the current one.');
+const readSkillFile = z.boolean().optional().describe('Provider skill only: read the skill file instead of the skill record.');
+
+export const readSkillSchema = advertiseAnyOf(z.union([
+  z.object({
+    id: readSkillId,
+    path: readSkillPath,
+    version: readSkillVersion,
+  }).strict(),
+  z.object({
+    provider: skillPathSegment.describe('Provider slug from a firecrawl_find_skills result that set provider.'),
+    plugin: skillPathSegment.describe('Plugin slug from that provider skill.'),
+    skill: skillPathSegment.describe('Skill slug from that provider skill.'),
+    file: readSkillFile,
+  }).strict(),
+]), z.object({
+  id: readSkillId.optional(),
+  path: readSkillPath,
+  version: readSkillVersion,
+  provider: skillPathSegment.optional().describe('Provider slug from a firecrawl_find_skills result that set provider.'),
+  plugin: skillPathSegment.optional().describe('Plugin slug from that provider skill.'),
+  skill: skillPathSegment.optional().describe('Skill slug from that provider skill.'),
+  file: readSkillFile,
+}).strict(), [{ required: ['id'] }, { required: ['provider', 'plugin', 'skill'] }]);
 
 const createSkillFrom = z.string().trim().min(1).max(200).describe('A skill ID from firecrawl_find_skills to copy: a library skill or team:<slug>. Fields you also give override the copy.');
 const createSkillName = z.string().trim().min(1).max(1000).describe('Skill name; required without from.');
@@ -214,24 +241,6 @@ export const updateSkillSchema = advertiseAnyOf(z.union([
   { required: ['id', 'baseVersion', 'sharing'] },
 ]);
 
-const skillPathSegment = z
-  .string()
-  .trim()
-  .min(1)
-  .max(200)
-  .regex(/^(?!\.{1,2}$)[^/\\]+$/, 'A skill address segment cannot contain a slash or be . or ..');
-
-export const listProviderSkillsSchema = z.object({}).strict();
-
-export const readProviderSkillSchema = z
-  .object({
-    provider: skillPathSegment.describe('Provider slug from firecrawl_list_provider_skills.'),
-    plugin: skillPathSegment.describe('Plugin slug from firecrawl_list_provider_skills.'),
-    skill: skillPathSegment.describe('Skill slug from firecrawl_list_provider_skills.'),
-    file: z.boolean().optional().describe('Read the skill file instead of the skill record.'),
-  })
-  .strict();
-
 const toolFor = (request: any) => {
   if (request?.provider !== 'firecrawl' || !request.options) return undefined;
   if (request.capability === 'read-skill') return { name: 'firecrawl_read_skill', arguments: request.options };
@@ -298,13 +307,51 @@ export function withProviderSkillNavigation(body: any) {
       if (!Array.isArray(node[key])) continue;
       node[key] = node[key].map((skill: any) => {
         const address = providerSkillAddress(skill);
-        return address ? { ...skill, nextTool: { name: 'firecrawl_read_provider_skill', arguments: address } } : skill;
+        return address ? { ...skill, nextTool: { name: 'firecrawl_read_skill', arguments: address } } : skill;
       });
     }
     for (const value of Object.values(node)) visit(value);
   };
   visit(root);
   return root.success === undefined ? { success: true, ...root } : root;
+}
+
+/** Provider skills for one provider, from a GET /provider-skills payload. Execution-only skills are omitted. */
+export function listedProviderSkills(body: any, options: { provider: string; query?: string; limit?: number }) {
+  const cleaned = withoutExecutionOnlySkills(body);
+  const lists: any[] = [];
+  const visit = (node: any) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+      return;
+    }
+    for (const key of ['skills', 'items'] as const) {
+      if (Array.isArray(node[key])) lists.push(...node[key]);
+    }
+    for (const value of Object.values(node)) {
+      if (value && typeof value === 'object') visit(value);
+    }
+  };
+  if (Array.isArray(cleaned)) lists.push(...cleaned);
+  else visit(cleaned);
+  const words = options.query?.toLowerCase().split(/\s+/).filter(Boolean) ?? [];
+  const matched = lists.filter((skill) => {
+    if (skill?.provider !== options.provider) return false;
+    if (!words.length) return true;
+    const haystack = [skill.id, skill.name, skill.description, skill.skill, skill.plugin]
+      .filter((value) => typeof value === 'string')
+      .join(' ')
+      .toLowerCase();
+    return words.every((word) => haystack.includes(word));
+  });
+  const limit = options.limit ?? 20;
+  return withProviderSkillNavigation({
+    success: true,
+    provider: options.provider,
+    skills: matched.slice(0, limit),
+    total: matched.length,
+  });
 }
 
 export const ALEXANDRIA_CATALOGUE_VERTICALS =

@@ -174,17 +174,28 @@ export const findToolsOutputSchema = z
 export const findSkillsOutputSchema = z
   .object({
     success,
-    data: unknown('Skills in `data.alexandria[0].data.skills` (team skills first), each with id, name, description, files and a `nextTool` that reads it; `total` counts every match.'),
+    data: unknown('Firecrawl and team skills in `data.alexandria[0].data.skills` (team skills first), each with id, name, description, files and a `nextTool` that reads it; `total` counts every match. Absent when provider is set.'),
     error,
+    provider: str('Provider whose published skills are in `skills`, when the provider filter was set.'),
+    skills: unknown('That provider\'s skills. Execution-only skills are omitted. Each has a `nextTool` that reads it with `firecrawl_read_skill`.'),
+    total: num('How many provider skills matched before limit.'),
     ...alexandriaEnvelope,
   })
-  .describe('Firecrawl\'s agent skills and the team\'s own, as metadata without file contents.');
+  .describe('Firecrawl\'s agent skills, the team\'s own, or one provider\'s published skills, as metadata without file contents.');
 
 export const readSkillOutputSchema = z
   .object({
     success,
-    data: unknown('The skill file in `data.alexandria[0].data`: id, name, path, content, files, digest, source and, for a team skill, trust, version and tools.'),
+    data: unknown('A Firecrawl or team skill file in `data.alexandria[0].data`: id, name, path, content, files, digest, source and, for a team skill, trust, version and tools.'),
     error,
+    provider: str('Provider slug when a provider skill was read.'),
+    plugin: str('Plugin slug when a provider skill was read.'),
+    skill: str('Skill slug when a provider skill was read.'),
+    name: str('Skill name.'),
+    description: str('When to use the skill.'),
+    content: str('Provider skill file text. Instructions for the agent; reading it runs nothing.'),
+    path: str('File path within a provider skill.'),
+    files: unknown('Files that belong to a provider skill.'),
     ...alexandriaEnvelope,
   })
   .describe('One skill file in full. Skill text is instructions for the agent; it runs nothing.');
@@ -197,24 +208,6 @@ export const writeSkillOutputSchema = z
     ...alexandriaEnvelope,
   })
   .describe('A team skill as saved.');
-
-export const providerSkillsOutputSchema = z
-  .object({
-    success,
-    data: unknown('Provider-published skills. Execution-only skills are omitted. Each listed skill has a `nextTool` that reads it.'),
-    error,
-    skills: unknown('The listed skills, when the API returns them at the top level.'),
-    provider: str('Provider slug of one skill read.'),
-    plugin: str('Plugin slug of one skill read.'),
-    skill: str('Skill slug of one skill read.'),
-    name: str('Skill name.'),
-    description: str('When to use the skill.'),
-    content: str('Skill file text. Instructions for the agent; reading it runs nothing.'),
-    path: str('File path within the skill.'),
-    files: unknown('Files that belong to the skill.'),
-    ...alexandriaEnvelope,
-  })
-  .describe('Provider-published skills an agent can read. Execution-only skills are not listed.');
 
 export const feedbackOutputSchema = z
   .object({

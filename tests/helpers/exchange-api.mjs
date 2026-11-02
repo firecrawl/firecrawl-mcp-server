@@ -198,6 +198,7 @@ async function startFakeExchangeApi(options = {}) {
         skills: [
           { provider: 'acme', plugin: 'research', skill: 'brief', name: 'Brief', description: 'Write a brief.' },
           { provider: 'acme', plugin: 'research', skill: 'run', name: 'Run', description: 'Execute only.', executionOnly: true },
+          { provider: 'fiber', plugin: 'people', skill: 'search', name: 'Search', description: 'Find people.' },
         ],
       });
     }
