@@ -2750,10 +2750,16 @@ test('account endpoint answers an unrecognized bearer with its OAuth challenge',
   // The API-key header outranks Authorization, so signing in would not
   // replace it: no challenge, same body.
   for (const name of ['x-firecrawl-api-key', 'x-api-key']) {
-    const headerKey = await listTools({ [name]: 'not-a-firecrawl-key' });
-    assert.equal(headerKey.status, 401, name);
-    assert.equal(headerKey.headers.has('www-authenticate'), false, name);
-    assert.deepEqual(await headerKey.json(), expectedBody, name);
+    for (const authorization of [undefined, 'Bearer fco_account_token']) {
+      const label = `${name} with authorization=${authorization ?? 'none'}`;
+      const headerKey = await listTools({
+        ...(authorization ? { authorization } : {}),
+        [name]: 'not-a-firecrawl-key',
+      });
+      assert.equal(headerKey.status, 401, label);
+      assert.equal(headerKey.headers.has('www-authenticate'), false, label);
+      assert.deepEqual(await headerKey.json(), expectedBody, label);
+    }
   }
 
   assert.equal(
