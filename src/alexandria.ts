@@ -135,8 +135,8 @@ const createSkillBody = z.string().min(1).max(200_000).describe('The instruction
 const createSkillSlug = skillSlug.optional().describe('Lowercase words joined by hyphens; defaults to one made from the name.');
 
 /**
- * Runtime validation stays a union. The advertised schema stays `type: object`
- * (clients reject a bare anyOf) and adds anyOf required-sets for the same rule.
+ * Advertised schema stays `type: object`. Each anyOf branch is that branch's
+ * full strict schema, so a field from one branch cannot appear with the other.
  */
 function advertiseExclusive<T extends z.ZodType>(schema: T, branches: z.ZodType[]): T {
   const branchSchemas = branches.map((branch) => {
@@ -151,6 +151,10 @@ function advertiseExclusive<T extends z.ZodType>(schema: T, branches: z.ZodType[
   return schema;
 }
 
+/**
+ * Runtime validation stays a union. The advertised schema stays `type: object`
+ * (clients reject a bare anyOf) and adds anyOf required-sets for the same rule.
+ */
 function advertiseAnyOf<T extends z.ZodType>(schema: T, shape: z.ZodType, requirements: { required: string[] }[]): T {
   const json = toJSONSchema(shape, { target: 'draft-7' }) as Record<string, unknown>;
   delete json.$schema;
