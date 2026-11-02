@@ -1,6 +1,25 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
 import { callExpectingError, startStdio, startStdioWithApi, toolText } from './helpers/exchange-mcp.mjs';
+
+test('skill routing lives on the tool descriptions, inside the client window', async (t) => {
+  const { client, init } = await startStdioWithApi(t);
+  const { tools } = await client.request('tools/list', {});
+  const byName = new Map(tools.map(tool => [tool.name, tool.description]));
+  assert.match(byName.get('firecrawl_find_skills'), /Set provider to list that provider's skills instead/);
+  assert.match(byName.get('firecrawl_find_skills'), /sent as q/);
+  assert.match(byName.get('firecrawl_read_skill'), /Pass provider, plugin and skill/);
+  assert.match(byName.get('firecrawl_create_skill'), /show the user the result message, which begins "Open it in Firecrawl:"/);
+  assert.match(byName.get('firecrawl_update_skill'), /enabled or listed \(discoverable\)/);
+  assert.match(byName.get('firecrawl_update_skill'), /show the user the result message, which begins "Open it in Firecrawl:"/);
+  for (const name of ['firecrawl_find_skills', 'firecrawl_read_skill', 'firecrawl_create_skill', 'firecrawl_update_skill']) {
+    assert.ok(byName.get(name).length <= CLAUDE_CODE_TEXT_CAP, `${name} is ${byName.get(name).length} characters`);
+  }
+  // The server-instruction prefix is already the catalogue routing Claude Code keeps.
+  // Skill routing stays on these descriptions instead of past that 2,048-character cut.
+  assert.equal(init.instructions.includes('firecrawl_find_skills'), false);
+});
 
 test('find_skills lists skills through find-skills and links each to read_skill', async (t) => {
   const { api, client } = await startStdioWithApi(t);
