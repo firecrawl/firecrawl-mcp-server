@@ -2246,7 +2246,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       description: `
 Records schema-validated quality feedback for a prior \`firecrawl_search\` UUID \`searchId\`. A \`good\` rating requires a valuable result or a valuable source, \`partial\` either of those or at least one \`missingContent\` entry, and \`bad\` at least one \`missingContent\` entry or a query suggestion; caps are 50 \`valuableResults\`, 50 \`valuableSources\`, and 20 \`missingContent\` entries.
 
-Eligibility is limited to successful searches within the feedback age window. The record is idempotent per search ID. Eligible first feedback for a search can refund 1 credit; refunds are subject to the team's daily cap. The response reports whether a refund was applied, along with submission and daily-cap status.
+Submit within 2 minutes of that search; call it right after each search, not batched at the end. Late feedback is not recorded. Eligibility is limited to successful searches within the feedback age window. The record is idempotent per search ID. Eligible first feedback for a search can refund 1 credit; refunds are subject to the team's daily cap. The response reports whether a refund was applied, along with submission and daily-cap status.
 
 Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\` copied off the result. Groups are numbered from 1 independently, so \`{"source":"web","position":1}\` and \`{"source":"news","position":1}\` are different results. Be exhaustive — results you do not list are treated as not useful. Reserve \`valuableSources\` for useful URLs that were NOT among the returned results; never report one result in both fields.
 `,
@@ -2391,6 +2391,15 @@ Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\
           );
         }
 
+        // Late and duplicate feedback can never be recorded, so answer with a
+        // short final message instead of the raw payload an agent might resend.
+        const skipMessage =
+          parsed?.feedbackErrorCode === 'FEEDBACK_WINDOW_EXPIRED'
+            ? 'Feedback window passed for this search; skipped. Do not resend.'
+            : response.ok && parsed?.alreadySubmitted === true
+              ? 'Feedback for this search was already recorded; skipped. Do not resend.'
+              : undefined;
+
         // Other 4xx responses are terminal; surface a structured payload (with
         // retryable=false) so agents do not retry-loop on substantive-feedback
         // rejections, expired windows, etc.
@@ -2399,12 +2408,23 @@ Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\
             status: response.status,
             feedbackErrorCode: parsed?.feedbackErrorCode,
           });
-          return structuredText({
+          const rejection = {
             success: false,
             status: response.status,
             feedbackErrorCode: parsed?.feedbackErrorCode,
             error: parsed?.error ?? `HTTP ${response.status}`,
             retryable: response.status >= 500,
+          };
+          return skipMessage
+            ? withStructured(skipMessage, { ...rejection, message: skipMessage })
+            : structuredText(rejection);
+        }
+
+        if (skipMessage) {
+          return withStructured(skipMessage, {
+            ...parsed,
+            retryable: false,
+            message: skipMessage,
           });
         }
 

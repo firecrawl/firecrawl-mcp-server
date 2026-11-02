@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- The `firecrawl_search_feedback` description asks for feedback within 2 minutes of the search, right after each search rather than batched at the end, since late feedback is not recorded.
+- `firecrawl_search_feedback` answers feedback that can't be recorded with a short final message instead of the JSON payload: `Feedback window passed for this search; skipped. Do not resend.` when the API rejects it with `FEEDBACK_WINDOW_EXPIRED`, and `Feedback for this search was already recorded; skipped. Do not resend.` when the API reports `alreadySubmitted`. The structured content keeps every field it had, plus `message` and `retryable: false`. Other rejections and accepted feedback are unchanged.
+
 ## [3.36.0] - 2026-10-27
 
 ### Changed
