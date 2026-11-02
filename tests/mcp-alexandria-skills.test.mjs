@@ -111,6 +111,7 @@ test('write tools refuse bad arguments before calling Exchange', async (t) => {
   await callExpectingError(client, { name: 'firecrawl_create_skill', arguments: { from: 'deep-research', sharing: 'link' } });
   await callExpectingError(client, { name: 'firecrawl_update_skill', arguments: { id: 'team:weekly-digest', baseVersion: 1 } });
   await callExpectingError(client, { name: 'firecrawl_update_skill', arguments: { id: 'deep-research', baseVersion: 1, name: 'x' } });
+  await callExpectingError(client, { name: 'firecrawl_read_skill', arguments: { id: 'deep-research', provider: 'acme', plugin: 'research', skill: 'brief' } });
   await callExpectingError(client, { name: 'firecrawl_read_skill', arguments: { provider: '..', plugin: 'research', skill: 'brief' } });
   await callExpectingError(client, { name: 'firecrawl_read_skill', arguments: { provider: 'acme', plugin: '.', skill: 'brief' } });
   assert.equal(api.requests.length, before);

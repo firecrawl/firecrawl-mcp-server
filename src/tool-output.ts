@@ -193,9 +193,9 @@ export const readSkillOutputSchema = z
     skill: str('Skill slug when a provider skill was read.'),
     name: str('Skill name.'),
     description: str('When to use the skill.'),
-    content: str('Provider skill file text. Instructions for the agent; reading it runs nothing.'),
-    path: str('File path within a provider skill.'),
-    files: unknown('Files that belong to a provider skill.'),
+    content: str('Skill file text. Instructions for the agent; reading it runs nothing.'),
+    path: str('File path within the skill.'),
+    files: unknown('Files that belong to the skill.'),
     ...alexandriaEnvelope,
   })
   .describe('One skill file in full. Skill text is instructions for the agent; it runs nothing.');

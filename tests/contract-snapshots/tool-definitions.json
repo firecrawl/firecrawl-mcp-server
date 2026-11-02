@@ -4977,7 +4977,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_read_skill@f630926e9382": {
+  "firecrawl_read_skill@65707c8df3db": {
     "annotations": {
       "title": "Read Skill",
       "readOnlyHint": true,
@@ -4990,15 +4990,16 @@
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "id": {
-          "description": "Skill ID from firecrawl_find_skills; team:<slug> for a team skill. Omit when reading a provider skill.",
+          "description": "Skill ID from firecrawl_find_skills; team:<slug> for a team skill.",
           "type": "string",
           "minLength": 1,
           "maxLength": 200
         },
         "path": {
-          "description": "A file from the skill's files list; defaults to SKILL.md. Team and library skills only.",
+          "description": "A file from the skill's files list; defaults to SKILL.md.",
           "type": "string",
           "minLength": 1,
           "maxLength": 500
@@ -5031,23 +5032,73 @@
           "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
         },
         "file": {
-          "description": "Provider skill only: read the skill file instead of the skill record.",
+          "description": "Read the skill file instead of the skill record.",
           "type": "boolean"
         }
       },
-      "additionalProperties": false,
       "anyOf": [
         {
+          "type": "object",
+          "properties": {
+            "id": {
+              "description": "Skill ID from firecrawl_find_skills; team:<slug> for a team skill.",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "path": {
+              "description": "A file from the skill's files list; defaults to SKILL.md.",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "version": {
+              "description": "A team skill only: an earlier kept version; defaults to the current one.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
           "required": [
             "id"
-          ]
+          ],
+          "additionalProperties": false
         },
         {
+          "type": "object",
+          "properties": {
+            "provider": {
+              "description": "Provider slug from a firecrawl_find_skills result that set provider.",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
+            },
+            "plugin": {
+              "description": "Plugin slug from that provider skill.",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
+            },
+            "skill": {
+              "description": "Skill slug from that provider skill.",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^(?!\\.{1,2}$)[^/\\\\]+$"
+            },
+            "file": {
+              "description": "Read the skill file instead of the skill record.",
+              "type": "boolean"
+            }
+          },
           "required": [
             "provider",
             "plugin",
             "skill"
-          ]
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -5130,7 +5181,7 @@
           ]
         },
         "content": {
-          "description": "Provider skill file text. Instructions for the agent; reading it runs nothing.",
+          "description": "Skill file text. Instructions for the agent; reading it runs nothing.",
           "anyOf": [
             {
               "type": "string"
@@ -5141,7 +5192,7 @@
           ]
         },
         "path": {
-          "description": "File path within a provider skill.",
+          "description": "File path within the skill.",
           "anyOf": [
             {
               "type": "string"
@@ -5152,7 +5203,7 @@
           ]
         },
         "files": {
-          "description": "Files that belong to a provider skill."
+          "description": "Files that belong to the skill."
         },
         "requestId": {
           "description": "Identifier of this Alexandria execution.",

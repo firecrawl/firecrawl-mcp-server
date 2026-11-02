@@ -109,32 +109,24 @@ export const findSkillsSchema = z
   })
   .strict();
 
-const readSkillId = z.string().trim().min(1).max(200).describe('Skill ID from firecrawl_find_skills; team:<slug> for a team skill. Omit when reading a provider skill.');
-const readSkillPath = z.string().trim().min(1).max(500).optional().describe('A file from the skill\'s files list; defaults to SKILL.md. Team and library skills only.');
+const readSkillId = z.string().trim().min(1).max(200).describe('Skill ID from firecrawl_find_skills; team:<slug> for a team skill.');
+const readSkillPath = z.string().trim().min(1).max(500).optional().describe('A file from the skill\'s files list; defaults to SKILL.md.');
 const readSkillVersion = z.number().int().min(1).optional().describe('A team skill only: an earlier kept version; defaults to the current one.');
-const readSkillFile = z.boolean().optional().describe('Provider skill only: read the skill file instead of the skill record.');
-
-export const readSkillSchema = advertiseAnyOf(z.union([
-  z.object({
-    id: readSkillId,
-    path: readSkillPath,
-    version: readSkillVersion,
-  }).strict(),
-  z.object({
-    provider: skillPathSegment.describe('Provider slug from a firecrawl_find_skills result that set provider.'),
-    plugin: skillPathSegment.describe('Plugin slug from that provider skill.'),
-    skill: skillPathSegment.describe('Skill slug from that provider skill.'),
-    file: readSkillFile,
-  }).strict(),
-]), z.object({
-  id: readSkillId.optional(),
+const readSkillFile = z.boolean().optional().describe('Read the skill file instead of the skill record.');
+const readTeamSkillSchema = z.object({
+  id: readSkillId,
   path: readSkillPath,
   version: readSkillVersion,
-  provider: skillPathSegment.optional().describe('Provider slug from a firecrawl_find_skills result that set provider.'),
-  plugin: skillPathSegment.optional().describe('Plugin slug from that provider skill.'),
-  skill: skillPathSegment.optional().describe('Skill slug from that provider skill.'),
+}).strict();
+const readProviderSkillSchema = z.object({
+  provider: skillPathSegment.describe('Provider slug from a firecrawl_find_skills result that set provider.'),
+  plugin: skillPathSegment.describe('Plugin slug from that provider skill.'),
+  skill: skillPathSegment.describe('Skill slug from that provider skill.'),
   file: readSkillFile,
-}).strict(), [{ required: ['id'] }, { required: ['provider', 'plugin', 'skill'] }]);
+}).strict();
+
+// Each advertised branch lists only its own fields, so id cannot be combined with provider, plugin or skill.
+export const readSkillSchema = advertiseExclusive(z.union([readTeamSkillSchema, readProviderSkillSchema]), [readTeamSkillSchema, readProviderSkillSchema]);
 
 const createSkillFrom = z.string().trim().min(1).max(200).describe('A skill ID from firecrawl_find_skills to copy: a library skill or team:<slug>. Fields you also give override the copy.');
 const createSkillName = z.string().trim().min(1).max(1000).describe('Skill name; required without from.');
@@ -146,6 +138,19 @@ const createSkillSlug = skillSlug.optional().describe('Lowercase words joined by
  * Runtime validation stays a union. The advertised schema stays `type: object`
  * (clients reject a bare anyOf) and adds anyOf required-sets for the same rule.
  */
+function advertiseExclusive<T extends z.ZodType>(schema: T, branches: z.ZodType[]): T {
+  const branchSchemas = branches.map((branch) => {
+    const json = toJSONSchema(branch, { target: 'draft-7' }) as Record<string, unknown>;
+    delete json.$schema;
+    return json;
+  });
+  const properties: Record<string, unknown> = {};
+  for (const branch of branchSchemas) Object.assign(properties, (branch.properties as Record<string, unknown> | undefined) ?? {});
+  const json = { type: 'object', additionalProperties: false, properties, anyOf: branchSchemas };
+  (schema._zod as { toJSONSchema?: () => unknown }).toJSONSchema = () => structuredClone(json);
+  return schema;
+}
+
 function advertiseAnyOf<T extends z.ZodType>(schema: T, shape: z.ZodType, requirements: { required: string[] }[]): T {
   const json = toJSONSchema(shape, { target: 'draft-7' }) as Record<string, unknown>;
   delete json.$schema;
