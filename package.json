@@ -36,7 +36,7 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/server": "2.3.1",
-    "firecrawl": "4.50.0",
+    "firecrawl": "4.51.0",
     "hono": "^4.12.27",
     "xsschema": "^0.4.4",
     "zod": "^4.2.1"
