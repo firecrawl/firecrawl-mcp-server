@@ -139,7 +139,10 @@ export function fitSearchResponse(response: unknown, budget: number): unknown {
     return build(largestFitting(0, longest, (n) => fits(n, total)), total);
   }
   const keep = largestFitting(0, total, (n) => fits(0, n));
-  if (fits(0, keep)) return build(0, keep);
+  if (fits(0, keep)) {
+    // Dropping results frees space for content in the results we keep.
+    return build(largestFitting(0, longest, (n) => fits(n, keep)), keep);
+  }
   return {
     success: response.success,
     id: response.id,

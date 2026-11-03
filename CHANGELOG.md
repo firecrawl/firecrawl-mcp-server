@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- When the search response byte cap drops lower-ranked results, retained results now keep as much page content as fits in the remaining budget instead of always losing all page content.
+
 ## [3.36.0] - 2026-10-27
 
 ### Changed

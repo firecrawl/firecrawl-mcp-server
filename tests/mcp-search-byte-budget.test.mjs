@@ -134,6 +134,46 @@ test('when results alone overflow the budget, the lowest-ranked ones are left ou
   assert.match(body.warning, new RegExp(`${100 - body.data.web.length} lower-ranked results were left out`));
 });
 
+for (const [label, markdown, truncated] of [
+  ['all retained content fits', 'Important body text. '.repeat(1_000), false],
+  ['retained content still needs truncation', 'Row | "quoted" value | é ü 🔥\n'.repeat(30_000), true],
+]) {
+  test(`dropping results leaves room for page content: ${label}`, async (t) => {
+    const web = Array.from({ length: 2 }, (_, i) => ({
+      url: `https://example.com/page-${i}`,
+      metadata: { note: 'x'.repeat(230_000) },
+      markdown,
+    }));
+    const search = await startServer(t, { success: true, data: { web } });
+    const result = await search(CAPPED_USER_AGENT);
+    const bytes = resultBytes(result);
+    assert.ok(bytes <= BUDGET, `result is ${bytes} bytes`);
+
+    const body = JSON.parse(result.content[0].text);
+    assert.deepEqual(result.structuredContent, body);
+    assert.equal(body.data.web.length, 1);
+    const kept = body.data.web[0];
+    assert.equal(kept.url, web[0].url);
+    assert.equal(kept.source, 'web');
+    assert.equal(kept.position, 1);
+    assert.deepEqual(kept.metadata, web[0].metadata);
+    assert.match(body.warning, /1 lower-ranked results were left out/);
+
+    if (truncated) {
+      const prefix = kept.markdown.slice(0, kept.markdown.lastIndexOf('\n\n[Truncated'));
+      assert.ok(prefix.length > 0, 'retained content must not be cut to zero');
+      assert.ok(markdown.startsWith(prefix));
+      assert.ok(prefix.length < markdown.length);
+      assert.ok(prefix.isWellFormed(), 'truncation must not split a surrogate pair');
+      assert.match(kept.truncated, /^markdown cut to fit/);
+      assert.ok(bytes > BUDGET * 0.9, `result uses only ${bytes} of ${BUDGET} bytes`);
+    } else {
+      assert.ok(kept.markdown === markdown, 'page content that fits must stay whole');
+      assert.equal(kept.truncated, undefined);
+    }
+  });
+}
+
 test('when groups that are not cut overflow the budget, an empty bounded result comes back', async (t) => {
   const alexandria = [{ provider: 'example', data: 'x'.repeat(1_000_000) }];
   const search = await startServer(t, { success: true, data: { web: [{ url: 'https://example.com/' }], alexandria } });
