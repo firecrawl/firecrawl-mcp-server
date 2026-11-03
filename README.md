@@ -387,7 +387,7 @@ Use this guide to select the right tool for your task:
 | gov       | US primary law and regulatory material         | results[] with snippets                          |
 | agent     | Multi-source research, unknown or many sites   | JSON (structured data)                           |
 | monitor   | Recurring page checks                          | monitor/check metadata and diffs                 |
-| research  | Paper and GitHub repository research           | research results and repo matches                |
+| research  | Paper research (developer for repositories)    | research results                                 |
 
 ### Format Selection Guide
 
@@ -960,7 +960,7 @@ Stop an interact session for a scraped page when you are done interacting.
 
 ### 12. Research Tools (`firecrawl_research_*`)
 
-Search and inspect papers and GitHub repositories through the research MCP tools.
+Search and inspect papers through the research MCP tools. For GitHub repositories, issues, and pull requests, use `firecrawl_developer_search`.
 
 **Covers:** paper abstracts and full text across biomedical, life-science, and clinical literature (PubMed, bioRxiv, medRxiv) alongside arXiv and other scientific sources.
 
