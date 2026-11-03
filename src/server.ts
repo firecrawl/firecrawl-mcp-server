@@ -1862,7 +1862,7 @@ Search web, news, or image sources and return ranked results with query-relevant
 
 ${ALEXANDRIA_SEARCH_LEAD}
 
-On an authenticated session, tool matches describe available capabilities; \`firecrawl_find_tools\` returns their contracts and \`firecrawl_scrape\` with an \`alexandria\` body executes a selected capability. Keyless sessions get no Alexandria matches in data.tools. Omitting sources also requests alexandria-skills: up to 3 free cards in \`data.skills\`. Call \`firecrawl_read_skill\` with a card's \`nextTool\` for the full skill.
+On an authenticated session, tool matches describe available capabilities; \`firecrawl_find_tools\` returns their contracts and \`firecrawl_scrape\` with an \`alexandria\` body executes a selected capability. Keyless sessions get no Alexandria matches in data.tools. On an authenticated session, omitting sources also requests alexandria-skills: up to 3 free cards in \`data.skills\`. Call \`firecrawl_read_skill\` with a card's \`nextTool\` for the full skill.
 
 For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`. For a legal or regulatory question, \`categories: ["gov"]\` returns hits in \`data.web\` with \`category: "gov"\` and cannot be combined with other categories. \`categories: ["research"]\` restricts web results to research-affiliated websites; the \`firecrawl_research_*\` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Authenticated responses can include an \`id\` for optional search feedback.
 `,
