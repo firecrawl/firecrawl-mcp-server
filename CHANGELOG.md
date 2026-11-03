@@ -6,6 +6,16 @@
 
 - When the search response byte cap drops lower-ranked results, retained results now keep as much page content as fits in the remaining budget instead of always losing all page content. Fitting accounts for truncation markers disappearing when a field becomes whole, and only warns that page content was cut when retained content actually changed.
 
+## [3.36.1] - 2026-11-03
+
+### Changed
+
+- The `firecrawl` JS SDK dependency moves from 4.50.0 to 4.51.0. That release adds the Government Index filters (`jurisdiction`, `court`, `courtType`, `cites`, `domain`) to the SDK's `govSearch`, `location` and `zeroDataRetention` to agent requests, and `insufficient_credits` and `zeroDataRetention` to the agent trace types. The server uses none of them: `firecrawl_gov_search` already sends its filters through the SDK's HTTP client, and `firecrawl_agent` offers neither `location` nor `zeroDataRetention`, so tools, schemas and results are unchanged.
+
+### Fixed
+
+- The Gemini CLI extension starts the firecrawl-mcp release it ships, `npx -y firecrawl-mcp@3.36.1`, instead of `npx -y firecrawl-mcp`. Without a version, npm picks the newest release whose `engines` accepts the running Node, so on Node 20, which Gemini CLI supports, the extension ran firecrawl-mcp 3.22.2. npm installs an exact version as asked, and 3.36.1 starts on Node 20 with an engine warning. The pin moves with each release: a test checks that it matches the package version.
+
 ## [3.36.0] - 2026-10-27
 
 ### Changed
