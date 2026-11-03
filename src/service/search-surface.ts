@@ -6,11 +6,10 @@ import {
   annotateResultPositions,
   assertExchangeCredential,
   defaultDomainTools,
-  enterpriseAllowsAlexandria,
   type ExtraToolsContext,
   type FirecrawlMcpServerHooks,
   hasAlexandria,
-  normalizeSearchSources,
+  resolveSearchSources,
   postSearchWithFallback,
   relayExchangeError,
   retryQueryEmbedUnavailable,
@@ -26,7 +25,6 @@ import {
   structuredCompact,
   type ToolRegistrar,
   type ToolResult,
-  withAlexandriaSource,
 } from '../server.js';
 import {
   SEARCH_PROFILE_TOOLS,
@@ -77,7 +75,7 @@ For a legal or regulatory question, \`categories: ["gov"]\` returns results in \
 
 ${ALEXANDRIA_SEARCH_INSTRUCTIONS}
 
-Returns result groups in \`data\` and an operation \`id\`.
+Omitting sources also requests alexandria-skills: up to 3 free skill cards in \`data.skills\`. Returns result groups in \`data\` and an operation \`id\`.
 `,
     outputSchema: searchOutputSchema,
     beforeValidate: args => {
@@ -131,16 +129,11 @@ Returns result groups in \`data\` and an operation \`id\`.
       };
 
       const searchQuery = query ?? '';
-      const requestedSources = normalizeSearchSources(
-        sources?.length ? sources : ['web']
-      ) as unknown[];
-      const addsAlexandria =
-        hasCredential(session) &&
-        enterpriseAllowsAlexandria(enterprise) &&
-        !hasAlexandria(requestedSources);
-      const searchSources = addsAlexandria
-        ? withAlexandriaSource(requestedSources)
-        : requestedSources;
+      const { sources: searchSources, requestedSources, addsAlexandria } = resolveSearchSources({
+        sources,
+        credentialed: hasCredential(session),
+        enterprise,
+      });
 
       // Build the outbound body from allowed fields only. Never spread the raw
       // arguments, so no scrape/content-fetch options can reach the API.

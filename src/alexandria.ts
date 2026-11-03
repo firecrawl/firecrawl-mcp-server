@@ -3,10 +3,12 @@ import { toJSONSchema } from 'zod/v4/core';
 import { httpUrl } from './tool-arguments.js';
 
 const catalogueTypes = ['alexandria', 'exchange'] as const;
+const skillSource = 'alexandria-skills' as const;
+const searchSourceTypes = ['web', 'images', 'news', ...catalogueTypes, skillSource] as const;
 export const searchSourceSchema = z.union([
-  z.enum(['web', 'images', 'news', ...catalogueTypes]),
+  z.enum(searchSourceTypes),
   z
-    .object({ type: z.enum(['web', 'images', 'news', ...catalogueTypes]) })
+    .object({ type: z.enum(searchSourceTypes) })
     .strict(),
 ]);
 export function hasAlexandria(sources: unknown): boolean {
@@ -30,6 +32,36 @@ export function withAlexandriaSource(sources: unknown): unknown[] {
   if (!Array.isArray(sources) || sources.length === 0) return ['web', 'alexandria'];
   if (hasAlexandria(sources)) return sources;
   return [...sources, typeof sources[0] === 'string' ? 'alexandria' : { type: 'alexandria' }];
+}
+
+export function hasSkillSource(sources: unknown): boolean {
+  return Array.isArray(sources) && sources.some((source) => (typeof source === 'string' ? source : source?.type) === skillSource);
+}
+
+/** Adds alexandria-skills in the same string or object form as the list it extends. */
+export function withSkillSource(sources: unknown[]): unknown[] {
+  if (hasSkillSource(sources)) return sources;
+  return [...sources, sources.length > 0 && typeof sources[0] !== 'string' ? { type: skillSource } : skillSource];
+}
+
+/**
+ * Sources for one search. An omitted list on a credentialed session that can use
+ * Alexandria is web, alexandria, and alexandria-skills. An explicit list is kept
+ * as given, aside from the existing alexandria addition, so the caller can include
+ * or leave out alexandria-skills. Keyless, zdr, and anon sessions are not given
+ * alexandria-skills: that source is refused without Alexandria access.
+ */
+export function resolveSearchSources(input: {
+  sources: unknown;
+  credentialed: boolean;
+  enterprise: unknown;
+}): { sources: unknown[]; requestedSources: unknown[]; addsAlexandria: boolean } {
+  const passed = Array.isArray(input.sources) && input.sources.length > 0;
+  const requestedSources = normalizeSearchSources(passed ? input.sources : ['web']) as unknown[];
+  const addsAlexandria = input.credentialed && enterpriseAllowsAlexandria(input.enterprise) && !hasAlexandria(requestedSources);
+  let sources = addsAlexandria ? withAlexandriaSource(requestedSources) : requestedSources;
+  if (!passed && addsAlexandria) sources = withSkillSource(sources);
+  return { sources, requestedSources, addsAlexandria };
 }
 
 /** Zero data retention and anonymous searches cannot run provider discovery. */

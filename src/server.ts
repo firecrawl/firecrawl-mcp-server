@@ -66,9 +66,7 @@ import {
   withoutResultPrices,
   hasAlexandria,
   defaultDomainTools,
-  normalizeSearchSources,
-  withAlexandriaSource,
-  enterpriseAllowsAlexandria,
+  resolveSearchSources,
   searchQueryIsValid,
   ALEXANDRIA_SEARCH_LEAD,
   ALEXANDRIA_CONTRACT_GUIDANCE,
@@ -534,6 +532,7 @@ export {
   defaultDomainTools,
   hasAlexandria,
   normalizeSearchSources,
+  resolveSearchSources,
   withAlexandriaSource,
   enterpriseAllowsAlexandria,
   searchQueryIsValid,
@@ -1863,7 +1862,7 @@ Search web, news, or image sources and return ranked results with query-relevant
 
 ${ALEXANDRIA_SEARCH_LEAD}
 
-On an authenticated session, tool matches describe available capabilities; \`firecrawl_find_tools\` returns their contracts and \`firecrawl_scrape\` with an \`alexandria\` body executes a selected capability. Keyless sessions get no Alexandria matches in data.tools. When \`data.skills\` is present, call \`firecrawl_read_skill\` with a card's \`nextTool\` for the full skill.
+On an authenticated session, tool matches describe available capabilities; \`firecrawl_find_tools\` returns their contracts and \`firecrawl_scrape\` with an \`alexandria\` body executes a selected capability. Keyless sessions get no Alexandria matches in data.tools. Omitting sources also requests alexandria-skills: up to 3 free cards in \`data.skills\`. Call \`firecrawl_read_skill\` with a card's \`nextTool\` for the full skill.
 
 For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`. For a legal or regulatory question, \`categories: ["gov"]\` returns hits in \`data.web\` with \`category: "gov"\` and cannot be combined with other categories. \`categories: ["research"]\` restricts web results to research-affiliated websites; the \`firecrawl_research_*\` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Authenticated responses can include an \`id\` for optional search feedback.
 `,
@@ -1887,16 +1886,14 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
     execute: async (args: unknown, { session, log, client: mcpClient }): Promise<ContentResult> => {
       const { query, ...opts } = args as Record<string, unknown>;
 
-      const requestedSources = normalizeSearchSources(
-        Array.isArray(opts.sources) && opts.sources.length ? opts.sources : ['web']
-      ) as unknown[];
-      const addsAlexandria =
-        hasCredential(session) &&
-        enterpriseAllowsAlexandria(opts.enterprise) &&
-        !hasAlexandria(requestedSources);
+      const { sources: resolvedSources, requestedSources, addsAlexandria } = resolveSearchSources({
+        sources: opts.sources,
+        credentialed: hasCredential(session),
+        enterprise: opts.enterprise,
+      });
       const searchOpts = {
         ...opts,
-        sources: addsAlexandria ? withAlexandriaSource(requestedSources) : requestedSources,
+        sources: resolvedSources,
       } as Record<string, unknown>;
       searchOpts.domainTools ??= defaultDomainTools(searchOpts.sources);
       searchOpts.toolDetail ??= 'compact';

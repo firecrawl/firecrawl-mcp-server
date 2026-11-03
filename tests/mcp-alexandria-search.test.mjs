@@ -43,9 +43,9 @@ test('search without data.skills leaves the grouped result unchanged', async (t)
 test('authenticated search always adds alexandria and keeps the requested sources', async (t) => {
   const { api, client } = await startStdioWithApi(t);
   for (const [overrides, sources, domainTools] of [
-    [{}, ['web', 'alexandria'], true],
-    [{ sources: [] }, ['web', 'alexandria'], true],
-    [{ domainTools: false }, ['web', 'alexandria'], false],
+    [{}, ['web', 'alexandria', 'alexandria-skills'], true],
+    [{ sources: [] }, ['web', 'alexandria', 'alexandria-skills'], true],
+    [{ domainTools: false }, ['web', 'alexandria', 'alexandria-skills'], false],
     [{ sources: ['web'] }, ['web', 'alexandria'], true],
     [{ sources: ['web'], domainTools: false }, ['web', 'alexandria'], false],
     [{ sources: ['news'] }, ['news', 'alexandria'], true],
@@ -56,7 +56,9 @@ test('authenticated search always adds alexandria and keeps the requested source
     [{ sources: ['alexandria'] }, ['alexandria'], false],
     [{ sources: [{ type: 'alexandria' }] }, [{ type: 'alexandria' }], false],
     [{ sources: ['alexandria'], domainTools: true }, ['alexandria'], true],
-    [{ categories: ['gov'] }, ['web', 'alexandria'], true],
+    [{ categories: ['gov'] }, ['web', 'alexandria', 'alexandria-skills'], true],
+    [{ sources: ['web', 'alexandria-skills'] }, ['web', 'alexandria-skills', 'alexandria'], true],
+    [{ sources: [{ type: 'alexandria-skills' }] }, [{ type: 'alexandria-skills' }, { type: 'alexandria' }], false],
     [{ sources: ['web'], categories: ['developer'] }, ['web', 'alexandria'], true],
   ]) {
     const result = await client.request('tools/call', {
@@ -93,7 +95,7 @@ test('search without a credential sends only the requested sources', async (t) =
     FIRECRAWL_OAUTH_TOKEN: '',
     FIRECRAWL_API_URL: api.url,
   });
-  for (const [overrides, sources] of [[{}, ['web']], [{ sources: ['news'] }, ['news']]]) {
+  for (const [overrides, sources] of [[{}, ['web']], [{ sources: ['news'] }, ['news']], [{ sources: ['web', 'alexandria-skills'] }, ['web', 'alexandria-skills']]]) {
     const result = await client.request('tools/call', {
       name: 'firecrawl_search',
       arguments: { query: 'company news', ...overrides },
