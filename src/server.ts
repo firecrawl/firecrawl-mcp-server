@@ -539,7 +539,6 @@ export {
   searchQueryIsValid,
 } from './alexandria.js';
 export { searchOutputSchema } from './tool-output.js';
-export { surfaceSearchSkills } from './alexandria.js';
 export { QUERY_EMBED_RETRY_CAP_MS, queryEmbedRetryDelayMs } from './tool-helpers.js';
 export {
   assertExchangeCredential,
