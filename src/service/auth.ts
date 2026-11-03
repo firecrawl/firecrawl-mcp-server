@@ -86,6 +86,22 @@ function getOAuthProtectedResourceMetadataUrl(profile: ServerProfile): string {
   return profile.id === 'full' ? base : `${base}${resource.pathname}`;
 }
 
+function oauthChallengeHeader(profile: ServerProfile, description: string): string {
+  // WWW-Authenticate is one header. Flatten CR/LF so a multiline JSON
+  // message cannot split the header value.
+  const wwwAuthenticateDescription = description.replace(/[\r\n]+/g, ' ').trim();
+  const wwwAuthenticate = [
+    ...(profile.advertiseOAuth
+      ? [
+          `resource_metadata="${escapeWWWAuthenticateValue(getOAuthProtectedResourceMetadataUrl(profile))}"`,
+        ]
+      : []),
+    'error="invalid_token"',
+    `error_description="${escapeWWWAuthenticateValue(wwwAuthenticateDescription)}"`,
+  ].join(', ');
+  return `Bearer ${wwwAuthenticate}`;
+}
+
 function createOAuthChallengeResponse(
   error: unknown,
   profile: ServerProfile,
@@ -98,18 +114,6 @@ function createOAuthChallengeResponse(
 
   const errorMessage =
     error instanceof Error ? error.message : String(error || 'Unauthorized');
-  // WWW-Authenticate is one header. Flatten CR/LF so a multiline JSON
-  // message cannot split the header value.
-  const wwwAuthenticateDescription = errorMessage.replace(/[\r\n]+/g, ' ').trim();
-  const wwwAuthenticate = [
-    ...(profile.advertiseOAuth
-      ? [
-          `resource_metadata="${escapeWWWAuthenticateValue(getOAuthProtectedResourceMetadataUrl(profile))}"`,
-        ]
-      : []),
-    'error="invalid_token"',
-    `error_description="${escapeWWWAuthenticateValue(wwwAuthenticateDescription)}"`,
-  ].join(', ');
 
   return new Response(
     JSON.stringify({
@@ -120,15 +124,28 @@ function createOAuthChallengeResponse(
     {
       headers: {
         'Content-Type': 'application/json',
-        'WWW-Authenticate': `Bearer ${wwwAuthenticate}`,
+        'WWW-Authenticate': oauthChallengeHeader(profile, errorMessage),
       },
       status: 401,
     }
   );
 }
 
-function createInvalidCredentialResponse(_error: InvalidFirecrawlCredentialError): Response {
+/**
+ * A profile that advertises OAuth answers an unrecognized bearer with its OAuth
+ * challenge, so the client can sign in again. A credential sent in an API-key
+ * header gets no challenge: that header takes precedence over Authorization,
+ * so signing in would not replace it.
+ */
+function createInvalidCredentialResponse(
+  request: AuthRequest | undefined,
+  profile: ServerProfile
+): Response {
   const recovery = invalidApiKeyRecoveryPayload();
+  const headerApiKey = normalizeHeader(
+    request?.headers?.['x-firecrawl-api-key'] ?? request?.headers?.['x-api-key']
+  );
+  const challenge = profile.advertiseOAuth && !headerApiKey;
   return new Response(
     JSON.stringify({
       error: 'invalid_api_key',
@@ -136,7 +153,12 @@ function createInvalidCredentialResponse(_error: InvalidFirecrawlCredentialError
       ...recovery,
     }),
     {
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(challenge
+          ? { 'WWW-Authenticate': oauthChallengeHeader(profile, recovery.message) }
+          : {}),
+      },
       status: 401,
     }
   );
@@ -665,7 +687,7 @@ export function createServiceAuthenticate(
           'rejected'
         );
         if (error instanceof InvalidFirecrawlCredentialError) {
-          throw createInvalidCredentialResponse(error);
+          throw createInvalidCredentialResponse(request, profile);
         }
         if (error instanceof InvalidOAuthCredentialError) {
           const recovery = invalidOAuthRecoveryPayload();
