@@ -49,7 +49,7 @@ export function withSkillSource(sources: unknown[]): unknown[] {
  * Alexandria is web, alexandria, and alexandria-skills. An explicit list is kept
  * as given, aside from the existing alexandria addition, so the caller can include
  * or leave out alexandria-skills. Keyless, zdr, and anon sessions are not given
- * alexandria-skills: that source is refused without Alexandria access.
+ * alexandria-skills by default. An explicit alexandria-skills entry is still forwarded.
  */
 export function resolveSearchSources(input: {
   sources: unknown;
