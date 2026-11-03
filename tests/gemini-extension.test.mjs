@@ -12,13 +12,13 @@ test('the Gemini CLI extension version matches the package version', () => {
   assert.equal(manifest.version, pkg.version);
 });
 
-test('the Gemini CLI extension starts the latest firecrawl-mcp with the declared key setting', () => {
+test('the Gemini CLI extension starts the firecrawl-mcp release it ships with the declared key setting', () => {
   const server = manifest.mcpServers.firecrawl;
   assert.equal(server.command, 'npx');
-  assert.deepEqual(server.args, ['-y', `${pkg.name}@latest`]);
+  assert.deepEqual(server.args, ['-y', `${pkg.name}@${pkg.version}`]);
   assert.deepEqual(
-    Object.keys(server.env),
-    manifest.settings.map((setting) => setting.envVar)
+    Object.keys(server.env).sort(),
+    manifest.settings.map((setting) => setting.envVar).sort()
   );
   assert.equal(server.env.FIRECRAWL_API_KEY, '${FIRECRAWL_API_KEY}');
 });
