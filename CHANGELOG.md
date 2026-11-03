@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.36.1] - 2026-11-03
+
+### Changed
+
+- The `firecrawl` JS SDK dependency moves from 4.50.0 to 4.51.0. That release adds the Government Index filters (`jurisdiction`, `court`, `courtType`, `cites`, `domain`) to the SDK's `govSearch`, `location` and `zeroDataRetention` to agent requests, and `insufficient_credits` and `zeroDataRetention` to the agent trace types. The server uses none of them: `firecrawl_gov_search` already sends its filters through the SDK's HTTP client, and `firecrawl_agent` offers neither `location` nor `zeroDataRetention`, so tools, schemas and results are unchanged.
+
+### Fixed
+
+- The Gemini CLI extension starts `npx -y firecrawl-mcp@latest` instead of `npx -y firecrawl-mcp`. Without a version, npm picks the newest release whose `engines` accepts the running Node, so on Node 20, which Gemini CLI supports, the extension ran firecrawl-mcp 3.22.2. The `latest` tag always resolves the current release, which starts on Node 20 with an engine warning.
+
 ## [3.36.0] - 2026-10-27
 
 ### Changed
