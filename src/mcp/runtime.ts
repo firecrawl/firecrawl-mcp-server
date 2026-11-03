@@ -140,7 +140,11 @@ export type ModernRequest = {
 export const TASKS_EXTENSION = 'io.modelcontextprotocol/tasks';
 
 export type ToolExecuteContext<Auth> = {
-  client: { version?: { name?: string; version?: string } };
+  /**
+   * `version` is the client's `clientInfo`; `perRequest` is set when it
+   * came from a 2026-07-28 call's own `_meta` rather than an initialize.
+   */
+  client: { version?: { name?: string; version?: string }; perRequest?: boolean };
   /** The 2026-07-28 request details; absent on 2025-era calls. */
   mcp?: ModernRequest;
   /**
@@ -661,11 +665,12 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
         try {
           const value = await tool.execute(args, {
             ...extra,
-            client: {
-              version:
-                (envelope?.[CLIENT_INFO_META_KEY] as { name?: string; version?: string } | undefined) ??
-                server.getClientVersion(),
-            },
+            client: envelope?.[CLIENT_INFO_META_KEY]
+              ? {
+                  version: envelope[CLIENT_INFO_META_KEY] as { name?: string; version?: string },
+                  perRequest: true,
+                }
+              : { version: server.getClientVersion() },
             log: {
               debug: sendLog('debug'),
               error: sendLog('error'),
