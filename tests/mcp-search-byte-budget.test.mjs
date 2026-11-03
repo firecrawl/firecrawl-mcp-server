@@ -136,6 +136,7 @@ test('when results alone overflow the budget, the lowest-ranked ones are left ou
 
 for (const [label, markdown, truncated] of [
   ['all retained content fits', 'Important body text. '.repeat(1_000), false],
+  ['whole content fits but its truncation markers would not', 'x'.repeat(219_500), false],
   ['retained content still needs truncation', 'Row | "quoted" value | é ü 🔥\n'.repeat(30_000), true],
 ]) {
   test(`dropping results leaves room for page content: ${label}`, async (t) => {
@@ -170,9 +171,67 @@ for (const [label, markdown, truncated] of [
     } else {
       assert.ok(kept.markdown === markdown, 'page content that fits must stay whole');
       assert.equal(kept.truncated, undefined);
+      assert.doesNotMatch(body.warning, /Page content was cut/);
     }
   });
 }
+
+test('short-field truncation markers do not force otherwise fitting results to be dropped', async (t) => {
+  const web = Array.from({ length: 100 }, (_, i) => ({
+    url: `https://example.com/page-${i}`,
+    description: 'short',
+    metadata: { note: 'x'.repeat(4_200) },
+    ...(i === 0 ? { markdown: 'x'.repeat(100_000) } : {}),
+  }));
+  const search = await startServer(t, { success: true, data: { web } });
+  const result = await search(CAPPED_USER_AGENT);
+  assert.ok(resultBytes(result) <= BUDGET);
+  const body = JSON.parse(result.content[0].text);
+  assert.deepEqual(result.structuredContent, body);
+  assert.equal(body.data.web.length, web.length);
+  for (const item of body.data.web) assert.equal(item.description, 'short');
+  assert.match(body.data.web[0].markdown, /^x+/);
+  assert.doesNotMatch(body.warning, /lower-ranked results were left out/);
+});
+
+test('content fitting checks intermediate field-length boundaries', async (t) => {
+  const web = [{
+    url: 'https://example.com/',
+    markdown: 'm'.repeat(1_000),
+    description: 'd'.repeat(400),
+    metadata: { note: 'x'.repeat(448_560) },
+  }];
+  const search = await startServer(t, { success: true, data: { web } });
+  const result = await search(CAPPED_USER_AGENT);
+  assert.ok(resultBytes(result) <= BUDGET);
+  const body = JSON.parse(result.content[0].text);
+  assert.deepEqual(result.structuredContent, body);
+  assert.equal(body.data.web.length, 1);
+  const kept = body.data.web[0];
+  // At limit 399 both fields carry markers and exceed the budget. At 400,
+  // the description becomes whole and its marker disappears, leaving room
+  // for a longer markdown prefix even though all 1,000 still cannot fit.
+  assert.equal(kept.description, web[0].description);
+  const prefix = /^m+/.exec(kept.markdown)?.[0];
+  assert.ok(prefix && prefix.length >= 400 && prefix.length < 1_000);
+  assert.match(kept.truncated, /^markdown cut to fit/);
+  assert.doesNotMatch(body.warning, /lower-ranked results were left out/);
+  const more = {
+    ...body,
+    data: {
+      ...body.data,
+      web: [{
+        ...kept,
+        markdown: `m${kept.markdown.replace(`Truncated: ${prefix.length}`, `Truncated: ${prefix.length + 1}`)}`,
+      }],
+    },
+  };
+  assert.ok(resultBytes({
+    ...result,
+    content: [{ ...result.content[0], text: JSON.stringify(more) }],
+    structuredContent: more,
+  }) > BUDGET, 'one more retained character must exceed the budget');
+});
 
 test('when groups that are not cut overflow the budget, an empty bounded result comes back', async (t) => {
   const alexandria = [{ provider: 'example', data: 'x'.repeat(1_000_000) }];

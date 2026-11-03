@@ -70,8 +70,14 @@ function cutResult(result: unknown, limit: number): unknown {
 }
 
 /** The response with content cut to `limit` and only the first `keep` results across groups. */
-function shape(response: Json, data: Json, limit: number, keep: number): Json {
+function shape(
+  response: Json,
+  data: Json,
+  limit: number,
+  keep: number
+): { response: Json; truncated: boolean } {
   let left = keep;
+  let truncated = false;
   const groups: Json = {};
   for (const [group, value] of Object.entries(data)) {
     if (!RESULT_GROUPS.includes(group) || !Array.isArray(value)) {
@@ -80,9 +86,13 @@ function shape(response: Json, data: Json, limit: number, keep: number): Json {
     }
     const kept = value.slice(0, Math.max(left, 0));
     left -= kept.length;
-    groups[group] = kept.map((result) => cutResult(result, limit));
+    groups[group] = kept.map((result) => {
+      const cut = cutResult(result, limit);
+      if (cut !== result) truncated = true;
+      return cut;
+    });
   }
-  return { ...response, data: groups };
+  return { response: { ...response, data: groups }, truncated };
 }
 
 function largestFitting(low: number, high: number, fits: (n: number) => boolean): number {
@@ -109,39 +119,77 @@ export function fitSearchResponse(response: unknown, budget: number): unknown {
     .filter(([group, value]) => RESULT_GROUPS.includes(group) && Array.isArray(value))
     .flatMap(([, value]) => value as unknown[]);
   const total = results.length;
-  const longest = Math.max(
-    0,
-    ...results.flatMap((result) =>
-      isRecord(result)
-        ? CONTENT_FIELDS.map((field) => {
-            const value = result[field];
-            if (typeof value === 'string') return value.length;
-            return Array.isArray(value) ? JSON.stringify(value).length : 0;
-          })
-        : []
-    )
+  const contentLengths = results.map((result) =>
+    isRecord(result)
+      ? CONTENT_FIELDS.map((field) => {
+          const value = result[field];
+          if (typeof value === 'string') return value.length;
+          return Array.isArray(value) ? JSON.stringify(value).length : 0;
+        })
+      : []
   );
-  const build = (limit: number, keep: number): Json => {
-    const notes = [
-      `Page content was cut to keep this response under ${budget} bytes. Results with a \`truncated\` field hold partial content; call firecrawl_scrape on their URLs for the full page.`,
-    ];
+  const bareData: Json = { ...data };
+  for (const group of RESULT_GROUPS) {
+    const groupResults = data[group];
+    if (!Array.isArray(groupResults)) continue;
+    bareData[group] = groupResults.map((result) => {
+      if (!isRecord(result)) return result;
+      const bare = { ...result };
+      for (const field of CONTENT_FIELDS) delete bare[field];
+      delete bare.truncated;
+      return bare;
+    });
+  }
+  const build = (limit: number, keep: number, source = data): Json => {
+    const shaped = shape(response, source, limit, keep);
+    const notes: string[] = [];
+    if (shaped.truncated) {
+      notes.push(`Page content was cut to keep this response under ${budget} bytes. Results with a \`truncated\` field hold partial content; call firecrawl_scrape on their URLs for the full page.`);
+    }
     if (keep < total) {
-      notes.push(`${total - keep} lower-ranked results were left out to fit the same limit.`);
+      notes.push(`${total - keep} lower-ranked results were left out to keep this response under ${budget} bytes.`);
     }
     const warning = typeof response.warning === 'string' && response.warning
       ? `${response.warning} ${notes.join(' ')}`
       : notes.join(' ');
-    return { ...shape(response, data, limit, keep), warning };
+    return { ...shaped.response, warning };
   };
   const fits = (limit: number, keep: number) => resultBytes(build(limit, keep)) <= budget;
+  const limits = new Map<number, number | undefined>();
+  const contentLimit = (keep: number): number | undefined => {
+    if (limits.has(keep)) return limits.get(keep);
+    // Content and its markers only add bytes to this lower bound. Avoid
+    // scanning every boundary when the retained metadata alone cannot fit.
+    if (resultBytes(build(0, keep, bareData)) > budget) {
+      limits.set(keep, undefined);
+      return undefined;
+    }
+    const boundaries = [...new Set([0, ...contentLengths.slice(0, keep).flat()])]
+      .sort((a, b) => a - b);
+    // Size can fall when a field becomes whole and loses its truncation
+    // markers. Between those boundaries it only grows, so search each
+    // interval separately, starting with the longest possible content.
+    for (let i = boundaries.length - 1; i >= 0; i -= 1) {
+      const low = boundaries[i];
+      if (!fits(low, keep)) continue;
+      const high = i + 1 < boundaries.length ? boundaries[i + 1] - 1 : low;
+      const limit = largestFitting(low, high, (n) => fits(n, keep));
+      limits.set(keep, limit);
+      return limit;
+    }
+    limits.set(keep, undefined);
+    return undefined;
+  };
 
-  if (fits(0, total)) {
-    return build(largestFitting(0, longest, (n) => fits(n, total)), total);
+  const allLimit = contentLimit(total);
+  if (allLimit !== undefined) {
+    return build(allLimit, total);
   }
-  const keep = largestFitting(0, total, (n) => fits(0, n));
-  if (fits(0, keep)) {
+  const keep = largestFitting(0, total, (n) => contentLimit(n) !== undefined);
+  const limit = contentLimit(keep);
+  if (limit !== undefined) {
     // Dropping results frees space for content in the results we keep.
-    return build(largestFitting(0, longest, (n) => fits(n, keep)), keep);
+    return build(limit, keep);
   }
   return {
     success: response.success,

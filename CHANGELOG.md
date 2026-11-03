@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- When the search response byte cap drops lower-ranked results, retained results now keep as much page content as fits in the remaining budget instead of always losing all page content.
+- When the search response byte cap drops lower-ranked results, retained results now keep as much page content as fits in the remaining budget instead of always losing all page content. Fitting accounts for truncation markers disappearing when a field becomes whole, and only warns that page content was cut when retained content actually changed.
 
 ## [3.36.0] - 2026-10-27
 
