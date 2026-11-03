@@ -55,6 +55,7 @@ import {
   createSkillSchema,
   updateSkillSchema,
   withSkillNavigation,
+  surfaceSearchSkills,
   presentProviderSkillRead,
   providerSkillsOnPage,
   providerSkillsPageInfo,
@@ -538,6 +539,7 @@ export {
   searchQueryIsValid,
 } from './alexandria.js';
 export { searchOutputSchema } from './tool-output.js';
+export { surfaceSearchSkills } from './alexandria.js';
 export { QUERY_EMBED_RETRY_CAP_MS, queryEmbedRetryDelayMs } from './tool-helpers.js';
 export {
   assertExchangeCredential,
@@ -1858,13 +1860,13 @@ Enumerate URLs indexed under one website through Firecrawl without fetching each
       destructiveHint: false, // Query-only; no destructive side effects on external entities.
     },
     description: `
-Search web, news, or image sources and return ranked results with query-relevant highlights. Use it for current information, or to list businesses, people, products, jobs or events with websites, prices or contacts. Each web result is a title, URL, and description; use \`firecrawl_scrape\` on a result URL when the excerpt is not enough.
+Search web, news, or image sources and return ranked results with query-relevant highlights. Each web result is a title, URL, and description; use \`firecrawl_scrape\` on a result URL when the excerpt is not enough.
 
 ${ALEXANDRIA_SEARCH_LEAD}
 
-On an authenticated session, tool matches describe available capabilities; \`firecrawl_find_tools\` returns their contracts and \`firecrawl_scrape\` with an \`alexandria\` body executes a selected capability. Keyless sessions get no Alexandria matches in data.tools.
+On an authenticated session, tool matches describe available capabilities; \`firecrawl_find_tools\` returns their contracts and \`firecrawl_scrape\` with an \`alexandria\` body executes a selected capability. Keyless sessions get no Alexandria matches in data.tools. When \`data.skills\` is present, call \`firecrawl_read_skill\` with a card's \`nextTool\` for the full skill.
 
-For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`. For a legal or regulatory question, \`categories: ["gov"]\` returns hits in \`data.web\` with \`category: "gov"\` and cannot be combined with other categories; authenticated sessions also have \`firecrawl_gov_search\` as the dedicated tool. Verify gov results' issuer, jurisdiction, status, and version before citing current law. \`categories: ["research"]\` restricts web results to research-affiliated websites; the \`firecrawl_research_*\` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
+For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`. For a legal or regulatory question, \`categories: ["gov"]\` returns hits in \`data.web\` with \`category: "gov"\` and cannot be combined with other categories. \`categories: ["research"]\` restricts web results to research-affiliated websites; the \`firecrawl_research_*\` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Authenticated responses can include an \`id\` for optional search feedback.
 `,
     outputSchema: searchOutputSchema,
     parameters: z
@@ -1916,7 +1918,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       };
       const byteBudget = searchByteBudget(session?.clientUserAgent);
       const searchResult = (response: unknown) => {
-        const shown = annotateResultPositions(withoutDiscoveredToolPrices(response));
+        const shown = surfaceSearchSkills(annotateResultPositions(withoutDiscoveredToolPrices(response)));
         return structuredCompact(byteBudget ? fitSearchResponse(shown, byteBudget) : shown);
       };
       const exchangeSource = hasAlexandria(searchBody.sources);
@@ -2067,7 +2069,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       idempotentHint: true,
     },
     description:
-      'List skills: written instructions for a task that name the Alexandria capabilities to call. Returns Firecrawl\'s own skills and your team\'s own skills (ids team:<slug>, listed first), as name, description and file list only. Set provider to list that provider\'s skills instead: provider and any query (sent as q) go to Exchange, and later pages are read until limit is filled. Choose one and read it with firecrawl_read_skill (each result\'s nextTool). Use query to match words in a skill\'s id, name or description; omit it to list every skill. Free.',
+      'List skills: written instructions for a task that name the Alexandria capabilities to call. Returns Firecrawl\'s own skills and your team\'s own skills (ids team:<slug>, listed first), as name, description and file list only. Set provider to list that provider\'s skills instead: provider and any query (sent as q) go to Exchange, and later pages are read until limit is filled. Choose one and read it with firecrawl_read_skill (each result\'s nextTool). Use query as a natural-language goal: official and provider skills are ranked semantically, and team skills still match those words. Omit it to list every skill. Free.',
     outputSchema: findSkillsOutputSchema,
     canList: (session: SessionData) => !isKeylessMode(session) && hasCredential(session),
     parameters: findSkillsSchema,

@@ -98,7 +98,7 @@ const skillPathSegment = z
 
 export const findSkillsSchema = z
   .object({
-    query: z.string().trim().min(1).max(2000).optional().describe('Words that must all appear in a skill\'s id, name or description. Omit to list every matching skill.'),
+    query: z.string().trim().min(1).max(2000).optional().describe('A natural-language goal. Official and provider skills are ranked semantically; team skills still match these words in the id, name or description. Omit to list without a goal.'),
     limit: z.number().int().min(1).max(50).optional().describe('Most skills to return; defaults to 20.'),
     provider: skillPathSegment.optional().describe('List skills published by this Alexandria provider instead of Firecrawl and team skills. Sent to Exchange as provider; a query is sent as q. Later pages are read until limit is filled.'),
   })
@@ -415,6 +415,71 @@ export function withoutToolPrice(tool: any) {
   const copy = { ...tool };
   for (const key of TOOL_PRICE_KEYS) delete copy[key];
   return copy;
+}
+
+function searchSkillProvider(value: unknown): string | undefined {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (value && typeof value === 'object' && !Array.isArray(value) && typeof (value as { slug?: unknown }).slug === 'string') {
+    const slug = (value as { slug: string }).slug.trim();
+    return slug || undefined;
+  }
+  return undefined;
+}
+
+/** Read call for a search skill card. Provider cards use provider, plugin and skill when the id carries them. */
+function searchSkillRead(card: { id?: unknown; source?: unknown; provider?: unknown }): { name: string; arguments: Record<string, string> } | undefined {
+  if (typeof card.id !== 'string' || !card.id.trim()) return undefined;
+  const id = card.id.trim();
+  const provider = searchSkillProvider(card.provider);
+  const parts = id.split('/').filter(Boolean);
+  const providerShaped = card.source === 'provider' || id.startsWith('provider:');
+  if (providerShaped && parts.length >= 2) {
+    const skill = parts[parts.length - 1];
+    const plugin = parts.length >= 3 ? parts[parts.length - 2] : parts[0];
+    const head = parts[0].startsWith('provider:') ? parts[0].slice('provider:'.length) : undefined;
+    const slug = provider ?? head;
+    const usable = parts.length >= 3 || (Boolean(provider) && !parts[0].startsWith('provider:'));
+    if (usable && slug && plugin && skill && [slug, plugin, skill].every((segment) => segment !== '.' && segment !== '..' && !/[/\\]/.test(segment))) {
+      return { name: 'firecrawl_read_skill', arguments: { provider: slug, plugin, skill } };
+    }
+  }
+  return { name: 'firecrawl_read_skill', arguments: { id } };
+}
+
+/**
+ * When a search response includes `data.skills`, keep short cards and place them
+ * after `web` and `tools`. Each card points at `firecrawl_read_skill` for the full body.
+ * A response without that array is returned unchanged.
+ */
+export function surfaceSearchSkills<T>(envelope: T): T {
+  const data = (envelope as { data?: unknown } | null)?.data;
+  if (!data || typeof data !== 'object' || Array.isArray(data) || !Array.isArray((data as { skills?: unknown }).skills)) return envelope;
+  const skills = ((data as { skills: unknown[] }).skills).flatMap((card) => {
+    if (!card || typeof card !== 'object' || Array.isArray(card)) return [];
+    const record = card as Record<string, unknown>;
+    const compact: Record<string, unknown> = {};
+    if (typeof record.id === 'string') compact.id = record.id;
+    if (typeof record.name === 'string') compact.name = record.name;
+    if (typeof record.description === 'string') compact.description = record.description;
+    if (record.source === 'official' || record.source === 'provider') compact.source = record.source;
+    const provider = searchSkillProvider(record.provider);
+    if (provider) compact.provider = provider;
+    if (typeof record.similarity === 'number' && Number.isFinite(record.similarity)) compact.similarity = record.similarity;
+    const nextTool = searchSkillRead(compact);
+    if (nextTool) compact.nextTool = nextTool;
+    return [compact];
+  });
+  const rest = { ...(data as Record<string, unknown>) };
+  delete rest.skills;
+  const keys = Object.keys(rest);
+  const after = Math.max(keys.indexOf('web'), keys.indexOf('tools'));
+  const ordered: Record<string, unknown> = {};
+  if (after < 0) Object.assign(ordered, rest, { skills });
+  else keys.forEach((key, index) => {
+    ordered[key] = rest[key];
+    if (index === after) ordered.skills = skills;
+  });
+  return { ...(envelope as Record<string, unknown>), data: ordered } as T;
 }
 
 /** Strips per-capability prices from `data.tools` in a search or URL scrape response. */

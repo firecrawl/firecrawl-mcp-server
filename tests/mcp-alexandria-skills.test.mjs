@@ -9,6 +9,11 @@ test('skill routing lives on the tool descriptions, inside the client window', a
   const byName = new Map(tools.map(tool => [tool.name, tool.description]));
   assert.match(byName.get('firecrawl_find_skills'), /Set provider to list that provider's skills instead/);
   assert.match(byName.get('firecrawl_find_skills'), /sent as q/);
+  assert.match(byName.get('firecrawl_find_skills'), /natural-language goal/);
+  const findTool = tools.find(tool => tool.name === 'firecrawl_find_skills');
+  assert.match(findTool.inputSchema.properties.query.description, /natural-language goal/);
+  assert.match(findTool.inputSchema.properties.query.description, /team skills still match/);
+  assert.doesNotMatch(findTool.inputSchema.properties.query.description, /must all appear/);
   assert.match(byName.get('firecrawl_read_skill'), /Pass provider, plugin and skill/);
   assert.match(byName.get('firecrawl_create_skill'), /show the user the result message, which begins "Open it in Firecrawl:"/);
   assert.match(byName.get('firecrawl_update_skill'), /enabled or listed \(discoverable\)/);

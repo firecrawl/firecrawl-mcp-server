@@ -119,6 +119,18 @@ async function startFakeExchangeApi(options = {}) {
         return json(403, { success: false, error: options.searchRefusal });
       }
 
+      if (options.searchSkills) {
+        return json(200, {
+          success: true,
+          data: {
+            skills: options.searchSkills,
+            web: [{ url: 'https://example.com', title: 'Example', description: 'A page.' }],
+            tools: [CAPABILITY_HIT],
+          },
+          creditsUsed: 0,
+          id: '00000000-0000-4000-8000-000000000000',
+        });
+      }
       return json(200, {
         success: true,
         data: { tools: [CAPABILITY_HIT] },

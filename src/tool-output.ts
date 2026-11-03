@@ -151,7 +151,7 @@ export const mapOutputSchema = z
 export const searchOutputSchema = z
   .object({
     success,
-    data: unknown('Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`. Each result carries its `source` and a 1-indexed `position` within that group; pass those pairs to `firecrawl_search_feedback`.'),
+    data: unknown('Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`. Each result carries its `source` and a 1-indexed `position` within that group; pass those pairs to `firecrawl_search_feedback`. Optional `skills` lists short official or provider skill cards after `web` and `tools`; call `firecrawl_read_skill` with a card\'s `nextTool` for the full body.'),
     error,
     warning,
     id: str('Search identifier, for optional `firecrawl_search_feedback`.'),

@@ -3,6 +3,43 @@ import test from 'node:test';
 import { startStdio, startStdioWithApi, callExpectingError, toolText } from './helpers/exchange-mcp.mjs';
 import { startFakeExchangeApi } from './helpers/exchange-api.mjs';
 
+test('search surfaces optional skill cards after web and tools', async (t) => {
+  const { client } = await startStdioWithApi(t, {
+    searchSkills: [
+      { id: 'account-firmographic-waterfall', name: 'Waterfall', description: 'Firmographics.', source: 'official', similarity: 0.91, body: '# full body' },
+      { id: 'provider:acme/research/brief', name: 'Brief', description: 'Write a brief.', source: 'provider', provider: 'acme', similarity: 0.8, files: ['SKILL.md'] },
+    ],
+  });
+  const body = toolText(await client.request('tools/call', { name: 'firecrawl_search', arguments: { query: 'firmographics' } }));
+  assert.deepEqual(Object.keys(body.data), ['web', 'tools', 'skills']);
+  assert.equal(body.data.web[0].source, 'web');
+  assert.equal(body.data.web[0].position, 1);
+  assert.deepEqual(body.data.skills[0], {
+    id: 'account-firmographic-waterfall',
+    name: 'Waterfall',
+    description: 'Firmographics.',
+    source: 'official',
+    similarity: 0.91,
+    nextTool: { name: 'firecrawl_read_skill', arguments: { id: 'account-firmographic-waterfall' } },
+  });
+  assert.deepEqual(body.data.skills[1], {
+    id: 'provider:acme/research/brief',
+    name: 'Brief',
+    description: 'Write a brief.',
+    source: 'provider',
+    provider: 'acme',
+    similarity: 0.8,
+    nextTool: { name: 'firecrawl_read_skill', arguments: { provider: 'acme', plugin: 'research', skill: 'brief' } },
+  });
+});
+
+test('search without data.skills leaves the grouped result unchanged', async (t) => {
+  const { client } = await startStdioWithApi(t);
+  const body = toolText(await client.request('tools/call', { name: 'firecrawl_search', arguments: { query: 'company news' } }));
+  assert.equal(Object.hasOwn(body.data, 'skills'), false);
+  assert.deepEqual(Object.keys(body.data), ['tools']);
+});
+
 test('authenticated search always adds alexandria and keeps the requested sources', async (t) => {
   const { api, client } = await startStdioWithApi(t);
   for (const [overrides, sources, domainTools] of [

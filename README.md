@@ -569,7 +569,7 @@ For scientific papers, see [Research Tools](#12-research-tools-firecrawl_researc
 
 **Returns:**
 
-- Search results grouped by source (`data.web`, `data.images`, `data.news`), with optional scraped content, plus an `id` field. Every result carries a `source` and a 1-indexed `position`, numbered from 1 within its own group — copy the pair straight into `firecrawl_search_feedback`'s `valuableResults` rather than counting array elements. Pass that `id` to `firecrawl_search_feedback` after you've used the results to refund 1 credit (search costs 2) and improve search quality.
+- Search results grouped by source (`data.web`, `data.images`, `data.news`), with optional scraped content, plus an `id` field. Every result carries a `source` and a 1-indexed `position`, numbered from 1 within its own group — copy the pair straight into `firecrawl_search_feedback`'s `valuableResults` rather than counting array elements. Pass that `id` to `firecrawl_search_feedback` after you've used the results to refund 1 credit (search costs 2) and improve search quality. When the API includes `data.skills`, those short cards (id, name, description, source, optional provider, similarity) are listed after `web` and `tools`. Call `firecrawl_read_skill` with a card's `nextTool` for the full skill. A response without `data.skills` is unchanged.
 
 **Prompt Example:**
 
@@ -1189,12 +1189,12 @@ These four tools are the whole skills surface. Team and library skills use the s
 
 | Tool | Arguments |
 | --- | --- |
-| `firecrawl_find_skills` | `{}`, `{"query":"digest","limit":5}`, or `{"provider":"acme"}` |
+| `firecrawl_find_skills` | `{}`, `{"query":"firmographics for a target account","limit":5}`, or `{"provider":"acme"}` |
 | `firecrawl_read_skill` | `{"id":"team:weekly-digest"}`, `{"id":"deep-research","path":"references/sources.md"}`, or `{"provider":"acme","plugin":"research","skill":"brief"}` |
 | `firecrawl_create_skill` | `{"from":"deep-research"}` or `{"name":"...","description":"...","body":"..."}` |
 | `firecrawl_update_skill` | `{"id":"team:weekly-digest","baseVersion":2,"enabled":false,"discoverable":false}` |
 
-A library skill cannot be edited; copy it with `firecrawl_create_skill`. There is no delete here. Update can set `enabled` and `discoverable`. A successful create or update includes `Open it in Firecrawl: https://www.firecrawl.dev/app/alexandria/skills/<slug>` (`<slug>` has no `team:` prefix). Show that line to the user. A provider filter is sent as `provider`, and `query` is sent as `q`; the tool reads later pages until `limit` is filled. Exchange returns `provider` as `{slug, name}` and `plugin` as `{id, displayName}`, with no `skill` field. The read path uses `provider.slug`, `plugin.id`, and the last segment of the skill id. Set `file: true` on read to fetch that skill's file. The Firecrawl API forwards `GET /exchange/provider-skills` and `GET /exchange/provider-skills/:provider/:plugin/:skill` to Exchange `/v1/provider-skills`.
+A library skill cannot be edited; copy it with `firecrawl_create_skill`. There is no delete here. Update can set `enabled` and `discoverable`. `query` is a natural-language goal: official and provider skills are ranked semantically, and team skills still match words. A successful create or update includes `Open it in Firecrawl: https://www.firecrawl.dev/app/alexandria/skills/<slug>` (`<slug>` has no `team:` prefix). Show that line to the user. A provider filter is sent as `provider`, and `query` is sent as `q`; the tool reads later pages until `limit` is filled. Exchange returns `provider` as `{slug, name}` and `plugin` as `{id, displayName}`, with no `skill` field. The read path uses `provider.slug`, `plugin.id`, and the last segment of the skill id. Set `file: true` on read to fetch that skill's file. The Firecrawl API forwards `GET /exchange/provider-skills` and `GET /exchange/provider-skills/:provider/:plugin/:skill` to Exchange `/v1/provider-skills`.
 
 **Execute (`firecrawl_scrape` with `alexandria`):** pass `alexandria` instead of `url` (exactly one of the two; requestId and timeout may also be supplied). A single call or an array of up to ten calls is accepted.
 

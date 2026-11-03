@@ -21,6 +21,7 @@ import {
   searchCategoriesAreCompatible,
   searchDomainsAreExclusive,
   searchOutputSchema,
+  surfaceSearchSkills,
   searchQueryIsValid,
   searchToolBaseFields,
   structuredCompact,
@@ -180,7 +181,7 @@ Returns result groups in \`data\` and an operation \`id\`.
         () => retryQueryEmbedUnavailable(postSearch),
         { tool: 'firecrawl_search' }
       );
-      return structuredCompact(annotateResultPositions(httpRes?.data ?? {}));
+      return structuredCompact(surfaceSearchSkills(annotateResultPositions(httpRes?.data ?? {})));
     },
   });
 }
