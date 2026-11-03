@@ -8,7 +8,7 @@
 
 ### Fixed
 
-- The Gemini CLI extension starts `npx -y firecrawl-mcp@latest` instead of `npx -y firecrawl-mcp`. Without a version, npm picks the newest release whose `engines` accepts the running Node, so on Node 20, which Gemini CLI supports, the extension ran firecrawl-mcp 3.22.2. The `latest` tag always resolves the current release, which starts on Node 20 with an engine warning.
+- The Gemini CLI extension starts the firecrawl-mcp release it ships, `npx -y firecrawl-mcp@3.36.1`, instead of `npx -y firecrawl-mcp`. Without a version, npm picks the newest release whose `engines` accepts the running Node, so on Node 20, which Gemini CLI supports, the extension ran firecrawl-mcp 3.22.2. npm installs an exact version as asked, and 3.36.1 starts on Node 20 with an engine warning. The pin moves with each release: a test checks that it matches the package version.
 
 ## [3.36.0] - 2026-10-27
 
