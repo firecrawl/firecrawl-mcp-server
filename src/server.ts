@@ -3092,7 +3092,9 @@ The session runs in an isolated Firecrawl-hosted browser that never receives the
       const openedFromUrl = !scrapeId;
       if (openedFromUrl) {
         log.info('Opening interact session from url', { url });
-        const cleanedScrapeOptions = removeEmptyTopLevel(scrapeOptions ?? {});
+        const cleanedScrapeOptions = removeEmptyTopLevel(
+          transformScrapeParams(scrapeOptions ?? {})
+        );
         const scraped = await client.scrape(String(url), {
           ...cleanedScrapeOptions,
           origin,
