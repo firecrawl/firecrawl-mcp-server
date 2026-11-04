@@ -1767,6 +1767,15 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
         );
         return structuredText(withoutDiscoveredToolPrices(json?.data ?? json));
       }
+      // The SDK refuses a json format with neither a prompt nor a schema
+      // before sending it, with a plain error that reaches the client as text
+      // alone. Agents that hit it have often put their question in queryOptions.
+      const formats = Array.isArray(cleaned.formats) ? cleaned.formats : [];
+      if (formats.some((f: any) => f?.type === 'json' && !f.prompt && !f.schema)) {
+        const message =
+          'formats "json" needs jsonOptions with a prompt or a schema. To ask a question about the page, use formats ["query"] with queryOptions.prompt instead.';
+        throw new UserError(message, { success: false, error: { code: 'invalid_request', message } });
+      }
       const client = getClient(session);
       const res = await relayTermsRequired(
         () =>

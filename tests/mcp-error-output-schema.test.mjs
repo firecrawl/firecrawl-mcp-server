@@ -175,6 +175,23 @@ test('a failure the API answers with 200 keeps its text and adds its code', asyn
   });
 });
 
+test('a json format without a prompt or schema is refused with a structured next step', async (t) => {
+  const message =
+    'formats "json" needs jsonOptions with a prompt or a schema. To ask a question about the page, use formats ["query"] with queryOptions.prompt instead.';
+  const result = await assertReadableError(t, {
+    apiUrl: 'http://127.0.0.1:9',
+    session: apiKey,
+    name: 'firecrawl_scrape',
+    args: { url: 'https://example.com', formats: ['json'], queryOptions: { prompt: 'How many reviews?' } },
+    includes: message,
+  });
+  assert.equal(result.content[0].text, message);
+  assert.deepEqual(result.structuredContent, {
+    success: false,
+    error: { code: 'invalid_request', message },
+  });
+});
+
 test('an unsupported site reaches an SDK client as a reason and a next step', async (t) => {
   const apiUrl = await startRefusingApi(t, 403, {
     success: false,
