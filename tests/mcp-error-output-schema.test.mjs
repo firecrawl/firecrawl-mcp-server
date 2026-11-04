@@ -159,6 +159,26 @@ test('an API error code the API sends is kept over the status name', async (t) =
   assert.equal(result.structuredContent.error.status, 408);
 });
 
+test('a paper ID the research API does not know is reported as not found', async (t) => {
+  const apiUrl = await startRefusingApi(t, 404, { success: false, code: 'NOT_FOUND', error: 'paper metadata not found' });
+  const { client } = await connect(t, { apiUrl, session: apiKey });
+  const notFound =
+    '(paper not found: no indexed paper has the ID "turn1search2". Use a paperId or primaryId from firecrawl_research_search_papers results.)';
+  const read = await client.callTool({
+    name: 'firecrawl_research_read_paper',
+    arguments: { paperId: 'turn1search2', question: 'What is the main finding?' },
+  });
+  assert.notEqual(read.isError, true);
+  assert.deepEqual(read.content, [{ type: 'text', text: notFound }]);
+  assert.deepEqual(read.structuredContent, { passages: [] });
+  const inspect = await client.callTool({
+    name: 'firecrawl_research_inspect_paper',
+    arguments: { paperId: 'turn1search2' },
+  });
+  assert.notEqual(inspect.isError, true);
+  assert.deepEqual(inspect.content, [{ type: 'text', text: notFound }]);
+});
+
 test('a failure the API answers with 200 keeps its text and adds its code', async (t) => {
   const error = 'DNS resolution failed for hostname "example.invalid". Please verify the URL is correct and the website exists.';
   const apiUrl = await startRefusingApi(t, 200, { success: false, code: 'SCRAPE_DNS_RESOLUTION_ERROR', error });
