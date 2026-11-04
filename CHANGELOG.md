@@ -5,6 +5,8 @@
 ### Fixed
 
 - The server instructions for keyless sessions no longer say `firecrawl_developer_search` takes repository, language, and license filters. The tool takes `query`, `k` and `skills`; the instructions now describe what it searches: public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. 3.37.0 shipped the incorrect sentence.
+- `firecrawl_feedback` accepts `objective`, `rationale`, `requestedWebsite`, `providerFeedback` and `capabilityFeedback` on `search`, `scrape`, `parse` and `map` feedback. The tool advertises these fields, and agents often carry `objective` over from their search and scrape calls, but a job feedback call that included one failed validation with "<field> is only supported for Alexandria feedback" and was never sent. They are left out of the `/v2/feedback` body, which rejects unknown keys, except that `rationale` is sent as `note` when the call has no `note`. Alexandria feedback, and the advertised input schema, are unchanged.
+- `firecrawl_feedback` and `firecrawl_search_feedback` add the API's validation messages to `error` when it rejects a body with `INVALID_BODY`, for example `Invalid request body: Feedback must be substantive. 'good' requires valuableSources or valuableResults; ...`. The error used to read only `Invalid request body`, so an agent could not tell which rule its call broke and sent the same call again. Other rejections read as before, and the output schema is unchanged.
 
 ## [3.37.0] - 2026-11-04
 

@@ -410,6 +410,28 @@ async function startFakeFirecrawlApi({ searchResponse } = {}) {
 
     if (
       req.method === 'POST' &&
+      req.url === '/v2/search/00000000-0000-4000-8000-000000000003/feedback'
+    ) {
+      res.writeHead(400, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          details: [
+            {
+              code: 'custom',
+              message: "Feedback must be substantive. 'good' requires valuableSources or valuableResults.",
+              path: [],
+            },
+          ],
+          error: 'Invalid request body',
+          feedbackErrorCode: 'INVALID_BODY',
+          success: false,
+        })
+      );
+      return;
+    }
+
+    if (
+      req.method === 'POST' &&
       req.url === '/v2/search/00000000-0000-4000-8000-000000000000/feedback'
     ) {
       res.writeHead(200, { 'content-type': 'application/json' });
@@ -418,6 +440,32 @@ async function startFakeFirecrawlApi({ searchResponse } = {}) {
           creditsRefunded: 0,
           feedbackId: '00000000-0000-4000-8000-000000000100',
           success: true,
+        })
+      );
+      return;
+    }
+
+    // Two reserved job IDs get /v2/feedback rejections that carry details:
+    // INVALID_BODY, and an expired window, whose text must stay as sent.
+    const rejectedFeedback = {
+      '00000000-0000-4000-8000-000000000004': [400, 'INVALID_BODY', 'Invalid request body'],
+      '00000000-0000-4000-8000-000000000005': [409, 'FEEDBACK_WINDOW_EXPIRED', 'Feedback window expired.'],
+    }[parsedBody?.jobId];
+    if (req.method === 'POST' && req.url === '/v2/feedback' && rejectedFeedback) {
+      const [status, feedbackErrorCode, error] = rejectedFeedback;
+      res.writeHead(status, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          details: [
+            {
+              code: 'custom',
+              message: 'Feedback must include at least one substantive signal.',
+              path: [],
+            },
+          ],
+          error,
+          feedbackErrorCode,
+          success: false,
         })
       );
       return;
@@ -2052,27 +2100,70 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
     await assert.rejects(client.request('tools/call', { name: 'firecrawl_feedback', arguments: invalid }), /parameter validation failed/);
     assert.equal(fakeApi.requests.length, before);
   }
+  // Job feedback takes the Alexandria-only fields and leaves them out of the
+  // /v2/feedback body; rationale stands in for a missing note.
+  const jobId = '00000000-0000-4000-8000-000000000010';
   for (const endpoint of ['search', 'scrape', 'parse', 'map']) {
-    for (const [field, value] of Object.entries({
-      requestedWebsite: sessionFeedback.requestedWebsite,
-      rationale: sessionFeedback.rationale,
-      objective: sessionFeedback.objective,
-      providerFeedback: [],
-      capabilityFeedback: sessionFeedback.capabilityFeedback,
-    })) {
-      const before = fakeApi.requests.length;
-      await assert.rejects(client.request('tools/call', {
-        name: 'firecrawl_feedback',
-        arguments: {
-          endpoint,
-          jobId: '00000000-0000-4000-8000-000000000010',
-          rating: 'partial',
-          [field]: value,
-        },
-      }), /parameter validation failed/);
-      assert.equal(fakeApi.requests.length, before);
-    }
+    const result = await client.request('tools/call', {
+      name: 'firecrawl_feedback',
+      arguments: {
+        endpoint,
+        jobId,
+        rating: 'partial',
+        url: 'https://example.com/',
+        requestedWebsite: sessionFeedback.requestedWebsite,
+        objective: sessionFeedback.objective,
+        rationale: sessionFeedback.rationale,
+        providerFeedback: [],
+        capabilityFeedback: sessionFeedback.capabilityFeedback,
+      },
+    });
+    assert.notEqual(result.isError, true);
+    const sentJob = fakeApi.requests.filter(request => request.url === '/v2/feedback').at(-1).body;
+    assert.deepEqual(sentJob, {
+      endpoint,
+      jobId,
+      rating: 'partial',
+      url: 'https://example.com/',
+      note: sessionFeedback.rationale,
+      origin: sentJob.origin,
+    });
   }
+  await client.request('tools/call', {
+    name: 'firecrawl_feedback',
+    arguments: { endpoint: 'scrape', jobId, rating: 'bad', note: 'Missing table', rationale: 'Only the intro rendered' },
+  });
+  assert.equal(fakeApi.requests.filter(request => request.url === '/v2/feedback').at(-1).body.note, 'Missing table');
+
+  // An INVALID_BODY rejection carries the API's validation message.
+  const rejected = await client.request('tools/call', {
+    name: 'firecrawl_search_feedback',
+    arguments: { searchId: '00000000-0000-4000-8000-000000000003', rating: 'good' },
+  });
+  assert.deepEqual(rejected.structuredContent, {
+    success: false,
+    status: 400,
+    feedbackErrorCode: 'INVALID_BODY',
+    error: "Invalid request body: Feedback must be substantive. 'good' requires valuableSources or valuableResults.",
+    retryable: false,
+  });
+  const rejectedJob = await client.request('tools/call', {
+    name: 'firecrawl_feedback',
+    arguments: { endpoint: 'scrape', jobId: '00000000-0000-4000-8000-000000000004', rating: 'good' },
+  });
+  assert.deepEqual(rejectedJob.structuredContent, {
+    success: false,
+    status: 400,
+    feedbackErrorCode: 'INVALID_BODY',
+    error: 'Invalid request body: Feedback must include at least one substantive signal.',
+    retryable: false,
+  });
+  // Details on any other rejection leave the API's text as it is.
+  const expiredJob = await client.request('tools/call', {
+    name: 'firecrawl_feedback',
+    arguments: { endpoint: 'scrape', jobId: '00000000-0000-4000-8000-000000000005', rating: 'good', note: 'Late' },
+  });
+  assert.equal(expiredJob.structuredContent.error, 'Feedback window expired.');
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
