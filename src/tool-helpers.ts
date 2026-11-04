@@ -78,7 +78,7 @@ export const searchToolBaseFields = {
   sources: z
     .array(searchSourceSchema)
     .optional()
-    .describe('Search sources. Omit this on an authenticated session for web, alexandria, and alexandria-skills (up to 3 free skill cards in data.skills). Keyless sessions that omit it get web only. ' + ALEXANDRIA_SOURCES_ALWAYS_ON + ' enterprise zdr or anon searches do not add alexandria or alexandria-skills. Pass sources to choose them; include alexandria-skills or leave it out. Use ["alexandria"] alone for provider discovery without web results.'),
+    .describe('Search sources. Omit this on an authenticated session for web, alexandria, and skills (up to 3 free skill cards in data.skills). Keyless sessions that omit it get web only. ' + ALEXANDRIA_SOURCES_ALWAYS_ON + ' enterprise zdr or anon searches do not add alexandria or skills. Pass sources to choose them; include skills or leave it out. Use ["alexandria"] alone for provider discovery without web results.'),
   categories: z
     .array(z.enum(['research', 'pdf', 'developer', 'gov']))
     .optional()

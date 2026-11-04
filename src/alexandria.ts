@@ -3,7 +3,7 @@ import { toJSONSchema } from 'zod/v4/core';
 import { httpUrl } from './tool-arguments.js';
 
 const catalogueTypes = ['alexandria', 'exchange'] as const;
-const skillSource = 'alexandria-skills' as const;
+const skillSource = 'skills' as const;
 const searchSourceTypes = ['web', 'images', 'news', ...catalogueTypes, skillSource] as const;
 export const searchSourceSchema = z.union([
   z.enum(searchSourceTypes),
@@ -38,7 +38,7 @@ export function hasSkillSource(sources: unknown): boolean {
   return Array.isArray(sources) && sources.some((source) => (typeof source === 'string' ? source : source?.type) === skillSource);
 }
 
-/** Adds alexandria-skills in the same string or object form as the list it extends. */
+/** Adds skills in the same string or object form as the list it extends. */
 export function withSkillSource(sources: unknown[]): unknown[] {
   if (hasSkillSource(sources)) return sources;
   return [...sources, sources.length > 0 && typeof sources[0] !== 'string' ? { type: skillSource } : skillSource];
@@ -46,10 +46,10 @@ export function withSkillSource(sources: unknown[]): unknown[] {
 
 /**
  * Sources for one search. An omitted list on a credentialed session that can use
- * Alexandria is web, alexandria, and alexandria-skills. An explicit list is kept
+ * Alexandria is web, alexandria, and skills. An explicit list is kept
  * as given, aside from the existing alexandria addition, so the caller can include
- * or leave out alexandria-skills. Keyless, zdr, and anon sessions are not given
- * alexandria-skills by default. An explicit alexandria-skills entry is still forwarded.
+ * or leave out skills. Keyless, zdr, and anon sessions are not given
+ * skills by default. An explicit skills entry is still forwarded.
  */
 export function resolveSearchSources(input: {
   sources: unknown;

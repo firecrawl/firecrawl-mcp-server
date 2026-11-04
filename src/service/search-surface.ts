@@ -75,7 +75,7 @@ For a legal or regulatory question, \`categories: ["gov"]\` returns results in \
 
 ${ALEXANDRIA_SEARCH_INSTRUCTIONS}
 
-On an authenticated session, omitting sources also requests alexandria-skills: up to 3 free skill cards in \`data.skills\`. Enterprise zdr or anon searches do not. Returns result groups in \`data\` and an operation \`id\`.
+On an authenticated session, omitting sources also requests skills: up to 3 free skill cards in \`data.skills\`. Enterprise zdr or anon searches do not. Returns result groups in \`data\` and an operation \`id\`.
 `,
     outputSchema: searchOutputSchema,
     beforeValidate: args => {

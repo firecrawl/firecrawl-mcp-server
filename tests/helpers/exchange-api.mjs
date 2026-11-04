@@ -267,6 +267,14 @@ async function startFakeExchangeApi(options = {}) {
       return json(200, { ...providerSkillDetail('acme', 'research', 'brief', '# Brief file'), path: 'brief/SKILL.md' });
     }
 
+    if (
+      req.method === 'GET' &&
+      url.pathname === '/v2/search/research/papers' &&
+      options.papers
+    ) {
+      return json(200, options.papers);
+    }
+
     if (req.method === 'GET' && url.pathname.startsWith('/exchange/discover')) {
       if (url.searchParams.get('q') === 'unindexed') {
         return json(501, {

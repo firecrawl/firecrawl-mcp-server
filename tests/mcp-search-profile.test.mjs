@@ -1405,7 +1405,7 @@ test('ordinary search profile enables semantic and domain tools by default', asy
   const message = parseSseJson(await res.text());
   assert.notEqual(message.result?.isError, true, JSON.stringify(message));
   const sent = backend.requests.find((r) => r.url === '/v2/search').body;
-  assert.deepEqual(sent.sources, ['web', 'alexandria', 'alexandria-skills']);
+  assert.deepEqual(sent.sources, ['web', 'alexandria', 'skills']);
   assert.equal(sent.domainTools, true);
 });
 
