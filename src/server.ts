@@ -3007,9 +3007,9 @@ Returns job status, progress information, and result data when completed.
       idempotentHint: false, // Repeating an interaction can act on the page again.
     },
     description: `
-Open or reuse a live browser session to navigate a page, click controls, fill fields, or run browser code. Provide either \`url\` or \`scrapeId\`, and either a natural-language \`prompt\` or executable \`code\`; code can run as Bash, Python, or Node with a bounded timeout.
+Open or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either \`url\` or \`scrapeId\`, and either a natural-language \`prompt\` or executable \`code\`; code can run as Bash, Python, or Node with a bounded timeout.
 
-This acts on the live site, so actions such as form submission can create persistent external side effects. Returns execution output, stdout/stderr, exit status, and session viewing URLs.
+The session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped \`scrapeOptions.profile\` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs.
 `,
     outputSchema: interactOutputSchema,
     parameters: z
