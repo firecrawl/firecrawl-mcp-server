@@ -9,6 +9,17 @@
 - `firecrawl_scrape` refuses `formats: ["json"]` without a `jsonOptions` prompt or schema with `formats "json" needs jsonOptions with a prompt or a schema. To ask a question about the page, use formats ["query"] with queryOptions.prompt instead.`, and `structuredContent` with error code `invalid_request`. The SDK already refused these calls before sending them, with a plain error that reached clients as text alone, so some showed a bare tool error. Agents that hit it had often put their question in `queryOptions`. Keyless scrapes, which the API accepts without a prompt or schema, are unchanged.
 - `firecrawl_research_read_paper` and `firecrawl_research_inspect_paper` report a paper ID the research index does not know as `(paper not found: no indexed paper has the ID "<id>". Use a paperId or primaryId from firecrawl_research_search_papers results.)`, with `passages: []` and no `paper` in `structuredContent`, as their output schemas describe. The API answers such an ID with 404, and both tools used to fail with `Request failed with status code 404` as text alone, which some clients showed as a bare tool error.
 
+## [3.37.0] - 2026-11-04
+
+### Added
+
+- `firecrawl_research_search_papers` takes `sort`: `relevance` (default) or `date_desc`, which returns the newest of the most relevant matches.
+- `firecrawl_research_search_papers` and `firecrawl_research_related_papers` print authors and created and updated dates when the result includes them.
+
+### Changed
+
+- The server instructions for keyless sessions list `firecrawl_research_*` for paper-index research only and name `firecrawl_developer_search` among the tools an API key exposes. The README points GitHub repository, issue and pull request research to `firecrawl_developer_search`.
+
 ## [3.36.1] - 2026-11-03
 
 ### Changed
