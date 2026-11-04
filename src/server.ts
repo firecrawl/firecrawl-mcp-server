@@ -2412,7 +2412,7 @@ Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\
             success: false,
             status: response.status,
             feedbackErrorCode: parsed?.feedbackErrorCode,
-            error: parsed?.error ?? `HTTP ${response.status}`,
+            error: feedbackRejectionError(parsed, response.status),
             retryable: response.status >= 500,
           });
         }
@@ -2430,6 +2430,28 @@ Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\
     if (!isKeylessMode(session)) return;
     const payload = recoveryPayload('KEYLESS_TOOL_NOT_AVAILABLE', session?.requestId);
     throw new UserError(String(payload.message), payload);
+  }
+
+  /**
+   * The API's rejection text followed by its validation messages, so an
+   * INVALID_BODY rejection says which rule the body broke (for example a
+   * `good` rating with no valuable result) instead of only "Invalid request body".
+   * Every other rejection keeps the API's text as it is.
+   */
+  function feedbackRejectionError(parsed: any, status: number): string {
+    const error = String(parsed?.error ?? `HTTP ${status}`);
+    if (parsed?.feedbackErrorCode !== 'INVALID_BODY') return error;
+    const details: unknown[] = Array.isArray(parsed?.details) ? parsed.details : [];
+    const messages = [
+      ...new Set(
+        details.flatMap((issue: any) => {
+          if (typeof issue?.message !== 'string' || issue.message === '') return [];
+          const path = Array.isArray(issue.path) ? issue.path.join('.') : '';
+          return [path ? `${path}: ${issue.message}` : issue.message];
+        })
+      ),
+    ].slice(0, 5);
+    return messages.length > 0 ? `${error}: ${messages.join('; ')}` : error;
   }
 
   /** Whether firecrawl_feedback is registered on this instance, so Alexandria results only point at a tool that exists. */
@@ -2479,15 +2501,11 @@ Returns submission status, feedback ID, and accounting fields.
         if (value.endpoint === 'alexandria') {
           const parsed = alexandriaSessionFeedbackSchema.safeParse(value);
           if (!parsed.success) for (const issue of parsed.error.issues) ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message });
-        } else {
-          if (!value.jobId) {
-            ctx.addIssue({ code: 'custom', path: ['jobId'], message: 'jobId is required for job feedback' });
-          }
-          for (const field of Object.keys(alexandriaFeedbackFields) as (keyof typeof alexandriaFeedbackFields)[]) {
-            if (value[field] !== undefined) {
-              ctx.addIssue({ code: 'custom', path: [field], message: `${field} is only supported for Alexandria feedback` });
-            }
-          }
+        } else if (!value.jobId) {
+          // The Alexandria-only fields are accepted here and left out of the
+          // job feedback body (rationale stands in for a missing note), since
+          // agents carry objective over from the search and scrape calls.
+          ctx.addIssue({ code: 'custom', path: ['jobId'], message: 'jobId is required for job feedback' });
         }
       }),
       execute: async (
@@ -2503,6 +2521,7 @@ Returns submission status, feedback ID, and accounting fields.
           issues,
           tags,
           note,
+          rationale,
           valuableSources,
           missingContent,
           querySuggestions,
@@ -2516,6 +2535,7 @@ Returns submission status, feedback ID, and accounting fields.
           issues?: string[];
           tags?: string[];
           note?: string;
+          rationale?: string;
           valuableSources?: { url: string; reason?: string }[];
           missingContent?: { topic: string; description?: string }[];
           querySuggestions?: string;
@@ -2546,7 +2566,7 @@ Returns submission status, feedback ID, and accounting fields.
           rating,
           issues,
           tags,
-          note,
+          note: note ?? rationale,
           valuableSources,
           missingContent,
           querySuggestions,
@@ -2589,7 +2609,7 @@ Returns submission status, feedback ID, and accounting fields.
             success: false,
             status: response.status,
             feedbackErrorCode: parsed?.feedbackErrorCode,
-            error: parsed?.error ?? `HTTP ${response.status}`,
+            error: feedbackRejectionError(parsed, response.status),
             retryable: response.status >= 500,
           });
         }
@@ -3016,9 +3036,9 @@ Returns job status, progress information, and result data when completed.
       idempotentHint: false, // Repeating an interaction can act on the page again.
     },
     description: `
-Open or reuse a live browser session to navigate a page, click controls, fill fields, or run browser code. Provide either \`url\` or \`scrapeId\`, and either a natural-language \`prompt\` or executable \`code\`; code can run as Bash, Python, or Node with a bounded timeout.
+Open or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either \`url\` or \`scrapeId\`, and either a natural-language \`prompt\` or executable \`code\`; code can run as Bash, Python, or Node with a bounded timeout.
 
-This acts on the live site, so actions such as form submission can create persistent external side effects. Returns execution output, stdout/stderr, exit status, and session viewing URLs.
+The session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped \`scrapeOptions.profile\` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs.
 `,
     outputSchema: interactOutputSchema,
     parameters: z
