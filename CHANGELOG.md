@@ -9,7 +9,7 @@
 
 ### Changed
 
-- The server instructions for keyless sessions list `firecrawl_research_*` for paper-index research only and name `firecrawl_developer_search`, with its repository, language and license filters, among the tools an API key exposes. The README points GitHub repository, issue and pull request research to `firecrawl_developer_search`.
+- The server instructions for keyless sessions list `firecrawl_research_*` for paper-index research only and name `firecrawl_developer_search` among the tools an API key exposes. The README points GitHub repository, issue and pull request research to `firecrawl_developer_search`.
 
 ## [3.36.1] - 2026-11-03
 
