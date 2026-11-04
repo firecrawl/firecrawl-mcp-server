@@ -154,7 +154,15 @@ async function paperRequest<T>(
   try {
     return await request();
   } catch (error) {
-    if ((error as { response?: { status?: unknown } })?.response?.status === 404) return null;
+    const response = (error as {
+      response?: { status?: unknown; data?: { success?: unknown; code?: unknown; error?: unknown } };
+    })?.response;
+    if (
+      response?.status === 404 &&
+      response.data?.success === false &&
+      response.data.code === 'NOT_FOUND' &&
+      response.data.error === 'paper metadata not found'
+    ) return null;
     throw error;
   }
 }

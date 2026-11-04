@@ -1,17 +1,19 @@
 import { SdkError } from 'firecrawl';
 
 /**
- * A non-2xx answer from Core on a path that does not go through the SDK. The
+ * A failed answer from Core on a path that does not go through the SDK. The
  * status travels with the error so a credential rejection stays recognisable
  * wherever it was raised, rather than being inferred from a message string.
  */
 export class CoreHttpError extends Error {
   readonly status: number;
+  readonly code?: string;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, code?: unknown) {
     super(message);
     this.name = 'CoreHttpError';
     this.status = status;
+    this.code = typeof code === 'string' ? code : undefined;
   }
 }
 
@@ -58,10 +60,10 @@ function retryAfterSeconds(details: unknown, message: string): number | undefine
 /**
  * The machine-readable shape of a failed Firecrawl API request, for a
  * CoreHttpError or an SDK error with an HTTP status: the API's own error code
- * when the SDK reports one, else a name for the status. Undefined for any other
+ * when the response supplies one, else a name for the status. Undefined for any other
  * error, such as a bug, a network error or an error an embedder's tool throws.
  * The API answers some failed requests, such as a scrape whose host has no DNS
- * record, with 200 and `success: false`; the SDK error then carries the API's
+ * record, with 200 and `success: false`; either error type can carry the API's
  * code, and that counts as a failed request too.
  */
 export function apiErrorDetails(error: unknown): ApiErrorDetails | undefined {
@@ -70,7 +72,7 @@ export function apiErrorDetails(error: unknown): ApiErrorDetails | undefined {
   if (status === undefined) return undefined;
   const sdk = error instanceof SdkError ? error : undefined;
   const apiCode =
-    sdk?.code && API_CODE.test(sdk.code) && !TRANSPORT_CODE.test(sdk.code) ? sdk.code : undefined;
+    error.code && API_CODE.test(error.code) && !TRANSPORT_CODE.test(error.code) ? error.code : undefined;
   const answeredFailure = status >= 200 && status < 300 && apiCode !== undefined;
   if ((status < 400 || status >= 600) && !answeredFailure) return undefined;
   if (UNSUPPORTED_SITE.test(error.message)) {

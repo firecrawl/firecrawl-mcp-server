@@ -4,6 +4,9 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import test from 'node:test';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { z } from 'zod';
@@ -26,11 +29,12 @@ async function startRefusingApi(t, status, body) {
   return `http://127.0.0.1:${server.address().port}`;
 }
 
-async function connect(t, { apiUrl, session, registerExtraTools, onToolResult }) {
+async function connect(t, { apiUrl, session, registerExtraTools, onToolResult, fileAccess }) {
   const port = await getFreePort();
   const instance = createFirecrawlMcpServer({
     transport: 'httpStream',
     apiUrl,
+    fileAccess,
     unstable_hooks: { authenticate: async () => ({ ...session }), registerExtraTools, onToolResult },
   });
   await instance.start({
@@ -45,8 +49,8 @@ async function connect(t, { apiUrl, session, registerExtraTools, onToolResult })
   return { client, tools };
 }
 
-async function assertReadableError(t, { apiUrl, session, name, args, includes, registerExtraTools, onToolResult }) {
-  const { client, tools } = await connect(t, { apiUrl, session, registerExtraTools, onToolResult });
+async function assertReadableError(t, { apiUrl, session, name, args, includes, registerExtraTools, onToolResult, fileAccess }) {
+  const { client, tools } = await connect(t, { apiUrl, session, registerExtraTools, onToolResult, fileAccess });
   assert.ok(tools.find((tool) => tool.name === name)?.outputSchema, `${name} declares an outputSchema`);
   const result = await client.callTool({ name, arguments: args });
   assert.equal(result.isError, true, JSON.stringify(result));
@@ -195,6 +199,47 @@ test('a failure the API answers with 200 keeps its text and adds its code', asyn
     error: { code: 'SCRAPE_DNS_RESOLUTION_ERROR', status: 200, message: error },
   });
 });
+
+for (const { name, session, args, fileAccess } of [
+  { name: 'firecrawl_monitor_list', session: apiKey, args: {} },
+  { name: 'firecrawl_scrape', session: keyless, args: { url: 'https://example.invalid' } },
+  { name: 'firecrawl_parse', session: apiKey, args: { filePath: '/not-read/document.pdf' }, fileAccess: 'upload' },
+  { name: 'firecrawl_parse', session: apiKey, fileAccess: 'local' },
+]) {
+  test(`a direct HTTP 200 failure preserves its code (${name}, ${fileAccess ?? session.authType})`, async (t) => {
+    const error = 'The requested resource could not be processed.';
+    const code = 'PROCESSING_FAILED';
+    const apiUrl = await startRefusingApi(t, 200, { success: false, code, error });
+    let toolArgs = args;
+    if (!toolArgs) {
+      const directory = await mkdtemp(join(tmpdir(), 'mcp-parse-error-'));
+      t.after(() => rm(directory, { recursive: true, force: true }));
+      const filePath = join(directory, 'document.html');
+      await writeFile(filePath, '<p>Test document</p>');
+      toolArgs = { filePath };
+    }
+    const result = await assertReadableError(t, {
+      apiUrl, session, name, args: toolArgs, fileAccess, includes: error,
+    });
+    assert.equal(result.structuredContent.success, false);
+    assert.equal(result.structuredContent.error.code, code);
+    assert.equal(result.structuredContent.error.status, 200);
+  });
+}
+
+for (const body of ['', { success: false, code: 'NOT_FOUND', error: 'Route not found' }]) {
+  test(`an operational research 404 stays an error (${JSON.stringify(body)})`, async (t) => {
+    const apiUrl = await startRefusingApi(t, 404, body);
+    for (const name of ['firecrawl_research_read_paper', 'firecrawl_research_inspect_paper']) {
+      const result = await assertReadableError(t, {
+        apiUrl, session: apiKey, name,
+        args: { paperId: 'arxiv:1706.03762', ...(name.endsWith('read_paper') ? { question: 'What is the finding?' } : {}) },
+        includes: '404',
+      });
+      assert.ok(!result.content[0].text.includes('no indexed paper'));
+    }
+  });
+}
 
 test('a json format without a prompt or schema is refused with a structured next step', async (t) => {
   const message =

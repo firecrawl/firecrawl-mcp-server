@@ -1519,12 +1519,13 @@ export function createFirecrawlMcpServer(
     } catch {
       parsed = { raw: responseText };
     }
-    if (!response.ok) {
+    if (!response.ok || parsed?.success === false) {
       throw new CoreHttpError(
         parsed?.error ||
           parsed?.message ||
           `Firecrawl request failed (HTTP ${response.status})`,
-        response.status
+        response.status,
+        parsed?.code
       );
     }
     return parsed;
@@ -2080,7 +2081,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       body: JSON.stringify(withIntegration(path, body, config.integration)),
     });
     const json: any = await response.json().catch(() => ({}));
-    if (!response.ok) {
+    if (!response.ok || json?.success === false) {
       if (isKeylessMode(session) && response.status === 429) {
         // The API normally supplies requests|credits. Preserve a structured,
         // non-specific recovery payload during a skewed or legacy deployment.
@@ -2099,7 +2100,8 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       }
       throw new CoreHttpError(
         json?.error || `Firecrawl request failed (HTTP ${response.status})`,
-        response.status
+        response.status,
+        json?.code
       );
     }
     return json;
@@ -3253,18 +3255,23 @@ Set \`redactPII\` to request redaction of personally identifiable information in
       });
 
       const responseText = await response.text();
-      if (!response.ok) {
+      let parsed: any;
+      try {
+        parsed = JSON.parse(responseText);
+      } catch {
+        // Preserve non-JSON responses as raw text below.
+      }
+      if (!response.ok || parsed?.success === false) {
         throw new CoreHttpError(
           `Parse request failed with status ${response.status}: ${responseText}`,
-          response.status
+          response.status,
+          parsed?.code
         );
       }
 
-      try {
-        return structuredText(JSON.parse(responseText));
-      } catch {
-        return withStructured(responseText, { raw: responseText });
-      }
+      return parsed === undefined
+        ? withStructured(responseText, { raw: responseText })
+        : structuredText(parsed);
     },
   });
 
