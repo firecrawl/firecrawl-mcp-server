@@ -5,6 +5,7 @@
 ### Fixed
 
 - A tool call on a site the API does not support reports `Firecrawl can't retrieve this site because it is not supported. Use another source for this information, and don't retry this URL or other pages on the same site.`, with error code `unsupported_site`, in place of the API's text, which apologizes and points to a sales contact an agent can't act on. The text block keeps its `Tool '<name>' execution failed:` prefix, and the API's own response is unchanged.
+- A scrape the API answers with HTTP 200, `success: false` and an error code, as it does when the host has no DNS record (`SCRAPE_DNS_RESOLUTION_ERROR`), is reported like any other failed API request: the error result carries `structuredContent` with `success: false` and `error: { code, status, message }`. It used to carry only the text block, unlike every other API failure, and some clients showed such results as a bare tool error without the API's explanation.
 
 ## [3.36.1] - 2026-11-03
 

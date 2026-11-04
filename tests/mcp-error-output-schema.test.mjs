@@ -159,6 +159,22 @@ test('an API error code the API sends is kept over the status name', async (t) =
   assert.equal(result.structuredContent.error.status, 408);
 });
 
+test('a failure the API answers with 200 keeps its text and adds its code', async (t) => {
+  const error = 'DNS resolution failed for hostname "example.invalid". Please verify the URL is correct and the website exists.';
+  const apiUrl = await startRefusingApi(t, 200, { success: false, code: 'SCRAPE_DNS_RESOLUTION_ERROR', error });
+  const result = await assertReadableError(t, {
+    apiUrl,
+    session: apiKey,
+    name: 'firecrawl_scrape',
+    args: { url: 'https://example.invalid' },
+    includes: error,
+  });
+  assert.deepEqual(result.structuredContent, {
+    success: false,
+    error: { code: 'SCRAPE_DNS_RESOLUTION_ERROR', status: 200, message: error },
+  });
+});
+
 test('an unsupported site reaches an SDK client as a reason and a next step', async (t) => {
   const apiUrl = await startRefusingApi(t, 403, {
     success: false,
