@@ -2427,9 +2427,11 @@ Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\
    * The API's rejection text followed by its validation messages, so an
    * INVALID_BODY rejection says which rule the body broke (for example a
    * `good` rating with no valuable result) instead of only "Invalid request body".
+   * Every other rejection keeps the API's text as it is.
    */
   function feedbackRejectionError(parsed: any, status: number): string {
     const error = String(parsed?.error ?? `HTTP ${status}`);
+    if (parsed?.feedbackErrorCode !== 'INVALID_BODY') return error;
     const details: unknown[] = Array.isArray(parsed?.details) ? parsed.details : [];
     const messages = [
       ...new Set(
