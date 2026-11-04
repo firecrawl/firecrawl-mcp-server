@@ -38,7 +38,7 @@ const STATUS_CODES: Readonly<Record<number, string>> = {
 // apology and a sales contact. An agent gets the reason and what to do instead.
 const UNSUPPORTED_SITE = /we do not support this site/i;
 const UNSUPPORTED_SITE_MESSAGE =
-  "Firecrawl can't retrieve this site because it is not supported. Use another source for this information, and don't retry this URL or other pages on the same site.";
+  "Firecrawl can't scrape this site because it is not supported. Check Alexandria for a relevant provider if available, or use another source. Don't retry scraping this URL or other pages on the same site.";
 
 export type ApiErrorDetails = {
   code: string;
