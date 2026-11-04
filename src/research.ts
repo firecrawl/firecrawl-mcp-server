@@ -142,6 +142,35 @@ function fmtHits(results?: PaperHit[]): string {
     .join('\n\n');
 }
 
+/**
+ * The research API answers a paper ID it does not know with 404, which the
+ * HTTP client raises as a bare "Request failed with status code 404". Inspect
+ * and read report it as a paper that was not found, as their output schemas
+ * describe, so the agent learns the ID is wrong. Null means not found.
+ */
+async function paperRequest<T>(
+  request: () => Promise<{ data: T }>
+): Promise<{ data: T } | null> {
+  try {
+    return await request();
+  } catch (error) {
+    const response = (error as {
+      response?: { status?: unknown; data?: { success?: unknown; code?: unknown; error?: unknown } };
+    })?.response;
+    if (
+      response?.status === 404 &&
+      response.data?.success === false &&
+      response.data.code === 'NOT_FOUND' &&
+      response.data.error === 'paper metadata not found'
+    ) return null;
+    throw error;
+  }
+}
+
+function paperNotFound(paperId: string): string {
+  return `(paper not found: no indexed paper has the ID ${JSON.stringify(paperId)}. Use a paperId or primaryId from firecrawl_research_search_papers results.)`;
+}
+
 function fmtPaperMetadata(paper?: PaperHit): string {
   if (!paper) return '(paper not found)';
   const lines = [`# ${paper.title ?? '(untitled)'}`];
@@ -313,10 +342,13 @@ Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DO
     ): Promise<ContentResult> => {
       const { paperId } = args as { paperId: string };
       const client = getClient(session) as ClientLike;
-      const res = await client.http.get<{ paper?: PaperHit }>(
-        `${BASE}/papers/${encodeURIComponent(paperId)}`,
-        originHeaders(requestOrigin(mcpClient, session))
+      const res = await paperRequest(() =>
+        client.http.get<{ paper?: PaperHit }>(
+          `${BASE}/papers/${encodeURIComponent(paperId)}`,
+          originHeaders(requestOrigin(mcpClient, session))
+        )
       );
+      if (!res) return withStructured(paperNotFound(paperId), {});
       const paper = res.data?.paper;
       return withStructured(
         fmtPaperMetadata(paper),
@@ -436,10 +468,13 @@ Returns matching passages or a notice when full text is unavailable.
       appendParam(params, 'query', question);
       appendParam(params, 'k', k);
       const client = getClient(session) as ClientLike;
-      const res = await client.http.get<{ passages?: { text: string }[] }>(
-        withQuery(`${BASE}/papers/${encodeURIComponent(paperId)}`, params),
-        originHeaders(requestOrigin(mcpClient, session))
+      const res = await paperRequest(() =>
+        client.http.get<{ passages?: { text: string }[] }>(
+          withQuery(`${BASE}/papers/${encodeURIComponent(paperId)}`, params),
+          originHeaders(requestOrigin(mcpClient, session))
+        )
       );
+      if (!res) return withStructured(paperNotFound(paperId), { passages: [] });
       const passages = res.data?.passages ?? [];
       return withStructured(
         passages.length

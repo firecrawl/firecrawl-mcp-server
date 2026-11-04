@@ -94,7 +94,7 @@ async function monitorRequest(
     const message =
       payload?.error ||
       `HTTP ${response.status}: ${response.statusText || 'Request failed'}`;
-    throw new CoreHttpError(message, response.status);
+    throw new CoreHttpError(message, response.status, payload?.code);
   }
 
   return payload;

@@ -1519,12 +1519,13 @@ export function createFirecrawlMcpServer(
     } catch {
       parsed = { raw: responseText };
     }
-    if (!response.ok) {
+    if (!response.ok || parsed?.success === false) {
       throw new CoreHttpError(
         parsed?.error ||
           parsed?.message ||
           `Firecrawl request failed (HTTP ${response.status})`,
-        response.status
+        response.status,
+        parsed?.code
       );
     }
     return parsed;
@@ -1766,6 +1767,15 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
           session
         );
         return structuredText(withoutDiscoveredToolPrices(json?.data ?? json));
+      }
+      // The SDK refuses a json format with neither a prompt nor a schema
+      // before sending it, with a plain error that reaches the client as text
+      // alone. Agents that hit it have often put their question in queryOptions.
+      const formats = Array.isArray(cleaned.formats) ? cleaned.formats : [];
+      if (formats.some((f: any) => f?.type === 'json' && !f.prompt && !f.schema)) {
+        const message =
+          'formats "json" needs jsonOptions with a prompt or a schema. To ask a question about the page, use formats ["query"] with queryOptions.prompt instead.';
+        throw new UserError(message, { success: false, error: { code: 'invalid_request', message } });
       }
       const client = getClient(session);
       const res = await relayTermsRequired(
@@ -2071,7 +2081,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       body: JSON.stringify(withIntegration(path, body, config.integration)),
     });
     const json: any = await response.json().catch(() => ({}));
-    if (!response.ok) {
+    if (!response.ok || json?.success === false) {
       if (isKeylessMode(session) && response.status === 429) {
         // The API normally supplies requests|credits. Preserve a structured,
         // non-specific recovery payload during a skewed or legacy deployment.
@@ -2090,7 +2100,8 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       }
       throw new CoreHttpError(
         json?.error || `Firecrawl request failed (HTTP ${response.status})`,
-        response.status
+        response.status,
+        json?.code
       );
     }
     return json;
@@ -3244,18 +3255,23 @@ Set \`redactPII\` to request redaction of personally identifiable information in
       });
 
       const responseText = await response.text();
-      if (!response.ok) {
+      let parsed: any;
+      try {
+        parsed = JSON.parse(responseText);
+      } catch {
+        // Preserve non-JSON responses as raw text below.
+      }
+      if (!response.ok || parsed?.success === false) {
         throw new CoreHttpError(
           `Parse request failed with status ${response.status}: ${responseText}`,
-          response.status
+          response.status,
+          parsed?.code
         );
       }
 
-      try {
-        return structuredText(JSON.parse(responseText));
-      } catch {
-        return withStructured(responseText, { raw: responseText });
-      }
+      return parsed === undefined
+        ? withStructured(responseText, { raw: responseText })
+        : structuredText(parsed);
     },
   });
 
