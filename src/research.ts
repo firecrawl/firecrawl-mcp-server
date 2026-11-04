@@ -104,9 +104,11 @@ function fmtAuthors(authors?: PaperHit['authors']): string | null {
         ? `; +${names.length - MAX_AUTHORS} more`
         : '; et al.'
       : '';
-  return ('Authors: ' + names.slice(0, MAX_AUTHORS).join('; ') + extra).slice(
-    0,
-    MAX_AUTHORS_LINE_CHARS
+  return (
+    ('Authors: ' + names.slice(0, MAX_AUTHORS).join('; ')).slice(
+      0,
+      MAX_AUTHORS_LINE_CHARS - extra.length
+    ) + extra
   );
 }
 
