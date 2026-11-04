@@ -177,6 +177,7 @@ test('a paper ID the research API does not know is reported as not found', async
   });
   assert.notEqual(inspect.isError, true);
   assert.deepEqual(inspect.content, [{ type: 'text', text: notFound }]);
+  assert.deepEqual(inspect.structuredContent, {});
 });
 
 test('a failure the API answers with 200 keeps its text and adds its code', async (t) => {
@@ -212,27 +213,30 @@ test('a json format without a prompt or schema is refused with a structured next
   });
 });
 
-test('an unsupported site reaches an SDK client as a reason and a next step', async (t) => {
-  const apiUrl = await startRefusingApi(t, 403, {
-    success: false,
-    error:
-      'We apologize for the inconvenience but we do not support this site. If you are part of an enterprise and want to have a further conversation about this, please contact our sales team here: https://www.firecrawl.dev/contact-sales',
+for (const code of [undefined, 'SITE_BLOCKED']) {
+  test(`an unsupported site reaches an SDK client as a reason and a next step (API code: ${code ?? 'none'})`, async (t) => {
+    const apiUrl = await startRefusingApi(t, 403, {
+      success: false,
+      error:
+        'We apologize for the inconvenience but we do not support this site. If you are part of an enterprise and want to have a further conversation about this, please contact our sales team here: https://www.firecrawl.dev/contact-sales',
+      ...(code ? { code } : {}),
+    });
+    const message =
+      "Firecrawl can't retrieve this site because it is not supported. Use another source for this information, and don't retry this URL or other pages on the same site.";
+    const result = await assertReadableError(t, {
+      apiUrl,
+      session: apiKey,
+      name: 'firecrawl_scrape',
+      args: { url: 'https://example.com' },
+      includes: message,
+    });
+    assert.equal(result.content[0].text, `Tool 'firecrawl_scrape' execution failed: ${message}`);
+    assert.deepEqual(result.structuredContent, {
+      success: false,
+      error: { code: 'unsupported_site', status: 403, message },
+    });
   });
-  const message =
-    "Firecrawl can't retrieve this site because it is not supported. Use another source for this information, and don't retry this URL or other pages on the same site.";
-  const result = await assertReadableError(t, {
-    apiUrl,
-    session: apiKey,
-    name: 'firecrawl_scrape',
-    args: { url: 'https://example.com' },
-    includes: message,
-  });
-  assert.equal(result.content[0].text, `Tool 'firecrawl_scrape' execution failed: ${message}`);
-  assert.deepEqual(result.structuredContent, {
-    success: false,
-    error: { code: 'unsupported_site', status: 403, message },
-  });
-});
+}
 
 test("an embedder tool's own HTTP-like error keeps today's result", async (t) => {
   const result = await assertReadableError(t, {

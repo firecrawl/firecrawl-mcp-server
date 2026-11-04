@@ -74,7 +74,7 @@ export function apiErrorDetails(error: unknown): ApiErrorDetails | undefined {
   const answeredFailure = status >= 200 && status < 300 && apiCode !== undefined;
   if ((status < 400 || status >= 600) && !answeredFailure) return undefined;
   if (UNSUPPORTED_SITE.test(error.message)) {
-    return { code: apiCode ?? 'unsupported_site', status, message: UNSUPPORTED_SITE_MESSAGE };
+    return { code: 'unsupported_site', status, message: UNSUPPORTED_SITE_MESSAGE };
   }
   const retryAfter = retryAfterSeconds(sdk?.details, error.message);
   return {
