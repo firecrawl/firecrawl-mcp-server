@@ -2470,15 +2470,11 @@ Returns submission status, feedback ID, and accounting fields.
         if (value.endpoint === 'alexandria') {
           const parsed = alexandriaSessionFeedbackSchema.safeParse(value);
           if (!parsed.success) for (const issue of parsed.error.issues) ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message });
-        } else {
-          if (!value.jobId) {
-            ctx.addIssue({ code: 'custom', path: ['jobId'], message: 'jobId is required for job feedback' });
-          }
-          for (const field of Object.keys(alexandriaFeedbackFields) as (keyof typeof alexandriaFeedbackFields)[]) {
-            if (value[field] !== undefined) {
-              ctx.addIssue({ code: 'custom', path: [field], message: `${field} is only supported for Alexandria feedback` });
-            }
-          }
+        } else if (!value.jobId) {
+          // The Alexandria-only fields are accepted here and left out of the
+          // job feedback body (rationale stands in for a missing note), since
+          // agents carry objective over from the search and scrape calls.
+          ctx.addIssue({ code: 'custom', path: ['jobId'], message: 'jobId is required for job feedback' });
         }
       }),
       execute: async (
@@ -2494,6 +2490,7 @@ Returns submission status, feedback ID, and accounting fields.
           issues,
           tags,
           note,
+          rationale,
           valuableSources,
           missingContent,
           querySuggestions,
@@ -2507,6 +2504,7 @@ Returns submission status, feedback ID, and accounting fields.
           issues?: string[];
           tags?: string[];
           note?: string;
+          rationale?: string;
           valuableSources?: { url: string; reason?: string }[];
           missingContent?: { topic: string; description?: string }[];
           querySuggestions?: string;
@@ -2537,7 +2535,7 @@ Returns submission status, feedback ID, and accounting fields.
           rating,
           issues,
           tags,
-          note,
+          note: note ?? rationale,
           valuableSources,
           missingContent,
           querySuggestions,

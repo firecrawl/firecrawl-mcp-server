@@ -2052,27 +2052,41 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
     await assert.rejects(client.request('tools/call', { name: 'firecrawl_feedback', arguments: invalid }), /parameter validation failed/);
     assert.equal(fakeApi.requests.length, before);
   }
+  // Job feedback takes the Alexandria-only fields and leaves them out of the
+  // /v2/feedback body; rationale stands in for a missing note.
+  const jobId = '00000000-0000-4000-8000-000000000010';
   for (const endpoint of ['search', 'scrape', 'parse', 'map']) {
-    for (const [field, value] of Object.entries({
-      requestedWebsite: sessionFeedback.requestedWebsite,
-      rationale: sessionFeedback.rationale,
-      objective: sessionFeedback.objective,
-      providerFeedback: [],
-      capabilityFeedback: sessionFeedback.capabilityFeedback,
-    })) {
-      const before = fakeApi.requests.length;
-      await assert.rejects(client.request('tools/call', {
-        name: 'firecrawl_feedback',
-        arguments: {
-          endpoint,
-          jobId: '00000000-0000-4000-8000-000000000010',
-          rating: 'partial',
-          [field]: value,
-        },
-      }), /parameter validation failed/);
-      assert.equal(fakeApi.requests.length, before);
-    }
+    const result = await client.request('tools/call', {
+      name: 'firecrawl_feedback',
+      arguments: {
+        endpoint,
+        jobId,
+        rating: 'partial',
+        url: 'https://example.com/',
+        requestedWebsite: sessionFeedback.requestedWebsite,
+        objective: sessionFeedback.objective,
+        rationale: sessionFeedback.rationale,
+        providerFeedback: [],
+        capabilityFeedback: sessionFeedback.capabilityFeedback,
+      },
+    });
+    assert.notEqual(result.isError, true);
+    const sentJob = fakeApi.requests.filter(request => request.url === '/v2/feedback').at(-1).body;
+    assert.deepEqual(sentJob, {
+      endpoint,
+      jobId,
+      rating: 'partial',
+      url: 'https://example.com/',
+      note: sessionFeedback.rationale,
+      origin: sentJob.origin,
+    });
   }
+  await client.request('tools/call', {
+    name: 'firecrawl_feedback',
+    arguments: { endpoint: 'scrape', jobId, rating: 'bad', note: 'Missing table', rationale: 'Only the intro rendered' },
+  });
+  assert.equal(fakeApi.requests.filter(request => request.url === '/v2/feedback').at(-1).body.note, 'Missing table');
+
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 
