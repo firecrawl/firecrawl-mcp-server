@@ -90,7 +90,8 @@ async function startFakeExchangeApi(options = {}) {
     const embedTarget =
       (req.method === 'GET' && url.pathname.startsWith('/exchange/discover')) ||
       (req.method === 'POST' && url.pathname === '/v2/search') ||
-      (req.method === 'POST' && url.pathname === '/v2/scrape' && parsedBody?.alexandria?.provider === 'firecrawl' && ['find-tools', 'find-skills'].includes(parsedBody?.alexandria?.capability));
+      (req.method === 'POST' && url.pathname === '/v2/scrape' && parsedBody?.alexandria?.provider === 'firecrawl' && ['find-tools', 'find-skills'].includes(parsedBody?.alexandria?.capability)) ||
+      (req.method === 'GET' && url.pathname === '/exchange/provider-skills' && url.searchParams.has('q'));
     if (options.queryEmbed && embedTarget) {
       const state = options.queryEmbed;
       state.hits = (state.hits ?? 0) + 1;

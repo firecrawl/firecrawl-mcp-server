@@ -35,6 +35,11 @@ test('find-tools and discovery retry once after 503 query_embed_unavailable', as
   const listed = toolText(await client.request('tools/call', { name: 'firecrawl_find_skills', arguments: { query: 'digest' } }));
   assert.equal(listed.data.alexandria[0].capability, 'find-skills');
   assert.equal(api.requests.filter(request => request.body?.alexandria?.capability === 'find-skills').length, 2);
+
+  queryEmbed.hits = 0;
+  const providerSkills = toolText(await client.request('tools/call', { name: 'firecrawl_find_skills', arguments: { provider: 'acme', query: 'brief' } }));
+  assert.equal(providerSkills.skills.length, 1);
+  assert.equal(api.requests.filter(request => request.url?.startsWith('/exchange/provider-skills?') && request.url.includes('q=brief')).length, 2);
 });
 
 test('a second query_embed_unavailable failure is retryable and is not tried again', async (t) => {

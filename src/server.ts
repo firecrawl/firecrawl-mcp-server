@@ -2080,8 +2080,9 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         for (let page = 1; page <= 50 && skills.length < limit; page++) {
           const params = new URLSearchParams({ provider, page: String(page) });
           if (teamOptions.query) params.set('q', teamOptions.query);
+          const getPage = () => (getClient(session) as any).http.get(`/exchange/provider-skills?${params.toString()}`, originHeaders(origin));
           const response = await relayExchangeError(
-            () => (getClient(session) as any).http.get(`/exchange/provider-skills?${params.toString()}`, originHeaders(origin)),
+            () => (teamOptions.query ? retryQueryEmbedUnavailable(getPage) : getPage()),
             { tool: 'firecrawl_find_skills', requestId: session?.requestId }
           );
           const body = response?.data ?? {};
