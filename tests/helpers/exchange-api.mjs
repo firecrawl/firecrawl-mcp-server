@@ -90,7 +90,7 @@ async function startFakeExchangeApi(options = {}) {
     const embedTarget =
       (req.method === 'GET' && url.pathname.startsWith('/exchange/discover')) ||
       (req.method === 'POST' && url.pathname === '/v2/search') ||
-      (req.method === 'POST' && url.pathname === '/v2/scrape' && parsedBody?.alexandria?.provider === 'firecrawl' && parsedBody?.alexandria?.capability === 'find-tools');
+      (req.method === 'POST' && url.pathname === '/v2/scrape' && parsedBody?.alexandria?.provider === 'firecrawl' && ['find-tools', 'find-skills'].includes(parsedBody?.alexandria?.capability));
     if (options.queryEmbed && embedTarget) {
       const state = options.queryEmbed;
       state.hits = (state.hits ?? 0) + 1;
@@ -246,15 +246,24 @@ async function startFakeExchangeApi(options = {}) {
         providerSkillRecord('fiber', 'Fiber', 'people', 'People', 'search', 'Search', 'Find people.'),
       ];
       const matched = catalog.filter((skill) => {
+        if (q === 'page-through') return skill.provider.slug === 'acme';
         if (skill.provider.slug !== providerFilter) return false;
         if (!q) return true;
         return `${skill.id} ${skill.name} ${skill.description}`.toLowerCase().includes(q);
       });
       const start = Math.max(0, page - 1) * pageSize;
+      const pageSkills = matched.slice(start, start + pageSize);
+      if (q === 'page-through' && page === 1 && pageSkills.length) {
+        pageSkills[pageSkills.length - 1] = {
+          ...pageSkills[pageSkills.length - 1],
+          id: 'provider:other/research/decoy',
+          provider: { slug: 'other', name: 'Other' },
+        };
+      }
       return json(200, {
         provider: { slug: providerFilter, name: providerFilter === 'acme' ? 'Acme' : 'Fiber' },
         plugins: [{ id: providerFilter === 'fiber' ? 'people' : 'research', displayName: providerFilter === 'fiber' ? 'People' : 'Research', visibility: 'execution-only' }],
-        skills: matched.slice(start, start + pageSize),
+        skills: pageSkills,
         page,
         limit: pageSize,
         total: matched.length,

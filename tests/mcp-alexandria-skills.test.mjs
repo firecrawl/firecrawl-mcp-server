@@ -208,5 +208,10 @@ test('find_skills lists one provider and read_skill reads that skill', async (t)
   assert.deepEqual(pages, ['1', '2']);
   assert.equal(paged.skills.length, 21);
   assert.equal(paged.skills.at(-1).id, 'provider:acme/research/later');
+  const pagedThrough = toolText(await client.request('tools/call', { name: 'firecrawl_find_skills', arguments: { provider: 'acme', query: 'page-through', limit: 50 } }));
+  const throughPages = api.requests.filter(request => request.method === 'GET' && request.url.includes('q=page-through')).map(request => new URL(request.url, 'http://127.0.0.1').searchParams.get('page'));
+  assert.deepEqual(throughPages, ['1', '2']);
+  assert.equal(pagedThrough.skills.some(skill => skill.id === 'provider:other/research/decoy'), false);
+  assert.equal(pagedThrough.skills.at(-1).id, 'provider:acme/research/later');
   assert.deepEqual(paged.skills.at(-1).nextTool.arguments, { provider: 'acme', plugin: 'research', skill: 'later' });
 });

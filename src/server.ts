@@ -1964,7 +1964,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
     try {
       const callsForRetry = Array.isArray(alexandria) ? alexandria : [alexandria];
       const retryEmbed = callsForRetry.every(
-        (call) => call.provider === 'firecrawl' && call.capability === 'find-tools'
+        (call) => call.provider === 'firecrawl' && (call.capability === 'find-tools' || call.capability === 'find-skills')
       );
       const postCalls = () =>
         (client as any).http.post(
@@ -2087,10 +2087,18 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
           const body = response?.data ?? {};
           const info = providerSkillsPageInfo(body);
           if (total === undefined && info.total !== undefined) total = info.total;
+          const rawCount = Array.isArray(body?.skills)
+            ? body.skills.length
+            : Array.isArray(body?.items)
+              ? body.items.length
+              : Array.isArray(body)
+                ? body.length
+                : 0;
           const batch = providerSkillsOnPage(body, provider);
           skills.push(...batch);
           const covered = page * info.limit;
-          if (batch.length === 0 || batch.length < info.limit || (info.total !== undefined && covered >= info.total)) break;
+          // A filtered page can be shorter than the server page, so stop on the raw count.
+          if (rawCount === 0 || rawCount < info.limit || (info.total !== undefined && covered >= info.total)) break;
         }
         return structuredCompact({ success: true, provider, skills: skills.slice(0, limit), total: total ?? skills.length });
       }
