@@ -5111,7 +5111,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_research_inspect_paper@a6f87b19e613": {
+  "firecrawl_research_inspect_paper@78cb6544d999": {
     "annotations": {
       "title": "Firecrawl inspect research paper",
       "readOnlyHint": true,
@@ -5193,7 +5193,7 @@
               ]
             },
             "authors": {
-              "description": "Authors, as a comma-joined string or as `{name, affiliation}` entries."
+              "description": "Authors, as a list of names or a comma-joined string."
             },
             "categories": {
               "description": "Paper categories, such as `cs.LG`.",
@@ -5210,7 +5210,7 @@
               ]
             },
             "createdDate": {
-              "description": "Date the paper was first indexed or published.",
+              "description": "Date the paper was first indexed or published (`YYYY-MM-DD`).",
               "anyOf": [
                 {
                   "type": "string"
@@ -5221,7 +5221,7 @@
               ]
             },
             "updateDate": {
-              "description": "Date the paper was last updated.",
+              "description": "Date the paper was last updated (`YYYY-MM-DD`).",
               "anyOf": [
                 {
                   "type": "string"
@@ -5307,7 +5307,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_research_related_papers@0eb420b8cf8d": {
+  "firecrawl_research_related_papers@41ad5912b474": {
     "annotations": {
       "title": "Firecrawl related research papers",
       "readOnlyHint": true,
@@ -5416,7 +5416,7 @@
                 ]
               },
               "authors": {
-                "description": "Authors, as a comma-joined string or as `{name, affiliation}` entries."
+                "description": "Authors, as a list of names or a comma-joined string."
               },
               "categories": {
                 "description": "Paper categories, such as `cs.LG`.",
@@ -5433,7 +5433,7 @@
                 ]
               },
               "createdDate": {
-                "description": "Date the paper was first indexed or published.",
+                "description": "Date the paper was first indexed or published (`YYYY-MM-DD`).",
                 "anyOf": [
                   {
                     "type": "string"
@@ -5444,7 +5444,7 @@
                 ]
               },
               "updateDate": {
-                "description": "Date the paper was last updated.",
+                "description": "Date the paper was last updated (`YYYY-MM-DD`).",
                 "anyOf": [
                   {
                     "type": "string"
@@ -5481,7 +5481,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_research_search_papers@35766df64334": {
+  "firecrawl_research_search_papers@81a72a9c839e": {
     "annotations": {
       "title": "Firecrawl research paper search",
       "readOnlyHint": true,
@@ -5489,7 +5489,7 @@
       "destructiveHint": false
     },
     "title": "Firecrawl research paper search",
-    "description": "\nSearch paper metadata and abstracts with a natural-language query across the indexed corpus, which spans biomedical, life-science, and clinical literature (PubMed, bioRxiv, medRxiv) alongside arXiv and other scientific sources. Optional author, category, and date filters constrain results.\n\nSeveral distinct framings of the same question surface different papers than a single query does.\n\nReturns ranked papers with canonical IDs, titles, authors, and abstracts.\n",
+    "description": "\nSearch paper metadata and abstracts with a natural-language query across the indexed corpus, which spans biomedical, life-science, and clinical literature (PubMed, bioRxiv, medRxiv) alongside arXiv and other scientific sources. Optional author, category, date, and sort options constrain or reorder results.\n\nSeveral distinct framings of the same question surface different papers than a single query does.\n\nReturns ranked papers with canonical IDs, titles, authors, and abstracts.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5526,6 +5526,14 @@
         "to": {
           "description": "Inclusive upper bound on created/updated date (`YYYY-MM-DD`).",
           "type": "string"
+        },
+        "sort": {
+          "description": "`relevance` (default) or `date_desc`, which returns the newest of the most relevant matches, newest first by created date. It does not list every paper in a date range; add `from` (and `to`) for that.",
+          "type": "string",
+          "enum": [
+            "relevance",
+            "date_desc"
+          ]
         }
       },
       "required": [
@@ -5593,7 +5601,7 @@
                 ]
               },
               "authors": {
-                "description": "Authors, as a comma-joined string or as `{name, affiliation}` entries."
+                "description": "Authors, as a list of names or a comma-joined string."
               },
               "categories": {
                 "description": "Paper categories, such as `cs.LG`.",
@@ -5610,7 +5618,7 @@
                 ]
               },
               "createdDate": {
-                "description": "Date the paper was first indexed or published.",
+                "description": "Date the paper was first indexed or published (`YYYY-MM-DD`).",
                 "anyOf": [
                   {
                     "type": "string"
@@ -5621,7 +5629,7 @@
                 ]
               },
               "updateDate": {
-                "description": "Date the paper was last updated.",
+                "description": "Date the paper was last updated (`YYYY-MM-DD`).",
                 "anyOf": [
                   {
                     "type": "string"

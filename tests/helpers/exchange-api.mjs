@@ -169,6 +169,14 @@ async function startFakeExchangeApi(options = {}) {
       return json(400, { success: false, error: 'url is required' });
     }
 
+    if (
+      req.method === 'GET' &&
+      url.pathname === '/v2/search/research/papers' &&
+      options.papers
+    ) {
+      return json(200, options.papers);
+    }
+
     if (req.method === 'GET' && url.pathname.startsWith('/exchange/discover')) {
       if (url.searchParams.get('q') === 'unindexed') {
         return json(501, {
