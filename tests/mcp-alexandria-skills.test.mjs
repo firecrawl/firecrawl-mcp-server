@@ -143,6 +143,23 @@ test('update_skill sends enabled and discoverable with its baseVersion', async (
 
 test('write tools refuse bad arguments before calling Exchange', async (t) => {
   const { api, client } = await startStdioWithApi(t);
+  const { tools } = await client.request('tools/list', {});
+  const update = tools.find(tool => tool.name === 'firecrawl_update_skill');
+  const create = tools.find(tool => tool.name === 'firecrawl_create_skill');
+  // The advertised schema, not only runtime validation, requires a change.
+  // id and baseVersion alone match none of these required-sets.
+  assert.deepEqual(update.inputSchema.anyOf.map(branch => branch.required), [
+    ['id', 'baseVersion', 'name'],
+    ['id', 'baseVersion', 'description'],
+    ['id', 'baseVersion', 'body'],
+    ['id', 'baseVersion', 'enabled'],
+    ['id', 'baseVersion', 'discoverable'],
+  ]);
+  assert.deepEqual(create.inputSchema.required, undefined);
+  assert.deepEqual(create.inputSchema.anyOf.map(branch => branch.required), [
+    ['from'],
+    ['name', 'description', 'body'],
+  ]);
   const before = api.requests.length;
   await callExpectingError(client, { name: 'firecrawl_update_skill', arguments: { id: 'team:weekly-digest', name: 'x' } });
   await callExpectingError(client, { name: 'firecrawl_update_skill', arguments: { id: 'team:weekly-digest', baseVersion: 1, delete: true } });
