@@ -410,6 +410,28 @@ async function startFakeFirecrawlApi({ searchResponse } = {}) {
 
     if (
       req.method === 'POST' &&
+      req.url === '/v2/search/00000000-0000-4000-8000-000000000003/feedback'
+    ) {
+      res.writeHead(400, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          details: [
+            {
+              code: 'custom',
+              message: "Feedback must be substantive. 'good' requires valuableSources or valuableResults.",
+              path: [],
+            },
+          ],
+          error: 'Invalid request body',
+          feedbackErrorCode: 'INVALID_BODY',
+          success: false,
+        })
+      );
+      return;
+    }
+
+    if (
+      req.method === 'POST' &&
       req.url === '/v2/search/00000000-0000-4000-8000-000000000000/feedback'
     ) {
       res.writeHead(200, { 'content-type': 'application/json' });
@@ -2087,6 +2109,18 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
   });
   assert.equal(fakeApi.requests.filter(request => request.url === '/v2/feedback').at(-1).body.note, 'Missing table');
 
+  // An INVALID_BODY rejection carries the API's validation message.
+  const rejected = await client.request('tools/call', {
+    name: 'firecrawl_search_feedback',
+    arguments: { searchId: '00000000-0000-4000-8000-000000000003', rating: 'good' },
+  });
+  assert.deepEqual(rejected.structuredContent, {
+    success: false,
+    status: 400,
+    feedbackErrorCode: 'INVALID_BODY',
+    error: "Invalid request body: Feedback must be substantive. 'good' requires valuableSources or valuableResults.",
+    retryable: false,
+  });
   assert.equal(stderr.includes('TypeError'), false, stderr);
 });
 

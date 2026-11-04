@@ -2403,7 +2403,7 @@ Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\
             success: false,
             status: response.status,
             feedbackErrorCode: parsed?.feedbackErrorCode,
-            error: parsed?.error ?? `HTTP ${response.status}`,
+            error: feedbackRejectionError(parsed, response.status),
             retryable: response.status >= 500,
           });
         }
@@ -2421,6 +2421,26 @@ Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\
     if (!isKeylessMode(session)) return;
     const payload = recoveryPayload('KEYLESS_TOOL_NOT_AVAILABLE', session?.requestId);
     throw new UserError(String(payload.message), payload);
+  }
+
+  /**
+   * The API's rejection text followed by its validation messages, so an
+   * INVALID_BODY rejection says which rule the body broke (for example a
+   * `good` rating with no valuable result) instead of only "Invalid request body".
+   */
+  function feedbackRejectionError(parsed: any, status: number): string {
+    const error = String(parsed?.error ?? `HTTP ${status}`);
+    const details: unknown[] = Array.isArray(parsed?.details) ? parsed.details : [];
+    const messages = [
+      ...new Set(
+        details.flatMap((issue: any) => {
+          if (typeof issue?.message !== 'string' || issue.message === '') return [];
+          const path = Array.isArray(issue.path) ? issue.path.join('.') : '';
+          return [path ? `${path}: ${issue.message}` : issue.message];
+        })
+      ),
+    ].slice(0, 5);
+    return messages.length > 0 ? `${error}: ${messages.join('; ')}` : error;
   }
 
   /** Whether firecrawl_feedback is registered on this instance, so Alexandria results only point at a tool that exists. */
@@ -2578,7 +2598,7 @@ Returns submission status, feedback ID, and accounting fields.
             success: false,
             status: response.status,
             feedbackErrorCode: parsed?.feedbackErrorCode,
-            error: parsed?.error ?? `HTTP ${response.status}`,
+            error: feedbackRejectionError(parsed, response.status),
             retryable: response.status >= 500,
           });
         }
