@@ -159,6 +159,28 @@ test('an API error code the API sends is kept over the status name', async (t) =
   assert.equal(result.structuredContent.error.status, 408);
 });
 
+test('an unsupported site reaches an SDK client as a reason and a next step', async (t) => {
+  const apiUrl = await startRefusingApi(t, 403, {
+    success: false,
+    error:
+      'We apologize for the inconvenience but we do not support this site. If you are part of an enterprise and want to have a further conversation about this, please contact our sales team here: https://www.firecrawl.dev/contact-sales',
+  });
+  const message =
+    "Firecrawl can't retrieve this site because it is not supported. Use another source for this information, and don't retry this URL or other pages on the same site.";
+  const result = await assertReadableError(t, {
+    apiUrl,
+    session: apiKey,
+    name: 'firecrawl_scrape',
+    args: { url: 'https://example.com' },
+    includes: message,
+  });
+  assert.equal(result.content[0].text, `Tool 'firecrawl_scrape' execution failed: ${message}`);
+  assert.deepEqual(result.structuredContent, {
+    success: false,
+    error: { code: 'unsupported_site', status: 403, message },
+  });
+});
+
 test("an embedder tool's own HTTP-like error keeps today's result", async (t) => {
   const result = await assertReadableError(t, {
     apiUrl: 'http://127.0.0.1:9',

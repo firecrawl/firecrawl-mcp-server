@@ -34,6 +34,12 @@ const STATUS_CODES: Readonly<Record<number, string>> = {
   429: 'rate_limited',
 };
 
+// The API refuses a site it does not serve with text written for a person: an
+// apology and a sales contact. An agent gets the reason and what to do instead.
+const UNSUPPORTED_SITE = /we do not support this site/i;
+const UNSUPPORTED_SITE_MESSAGE =
+  "Firecrawl can't retrieve this site because it is not supported. Use another source for this information, and don't retry this URL or other pages on the same site.";
+
 export type ApiErrorDetails = {
   code: string;
   status: number;
@@ -62,6 +68,9 @@ export function apiErrorDetails(error: unknown): ApiErrorDetails | undefined {
   const sdk = error instanceof SdkError ? error : undefined;
   const apiCode =
     sdk?.code && API_CODE.test(sdk.code) && !TRANSPORT_CODE.test(sdk.code) ? sdk.code : undefined;
+  if (UNSUPPORTED_SITE.test(error.message)) {
+    return { code: apiCode ?? 'unsupported_site', status, message: UNSUPPORTED_SITE_MESSAGE };
+  }
   const retryAfter = retryAfterSeconds(sdk?.details, error.message);
   return {
     code: apiCode ?? STATUS_CODES[status] ?? (status >= 500 ? 'server_error' : `http_${status}`),

@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- A tool call on a site the API does not support reports `Firecrawl can't retrieve this site because it is not supported. Use another source for this information, and don't retry this URL or other pages on the same site.`, with error code `unsupported_site`, in place of the API's text, which apologizes and points to a sales contact an agent can't act on. The text block keeps its `Tool '<name>' execution failed:` prefix, and the API's own response is unchanged.
+
 ## [3.36.1] - 2026-11-03
 
 ### Changed
