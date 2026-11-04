@@ -2526,7 +2526,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_interact@4896d340d2da": {
+  "firecrawl_interact@2aad375b040d": {
     "annotations": {
       "title": "Firecrawl interact",
       "readOnlyHint": false,
@@ -2535,7 +2535,7 @@
       "idempotentHint": false
     },
     "title": "Firecrawl interact",
-    "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill fields, or run browser code. Provide either `url` or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThis acts on the live site, so actions such as form submission can create persistent external side effects. Returns execution output, stdout/stderr, exit status, and session viewing URLs.\n",
+    "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either `url` or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThe session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped `scrapeOptions.profile` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2924,7 +2924,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_interact@991a480a7fc3": {
+  "firecrawl_interact@e0082512d630": {
     "annotations": {
       "title": "Firecrawl interact",
       "readOnlyHint": false,
@@ -2933,7 +2933,7 @@
       "idempotentHint": false
     },
     "title": "Firecrawl interact",
-    "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill fields, or run browser code. Provide either `url` or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThis acts on the live site, so actions such as form submission can create persistent external side effects. Returns execution output, stdout/stderr, exit status, and session viewing URLs.\n",
+    "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either `url` or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThe session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped `scrapeOptions.profile` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
