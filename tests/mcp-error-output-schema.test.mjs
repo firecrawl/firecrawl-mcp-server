@@ -222,7 +222,7 @@ for (const code of [undefined, 'SITE_BLOCKED']) {
       ...(code ? { code } : {}),
     });
     const message =
-      "Firecrawl can't scrape this site because it is not supported. Check Alexandria for a relevant provider if available, or use another source. Don't retry scraping this URL or other pages on the same site.";
+      "Firecrawl can't scrape this site because it is currently not supported. Check Alexandria for a relevant provider if available, or use another source.";
     const result = await assertReadableError(t, {
       apiUrl,
       session: apiKey,
