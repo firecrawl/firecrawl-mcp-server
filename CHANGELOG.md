@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- The server instructions for keyless sessions no longer say `firecrawl_developer_search` takes repository, language, and license filters. The tool takes `query`, `k` and `skills`; the instructions now describe what it searches: public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. 3.37.0 shipped the incorrect sentence.
+
 ## [3.37.0] - 2026-11-04
 
 ### Added
