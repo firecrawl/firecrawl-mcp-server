@@ -142,8 +142,9 @@ export const enrichParameters = z.strictObject({
     .number()
     .int()
     .positive()
+    .max(120_000)
     .optional()
-    .describe('Execution timeout in milliseconds. Omit to use the client default.'),
+    .describe('Execution timeout in milliseconds, at most 120000. Omit to use the client default.'),
 });
 
 /** https, no query, no fragment, no trailing slash. The slug's case is kept. */

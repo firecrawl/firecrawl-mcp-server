@@ -309,6 +309,23 @@ test('an enrichment refusal is returned with the request id', async (t) => {
   );
 });
 
+test('timeout above 120000 ms is rejected and 120000 is sent', async (t) => {
+  const { api, client } = await session(t);
+  await callExpectingError(client, {
+    name: 'firecrawl_enrich',
+    arguments: { target: { url: PERSON_URL }, timeout: 120_001 },
+  });
+  assert.equal(api.requests.length, 0);
+  const result = toolText(
+    await client.request('tools/call', {
+      name: 'firecrawl_enrich',
+      arguments: { target: { url: PERSON_URL }, timeout: 120_000 },
+    })
+  );
+  assert.equal(result.success, true);
+  assert.equal(enrichCall(api.requests).body.timeout, 120_000);
+});
+
 test('invalid targets and extra lookup fields are rejected before a request', async (t) => {
   const { api, client } = await session(t);
   const invalid = [

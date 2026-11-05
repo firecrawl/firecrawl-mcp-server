@@ -1645,7 +1645,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_enrich@c529d41c5419": {
+  "firecrawl_enrich@76f83df66ffb": {
     "annotations": {
       "title": "Enrich a person or company",
       "readOnlyHint": true,
@@ -1687,10 +1687,10 @@
           "pattern": "^[A-Za-z0-9._:-]{1,128}$"
         },
         "timeout": {
-          "description": "Execution timeout in milliseconds. Omit to use the client default.",
+          "description": "Execution timeout in milliseconds, at most 120000. Omit to use the client default.",
           "type": "integer",
           "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
+          "maximum": 120000
         }
       },
       "required": [
