@@ -1645,6 +1645,156 @@
       "additionalProperties": false
     }
   },
+  "firecrawl_enrich@c529d41c5419": {
+    "annotations": {
+      "title": "Enrich a person or company",
+      "readOnlyHint": true,
+      "openWorldHint": true,
+      "destructiveHint": false
+    },
+    "title": "Enrich a person or company",
+    "description": "\nEnrich one known person or one known company and return that profile. Use it when the task already identifies who or which company, usually by a LinkedIn URL, and needs the profile. firecrawl_search finds pages and candidate matches. firecrawl_enrich looks up the one target you name.\n\nPass target.url as a LinkedIn person page (/in/) or company page (/company/). Omit target.type to take person or company from that URL. Country hosts such as ca.linkedin.com are accepted. The lookup calls the existing enrichment waterfall, so the team's provider order, terms, and credit charge stay there.\n\nReturns the structured profile and creditsCost, the credits the call consumed. A provider error is on the result.\n",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "target": {
+          "description": "The one person or company to enrich. Set type when you already know which; otherwise it is taken from the LinkedIn URL.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "description": "person or company. Omit to infer it from the LinkedIn URL: /in/ is a person and /company/ is a company.",
+              "type": "string",
+              "enum": [
+                "person",
+                "company"
+              ]
+            },
+            "url": {
+              "description": "LinkedIn person or company page, such as https://www.linkedin.com/in/example or https://www.linkedin.com/company/example. Country hosts such as https://ca.linkedin.com/in/example are accepted. Pass the page itself, not a sub-page.",
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "url"
+          ],
+          "additionalProperties": false
+        },
+        "requestId": {
+          "description": "Idempotency key bound to this enrichment. Generated when omitted and returned with the result. Reuse it only to retry the identical target.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+        },
+        "timeout": {
+          "description": "Execution timeout in milliseconds. Omit to use the client default.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "additionalProperties": false
+    },
+    "name": "firecrawl_enrich",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "One enriched person or company profile, and the credits the call consumed.",
+      "type": "object",
+      "properties": {
+        "success": {
+          "description": "Whether enrichment returned a profile.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "description": "Provider error for this target, when the waterfall did not return a profile."
+        },
+        "message": {
+          "description": "Human-readable result or refusal.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requestId": {
+          "description": "Idempotency key for this enrichment. Reuse it only with the identical target.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scrape_id": {
+          "description": "Identifier of the underlying scrape.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "creditsCost": {
+          "description": "Credits this enrichment consumed, from the Alexandria execution total.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target": {
+          "description": "The person or company this call enriched.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "description": "Person or company, inferred from the LinkedIn URL when omitted.",
+              "type": "string",
+              "enum": [
+                "person",
+                "company"
+              ]
+            },
+            "url": {
+              "description": "LinkedIn URL that was enriched.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "url"
+          ],
+          "additionalProperties": false
+        },
+        "profile": {
+          "description": "Structured profile returned for the target. Fields are the waterfall payload, passed through."
+        },
+        "nextTool": {
+          "description": "Follow-up call when the waterfall needs one, such as reading provider terms."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
   "firecrawl_feedback@8019b623f506": {
     "annotations": {
       "title": "Firecrawl feedback",

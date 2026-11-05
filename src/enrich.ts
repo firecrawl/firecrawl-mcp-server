@@ -30,7 +30,7 @@ type ClientLike = {
     post: (
       endpoint: string,
       body?: Record<string, unknown>,
-      init?: { headers?: Record<string, string> }
+      init?: { headers?: Record<string, string>; timeoutMs?: number }
     ) => Promise<{ data?: unknown }>;
   };
 };
@@ -138,19 +138,36 @@ export const enrichParameters = z.strictObject({
     .describe(
       'Idempotency key bound to this enrichment. Generated when omitted and returned with the result. Reuse it only to retry the identical target.'
     ),
+  timeout: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('Execution timeout in milliseconds. Omit to use the client default.'),
 });
+
+/** https, no query, no fragment, no trailing slash. The slug's case is kept. */
+export function canonicalLinkedInUrl(raw: string): string | undefined {
+  if (!linkedInPage(raw)) return undefined;
+  const parsed = new URL(raw.trim());
+  const host = parsed.hostname.toLowerCase().replace(/\.$/, '');
+  const [head, slug] = parsed.pathname.split('/').filter(Boolean);
+  const kind = head.toLowerCase() === 'in' ? 'in' : 'company';
+  return `https://${host}/${kind}/${slug}`;
+}
 
 export function resolveEnrichTarget(target: {
   type?: EnrichKind;
   url: string;
 }): { type: EnrichKind; url: string } {
-  const type = target.type ?? linkedInPage(target.url);
-  if (!type) {
+  const inferred = linkedInPage(target.url);
+  const url = canonicalLinkedInUrl(target.url);
+  if (!inferred || !url || (target.type && target.type !== inferred)) {
     throw new UserError(
       'url must be a LinkedIn person (/in/) or company (/company/) page.'
     );
   }
-  return { type, url: target.url };
+  return { type: target.type ?? inferred, url };
 }
 
 /** The only options the Exchange client sends for firecrawl/enrich. */
@@ -175,6 +192,16 @@ function withRequestId(error: unknown, requestId: string): UserError {
     ...(error instanceof UserError ? error.extras : {}),
     requestId,
   });
+}
+
+const WATERFALL_META_KEYS = new Set(['status', 'steps']);
+
+/** `{ status: "disabled" }` with no profile fields is a waterfall that did not run. */
+function isDisabledWaterfall(data: unknown): boolean {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+  const record = data as Record<string, unknown>;
+  if (record.status !== 'disabled') return false;
+  return Object.keys(record).every((key) => WATERFALL_META_KEYS.has(key));
 }
 
 function readEnrichment(
@@ -207,6 +234,12 @@ function readEnrichment(
     result.error = item.error;
     return result;
   }
+  if (isDisabledWaterfall(item?.data)) {
+    result.success = false;
+    result.message =
+      'Enrichment is disabled for this profile. No profile was returned.';
+    return result;
+  }
   if (item?.data !== undefined) result.profile = item.data;
   return result;
 }
@@ -234,7 +267,7 @@ Returns the structured profile and creditsCost, the credits the call consumed. A
     outputSchema: enrichOutputSchema,
     parameters: enrichParameters,
     execute: async (args, { session, client: mcpClient }): Promise<ContentResult> => {
-      const { target, requestId: suppliedRequestId } = args as z.infer<
+      const { target, requestId: suppliedRequestId, timeout } = args as z.infer<
         typeof enrichParameters
       >;
       const resolved = resolveEnrichTarget(target);
@@ -250,8 +283,12 @@ Returns the structured profile and creditsCost, the credits the call consumed. A
               {
                 alexandria: enrichAlexandriaCall(resolved.url),
                 origin: requestOrigin(mcpClient, session),
+                ...(timeout !== undefined ? { timeout } : {}),
               },
-              { headers: { 'x-request-id': requestId } }
+              {
+                headers: { 'x-request-id': requestId },
+                ...(timeout !== undefined ? { timeoutMs: timeout + 5000 } : {}),
+              }
             ),
           { tool: 'firecrawl_enrich', requestId, providers: ['firecrawl'] }
         );

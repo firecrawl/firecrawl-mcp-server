@@ -43,11 +43,33 @@ async function startEnrichApi() {
     if (req.method !== 'POST' || req.url !== '/v2/scrape') {
       return json(404, { success: false, error: 'unexpected request' });
     }
+    if (url.endsWith('/hang')) return;
     if (url.endsWith('/refused')) {
       return json(403, {
         success: false,
         code: 'THIRD_PARTY_DATA_ENRICHMENT_NOT_ENABLED',
         error: 'Enrichment is not enabled for this kind of profile.',
+      });
+    }
+    if (url.endsWith('/credits')) {
+      return json(402, {
+        success: false,
+        error: 'Insufficient credits to run this request.',
+        code: 'insufficient_credits',
+      });
+    }
+    if (url.endsWith('/limited')) {
+      return json(429, {
+        success: false,
+        error: 'Rate limit exceeded.',
+        code: 'rate_limited',
+      });
+    }
+    if (url.endsWith('/down')) {
+      return json(503, {
+        success: false,
+        error: 'Exchange is unavailable.',
+        code: 'exchange_unavailable',
       });
     }
     if (url.endsWith('/missing')) {
@@ -158,7 +180,7 @@ test('an explicit company target is sent as the same waterfall call', async (t) 
     await client.request('tools/call', {
       name: 'firecrawl_enrich',
       arguments: {
-        target: { type: 'company', url: COMPANY_URL },
+        target: { type: 'company', url: `${COMPANY_URL}/?trk=company` },
         requestId,
       },
     })
@@ -174,7 +196,29 @@ test('an explicit company target is sent as the same waterfall call', async (t) 
   assert.equal(result.profile.name, 'Example Company');
 });
 
-test('a disabled waterfall payload is passed through as the profile', async (t) => {
+test('a LinkedIn URL is canonicalized before it is sent', async (t) => {
+  const { api, client } = await session(t);
+  const result = toolText(
+    await client.request('tools/call', {
+      name: 'firecrawl_enrich',
+      arguments: {
+        target: {
+          url: 'http://www.linkedin.com/in/example/?trk=public_profile#about',
+        },
+      },
+    })
+  );
+  const call = enrichCall(api.requests);
+  assert.deepEqual(call.body.alexandria.options, {
+    url: PERSON_URL,
+    format: 'json',
+  });
+  assert.equal('timeout' in call.body, false);
+  assert.deepEqual(result.target, { type: 'person', url: PERSON_URL });
+  assert.equal(result.profile.url, PERSON_URL);
+});
+
+test('a disabled waterfall payload is a failure, not a profile', async (t) => {
   const { client } = await session(t);
   const result = toolText(
     await client.request('tools/call', {
@@ -182,9 +226,13 @@ test('a disabled waterfall payload is passed through as the profile', async (t) 
       arguments: { target: { url: 'https://www.linkedin.com/in/disabled' } },
     })
   );
-  assert.equal(result.success, true);
+  assert.equal(result.success, false);
+  assert.equal(result.profile, undefined);
   assert.equal(result.target.type, 'person');
-  assert.deepEqual(result.profile, { status: 'disabled', steps: [] });
+  assert.equal(
+    result.message,
+    'Enrichment is disabled for this profile. No profile was returned.'
+  );
   assert.equal(result.creditsCost, 30);
 });
 
@@ -204,6 +252,43 @@ test('a provider miss keeps the envelope credit total and the item error', async
     message: 'No enrichment record for this URL.',
     status: 404,
   });
+});
+
+test('billing, rate limit, and upstream failures are returned with the request id', async (t) => {
+  const { api, client } = await session(t);
+  const cases = [
+    ['https://www.linkedin.com/in/credits', 'Insufficient credits to run this request.'],
+    ['https://www.linkedin.com/in/limited', 'Rate limit exceeded.'],
+    ['https://www.linkedin.com/in/down', 'Exchange is unavailable.'],
+  ];
+  for (const [url, message] of cases) {
+    const result = await client.request('tools/call', {
+      name: 'firecrawl_enrich',
+      arguments: { target: { url } },
+    });
+    assert.equal(result.isError, true, JSON.stringify(result));
+    assert.match(result.content[0].text, new RegExp(message));
+    assert.equal(result.structuredContent.message, message);
+    assert.match(result.structuredContent.requestId, /^[A-Za-z0-9._:-]{1,128}$/);
+  }
+  assert.equal(api.requests.length, cases.length);
+});
+
+test('a hung enrichment reports the client timeout', { timeout: 20_000 }, async (t) => {
+  const { api, client } = await session(t);
+  const result = await client.request('tools/call', {
+    name: 'firecrawl_enrich',
+    arguments: {
+      target: { url: 'https://www.linkedin.com/in/hang' },
+      timeout: 200,
+    },
+  });
+  assert.equal(result.isError, true, JSON.stringify(result));
+  assert.match(result.content[0].text, /timeout of \d+ms exceeded/);
+  assert.match(result.content[0].text, /Request ID: /);
+  const call = enrichCall(api.requests);
+  assert.equal(call.body.timeout, 200);
+  assert.equal(call.body.alexandria.options.url, 'https://www.linkedin.com/in/hang');
 });
 
 test('an enrichment refusal is returned with the request id', async (t) => {
