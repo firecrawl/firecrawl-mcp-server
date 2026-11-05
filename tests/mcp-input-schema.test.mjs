@@ -118,7 +118,10 @@ test('a nested extraction schema validates against the listed firecrawl_scrape s
   };
   for (const [reading, schema] of [
     ['as listed', inputs.firecrawl_scrape],
-    ['with empty objects read as false', readEmptyAsFalse(inputs.firecrawl_scrape)],
+    [
+      'with empty objects read as false',
+      readEmptyAsFalse(inputs.firecrawl_scrape),
+    ],
   ]) {
     const result = validator.getValidator(schema)(args);
     assert.ok(result.valid, `${reading}: ${result.errorMessage}`);
