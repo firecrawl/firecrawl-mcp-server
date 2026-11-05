@@ -56,6 +56,21 @@ function closeObjects(schema: JsonObject): JsonObject {
   };
 }
 
+/**
+ * An open map's `additionalProperties: {}` is listed as `true`. Both accept any value, but some clients read the
+ * empty object as false (it is falsy in Python) and then refuse every key, such as each key of an extraction schema.
+ */
+function openMaps(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(openMaps);
+  if (typeof value !== 'object' || value === null) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, child]) => [
+      key,
+      key === 'additionalProperties' && JSON.stringify(child) === '{}' ? true : openMaps(child),
+    ])
+  );
+}
+
 export class UserError extends Error {
   extras?: Record<string, unknown>;
 
@@ -587,7 +602,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
           ...(tool.icons && { icons: tool.icons }),
           description: tool.description,
           inputSchema: tool.parameters
-            ? closeObjects((await toJsonSchema(tool.parameters as never)) as JsonObject)
+            ? openMaps(closeObjects((await toJsonSchema(tool.parameters as never)) as JsonObject))
             : { additionalProperties: false, properties: {}, type: 'object' },
           name: tool.name,
           ...(outputSchemaOf(tool) && {
