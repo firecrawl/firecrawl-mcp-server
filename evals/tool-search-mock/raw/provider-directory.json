@@ -1,0 +1,485 @@
+[
+ {
+  "provider": "apollo",
+  "name": "Apollo",
+  "rank": 80,
+  "toolCount": 10,
+  "description": "Person and company enrichment: find people by title and company, resolve them to verified work emails, and enrich companies from a domain with funding, headcount and technologies."
+ },
+ {
+  "provider": "fiscal-ai",
+  "name": "Fiscal.ai",
+  "rank": 75,
+  "toolCount": 34,
+  "description": "Company fundamentals with the record around them: standardized and as-reported statements, ratios, ownership, prices, earnings call transcripts, and what fund letters say about a company."
+ },
+ {
+  "provider": "fireround",
+  "name": "Fireround",
+  "rank": 70,
+  "toolCount": 9,
+  "description": "Startup funding rounds: venture capital (VC funding) of private companies from across the open web, pre-seed to growth, with amounts, valuations, stages, lead and other investors, certainty and sources, each read back against the pages it came from; the funded companies with their headquarters, sector, what they do and total raised; the investors behind them and the news that reported them."
+ },
+ {
+  "provider": "fullenrich",
+  "name": "FullEnrich",
+  "rank": 70,
+  "toolCount": 10,
+  "description": "People and company search, profile lookups, firmographics, and verified contact data."
+ },
+ {
+  "provider": "wikipedia",
+  "name": "Wikipedia",
+  "rank": 70,
+  "toolCount": 7,
+  "description": "Wikipedia and its sister projects through Wikimedia Enterprise, the Wikimedia Foundation's official API: current articles by title, parsed infoboxes and article sections, and Wikidata entities."
+ },
+ {
+  "provider": "benzinga",
+  "name": "Benzinga",
+  "rank": 65,
+  "toolCount": 11,
+  "description": "Real-time financial newswire and analyst coverage for US-listed companies: market-moving headlines, why-is-it-moving notes, press releases, ratings changes and consensus, announced deals, and unusual options activity."
+ },
+ {
+  "provider": "people-data-labs",
+  "name": "People Data Labs",
+  "rank": 65,
+  "toolCount": 2,
+  "description": "Person and company identity resolution, enrichment and search from a profile, email, domain, ticker or name."
+ },
+ {
+  "provider": "fred",
+  "name": "FRED",
+  "rank": 60,
+  "toolCount": 31,
+  "description": "US and international economic time series from the Federal Reserve Bank of St. Louis: rates, prices, employment, output and money, with the full revision history behind each figure."
+ },
+ {
+  "provider": "particle",
+  "name": "Particle",
+  "rank": 60,
+  "toolCount": 105,
+  "description": "Podcast intelligence: speaker-labelled transcripts, episode and show search, the people who appear, the sponsors and companies advertising, chart rankings, and bias and brand-suitability analysis."
+ },
+ {
+  "provider": "agoda-com",
+  "name": "Agoda stays",
+  "rank": 0,
+  "toolCount": 6,
+  "description": "Agoda accommodation: destination, landmark and property suggestions, dated property search near a landmark or in a city with per-night and stay prices (tax-exclusive and tax-inclusive), the dated room grid of one property with room types, tax-included stay totals, tax and fee lines and cancellation terms, paginated guest reviews with score breakdown, property FAQ and top destinations, over Agoda's own site API (GraphQL search and the cronos JSON API)."
+ },
+ {
+  "provider": "amazon-com",
+  "name": "Amazon US",
+  "rank": 0,
+  "toolCount": 12,
+  "description": "Amazon US public product details, photos, specifications, variants, displayed review totals, individual customer reviews with rating distribution, search, suggestions, Best Sellers lists, featured offers, sellers, stock and batch prices."
+ },
+ {
+  "provider": "amtrak-com",
+  "name": "Amtrak",
+  "rank": 0,
+  "toolCount": 7,
+  "description": "Amtrak (US national passenger rail) read-only: station directory and search with addresses, hours and amenities; named routes with ordered stops and train numbers; live train positions and stop-by-stop status decrypted from the public Track Your Train feed. Public feeds of www.amtrak.com and maps.amtrak.com, no login. Fares, schedules by date and booking are not covered (the /dotcom/ APIs sit behind Akamai Bot Manager)."
+ },
+ {
+  "provider": "recherche-entreprises-api-gouv-fr",
+  "name": "API Recherche d'entreprises (annuaire-entreprises.data.gouv.fr)",
+  "rank": 0,
+  "toolCount": 3,
+  "description": "The French state's open company search (API Recherche d'entreprises, run by DINUM for annuaire-entreprises.data.gouv.fr): every diffusible French legal unit from INSEE Sirene and INPI's national company register (RNE) with legal form, NAF activity, salaried headcount band, INSEE size category, head office with address and coordinates, executives (dirigeants) as published, latest published revenue and net income, VAT numbers and public labels (ESS, RGE, Qualiopi, mission company...). Search by name, SIREN/SIRET or executive name and filter by NAF code or section, headcount band, category, legal form, postal code, commune, department, region, status, labels, revenue and net-income ranges and executive birth date; look a company up by SIREN; or list companies with establishments around a point. Keyless official open data under Licence Ouverte / Etalab 2.0."
+ },
+ {
+  "provider": "apps-apple-com",
+  "name": "Apple App Store",
+  "rank": 0,
+  "toolCount": 5,
+  "description": "Apple App Store listings from Apple's own catalog and iTunes APIs: app detail with per-device compatibility (iPhone, iPad, Mac, Apple Watch, Apple Vision), prices and in-app purchase/subscription prices, version history and ratings; paginated customer reviews; keyword search; top charts by genre; a developer's apps."
+ },
+ {
+  "provider": "artificialanalysis-ai",
+  "name": "Artificial Analysis",
+  "rank": 0,
+  "toolCount": 4,
+  "description": "Artificial Analysis LLM benchmarks: model and reasoning-effort records with Intelligence Index, benchmark scores, cost per task, list prices, output speed and latency, plus per-model and leaderboard-wide API provider endpoint benchmarks."
+ },
+ {
+  "provider": "arxiv-org",
+  "name": "arXiv",
+  "rank": 0,
+  "toolCount": 6,
+  "description": "arXiv e-print repository: paper search and per-paper metadata through the export.arxiv.org Atom API, category and archive listings, BibTeX export, OAI-PMH metadata harvesting by date window and set, and the list of harvestable sets. Anonymous, no session."
+ },
+ {
+  "provider": "ashbyhq-com",
+  "name": "Ashby job boards",
+  "rank": 0,
+  "toolCount": 3,
+  "description": "Employer job boards hosted by Ashby (jobs.ashbyhq.com): describe a board with its teams, list every open posting with locations, employment and workplace type, publish date and structured compensation from Ashby's public Posting API, and read one posting with its description, compensation tiers, deadline, application link and, on request, the application form's questions. Keyed by the employer's board slug; Ashby publishes no directory of boards."
+ },
+ {
+  "provider": "auction-com",
+  "name": "Auction.com",
+  "rank": 0,
+  "toolCount": 5,
+  "description": "Auction.com residential real-estate auctions (US): search foreclosure, bank-owned and other auction listings by state, city, county or ZIP, read listing details, third-party valuation and comparables, live bid state, and location suggestions, from the site's own anonymous GraphQL API."
+ },
+ {
+  "provider": "autotrader-com",
+  "name": "Autotrader",
+  "rank": 0,
+  "toolCount": 5,
+  "description": "Autotrader.com (Cox Automotive) US vehicle marketplace: search new, used and certified listings by location, make/model, year, price, mileage or one dealership (by dealer id or dealer website domain, with the dealer's new/used/certified inventory counts); read one listing with pricing, specifications, features and seller; resolve make/model names to codes; facet counts by model year, trim and city; model specifications by style id."
+ },
+ {
+  "provider": "b3-com-br",
+  "name": "B3 listed companies and indices",
+  "rank": 0,
+  "toolCount": 9,
+  "description": "B3 (Brasil, Bolsa, Balc\u00e3o), the S\u00e3o Paulo exchange: listed-company registry search and enumeration, company detail with sector classification and financial summary, corporate actions, cash dividend history, CVM filings, index portfolios (IBOV, IBRX, SMLL, IDIV, IFIX...), stock-to-index membership, delayed quotes and the sector taxonomy. Public data, no credentials; Portuguese labels as B3 publishes them."
+ },
+ {
+  "provider": "ballotpedia-org",
+  "name": "Ballotpedia",
+  "rank": 0,
+  "toolCount": 8,
+  "description": "Ballotpedia, the encyclopedia of American politics and elections: candidates, races and ballot measures for US federal, state and local elections (2022 onward, including the 2026 midterms), e.g. who is running for governor of New Hampshire with party and incumbency. Statewide races by state code, sample ballots and political districts for any address or coordinate, current officeholders, candidate profiles (prior offices, profession, endorsements, campaign websites) and ballot measure details with arguments and donors, from the api4 backend behind Ballotpedia's Sample Ballot Lookup and Who Represents Me tools. Also the newest Ballotpedia News posts (news.ballotpedia.org) as a latest election news feed."
+ },
+ {
+  "provider": "bankofcanada-ca",
+  "name": "Bank of Canada (Valet API and press feeds)",
+  "rank": 0,
+  "toolCount": 8,
+  "description": "Official Bank of Canada data from the keyless Valet API and the Bank's RSS feeds: the policy interest rate in effect on any date with its change history, daily CAD exchange rates, Government of Canada benchmark bond yields, any of about 16,000 Valet series and 2,600 groups (CORRA, CPI and commodity price indexes, bank rates, auction results) with catalogue search and details, press releases, speeches and publications, and policy rate announcements with their decisions."
+ },
+ {
+  "provider": "bbb-business-profiles-ratings-complaint",
+  "name": "BBB business profiles",
+  "rank": 0,
+  "toolCount": 4,
+  "description": "Better Business Bureau (bbb.org) business search, profiles with BBB letter grade and accreditation, complaint histories and customer reviews for the US and Canada."
+ },
+ {
+  "provider": "builtin-com",
+  "name": "Built In",
+  "rank": 0,
+  "toolCount": 3,
+  "description": "Technology job search, public role details and company profiles from Built In."
+ },
+ {
+  "provider": "cslb-ca-gov",
+  "name": "California CSLB contractor license lookup",
+  "rank": 0,
+  "toolCount": 5,
+  "description": "California Contractors State License Board (www.cslb.ca.gov) public Check a License service: read a contractor license record by license number (business information, entity, dates, status, classifications, bonds, workers' compensation, miscellaneous actions), search business names with cursor pagination, find currently licensed contractors by ZIP code or city and classification, list the personnel associated with a license, and read the public complaint disclosure cases of a license. Anonymous, read-only; no HIS registrations, application status, bulk Data Portal downloads or complaint filing."
+ },
+ {
+  "provider": "data-chhs-ca-gov",
+  "name": "California HCAI prescription drug price reports (WAC increases and new drugs)",
+  "rank": 0,
+  "toolCount": 2,
+  "description": "California's prescription drug cost transparency reports (CTRx, SB 17) from the Department of Health Care Access and Information (HCAI), published on the CalHHS Open Data Portal. Manufacturers report wholesale acquisition cost (WAC, list price) increases of more than 16% over three years for drugs costing over $40 per course of therapy, with the increase, the new WAC, patent expiry, sales, their stated reasons and any acquisition, plus a five-year WAC history per report; and new drugs introduced at a WAC above the Medicare Part D specialty-drug threshold, with launch WAC, marketing and pricing plan, estimated patients and FDA breakthrough and priority review flags. The current year's monthly update and annual files back to 2019, searchable by drug, NDC, manufacturer and date, with derived increase percentages including the statute's three-year measure. CC BY; every result carries HCAI's attribution."
+ },
+ {
+  "provider": "data-edmonton-ca",
+  "name": "City of Edmonton Open Data",
+  "rank": 0,
+  "toolCount": 8,
+  "description": "The City of Edmonton's open data portal (data.edmonton.ca, a Socrata site, Open Government Licence - Edmonton): search the dataset catalog, read a dataset's metadata and columns, query and count rows of any dataset with SoQL ($select/$where/$order/$group/$q and bare field filters, including spatial functions), list the portal's category and tag facets, and typed lookups for building permits, property assessments (with zoning, lot size and year built) and business licences."
+ },
+ {
+  "provider": "cnbc-com",
+  "name": "CNBC",
+  "rank": 0,
+  "toolCount": 8,
+  "description": "CNBC news search, full articles, section and topic feeds, most-popular ranking, videos, market quotes and ticker lookup from CNBC's own content GraphQL and Queryly search APIs."
+ },
+ {
+  "provider": "api-exchange-coinbase-com",
+  "name": "Coinbase Exchange",
+  "rank": 0,
+  "toolCount": 10,
+  "description": "Public market data from the Coinbase Exchange REST API (api.exchange.coinbase.com): trading pairs, tickers with 24h stats, aggregated order books, tick-level trades with cursor pagination, historical OHLCV candles from 1 minute to 1 day walked in 300-bucket windows, exchange-wide volume summary, currencies with networks, and wrapped-asset conversion rates. Anonymous endpoints only; no trading or account access."
+ },
+ {
+  "provider": "find-and-update-company-information-service-gov-uk",
+  "name": "Companies House",
+  "rank": 0,
+  "toolCount": 17,
+  "description": "Public UK company searches, profiles, filings, officers, ownership, charges and historic records from the Companies House website."
+ },
+ {
+  "provider": "datalegion",
+  "name": "Data Legion",
+  "rank": 0,
+  "toolCount": 6,
+  "description": "Person and company enrichment with separate tier and contact products."
+ },
+ {
+  "provider": "dataprivacyframework-gov",
+  "name": "Data Privacy Framework participant list",
+  "rank": 0,
+  "toolCount": 4,
+  "description": "U.S. Department of Commerce Data Privacy Framework (DPF) program: search the public list of self-certified participants (EU-U.S. DPF, UK Extension, Swiss-U.S. DPF), filter by status, state, framework, data covered, industry, recourse mechanism and verification method, read one organization's full certification record, and look up the reference lists behind the filters. Read-only, anonymous, from the site's own JSON API."
+ },
+ {
+  "provider": "dominos-com",
+  "name": "Domino's US",
+  "rank": 0,
+  "toolCount": 8,
+  "description": "Public US store lookup, menus, product customization and published delivery fees."
+ },
+ {
+  "provider": "doordash-com",
+  "name": "DoorDash US and Canada",
+  "rank": 0,
+  "toolCount": 11,
+  "description": "DoorDash US and Canada store and product search, restaurant menus, item detail, nested modifiers and promotional deals, convenience/grocery catalogs with per-category totals, product details and public reviews from DoorDash's own web APIs. Canadian restaurant stores return CAD prices and country CA."
+ },
+ {
+  "provider": "ecorp-sos-ga-gov",
+  "name": "Georgia Secretary of State business registry (eCorp)",
+  "rank": 0,
+  "toolCount": 6,
+  "description": "Georgia Secretary of State Corporations Division public registry at ecorp.sos.ga.gov (PCC Technology Group eCorp): business entity search by name, control number, registered agent, officer or designated agent; entity detail with status, type, formation date, jurisdiction, principal office, registered agent and officers; filing history and name change history keyed by the site's internal business id; plus the service-of-process and state trademark search grids. Server-rendered HTML, anonymous, no documents (PDF retrieval is session-gated upstream)."
+ },
+ {
+  "provider": "github-com",
+  "name": "GitHub",
+  "rank": 0,
+  "toolCount": 15,
+  "description": "Public GitHub repositories, releases, issues, labels, contributors and raw file contents, plus the GitHub Advisory Database: reviewed, unreviewed and malware advisories with EPSS, CWEs and credits, and repositories' own security advisories, plus public user and organization profiles (counts, bio, company, location, top repositories and languages) and user search by location, language, followers and repository count. No email or contact data is returned: GitHub's Acceptable Use Policy forbids selling users' personal information."
+ },
+ {
+  "provider": "adstransparency-google-com",
+  "name": "Google Ads Transparency Center",
+  "rank": 0,
+  "toolCount": 7,
+  "description": "Google Ads Transparency Center: resolve advertisers, list their ads by region, format, platform and date, read creative details (dates, previews, EU DSA and political impression/spend ranges, targeting), advertiser profiles, political ads insights and geo criterion lookups, from the site's own anonymous RPC endpoints."
+ },
+ {
+  "provider": "indeed-com",
+  "name": "Indeed",
+  "rank": 0,
+  "toolCount": 3,
+  "description": "Indeed job search, full job postings and employer profiles (rating, review category scores, size, revenue, industry, addresses, CEO, links) from Indeed's own GraphQL API for the US and 26 other country sites, with the public company page as fallback and salary and location normalised."
+ },
+ {
+  "provider": "influencers-club",
+  "name": "Influencers.club",
+  "rank": 0,
+  "toolCount": 22,
+  "description": "Creator discovery, similar creators, audience overlap, cross-platform enrichment and creator content."
+ },
+ {
+  "provider": "join-com",
+  "name": "JOIN job ads",
+  "rank": 0,
+  "toolCount": 4,
+  "description": "Employer career pages hosted by JOIN (join.com): read an employer's profile with offices and benefits, list its online job ads with category and city filters, read one ad with description, salary, contract and working terms, and enumerate the employer's job categories. Keyed by the employer's join.com slug; JOIN publishes no cross-employer search or directory."
+ },
+ {
+  "provider": "littlecaesars-ca",
+  "name": "Little Caesars Canada",
+  "rank": 0,
+  "toolCount": 8,
+  "description": "Little Caesars Canada (littlecaesars.ca) store finder, store details, store-scoped menus with CAD prices, menu items, create-your-own pizza crusts and toppings, ordering time slots, delivery fee quotes for a street address, and promo deals, in English or French, from the anonymous ordering BFF the order.littlecaesars.ca app uses."
+ },
+ {
+  "provider": "littlecaesars-com",
+  "name": "Little Caesars US",
+  "rank": 0,
+  "toolCount": 8,
+  "description": "Little Caesars (littlecaesars.com) US store finder, store details, store-scoped menus with prices, item modifiers and toppings, create-your-own pizza options, ordering time slots, address delivery fee quotes and national/market promo deals, from the anonymous ordering BFF the order.littlecaesars.com app uses."
+ },
+ {
+  "provider": "marcos-com",
+  "name": "Marco's Pizza",
+  "rank": 0,
+  "toolCount": 6,
+  "description": "Marco's Pizza (marcos.com) store finder and location-specific menus: categories, items, sizes and prices, toppings and modifiers, coupons and live wait times from the public ordering data files and API."
+ },
+ {
+  "provider": "mempool-space",
+  "name": "mempool.space",
+  "rank": 0,
+  "toolCount": 10,
+  "description": "Bitcoin mainnet explorer data from the open-source mempool.space REST API: transactions with inputs, outputs, fees and confirmations, which transaction spent each output, address balances, histories and UTXOs, blocks by hash or height with mining pool and fees, recent blocks, fee estimates and the mempool backlog."
+ },
+ {
+  "provider": "namecheap-com",
+  "name": "Namecheap domain search",
+  "rank": 0,
+  "toolCount": 5,
+  "description": "Public, anonymous domain availability, premium and aftermarket status, TLD pricing, marketplace listings and auctions behind namecheap.com's domain search. Read-only; no cart, account or purchase actions."
+ },
+ {
+  "provider": "nature-com",
+  "name": "Nature",
+  "rank": 0,
+  "toolCount": 8,
+  "description": "Nature and the Nature Portfolio journals on nature.com: article search with filters, article metadata and open-access full text, structured reference lists (Springer Nature RIS export), per-journal listings and issue tables of contents, subject RSS feeds and monthly article sitemaps. Anonymous server-rendered HTML/XML; subscription full text is not available."
+ },
+ {
+  "provider": "naver-com",
+  "name": "Naver Place",
+  "rank": 0,
+  "toolCount": 5,
+  "description": "Naver Place (\ub124\uc774\ubc84 \ud50c\ub808\uc774\uc2a4): keyword place search, place detail (address, hours, menus, links), visitor (receipt) reviews with cursor pagination, review statistics and the photo viewer, from the anonymous pcmap-api.place.naver.com GraphQL the PC map uses. Korean content (locale ko)."
+ },
+ {
+  "provider": "newjersey-mylicense-com",
+  "name": "New Jersey license verification (DCA)",
+  "rank": 0,
+  "toolCount": 3,
+  "description": "New Jersey Division of Consumer Affairs public license verification (newjersey.mylicense.com/verification): the profession and license-type lists behind the search form, person and business licensee search by profession, license type, name, license number and city with the site's 40-row pages, and the License Information record (status, status change reason, issue and expiration dates, board action flag, CDS drug schedules, prerequisite licenses) for one license number. Classic ASP.NET WebForms parsed from HTML; every call establishes its own server session (form GET, search POST, results GET, detail GET) because result keys live in that session."
+ },
+ {
+  "provider": "npmjs-com",
+  "name": "npm",
+  "rank": 0,
+  "toolCount": 9,
+  "description": "npm, the JavaScript package registry: full-text and typeahead package search, package documents with dist-tags and version history, per-version dependencies and tarballs, download counts (totals, daily series, per version), dependents and packages by user or organization."
+ },
+ {
+  "provider": "package-registry-metadata-download-stats",
+  "name": "Package registries",
+  "rank": 0,
+  "toolCount": 4,
+  "description": "npm, PyPI, crates.io and Maven Central package metadata: latest version, license, links, version history, weekly and monthly downloads and dependent counts."
+ },
+ {
+  "provider": "pypi-org",
+  "name": "PyPI",
+  "rank": 0,
+  "toolCount": 8,
+  "description": "Python Package Index: project and release metadata, dependencies and Python compatibility, distribution files with hashes, PEP 740 provenance, release feeds, the global change log, a user's projects and site statistics."
+ },
+ {
+  "provider": "firecrawl-research-index",
+  "name": "Research Index",
+  "rank": 0,
+  "toolCount": 4,
+  "description": "Find scientific papers, inspect metadata, read relevant passages and follow citation relationships."
+ },
+ {
+  "provider": "sec-gov",
+  "name": "SEC EDGAR",
+  "rank": 0,
+  "toolCount": 24,
+  "description": "Official SEC company profiles, filings, filing sections, 13F holdings, XBRL concept facts and revenue by product from each filing's XBRL, plus bulk collection of companies, XBRL facts, the daily filings index, insider transactions (Forms 3/4/5) and Schedules 13D/13G."
+ },
+ {
+  "provider": "semanticscholar-org",
+  "name": "Semantic Scholar",
+  "rank": 0,
+  "toolCount": 10,
+  "description": "Semantic Scholar's scholarly search and citation graph through its public Academic Graph API: keyword paper search with filters, title matching, paper details by S2 id, DOI, arXiv, PubMed or other identifiers, batch lookups, citations and references with contexts and intents, recommendations, and author search, profiles and publication lists. Anonymous public endpoints only."
+ },
+ {
+  "provider": "similarweb",
+  "name": "Similarweb",
+  "rank": 0,
+  "toolCount": 8,
+  "description": "Website traffic, audiences and search intelligence from Similarweb."
+ },
+ {
+  "provider": "smartrecruiters-com",
+  "name": "SmartRecruiters",
+  "rank": 0,
+  "toolCount": 4,
+  "description": "Public job postings hosted by SmartRecruiters: read one posting from any pasted posting, apply or publication URL with salary, location and description sections; walk one company's full job list with keyword and location filters; search postings across every employer; resolve a company name to its identifier."
+ },
+ {
+  "provider": "upspring",
+  "name": "Upspring",
+  "rank": 0,
+  "toolCount": 14,
+  "description": "Competitor ad intelligence from Upspring: Meta ads with their hooks, personas and offers, and the brands behind them."
+ },
+ {
+  "provider": "uswitch-com",
+  "name": "Uswitch broadband",
+  "rank": 0,
+  "toolCount": 5,
+  "description": "UK home broadband price comparison from Uswitch's own broadband API: addresses at a postcode, availability-checked deals with prices, speeds, contract terms and fees, deal detail, provider directory and Trustpilot scores. Read-only; no switching or sign-up."
+ },
+ {
+  "provider": "wayfair-com",
+  "name": "Wayfair Careers and Product Reviews",
+  "rank": 0,
+  "toolCount": 4,
+  "description": "Wayfair job postings from the careers site's own JSON search endpoint and server-rendered job pages: filtered job search with the full employer-authored description available per job, one job's complete detail (JSON-LD JobPosting plus the page's inline job data), and the filter vocabularies (teams, categories, countries, states, locations, job types) with their ids. Also the storefront's customer reviews for one product (paged to the last review, newest first, with rating distribution and totals)."
+ },
+ {
+  "provider": "x-com",
+  "name": "X",
+  "rank": 0,
+  "toolCount": 4,
+  "description": "Inference-backed public X research with sourced structured outputs."
+ },
+ {
+  "provider": "xe-com",
+  "name": "XE currency data",
+  "rank": 0,
+  "toolCount": 6,
+  "description": "XE (xe.com) mid-market foreign exchange data read from the public site: convert an amount between two currencies with 7/30/90-day statistics, the full live rate table for a base currency, the historical rate table for any past date, a decoded chart series over 1 day to 10 years, the currency encyclopedia profile of one currency, and the list of every currency XE covers. Anonymous, read-only; money-transfer quoting and account features are out of scope."
+ },
+ {
+  "provider": "ycombinator-com",
+  "name": "Y Combinator",
+  "rank": 0,
+  "toolCount": 6,
+  "description": "Public YC startup directory: browse or search companies by batch and filters (directory and industry URLs route here), list batches, read one or up to 25 company profiles with founders and stage, read a company's advertised jobs, search jobs across all YC companies, and list Launch YC posts."
+ },
+ {
+  "provider": "finance-yahoo-com",
+  "name": "Yahoo Finance",
+  "rank": 0,
+  "toolCount": 5,
+  "description": "Yahoo Finance public quotes, earnings estimates, ticker discovery, dividend history and historical OHLCV price bars."
+ },
+ {
+  "provider": "youtube-com",
+  "name": "YouTube",
+  "rank": 0,
+  "toolCount": 11,
+  "description": "Public YouTube video metadata, caption transcripts, comments with threaded replies, video search, channel listings (videos, Shorts, live streams, playlists) and playlist contents from YouTube's own InnerTube API and caption service."
+ },
+ {
+  "provider": "zillow-com",
+  "name": "Zillow",
+  "rank": 0,
+  "toolCount": 16,
+  "description": "US home search, property details, photos, schools, scores and valuation history, plus rental listings (apartments, houses, townhomes, condos, rooms) and apartment buildings with per-unit availability, and the Zillow Observed Rent Index (ZORI) market rent series by metro, city, county or ZIP from Zillow Research, plus the newest for-sale listings feed (homedetails URLs with listing time, address and price)."
+ },
+ {
+  "provider": "ziprecruiter-com",
+  "name": "ZipRecruiter US",
+  "rank": 0,
+  "toolCount": 6,
+  "description": "ZipRecruiter US job marketplace: job search by title and city/state (the public /Jobs/ directory pages, 20 cards a page with pay, employment and location types, benefits and posting time), full job postings (JobPosting JSON-LD plus the page's job details), a company's open jobs near a city, salary percentiles for a title in a city, and title/location autocomplete."
+ },
+ {
+  "provider": "dominos-ca",
+  "name": "Domino's Canada",
+  "rank": -115,
+  "toolCount": 9,
+  "description": "Public Canadian store directory, nearby locations, profiles, published delivery fees and complete store-specific menus. Read-only; no order placement."
+ },
+ {
+  "provider": "pizzahut-ca",
+  "name": "Pizza Hut Canada",
+  "rank": -116,
+  "toolCount": 9,
+  "description": "Canadian Pizza Hut store, menu, builder and promotion data from the public Yum storefront."
+ },
+ {
+  "provider": "workable",
+  "name": "Workable",
+  "rank": -177,
+  "toolCount": 6,
+  "description": "Workable public job board (jobs.workable.com) search, employer profiles with their postings, and posting details, and any employer's Workable careers page (apply.workable.com/<account>/): job lists with filters and pagination, posting details and application links, from the JSON endpoints the pages themselves call."
+ }
+]

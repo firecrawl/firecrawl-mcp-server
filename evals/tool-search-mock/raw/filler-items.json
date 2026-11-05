@@ -1,0 +1,5490 @@
+[
+ {
+  "id": "wikipedia/articles/lookup",
+  "provider": "wikipedia",
+  "capability": "articles/lookup",
+  "name": "Article",
+  "description": "Read the current revision of a Wikipedia (or sister-project) article by exact title: full wikitext (or HTML with body), abstract, categories, redirects, connected Wikidata QID, license, and revision credibility signals. Use structured-contents instead when you want infobox fields, sections or references already parsed. From https://de.wikipedia.org/wiki/Berlin pass name `Berlin` and project `dewiki`. Not a search: titles must match exactly.",
+  "options": [
+   {
+    "name": "name",
+    "type": "string",
+    "required": true,
+    "in": "path",
+    "about": "Exact article title as on the wiki, for example `Marie_Curie` or `Marie Curie`. Case-sensitive: Wikipedia titles start with a capital letter. From a URL such as https://fr.wikipedia.org/wiki/Marie_Curie, use the part after /wiki/."
+   },
+   {
+    "name": "project",
+    "type": "string",
+    "about": "Wikimedia project identifier: language code plus project code, for example `enwiki` (English Wikipedia), `frwiki`, `dewiki`, `enwiktionary` or `eswikivoyage`. Defaults to `enwiki` when neither project nor language is given. `reference/projects` lists every identifier."
+   },
+   {
+    "name": "language",
+    "type": "string",
+    "about": "Wikimedia language code, for example `en`, `fr` or `zh-yue`. Returns the article from any project in that language; combine with project to pin one wiki."
+   },
+   {
+    "name": "fields",
+    "type": "string[]",
+    "max": 50,
+    "about": "Return only these fields, in dot notation, for example `name`, `abstract`, `url`, `version.identifier`. Omit for the full record. Wikimedia returns exactly the fields named."
+   },
+   {
+    "name": "limit",
+    "type": "number",
+    "min": 1,
+    "max": 10,
+    "default": 1,
+    "about": "Most matching articles to return, 1 to 10. More than one only helps when no project is pinned and the title exists on several wikis."
+   },
+   {
+    "name": "body",
+    "type": "string",
+    "oneOf": [
+     "wikitext",
+     "html",
+     "both",
+     "none"
+    ],
+    "default": "wikitext",
+    "about": "Which article_body format to include when fields is not given: `wikitext` (default, compact), `html` (MediaWiki DOM, often 5-10x larger), `both`, or `none` for metadata and abstract only."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "wikipedia/articles/structured-contents",
+  "provider": "wikipedia",
+  "capability": "articles/structured-contents",
+  "name": "Structured article",
+  "description": "Read a Wikipedia article pre-parsed into JSON: one-line description, abstract, infobox fields, sections as paragraphs and lists with links, references and tables. Best for extracting facts such as a person's birth date or a city's population without parsing HTML. Beta upstream, with the most complete coverage on en, de, fr, es, pt, it, nl, cy and id Wikipedia. Exact title, as for articles/lookup.",
+  "options": [
+   {
+    "name": "name",
+    "type": "string",
+    "required": true,
+    "in": "path",
+    "about": "Exact article title as on the wiki, for example `Marie_Curie` or `Marie Curie`. Case-sensitive: Wikipedia titles start with a capital letter. From a URL such as https://fr.wikipedia.org/wiki/Marie_Curie, use the part after /wiki/."
+   },
+   {
+    "name": "project",
+    "type": "string",
+    "about": "Wikimedia project identifier: language code plus project code, for example `enwiki` (English Wikipedia), `frwiki`, `dewiki`, `enwiktionary` or `eswikivoyage`. Defaults to `enwiki` when neither project nor language is given. `reference/projects` lists every identifier."
+   },
+   {
+    "name": "language",
+    "type": "string",
+    "about": "Wikimedia language code, for example `en`, `fr` or `zh-yue`. Returns the article from any project in that language; combine with project to pin one wiki."
+   },
+   {
+    "name": "fields",
+    "type": "string[]",
+    "max": 50,
+    "about": "Return only these fields, in dot notation, for example `name`, `abstract`, `url`, `version.identifier`. Omit for the full record. Wikimedia returns exactly the fields named."
+   },
+   {
+    "name": "limit",
+    "type": "number",
+    "min": 1,
+    "max": 10,
+    "default": 1,
+    "about": "Most matching articles to return, 1 to 10. More than one only helps when no project is pinned and the title exists on several wikis."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "wikipedia/reference/languages",
+  "provider": "wikipedia",
+  "capability": "reference/languages",
+  "name": "Languages",
+  "description": "List the language codes Wikimedia projects use, with names and writing direction, to choose the language option or build a project identifier. Codes are two or three letters, sometimes with a suffix (zh-yue). Free.",
+  "options": [],
+  "seed": "filler"
+ },
+ {
+  "id": "wikipedia/reference/projects",
+  "provider": "wikipedia",
+  "capability": "reference/projects",
+  "name": "Projects",
+  "description": "List the Wikimedia projects available for lookup, to find the project identifier for a language and project type, such as `ptwiki` for Portuguese Wikipedia or `frwiktionary`. Free.",
+  "options": [
+   {
+    "name": "language",
+    "type": "string",
+    "about": "Only projects in this language code, for example `de`."
+   },
+   {
+    "name": "code",
+    "type": "string",
+    "oneOf": [
+     "wiki",
+     "wiktionary",
+     "wikisource",
+     "wikiquote",
+     "wikibooks",
+     "wikiversity",
+     "wikivoyage"
+    ],
+    "about": "Only projects of this type, for example `wiki` for Wikipedia."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "wikipedia/wikidata/item",
+  "provider": "wikipedia",
+  "capability": "wikidata/item",
+  "name": "Wikidata item",
+  "description": "Read a Wikidata item by QID: labels, descriptions and aliases in every language, all statements (property values with qualifiers and references) and links to its article on each wiki. Use for structured facts such as dates, identifiers and relationships, or to find an entity's article title in another language through sitelinks. Beta upstream; a very large item can fail.",
+  "options": [
+   {
+    "name": "identifier",
+    "type": "string",
+    "required": true,
+    "in": "path",
+    "about": "Wikidata item ID (QID), for example `Q42`. An article's main_entity.identifier is its QID."
+   },
+   {
+    "name": "fields",
+    "type": "string[]",
+    "max": 50,
+    "about": "Return only these fields, in dot notation, for example `entity.labels.en` or `entity.statements.P569`. Omit for the full record."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "wikipedia/wikidata/labels",
+  "provider": "wikipedia",
+  "capability": "wikidata/labels",
+  "name": "Wikidata labels",
+  "description": "Get the name of a Wikidata item or property in every language, keyed by language code. Cheaper than wikidata/item when only names are needed, for example to label the property and value IDs in a statement. Beta upstream.",
+  "options": [
+   {
+    "name": "identifier",
+    "type": "string",
+    "required": true,
+    "in": "path",
+    "about": "Wikidata item or property ID, for example `Q42` or `P31`."
+   },
+   {
+    "name": "fields",
+    "type": "string[]",
+    "max": 50,
+    "about": "Return only these fields, in dot notation, for example `entity.labels.en` or `entity.statements.P569`. Omit for the full record."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "wikipedia/wikidata/property",
+  "provider": "wikipedia",
+  "capability": "wikidata/property",
+  "name": "Wikidata property",
+  "description": "Read a Wikidata property by PID: its labels, descriptions, datatype and statements. Use to learn what a statement key in an item, such as P569, means. Beta upstream.",
+  "options": [
+   {
+    "name": "identifier",
+    "type": "string",
+    "required": true,
+    "in": "path",
+    "about": "Wikidata property ID (PID), for example `P31` (instance of) or `P569` (date of birth)."
+   },
+   {
+    "name": "fields",
+    "type": "string[]",
+    "max": 50,
+    "about": "Return only these fields, in dot notation, for example `entity.labels.en` or `entity.statements.P569`. Omit for the full record."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "benzinga/calendar/consensus-ratings",
+  "provider": "benzinga",
+  "capability": "calendar/consensus-ratings",
+  "name": "Consensus ratings",
+  "description": "Use for where analysts stand in aggregate right now on one company. For the individual changes that moved the consensus, use calendar/ratings instead.",
+  "options": [
+   {
+    "about": "Exactly one ticker symbol to aggregate for; the endpoint takes a single ticker, not a list. Call once per company.",
+    "name": "parameters[tickers]",
+    "type": "string"
+   },
+   {
+    "about": "Earliest date, YYYY-MM-DD.",
+    "name": "parameters[date_from]",
+    "type": "string"
+   },
+   {
+    "about": "Latest date, YYYY-MM-DD.",
+    "name": "parameters[date_to]",
+    "type": "string"
+   },
+   {
+    "about": "Collapse the aggregate to BUY, HOLD and SELL rather than the five-step scale.",
+    "name": "simplify",
+    "type": "boolean"
+   },
+   {
+    "about": "Whether each rating bucket is reported as a count of analysts or as a percentage of them.",
+    "default": "number",
+    "name": "aggregate_type",
+    "oneOf": [
+     "number",
+     "percentage"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Records to return. Limit 1000.",
+    "max": 1000,
+    "name": "pagesize",
+    "type": "number"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "benzinga/calendar/mergers-acquisitions",
+  "provider": "benzinga",
+  "capability": "calendar/mergers-acquisitions",
+  "name": "Mergers and acquisitions",
+  "description": "Use for who is buying whom, at what price, and whether the deal is pending or closed. For the coverage and commentary around a deal use news/search.",
+  "options": [
+   {
+    "about": "Comma-separated ticker symbols, maximum 50. Set this when the caller asks whether a named company is acquiring or being acquired.",
+    "name": "parameters[tickers]",
+    "type": "string"
+   },
+   {
+    "about": "A single date, YYYY-MM-DD, as shorthand when date_from and date_to would be the same. Leave unset to get the latest deals.",
+    "name": "parameters[date]",
+    "type": "string"
+   },
+   {
+    "about": "Earliest date, YYYY-MM-DD, interpreted against date_sort.",
+    "name": "parameters[date_from]",
+    "type": "string"
+   },
+   {
+    "about": "Latest date, YYYY-MM-DD, interpreted against date_sort.",
+    "name": "parameters[date_to]",
+    "type": "string"
+   },
+   {
+    "about": "Which deal date to sort on. Use announced for a chronology of new deals, expected for pending closes, or completed for deals that have closed.",
+    "name": "parameters[date_sort]",
+    "oneOf": [
+     "expected",
+     "completed",
+     "announced"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Minimum importance level, matched as greater than or equal to the value given. Raise it when the caller only wants large or notable deals.",
+    "name": "parameters[importance]",
+    "oneOf": [
+     "0",
+     "1",
+     "2",
+     "3",
+     "4",
+     "5"
+    ],
+    "type": "number"
+   },
+   {
+    "about": "Unix timestamp in UTC; returns only records updated at or after it. Set this when polling for changes since a previous call.",
+    "name": "parameters[updated]",
+    "type": "number"
+   },
+   {
+    "about": "Zero-based page offset, capped at 100000. Prefer narrowing by date over paging deep.",
+    "default": 0,
+    "max": 100000,
+    "name": "page",
+    "type": "number"
+   },
+   {
+    "about": "Number of records to return, limit 1000.",
+    "max": 1000,
+    "name": "pagesize",
+    "type": "number"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "benzinga/calendar/ratings",
+  "provider": "benzinga",
+  "capability": "calendar/ratings",
+  "name": "Analyst ratings",
+  "description": "Use for how analysts have moved on a stock: upgrades, downgrades, initiations and target changes. Filter by parameters[analyst_id] or parameters[firm_id] to follow one analyst or firm. It carries the ratings, not the reasoning behind them.",
+  "options": [
+   {
+    "about": "Comma-separated response fields to return, or * for every field including ratings_accuracy. Available: id, date, time, ticker, exchange, name, currency, action_pt, action_company, rating_current, pt_current, rating_prior, pt_prior, pt_pct_change, url, url_calendar, url_news, analyst, analyst_id, analyst_name, firm_id, ratings_accuracy, importance, notes, updated. Set it to trim the payload when you only need the rating and target.",
+    "name": "fields",
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated ticker symbols, maximum 50.",
+    "name": "parameters[tickers]",
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated analyst ids. Take them from the id field of calendar/ratings-analysts, or the analyst_id on a rating, to follow one analyst's calls.",
+    "name": "parameters[analyst_id]",
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated firm ids. Take them from the id field of calendar/ratings-firms, or the firm_id on a rating, to keep to one research firm's coverage.",
+    "name": "parameters[firm_id]",
+    "type": "string"
+   },
+   {
+    "about": "Ratings action to filter to, matched against action_company.",
+    "name": "parameters[action]",
+    "oneOf": [
+     "Assumes",
+     "Downgrades",
+     "Firm Dissolved",
+     "Initiates Coverage On",
+     "Maintains",
+     "Reinstates",
+     "Reiterates",
+     "Removes",
+     "Suspends",
+     "Terminates Coverage On",
+     "Upgrades"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "A single date, YYYY-MM-DD, as shorthand when date_from and date_to would be the same. Leave unset to get the latest ratings.",
+    "name": "parameters[date]",
+    "type": "string"
+   },
+   {
+    "about": "Earliest rating date, YYYY-MM-DD.",
+    "name": "parameters[date_from]",
+    "type": "string"
+   },
+   {
+    "about": "Latest rating date, YYYY-MM-DD.",
+    "name": "parameters[date_to]",
+    "type": "string"
+   },
+   {
+    "about": "Minimum importance level, matched as greater than or equal to the value given. Raise it when the caller only wants the notable calls.",
+    "name": "parameters[importance]",
+    "oneOf": [
+     "0",
+     "1",
+     "2",
+     "3",
+     "4",
+     "5"
+    ],
+    "type": "number"
+   },
+   {
+    "about": "Collapse ratings to standardized categories.",
+    "name": "simplify",
+    "type": "boolean"
+   },
+   {
+    "about": "Unix timestamp. Returns records updated at or after it, for polling deltas.",
+    "name": "parameters[updated]",
+    "type": "number"
+   },
+   {
+    "about": "Page offset, 0 to 100000.",
+    "default": 0,
+    "max": 100000,
+    "name": "page",
+    "type": "number"
+   },
+   {
+    "about": "Records to return. Limit 1000.",
+    "max": 1000,
+    "name": "pagesize",
+    "type": "number"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "benzinga/calendar/ratings-analysts",
+  "provider": "benzinga",
+  "capability": "calendar/ratings-analysts",
+  "name": "Analyst roster",
+  "description": "Use to resolve an analyst by name, or to judge how accurate a particular analyst has been, and to get the id you then pass to calendar/ratings as parameters[analyst_id]. For the ratings themselves use calendar/ratings; for the list of firms rather than people use calendar/ratings-firms.",
+  "options": [
+   {
+    "about": "Page offset, limited to 0-100000. Set this only when walking past the first page of the analyst roster.",
+    "default": 0,
+    "name": "page",
+    "type": "number"
+   },
+   {
+    "about": "Number of analysts to return, limit 1000. Raise it when you want the roster in one call rather than paging.",
+    "default": 100,
+    "max": 1000,
+    "name": "pageSize",
+    "type": "number"
+   },
+   {
+    "about": "Comma-separated list of response fields to return. Set it to trim the payload when you only need names and ids and not the ratings_accuracy block.",
+    "name": "fields",
+    "type": "string"
+   },
+   {
+    "about": "Analyst identifier to look up. Set this when you already have an analyst_id from a ratings record and want that analyst's profile and accuracy.",
+    "name": "analyst",
+    "type": "string"
+   },
+   {
+    "about": "Analyst name to match. Set this when the caller names a person rather than supplying an id; the reference does not say whether matching is exact, so try the full name first.",
+    "name": "analyst_name",
+    "type": "string"
+   },
+   {
+    "about": "Firm identifier to restrict to. Set this to list only the analysts working at one research firm.",
+    "name": "firm",
+    "type": "string"
+   },
+   {
+    "about": "Firm name to match. Use it when the caller names the bank, for example Morgan Stanley, instead of supplying a firm id.",
+    "name": "firm_name",
+    "type": "string"
+   },
+   {
+    "about": "Unix timestamp (UTC); only records updated at or after this are returned, and the sort order follows it. Set this to poll for roster changes since your last sync.",
+    "name": "updated",
+    "type": "number"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "benzinga/calendar/ratings-firms",
+  "provider": "benzinga",
+  "capability": "calendar/ratings-firms",
+  "name": "Research firms",
+  "description": "Use to enumerate the covering firms or to turn a firm name into the id that calendar/ratings filters on as parameters[firm_id]. For an individual analyst and their track record use calendar/ratings-analysts; for the ratings themselves use calendar/ratings.",
+  "options": [
+   {
+    "about": "Page offset, limited to 0-100000. Set this only when paging past the first block of firms.",
+    "default": 0,
+    "name": "page",
+    "type": "number"
+   },
+   {
+    "about": "Number of firms to return, limit 1000. Raise it to pull the whole firm list in one call.",
+    "default": 100,
+    "max": 1000,
+    "name": "pageSize",
+    "type": "number"
+   },
+   {
+    "about": "Comma-separated list of response fields to return. Set it when you only need id and name.",
+    "name": "fields",
+    "type": "string"
+   },
+   {
+    "about": "Firm identifier to look up. Set this when you already hold a firm_id from a ratings record and want the firm's details.",
+    "name": "firm",
+    "type": "string"
+   },
+   {
+    "about": "Unix timestamp (UTC); only firms updated at or after this are returned. Set this to poll for newly added or renamed firms since your last sync.",
+    "name": "updated",
+    "type": "number"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "benzinga/calendar/removed",
+  "provider": "benzinga",
+  "capability": "calendar/removed",
+  "name": "Removed calendar events",
+  "description": "Use when you keep a copy of the ratings or M&A calendar and need to know which previously returned events have since been withdrawn, which Schedule C.10 requires you to act on. It answers only what disappeared; for the events themselves use calendar/ratings or calendar/mergers-acquisitions.",
+  "options": [
+   {
+    "about": "Page offset, limited to 0-100000. Set this when walking a long backlog of removals.",
+    "default": 0,
+    "max": 100000,
+    "name": "page",
+    "type": "number"
+   },
+   {
+    "about": "Number of removal records to return, limit 1000.",
+    "default": 100,
+    "max": 1000,
+    "name": "pageSize",
+    "type": "number"
+   },
+   {
+    "about": "Which calendar to read removals for: ratings for calendar/ratings rows, ma for calendar/mergers-acquisitions rows. Always set it: left unset the feed returns removals from every Benzinga calendar, most of them for calendars not published here (probed 2026-09-21, the unfiltered first page was dividends).",
+    "name": "type",
+    "oneOf": [
+     "ratings",
+     "ma"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Unix timestamp (UTC); only records updated at or after this are returned. Set this to the time of your last sync so you get just the newly withdrawn events.",
+    "name": "updated",
+    "type": "number"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "benzinga/news/press-releases",
+  "provider": "benzinga",
+  "capability": "news/press-releases",
+  "name": "Press releases",
+  "description": "Use this for company-issued announcements as distributed over the wires (PRNewswire, Globe Newswire, Business Wire, ACCESS Newswire, Newsfile), the primary-source wording behind a story, including licensing, collaboration and acquisition deals with the upfront, milestone and total values the companies disclosed. For a subject rather than a company, pass topics with topic_group_by and (for example license agreement,upfront payment) plus dateFrom and dateTo, and displayOutput full to quote the terms. For Benzinga editorial coverage and the wider newswire use news/search, and for the one-line explanation of a price move use news/wiims.",
+  "options": [
+   {
+    "about": "Page offset, limited to 0-100000. Increase it to page past the first batch rather than widening the date range.",
+    "default": 0,
+    "name": "page",
+    "type": "number"
+   },
+   {
+    "about": "Number of releases returned, maximum 100. Raise it when you want a full day of a company's releases in one call.",
+    "default": 15,
+    "max": 100,
+    "name": "pageSize",
+    "type": "number"
+   },
+   {
+    "about": "How much of each release to return: headline only, abstract (headline plus teaser) or full body text. Set full only when you need to quote the release.",
+    "default": "headline",
+    "name": "displayOutput",
+    "oneOf": [
+     "full",
+     "abstract",
+     "headline"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "A single day to query, yyyy-mm-dd. Use it instead of dateFrom and dateTo when the caller names one date.",
+    "name": "date",
+    "type": "string"
+   },
+   {
+    "about": "Earliest publication date, yyyy-mm-dd. Set it whenever the caller asks about a period rather than a single day.",
+    "name": "dateFrom",
+    "type": "string"
+   },
+   {
+    "about": "Latest publication date, yyyy-mm-dd. Pair it with dateFrom to bound a period.",
+    "name": "dateTo",
+    "type": "string"
+   },
+   {
+    "about": "Unix timestamp in UTC; set it to your last sync time to pull only releases updated since then.",
+    "name": "updatedSince",
+    "type": "number"
+   },
+   {
+    "about": "Unix timestamp in UTC; set it to pull and sort by releases published since that moment.",
+    "name": "publishedSince",
+    "type": "number"
+   },
+   {
+    "about": "Sort order as field:direction. Use created:asc to read a period forwards, or updated:desc when tracking edits.",
+    "name": "sort",
+    "oneOf": [
+     "id:asc",
+     "id:desc",
+     "created:asc",
+     "created:desc",
+     "updated:asc",
+     "updated:desc"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated ISINs, maximum 50. Use it when the caller identifies companies by ISIN rather than ticker.",
+    "name": "isin",
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated CUSIPs, maximum 50; requires a license agreement. Use only when the caller supplies CUSIPs.",
+    "name": "cusips",
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated ticker symbols, maximum 50. Set this whenever the caller names a company.",
+    "name": "tickers",
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated primary ticker symbols. Use it instead of tickers when you want only releases whose primary subject is that company.",
+    "name": "primaryTickers",
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated words or phrases matched against title, tags and body in that order of priority. Use it when the caller asks about a subject rather than a company.",
+    "name": "topics",
+    "type": "string"
+   },
+   {
+    "about": "Logical operator for the topics query. Set and when every topic must appear, or leave as or to match any.",
+    "default": "or",
+    "name": "topic_group_by",
+    "oneOf": [
+     "and",
+     "or"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated distributing wires, spelled as Benzinga does: PRNewswire, Globe Newswire, Business Wire, ACCESS Newswire, Newsfile. Set it to restrict to one wire.",
+    "name": "authors",
+    "type": "string"
+   },
+   {
+    "about": "Desired response format. Set text only when you want plain text rather than the default JSON structures.",
+    "name": "format",
+    "oneOf": [
+     "text"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Importance level of the release. Set high when the caller only wants the market-moving releases.",
+    "name": "importance",
+    "oneOf": [
+     "low",
+     "medium",
+     "high"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Region filter, for example 'ca' or 'canada' for Canadian content. Set it when the caller scopes the question to a market.",
+    "name": "region",
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "benzinga/news/removed",
+  "provider": "benzinga",
+  "capability": "news/removed",
+  "name": "Removed news",
+  "description": "Use this when you keep a copy of Benzinga news and need to know which stories have been withdrawn so you can delete them, which Schedule C.10 requires. It never returns story content; for the stories themselves use news/search.",
+  "options": [
+   {
+    "about": "Page offset. Upstream caps pageSize multiplied by page at 10000, so narrow with updatedSince rather than paging deep.",
+    "default": 0,
+    "name": "page",
+    "type": "number"
+   },
+   {
+    "about": "Number of removal records returned, maximum 1000. Raise it when reconciling a backlog in one call.",
+    "default": 100,
+    "max": 1000,
+    "name": "pageSize",
+    "type": "number"
+   },
+   {
+    "about": "Unix timestamp in UTC; set it to the time of your last sync so you only receive removals recorded since then.",
+    "name": "updatedSince",
+    "type": "number"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "benzinga/news/search",
+  "provider": "benzinga",
+  "capability": "news/search",
+  "name": "News search",
+  "description": "Use for what was reported about a company or subject, and when. Scope it to tickers or a date range: unscoped it returns the whole newswire. For the analyst reaction to a story use calendar/ratings.",
+  "options": [
+   {
+    "about": "Page offset, limited to 0-100000. Increase it to read past the first page of results rather than widening the date range.",
+    "default": 0,
+    "max": 100000,
+    "name": "page",
+    "type": "number"
+   },
+   {
+    "about": "Stories to return, maximum 100. Raise it when you want a full day of coverage in one call.",
+    "default": 15,
+    "max": 100,
+    "name": "pageSize",
+    "type": "number"
+   },
+   {
+    "about": "How much of each story to return: headline only, abstract (headline plus teaser) or full body text. Set full only when you need to quote the story.",
+    "default": "headline",
+    "name": "displayOutput",
+    "oneOf": [
+     "full",
+     "abstract",
+     "headline"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "A single day to query, yyyy-mm-dd. Use it instead of dateFrom and dateTo when the caller names one date.",
+    "name": "date",
+    "type": "string"
+   },
+   {
+    "about": "Earliest publication date, yyyy-mm-dd. Set it whenever the caller asks about a period rather than a single day.",
+    "name": "dateFrom",
+    "type": "string"
+   },
+   {
+    "about": "Latest publication date, yyyy-mm-dd. Pair it with dateFrom to bound a period.",
+    "name": "dateTo",
+    "type": "string"
+   },
+   {
+    "about": "Unix timestamp in UTC; set it to your last sync time to pull only stories updated since then.",
+    "name": "updatedSince",
+    "type": "number"
+   },
+   {
+    "about": "Unix timestamp in UTC; set it to pull and sort by stories published since that moment.",
+    "name": "publishedSince",
+    "type": "number"
+   },
+   {
+    "about": "Sort order as field:direction. Use created:asc to read a period forwards, or updated:desc when tracking edits.",
+    "name": "sort",
+    "oneOf": [
+     "id:asc",
+     "id:desc",
+     "created:asc",
+     "created:desc",
+     "updated:asc",
+     "updated:desc"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated ISINs, maximum 50. Use it when the caller identifies companies by ISIN rather than ticker.",
+    "name": "isin",
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated CUSIPs, maximum 50; requires a license agreement. Use only when the caller supplies CUSIPs.",
+    "name": "cusips",
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated ticker symbols, maximum 50. Set this whenever the caller names a company.",
+    "name": "tickers",
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated primary ticker symbols. Use it instead of tickers when you want only stories whose primary subject is that company.",
+    "name": "primaryTickers",
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated Benzinga channels to restrict to, for example Earnings or Analyst Ratings.",
+    "name": "channels",
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated words or phrases matched against title, tags and body in that order of priority. Use it when the caller asks about a subject rather than a company.",
+    "name": "topics",
+    "type": "string"
+   },
+   {
+    "about": "Logical operator for the topics query. Set and when every topic must appear, or leave as or to match any.",
+    "default": "or",
+    "name": "topic_group_by",
+    "oneOf": [
+     "and",
+     "or"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated authors. Set it to restrict to a particular desk or writer.",
+    "name": "authors",
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated content types. Set it when you need to keep the feed to a specific content type.",
+    "name": "content_types",
+    "type": "string"
+   },
+   {
+    "about": "Desired response format. Set text only when you want plain text rather than the default JSON structures.",
+    "name": "format",
+    "oneOf": [
+     "text"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Importance level filter. Set it when the caller only wants the market-moving stories.",
+    "name": "importance",
+    "type": "string"
+   },
+   {
+    "about": "Importance rank from 1 to 5. Set a low number to keep only the highest-ranked stories.",
+    "max": 5,
+    "min": 1,
+    "name": "importanceRank",
+    "type": "number"
+   },
+   {
+    "about": "Region filter, for example 'ca' or 'canada' for Canadian content. Set it when the caller scopes the question to a market.",
+    "name": "region",
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "benzinga/news/wiims",
+  "provider": "benzinga",
+  "capability": "news/wiims",
+  "name": "Why Is It Moving",
+  "description": "Use this to answer why a stock moved: WIIMs are the short attributed explanations Benzinga files against a ticker's price action. For the underlying coverage use news/search, and for the company's own announcement use news/press-releases.",
+  "options": [
+   {
+    "about": "Page offset, limited to 0-100000. Increase it to page further back rather than widening the date range.",
+    "default": 0,
+    "name": "page",
+    "type": "number"
+   },
+   {
+    "about": "Number of WIIM items returned, maximum 100. Raise it when scanning a whole session's movers.",
+    "default": 15,
+    "max": 100,
+    "name": "pageSize",
+    "type": "number"
+   },
+   {
+    "about": "How much of each item to return: headline only, abstract (headline plus teaser) or full body. WIIMs are short, so abstract is usually enough.",
+    "default": "headline",
+    "name": "displayOutput",
+    "oneOf": [
+     "full",
+     "abstract",
+     "headline"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "A single day to query, yyyy-mm-dd. Use it when the caller asks why a stock moved on a specific date.",
+    "name": "date",
+    "type": "string"
+   },
+   {
+    "about": "Earliest publication date, yyyy-mm-dd. Set it when the caller asks about a period.",
+    "name": "dateFrom",
+    "type": "string"
+   },
+   {
+    "about": "Latest publication date, yyyy-mm-dd. Pair it with dateFrom to bound a period.",
+    "name": "dateTo",
+    "type": "string"
+   },
+   {
+    "about": "Unix timestamp in UTC; set it to your last sync time to pull only items updated since then.",
+    "name": "updatedSince",
+    "type": "number"
+   },
+   {
+    "about": "Unix timestamp in UTC; set it to pull and sort by items published since that moment, which suits intraday polling.",
+    "name": "publishedSince",
+    "type": "number"
+   },
+   {
+    "about": "Sort order as field:direction. Use created:asc to read a session forwards.",
+    "name": "sort",
+    "oneOf": [
+     "id:asc",
+     "id:desc",
+     "created:asc",
+     "created:desc",
+     "updated:asc",
+     "updated:desc"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated ISINs, maximum 50. Use when the caller identifies companies by ISIN.",
+    "name": "isin",
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated CUSIPs, maximum 50; requires a license agreement.",
+    "name": "cusips",
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated ticker symbols, maximum 50. Set this whenever the caller names a company.",
+    "name": "tickers",
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated primary ticker symbols; use it to keep only items whose primary subject is that company.",
+    "name": "primaryTickers",
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated words or phrases matched against title, tags and body in that order of priority.",
+    "name": "topics",
+    "type": "string"
+   },
+   {
+    "about": "Logical operator for the topics query. Set and when every topic must appear.",
+    "default": "or",
+    "name": "topic_group_by",
+    "oneOf": [
+     "and",
+     "or"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated authors. Set it to restrict to a particular desk.",
+    "name": "authors",
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated content types. Set it when you need to keep the feed to a specific content type.",
+    "name": "content_types",
+    "type": "string"
+   },
+   {
+    "about": "Desired response format. Set text only when you want plain text rather than JSON structures.",
+    "name": "format",
+    "oneOf": [
+     "text"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Importance level filter. Set it when the caller wants only the more significant move explanations.",
+    "name": "importance",
+    "type": "string"
+   },
+   {
+    "about": "Importance rank from 1 to 5. Set a low number to keep only the highest-ranked items.",
+    "name": "importanceRank",
+    "type": "number"
+   },
+   {
+    "about": "Region filter, for example 'ca' or 'canada' for Canadian content.",
+    "name": "region",
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "benzinga/signals/options-activity",
+  "provider": "benzinga",
+  "capability": "signals/options-activity",
+  "name": "Unusual options activity",
+  "description": "Use for positioning: large directional bets before a catalyst. It reports orders, not outcomes, and a sweep filled at or above the ask (execution_estimate) is a stronger signal than one at the midpoint.",
+  "options": [
+   {
+    "about": "Comma-separated ticker symbols, maximum 50.",
+    "name": "parameters[tickers]",
+    "type": "string"
+   },
+   {
+    "about": "Benzinga id of one options-activity record. Set it to fetch a single signal you already hold the id for.",
+    "name": "parameters[id]",
+    "type": "string"
+   },
+   {
+    "about": "A single date, YYYY-MM-DD.",
+    "name": "parameters[date]",
+    "type": "string"
+   },
+   {
+    "about": "Earliest date, YYYY-MM-DD.",
+    "name": "parameters[date_from]",
+    "type": "string"
+   },
+   {
+    "about": "Latest date, YYYY-MM-DD.",
+    "name": "parameters[date_to]",
+    "type": "string"
+   },
+   {
+    "about": "Date field to sort on. The only documented value is date; set it to read a period in date order.",
+    "name": "parameters[date_sort]",
+    "oneOf": [
+     "date"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Unix timestamp. Returns records updated at or after it.",
+    "name": "parameters[updated]",
+    "type": "number"
+   },
+   {
+    "about": "Page offset.",
+    "default": 0,
+    "name": "page",
+    "type": "number"
+   },
+   {
+    "about": "Records to return, limit 1000.",
+    "max": 1000,
+    "name": "pagesize",
+    "type": "number"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/categories/category",
+  "provider": "fred",
+  "capability": "categories/category",
+  "name": "Category",
+  "description": "Call to confirm what a category id is before walking down from it, or with no argument to land on the root. The only category endpoint that takes no real-time period, so what it returns is always the current name.",
+  "options": [
+   {
+    "about": "The category to read. 0 is the root of the tree.",
+    "default": 0,
+    "name": "category_id",
+    "type": "number"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/categories/children",
+  "provider": "fred",
+  "capability": "categories/children",
+  "name": "Child categories",
+  "description": "The rung of the walk from the root to a series list. It descends one level per call, so getting from the root to a leaf takes several. Nothing here pages: a category with many children returns all of them.",
+  "options": [
+   {
+    "about": "The category to read. 0 is the root of the tree.",
+    "default": 0,
+    "name": "category_id",
+    "type": "number"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/categories/related",
+  "provider": "fred",
+  "capability": "categories/related",
+  "name": "Related categories",
+  "description": "Call for the cross-links the hierarchy cannot express. Most categories have none, so an empty array is the normal answer here and not a sign the call went wrong.",
+  "options": [
+   {
+    "about": "The category to read. Required here, though the identical-looking parameter defaults to the root on `categories/category` and `categories/children`.",
+    "name": "category_id",
+    "required": true,
+    "type": "number"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/categories/related-tags",
+  "provider": "fred",
+  "capability": "categories/related-tags",
+  "name": "Category related tags",
+  "description": "Call to narrow a category further once you already have one tag: it returns the tags that co-occur with `tag_names` inside this category. It narrows rather than suggesting alternatives, and unlike `categories/tags` the `tag_names` argument is mandatory.",
+  "options": [
+   {
+    "about": "The category to read. Required here, though the identical-looking parameter defaults to the root on `categories/category` and `categories/children`.",
+    "name": "category_id",
+    "required": true,
+    "type": "number"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Semicolon-delimited tag names, required here even though the same parameter is an optional filter on the sibling endpoints. It is the anchor set: the answer is the other tags carried by series that already carry all of these, so adding a name narrows rather than widens.",
+    "name": "tag_names",
+    "type": "string",
+    "required": true
+   },
+   {
+    "about": "Semicolon-delimited tag names to drop. Not independently usable: FRED requires `tag_names` to be set as well, which nothing in this contract can enforce.",
+    "name": "exclude_tag_names",
+    "type": "string"
+   },
+   {
+    "about": "Narrow to one kind of tag: freq frequency, gen general concept, geo geography, geot geography type, rls release, seas seasonal adjustment, src source.",
+    "name": "tag_group_id",
+    "oneOf": [
+     "freq",
+     "gen",
+     "geo",
+     "geot",
+     "rls",
+     "seas",
+     "src"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Free text the tag name must match.",
+    "name": "search_text",
+    "type": "string"
+   },
+   {
+    "about": "Records to return. The default is the maximum, so a naive call is a large response rather than a page.",
+    "default": 1000,
+    "max": 1000,
+    "name": "limit",
+    "type": "number"
+   },
+   {
+    "about": "Records to skip. Page by adding `limit` to it; `count` in the envelope is the full match total.",
+    "default": 0,
+    "name": "offset",
+    "type": "number"
+   },
+   {
+    "about": "Which tag attribute to sort by.",
+    "default": "series_count",
+    "name": "order_by",
+    "oneOf": [
+     "series_count",
+     "popularity",
+     "created",
+     "name",
+     "group_id"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Sort direction.",
+    "default": "asc",
+    "name": "sort_order",
+    "oneOf": [
+     "asc",
+     "desc"
+    ],
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/categories/series",
+  "provider": "fred",
+  "capability": "categories/series",
+  "name": "Category series",
+  "description": "The bottom of the category walk: turns a category id into series ids. `limit` defaults to its maximum of 1000, so narrow with `tag_names` or `filter_variable` rather than expecting a small first page.",
+  "options": [
+   {
+    "about": "The category to read. Required here, though the identical-looking parameter defaults to the root on `categories/category` and `categories/children`.",
+    "name": "category_id",
+    "required": true,
+    "type": "number"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Records to return. The default is the maximum, so a naive call is a large response rather than a page.",
+    "default": 1000,
+    "max": 1000,
+    "name": "limit",
+    "type": "number"
+   },
+   {
+    "about": "Records to skip. Page by adding `limit` to it; `count` in the envelope is the full match total.",
+    "default": 0,
+    "name": "offset",
+    "type": "number"
+   },
+   {
+    "about": "Which series attribute to sort by.",
+    "default": "series_id",
+    "name": "order_by",
+    "oneOf": [
+     "series_id",
+     "title",
+     "units",
+     "frequency",
+     "seasonal_adjustment",
+     "realtime_start",
+     "realtime_end",
+     "last_updated",
+     "observation_start",
+     "observation_end",
+     "popularity",
+     "group_popularity"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Sort direction.",
+    "default": "asc",
+    "name": "sort_order",
+    "oneOf": [
+     "asc",
+     "desc"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Which series attribute to filter on. Inert without `filter_value`.",
+    "name": "filter_variable",
+    "oneOf": [
+     "frequency",
+     "units",
+     "seasonal_adjustment"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "The value `filter_variable` must take. Inert on its own.",
+    "name": "filter_value",
+    "type": "string"
+   },
+   {
+    "about": "Semicolon-delimited tag names a series must carry all of, for example `income;bea`.",
+    "name": "tag_names",
+    "type": "string"
+   },
+   {
+    "about": "Semicolon-delimited tag names to drop. Not independently usable: FRED requires `tag_names` to be set as well, which nothing in this contract can enforce.",
+    "name": "exclude_tag_names",
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/categories/tags",
+  "provider": "fred",
+  "capability": "categories/tags",
+  "name": "Category tags",
+  "description": "Call to see what the series in a category are labelled with before filtering them. `series_count` on each tag counts only series in this category, not every series carrying the tag.",
+  "options": [
+   {
+    "about": "The category to read. Required here, though the identical-looking parameter defaults to the root on `categories/category` and `categories/children`.",
+    "name": "category_id",
+    "required": true,
+    "type": "number"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Semicolon-delimited tag names to restrict the answer to, for example `usa;monthly`. Names are human strings and may contain spaces, so a space inside one name is URL-encoded while `;` separates names.",
+    "name": "tag_names",
+    "type": "string"
+   },
+   {
+    "about": "Narrow to one kind of tag: freq frequency, gen general concept, geo geography, geot geography type, rls release, seas seasonal adjustment, src source.",
+    "name": "tag_group_id",
+    "oneOf": [
+     "freq",
+     "gen",
+     "geo",
+     "geot",
+     "rls",
+     "seas",
+     "src"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Free text the tag name must match.",
+    "name": "search_text",
+    "type": "string"
+   },
+   {
+    "about": "Records to return. The default is the maximum, so a naive call is a large response rather than a page.",
+    "default": 1000,
+    "max": 1000,
+    "name": "limit",
+    "type": "number"
+   },
+   {
+    "about": "Records to skip. Page by adding `limit` to it; `count` in the envelope is the full match total.",
+    "default": 0,
+    "name": "offset",
+    "type": "number"
+   },
+   {
+    "about": "Which tag attribute to sort by.",
+    "default": "series_count",
+    "name": "order_by",
+    "oneOf": [
+     "series_count",
+     "popularity",
+     "created",
+     "name",
+     "group_id"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Sort direction.",
+    "default": "asc",
+    "name": "sort_order",
+    "oneOf": [
+     "asc",
+     "desc"
+    ],
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/releases/dates",
+  "provider": "fred",
+  "capability": "releases/dates",
+  "name": "All release dates",
+  "description": "Call for the economic calendar across all releases at once. Not symmetric with `releases/release-dates` despite the near-identical name: this one sorts descending by default, carries `release_name`, and only reaches back to the start of the current year unless told otherwise.",
+  "options": [
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Unlike everywhere else this defaults to the first day of the current year, which is not expressible as a literal here; pass one explicitly to ask about earlier years.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to the latest available vintage, not to today.",
+    "default": "9999-12-31",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Records to return. The default is the maximum, so a naive call is a large response rather than a page.",
+    "default": 1000,
+    "max": 1000,
+    "name": "limit",
+    "type": "number"
+   },
+   {
+    "about": "Records to skip. Page by adding `limit` to it; `count` in the envelope is the full match total.",
+    "default": 0,
+    "name": "offset",
+    "type": "number"
+   },
+   {
+    "about": "Which attribute to sort by.",
+    "default": "release_date",
+    "name": "order_by",
+    "oneOf": [
+     "release_date",
+     "release_id",
+     "release_name"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Sort direction. Defaults to desc here - the only endpoint in this provider that does - so the newest dates come first.",
+    "default": "desc",
+    "name": "sort_order",
+    "oneOf": [
+     "asc",
+     "desc"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Include scheduled dates that have no data yet. The default of false silently drops the future, so `when is this next published` answers with the last past date unless this is true.",
+    "default": "false",
+    "name": "include_release_dates_with_no_data",
+    "oneOf": [
+     "true",
+     "false"
+    ],
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/releases/related-tags",
+  "provider": "fred",
+  "capability": "releases/related-tags",
+  "name": "Release related tags",
+  "description": "Call to narrow within a release once you have one tag. Two independently required arguments here, `release_id` and `tag_names`; the second reads like an optional filter and is not.",
+  "options": [
+   {
+    "about": "The release to read, for example 53 for Gross Domestic Product. Find one with `releases/releases`.",
+    "name": "release_id",
+    "required": true,
+    "type": "number"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Semicolon-delimited tag names, required here even though the same parameter is an optional filter on the sibling endpoints. It is the anchor set: the answer is the other tags carried by series that already carry all of these, so adding a name narrows rather than widens.",
+    "name": "tag_names",
+    "type": "string",
+    "required": true
+   },
+   {
+    "about": "Semicolon-delimited tag names to drop. Not independently usable: FRED requires `tag_names` to be set as well, which nothing in this contract can enforce.",
+    "name": "exclude_tag_names",
+    "type": "string"
+   },
+   {
+    "about": "Narrow to one kind of tag: freq frequency, gen general concept, geo geography, geot geography type, rls release, seas seasonal adjustment, src source.",
+    "name": "tag_group_id",
+    "oneOf": [
+     "freq",
+     "gen",
+     "geo",
+     "geot",
+     "rls",
+     "seas",
+     "src"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Free text the tag name must match.",
+    "name": "search_text",
+    "type": "string"
+   },
+   {
+    "about": "Records to return. The default is the maximum, so a naive call is a large response rather than a page.",
+    "default": 1000,
+    "max": 1000,
+    "name": "limit",
+    "type": "number"
+   },
+   {
+    "about": "Records to skip. Page by adding `limit` to it; `count` in the envelope is the full match total.",
+    "default": 0,
+    "name": "offset",
+    "type": "number"
+   },
+   {
+    "about": "Which tag attribute to sort by.",
+    "default": "series_count",
+    "name": "order_by",
+    "oneOf": [
+     "series_count",
+     "popularity",
+     "created",
+     "name",
+     "group_id"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Sort direction.",
+    "default": "asc",
+    "name": "sort_order",
+    "oneOf": [
+     "asc",
+     "desc"
+    ],
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/releases/release",
+  "provider": "fred",
+  "capability": "releases/release",
+  "name": "Release",
+  "description": "Call to resolve a release id into a name and link. Widening the real-time period makes this single-release call return more than one record, one per interval in which the release's attributes differed.",
+  "options": [
+   {
+    "about": "The release to read, for example 53 for Gross Domestic Product. Find one with `releases/releases`.",
+    "name": "release_id",
+    "required": true,
+    "type": "number"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/releases/release-dates",
+  "provider": "fred",
+  "capability": "releases/release-dates",
+  "name": "Release dates",
+  "description": "Call for one release's publication history. It defaults to the whole span back to 1776-07-04 rather than the current year, has no `order_by`, and omits `release_name` - three ways it differs from `releases/dates`. Set `include_release_dates_with_no_data` to get the next scheduled date.",
+  "options": [
+   {
+    "about": "The release to read, for example 53 for Gross Domestic Product. Find one with `releases/releases`.",
+    "name": "release_id",
+    "required": true,
+    "type": "number"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Unlike its siblings this defaults to the earliest available vintage, not to today, so leaving it unset returns the whole history.",
+    "default": "1776-07-04",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to the latest available vintage, not to today.",
+    "default": "9999-12-31",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Dates to return. The cap here is 10000, ten times every other endpoint in this provider.",
+    "default": 10000,
+    "max": 10000,
+    "name": "limit",
+    "type": "number"
+   },
+   {
+    "about": "Records to skip. Page by adding `limit` to it; `count` in the envelope is the full match total.",
+    "default": 0,
+    "name": "offset",
+    "type": "number"
+   },
+   {
+    "about": "Sort direction.",
+    "default": "asc",
+    "name": "sort_order",
+    "oneOf": [
+     "asc",
+     "desc"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Include scheduled dates that have no data yet. The default of false silently drops the future, so `when is this next published` answers with the last past date unless this is true.",
+    "default": "false",
+    "name": "include_release_dates_with_no_data",
+    "oneOf": [
+     "true",
+     "false"
+    ],
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/releases/releases",
+  "provider": "fred",
+  "capability": "releases/releases",
+  "name": "Releases",
+  "description": "The entry point for every other release capability: it is where a release name becomes the `release_id` they take. There are only a few hundred releases and `limit` defaults to 1000, so one call is usually the whole list.",
+  "options": [
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Records to return. The default is the maximum, so a naive call is a large response rather than a page.",
+    "default": 1000,
+    "max": 1000,
+    "name": "limit",
+    "type": "number"
+   },
+   {
+    "about": "Records to skip. Page by adding `limit` to it; `count` in the envelope is the full match total.",
+    "default": 0,
+    "name": "offset",
+    "type": "number"
+   },
+   {
+    "about": "Which release attribute to sort by.",
+    "default": "release_id",
+    "name": "order_by",
+    "oneOf": [
+     "release_id",
+     "name",
+     "press_release",
+     "realtime_start",
+     "realtime_end"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Sort direction.",
+    "default": "asc",
+    "name": "sort_order",
+    "oneOf": [
+     "asc",
+     "desc"
+    ],
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/releases/series",
+  "provider": "fred",
+  "capability": "releases/series",
+  "name": "Release series",
+  "description": "The bridge from a release to series ids: every series that arrives with this publication. A large release runs to thousands of series, so filter with `tag_names` or `filter_variable` rather than paging the whole thing.",
+  "options": [
+   {
+    "about": "The release to read, for example 53 for Gross Domestic Product. Find one with `releases/releases`.",
+    "name": "release_id",
+    "required": true,
+    "type": "number"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Records to return. The default is the maximum, so a naive call is a large response rather than a page.",
+    "default": 1000,
+    "max": 1000,
+    "name": "limit",
+    "type": "number"
+   },
+   {
+    "about": "Records to skip. Page by adding `limit` to it; `count` in the envelope is the full match total.",
+    "default": 0,
+    "name": "offset",
+    "type": "number"
+   },
+   {
+    "about": "Which series attribute to sort by.",
+    "default": "series_id",
+    "name": "order_by",
+    "oneOf": [
+     "series_id",
+     "title",
+     "units",
+     "frequency",
+     "seasonal_adjustment",
+     "realtime_start",
+     "realtime_end",
+     "last_updated",
+     "observation_start",
+     "observation_end",
+     "popularity",
+     "group_popularity"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Sort direction.",
+    "default": "asc",
+    "name": "sort_order",
+    "oneOf": [
+     "asc",
+     "desc"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Which series attribute to filter on. Inert without `filter_value`.",
+    "name": "filter_variable",
+    "oneOf": [
+     "frequency",
+     "units",
+     "seasonal_adjustment"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "The value `filter_variable` must take. Inert on its own.",
+    "name": "filter_value",
+    "type": "string"
+   },
+   {
+    "about": "Semicolon-delimited tag names a series must carry all of, for example `japan;imports`.",
+    "name": "tag_names",
+    "type": "string"
+   },
+   {
+    "about": "Semicolon-delimited tag names to drop. Not independently usable: FRED requires `tag_names` to be set as well, which nothing in this contract can enforce.",
+    "name": "exclude_tag_names",
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/releases/sources",
+  "provider": "fred",
+  "capability": "releases/sources",
+  "name": "Release sources",
+  "description": "Call when the question is who publishes a release rather than what is in it. A release can have more than one source agency.",
+  "options": [
+   {
+    "about": "The release to read, for example 53 for Gross Domestic Product. Find one with `releases/releases`.",
+    "name": "release_id",
+    "required": true,
+    "type": "number"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/releases/tables",
+  "provider": "fred",
+  "capability": "releases/tables",
+  "name": "Release table",
+  "description": "Call when the layout matters - which line of a published table a series sits on, and what nests under what. This is the only capability here that answers with a tree rather than a list, so a caller that walks `key` plus `paginated` has to special-case it: descend `elements`, then each element's `children`.",
+  "options": [
+   {
+    "about": "The release to read, for example 53 for Gross Domestic Product. Find one with `releases/releases`.",
+    "name": "release_id",
+    "required": true,
+    "type": "number"
+   },
+   {
+    "about": "The element to read. Omit for the root element of the release's table tree.",
+    "name": "element_id",
+    "type": "number"
+   },
+   {
+    "about": "Attach observation values to elements whose `type` is series. Only those elements gain them.",
+    "default": "false",
+    "name": "include_observation_values",
+    "oneOf": [
+     "true",
+     "false"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "The observation date to read values at, YYYY-MM-DD. Only meaningful with `include_observation_values`.",
+    "default": "9999-12-31",
+    "name": "observation_date",
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/releases/tags",
+  "provider": "fred",
+  "capability": "releases/tags",
+  "name": "Release tags",
+  "description": "Call to see how a release's series are labelled before filtering `releases/series` by tag. `tag_names` is optional here and required on `releases/related-tags` - same parameter, adjacent endpoints, opposite requiredness.",
+  "options": [
+   {
+    "about": "The release to read, for example 53 for Gross Domestic Product. Find one with `releases/releases`.",
+    "name": "release_id",
+    "required": true,
+    "type": "number"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Semicolon-delimited tag names to restrict the answer to, for example `usa;monthly`. Names are human strings and may contain spaces, so a space inside one name is URL-encoded while `;` separates names.",
+    "name": "tag_names",
+    "type": "string"
+   },
+   {
+    "about": "Narrow to one kind of tag: freq frequency, gen general concept, geo geography, geot geography type, rls release, seas seasonal adjustment, src source.",
+    "name": "tag_group_id",
+    "oneOf": [
+     "freq",
+     "gen",
+     "geo",
+     "geot",
+     "rls",
+     "seas",
+     "src"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Free text the tag name must match.",
+    "name": "search_text",
+    "type": "string"
+   },
+   {
+    "about": "Records to return. The default is the maximum, so a naive call is a large response rather than a page.",
+    "default": 1000,
+    "max": 1000,
+    "name": "limit",
+    "type": "number"
+   },
+   {
+    "about": "Records to skip. Page by adding `limit` to it; `count` in the envelope is the full match total.",
+    "default": 0,
+    "name": "offset",
+    "type": "number"
+   },
+   {
+    "about": "Which tag attribute to sort by.",
+    "default": "series_count",
+    "name": "order_by",
+    "oneOf": [
+     "series_count",
+     "popularity",
+     "created",
+     "name",
+     "group_id"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Sort direction.",
+    "default": "asc",
+    "name": "sort_order",
+    "oneOf": [
+     "asc",
+     "desc"
+    ],
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/series/categories",
+  "provider": "fred",
+  "capability": "series/categories",
+  "name": "Series categories",
+  "description": "Call to walk back up from a series you already have to the part of the tree it lives in, and from there to its peers. A series can sit in several categories.",
+  "options": [
+   {
+    "about": "The series to read, for example GNPCA or UNRATE. Find one with `series/search`.",
+    "name": "series_id",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/series/observations",
+  "provider": "fred",
+  "capability": "series/observations",
+  "name": "Series observations",
+  "description": "The only capability in this provider that returns numbers; everything else exists to find the id it takes. Two independent time axes: `observation_start`/`observation_end` bound when the economy did the thing, `realtime_start`/`realtime_end` bound when FRED knew it. Leaving the real-time pair alone gives today's vintage only, so a question about revisions needs 1776-07-04 to 9999-12-31 or an explicit `vintage_dates`.",
+  "options": [
+   {
+    "about": "The series to read, for example GNPCA or UNRATE. Find one with `series/search`.",
+    "name": "series_id",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, meaning the current vintage. `vintage_dates` is an alternative to this pair, not a filter layered on top of it.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today.",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Observations to return.",
+    "default": 100000,
+    "max": 100000,
+    "name": "limit",
+    "type": "number"
+   },
+   {
+    "about": "Observations to skip.",
+    "default": 0,
+    "name": "offset",
+    "type": "number"
+   },
+   {
+    "about": "Sort by observation date.",
+    "default": "asc",
+    "name": "sort_order",
+    "oneOf": [
+     "asc",
+     "desc"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Earliest observation date to return, YYYY-MM-DD. When the economy did the thing - not to be confused with `realtime_start`, which is when FRED knew it.",
+    "default": "1776-07-04",
+    "name": "observation_start",
+    "type": "string"
+   },
+   {
+    "about": "Latest observation date to return, YYYY-MM-DD.",
+    "default": "9999-12-31",
+    "name": "observation_end",
+    "type": "string"
+   },
+   {
+    "about": "Value transformation: lin levels, chg change, ch1 change from a year ago, pch percent change, pc1 percent change from a year ago, pca compounded annual rate of change, cch continuously compounded rate of change, cca continuously compounded annual rate of change, log natural log.",
+    "default": "lin",
+    "name": "units",
+    "oneOf": [
+     "lin",
+     "chg",
+     "ch1",
+     "pch",
+     "pc1",
+     "pca",
+     "cch",
+     "cca",
+     "log"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Aggregate down to a lower frequency. Asking for a frequency higher than the series' native one is an error rather than a no-op, and asking for the native one does nothing. Omit for no aggregation.",
+    "name": "frequency",
+    "oneOf": [
+     "d",
+     "w",
+     "bw",
+     "m",
+     "q",
+     "sa",
+     "a",
+     "wef",
+     "weth",
+     "wew",
+     "wetu",
+     "wem",
+     "wesu",
+     "wesa",
+     "bwew",
+     "bwem"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "How `frequency` aggregates. No effect unless `frequency` is set.",
+    "default": "avg",
+    "name": "aggregation_method",
+    "oneOf": [
+     "avg",
+     "sum",
+     "eop"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "1 observations by real-time period, 2 all observations by vintage date, 3 new and revised observations only, 4 initial release only. The fields described below are the shape of output_type 1; 2 and 3 replace the record entirely with one column per vintage date.",
+    "default": "1",
+    "name": "output_type",
+    "oneOf": [
+     "1",
+     "2",
+     "3",
+     "4"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Comma-separated YYYY-MM-DD dates to read the data as it stood on, instead of a real-time period. Capped server-side by output type - roughly 2000 dates for json, far fewer for output_type 2 on a daily series.",
+    "name": "vintage_dates",
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/series/release",
+  "provider": "fred",
+  "capability": "series/release",
+  "name": "Series release",
+  "description": "Call to find which publication a series arrives in, then use that `release_id` for its calendar or its sibling series. Answering `when is this next updated` goes through here rather than through the series record.",
+  "options": [
+   {
+    "about": "The series to read, for example GNPCA or UNRATE. Find one with `series/search`.",
+    "name": "series_id",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/series/search",
+  "provider": "fred",
+  "capability": "series/search",
+  "name": "Series search",
+  "description": "The way in when all you have is words. Set `search_type` to series_id when the query is an id fragment rather than a description; the default full-text mode stems, so `UNRATE` under it matches on unrelated titles. Leave `order_by` and `sort_order` unset unless you mean to override the relevance ranking, because their defaults depend on each other.",
+  "options": [
+   {
+    "about": "The words to match against series.",
+    "name": "search_text",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "about": "`full_text` stems the words across title, units, frequency and tags. `series_id` is a substring match on ids with `*` as a wildcard, which is what a ticker-shaped query wants - passing one under the default gets stem-matched noise instead.",
+    "default": "full_text",
+    "name": "search_type",
+    "oneOf": [
+     "full_text",
+     "series_id"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Records to return. The default is the maximum, so a naive call is a large response rather than a page.",
+    "default": 1000,
+    "max": 1000,
+    "name": "limit",
+    "type": "number"
+   },
+   {
+    "about": "Records to skip. Page by adding `limit` to it; `count` in the envelope is the full match total.",
+    "default": 0,
+    "name": "offset",
+    "type": "number"
+   },
+   {
+    "about": "Which attribute to sort by. The default is conditional and cannot be stated here: `search_rank` when `search_type` is full_text, `series_id` when it is series_id.",
+    "name": "order_by",
+    "oneOf": [
+     "search_rank",
+     "series_id",
+     "title",
+     "units",
+     "frequency",
+     "seasonal_adjustment",
+     "realtime_start",
+     "realtime_end",
+     "last_updated",
+     "observation_start",
+     "observation_end",
+     "popularity",
+     "group_popularity"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Sort direction. Also conditional: FRED defaults to desc when `order_by` is search_rank or popularity, asc otherwise.",
+    "name": "sort_order",
+    "oneOf": [
+     "asc",
+     "desc"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Which series attribute to filter on. Inert without `filter_value`.",
+    "name": "filter_variable",
+    "oneOf": [
+     "frequency",
+     "units",
+     "seasonal_adjustment"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "The value `filter_variable` must take. Inert on its own.",
+    "name": "filter_value",
+    "type": "string"
+   },
+   {
+    "about": "Semicolon-delimited tag names a series must carry all of, for example `usa;m2`.",
+    "name": "tag_names",
+    "type": "string"
+   },
+   {
+    "about": "Semicolon-delimited tag names to drop. Not independently usable: FRED requires `tag_names` to be set as well, which nothing in this contract can enforce.",
+    "name": "exclude_tag_names",
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/series/search-related-tags",
+  "provider": "fred",
+  "capability": "series/search-related-tags",
+  "name": "Series search related tags",
+  "description": "The second step of narrowing a search: given words and one tag already applied, the tags that co-occur on what is left. Two required arguments, `series_search_text` and `tag_names` - the second looks like a filter and is mandatory.",
+  "options": [
+   {
+    "about": "The words matched against series; the tags returned are the tags of that result set. Note the name: `series_search_text` here, `search_text` on `series/search`. They are not interchangeable.",
+    "name": "series_search_text",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Semicolon-delimited tag names, required here even though the same parameter is an optional filter on the sibling endpoints. It is the anchor set: the answer is the other tags carried by series that already carry all of these, so adding a name narrows rather than widens.",
+    "name": "tag_names",
+    "type": "string",
+    "required": true
+   },
+   {
+    "about": "Semicolon-delimited tag names to drop. Not independently usable: FRED requires `tag_names` to be set as well, which nothing in this contract can enforce.",
+    "name": "exclude_tag_names",
+    "type": "string"
+   },
+   {
+    "about": "Narrow to one kind of tag: freq frequency, gen general concept, geo geography, geot geography type, rls release, seas seasonal adjustment, src source.",
+    "name": "tag_group_id",
+    "oneOf": [
+     "freq",
+     "gen",
+     "geo",
+     "geot",
+     "rls",
+     "seas",
+     "src"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Words to match against tag names. Named `tag_search_text` here where the sibling tag endpoints call the same thing `search_text`.",
+    "name": "tag_search_text",
+    "type": "string"
+   },
+   {
+    "about": "Records to return. The default is the maximum, so a naive call is a large response rather than a page.",
+    "default": 1000,
+    "max": 1000,
+    "name": "limit",
+    "type": "number"
+   },
+   {
+    "about": "Records to skip. Page by adding `limit` to it; `count` in the envelope is the full match total.",
+    "default": 0,
+    "name": "offset",
+    "type": "number"
+   },
+   {
+    "about": "Which tag attribute to sort by.",
+    "default": "series_count",
+    "name": "order_by",
+    "oneOf": [
+     "series_count",
+     "popularity",
+     "created",
+     "name",
+     "group_id"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Sort direction.",
+    "default": "asc",
+    "name": "sort_order",
+    "oneOf": [
+     "asc",
+     "desc"
+    ],
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/series/search-tags",
+  "provider": "fred",
+  "capability": "series/search-tags",
+  "name": "Series search tags",
+  "description": "Call after a broad `series/search` to see what would narrow it, then feed a name back as `tag_names` there. Two search-text parameters on one endpoint: `series_search_text` picks the series, `tag_search_text` filters the tags that come back.",
+  "options": [
+   {
+    "about": "The words matched against series; the tags returned are the tags of that result set. Note the name: `series_search_text` here, `search_text` on `series/search`. They are not interchangeable.",
+    "name": "series_search_text",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Semicolon-delimited tag names to restrict the answer to, for example `m1;m2`. An include-list over the tags returned, not a filter on the series - which is what the same name means on `series/search`.",
+    "name": "tag_names",
+    "type": "string"
+   },
+   {
+    "about": "Narrow to one kind of tag: freq frequency, gen general concept, geo geography, geot geography type, rls release, seas seasonal adjustment, src source.",
+    "name": "tag_group_id",
+    "oneOf": [
+     "freq",
+     "gen",
+     "geo",
+     "geot",
+     "rls",
+     "seas",
+     "src"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Words to match against tag names. Named `tag_search_text` here where the sibling tag endpoints call the same thing `search_text`.",
+    "name": "tag_search_text",
+    "type": "string"
+   },
+   {
+    "about": "Records to return. The default is the maximum, so a naive call is a large response rather than a page.",
+    "default": 1000,
+    "max": 1000,
+    "name": "limit",
+    "type": "number"
+   },
+   {
+    "about": "Records to skip. Page by adding `limit` to it; `count` in the envelope is the full match total.",
+    "default": 0,
+    "name": "offset",
+    "type": "number"
+   },
+   {
+    "about": "Which tag attribute to sort by.",
+    "default": "series_count",
+    "name": "order_by",
+    "oneOf": [
+     "series_count",
+     "popularity",
+     "created",
+     "name",
+     "group_id"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Sort direction.",
+    "default": "asc",
+    "name": "sort_order",
+    "oneOf": [
+     "asc",
+     "desc"
+    ],
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/series/series",
+  "provider": "fred",
+  "capability": "series/series",
+  "name": "Series metadata",
+  "description": "Call before charting or comparing: `units`, `seasonal_adjustment` and `frequency` are what decide whether two series are comparable, and none of them are visible from the id. Widening the real-time period returns one record per interval in which the metadata differed, so a single-series call can answer with several rows.",
+  "options": [
+   {
+    "about": "The series to read, for example GNPCA or UNRATE. Find one with `series/search`.",
+    "name": "series_id",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/series/tags",
+  "provider": "fred",
+  "capability": "series/tags",
+  "name": "Series tags",
+  "description": "Call to read one series' labels - its geography, frequency, publisher and subject - and to get the tag names that would find its peers through `tags/series`. Unlike every other tag capability here it has no limit, offset, search_text or tag_group_id: you get all of them.",
+  "options": [
+   {
+    "about": "The series to read, for example GNPCA or UNRATE. Find one with `series/search`.",
+    "name": "series_id",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Which tag attribute to sort by.",
+    "default": "series_count",
+    "name": "order_by",
+    "oneOf": [
+     "series_count",
+     "popularity",
+     "created",
+     "name",
+     "group_id"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Sort direction.",
+    "default": "asc",
+    "name": "sort_order",
+    "oneOf": [
+     "asc",
+     "desc"
+    ],
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/series/updates",
+  "provider": "fred",
+  "capability": "series/updates",
+  "name": "Series updates",
+  "description": "Call to find what has changed rather than what exists - the only capability here that takes no series id. FRED caps it at series updated in the last two weeks, so it cannot answer a question about last quarter, and the sort is fixed at last_updated descending with no way to change it.",
+  "options": [
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Records to return. The default is the maximum, so a naive call is a large response rather than a page.",
+    "default": 1000,
+    "max": 1000,
+    "name": "limit",
+    "type": "number"
+   },
+   {
+    "about": "Records to skip. Page by adding `limit` to it; `count` in the envelope is the full match total.",
+    "default": 0,
+    "name": "offset",
+    "type": "number"
+   },
+   {
+    "about": "Geographic scope: macro is country-level series, regional is US states, counties and metro areas. Note this is not the `filter_value` of the series-listing endpoints, where it means the value of `filter_variable` - same name, unrelated meaning.",
+    "default": "all",
+    "name": "filter_value",
+    "oneOf": [
+     "macro",
+     "regional",
+     "all"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Start of the update window, as YYYYMMDDHhmm with no separators - `201803021420`. All or nothing with `end_time`: FRED rejects either one on its own.",
+    "name": "start_time",
+    "type": "string"
+   },
+   {
+    "about": "End of the update window, same YYYYMMDDHhmm format. Required if `start_time` is set, and vice versa.",
+    "name": "end_time",
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/series/vintage-dates",
+  "provider": "fred",
+  "capability": "series/vintage-dates",
+  "name": "Series vintage dates",
+  "description": "Call to find out when a series was actually revised, then pass one or more of these dates to `series/observations` as `vintage_dates` to see the data as it stood. The path is `vintagedates` with no underscore, and unlike its siblings the real-time period defaults to the whole span rather than to today, so a bare call returns the full revision history.",
+  "options": [
+   {
+    "about": "The series to read, for example GNPCA or UNRATE. Find one with `series/search`.",
+    "name": "series_id",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Unlike its siblings this defaults to the earliest available vintage, not to today, so leaving it unset returns the whole history.",
+    "default": "1776-07-04",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to the latest available vintage, not to today.",
+    "default": "9999-12-31",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Dates to return. The cap here is 10000, not the 1000 of most endpoints.",
+    "default": 10000,
+    "max": 10000,
+    "name": "limit",
+    "type": "number"
+   },
+   {
+    "about": "Records to skip. Page by adding `limit` to it; `count` in the envelope is the full match total.",
+    "default": 0,
+    "name": "offset",
+    "type": "number"
+   },
+   {
+    "about": "Sort direction.",
+    "default": "asc",
+    "name": "sort_order",
+    "oneOf": [
+     "asc",
+     "desc"
+    ],
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/sources/releases",
+  "provider": "fred",
+  "capability": "sources/releases",
+  "name": "Source releases",
+  "description": "The middle rung of the provenance walk: agency to release to series. Call when the question starts from a publisher - everything the BEA puts out - rather than from a subject.",
+  "options": [
+   {
+    "about": "The source agency to read, for example 1 for the Board of Governors. Find one with `sources/sources`.",
+    "name": "source_id",
+    "required": true,
+    "type": "number"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Records to return. The default is the maximum, so a naive call is a large response rather than a page.",
+    "default": 1000,
+    "max": 1000,
+    "name": "limit",
+    "type": "number"
+   },
+   {
+    "about": "Records to skip. Page by adding `limit` to it; `count` in the envelope is the full match total.",
+    "default": 0,
+    "name": "offset",
+    "type": "number"
+   },
+   {
+    "about": "Which release attribute to sort by.",
+    "default": "release_id",
+    "name": "order_by",
+    "oneOf": [
+     "release_id",
+     "name",
+     "press_release",
+     "realtime_start",
+     "realtime_end"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Sort direction.",
+    "default": "asc",
+    "name": "sort_order",
+    "oneOf": [
+     "asc",
+     "desc"
+    ],
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/sources/source",
+  "provider": "fred",
+  "capability": "sources/source",
+  "name": "Source",
+  "description": "Call to resolve a source id to an agency name and site. Widening the real-time period makes this single-source call return several records, one per interval in which the agency's name or link differed.",
+  "options": [
+   {
+    "about": "The source agency to read, for example 1 for the Board of Governors. Find one with `sources/sources`.",
+    "name": "source_id",
+    "required": true,
+    "type": "number"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/sources/sources",
+  "provider": "fred",
+  "capability": "sources/sources",
+  "name": "Sources",
+  "description": "Where a `source_id` comes from. There are only about a hundred agencies and `limit` defaults to 1000, so one call is the whole list and paging is never needed here.",
+  "options": [
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Records to return. The default is the maximum, so a naive call is a large response rather than a page.",
+    "default": 1000,
+    "max": 1000,
+    "name": "limit",
+    "type": "number"
+   },
+   {
+    "about": "Records to skip. Page by adding `limit` to it; `count` in the envelope is the full match total.",
+    "default": 0,
+    "name": "offset",
+    "type": "number"
+   },
+   {
+    "about": "Which source attribute to sort by.",
+    "default": "source_id",
+    "name": "order_by",
+    "oneOf": [
+     "source_id",
+     "name",
+     "realtime_start",
+     "realtime_end"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Sort direction.",
+    "default": "asc",
+    "name": "sort_order",
+    "oneOf": [
+     "asc",
+     "desc"
+    ],
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/tags/related",
+  "provider": "fred",
+  "capability": "tags/related",
+  "name": "Related tags",
+  "description": "Call to narrow a tag search: given tags already chosen, the tags that co-occur with them. The one required argument is the one that is optional on `tags/tags`, and `tag_group_id` does not accept `cc` here. Tag names may contain spaces, so a value like `monetary aggregates;weekly` needs the space URL-encoded and only the `;` treated as a separator.",
+  "options": [
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Semicolon-delimited tag names, required here even though the same parameter is an optional filter on the sibling endpoints. It is the anchor set: the answer is the other tags carried by series that already carry all of these, so adding a name narrows rather than widens.",
+    "name": "tag_names",
+    "type": "string",
+    "required": true
+   },
+   {
+    "about": "Semicolon-delimited tag names to drop. Not independently usable: FRED requires `tag_names` to be set as well, which nothing in this contract can enforce.",
+    "name": "exclude_tag_names",
+    "type": "string"
+   },
+   {
+    "about": "Narrow to one kind of tag: freq frequency, gen general concept, geo geography, geot geography type, rls release, seas seasonal adjustment, src source.",
+    "name": "tag_group_id",
+    "oneOf": [
+     "freq",
+     "gen",
+     "geo",
+     "geot",
+     "rls",
+     "seas",
+     "src"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Free text the tag name must match.",
+    "name": "search_text",
+    "type": "string"
+   },
+   {
+    "about": "Records to return. The default is the maximum, so a naive call is a large response rather than a page.",
+    "default": 1000,
+    "max": 1000,
+    "name": "limit",
+    "type": "number"
+   },
+   {
+    "about": "Records to skip. Page by adding `limit` to it; `count` in the envelope is the full match total.",
+    "default": 0,
+    "name": "offset",
+    "type": "number"
+   },
+   {
+    "about": "Which tag attribute to sort by.",
+    "default": "series_count",
+    "name": "order_by",
+    "oneOf": [
+     "series_count",
+     "popularity",
+     "created",
+     "name",
+     "group_id"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Sort direction.",
+    "default": "asc",
+    "name": "sort_order",
+    "oneOf": [
+     "asc",
+     "desc"
+    ],
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/tags/series",
+  "provider": "fred",
+  "capability": "tags/series",
+  "name": "Series by tag",
+  "description": "The non-hierarchical route to series ids: every series carrying all of `tag_names` at once, without walking the category tree. Tags intersect rather than union, so each name added narrows. Unlike `categories/series` there is no `filter_variable`/`filter_value` here - narrow with more tags instead.",
+  "options": [
+   {
+    "about": "Semicolon-delimited tag names, required. A series must carry all of them to be returned, so each name added narrows the answer. Names are human strings and may contain spaces: encode the space, and use `;` only as the separator.",
+    "name": "tag_names",
+    "type": "string",
+    "required": true
+   },
+   {
+    "about": "Semicolon-delimited tag names to drop. Not independently usable: FRED requires `tag_names` to be set as well, which nothing in this contract can enforce.",
+    "name": "exclude_tag_names",
+    "type": "string"
+   },
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Records to return. The default is the maximum, so a naive call is a large response rather than a page.",
+    "default": 1000,
+    "max": 1000,
+    "name": "limit",
+    "type": "number"
+   },
+   {
+    "about": "Records to skip. Page by adding `limit` to it; `count` in the envelope is the full match total.",
+    "default": 0,
+    "name": "offset",
+    "type": "number"
+   },
+   {
+    "about": "Which series attribute to sort by.",
+    "default": "series_id",
+    "name": "order_by",
+    "oneOf": [
+     "series_id",
+     "title",
+     "units",
+     "frequency",
+     "seasonal_adjustment",
+     "realtime_start",
+     "realtime_end",
+     "last_updated",
+     "observation_start",
+     "observation_end",
+     "popularity",
+     "group_popularity"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Sort direction.",
+    "default": "asc",
+    "name": "sort_order",
+    "oneOf": [
+     "asc",
+     "desc"
+    ],
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "fred/tags/tags",
+  "provider": "fred",
+  "capability": "tags/tags",
+  "name": "Tags",
+  "description": "The full vocabulary - roughly 4,800 tags against a `limit` cap of 1000, so this is the one tag capability that genuinely needs paging. `series_count` here is the global count, unlike the same field on the category, release and related-tag capabilities where it is scoped to what was asked about.",
+  "options": [
+   {
+    "about": "Start of the real-time period, YYYY-MM-DD. Defaults to today, which means the current vintage only. Set 1776-07-04 for the full revision history. Setting one bound implies the other.",
+    "name": "realtime_start",
+    "type": "string"
+   },
+   {
+    "about": "End of the real-time period, YYYY-MM-DD. Defaults to today. Set 9999-12-31 for the full revision history.",
+    "name": "realtime_end",
+    "type": "string"
+   },
+   {
+    "about": "Semicolon-delimited tag names to restrict the answer to, for example `usa;monthly`. Names are human strings and may contain spaces, so a space inside one name is URL-encoded while `;` separates names.",
+    "name": "tag_names",
+    "type": "string"
+   },
+   {
+    "about": "Narrow to one kind of tag: freq frequency, gen general concept, geo geography, geot geography type, rls release, seas seasonal adjustment, src source, cc citation and copyright. `cc` is accepted here and nowhere else, and it is how the copyright-restricted series are found at all.",
+    "name": "tag_group_id",
+    "oneOf": [
+     "freq",
+     "gen",
+     "geo",
+     "geot",
+     "rls",
+     "seas",
+     "src",
+     "cc"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Free text the tag name must match.",
+    "name": "search_text",
+    "type": "string"
+   },
+   {
+    "about": "Records to return. The default is the maximum, so a naive call is a large response rather than a page.",
+    "default": 1000,
+    "max": 1000,
+    "name": "limit",
+    "type": "number"
+   },
+   {
+    "about": "Records to skip. Page by adding `limit` to it; `count` in the envelope is the full match total.",
+    "default": 0,
+    "name": "offset",
+    "type": "number"
+   },
+   {
+    "about": "Which tag attribute to sort by.",
+    "default": "series_count",
+    "name": "order_by",
+    "oneOf": [
+     "series_count",
+     "popularity",
+     "created",
+     "name",
+     "group_id"
+    ],
+    "type": "string"
+   },
+   {
+    "about": "Sort direction.",
+    "default": "asc",
+    "name": "sort_order",
+    "oneOf": [
+     "asc",
+     "desc"
+    ],
+    "type": "string"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "amazon-com/products/bestsellers",
+  "provider": "amazon-com",
+  "capability": "products/bestsellers",
+  "name": "Bestsellers",
+  "description": "Rank products in an Amazon US category (top sellers in headphones, books, toys) without a search query. Pair with product or specifications for details of a ranked ASIN.",
+  "options": [
+   {
+    "name": "department",
+    "type": "string",
+    "in": "body",
+    "about": "Best Sellers department slug as it appears in the list URL, such as electronics, books or amazon-renewed. Pattern: ^[a-z0-9-]{1,60}$."
+   },
+   {
+    "name": "node",
+    "type": "string",
+    "in": "body",
+    "about": "Browse node id of a sub-category inside department, such as 12097479011 for Over-Ear Headphones. Omit for the department's own list. Pattern: ^[0-9]{1,15}$."
+   },
+   {
+    "name": "page",
+    "type": "number",
+    "in": "body",
+    "about": "Each list has 2 pages of 50 ranks.",
+    "default": 1,
+    "min": 1,
+    "max": 2
+   },
+   {
+    "name": "url",
+    "type": "string",
+    "in": "body",
+    "about": "HTTPS Amazon.com Best Sellers category URL (/gp/bestsellers/<department>[/<node>] or /zgbs/<department>[/<node>]). Supply this, or department."
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "url",
+    "department"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "amazon-com/products/offer",
+  "provider": "amazon-com",
+  "capability": "products/offer",
+  "name": "Offer",
+  "description": "Get the featured buy-box offer for one Amazon.com ASIN or product URL: displayed price, list price and savings, boolean in-stock state with Amazon's availability text, seller and shipper, item condition, delivery promise, coupon and other-offers hints. Pass zip to see the offer for a US delivery ZIP code. Unknown values are null.",
+  "options": [
+   {
+    "name": "asin",
+    "type": "string",
+    "in": "body",
+    "about": "Ten-character Amazon Standard Identification Number, e.g. B09B8V1LZ3. Supply this or url. Pattern: ^[A-Za-z0-9]{10}$."
+   },
+   {
+    "name": "url",
+    "type": "string",
+    "in": "body",
+    "about": "HTTPS Amazon.com /dp/ASIN or /gp/product/ASIN URL. Supply this or asin."
+   },
+   {
+    "name": "zip",
+    "type": "string",
+    "in": "body",
+    "about": "US 5-digit ZIP code to show the offer for, set the way an anonymous visitor sets it in Amazon's location popover. Delivery promise, stock and the featured seller can differ by ZIP. Omit for Amazon's default location for the session. Pattern: ^[0-9]{5}$."
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "asin",
+    "url"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "amazon-com/products/photos",
+  "provider": "amazon-com",
+  "capability": "products/photos",
+  "name": "Photos",
+  "description": "Get the selected product image gallery.",
+  "options": [
+   {
+    "name": "asin",
+    "type": "string",
+    "in": "body",
+    "about": "Pattern: ^[A-Za-z0-9]{10}$."
+   },
+   {
+    "name": "url",
+    "type": "string",
+    "in": "body",
+    "about": "HTTPS Amazon.com /dp/ASIN or /gp/product/ASIN URL. Supply this or asin."
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "asin",
+    "url"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "amazon-com/products/prices",
+  "provider": "amazon-com",
+  "capability": "products/prices",
+  "name": "Prices",
+  "description": "Check current buy-box price and stock state for up to five Amazon.com ASINs in one call. Each row carries price, list price, in-stock flag, availability text, seller and condition; an ASIN that cannot be read gets an error string instead of failing the batch.",
+  "options": [
+   {
+    "name": "asins",
+    "type": "string[]",
+    "in": "body",
+    "about": "One to five ASINs to check in parallel.",
+    "required": true
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "amazon-com/products/product",
+  "provider": "amazon-com",
+  "capability": "products/product",
+  "name": "Product",
+  "description": "Get public Amazon product details, displayed price, images, variants and review totals.",
+  "options": [
+   {
+    "name": "asin",
+    "type": "string",
+    "in": "body",
+    "about": "Pattern: ^[A-Za-z0-9]{10}$."
+   },
+   {
+    "name": "url",
+    "type": "string",
+    "in": "body",
+    "about": "HTTPS Amazon.com /dp/ASIN or /gp/product/ASIN URL. Supply this or asin."
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "asin",
+    "url"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "amazon-com/products/review_summary",
+  "provider": "amazon-com",
+  "capability": "products/review_summary",
+  "name": "Review summary",
+  "description": "Get the displayed rating and count; individual review text is not included.",
+  "options": [
+   {
+    "name": "asin",
+    "type": "string",
+    "in": "body",
+    "about": "Pattern: ^[A-Za-z0-9]{10}$."
+   },
+   {
+    "name": "url",
+    "type": "string",
+    "in": "body",
+    "about": "HTTPS Amazon.com /dp/ASIN or /gp/product/ASIN URL. Supply this or asin."
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "asin",
+    "url"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "amazon-com/products/reviews",
+  "provider": "amazon-com",
+  "capability": "products/reviews",
+  "name": "Reviews",
+  "description": "What buyers say about a product or book: individual review text, stars, dates, verified purchase and the rating distribution, from the public product-page sample. For totals only, use review_summary.",
+  "options": [
+   {
+    "name": "asin",
+    "type": "string",
+    "in": "body",
+    "about": "Ten-character ASIN, or the ISBN-10 of a book. Supply this or url. Pattern: ^[A-Za-z0-9]{10}$."
+   },
+   {
+    "name": "include_international",
+    "type": "boolean",
+    "in": "body",
+    "about": "Include the 'Top reviews from other countries' section. Set false for United States reviews only."
+   },
+   {
+    "name": "order",
+    "type": "string",
+    "in": "body",
+    "about": "`top` keeps Amazon's display order (most helpful first). `recent` sorts the returned sample by review date, newest first.",
+    "default": "top",
+    "oneOf": [
+     "top",
+     "recent"
+    ]
+   },
+   {
+    "name": "stars",
+    "type": "number",
+    "in": "body",
+    "about": "Keep only reviews with this star rating. Applied to the page sample; Amazon's full star filter requires sign-in.",
+    "min": 1,
+    "max": 5
+   },
+   {
+    "name": "url",
+    "type": "string",
+    "in": "body",
+    "about": "HTTPS Amazon.com /dp/ASIN or /gp/product/ASIN URL. Supply this or asin."
+   },
+   {
+    "name": "verified_only",
+    "type": "boolean",
+    "in": "body",
+    "about": "Keep only reviews marked Verified Purchase. Applied to the page sample."
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "asin",
+    "url"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "amazon-com/products/search",
+  "provider": "amazon-com",
+  "capability": "products/search",
+  "name": "Search",
+  "description": "Fetch one search page. Next-page input is returned; blocked pages raise an error.",
+  "options": [
+   {
+    "name": "page",
+    "type": "number",
+    "in": "body",
+    "about": "page",
+    "default": 1,
+    "min": 1,
+    "max": 20
+   },
+   {
+    "name": "query",
+    "type": "string",
+    "in": "body",
+    "about": "query",
+    "required": true
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "amazon-com/products/specifications",
+  "provider": "amazon-com",
+  "capability": "products/specifications",
+  "name": "Specifications",
+  "description": "Get product specification tables (including detail-bullet lists for books and media), best sellers rank per category, and feature bullets.",
+  "options": [
+   {
+    "name": "asin",
+    "type": "string",
+    "in": "body",
+    "about": "Pattern: ^[A-Za-z0-9]{10}$."
+   },
+   {
+    "name": "url",
+    "type": "string",
+    "in": "body",
+    "about": "HTTPS Amazon.com /dp/ASIN or /gp/product/ASIN URL. Supply this or asin."
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "asin",
+    "url"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "amazon-com/products/suggestions",
+  "provider": "amazon-com",
+  "capability": "products/suggestions",
+  "name": "Suggestions",
+  "description": "Get autocomplete suggestions for a search prefix.",
+  "options": [
+   {
+    "name": "count",
+    "type": "number",
+    "in": "body",
+    "about": "count",
+    "default": 10,
+    "min": 1,
+    "max": 10
+   },
+   {
+    "name": "query",
+    "type": "string",
+    "in": "body",
+    "about": "query",
+    "required": true
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "amazon-com/products/variants",
+  "provider": "amazon-com",
+  "capability": "products/variants",
+  "name": "Variants",
+  "description": "List the variant dimensions (color, size, style...) and sibling ASINs of an Amazon.com product, with the swatch availability flag Amazon renders. Set include_prices to also fetch the buy-box price and stock state of the selected ASIN and up to max_priced-1 sibling ASINs.",
+  "options": [
+   {
+    "name": "asin",
+    "type": "string",
+    "in": "body",
+    "about": "Ten-character Amazon Standard Identification Number, e.g. B09B8V1LZ3. Supply this or url. Pattern: ^[A-Za-z0-9]{10}$."
+   },
+   {
+    "name": "include_prices",
+    "type": "boolean",
+    "in": "body",
+    "about": "Fetch each priced variant's product page for price and stock. Costs one upstream request per variant."
+   },
+   {
+    "name": "max_priced",
+    "type": "number",
+    "in": "body",
+    "about": "Upper bound on variants (including the selected one) that receive an offer summary when include_prices is true.",
+    "default": 5,
+    "min": 1,
+    "max": 8
+   },
+   {
+    "name": "url",
+    "type": "string",
+    "in": "body",
+    "about": "HTTPS Amazon.com /dp/ASIN or /gp/product/ASIN URL. Supply this or asin."
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "asin",
+    "url"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "amazon-com/products/variations",
+  "provider": "amazon-com",
+  "capability": "products/variations",
+  "name": "Variations",
+  "description": "List product variants and their attributes. Availability and prices require a separate lookup.",
+  "options": [
+   {
+    "name": "asin",
+    "type": "string",
+    "in": "body",
+    "about": "Pattern: ^[A-Za-z0-9]{10}$."
+   },
+   {
+    "name": "url",
+    "type": "string",
+    "in": "body",
+    "about": "HTTPS Amazon.com /dp/ASIN or /gp/product/ASIN URL. Supply this or asin."
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "asin",
+    "url"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "apps-apple-com/apps/app",
+  "provider": "apps-apple-com",
+  "capability": "apps/app",
+  "name": "App",
+  "description": "Verify device or watchOS compatibility, subscription and in-app purchase prices, the current version or release notes of a specific app.",
+  "options": [
+   {
+    "name": "app_id",
+    "type": "string",
+    "in": "body",
+    "about": "Numeric App Store app id (the `id` in `apps.apple.com/us/app/<slug>/id493145008`). Pattern: ^[0-9]{1,12}$."
+   },
+   {
+    "name": "bundle_id",
+    "type": "string",
+    "in": "body",
+    "about": "iOS bundle identifier (`com.spotify.client`). Resolved to the app id on the same storefront first. Pattern: ^[A-Za-z0-9][A-Za-z0-9._-]{1,254}$."
+   },
+   {
+    "name": "country",
+    "type": "string",
+    "in": "body",
+    "about": "Two-letter App Store storefront code (lowercase, e.g. `us`, `gb`, `de`). Default `us`. Prices and availability are storefront specific. Pattern: ^[a-zA-Z]{2}$."
+   },
+   {
+    "name": "locale",
+    "type": "string",
+    "in": "body",
+    "about": "Display locale for names, descriptions and release notes, e.g. `en-US`, `en-GB`. Default `en-US`. Pattern: ^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$."
+   },
+   {
+    "name": "url",
+    "type": "string",
+    "in": "body",
+    "about": "A pasted App Store app URL such as `https://apps.apple.com/us/app/headspace-sleep-meditation/id493145008`; the storefront in the path is used unless `country` is given."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "apps-apple-com/apps/developer_apps",
+  "provider": "apps-apple-com",
+  "capability": "apps/developer_apps",
+  "name": "Developer apps",
+  "description": "List everything one publisher offers, given the developer id from `app`, `search` or a developer page URL.",
+  "options": [
+   {
+    "name": "country",
+    "type": "string",
+    "in": "body",
+    "about": "Two-letter App Store storefront code (lowercase, e.g. `us`, `gb`, `de`). Default `us`. Prices and availability are storefront specific. Pattern: ^[a-zA-Z]{2}$."
+   },
+   {
+    "name": "developer_id",
+    "type": "string",
+    "in": "body",
+    "about": "Numeric developer (artist) id, the `id` in `apps.apple.com/us/developer/<slug>/id324684583`. Pattern: ^[0-9]{1,12}$.",
+    "required": true
+   },
+   {
+    "name": "limit",
+    "type": "number",
+    "in": "body",
+    "about": "Maximum apps returned (default 200).",
+    "min": 1,
+    "max": 200
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "apps-apple-com/apps/reviews",
+  "provider": "apps-apple-com",
+  "capability": "apps/reviews",
+  "name": "Reviews",
+  "description": "Read what users say about an app, or its latest feedback; page with `offset` from `next_offset`, keeping the same `sort`.",
+  "options": [
+   {
+    "name": "app_id",
+    "type": "string",
+    "in": "body",
+    "about": "Numeric App Store app id (the `id` in `apps.apple.com/us/app/<slug>/id493145008`). Pattern: ^[0-9]{1,12}$.",
+    "required": true
+   },
+   {
+    "name": "country",
+    "type": "string",
+    "in": "body",
+    "about": "Two-letter App Store storefront code (lowercase, e.g. `us`, `gb`, `de`). Default `us`. Prices and availability are storefront specific. Pattern: ^[a-zA-Z]{2}$."
+   },
+   {
+    "name": "limit",
+    "type": "number",
+    "in": "body",
+    "about": "Reviews per page (default and maximum 10, the page size the App Store web client uses).",
+    "min": 1,
+    "max": 10
+   },
+   {
+    "name": "locale",
+    "type": "string",
+    "in": "body",
+    "about": "Display locale for names, descriptions and release notes, e.g. `en-US`, `en-GB`. Default `en-US`. Pattern: ^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$."
+   },
+   {
+    "name": "offset",
+    "type": "number",
+    "in": "body",
+    "about": "Zero-based offset; pass `next_offset` from the previous page.",
+    "min": 0,
+    "max": 10000
+   },
+   {
+    "name": "sort",
+    "type": "string",
+    "in": "body",
+    "about": "Review order, the App Store's own sort options. `most_recent` (default): newest first, dates non-increasing within and across pages. `most_helpful`: Apple's 'Most Helpful' ranking, not chronological. `most_favorable` / `most_critical`: positive / critical reviews (observed as 5-star / 1-star), newest first.",
+    "oneOf": [
+     "most_recent",
+     "most_helpful",
+     "most_favorable",
+     "most_critical"
+    ]
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "apps-apple-com/apps/search",
+  "provider": "apps-apple-com",
+  "capability": "apps/search",
+  "name": "Search",
+  "description": "Find candidate apps by name or topic before calling `app` for compatibility and subscription detail.",
+  "options": [
+   {
+    "name": "country",
+    "type": "string",
+    "in": "body",
+    "about": "Two-letter App Store storefront code (lowercase, e.g. `us`, `gb`, `de`). Default `us`. Prices and availability are storefront specific. Pattern: ^[a-zA-Z]{2}$."
+   },
+   {
+    "name": "limit",
+    "type": "number",
+    "in": "body",
+    "about": "Maximum results (default 25). The source has no offset paging.",
+    "min": 1,
+    "max": 200
+   },
+   {
+    "name": "term",
+    "type": "string",
+    "in": "body",
+    "about": "Search words.",
+    "required": true
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "apps-apple-com/apps/top_charts",
+  "provider": "apps-apple-com",
+  "capability": "apps/top_charts",
+  "name": "Top charts",
+  "description": "Rankings: what is popular now in a category or overall on a storefront.",
+  "options": [
+   {
+    "name": "chart",
+    "type": "string",
+    "in": "body",
+    "about": "Default `top-free`.",
+    "oneOf": [
+     "top-free",
+     "top-paid",
+     "top-grossing"
+    ]
+   },
+   {
+    "name": "country",
+    "type": "string",
+    "in": "body",
+    "about": "Two-letter App Store storefront code (lowercase, e.g. `us`, `gb`, `de`). Default `us`. Prices and availability are storefront specific. Pattern: ^[a-zA-Z]{2}$."
+   },
+   {
+    "name": "genre_id",
+    "type": "string",
+    "in": "body",
+    "about": "App Store genre id: 6000-6027 (categories, e.g. 6013 Health & Fitness, 6014 Games), 7001-7019 (Games sub-genres). Omit for all apps. Pattern: ^[0-9]{4}$."
+   },
+   {
+    "name": "limit",
+    "type": "number",
+    "in": "body",
+    "about": "Number of ranks (default 25).",
+    "min": 1,
+    "max": 200
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "arxiv-org/papers/get_bibtex",
+  "provider": "arxiv-org",
+  "capability": "papers/get_bibtex",
+  "name": "Get bibtex",
+  "description": "Cite a paper found with `search_papers`, `list_category` or `get_paper`.",
+  "options": [
+   {
+    "name": "arxiv_id",
+    "type": "string",
+    "in": "body",
+    "about": "arXiv identifier, with or without version or the `arXiv:` prefix."
+   },
+   {
+    "name": "url",
+    "type": "string",
+    "in": "body",
+    "about": "A pasted `https://arxiv.org/bibtex/{id}` or `/abs/{id}` URL instead of `arxiv_id`."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "arxiv-org/papers/get_paper",
+  "provider": "arxiv-org",
+  "capability": "papers/get_paper",
+  "name": "Get paper",
+  "description": "Look up one paper by identifier or URL. Use `get_bibtex` for a citation entry and `harvest_records` for the license.",
+  "options": [
+   {
+    "name": "arxiv_id",
+    "type": "string",
+    "in": "body",
+    "about": "arXiv identifier, new (`YYMM.NNNNN[vN]`) or old (`archive/YYMMNNN[vN]`) style, with or without the `arXiv:` prefix."
+   },
+   {
+    "name": "url",
+    "type": "string",
+    "in": "body",
+    "about": "A pasted arxiv.org paper URL instead of `arxiv_id`."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "arxiv-org/papers/harvest_records",
+  "provider": "arxiv-org",
+  "capability": "papers/harvest_records",
+  "name": "Harvest records",
+  "description": "Bulk or incremental synchronisation of arXiv metadata by date window, or the only surface that states a paper's license. For topical search use `search_papers`.",
+  "options": [
+   {
+    "name": "cursor",
+    "type": "string",
+    "in": "body",
+    "about": "`next_cursor` from a previous call. When given, `set`, `from` and `until` must be omitted."
+   },
+   {
+    "name": "from",
+    "type": "string",
+    "in": "body",
+    "about": "Earliest datestamp (`YYYY-MM-DD`, inclusive). Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$."
+   },
+   {
+    "name": "limit",
+    "type": "number",
+    "in": "body",
+    "about": "Records to return in this call (1-1000; default 100).",
+    "min": 1,
+    "max": 1000
+   },
+   {
+    "name": "set",
+    "type": "string",
+    "in": "body",
+    "about": "OAI set spec from `list_sets`, e.g. `cs`, `econ`, `physics:hep-th`. Omit for all of arXiv. Pattern: ^[a-zA-Z][a-zA-Z0-9:.-]*$."
+   },
+   {
+    "name": "until",
+    "type": "string",
+    "in": "body",
+    "about": "Latest datestamp (`YYYY-MM-DD`, inclusive). Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "arxiv-org/papers/list_category",
+  "provider": "arxiv-org",
+  "capability": "papers/list_category",
+  "name": "List category",
+  "description": "Browse what was announced in a category, or walk a month's submissions. Identifiers feed `get_paper` and `get_bibtex`.",
+  "options": [
+   {
+    "name": "category",
+    "type": "string",
+    "in": "body",
+    "about": "Archive or category code, e.g. `cs`, `cs.LG`, `math.AP`, `hep-th`, `econ.GN`. Pattern: ^[a-zA-Z][a-zA-Z-]*(\\.[A-Za-z][A-Za-z-]*)?$."
+   },
+   {
+    "name": "limit",
+    "type": "number",
+    "in": "body",
+    "about": "Entries to return from the fetched page (default: all of them). `next_skip` continues after the last returned entry.",
+    "min": 1,
+    "max": 2000
+   },
+   {
+    "name": "period",
+    "type": "string",
+    "in": "body",
+    "about": "`recent` (default), `new`, `pastweek`, a month `YYYY-MM` or a year `YYYY`. Pattern: ^(recent|new|pastweek|[0-9]{4}(-[0-9]{2})?)$."
+   },
+   {
+    "name": "show",
+    "type": "number",
+    "in": "body",
+    "about": "Page size arXiv fetches (one of 25, 50, 100, 250, 500, 1000, 2000; default 25). `limit` may return fewer.",
+    "oneOf": [
+     "25",
+     "50",
+     "100",
+     "250",
+     "500",
+     "1000",
+     "2000"
+    ]
+   },
+   {
+    "name": "skip",
+    "type": "number",
+    "in": "body",
+    "about": "Zero-based offset of the first entry (the `next_skip` of a previous page).",
+    "min": 0,
+    "max": 200000
+   },
+   {
+    "name": "url",
+    "type": "string",
+    "in": "body",
+    "about": "A pasted `https://arxiv.org/list/{category}/{period}` URL instead of `category`/`period`."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "arxiv-org/papers/list_sets",
+  "provider": "arxiv-org",
+  "capability": "papers/list_sets",
+  "name": "List sets",
+  "description": "Discover valid `set` values for `harvest_records` and category codes for `list_category`.",
+  "options": [],
+  "seed": "filler"
+ },
+ {
+  "id": "arxiv-org/papers/search_papers",
+  "provider": "arxiv-org",
+  "capability": "papers/search_papers",
+  "name": "Search papers",
+  "description": "Find papers by topic, title, author or category, or find the arXiv identifier that `get_paper`, `get_bibtex` and the listing functions take. Citing or replicating papers are not an arXiv concept: arXiv serves no citation graph.",
+  "options": [
+   {
+    "name": "max_results",
+    "type": "number",
+    "in": "body",
+    "about": "Results per page (1-100).",
+    "min": 1,
+    "max": 100
+   },
+   {
+    "name": "query",
+    "type": "string",
+    "in": "body",
+    "about": "arXiv API search expression, e.g. `all:\"Incompressible Knowledge Probes\"`, `au:Li_B AND cat:cs.LG`, `ti:transformer`. Bare words are each searched in all fields and ANDed (`agent memory` is sent as `all:agent AND all:memory`; English stopwords such as `a`, `for`, `the` are dropped because arXiv's index does not match them); quote a phrase to match it as a whole.",
+    "required": true
+   },
+   {
+    "name": "sort_by",
+    "type": "string",
+    "in": "body",
+    "about": "Sort key (default relevance).",
+    "oneOf": [
+     "relevance",
+     "lastUpdatedDate",
+     "submittedDate"
+    ]
+   },
+   {
+    "name": "sort_order",
+    "type": "string",
+    "in": "body",
+    "about": "Sort direction (default descending).",
+    "oneOf": [
+     "ascending",
+     "descending"
+    ]
+   },
+   {
+    "name": "start",
+    "type": "number",
+    "in": "body",
+    "about": "Zero-based offset of the first result (the `start` from a previous page's `next_start`).",
+    "min": 0,
+    "max": 30000
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "autotrader-com/vehicles/get_listing",
+  "provider": "autotrader-com",
+  "capability": "vehicles/get_listing",
+  "name": "Get listing",
+  "description": "After search_listings, or when the user pastes an autotrader.com/cars-for-sale/vehicle/{id} URL or a VIN.",
+  "options": [
+   {
+    "name": "listing_id",
+    "type": "number",
+    "in": "body",
+    "about": "Autotrader listing id, e.g. 788577333.",
+    "min": 1
+   },
+   {
+    "name": "url",
+    "type": "string",
+    "in": "body",
+    "about": "Autotrader listing URL, https://www.autotrader.com/cars-for-sale/vehicle/{listing_id}[?...]."
+   },
+   {
+    "name": "vin",
+    "type": "string",
+    "in": "body",
+    "about": "17-character VIN (I, O and Q never occur). Pattern: ^[A-HJ-NPR-Z0-9]{17}$."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "autotrader-com/vehicles/listing_facets",
+  "provider": "autotrader-com",
+  "capability": "vehicles/listing_facets",
+  "name": "Listing facets",
+  "description": "To see which years, trims or cities have inventory before searching, or to pick a trim_code for search_listings.",
+  "options": [
+   {
+    "name": "facet",
+    "type": "string",
+    "in": "body",
+    "about": "model_years, trims or cities.",
+    "required": true,
+    "oneOf": [
+     "model_years",
+     "trims",
+     "cities"
+    ]
+   },
+   {
+    "name": "listing_type",
+    "type": "string",
+    "in": "body",
+    "about": "Filter by NEW, USED or CERTIFIED (certified pre-owned). Omit for all.",
+    "oneOf": [
+     "NEW",
+     "USED",
+     "CERTIFIED"
+    ]
+   },
+   {
+    "name": "make_code",
+    "type": "string",
+    "in": "body",
+    "about": "Autotrader make code, e.g. TOYOTA, HONDA, CHEV, MB (resolve free text with suggest_make_model). Pattern: ^[A-Z0-9]{1,20}$.",
+    "required": true
+   },
+   {
+    "name": "model_code",
+    "type": "string",
+    "in": "body",
+    "about": "Autotrader model code, e.g. CAMRY, CIVIC, 911 (from suggest_make_model). Requires make_code. Pattern: ^[A-Z0-9_-]{1,30}$."
+   },
+   {
+    "name": "radius_miles",
+    "type": "number",
+    "in": "body",
+    "about": "Search radius in miles around zip; 0 means nationwide. Default 50.",
+    "min": 0,
+    "max": 500
+   },
+   {
+    "name": "zip",
+    "type": "string",
+    "in": "body",
+    "about": "5-digit US ZIP code; ignored by the cities facet. Pattern: ^[0-9]{5}$."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "autotrader-com/vehicles/search_listings",
+  "provider": "autotrader-com",
+  "capability": "vehicles/search_listings",
+  "name": "Search listings",
+  "description": "Discovering vehicles for sale in the US, or reading one dealership's Autotrader inventory and its new/used/certified counts by dealer_id or dealer website domain (e.g. comparing a dealer's own site against its marketplace syndication). Chain listing_id into get_listing, style_id into vehicle_specs and seller.owner_id into dealer_id. Use suggest_make_model to turn 'Toyota Camry' into make_code/model_code first.",
+  "options": [
+   {
+    "name": "cursor",
+    "type": "string",
+    "in": "body",
+    "about": "next_cursor from a previous page (the record offset). The site serves at most the first 1000 matches. Pattern: ^[0-9]{1,3}$."
+   },
+   {
+    "name": "dealer_id",
+    "type": "number",
+    "in": "body",
+    "about": "Restrict to one seller's inventory: the owner_id of a listing's seller (also dealer.dealer_id). Not with dealer_website.",
+    "min": 1
+   },
+   {
+    "name": "dealer_website",
+    "type": "string",
+    "in": "body",
+    "about": "Restrict to one dealership by its own website domain or URL, e.g. alexandriatoyota.com or https://www.alexandriatoyota.com/. Resolved to a dealer_id through the site's dealer finder for the 50 dealers nearest zip, so use the dealership's own ZIP; not_found when no dealer near zip has that website, invalid_input when several do (then pass dealer_id). Not with dealer_id."
+   },
+   {
+    "name": "end_year",
+    "type": "number",
+    "in": "body",
+    "about": "Latest model year.",
+    "min": 1900,
+    "max": 2100
+   },
+   {
+    "name": "keyword",
+    "type": "string",
+    "in": "body",
+    "about": "Free-text keyword phrase matched against listing descriptions, e.g. 'leather sunroof'."
+   },
+   {
+    "name": "listing_type",
+    "type": "string",
+    "in": "body",
+    "about": "Filter by NEW, USED or CERTIFIED (certified pre-owned). Omit for all.",
+    "oneOf": [
+     "NEW",
+     "USED",
+     "CERTIFIED"
+    ]
+   },
+   {
+    "name": "make_code",
+    "type": "string",
+    "in": "body",
+    "about": "Autotrader make code, e.g. TOYOTA, HONDA, CHEV, MB (resolve free text with suggest_make_model). Pattern: ^[A-Z0-9]{1,20}$."
+   },
+   {
+    "name": "max_mileage",
+    "type": "number",
+    "in": "body",
+    "about": "Maximum odometer miles.",
+    "min": 0
+   },
+   {
+    "name": "max_price",
+    "type": "number",
+    "in": "body",
+    "about": "Maximum asking price in USD.",
+    "min": 0
+   },
+   {
+    "name": "min_price",
+    "type": "number",
+    "in": "body",
+    "about": "Minimum asking price in USD.",
+    "min": 0
+   },
+   {
+    "name": "model_code",
+    "type": "string",
+    "in": "body",
+    "about": "Autotrader model code, e.g. CAMRY, CIVIC, 911 (from suggest_make_model). Requires make_code. Pattern: ^[A-Z0-9_-]{1,30}$."
+   },
+   {
+    "name": "page_size",
+    "type": "number",
+    "in": "body",
+    "about": "Listings per page, 1-100. Default 25.",
+    "min": 1,
+    "max": 100
+   },
+   {
+    "name": "radius_miles",
+    "type": "number",
+    "in": "body",
+    "about": "Search radius in miles around zip; 0 means nationwide. Default 50.",
+    "min": 0,
+    "max": 500
+   },
+   {
+    "name": "sort",
+    "type": "string",
+    "in": "body",
+    "about": "Sort order. Default relevance.",
+    "oneOf": [
+     "relevance",
+     "derivedpriceASC",
+     "derivedpriceDESC",
+     "mileageASC",
+     "mileageDESC",
+     "yearASC",
+     "yearDESC",
+     "distanceASC",
+     "datelistedDESC"
+    ]
+   },
+   {
+    "name": "start_year",
+    "type": "number",
+    "in": "body",
+    "about": "Earliest model year.",
+    "min": 1900,
+    "max": 2100
+   },
+   {
+    "name": "trim_code",
+    "type": "string",
+    "in": "body",
+    "about": "Trim code in MODEL|TRIM form as returned by listing_facets(trims) or a listing's trim_code, e.g. CAMRY|SE. Pattern: ^[A-Z0-9_ .|/-]{1,60}$."
+   },
+   {
+    "name": "vehicle_style_code",
+    "type": "string",
+    "in": "body",
+    "about": "Body style code, e.g. SEDAN, SUVCROSS, TRUCKS, COUPE, CONVERT, VANS, WAGON, HATCH. Pattern: ^[A-Z_]{1,20}$."
+   },
+   {
+    "name": "zip",
+    "type": "string",
+    "in": "body",
+    "about": "5-digit US ZIP code the search radius is centred on. Pattern: ^[0-9]{5}$.",
+    "required": true
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "autotrader-com/vehicles/suggest_make_model",
+  "provider": "autotrader-com",
+  "capability": "vehicles/suggest_make_model",
+  "name": "Suggest make model",
+  "description": "Before search_listings or listing_facets when you have a make/model name rather than codes.",
+  "options": [
+   {
+    "name": "query",
+    "type": "string",
+    "in": "body",
+    "about": "Prefix of a make or model name, 2-40 characters.",
+    "required": true
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "autotrader-com/vehicles/vehicle_specs",
+  "provider": "autotrader-com",
+  "capability": "vehicles/vehicle_specs",
+  "name": "Vehicle specs",
+  "description": "After get_listing or search_listings, to read the manufacturer specifications behind a listing.",
+  "options": [
+   {
+    "name": "style_id",
+    "type": "number",
+    "in": "body",
+    "about": "Autotrader style id, e.g. 453130 (listing.style_id).",
+    "required": true,
+    "min": 1
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "bbb-business-profiles-ratings-complaint/businesses/complaints",
+  "provider": "bbb-business-profiles-ratings-complaint",
+  "capability": "businesses/complaints",
+  "name": "Complaint history",
+  "description": "One page (10) of the public complaint history for a BBB business identified by profile URL or bbb_id + business_id: complaint type, status, date, redacted text and business/consumer responses, with per-type and per-status counts, optional type/status filters, and the profile's complaint totals (all, closed in 3 years, closed in 12 months).",
+  "options": [
+   {
+    "name": "url",
+    "in": "body",
+    "type": "string",
+    "about": "HTTPS www.bbb.org/{us|ca}/<state>/<city>/profile/<category>/<name>-<bbb_id>-<business_id> profile URL (section suffixes such as /complaints are accepted). Provide either url, or bbb_id with business_id."
+   },
+   {
+    "name": "bbb_id",
+    "in": "body",
+    "type": "string",
+    "about": "4-digit BBB office id from search results, e.g. 0825. Provide together with business_id."
+   },
+   {
+    "name": "business_id",
+    "in": "body",
+    "type": "string",
+    "about": "Numeric BBB business id from search results, e.g. 90019908. Provide together with bbb_id."
+   },
+   {
+    "name": "country",
+    "in": "body",
+    "type": "string",
+    "about": "Only with bbb_id/business_id: which BBB site holds the profile.",
+    "default": "us",
+    "oneOf": [
+     "us",
+     "ca"
+    ]
+   },
+   {
+    "name": "page",
+    "in": "body",
+    "type": "number",
+    "about": "Page number, 1 to 100 (10 per page, newest first).",
+    "min": 1,
+    "max": 100,
+    "default": 1
+   },
+   {
+    "name": "complaint_type",
+    "in": "body",
+    "type": "string",
+    "about": "BBB complaint type slug as returned in filters.type: billingissues, serviceorrepair, productissues, order, customerservice, salesadvertising, delivery, facilities and others."
+   },
+   {
+    "name": "status",
+    "in": "body",
+    "type": "string",
+    "about": "BBB complaint status slug as returned in filters.status: answered, resolved, unanswered, unpursuable."
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "url",
+    "bbb_id"
+   ],
+   [
+    "url",
+    "business_id"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "bbb-business-profiles-ratings-complaint/businesses/profile",
+  "provider": "bbb-business-profiles-ratings-complaint",
+  "capability": "businesses/profile",
+  "name": "Business profile",
+  "description": "One BBB business profile identified by its bbb.org profile URL or by bbb_id + business_id (from search): BBB letter grade with reasons, accreditation status and dates, file-opened/start/incorporation dates, years in business, entity type, categories, address, coordinates, contacts, websites, social links, local BBB office, alerts, and complaint and customer-review totals.",
+  "options": [
+   {
+    "name": "url",
+    "in": "body",
+    "type": "string",
+    "about": "HTTPS www.bbb.org/{us|ca}/<state>/<city>/profile/<category>/<name>-<bbb_id>-<business_id> profile URL (section suffixes such as /complaints are accepted). Provide either url, or bbb_id with business_id."
+   },
+   {
+    "name": "bbb_id",
+    "in": "body",
+    "type": "string",
+    "about": "4-digit BBB office id from search results, e.g. 0825. Provide together with business_id."
+   },
+   {
+    "name": "business_id",
+    "in": "body",
+    "type": "string",
+    "about": "Numeric BBB business id from search results, e.g. 90019908. Provide together with bbb_id."
+   },
+   {
+    "name": "country",
+    "in": "body",
+    "type": "string",
+    "about": "Only with bbb_id/business_id: which BBB site holds the profile.",
+    "default": "us",
+    "oneOf": [
+     "us",
+     "ca"
+    ]
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "url",
+    "bbb_id"
+   ],
+   [
+    "url",
+    "business_id"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "bbb-business-profiles-ratings-complaint/businesses/reviews",
+  "provider": "bbb-business-profiles-ratings-complaint",
+  "capability": "businesses/reviews",
+  "name": "Customer reviews",
+  "description": "One page (10) of BBB customer reviews for a business identified by profile URL or bbb_id + business_id: star rating, reviewer display name, date, text and business/customer follow-up responses, plus the profile's review total and average star rating.",
+  "options": [
+   {
+    "name": "url",
+    "in": "body",
+    "type": "string",
+    "about": "HTTPS www.bbb.org/{us|ca}/<state>/<city>/profile/<category>/<name>-<bbb_id>-<business_id> profile URL (section suffixes such as /complaints are accepted). Provide either url, or bbb_id with business_id."
+   },
+   {
+    "name": "bbb_id",
+    "in": "body",
+    "type": "string",
+    "about": "4-digit BBB office id from search results, e.g. 0825. Provide together with business_id."
+   },
+   {
+    "name": "business_id",
+    "in": "body",
+    "type": "string",
+    "about": "Numeric BBB business id from search results, e.g. 90019908. Provide together with bbb_id."
+   },
+   {
+    "name": "country",
+    "in": "body",
+    "type": "string",
+    "about": "Only with bbb_id/business_id: which BBB site holds the profile.",
+    "default": "us",
+    "oneOf": [
+     "us",
+     "ca"
+    ]
+   },
+   {
+    "name": "page",
+    "in": "body",
+    "type": "number",
+    "about": "Page number, 1 to 100 (10 per page, newest first).",
+    "min": 1,
+    "max": 100,
+    "default": 1
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "url",
+    "bbb_id"
+   ],
+   [
+    "url",
+    "business_id"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "bbb-business-profiles-ratings-complaint/businesses/search",
+  "provider": "bbb-business-profiles-ratings-complaint",
+  "capability": "businesses/search",
+  "name": "Business search",
+  "description": "Find BBB business profiles by business name or category near a place (US or Canada). Returns one page of 15 results with each business's BBB letter grade, accreditation flag, categories, address, phones, coordinates and profile URL, plus totals for pagination. BBB's matching is fuzzy: check the returned name.",
+  "options": [
+   {
+    "name": "query",
+    "in": "body",
+    "type": "string",
+    "about": "Business name or category, 1 to 200 characters, e.g. roofing, Comcast, moving company.",
+    "required": true
+   },
+   {
+    "name": "location",
+    "in": "body",
+    "type": "string",
+    "about": "City and state/province (Austin, TX) or postal code, up to 120 characters. Omit for a nationwide search."
+   },
+   {
+    "name": "country",
+    "in": "body",
+    "type": "string",
+    "about": "Which BBB site to search.",
+    "default": "us",
+    "oneOf": [
+     "us",
+     "ca"
+    ]
+   },
+   {
+    "name": "page",
+    "in": "body",
+    "type": "number",
+    "about": "Results page, 1 to 100 (15 results per page).",
+    "min": 1,
+    "max": 100,
+    "default": 1
+   },
+   {
+    "name": "sort",
+    "in": "body",
+    "type": "string",
+    "about": "Result order.",
+    "default": "Relevance",
+    "oneOf": [
+     "Relevance",
+     "Distance",
+     "Rating",
+     "AToZ",
+     "ZToA"
+    ]
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "bankofcanada-ca/economic-data/bond_yields",
+  "provider": "bankofcanada-ca",
+  "capability": "economic-data/bond_yields",
+  "name": "Bond yields",
+  "description": "Canadian government bond yields or the yield curve on a date, e.g. the 10-year Canada yield today or its path over a month.",
+  "options": [
+   {
+    "name": "date",
+    "type": "string",
+    "in": "body",
+    "about": "One day, YYYY-MM-DD. Weekends and holidays have no yields (not_found). Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$."
+   },
+   {
+    "name": "end_date",
+    "type": "string",
+    "in": "body",
+    "about": "Range end, YYYY-MM-DD. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$."
+   },
+   {
+    "name": "recent",
+    "type": "number",
+    "in": "body",
+    "about": "The latest N observations per series instead of a date or range.",
+    "min": 1,
+    "max": 10000
+   },
+   {
+    "name": "start_date",
+    "type": "string",
+    "in": "body",
+    "about": "Range start, YYYY-MM-DD. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$."
+   },
+   {
+    "name": "terms",
+    "type": "string[]",
+    "in": "body",
+    "about": "Terms to return. Default: all seven."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "bankofcanada-ca/economic-data/describe_series",
+  "provider": "bankofcanada-ca",
+  "capability": "economic-data/describe_series",
+  "name": "Describe series",
+  "description": "Checking what a Valet series measures and its unit, or listing the series inside a group, before fetching observations.",
+  "options": [
+   {
+    "name": "group",
+    "type": "string",
+    "in": "body",
+    "about": "Group name, e.g. bond_yields_benchmark. Exclusive with series. Pattern: ^[A-Za-z0-9._-]+$."
+   },
+   {
+    "name": "series",
+    "type": "string",
+    "in": "body",
+    "about": "Series name, e.g. FXUSDCAD. Exclusive with group. Pattern: ^[A-Za-z0-9._-]+$."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "bankofcanada-ca/economic-data/fx_rates",
+  "provider": "bankofcanada-ca",
+  "capability": "economic-data/fx_rates",
+  "name": "Fx rates",
+  "description": "Official CAD exchange rates, e.g. USD/CAD on a date, the latest EUR/CAD, a month of rates for invoicing or tax conversions.",
+  "options": [
+   {
+    "name": "currencies",
+    "type": "string[]",
+    "in": "body",
+    "about": "ISO 4217 codes, e.g. [\"USD\", \"EUR\"]. Case-insensitive; CAD is not a series. Default: every currently published rate."
+   },
+   {
+    "name": "date",
+    "type": "string",
+    "in": "body",
+    "about": "One day, YYYY-MM-DD. Weekends and Bank holidays have no rates (not_found). Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$."
+   },
+   {
+    "name": "end_date",
+    "type": "string",
+    "in": "body",
+    "about": "Range end, YYYY-MM-DD. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$."
+   },
+   {
+    "name": "recent",
+    "type": "number",
+    "in": "body",
+    "about": "The latest N observations per series instead of a date or range.",
+    "min": 1,
+    "max": 10000
+   },
+   {
+    "name": "start_date",
+    "type": "string",
+    "in": "body",
+    "about": "Range start, YYYY-MM-DD. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "bankofcanada-ca/economic-data/news",
+  "provider": "bankofcanada-ca",
+  "capability": "economic-data/news",
+  "name": "News",
+  "description": "Recent Bank of Canada news or publications, a press release list, upcoming speeches and events, or paging back through the archive.",
+  "options": [
+   {
+    "name": "category",
+    "type": "string",
+    "in": "body",
+    "about": "Default press_releases.",
+    "oneOf": [
+     "press_releases",
+     "press",
+     "announcements",
+     "speeches",
+     "media_advisories",
+     "market_notices",
+     "upcoming_events",
+     "monetary_policy_report",
+     "summary_of_deliberations",
+     "financial_stability_report",
+     "business_outlook_survey",
+     "staff_working_papers",
+     "staff_analytical_notes",
+     "publications"
+    ]
+   },
+   {
+    "name": "page",
+    "type": "number",
+    "in": "body",
+    "about": "Feed page, ten items each. Default 1. A page past the end is an empty result.",
+    "min": 1,
+    "max": 1000
+   },
+   {
+    "name": "query",
+    "type": "string",
+    "in": "body",
+    "about": "Words that must all appear in an item's title or description, applied within the page."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "bankofcanada-ca/economic-data/observations",
+  "provider": "bankofcanada-ca",
+  "capability": "economic-data/observations",
+  "name": "Observations",
+  "description": "Any Bank of Canada statistic not covered by policy_rate, fx_rates or bond_yields, or a Valet observations URL someone pasted; find names with search_series.",
+  "options": [
+   {
+    "name": "end_date",
+    "type": "string",
+    "in": "body",
+    "about": "Range end, YYYY-MM-DD. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$."
+   },
+   {
+    "name": "group",
+    "type": "string",
+    "in": "body",
+    "about": "One Valet group name. Exclusive with series. Pattern: ^[A-Za-z0-9._-]+$."
+   },
+   {
+    "name": "max_observations",
+    "type": "number",
+    "in": "body",
+    "about": "Cap on returned values (default 2000); more is reported as partial coverage.",
+    "min": 1,
+    "max": 20000
+   },
+   {
+    "name": "order",
+    "type": "string",
+    "in": "body",
+    "about": "Row order by period key. Default desc (newest first).",
+    "oneOf": [
+     "asc",
+     "desc"
+    ]
+   },
+   {
+    "name": "recent",
+    "type": "number",
+    "in": "body",
+    "about": "The latest N observations per series instead of a date or range.",
+    "min": 1,
+    "max": 10000
+   },
+   {
+    "name": "recent_months",
+    "type": "number",
+    "in": "body",
+    "about": "recent_months",
+    "min": 1,
+    "max": 10000
+   },
+   {
+    "name": "recent_weeks",
+    "type": "number",
+    "in": "body",
+    "about": "recent_weeks",
+    "min": 1,
+    "max": 10000
+   },
+   {
+    "name": "recent_years",
+    "type": "number",
+    "in": "body",
+    "about": "recent_years",
+    "min": 1,
+    "max": 10000
+   },
+   {
+    "name": "series",
+    "type": "string[]",
+    "in": "body",
+    "about": "Valet series names. Exclusive with group."
+   },
+   {
+    "name": "start_date",
+    "type": "string",
+    "in": "body",
+    "about": "Range start, YYYY-MM-DD. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "bankofcanada-ca/economic-data/policy_rate",
+  "provider": "bankofcanada-ca",
+  "capability": "economic-data/policy_rate",
+  "name": "Policy rate",
+  "description": "The current Canadian policy rate, the rate in effect on a given date (e.g. at the end of a quarter, for comparison with other central banks), or when and by how much the Bank last moved it.",
+  "options": [
+   {
+    "name": "date",
+    "type": "string",
+    "in": "body",
+    "about": "As-of date, YYYY-MM-DD. The rate in effect on it is the latest business-day observation on or before it. Default: the latest published. Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$."
+   },
+   {
+    "name": "start_date",
+    "type": "string",
+    "in": "body",
+    "about": "Start of the change history, YYYY-MM-DD. Default: three years before date (or the last three years). Pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "bankofcanada-ca/economic-data/rate_announcements",
+  "provider": "bankofcanada-ca",
+  "capability": "economic-data/rate_announcements",
+  "name": "Rate announcements",
+  "description": "The latest Bank of Canada rate decisions and their wording, e.g. what the Bank decided at its last meetings and the links to each announcement.",
+  "options": [
+   {
+    "name": "limit",
+    "type": "number",
+    "in": "body",
+    "about": "Announcements to return. Default 8 (about one year).",
+    "min": 1,
+    "max": 40
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "bankofcanada-ca/economic-data/search_series",
+  "provider": "bankofcanada-ca",
+  "capability": "economic-data/search_series",
+  "name": "Search series",
+  "description": "Finding the Valet series or group name for a statistic (e.g. CORRA, prime rate, CPI, commodity prices, mortgage rates, auction results) before calling observations.",
+  "options": [
+   {
+    "name": "kind",
+    "type": "string",
+    "in": "body",
+    "about": "Default all.",
+    "oneOf": [
+     "series",
+     "groups",
+     "all"
+    ]
+   },
+   {
+    "name": "limit",
+    "type": "number",
+    "in": "body",
+    "about": "Default 20.",
+    "min": 1,
+    "max": 100
+   },
+   {
+    "name": "query",
+    "type": "string",
+    "in": "body",
+    "about": "Words that must all appear, e.g. \"overnight rate\" or \"10-year bond\".",
+    "required": true
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "artificialanalysis-ai/benchmarks/get_model",
+  "provider": "artificialanalysis-ai",
+  "capability": "benchmarks/get_model",
+  "name": "Get model",
+  "description": "When you have a model slug from search_models (or a pasted /models/{slug} URL) and need the full benchmark record.",
+  "options": [
+   {
+    "name": "slug",
+    "type": "string",
+    "in": "body",
+    "about": "Model slug (e.g. `claude-fable-5-1`, `gpt-6-luna-high`) or a pasted https://artificialanalysis.ai/models/{slug} URL. Pattern: ^[A-Za-z0-9./:_-]+$.",
+    "required": true
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "artificialanalysis-ai/benchmarks/list_model_providers",
+  "provider": "artificialanalysis-ai",
+  "capability": "benchmarks/list_model_providers",
+  "name": "List model providers",
+  "description": "To compare where to run a given model: prices and measured speed per provider. Needs a model slug from search_models.",
+  "options": [
+   {
+    "name": "slug",
+    "type": "string",
+    "in": "body",
+    "about": "Model slug (e.g. `gpt-6-astra`) or a pasted https://artificialanalysis.ai/models/{slug}/providers URL. Pattern: ^[A-Za-z0-9./:_-]+$.",
+    "required": true
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "artificialanalysis-ai/benchmarks/search_models",
+  "provider": "artificialanalysis-ai",
+  "capability": "benchmarks/search_models",
+  "name": "Search models",
+  "description": "Start here to find a model slug (e.g. `claude-fable-5-1-high`) for get_model or list_model_providers, to rank models by intelligence, price or speed, or with `slug` to fetch one known model/effort row (legacy slugs included) without paging the whole table.",
+  "options": [
+   {
+    "name": "creator",
+    "type": "string",
+    "in": "body",
+    "about": "Creator name filter, case-insensitive substring (e.g. `anthropic`, `openai`)."
+   },
+   {
+    "name": "cursor",
+    "type": "string",
+    "in": "body",
+    "about": "Opaque `next_cursor` from the previous page. Pattern: ^[0-9]+$."
+   },
+   {
+    "name": "include_deprecated",
+    "type": "boolean",
+    "in": "body",
+    "about": "Include models the site marks deprecated. Since 2026-10-17 the leaderboard page serves only current models, so deprecated rows are usually absent and the result is reported as partial coverage. Implied true when `slug` is given."
+   },
+   {
+    "name": "limit",
+    "type": "number",
+    "in": "body",
+    "about": "Results per page (1-100).",
+    "default": 20,
+    "min": 1,
+    "max": 100
+   },
+   {
+    "name": "open_weights",
+    "type": "boolean",
+    "in": "body",
+    "about": "Only open-weights (true) or proprietary (false) models."
+   },
+   {
+    "name": "query",
+    "type": "string",
+    "in": "body",
+    "about": "Case-insensitive terms matched against model name, short name, slug and creator; every whitespace-separated term must match (substring: `deepseek-v3` also matches `deepseek-v3-0324`; use `slug` for an exact row). Punctuation is folded on both sides, so `Claude Sonnet 5.5`, `claude-sonnet-5.5` and `claude-sonnet-5-5` find the same rows. One model per call: a list of several names matches nothing."
+   },
+   {
+    "name": "reasoning",
+    "type": "boolean",
+    "in": "body",
+    "about": "Only reasoning (true) or non-reasoning (false) models."
+   },
+   {
+    "name": "slug",
+    "type": "string",
+    "in": "body",
+    "about": "Exact model slug at one reasoning effort (e.g. `claude-fable-5-1-high`, `deepseek-v3`) or a pasted https://artificialanalysis.ai/models/{slug} URL: returns that one row (effort siblings such as `-high`/`-low` are not matched). Implies `include_deprecated: true`; a deprecated slug matches only while the page lists deprecated rows (use get_model for it otherwise). Combines with the other filters. Pattern: ^[A-Za-z0-9./:_-]+$."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "artificialanalysis-ai/benchmarks/search_provider_endpoints",
+  "provider": "artificialanalysis-ai",
+  "capability": "benchmarks/search_provider_endpoints",
+  "name": "Search provider endpoints",
+  "description": "To find the fastest or cheapest endpoint for a model, or all models a provider hosts. Use list_model_providers for one model's percentile detail.",
+  "options": [
+   {
+    "name": "cursor",
+    "type": "string",
+    "in": "body",
+    "about": "Opaque `next_cursor` from the previous page. Pattern: ^[0-9]+$."
+   },
+   {
+    "name": "host",
+    "type": "string",
+    "in": "body",
+    "about": "API provider slug or name, exact and case-insensitive (e.g. `anthropic`, `amazon_bedrock`, `novita`)."
+   },
+   {
+    "name": "include_deprecated",
+    "type": "boolean",
+    "in": "body",
+    "about": "Include endpoints of deprecated models."
+   },
+   {
+    "name": "limit",
+    "type": "number",
+    "in": "body",
+    "about": "Results per page (1-100).",
+    "default": 20,
+    "min": 1,
+    "max": 100
+   },
+   {
+    "name": "model",
+    "type": "string",
+    "in": "body",
+    "about": "Model slug, exact (e.g. `claude-fable-5-1`). Pattern: ^[A-Za-z0-9./:_-]+$."
+   },
+   {
+    "name": "query",
+    "type": "string",
+    "in": "body",
+    "about": "Case-insensitive terms matched against endpoint label, model slug and provider; every term must match."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "amtrak-com/train-status/get_route",
+  "provider": "amtrak-com",
+  "capability": "train-status/get_route",
+  "name": "Get route",
+  "description": "Route detail after `list_routes`; the train numbers feed `train_status`, the stop codes feed `get_station`.",
+  "options": [
+   {
+    "name": "code",
+    "type": "string",
+    "in": "body",
+    "about": "Route code from list_routes, e.g. NERG Pattern: ^[A-Za-z0-9]{2,8}$."
+   },
+   {
+    "name": "name",
+    "type": "string",
+    "in": "body",
+    "about": "Exact route name, e.g. 'Coast Starlight' (case-insensitive)"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "amtrak-com/train-status/get_station",
+  "provider": "amtrak-com",
+  "capability": "train-status/get_station",
+  "name": "Get station",
+  "description": "Station detail once you have a code from `list_stations`, `search_stations`, a route's stops or a train's stops.",
+  "options": [
+   {
+    "name": "code",
+    "type": "string",
+    "in": "body",
+    "about": "Amtrak 3-letter station code, e.g. NYP, WAS, CHI (case-insensitive). Pattern: ^[A-Za-z]{3}$."
+   },
+   {
+    "name": "url",
+    "type": "string",
+    "in": "body",
+    "about": "Station page URL, e.g. https://www.amtrak.com/stations/nyp; alternative to `code`"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "amtrak-com/train-status/list_routes",
+  "provider": "amtrak-com",
+  "capability": "train-status/list_routes",
+  "name": "List routes",
+  "description": "Find a route code or name for `get_route`, or filter `live_trains` by `route_name`.",
+  "options": [],
+  "seed": "filler"
+ },
+ {
+  "id": "amtrak-com/train-status/list_stations",
+  "provider": "amtrak-com",
+  "capability": "train-status/list_stations",
+  "name": "List stations",
+  "description": "Start here to find station codes for `get_station`, `search_stations` inputs or route stops; filter by `state` to keep the result small.",
+  "options": [
+   {
+    "name": "state",
+    "type": "string",
+    "in": "body",
+    "about": "Two-letter US state or Canadian province code, e.g. NY, CA, BC. Case-insensitive. Pattern: ^[A-Za-z]{2}$."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "amtrak-com/train-status/live_trains",
+  "provider": "amtrak-com",
+  "capability": "train-status/live_trains",
+  "name": "Live trains",
+  "description": "A snapshot of where trains are right now; use `train_status` for one train with its stop-by-stop times.",
+  "options": [
+   {
+    "name": "limit",
+    "type": "number",
+    "in": "body",
+    "about": "Return at most this many trains (feed order). Default: all.",
+    "min": 1,
+    "max": 500
+   },
+   {
+    "name": "route_name",
+    "type": "string",
+    "in": "body",
+    "about": "Exact route name as the feed states it, e.g. 'Northeast Regional', 'Acela' (case-insensitive)"
+   },
+   {
+    "name": "state",
+    "type": "string",
+    "in": "body",
+    "about": "Filter by feed state",
+    "oneOf": [
+     "Active",
+     "Predeparture",
+     "Completed"
+    ]
+   },
+   {
+    "name": "train_number",
+    "type": "string",
+    "in": "body",
+    "about": "Train number, e.g. 2151 Pattern: ^[0-9A-Za-z]{1,6}$."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "amtrak-com/train-status/search_stations",
+  "provider": "amtrak-com",
+  "capability": "train-status/search_stations",
+  "name": "Search stations",
+  "description": "Find a station code when you know a place name or a partial name; `get_station` for full detail.",
+  "options": [
+   {
+    "name": "q",
+    "type": "string",
+    "in": "body",
+    "about": "Search term: city, station name, alias or code",
+    "required": true
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "amtrak-com/train-status/train_status",
+  "provider": "amtrak-com",
+  "capability": "train-status/train_status",
+  "name": "Train status",
+  "description": "Train status by number, the Track Your Train equivalent. Train numbers come from `get_route` or `live_trains`.",
+  "options": [
+   {
+    "name": "train_number",
+    "type": "string",
+    "in": "body",
+    "about": "Train number, e.g. 2151 or 14 Pattern: ^[0-9A-Za-z]{1,6}$.",
+    "required": true
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "youtube-com/videos/channel_live",
+  "provider": "youtube-com",
+  "capability": "videos/channel_live",
+  "name": "Channel live",
+  "description": "List a channel's live streams, upcoming streams/premieres and stream replays, paged by continuation.",
+  "options": [
+   {
+    "name": "channel",
+    "type": "string",
+    "in": "body",
+    "about": "Channel id (UC...) or handle (@name)."
+   },
+   {
+    "name": "continuation",
+    "type": "string",
+    "in": "body",
+    "about": "Continuation token returned by a previous call of this function."
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "channel",
+    "continuation"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "youtube-com/videos/channel_playlists",
+  "provider": "youtube-com",
+  "capability": "videos/channel_playlists",
+  "name": "Channel playlists",
+  "description": "List the public playlists a channel shows, paged by continuation.",
+  "options": [
+   {
+    "name": "channel",
+    "type": "string",
+    "in": "body",
+    "about": "Channel id (UC...) or handle (@name)."
+   },
+   {
+    "name": "continuation",
+    "type": "string",
+    "in": "body",
+    "about": "Continuation token returned by a previous call of this function."
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "channel",
+    "continuation"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "youtube-com/videos/channel_shorts",
+  "provider": "youtube-com",
+  "capability": "videos/channel_shorts",
+  "name": "Channel shorts",
+  "description": "List a channel's Shorts, newest first, paged by continuation.",
+  "options": [
+   {
+    "name": "channel",
+    "type": "string",
+    "in": "body",
+    "about": "Channel id (UC...) or handle (@name)."
+   },
+   {
+    "name": "continuation",
+    "type": "string",
+    "in": "body",
+    "about": "Continuation token returned by a previous call of this function."
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "channel",
+    "continuation"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "youtube-com/videos/channel_videos",
+  "provider": "youtube-com",
+  "capability": "videos/channel_videos",
+  "name": "Channel videos",
+  "description": "List a channel's uploads, newest first, paged by continuation.",
+  "options": [
+   {
+    "name": "channel",
+    "type": "string",
+    "in": "body",
+    "about": "Channel id (UC...) or handle (@name)."
+   },
+   {
+    "name": "continuation",
+    "type": "string",
+    "in": "body",
+    "about": "Continuation token returned by a previous call of this function."
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "channel",
+    "continuation"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "youtube-com/videos/comment_replies",
+  "provider": "youtube-com",
+  "capability": "videos/comment_replies",
+  "name": "Comment replies",
+  "description": "Read a comment thread after video_comments.",
+  "options": [
+   {
+    "name": "continuation",
+    "type": "string",
+    "in": "body",
+    "about": "replies_continuation of a comment from video_comments, or the continuation this function returned.",
+    "required": true
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "youtube-com/videos/playlist_videos",
+  "provider": "youtube-com",
+  "capability": "videos/playlist_videos",
+  "name": "Playlist videos",
+  "description": "List the videos in a public playlist, paged by continuation.",
+  "options": [
+   {
+    "name": "continuation",
+    "type": "string",
+    "in": "body",
+    "about": "Continuation token returned by a previous call of this function."
+   },
+   {
+    "name": "playlist",
+    "type": "string",
+    "in": "body",
+    "about": "Playlist id (PL..., UU..., OLAK5uy_...) or a youtube.com URL carrying list=."
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "playlist",
+    "continuation"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "youtube-com/videos/resolve_channel",
+  "provider": "youtube-com",
+  "capability": "videos/resolve_channel",
+  "name": "Resolve channel",
+  "description": "Turn a handle or a pasted channel URL into a channel_id.",
+  "options": [
+   {
+    "name": "url_or_handle",
+    "type": "string",
+    "in": "body",
+    "about": "@handle, bare handle, or a youtube.com channel URL.",
+    "required": true
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "youtube-com/videos/search_videos",
+  "provider": "youtube-com",
+  "capability": "videos/search_videos",
+  "name": "Search videos",
+  "description": "Find videos by topic or by an author's name before fetching details, transcripts or comments.",
+  "options": [
+   {
+    "name": "continuation",
+    "type": "string",
+    "in": "body",
+    "about": "Continuation token returned by a previous call of this function."
+   },
+   {
+    "name": "query",
+    "type": "string",
+    "in": "body",
+    "about": "Search text."
+   },
+   {
+    "name": "sort",
+    "type": "string",
+    "in": "body",
+    "about": "Result order, default relevance. view_count is YouTube's most-viewed order. YouTube no longer honours sort by upload date; use upload_date to bound by time. First page only; the continuation keeps it.",
+    "oneOf": [
+     "relevance",
+     "view_count"
+    ]
+   },
+   {
+    "name": "upload_date",
+    "type": "string",
+    "in": "body",
+    "about": "Only videos uploaded within this window: the last hour, today, this week, this month or this year (YouTube's upload-date filter). First page only; the continuation keeps it.",
+    "oneOf": [
+     "hour",
+     "today",
+     "week",
+     "month",
+     "year"
+    ]
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "query",
+    "continuation"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "youtube-com/videos/video_comments",
+  "provider": "youtube-com",
+  "capability": "videos/video_comments",
+  "name": "Video comments",
+  "description": "Public reaction to a video; follow replies_continuation with comment_replies for a thread.",
+  "options": [
+   {
+    "name": "continuation",
+    "type": "string",
+    "in": "body",
+    "about": "Continuation token returned by a previous call of this function."
+   },
+   {
+    "name": "sort",
+    "type": "string",
+    "in": "body",
+    "about": "Comment ordering for the first page.",
+    "default": "top",
+    "oneOf": [
+     "top",
+     "newest"
+    ]
+   },
+   {
+    "name": "url",
+    "type": "string",
+    "in": "body",
+    "about": "A youtube.com watch or youtu.be URL; the video id is taken from it."
+   },
+   {
+    "name": "video_id",
+    "type": "string",
+    "in": "body",
+    "about": "YouTube video id, 11 URL-safe characters. Pattern: ^[A-Za-z0-9_-]{11}$."
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "video_id",
+    "url"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "youtube-com/videos/video_details",
+  "provider": "youtube-com",
+  "capability": "videos/video_details",
+  "name": "Video details",
+  "description": "Start here for a video's identity and to see which transcript languages exist before calling video_transcript.",
+  "options": [
+   {
+    "name": "url",
+    "type": "string",
+    "in": "body",
+    "about": "A youtube.com watch, shorts, live, embed or youtu.be URL; the video id is taken from it."
+   },
+   {
+    "name": "video_id",
+    "type": "string",
+    "in": "body",
+    "about": "YouTube video id, 11 URL-safe characters. Pattern: ^[A-Za-z0-9_-]{11}$."
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "video_id",
+    "url"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "youtube-com/videos/video_transcript",
+  "provider": "youtube-com",
+  "capability": "videos/video_transcript",
+  "name": "Video transcript",
+  "description": "The video's spoken content; use video_details first if you need to know which languages exist.",
+  "options": [
+   {
+    "name": "language",
+    "type": "string",
+    "in": "body",
+    "about": "Caption language code to fetch (en, de-DE, es-419). Default: the first manual track, else the first auto-generated one. Pattern: ^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$."
+   },
+   {
+    "name": "translate_to",
+    "type": "string",
+    "in": "body",
+    "about": "Language code to translate the track into server-side; must be one the source lists as a translation target. Pattern: ^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$."
+   },
+   {
+    "name": "url",
+    "type": "string",
+    "in": "body",
+    "about": "A youtube.com watch, shorts, live, embed or youtu.be URL; the video id is taken from it."
+   },
+   {
+    "name": "video_id",
+    "type": "string",
+    "in": "body",
+    "about": "YouTube video id, 11 URL-safe characters. Pattern: ^[A-Za-z0-9_-]{11}$."
+   }
+  ],
+  "requiresOneOf": [
+   [
+    "video_id",
+    "url"
+   ]
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "x-com/posts/lookup",
+  "provider": "x-com",
+  "capability": "posts/lookup",
+  "name": "Inspect a post",
+  "description": "Analyze a known public post with X Search thread fetch; exact retrieval must be live verified.",
+  "options": [
+   {
+    "name": "post_id",
+    "about": "Exact numeric X post ID. A status URL is accepted, as are id, tweet_id and status_id.",
+    "required": true,
+    "type": "string",
+    "in": "body",
+    "aliases": [
+     "id",
+     "tweet_id",
+     "status_id",
+     "tweetId",
+     "statusId",
+     "url",
+     "link",
+     "post_url"
+    ]
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "x-com/posts/search",
+  "provider": "x-com",
+  "capability": "posts/search",
+  "name": "Search posts",
+  "description": "Research public X posts with a sourced summary and structured evidence; not exact recent-search pagination.",
+  "options": [
+   {
+    "name": "query",
+    "about": "Keyword, hashtag or semantic research query.",
+    "required": true,
+    "type": "string",
+    "in": "body"
+   },
+   {
+    "name": "limit",
+    "about": "Maximum output records, not a bound on upstream fetched items.",
+    "type": "number",
+    "in": "body",
+    "default": 5,
+    "min": 1,
+    "max": 10
+   },
+   {
+    "name": "from_date",
+    "about": "Inclusive UTC date YYYY-MM-DD.",
+    "required": false,
+    "type": "string",
+    "in": "body"
+   },
+   {
+    "name": "to_date",
+    "about": "Inclusive UTC date YYYY-MM-DD.",
+    "required": false,
+    "type": "string",
+    "in": "body"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "x-com/users/lookup",
+  "provider": "x-com",
+  "capability": "users/lookup",
+  "name": "Inspect a profile",
+  "description": "Research one public X profile using Grok user search; unknown metrics remain null.",
+  "options": [
+   {
+    "name": "username",
+    "about": "X handle, optionally prefixed with @.",
+    "required": true,
+    "type": "string",
+    "in": "body"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "x-com/users/posts",
+  "provider": "x-com",
+  "capability": "users/posts",
+  "name": "Research account posts",
+  "description": "Analyze a sample of posts from one account, with a date range. Not a complete paginated timeline.",
+  "options": [
+   {
+    "name": "username",
+    "about": "X handle, optionally prefixed with @.",
+    "required": true,
+    "type": "string",
+    "in": "body"
+   },
+   {
+    "name": "limit",
+    "about": "Maximum output records, not a bound on upstream fetched items.",
+    "type": "number",
+    "in": "body",
+    "default": 5,
+    "min": 1,
+    "max": 10
+   },
+   {
+    "name": "from_date",
+    "about": "Inclusive UTC date YYYY-MM-DD.",
+    "required": false,
+    "type": "string",
+    "in": "body"
+   },
+   {
+    "name": "to_date",
+    "about": "Inclusive UTC date YYYY-MM-DD.",
+    "required": false,
+    "type": "string",
+    "in": "body"
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "xe-com/exchange-rates/convert",
+  "provider": "xe-com",
+  "capability": "exchange-rates/convert",
+  "name": "Convert",
+  "description": "A single pair's current rate or a converted amount. For many quotes against one base use live_rates; for a past date use historical_table.",
+  "options": [
+   {
+    "name": "amount",
+    "type": "number",
+    "in": "body",
+    "about": "Amount of `from` to convert. Default 1."
+   },
+   {
+    "name": "from",
+    "type": "string",
+    "in": "body",
+    "about": "Source currency code (USD, EUR, BTC). Case-insensitive.",
+    "required": true
+   },
+   {
+    "name": "to",
+    "type": "string",
+    "in": "body",
+    "about": "Target currency code.",
+    "required": true
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "xe-com/exchange-rates/currency_profile",
+  "provider": "xe-com",
+  "capability": "exchange-rates/currency_profile",
+  "name": "Currency profile",
+  "description": "Reference facts about a currency. For rates use convert, live_rates or historical_table.",
+  "options": [
+   {
+    "name": "currency",
+    "type": "string",
+    "in": "body",
+    "about": "Currency code (EUR) or encyclopedia slug (eur-euro) as in list_currencies or historical_table rows.",
+    "required": true
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "xe-com/exchange-rates/historical_table",
+  "provider": "xe-com",
+  "capability": "exchange-rates/historical_table",
+  "name": "Historical table",
+  "description": "What a rate was on a given day, or a whole day's table. For a time series of one pair use rate_history.",
+  "options": [
+   {
+    "name": "base",
+    "type": "string",
+    "in": "body",
+    "about": "Base currency code.",
+    "required": true
+   },
+   {
+    "name": "date",
+    "type": "string",
+    "in": "body",
+    "about": "Calendar date, YYYY-MM-DD. Pattern: ^\\d{4}-\\d{2}-\\d{2}$.",
+    "required": true
+   },
+   {
+    "name": "quotes",
+    "type": "string[]",
+    "in": "body",
+    "about": "Only these quote currencies."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "xe-com/exchange-rates/list_currencies",
+  "provider": "xe-com",
+  "capability": "exchange-rates/list_currencies",
+  "name": "List currencies",
+  "description": "Discover valid codes and slugs before calling the other functions.",
+  "options": [],
+  "seed": "filler"
+ },
+ {
+  "id": "xe-com/exchange-rates/live_rates",
+  "provider": "xe-com",
+  "capability": "exchange-rates/live_rates",
+  "name": "Live rates",
+  "description": "Many rates against one base in one call. For one pair with statistics use convert.",
+  "options": [
+   {
+    "name": "base",
+    "type": "string",
+    "in": "body",
+    "about": "Base currency code. Default USD."
+   },
+   {
+    "name": "quotes",
+    "type": "string[]",
+    "in": "body",
+    "about": "Only these quote currencies, in this order. Each must be a code XE publishes."
+   }
+  ],
+  "seed": "filler"
+ },
+ {
+  "id": "xe-com/exchange-rates/rate_history",
+  "provider": "xe-com",
+  "capability": "exchange-rates/rate_history",
+  "name": "Rate history",
+  "description": "Charting or trend analysis of one pair. For a single past date across all currencies use historical_table.",
+  "options": [
+   {
+    "name": "from",
+    "type": "string",
+    "in": "body",
+    "about": "from",
+    "required": true
+   },
+   {
+    "name": "interval",
+    "type": "string",
+    "in": "body",
+    "about": "One closing value per UTC day (default) or per hour (ranges up to 1M).",
+    "oneOf": [
+     "day",
+     "hour"
+    ]
+   },
+   {
+    "name": "range",
+    "type": "string",
+    "in": "body",
+    "about": "How far back from XE's latest point. Default 1M.",
+    "oneOf": [
+     "1D",
+     "1W",
+     "1M",
+     "3M",
+     "6M",
+     "1Y",
+     "2Y",
+     "5Y",
+     "10Y"
+    ]
+   },
+   {
+    "name": "to",
+    "type": "string",
+    "in": "body",
+    "about": "to",
+    "required": true
+   }
+  ],
+  "seed": "filler"
+ }
+]

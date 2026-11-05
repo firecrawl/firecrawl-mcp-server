@@ -1,0 +1,19 @@
+{
+  "name": "firecrawl-tool-search-mock",
+  "version": "0.1.0",
+  "description": "Offline stdio MCP server that serves the Firecrawl tool surface with and without per-capability Alexandria tools, for tool-search experiments.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "ax-ts-mock-a": "bin/a.mjs",
+    "ax-ts-mock-b": "bin/b.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "data"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}
