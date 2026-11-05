@@ -197,7 +197,7 @@ async function startFakeBackend(options = {}) {
         JSON.stringify({
           success: true,
           data: {
-            [options.govGroup ?? 'law']: [
+            [options.govGroup ?? 'gov']: [
               {
                 description: 'The matched snippet.',
                 position: 1,
@@ -206,6 +206,7 @@ async function startFakeBackend(options = {}) {
                 jurisdiction: 'us',
                 cites: ['us:usc:21:343'],
                 cited_as: ['us:cfr:21:101'],
+                lang: 'en',
                 updated_at: 1700000000000,
               },
             ],
@@ -857,7 +858,7 @@ test('search firecrawl_gov_search queries the Government Index', async (t) => {
   const query = new URL(calls[0].url, 'http://localhost').searchParams;
   assert.equal(query.get('query'), 'food labeling requirements');
   assert.equal(query.get('k'), '1');
-  assert.deepEqual(query.getAll('sources'), ['law']);
+  assert.deepEqual(query.getAll('sources'), ['gov']);
 
   assert.equal(
     message.result.content[0].text,
@@ -872,6 +873,7 @@ test('search firecrawl_gov_search queries the Government Index', async (t) => {
       jurisdiction: 'us',
       cites: ['us:usc:21:343'],
       cited_as: ['us:cfr:21:101'],
+      lang: 'en',
       updated_at: 1700000000000,
     },
   ]);

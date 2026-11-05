@@ -56,6 +56,21 @@ function closeObjects(schema: JsonObject): JsonObject {
   };
 }
 
+/**
+ * An open map's `additionalProperties: {}` is listed as `true`. Both accept any value, but some clients read the
+ * empty object as false (it is falsy in Python) and then refuse every key, such as each key of an extraction schema.
+ */
+function openMaps(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(openMaps);
+  if (typeof value !== 'object' || value === null) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, child]) => [
+      key,
+      key === 'additionalProperties' && JSON.stringify(child) === '{}' ? true : openMaps(child),
+    ])
+  );
+}
+
 export class UserError extends Error {
   extras?: Record<string, unknown>;
 
@@ -140,7 +155,11 @@ export type ModernRequest = {
 export const TASKS_EXTENSION = 'io.modelcontextprotocol/tasks';
 
 export type ToolExecuteContext<Auth> = {
-  client: { version?: { name?: string; version?: string } };
+  /**
+   * `version` is the client's `clientInfo`; `perRequest` is set when it
+   * came from a 2026-07-28 call's own `_meta` rather than an initialize.
+   */
+  client: { version?: { name?: string; version?: string }; perRequest?: boolean };
   /** The 2026-07-28 request details; absent on 2025-era calls. */
   mcp?: ModernRequest;
   /**
@@ -583,7 +602,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
           ...(tool.icons && { icons: tool.icons }),
           description: tool.description,
           inputSchema: tool.parameters
-            ? closeObjects((await toJsonSchema(tool.parameters as never)) as JsonObject)
+            ? openMaps(closeObjects((await toJsonSchema(tool.parameters as never)) as JsonObject))
             : { additionalProperties: false, properties: {}, type: 'object' },
           name: tool.name,
           ...(outputSchemaOf(tool) && {
@@ -661,11 +680,12 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
         try {
           const value = await tool.execute(args, {
             ...extra,
-            client: {
-              version:
-                (envelope?.[CLIENT_INFO_META_KEY] as { name?: string; version?: string } | undefined) ??
-                server.getClientVersion(),
-            },
+            client: envelope?.[CLIENT_INFO_META_KEY]
+              ? {
+                  version: envelope[CLIENT_INFO_META_KEY] as { name?: string; version?: string },
+                  perRequest: true,
+                }
+              : { version: server.getClientVersion() },
             log: {
               debug: sendLog('debug'),
               error: sendLog('error'),

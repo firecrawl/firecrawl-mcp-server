@@ -107,13 +107,14 @@ interface GovHit {
   position?: number;
 }
 
-/** A `law` result: a hit plus the index's legal labels, each absent when unknown. */
-interface LawHit extends GovHit {
+/** A `gov` result: a hit plus the index's labels, each absent when unknown. */
+interface LabeledGovHit extends GovHit {
   jurisdiction?: string;
   court?: string;
   court_type?: string;
   cites?: string[];
   cited_as?: string[];
+  lang?: string;
   updated_at?: number;
 }
 
@@ -160,11 +161,11 @@ Returns ranked results with a position, title, URL, and matched snippet. Results
       for (const [key, value] of Object.entries(options)) {
         if (value != null) params.append(key, String(value));
       }
-      params.append('sources', 'law');
+      params.append('sources', 'gov');
       const client = getClient(session) as ClientLike;
       const res = await client.http
         .get<{
-          data?: { law?: LawHit[]; web?: GovHit[] };
+          data?: { gov?: LabeledGovHit[]; web?: GovHit[] };
         }>(
           `${BASE}?${params.toString()}`,
           originHeaders(requestOrigin(mcpClient, session))
@@ -182,7 +183,7 @@ Returns ranked results with a position, title, URL, and matched snippet. Results
           throw new UserError(message, { status: 400, error: message });
         });
       // An API without `sources` answers only `web`.
-      const results = res.data?.data?.law ?? res.data?.data?.web ?? [];
+      const results = res.data?.data?.gov ?? res.data?.data?.web ?? [];
       return withStructured(fmtGov(results), { results });
     },
   });
