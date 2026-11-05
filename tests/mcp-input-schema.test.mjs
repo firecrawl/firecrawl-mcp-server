@@ -7,6 +7,7 @@ import {
   Client,
   StreamableHTTPClientTransport,
 } from '@modelcontextprotocol/client';
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/server/validators/ajv';
 import { createFirecrawlMcpServer } from '../dist/server.js';
 import { getFreePort } from './helpers/exchange-mcp.mjs';
 
@@ -52,9 +53,9 @@ test('extraction schemas are listed as open objects and other objects stay close
       false,
       `${where} accepts keys`
     );
-    assert.deepEqual(
+    assert.equal(
       schema.additionalProperties,
-      {},
+      true,
       `${where} accepts any value`
     );
   }
@@ -69,4 +70,67 @@ test('extraction schemas are listed as open objects and other objects stay close
     false
   );
   assert.equal(inputs.firecrawl_agent.additionalProperties, false);
+});
+
+// Some clients validate arguments against the listed schema after reading an
+// empty-object `additionalProperties` as false, the way Python truthiness
+// does, and refuse the call with "Additional properties are not allowed".
+function readEmptyAsFalse(value) {
+  if (Array.isArray(value)) return value.map(readEmptyAsFalse);
+  if (typeof value !== 'object' || value === null) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, child]) => [
+      key,
+      key === 'additionalProperties' && JSON.stringify(child) === '{}'
+        ? false
+        : readEmptyAsFalse(child),
+    ])
+  );
+}
+
+test('a nested extraction schema validates against the listed firecrawl_scrape schema', async (t) => {
+  const inputs = await listTools(t);
+  const validator = new AjvJsonSchemaValidator();
+  const args = {
+    url: 'https://example.com/products',
+    formats: ['json'],
+    jsonOptions: {
+      prompt: 'List every product with its name and price.',
+      schema: {
+        type: 'object',
+        properties: {
+          products: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                price: { type: 'number' },
+                tags: { type: 'array', items: { type: 'string' } },
+              },
+              required: ['name', 'price'],
+            },
+          },
+        },
+        required: ['products'],
+      },
+    },
+  };
+  for (const [reading, schema] of [
+    ['as listed', inputs.firecrawl_scrape],
+    [
+      'with empty objects read as false',
+      readEmptyAsFalse(inputs.firecrawl_scrape),
+    ],
+  ]) {
+    const result = validator.getValidator(schema)(args);
+    assert.ok(result.valid, `${reading}: ${result.errorMessage}`);
+  }
+});
+
+test('no listed input schema leaves a map open with an empty object', async (t) => {
+  const inputs = await listTools(t);
+  for (const [name, schema] of Object.entries(inputs)) {
+    assert.deepEqual(readEmptyAsFalse(schema), schema, name);
+  }
 });

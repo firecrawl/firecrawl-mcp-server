@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- A tool call on a site the API does not support reports `Firecrawl can't scrape this site because it is currently not supported. Check Alexandria for a relevant provider if available, or use another source.`, with error code `unsupported_site`, in place of the API's text, which apologizes and points to a sales contact an agent can't act on. The text block keeps its `Tool '<name>' execution failed:` prefix, and the API's own response is unchanged.
+- Direct HTTP requests preserve API error codes too, including HTTP 200 bodies with `success: false`, for keyless requests, parsing and monitoring. Research paper lookups only treat the API's specific `NOT_FOUND` / `paper metadata not found` response as a missing paper; route and configuration 404s remain errors.
+- A scrape the API answers with HTTP 200, `success: false` and an error code, as it does when the host has no DNS record (`SCRAPE_DNS_RESOLUTION_ERROR`), is reported like any other failed API request: the error result carries `structuredContent` with `success: false` and `error: { code, status, message }`. It used to carry only the text block, unlike every other API failure, and some clients showed such results as a bare tool error without the API's explanation.
+- `firecrawl_scrape` refuses `formats: ["json"]` without a `jsonOptions` prompt or schema with `formats "json" needs jsonOptions with a prompt or a schema. To ask a question about the page, use formats ["query"] with queryOptions.prompt instead.`, and `structuredContent` with error code `invalid_request`. The SDK already refused these calls before sending them, with a plain error that reached clients as text alone, so some showed a bare tool error. Agents that hit it had often put their question in `queryOptions`. Keyless scrapes, which the API accepts without a prompt or schema, are unchanged.
+- `firecrawl_research_read_paper` and `firecrawl_research_inspect_paper` report a paper ID the research index does not know as `(paper not found: no indexed paper has the ID "<id>". Use a paperId or primaryId from firecrawl_research_search_papers results.)`, with `passages: []` and no `paper` in `structuredContent`, as their output schemas describe. The API answers such an ID with 404, and both tools used to fail with `Request failed with status code 404` as text alone, which some clients showed as a bare tool error.
+- `firecrawl_feedback` accepts `objective`, `rationale`, `requestedWebsite`, `providerFeedback` and `capabilityFeedback` on `search`, `scrape`, `parse` and `map` feedback. The tool advertises these fields, and agents often carry `objective` over from their search and scrape calls, but a job feedback call that included one failed validation with "<field> is only supported for Alexandria feedback" and was never sent. They are left out of the `/v2/feedback` body, which rejects unknown keys, except that `rationale` is sent as `note` when the call has no `note`. Alexandria feedback, and the advertised input schema, are unchanged.
+- `firecrawl_feedback` and `firecrawl_search_feedback` add the API's validation messages to `error` when it rejects a body with `INVALID_BODY`, for example `Invalid request body: Feedback must be substantive. 'good' requires valuableSources or valuableResults; ...`. The error used to read only `Invalid request body`, so an agent could not tell which rule its call broke and sent the same call again. Other rejections read as before, and the output schema is unchanged.
+
 ## [3.37.0] - 2026-11-04
 
 ### Added
