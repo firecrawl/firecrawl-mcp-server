@@ -1,4 +1,4 @@
-import { applyAxSimArm, axSimArmTakesObjective, axSimArmUsesSummary } from './ax-sim.js';
+import { applyAxSimArm, startAxSimRewrite, axSimArmTakesObjective, axSimArmUsesSummary } from './ax-sim.js';
 import {
   ALEXANDRIA_FEEDBACK_HINT,
   alexandriaCallsWarrantFeedback,
@@ -1935,15 +1935,17 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
           addsAlexandria && opts.domainTools !== true,
           requestedSources
         );
-      const httpRes = await relayExchangeError(postSearch, { tool: 'firecrawl_search' });
       const simPost = async (path: string, body: unknown, timeoutMs: number) =>
         (await (client as any).http.post(path, { ...(body as object), origin: searchBody.origin }, { timeoutMs }))?.data;
+      const early = startAxSimRewrite(simPost, searchQuery);
+      const httpRes = await relayExchangeError(postSearch, { tool: 'firecrawl_search' });
       return searchResult(
         await applyAxSimArm(httpRes?.data ?? {}, simPost, {
           query: searchQuery,
           limit: typeof opts.limit === 'number' ? opts.limit : undefined,
           toolDetail: requestedToolDetail,
           objective: typeof objective === 'string' ? objective : undefined,
+          early,
         })
       );
     },
