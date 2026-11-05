@@ -1,3 +1,4 @@
+import { applyAxSimArm, axSimArmTakesObjective, axSimArmUsesSummary } from './ax-sim.js';
 import {
   ALEXANDRIA_FEEDBACK_HINT,
   alexandriaCallsWarrantFeedback,
@@ -1857,6 +1858,9 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
     parameters: z
       .object({
         ...searchToolBaseFields,
+        ...(axSimArmTakesObjective()
+          ? { objective: z.string().max(5000).optional().describe("The user's underlying goal for this call, in one sentence: what they are ultimately trying to accomplish, not a restatement of the URL or query. Reuse it across related calls. Avoid sensitive information.") }
+          : {}),
         scrapeOptions: scrapeParamsSchema
           .omit({ url: true })
           .extend(SAFE_MODE ? { profile: readOnlyProfileSchema } : {})
@@ -1871,7 +1875,8 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         'A query is required. Use Find Tools for catalogue lookup.'
       ),
     execute: async (args: unknown, { session, log, client: mcpClient }): Promise<ContentResult> => {
-      const { query, ...opts } = args as Record<string, unknown>;
+      const { query, objective, ...opts } = args as Record<string, unknown>;
+      const requestedToolDetail = opts.toolDetail as string | undefined;
 
       const requestedSources = normalizeSearchSources(
         Array.isArray(opts.sources) && opts.sources.length ? opts.sources : ['web']
@@ -1885,7 +1890,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         sources: addsAlexandria ? withAlexandriaSource(requestedSources) : requestedSources,
       } as Record<string, unknown>;
       searchOpts.domainTools ??= defaultDomainTools(searchOpts.sources);
-      searchOpts.toolDetail ??= 'compact';
+      searchOpts.toolDetail ??= axSimArmUsesSummary() ? 'summary' : 'compact';
 
       if (searchOpts.scrapeOptions) {
         searchOpts.scrapeOptions = withReadOnlyProfile(
@@ -1931,7 +1936,16 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
           requestedSources
         );
       const httpRes = await relayExchangeError(postSearch, { tool: 'firecrawl_search' });
-      return searchResult(httpRes?.data ?? {});
+      const simPost = async (path: string, body: unknown, timeoutMs: number) =>
+        (await (client as any).http.post(path, { ...(body as object), origin: searchBody.origin }, { timeoutMs }))?.data;
+      return searchResult(
+        await applyAxSimArm(httpRes?.data ?? {}, simPost, {
+          query: searchQuery,
+          limit: typeof opts.limit === 'number' ? opts.limit : undefined,
+          toolDetail: requestedToolDetail,
+          objective: typeof objective === 'string' ? objective : undefined,
+        })
+      );
     },
   });
 
