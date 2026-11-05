@@ -66,6 +66,7 @@ import {
 } from './alexandria';
 import { alexandriaOutput } from './alexandria-output';
 import { registerDeveloperTools } from './developer';
+import { registerEnrichTools } from './enrich';
 import { registerGovTools } from './gov';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
@@ -3284,6 +3285,7 @@ Set \`redactPII\` to request redaction of personally identifiable information in
   registerResearchTools(server, getClient);
   registerDeveloperTools(server, getClient);
   registerGovTools(server, getClient);
+  registerEnrichTools(server, getClient, hasCredential);
   registerUsageTools(server, getClient);
 
   hooks.registerExtraTools?.(
