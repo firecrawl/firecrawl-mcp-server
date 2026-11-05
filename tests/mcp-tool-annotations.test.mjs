@@ -8,7 +8,7 @@ import { getFreePort } from './helpers/exchange-mcp.mjs';
 
 const IDEMPOTENT = {
   firecrawl_crawl: false,
-  firecrawl_agent: false,
+  firecrawl_research: false,
   firecrawl_interact: false,
   firecrawl_interact_stop: true,
   firecrawl_monitor_create: false,

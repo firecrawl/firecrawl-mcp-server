@@ -1389,7 +1389,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     /authenticated responses can include an `id` for optional map feedback/i
   );
   assert.match(
-    byName.get('firecrawl_agent').description,
+    byName.get('firecrawl_research').description,
     /returns only a job ID, not the research result/i
   );
   assert.match(
@@ -1730,7 +1730,7 @@ test('local keyless stdio keeps profile guidance keyless-scoped and omits feedba
   );
   for (const name of [
     'firecrawl_map',
-    'firecrawl_agent',
+    'firecrawl_research',
     'firecrawl_agent_status',
     'firecrawl_research_*',
   ]) {
@@ -3837,7 +3837,7 @@ test('every listed tool declares an output schema and returns structured content
   // have to be named in the schema or they vanish for Codex.
   const agent = await client.request('tools/call', {
     arguments: { prompt: 'Find the example domain owner' },
-    name: 'firecrawl_agent',
+    name: 'firecrawl_research',
   });
   assert.notEqual(agent.isError, true);
   assert.equal(agent.structuredContent.id, '00000000-0000-4000-8000-000000000030');
@@ -3864,7 +3864,7 @@ test('every listed tool declares an output schema and returns structured content
   assert.equal('id' in feedback.structuredContent, false);
 });
 
-test('firecrawl_agent forwards effort, maxCredits and strictConstrainToURLs to /v2/agent', async (t) => {
+test('firecrawl_research forwards effort, maxCredits and strictConstrainToURLs to /v2/agent', async (t) => {
   const fakeApi = await startFakeFirecrawlApi();
   t.after(() => fakeApi.close());
 
@@ -3892,7 +3892,7 @@ test('firecrawl_agent forwards effort, maxCredits and strictConstrainToURLs to /
       strictConstrainToURLs: true,
       urls: ['https://example.com/'],
     },
-    name: 'firecrawl_agent',
+    name: 'firecrawl_research',
   });
   assert.notEqual(result.isError, true);
 
@@ -3907,7 +3907,7 @@ test('firecrawl_agent forwards effort, maxCredits and strictConstrainToURLs to /
   // Omitted options stay off the wire so the API keeps its own defaults.
   const bare = await client.request('tools/call', {
     arguments: { prompt: 'Find the example domain owner' },
-    name: 'firecrawl_agent',
+    name: 'firecrawl_research',
   });
   assert.notEqual(bare.isError, true);
   const bareRequest = fakeApi.requests.filter((request) => request.url === '/v2/agent').at(-1);
@@ -3923,7 +3923,7 @@ test('firecrawl_agent forwards effort, maxCredits and strictConstrainToURLs to /
       strictConstrainToURLs: false,
       urls: ['https://example.com/'],
     },
-    name: 'firecrawl_agent',
+    name: 'firecrawl_research',
   });
   assert.notEqual(relaxed.isError, true);
   const relaxedRequest = fakeApi.requests.filter((request) => request.url === '/v2/agent').at(-1);
@@ -3935,7 +3935,7 @@ test('firecrawl_agent forwards effort, maxCredits and strictConstrainToURLs to /
   await assert.rejects(
     client.request('tools/call', {
       arguments: { maxCredits: 0, prompt: 'Find the example domain owner' },
-      name: 'firecrawl_agent',
+      name: 'firecrawl_research',
     }),
     /maxCredits/
   );
@@ -3975,7 +3975,7 @@ test('firecrawl_agent_status flags a credit-limit stop and keeps its partial', a
   assert.match(notice, /`partial` is an INCOMPLETE best-effort result/);
   assert.match(notice, /It does not match the schema this run was given\./);
   assert.match(notice, /Agent message: Only Acme was found\./);
-  assert.match(notice, /firecrawl_agent with threadId "00000000-0000-4000-8000-000000000041"/);
+  assert.match(notice, /firecrawl_research with threadId "00000000-0000-4000-8000-000000000041"/);
   assert.match(notice, /higher maxCredits/);
   assert.deepEqual(JSON.parse(text.slice(notice.length + 2)).partial, { companies: [{ name: 'Acme' }] });
   const structured = stopped.structuredContent;
@@ -4006,7 +4006,7 @@ test('firecrawl_agent_status flags a credit-limit stop and keeps its partial', a
   const bareNotice = bare.structuredContent.notice;
   assert.match(bareNotice, /No partial result was recovered\./);
   assert.doesNotMatch(bareNotice, /threadId|schema|Agent message/);
-  assert.match(bareNotice, /start a new firecrawl_agent run with a higher maxCredits/);
+  assert.match(bareNotice, /start a new firecrawl_research run with a higher maxCredits/);
   assert.equal('partial' in bare.structuredContent, false);
 
   // Any other failure (and every completed run) is passed through unchanged.
@@ -4026,7 +4026,7 @@ test('firecrawl_agent_status flags a credit-limit stop and keeps its partial', a
   assert.equal('notice' in completed.structuredContent, false);
 });
 
-test('firecrawl_agent forwards onTermsRequired and status keeps the terms-required fields', async (t) => {
+test('firecrawl_research forwards onTermsRequired and status keeps the terms-required fields', async (t) => {
   const fakeApi = await startFakeFirecrawlApi();
   t.after(() => fakeApi.close());
 
@@ -4045,7 +4045,7 @@ test('firecrawl_agent forwards onTermsRequired and status keeps the terms-requir
   client.notify('notifications/initialized');
 
   const { tools } = await client.request('tools/list');
-  const agentTool = tools.find((tool) => tool.name === 'firecrawl_agent');
+  const agentTool = tools.find((tool) => tool.name === 'firecrawl_research');
   assert.equal('onTermsRequired' in agentTool.inputSchema.properties, false);
   assert.deepEqual(agentTool.inputSchema.properties.exchange.properties.onTermsRequired.enum, ['skip', 'ask']);
   assert.match(agentTool.description, /exchange\.skippedProviders/);
@@ -4062,12 +4062,12 @@ test('firecrawl_agent forwards onTermsRequired and status keeps the terms-requir
 
   const asked = await client.request('tools/call', {
     arguments: { prompt: 'Find the key business contact at exa.ai', exchange: { onTermsRequired: 'ask' } },
-    name: 'firecrawl_agent',
+    name: 'firecrawl_research',
   });
   assert.notEqual(asked.isError, true);
   const plain = await client.request('tools/call', {
     arguments: { prompt: 'Find the example domain owner' },
-    name: 'firecrawl_agent',
+    name: 'firecrawl_research',
   });
   assert.notEqual(plain.isError, true);
   const bodies = fakeApi.requests
@@ -4080,7 +4080,7 @@ test('firecrawl_agent forwards onTermsRequired and status keeps the terms-requir
   await assert.rejects(
     client.request('tools/call', {
       arguments: { prompt: 'Find the key business contact at exa.ai', exchange: { onTermsRequired: 'fail' } },
-      name: 'firecrawl_agent',
+      name: 'firecrawl_research',
     }),
     /onTermsRequired/
   );
@@ -4097,7 +4097,7 @@ test('firecrawl_agent forwards onTermsRequired and status keeps the terms-requir
   assert.equal(structured.message, 'Apollo could add verified work emails.');
 });
 
-test('firecrawl_agent answers a pending approval on a thread', async (t) => {
+test('firecrawl_research answers a pending approval on a thread', async (t) => {
   const fakeApi = await startFakeFirecrawlApi();
   t.after(() => fakeApi.close());
 
@@ -4119,7 +4119,7 @@ test('firecrawl_agent answers a pending approval on a thread', async (t) => {
   const approvalId = '00000000-0000-4000-8000-000000000033';
 
   const { tools } = await client.request('tools/list');
-  const agentTool = tools.find((tool) => tool.name === 'firecrawl_agent');
+  const agentTool = tools.find((tool) => tool.name === 'firecrawl_research');
   const props = agentTool.inputSchema.properties;
   assert.equal(props.threadId.format, 'uuid');
   assert.deepEqual(props.mode.enum, ['extract', 'chat']);
@@ -4150,7 +4150,7 @@ test('firecrawl_agent answers a pending approval on a thread', async (t) => {
   assert.match(agentTool.description, /organization admin must accept terms in the Firecrawl dashboard/);
   assert.match(agentTool.description, /Never infer acceptance from a data request/);
 
-  const call = (args) => client.request('tools/call', { arguments: args, name: 'firecrawl_agent' });
+  const call = (args) => client.request('tools/call', { arguments: args, name: 'firecrawl_research' });
 
   // 1. A follow-up turn on the same thread.
   const followUp = await call({ prompt: 'Only keep the founders', threadId, mode: 'chat' });
@@ -4290,7 +4290,7 @@ test('firecrawl_agent answers a pending approval on a thread', async (t) => {
   assert.deepEqual(paidStatus.suggestions, [{ label: 'Only founders', prompt: 'Only keep the founders' }]);
 });
 
-test('firecrawl_agent continues a thread', async (t) => {
+test('firecrawl_research continues a thread', async (t) => {
   const fakeApi = await startFakeFirecrawlApi();
   t.after(() => fakeApi.close());
 
@@ -4311,7 +4311,7 @@ test('firecrawl_agent continues a thread', async (t) => {
   const threadId = '00000000-0000-4000-8000-000000000031';
 
   const { tools } = await client.request('tools/list');
-  const agentTool = tools.find((tool) => tool.name === 'firecrawl_agent');
+  const agentTool = tools.find((tool) => tool.name === 'firecrawl_research');
   const props = agentTool.inputSchema.properties;
   assert.equal(props.threadId.format, 'uuid');
   assert.deepEqual(props.mode.enum, ['extract', 'chat']);
@@ -4319,7 +4319,7 @@ test('firecrawl_agent continues a thread', async (t) => {
   assert.ok(agentTool.description.length <= CLAUDE_CODE_TEXT_CAP, `description is ${agentTool.description.length} chars`);
   assert.match(agentTool.description, /To continue that thread, pass it with a follow-up `prompt`/);
 
-  const call = (args) => client.request('tools/call', { arguments: args, name: 'firecrawl_agent' });
+  const call = (args) => client.request('tools/call', { arguments: args, name: 'firecrawl_research' });
 
   // A follow-up turn on the same thread, and a turn that only sets the mode.
   const followUp = await call({ prompt: 'Only keep the founders', threadId, mode: 'chat' });

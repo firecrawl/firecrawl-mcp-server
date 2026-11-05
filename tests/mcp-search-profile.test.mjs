@@ -40,7 +40,7 @@ const EXCLUDED_TOOLS = [
   'firecrawl_crawl',
   'firecrawl_check_crawl_status',
   'firecrawl_extract',
-  'firecrawl_agent',
+  'firecrawl_research',
   'firecrawl_interact',
   'firecrawl_parse',
   'firecrawl_monitor_create',

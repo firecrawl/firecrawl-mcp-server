@@ -84,7 +84,7 @@ test('hosted scrape and search are read-only and load profiles without saving', 
 
   const { tools } = await httpSession(port, '/v2/mcp', headers);
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
-  assert.equal(byName.get('firecrawl_agent').annotations.readOnlyHint, false);
+  assert.equal(byName.get('firecrawl_research').annotations.readOnlyHint, false);
   assert.equal(byName.get('firecrawl_search').annotations.readOnlyHint, true);
   assert.deepEqual(
     Object.keys(byName.get('firecrawl_search').inputSchema.properties.scrapeOptions.properties.profile.properties),

@@ -41,7 +41,7 @@ test('extraction schemas are listed as open objects and other objects stay close
   const freeForm = {
     'firecrawl_scrape jsonOptions.schema':
       inputs.firecrawl_scrape.properties.jsonOptions.properties.schema,
-    'firecrawl_agent schema': inputs.firecrawl_agent.properties.schema,
+    'firecrawl_research schema': inputs.firecrawl_research.properties.schema,
     'firecrawl_crawl scrapeOptions.jsonOptions.schema':
       inputs.firecrawl_crawl.properties.scrapeOptions.properties.jsonOptions
         .properties.schema,
@@ -69,7 +69,7 @@ test('extraction schemas are listed as open objects and other objects stay close
     inputs.firecrawl_scrape.properties.location.additionalProperties,
     false
   );
-  assert.equal(inputs.firecrawl_agent.additionalProperties, false);
+  assert.equal(inputs.firecrawl_research.additionalProperties, false);
 });
 
 // Some clients validate arguments against the listed schema after reading an

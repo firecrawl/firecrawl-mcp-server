@@ -223,17 +223,17 @@ for (const [transport, connect] of [
     const discovered = result(await mcp.rpc('server/discover'));
     assert.deepEqual(discovered.capabilities.extensions, { [TASKS]: {} });
     const { tools } = result(await mcp.rpc('tools/list'));
-    const agent = tools.find((tool) => tool.name === 'firecrawl_agent');
+    const agent = tools.find((tool) => tool.name === 'firecrawl_research');
     assert.ok(
       agent.outputSchema.properties.data,
       'an agent task ends with the research result, so its schema names data'
     );
   });
 
-  test(`${transport}: firecrawl_agent runs as a task through to its result`, async (t) => {
+  test(`${transport}: firecrawl_research runs as a task through to its result`, async (t) => {
     const api = await startApi(t);
     const mcp = await connect(t, api);
-    const task = await callTool(mcp, 'firecrawl_agent', {
+    const task = await callTool(mcp, 'firecrawl_research', {
       prompt: 'Find the founders of Firecrawl',
     });
     assert.equal(task.resultType, 'task');
@@ -289,7 +289,7 @@ for (const [transport, connect] of [
   test(`${transport}: a failed agent run completes the task with an isError result`, async (t) => {
     const api = await startApi(t);
     const mcp = await connect(t, api);
-    const task = await callTool(mcp, 'firecrawl_agent', {
+    const task = await callTool(mcp, 'firecrawl_research', {
       prompt: 'Long research',
     });
     api.state.agent = {
@@ -378,7 +378,7 @@ for (const [transport, connect] of [
 
   test(`${transport}: a refused start answers with the plain tool result`, async (t) => {
     const mcp = await connect(t, await startApi(t));
-    const refused = await callTool(mcp, 'firecrawl_agent', {
+    const refused = await callTool(mcp, 'firecrawl_research', {
       prompt: 'refuse-me',
     });
     assert.equal(refused.resultType, 'complete');
@@ -415,7 +415,7 @@ for (const [transport, connect] of [
     );
     assert.equal(init.capabilities.extensions, undefined);
     const { tools } = result(await mcp.rpc('tools/list'));
-    const agent = tools.find((tool) => tool.name === 'firecrawl_agent');
+    const agent = tools.find((tool) => tool.name === 'firecrawl_research');
     assert.equal(agent.outputSchema.properties.data, undefined);
     const { error } = await mcp.rpc('tasks/get', {
       taskId: `fc-crawl-${Date.now().toString(36)}-${CRAWL_ID}`,
@@ -465,7 +465,7 @@ test('task methods reach onToolResult, and taskResult decorates only a completed
   t.after(() => instance.stop());
   const mcp = httpClient(port, '/mcp');
 
-  const task = await callTool(mcp, 'firecrawl_agent', { prompt: 'p' });
+  const task = await callTool(mcp, 'firecrawl_research', { prompt: 'p' });
   assert.equal(task.resultType, 'task');
   assert.equal((await getTask(mcp, task.taskId)).status, 'working');
   assert.equal(decorated.length, 0, 'a running task is not decorated');
@@ -475,7 +475,7 @@ test('task methods reach onToolResult, and taskResult decorates only a completed
   assert.deepEqual(done.result.structuredContent.agent_hints, ['decorated']);
   assert.deepEqual(decorated, [
     {
-      tool: 'firecrawl_agent',
+      tool: 'firecrawl_research',
       jobId: AGENT_ID,
       hasSession: true,
       client: 'tasks-test',
@@ -486,12 +486,12 @@ test('task methods reach onToolResult, and taskResult decorates only a completed
   assert.deepEqual(
     events.map(({ tool, status }) => `${tool} ${status}`),
     [
-      'firecrawl_agent started',
-      'firecrawl_agent success',
-      'tasks/get:firecrawl_agent started',
-      'tasks/get:firecrawl_agent success',
-      'tasks/cancel:firecrawl_agent started',
-      'tasks/cancel:firecrawl_agent success',
+      'firecrawl_research started',
+      'firecrawl_research success',
+      'tasks/get:firecrawl_research started',
+      'tasks/get:firecrawl_research success',
+      'tasks/cancel:firecrawl_research started',
+      'tasks/cancel:firecrawl_research success',
     ],
     'polling a running task reports nothing'
   );
@@ -520,13 +520,13 @@ test('a task whose job failed reaches onToolResult as an error', async (t) => {
     unstable_hooks: { onToolResult: (event) => events.push(event) },
   });
   const mcp = httpClient(port, '/v2/mcp');
-  const task = await callTool(mcp, 'firecrawl_agent', { prompt: 'p' });
+  const task = await callTool(mcp, 'firecrawl_research', { prompt: 'p' });
   api.state.agent = { status: 'failed', error: 'The agent could not finish.' };
   const done = await getTask(mcp, task.taskId);
   assert.equal(done.status, 'completed');
   assert.equal(done.result.isError, true);
   const failed = events.at(-1);
-  assert.equal(failed.tool, 'tasks/get:firecrawl_agent');
+  assert.equal(failed.tool, 'tasks/get:firecrawl_research');
   assert.equal(failed.status, 'error');
   assert.equal(failed.error.name, 'TaskJobFailed');
 });
@@ -543,11 +543,11 @@ test('a finished job whose result is an error is not reported as a failed job', 
     },
   });
   const mcp = httpClient(port, '/v2/mcp');
-  const task = await callTool(mcp, 'firecrawl_agent', { prompt: 'p' });
+  const task = await callTool(mcp, 'firecrawl_research', { prompt: 'p' });
   api.state.agent = { status: 'completed', data: { answer: 42 } };
   const done = await getTask(mcp, task.taskId);
   assert.equal(done.result.isError, true);
-  assert.equal(events.at(-1).tool, 'tasks/get:firecrawl_agent');
+  assert.equal(events.at(-1).tool, 'tasks/get:firecrawl_research');
   assert.equal(events.at(-1).status, 'success');
 });
 
@@ -566,7 +566,7 @@ test('any server instance answers tasks/get and tasks/cancel for a task another 
     { markdown: 'page two' },
   ]);
 
-  const agent = await callTool(starter, 'firecrawl_agent', { prompt: 'p' });
+  const agent = await callTool(starter, 'firecrawl_research', { prompt: 'p' });
   result(await other.rpc('tasks/cancel', { taskId: agent.taskId }));
   assert.ok(
     api.requests.some((r) => r.method === 'DELETE' && r.url === `/v2/agent/${AGENT_ID}`),

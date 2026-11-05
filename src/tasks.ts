@@ -25,7 +25,7 @@ import {
 /**
  * The MCP Tasks extension (`io.modelcontextprotocol/tasks`, protocol revision
  * 2026-07-28). When a client declares it on a `tools/call`,
- * `firecrawl_agent` and `firecrawl_crawl` answer with a task as soon as the
+ * `firecrawl_research` and `firecrawl_crawl` answer with a task as soon as the
  * Firecrawl API accepts the job, and the client follows it with `tasks/get`
  * and `tasks/cancel`. Tools an embedder adds can answer with their own tasks
  * and serve them through a {@link TaskHandler}.
@@ -91,11 +91,11 @@ type FirecrawlTask = TaskState & {
 };
 
 const TASK_TOOLS: Record<string, Kind> = {
-  firecrawl_agent: 'agent',
+  firecrawl_research: 'agent',
   firecrawl_crawl: 'crawl',
 };
 const TOOL_OF: Record<Kind, string> = {
-  agent: 'firecrawl_agent',
+  agent: 'firecrawl_research',
   crawl: 'firecrawl_crawl',
 };
 const POLL_INTERVAL_MS: Record<Kind, number> = { agent: 5000, crawl: 3000 };
@@ -373,7 +373,7 @@ export function tasksExtension<Session extends OriginSession>(
   };
   return {
     id: TASKS_EXTENSION,
-    outputSchemas: () => ({ firecrawl_agent: jobs.resultSchema('agent') }),
+    outputSchemas: () => ({ firecrawl_research: jobs.resultSchema('agent') }),
     async callTool({ name, run }, context) {
       const kind = Object.hasOwn(TASK_TOOLS, name)
         ? TASK_TOOLS[name]

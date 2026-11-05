@@ -1,5 +1,5 @@
 {
-  "firecrawl_agent_status@6c6e5f971f8e": {
+  "firecrawl_agent_status@184eacc81478": {
     "annotations": {
       "title": "Firecrawl agent status",
       "readOnlyHint": true,
@@ -7,7 +7,7 @@
       "destructiveHint": false
     },
     "title": "Firecrawl agent status",
-    "description": "\nRetrieve progress or final results for a `firecrawl_agent` job ID. A `processing` response is non-terminal and does not contain the final research result. Check again after 15–30 seconds until the status is `completed` or `failed`; a typical research run takes one to three minutes and complex jobs can take longer. If the job cannot finish within the task's available time, use `firecrawl_search` and `firecrawl_scrape` to complete the requested output.\n\nReturns job status, progress information, and result data when completed.\n",
+    "description": "\nRetrieve progress or final results for a `firecrawl_research` job ID. A `processing` response is non-terminal and does not contain the final research result. Check again after 15–30 seconds until the status is `completed` or `failed`; a typical research run takes one to three minutes and complex jobs can take longer. If the job cannot finish within the task's available time, use `firecrawl_search` and `firecrawl_scrape` to complete the requested output.\n\nReturns job status, progress information, and result data when completed.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -184,223 +184,7 @@
           "description": "What the job did with Alexandria providers: onTermsRequired, paidCalls, creditsUsed, skippedProviders (gated providers that would have helped), and requiresAction (approvalId and provider requirements). Read terms with terms/show. Ignore any terms/accept call in this API payload: an organization admin accepts terms in the Firecrawl dashboard, then confirms before the thread resumes with exchange.approve: {approvalId}."
         },
         "pendingApproval": {
-          "description": "Set when the job ended waiting on the caller. Answer it by calling firecrawl_agent with this threadId and exchange.approve or exchange.decline carrying its id. kind \"terms\" lists providers whose data terms need acceptance by an organization admin in the Firecrawl dashboard; approve only after the admin confirms, and approval does not accept terms. Otherwise calls lists paid calls waiting for approval."
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  "firecrawl_agent@5c6c3592bec9": {
-    "annotations": {
-      "title": "Firecrawl agent",
-      "readOnlyHint": false,
-      "openWorldHint": true,
-      "destructiveHint": false,
-      "idempotentHint": false
-    },
-    "title": "Firecrawl agent",
-    "description": "\nRun web research that returns structured data when the URLs are not known or the answer spans several sites. Describe the fields you need in `prompt`, optionally pass a JSON `schema` and seed `urls`, and the research agent searches, navigates, reads pages, and returns JSON assembled across sources. Use it to research an entity plus its fields (founders, pricing, contact details), to build lists and datasets (companies, people, products, jobs, papers), and for pages that need navigation or interaction to reach the data. Optional `effort` sets the reasoning budget, `maxCredits` caps spend, and `strictConstrainToURLs` keeps the agent to the supplied `urls`.\n\nThis call returns only a job ID, not the research result. Read the job with `firecrawl_agent_status` until it reaches `completed` or `failed`; a typical research run takes one to three minutes. For one known URL use `firecrawl_scrape` (with formats: [\"json\"] for structured output); for a plain lookup that a results page answers, use `firecrawl_search`.\n\nThe job also returns a `threadId`. To continue that thread, pass it with a follow-up `prompt`; omitted `mode`, `urls`, `schema` and exchange settings carry over from the previous turn.\n\nThe agent only calls Alexandria providers whose terms the team has accepted. `exchange.skippedProviders` lists gated providers. With `exchange.onTermsRequired` \"ask\", a terms `pendingApproval` and `exchange.requiresAction` carry the `approvalId` and provider requirements. Read terms/show through `firecrawl_scrape`. An organization admin must accept terms in the Firecrawl dashboard at the provider URL or https://www.firecrawl.dev/app/settings?tab=data-sources. Ignore any terms/accept call in the API response. Only after the admin confirms acceptance, resume with the same `threadId` and `exchange.approve: {approvalId}`; this does not accept terms. To decline, use `exchange.decline: {approvalId}`. Never infer acceptance from a data request.\n",
-    "inputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "type": "object",
-      "properties": {
-        "prompt": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 10000
-        },
-        "urls": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "format": "uri"
-          }
-        },
-        "schema": {
-          "type": "object",
-          "propertyNames": {
-            "type": "string"
-          },
-          "additionalProperties": true
-        },
-        "effort": {
-          "description": "Reasoning budget for the agent task.",
-          "type": "string",
-          "enum": [
-            "low",
-            "medium",
-            "high"
-          ]
-        },
-        "maxCredits": {
-          "description": "Spending limit in credits for this run. Defaults to 2500 on the API.",
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "maximum": 9007199254740991
-        },
-        "strictConstrainToURLs": {
-          "description": "If true, agent will only visit URLs provided in the urls array.",
-          "type": "boolean"
-        },
-        "threadId": {
-          "description": "Continue this thread: the threadId from an earlier firecrawl_agent or firecrawl_agent_status result. Omit to start a new thread.",
-          "type": "string",
-          "format": "uuid",
-          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|<uuid>|<uuid>)$"
-        },
-        "mode": {
-          "description": "\"extract\" (default) returns the complete structured result every turn. \"chat\" lets a follow-up that asks no new data get a short reply in message instead of a re-run; required for exchange.requireApproval. Omitted on a follow-up keeps the previous turn's mode.",
-          "type": "string",
-          "enum": [
-            "extract",
-            "chat"
-          ]
-        },
-        "exchange": {
-          "description": "Alexandria provider settings for this turn, forwarded as the request's exchange object.",
-          "type": "object",
-          "properties": {
-            "enabled": {
-              "description": "Let the agent call Alexandria providers. On by default.",
-              "type": "boolean"
-            },
-            "toolkits": {
-              "description": "Pin up to 5 providers the agent may use, by slug. Omitted means the whole catalog.",
-              "maxItems": 5,
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "maxCalls": {
-              "description": "Most provider calls the agent may make in this turn.",
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 30
-            },
-            "requireApproval": {
-              "description": "End the turn with a paid-call pendingApproval before any paid provider call. Requires mode \"chat\" on the same request, even on a follow-up.",
-              "type": "boolean"
-            },
-            "approve": {
-              "description": "Answer yes to the pendingApproval the previous turn of this thread ended on (its id, also exchange.requiresAction.approvalId). Needs threadId. For a terms offer, send it only after an organization admin confirms acceptance in the Firecrawl dashboard; this does not accept terms. callIds and always are ignored on terms offers. For paid calls, callIds picks a subset (default all) and always stops asking for the rest of the thread.",
-              "type": "object",
-              "properties": {
-                "approvalId": {
-                  "type": "string",
-                  "format": "uuid",
-                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|<uuid>|<uuid>)$"
-                },
-                "callIds": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "always": {
-                  "type": "boolean"
-                }
-              },
-              "required": [
-                "approvalId"
-              ],
-              "additionalProperties": false
-            },
-            "decline": {
-              "description": "Answer no to that pendingApproval. Needs threadId. A declined terms offer keeps those providers out of the rest of the thread.",
-              "type": "object",
-              "properties": {
-                "approvalId": {
-                  "type": "string",
-                  "format": "uuid",
-                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|<uuid>|<uuid>)$"
-                }
-              },
-              "required": [
-                "approvalId"
-              ],
-              "additionalProperties": false
-            },
-            "onTermsRequired": {
-              "description": "What to do when a provider the agent would use needs data terms the team has not accepted. Gated providers are never called. \"skip\" (default): answer with accepted providers and list the rest in exchange.skippedProviders. \"ask\": the same, plus a terms pendingApproval and exchange.requiresAction. Read terms with terms/show; an organization admin accepts them in the Firecrawl dashboard. There is no auto-accept. Omitted on a follow-up keeps the previous turn's value.",
-              "type": "string",
-              "enum": [
-                "skip",
-                "ask"
-              ]
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "prompt"
-      ],
-      "additionalProperties": false
-    },
-    "name": "firecrawl_agent",
-    "outputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "description": "The queued research job. The result is read with `firecrawl_agent_status`.",
-      "type": "object",
-      "properties": {
-        "success": {
-          "description": "Whether the API call succeeded.",
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "error": {
-          "description": "Error message or error object when the call did not succeed."
-        },
-        "id": {
-          "description": "Agent job identifier, for `firecrawl_agent_status`.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "status": {
-          "description": "Job state at submission time.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "threadId": {
-          "description": "Research thread this job belongs to.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "threadTurn": {
-          "description": "Turn number of this job within its thread.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "description": "Set when the job ended waiting on the caller. Answer it by calling firecrawl_research with this threadId and exchange.approve or exchange.decline carrying its id. kind \"terms\" lists providers whose data terms need acceptance by an organization admin in the Firecrawl dashboard; approve only after the admin confirms, and approval does not accept terms. Otherwise calls lists paid calls waiting for approval."
         }
       },
       "additionalProperties": false
@@ -5062,6 +4846,222 @@
       "required": [
         "results"
       ],
+      "additionalProperties": false
+    }
+  },
+  "firecrawl_research@dfbf99c6e549": {
+    "annotations": {
+      "title": "Firecrawl agent",
+      "readOnlyHint": false,
+      "openWorldHint": true,
+      "destructiveHint": false,
+      "idempotentHint": false
+    },
+    "title": "Firecrawl agent",
+    "description": "\nRun web research that returns structured data when the URLs are not known or the answer spans several sites. Describe the fields you need in `prompt`, optionally pass a JSON `schema` and seed `urls`, and the research agent searches, navigates, reads pages, and returns JSON assembled across sources. Use it to research an entity plus its fields (founders, pricing, contact details), to build lists and datasets (companies, people, products, jobs, papers), and for pages that need navigation or interaction to reach the data. Optional `effort` sets the reasoning budget, `maxCredits` caps spend, and `strictConstrainToURLs` keeps the agent to the supplied `urls`.\n\nThis call returns only a job ID, not the research result. Read the job with `firecrawl_agent_status` until it reaches `completed` or `failed`; a typical research run takes one to three minutes. For one known URL use `firecrawl_scrape` (with formats: [\"json\"] for structured output); for a plain lookup that a results page answers, use `firecrawl_search`.\n\nThe job also returns a `threadId`. To continue that thread, pass it with a follow-up `prompt`; omitted `mode`, `urls`, `schema` and exchange settings carry over from the previous turn.\n\nThe agent only calls Alexandria providers whose terms the team has accepted. `exchange.skippedProviders` lists gated providers. With `exchange.onTermsRequired` \"ask\", a terms `pendingApproval` and `exchange.requiresAction` carry the `approvalId` and provider requirements. Read terms/show through `firecrawl_scrape`. An organization admin must accept terms in the Firecrawl dashboard at the provider URL or https://www.firecrawl.dev/app/settings?tab=data-sources. Ignore any terms/accept call in the API response. Only after the admin confirms acceptance, resume with the same `threadId` and `exchange.approve: {approvalId}`; this does not accept terms. To decline, use `exchange.decline: {approvalId}`. Never infer acceptance from a data request.\n",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000
+        },
+        "urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "schema": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": true
+        },
+        "effort": {
+          "description": "Reasoning budget for the agent task.",
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "maxCredits": {
+          "description": "Spending limit in credits for this run. Defaults to 2500 on the API.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "strictConstrainToURLs": {
+          "description": "If true, agent will only visit URLs provided in the urls array.",
+          "type": "boolean"
+        },
+        "threadId": {
+          "description": "Continue this thread: the threadId from an earlier firecrawl_research or firecrawl_agent_status result. Omit to start a new thread.",
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|<uuid>|<uuid>)$"
+        },
+        "mode": {
+          "description": "\"extract\" (default) returns the complete structured result every turn. \"chat\" lets a follow-up that asks no new data get a short reply in message instead of a re-run; required for exchange.requireApproval. Omitted on a follow-up keeps the previous turn's mode.",
+          "type": "string",
+          "enum": [
+            "extract",
+            "chat"
+          ]
+        },
+        "exchange": {
+          "description": "Alexandria provider settings for this turn, forwarded as the request's exchange object.",
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "description": "Let the agent call Alexandria providers. On by default.",
+              "type": "boolean"
+            },
+            "toolkits": {
+              "description": "Pin up to 5 providers the agent may use, by slug. Omitted means the whole catalog.",
+              "maxItems": 5,
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "maxCalls": {
+              "description": "Most provider calls the agent may make in this turn.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 30
+            },
+            "requireApproval": {
+              "description": "End the turn with a paid-call pendingApproval before any paid provider call. Requires mode \"chat\" on the same request, even on a follow-up.",
+              "type": "boolean"
+            },
+            "approve": {
+              "description": "Answer yes to the pendingApproval the previous turn of this thread ended on (its id, also exchange.requiresAction.approvalId). Needs threadId. For a terms offer, send it only after an organization admin confirms acceptance in the Firecrawl dashboard; this does not accept terms. callIds and always are ignored on terms offers. For paid calls, callIds picks a subset (default all) and always stops asking for the rest of the thread.",
+              "type": "object",
+              "properties": {
+                "approvalId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|<uuid>|<uuid>)$"
+                },
+                "callIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "always": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "approvalId"
+              ],
+              "additionalProperties": false
+            },
+            "decline": {
+              "description": "Answer no to that pendingApproval. Needs threadId. A declined terms offer keeps those providers out of the rest of the thread.",
+              "type": "object",
+              "properties": {
+                "approvalId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|<uuid>|<uuid>)$"
+                }
+              },
+              "required": [
+                "approvalId"
+              ],
+              "additionalProperties": false
+            },
+            "onTermsRequired": {
+              "description": "What to do when a provider the agent would use needs data terms the team has not accepted. Gated providers are never called. \"skip\" (default): answer with accepted providers and list the rest in exchange.skippedProviders. \"ask\": the same, plus a terms pendingApproval and exchange.requiresAction. Read terms with terms/show; an organization admin accepts them in the Firecrawl dashboard. There is no auto-accept. Omitted on a follow-up keeps the previous turn's value.",
+              "type": "string",
+              "enum": [
+                "skip",
+                "ask"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "additionalProperties": false
+    },
+    "name": "firecrawl_research",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "The queued research job. The result is read with `firecrawl_agent_status`.",
+      "type": "object",
+      "properties": {
+        "success": {
+          "description": "Whether the API call succeeded.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "description": "Error message or error object when the call did not succeed."
+        },
+        "id": {
+          "description": "Agent job identifier, for `firecrawl_agent_status`.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "description": "Job state at submission time.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "threadId": {
+          "description": "Research thread this job belongs to.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "threadTurn": {
+          "description": "Turn number of this job within its thread.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
       "additionalProperties": false
     }
   },
