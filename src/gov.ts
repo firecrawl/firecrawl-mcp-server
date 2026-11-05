@@ -111,11 +111,11 @@ interface GovHit {
 interface LabeledGovHit extends GovHit {
   jurisdiction?: string;
   court?: string;
-  court_type?: string;
+  courtType?: string;
   cites?: string[];
-  cited_as?: string[];
+  citedAs?: string[];
   lang?: string;
-  updated_at?: number;
+  updatedAt?: number;
 }
 
 /** Render hits as `## <position>. <title>` / url / description blocks. */

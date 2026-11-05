@@ -205,9 +205,9 @@ async function startFakeBackend(options = {}) {
                 url: 'https://www.ecfr.gov/current/title-21/part-101',
                 jurisdiction: 'us',
                 cites: ['us:usc:21:343'],
-                cited_as: ['us:cfr:21:101'],
+                citedAs: ['us:cfr:21:101'],
                 lang: 'en',
-                updated_at: 1700000000000,
+                updatedAt: 1700000000000,
               },
             ],
           },
@@ -872,9 +872,9 @@ test('search firecrawl_gov_search queries the Government Index', async (t) => {
       url: 'https://www.ecfr.gov/current/title-21/part-101',
       jurisdiction: 'us',
       cites: ['us:usc:21:343'],
-      cited_as: ['us:cfr:21:101'],
+      citedAs: ['us:cfr:21:101'],
       lang: 'en',
-      updated_at: 1700000000000,
+      updatedAt: 1700000000000,
     },
   ]);
   assert.equal(backend.requests.some((request) => request.url === '/v2/search'), false);
