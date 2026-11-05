@@ -5,7 +5,7 @@ type Tool = Record<string, any> & { provider: string; capability: string };
 type Post = (path: string, body: unknown, timeoutMs: number) => Promise<any>;
 type Group = 'query' | 'rewrite' | 'site';
 
-const REWRITE_FAMILY = new Set(['r0', 'blend', 'rewritefirst', 'best', 'prov', 'splitkeys', 'objective']);
+const REWRITE_FAMILY = new Set(['r0', 'blend', 'rewritefirst', 'prov', 'splitkeys', 'objective']);
 
 export const axSimArmUsesSummary = () => AX_SIM_ARM !== 'base';
 export const axSimArmTakesObjective = () => AX_SIM_ARM === 'objective';
@@ -51,6 +51,17 @@ function interleave(lists: Tool[][]): Tool[] {
   const depth = Math.max(0, ...lists.map((l) => l.length));
   for (let i = 0; i < depth; i++) for (const l of lists) if (l[i] && !out.has(key(l[i]))) out.set(key(l[i]), l[i]);
   return [...out.values()];
+}
+
+function rrf(lists: Tool[][]): Tool[] {
+  const score = new Map<string, { tool: Tool; score: number }>();
+  for (const list of lists)
+    list.forEach((t, rank) => {
+      const entry = score.get(key(t)) ?? { tool: t, score: 0 };
+      entry.score += 1 / (60 + rank + 1);
+      score.set(key(t), entry);
+    });
+  return [...score.values()].sort((a, b) => b.score - a.score).map((e) => e.tool);
 }
 
 function namesProvider(query: string, provider: string): boolean {
@@ -107,13 +118,10 @@ export async function applyAxSimArm(response: any, post: Post, args: { query: st
     const seen = new Set<string>();
     return lists.flat().filter((t) => !seen.has(key(t)) && seen.add(key(t))).map((t) => byKey.get(key(t))!);
   };
-  const sim = (t: Tool) => Math.max(...[...query, ...rw].filter((x) => key(x) === key(t)).map((x) => Number(x.similarity ?? 0)), -1);
-  const floor = Math.min(...query.map((t) => Number(t.similarity ?? 0)).filter((v) => v > 0), 1);
 
   let list: Tool[];
   if (AX_SIM_ARM === 'rewritefirst') list = order([rw, query, st]);
-  else if (AX_SIM_ARM === 'blend' || AX_SIM_ARM === 'objective') list = order([interleave([query, rw]), st]);
-  else if (AX_SIM_ARM === 'best') list = order([query, rw, st]).sort((a, b) => (sim(b) >= 0 ? sim(b) : floor) - (sim(a) >= 0 ? sim(a) : floor));
+  else if (AX_SIM_ARM === 'blend' || AX_SIM_ARM === 'objective') list = order([rrf([query, rw]), st]);
   else list = order([query, st, rw]);
 
   if (AX_SIM_ARM === 'prov')
