@@ -26,6 +26,7 @@ const WRAPPER_TYPES = new Set([
 
 const NUMERIC_STRING = /^-?\d+(?:\.\d+)?$/;
 const URL_SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
+const HTTP_SCHEME = /^(https?:)\/*/i;
 const HTTP_URL_FIELDS = new WeakSet<object>();
 
 function isHttpUrl(value: string): boolean {
@@ -124,9 +125,9 @@ function normalizeValue(schema: Schema, value: unknown): unknown {
   const inner = unwrap(schema);
   if (inner && HTTP_URL_FIELDS.has(inner) && typeof value === 'string') {
     const url = value.trim();
-    return url && !URL_SCHEME.test(url)
-      ? `https://${url.replace(/^\/\//, '')}`
-      : value;
+    if (HTTP_SCHEME.test(url)) return url.replace(HTTP_SCHEME, '$1//');
+    if (!url || URL_SCHEME.test(url) || /^\/(?!\/)/.test(url)) return value;
+    return `https://${url.replace(/^\/\//, '')}`;
   }
   const def = inner?._zod?.def;
   if (!def) return value;

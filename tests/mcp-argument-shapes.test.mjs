@@ -279,8 +279,13 @@ test('scheme-less URLs are read as https URLs', async (t) => {
     assert.match(decodeURIComponent(sent), /https:\/\/example\.com\/page/, `${name} sends an https URL`);
   }
 
+  for (const url of ['http:example.com/page', 'HTTPS:/example.com/page']) {
+    assertAccepted(await full('firecrawl_scrape', { url }), url);
+    assert.match(lastBody(api, '/v2/scrape').url, /^https?:\/\/example\.com\/page$/i, url);
+  }
+
   const before = api.requests.length;
-  for (const url of ['https://<scrubbed-url-domain>/page', 'ftp://example.com/file', '']) {
+  for (const url of ['https://<scrubbed-url-domain>/page', 'ftp://example.com/file', '/login', '']) {
     assert.notEqual(rejectionText(await full('firecrawl_scrape', { url })), '', `${url} is refused`);
   }
   assert.equal(api.requests.length, before, 'refused URLs never reach the API');
