@@ -40,7 +40,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Use `firecrawl_credit_usage` to check credits left or what credits were spent on, by month or day, optionally broken down by endpoint or API key.
 - Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control. The session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
 
-This server lists 27 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 9 tools (search, developer, government, and research search, plus Alexandria catalogue lookup and execution).
+This server lists 27 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. Setting `FIRECRAWL_ENRICH_TOOLS=1` adds the two opt-in [enrich tools](#15b-enrich-tools-firecrawl_enrich_search-firecrawl_enrich). For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 9 tools (search, developer, government, and research search, plus Alexandria catalogue lookup and execution).
 
 ## Installation
 
@@ -297,6 +297,7 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 - `FIRECRAWL_INTEGRATION` (Optional): Integration tag for apps that launch this server, such as an editor extension
   - Sent as the `integration` field of scrape, batch scrape, crawl, map, search, extract, agent, parse, interact and feedback requests
   - Use a value that starts with `_`, for example `_zed`
+- `FIRECRAWL_ENRICH_TOOLS` (Optional): Set to `1` to register the two [enrich tools](#15b-enrich-tools-firecrawl_enrich_search-firecrawl_enrich), `firecrawl_enrich_search` and `firecrawl_enrich`, for people and company search and enrichment. Off by default.
 
 #### Local HTTP mode
 
@@ -1222,6 +1223,45 @@ for data is not consent, and no automatic acceptance or uncertain retries occur.
 No credits are charged for the blocked retrieval. After the admin confirms acceptance, call the same
 tool again with the identical payload and `requestId`.
 
+### 15b. Enrich Tools (`firecrawl_enrich_search`, `firecrawl_enrich`)
+
+Opt-in people and company search and enrichment over Alexandria's B2B data providers (Apollo, FullEnrich, People Data Labs and Data Legion). Start the server with `FIRECRAWL_ENRICH_TOOLS=1` (or pass `enrichTools: true` programmatically) to register them; the Alexandria providers need an API key on a team with Alexandria access.
+
+| Tool | Group | Use it for | Providers |
+| --- | --- | --- | --- |
+| `firecrawl_enrich_search` | `people` | Finding people by title, employer, location and more | apollo, fullenrich, people_data_labs |
+| | `companies` | Finding companies by industry, headcount, location, technology or founding year | apollo, fullenrich, people_data_labs |
+| | `firecrawl_search` | Finding people and companies on the web | Firecrawl web search, the same parameters as `firecrawl_search` |
+| `firecrawl_enrich` | `people` | Resolving known people to profiles and work history | fullenrich, apollo, people_data_labs, datalegion |
+| | `contact_info` | Work email, personal email or mobile for known people | fullenrich, datalegion, apollo |
+| | `companies` | Resolving known companies to firmographics | fullenrich, apollo, people_data_labs, datalegion |
+
+Each group holds one block per provider. No parameter is shared between providers: each block takes that provider's own parameters under its own names (Apollo's `person_titles`, FullEnrich's `current_position_titles`, a People Data Labs `sql` query), so a filter a provider lacks is simply absent from its block. A provider runs only when the call includes its block. A call with no group fails with `no_provider`, and so does a group with no provider block, naming the providers it can use. The `firecrawl_search` block in `firecrawl_enrich_search` takes exactly the parameters of the `firecrawl_search` tool and returns its response. Lookups take each provider's own list of inputs, 1 to 50 per call.
+
+```json
+{
+  "name": "firecrawl_enrich_search",
+  "arguments": {
+    "people": { "apollo": { "person_titles": ["Head of Data"], "q_organization_domains_list": ["example.com"] } },
+    "firecrawl_search": { "query": "example.com head of data", "limit": 5 }
+  }
+}
+```
+
+```json
+{
+  "name": "firecrawl_enrich",
+  "arguments": {
+    "companies": {
+      "fullenrich": { "companies": [{ "domain": "example.com" }] },
+      "datalegion": { "companies": [{ "domain": "example.com" }, { "name": "Example Labs" }] }
+    }
+  }
+}
+```
+
+Requested providers run in parallel, and nothing is merged. The response has one key per requested group listing every provider in that group with its `status`, records `returned`, `credits` and its own `results`; lookup results carry `input_index` into that provider's input list, and `unmatched` lists the inputs it missed. `firecrawl_search` reports its `status`, `returned`, `credits` and the full search `response`. `credits_total` sums the charges. Tool descriptions list each provider's credit price.
+
 ### 16. Credit Usage Tool
 
 The tool requires an authenticated Firecrawl account and is read-only.
@@ -1269,7 +1309,7 @@ Set `host` explicitly. Without it the server listens on `localhost`, which Node 
 
 The library doesn't check `Host` or `Origin` unless asked, and its CORS headers allow any origin. A server reachable from a browser on the same machine should pass `httpStream.allowedHosts` (for example `['localhost', '127.0.0.1', '[::1]']`): requests whose `Host` or `Origin` header names another host then get `403` (except `GET` and `HEAD` on the health path), and CORS headers echo the allowed origin. The command line sets this list in local HTTP mode.
 
-Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`, `logging`, `safeMode`, `fileAccess` (`local` or `upload`), `requireCredential`, `searchFeedback` and `endpointFeedback`. `unstable_hooks` accepts:
+Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`, `logging`, `safeMode`, `fileAccess` (`local` or `upload`), `requireCredential`, `searchFeedback`, `endpointFeedback` and `enrichTools`. `unstable_hooks` accepts:
 
 | Hook | Purpose |
 |---|---|

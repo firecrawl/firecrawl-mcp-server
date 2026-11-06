@@ -17,11 +17,11 @@ try {
   if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
 }
 
-const FEEDBACK_DISABLED_VALUES = new Set(['1', 'true', 'yes', 'on']);
+const TRUTHY_ENV_VALUES = new Set(['1', 'true', 'yes', 'on']);
 
-function feedbackEnvEnabled(...keys: string[]): boolean {
+function envFlagEnabled(...keys: string[]): boolean {
   return keys.some((key) =>
-    FEEDBACK_DISABLED_VALUES.has((process.env[key] || '').trim().toLowerCase())
+    TRUTHY_ENV_VALUES.has((process.env[key] || '').trim().toLowerCase())
   );
 }
 
@@ -33,14 +33,15 @@ const apiKey = resolveCredentialFromEnv();
 const apiUrl = process.env.FIRECRAWL_API_URL;
 const primaryProfile = makePrimaryProfile();
 
-const searchFeedbackDisabled = feedbackEnvEnabled(
+const searchFeedbackDisabled = envFlagEnabled(
   'FIRECRAWL_NO_SEARCH_FEEDBACK',
   'FIRECRAWL_DISABLE_SEARCH_FEEDBACK'
 );
-const endpointFeedbackDisabled = feedbackEnvEnabled(
+const endpointFeedbackDisabled = envFlagEnabled(
   'FIRECRAWL_NO_ENDPOINT_FEEDBACK',
   'FIRECRAWL_DISABLE_ENDPOINT_FEEDBACK'
 );
+const enrichToolsEnabled = envFlagEnabled('FIRECRAWL_ENRICH_TOOLS');
 
 if (searchFeedbackDisabled) {
   console.error(
@@ -64,6 +65,7 @@ const options: FirecrawlMcpServerOptions = {
   requireCredential: hosted,
   searchFeedback: !searchFeedbackDisabled,
   endpointFeedback: !endpointFeedbackDisabled,
+  enrichTools: enrichToolsEnabled,
   integration: process.env.FIRECRAWL_INTEGRATION,
 };
 const serviceSettings = { hosted, transport, apiKey, apiUrl } as const;
