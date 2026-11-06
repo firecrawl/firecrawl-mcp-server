@@ -19,6 +19,8 @@ test('authenticated search always adds alexandria and keeps the requested source
     [{ sources: ['alexandria'] }, ['alexandria'], false],
     [{ sources: [{ type: 'alexandria' }] }, [{ type: 'alexandria' }], false],
     [{ sources: ['alexandria'], domainTools: true }, ['alexandria'], true],
+    [{ domainTools: true }, ['web', 'alexandria'], true],
+    [{ sources: ['news'], domainTools: true }, ['news', 'alexandria'], true],
     [{ categories: ['gov'] }, ['web', 'alexandria'], true],
     [{ sources: ['web'], categories: ['developer'] }, ['web', 'alexandria'], true],
   ]) {
@@ -32,6 +34,11 @@ test('authenticated search always adds alexandria and keeps the requested source
     assert.equal('creditsCost' in toolText(result).data.tools[0], false);
     assert.deepEqual(api.requests.at(-1).body.sources, sources, JSON.stringify(overrides));
     assert.equal(api.requests.at(-1).body.domainTools, domainTools, JSON.stringify(overrides));
+    assert.equal(
+      api.requests.at(-1).headers['x-firecrawl-implicit-alexandria'],
+      overrides.domainTools === true || (overrides.sources ?? []).some((source) => ['alexandria', 'exchange'].includes(source.type ?? source)) ? undefined : '1',
+      JSON.stringify(overrides)
+    );
   }
 });
 
@@ -44,6 +51,7 @@ test('zero data retention and anonymous searches do not get alexandria added', a
     });
     assert.deepEqual(api.requests.at(-1).body.sources, ['web']);
     assert.equal(api.requests.at(-1).body.domainTools, false);
+    assert.equal(api.requests.at(-1).headers['x-firecrawl-implicit-alexandria'], undefined);
   }
 });
 
@@ -80,6 +88,8 @@ test('added alexandria falls back to the requested sources on discovery refusal;
     assert.equal(api.requests.length, before + 2);
     assert.deepEqual(api.requests.at(-1).body.sources, fallback);
     assert.equal(api.requests.at(-1).body.domainTools, false);
+    assert.equal(api.requests.at(-2).headers['x-firecrawl-implicit-alexandria'], '1');
+    assert.equal(api.requests.at(-1).headers['x-firecrawl-implicit-alexandria'], undefined);
   }
   for (const explicit of [{ sources: ['alexandria'] }, { sources: ['web', 'alexandria'] }, { domainTools: true }]) {
     const before = api.requests.length;
@@ -87,6 +97,7 @@ test('added alexandria falls back to the requested sources on discovery refusal;
       name: 'firecrawl_search', arguments: { query: 'company news', ...explicit },
     });
     assert.equal(api.requests.length, before + 1);
+    assert.equal(api.requests.at(-1).headers['x-firecrawl-implicit-alexandria'], undefined);
   }
   const other = await startStdioWithApi(t, { searchRefusal: 'Permission denied.' });
   await callExpectingError(other.client, {
