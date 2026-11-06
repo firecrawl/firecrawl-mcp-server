@@ -1,4 +1,4 @@
-import { applyAxSimArm, startAxSimRewrite, axSimArmTakesObjective, axSimArmUsesSummary } from './ax-sim.js';
+import { applyAxSimArm, startAxSimRewrite, axSimArmTakesObjective, axSimArmUsesSummary, AX_SIM_UPTAKE_LEAD } from './ax-sim.js';
 import {
   ALEXANDRIA_FEEDBACK_HINT,
   alexandriaCallsWarrantFeedback,
@@ -1846,7 +1846,7 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
       destructiveHint: false, // Query-only; no destructive side effects on external entities.
     },
     description: `
-Search web, news, or image sources and return ranked results with query-relevant highlights. Use it for current information, or to list businesses, people, products, jobs or events with websites, prices or contacts. Each web result is a title, URL, and description; use \`firecrawl_scrape\` on a result URL when the excerpt is not enough.
+${AX_SIM_UPTAKE_LEAD}Search web, news, or image sources and return ranked results with query-relevant highlights. Use it for current information, or to list businesses, people, products, jobs or events with websites, prices or contacts. Each web result is a title, URL, and description; use \`firecrawl_scrape\` on a result URL when the excerpt is not enough.
 
 ${ALEXANDRIA_SEARCH_LEAD}
 

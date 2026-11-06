@@ -8,7 +8,10 @@ type Group = 'query' | 'rewrite' | 'site';
 const REWRITE_FAMILY = new Set(['r0', 'blend', 'rewritefirst', 'prov', 'splitkeys', 'objective', 'fix']);
 const FIX_WAIT_MS = 1000;
 
-export const axSimArmUsesSummary = () => AX_SIM_ARM !== 'base';
+export const axSimArmUsesSummary = () => AX_SIM_ARM !== 'base' && AX_SIM_ARM !== 'uptake';
+export const AX_SIM_UPTAKE_LEAD = AX_SIM_ARM === 'uptake'
+  ? 'When data.tools lists a provider whose description fits the request, call it with `firecrawl_scrape` and its `alexandria` body before fetching web pages: it returns exact, structured records.\n\n'
+  : '';
 export const axSimArmTakesObjective = () => AX_SIM_ARM === 'objective';
 
 const REWRITE_PROMPT =
@@ -121,7 +124,7 @@ export function startAxSimRewrite(post: Post, query: string): Promise<Tool[][]> 
 }
 
 export async function applyAxSimArm(response: any, post: Post, args: { query: string; limit?: number; toolDetail?: string; objective?: string; early?: Promise<Tool[][]> }): Promise<any> {
-  if (AX_SIM_ARM === 'base' || !response?.data) return response;
+  if (AX_SIM_ARM === 'base' || AX_SIM_ARM === 'uptake' || !response?.data) return response;
   const level = args.toolDetail ?? (AX_SIM_ARM === 'summary' ? 'summary' : 'compact');
   const prod: Tool[] = Array.isArray(response.data.tools) ? response.data.tools : [];
   const out = (tools: Tool[]) => ({ ...response, data: { ...response.data, tools: tools.map((t) => detail(t, level)) } });
