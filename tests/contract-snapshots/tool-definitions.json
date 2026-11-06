@@ -8190,7 +8190,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "people_company_enrich@de6f1b10c143": {
+  "people_company_enrich@7a6ab7d6fe4d": {
     "annotations": {
       "title": "Look up and enrich people or companies",
       "readOnlyHint": false,
@@ -8235,19 +8235,40 @@
                   {
                     "required": [
                       "person_professional_network_url"
-                    ]
+                    ],
+                    "properties": {
+                      "person_professional_network_url": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "person_name",
                       "company_domain"
-                    ]
+                    ],
+                    "properties": {
+                      "person_name": {
+                        "pattern": "\\S"
+                      },
+                      "company_domain": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "person_name",
                       "company_professional_network_url"
-                    ]
+                    ],
+                    "properties": {
+                      "person_name": {
+                        "pattern": "\\S"
+                      },
+                      "company_professional_network_url": {
+                        "pattern": "\\S"
+                      }
+                    }
                   }
                 ],
                 "type": "object",
@@ -8280,12 +8301,22 @@
                   {
                     "required": [
                       "domain"
-                    ]
+                    ],
+                    "properties": {
+                      "domain": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "professional_network_url"
-                    ]
+                    ],
+                    "properties": {
+                      "professional_network_url": {
+                        "pattern": "\\S"
+                      }
+                    }
                   }
                 ],
                 "type": "object",
@@ -8318,43 +8349,96 @@
                   {
                     "required": [
                       "id"
-                    ]
+                    ],
+                    "properties": {
+                      "id": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "email"
-                    ]
+                    ],
+                    "properties": {
+                      "email": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "linkedin_url"
-                    ]
+                    ],
+                    "properties": {
+                      "linkedin_url": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "name",
                       "domain"
-                    ]
+                    ],
+                    "properties": {
+                      "name": {
+                        "pattern": "\\S"
+                      },
+                      "domain": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "name",
                       "organization_name"
-                    ]
+                    ],
+                    "properties": {
+                      "name": {
+                        "pattern": "\\S"
+                      },
+                      "organization_name": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "first_name",
                       "last_name",
                       "domain"
-                    ]
+                    ],
+                    "properties": {
+                      "first_name": {
+                        "pattern": "\\S"
+                      },
+                      "last_name": {
+                        "pattern": "\\S"
+                      },
+                      "domain": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "first_name",
                       "last_name",
                       "organization_name"
-                    ]
+                    ],
+                    "properties": {
+                      "first_name": {
+                        "pattern": "\\S"
+                      },
+                      "last_name": {
+                        "pattern": "\\S"
+                      },
+                      "organization_name": {
+                        "pattern": "\\S"
+                      }
+                    }
                   }
                 ],
                 "type": "object",
@@ -8399,22 +8483,42 @@
                   {
                     "required": [
                       "domain"
-                    ]
+                    ],
+                    "properties": {
+                      "domain": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "linkedin_url"
-                    ]
+                    ],
+                    "properties": {
+                      "linkedin_url": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "name"
-                    ]
+                    ],
+                    "properties": {
+                      "name": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "website"
-                    ]
+                    ],
+                    "properties": {
+                      "website": {
+                        "pattern": "\\S"
+                      }
+                    }
                   }
                 ],
                 "type": "object",
@@ -8451,61 +8555,138 @@
                   {
                     "required": [
                       "profile"
-                    ]
+                    ],
+                    "properties": {
+                      "profile": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "email"
-                    ]
+                    ],
+                    "properties": {
+                      "email": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "phone"
-                    ]
+                    ],
+                    "properties": {
+                      "phone": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "pdl_id"
-                    ]
+                    ],
+                    "properties": {
+                      "pdl_id": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "name",
                       "company"
-                    ]
+                    ],
+                    "properties": {
+                      "name": {
+                        "pattern": "\\S"
+                      },
+                      "company": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "name",
                       "school"
-                    ]
+                    ],
+                    "properties": {
+                      "name": {
+                        "pattern": "\\S"
+                      },
+                      "school": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "name",
                       "location"
-                    ]
+                    ],
+                    "properties": {
+                      "name": {
+                        "pattern": "\\S"
+                      },
+                      "location": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "first_name",
                       "last_name",
                       "company"
-                    ]
+                    ],
+                    "properties": {
+                      "first_name": {
+                        "pattern": "\\S"
+                      },
+                      "last_name": {
+                        "pattern": "\\S"
+                      },
+                      "company": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "first_name",
                       "last_name",
                       "school"
-                    ]
+                    ],
+                    "properties": {
+                      "first_name": {
+                        "pattern": "\\S"
+                      },
+                      "last_name": {
+                        "pattern": "\\S"
+                      },
+                      "school": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "first_name",
                       "last_name",
                       "location"
-                    ]
+                    ],
+                    "properties": {
+                      "first_name": {
+                        "pattern": "\\S"
+                      },
+                      "last_name": {
+                        "pattern": "\\S"
+                      },
+                      "location": {
+                        "pattern": "\\S"
+                      }
+                    }
                   }
                 ],
                 "type": "object",
@@ -8555,27 +8736,52 @@
                   {
                     "required": [
                       "website"
-                    ]
+                    ],
+                    "properties": {
+                      "website": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "profile"
-                    ]
+                    ],
+                    "properties": {
+                      "profile": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "ticker"
-                    ]
+                    ],
+                    "properties": {
+                      "ticker": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "pdl_id"
-                    ]
+                    ],
+                    "properties": {
+                      "pdl_id": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "name"
-                    ]
+                    ],
+                    "properties": {
+                      "name": {
+                        "pattern": "\\S"
+                      }
+                    }
                   }
                 ],
                 "type": "object",
@@ -8628,33 +8834,66 @@
                   {
                     "required": [
                       "social_url"
-                    ]
+                    ],
+                    "properties": {
+                      "social_url": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "email"
-                    ]
+                    ],
+                    "properties": {
+                      "email": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "linkedin_id"
-                    ]
+                    ],
+                    "properties": {
+                      "linkedin_id": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "legion_id"
-                    ]
+                    ],
+                    "properties": {
+                      "legion_id": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "full_name"
-                    ]
+                    ],
+                    "properties": {
+                      "full_name": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "first_name",
                       "last_name"
-                    ]
+                    ],
+                    "properties": {
+                      "first_name": {
+                        "pattern": "\\S"
+                      },
+                      "last_name": {
+                        "pattern": "\\S"
+                      }
+                    }
                   }
                 ],
                 "type": "object",
@@ -8713,32 +8952,62 @@
                   {
                     "required": [
                       "domain"
-                    ]
+                    ],
+                    "properties": {
+                      "domain": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "social_url"
-                    ]
+                    ],
+                    "properties": {
+                      "social_url": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "name"
-                    ]
+                    ],
+                    "properties": {
+                      "name": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "linkedin_id"
-                    ]
+                    ],
+                    "properties": {
+                      "linkedin_id": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "ticker_symbol"
-                    ]
+                    ],
+                    "properties": {
+                      "ticker_symbol": {
+                        "pattern": "\\S"
+                      }
+                    }
                   },
                   {
                     "required": [
                       "legion_id"
-                    ]
+                    ],
+                    "properties": {
+                      "legion_id": {
+                        "pattern": "\\S"
+                      }
+                    }
                   }
                 ],
                 "type": "object",

@@ -378,10 +378,11 @@ test('the published schema carries the identifier rules', async (t) => {
   const client = await connect(t, {});
   const { tools } = await client.listTools();
   const enrich = tools.find((tool) => tool.name === 'people_company_enrich');
+  const nonBlank = (...keys) => ({ required: keys, properties: Object.fromEntries(keys.map((key) => [key, { pattern: '\\S' }])) });
   assert.deepEqual(enrich.inputSchema.properties.fullenrich.properties.people.items.anyOf, [
-    { required: ['person_professional_network_url'] },
-    { required: ['person_name', 'company_domain'] },
-    { required: ['person_name', 'company_professional_network_url'] },
+    nonBlank('person_professional_network_url'),
+    nonBlank('person_name', 'company_domain'),
+    nonBlank('person_name', 'company_professional_network_url'),
   ]);
   const search = tools.find((tool) => tool.name === 'people_company_search');
   const pdl = search.inputSchema.properties.people_data_labs.anyOf;

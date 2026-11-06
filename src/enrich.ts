@@ -63,7 +63,7 @@ function needsOneOf<S extends z.ZodRawShape>(shape: S, sets: string[][], message
   return z
     .strictObject(shape)
     .refine((r: Record<string, unknown>) => sets.some((set) => set.every((key) => has(r[key]))), { message })
-    .meta({ anyOf: sets.map((required) => ({ required })) });
+    .meta({ anyOf: sets.map((required) => ({ required, properties: Object.fromEntries(required.map((key) => [key, { pattern: '\\S' }])) })) });
 }
 
 const has = (value: unknown) => typeof value === 'string' && value.trim() !== '';
