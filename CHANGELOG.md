@@ -1,9 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [3.38.0] - 2026-11-06
 
 ### Added
 
+- Per-call feedback tokens for Alexandria. Alexandria call results can carry a `feedbackToken`; the server keeps up to 20 per session for 24 hours and shows the agent a short `feedbackRef` (`c1`, `c2`, ...) in its place, and retained results list their refs in `feedbackRefs`. `firecrawl_feedback` with endpoint `alexandria` sends the session's tokens with the overall rating, so it covers the calls in the session, and takes an optional `callRatings: [{ ref, rating }]` to rate single calls. Unknown or expired refs are dropped and reported in `note`, a successful submission clears the tokens it sent, and `rejectedTokens` from the API is passed through. Sessions are keyed by `Mcp-Session-Id`, or by a hash of the credential without one. Clients and results without tokens behave as before.
 - Two enrichment tools over Alexandria's B2B data providers, listed by default wherever the server has a credential, including the search-only endpoint (not in local keyless mode and not to keyless sessions): `people_company_search` finds people or companies (`entity: "person" | "company"`), optionally beside web results from a `firecrawl_search` block, and `people_company_enrich` looks up and enriches known people or companies, or with `contact_fields` finds work email, personal email or mobile for known people. Each tool has a block for each provider it supports (from Apollo, FullEnrich, People Data Labs and Data Legion) that takes that provider's own parameters, with nothing shared between providers, and a provider runs only when the call includes its block. Providers given a block run in parallel, and every response reports, per provider, its own records, what it charged and any error, with `retryable` on provider and web search failures a later try may fix. Each call takes `max_credits` (default 1000) and is refused before any provider runs when its estimated most possible cost is higher. Arguments may carry `conversationId` and `objective`, which are dropped; common near-miss shapes are repaired, and an argument that still fails schema validation is refused with the field, what its block takes and an example. These tools add two entries to the default tool list and to the search-only endpoint's fixed tool set.
 
 ### Changed

@@ -100,6 +100,7 @@ const alexandriaEnvelope = {
   message: str('Guidance that accompanies the result.'),
   nextTool: unknown('A follow-up tool call (`{name, arguments}`) that continues or inspects this result.'),
   feedbackTool: unknown('Pointer to the feedback tool for reporting how this result served the task.'),
+  feedbackRefs: unknown('Retained results only: `[{provider, capability, feedbackRef}]` per call; pass a ref in `callRatings` of the feedback tool to rate that call.'),
 };
 
 // --- src/index.ts tools -----------------------------------------------------
@@ -187,6 +188,8 @@ export const feedbackOutputSchema = z
     websiteCapReached: bool("Alexandria only: whether this website's daily refund cap is reached; feedback about other websites can still refund."),
     alreadySubmitted: bool('Whether feedback for this job was already recorded.'),
     warning,
+    rejectedTokens: num('Alexandria only: how many call tokens failed verification (expired, other team, or invalid).'),
+    note: str('Details about parts of the submission that were ignored.'),
     data: unknown('Payload returned with the accepted feedback.'),
     raw: str('Response body when it was not JSON.'),
   })
