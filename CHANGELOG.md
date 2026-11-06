@@ -4,7 +4,7 @@
 
 ### Added
 
-- Five opt-in enrichment tools over Alexandria's B2B data providers, registered when the server starts with `FIRECRAWL_ENRICH_TOOLS=1` or `enrichTools: true`: `firecrawl_enrich_people_search`, `firecrawl_enrich_people`, `firecrawl_enrich_contact_info`, `firecrawl_enrich_company_search` and `firecrawl_enrich_company`. Each has a block for each provider it supports (from Apollo, FullEnrich, People Data Labs and Data Legion) that takes that provider's own parameters, with nothing shared between providers, and a provider runs only when the call includes its block. Providers given a block run in parallel, and every response reports, per provider, its own records, what it charged and any error. The default tool list is unchanged.
+- Two opt-in enrichment tools over Alexandria's B2B data providers, registered when the server starts with `FIRECRAWL_ENRICH_TOOLS=1` or `enrichTools: true`: `people_company_search` finds people or companies (`entity: "person" | "company"`), and `people_company_lookup` resolves known people or companies, or with `contact_fields` finds work email, personal email or mobile for known people. Each tool has a block for each provider it supports (from Apollo, FullEnrich, People Data Labs and Data Legion) that takes that provider's own parameters, with nothing shared between providers, and a provider runs only when the call includes its block. Providers given a block run in parallel, and every response reports, per provider, its own records, what it charged and any error. The default tool list is unchanged.
 
 ### Fixed
 
