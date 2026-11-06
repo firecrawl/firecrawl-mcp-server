@@ -139,8 +139,9 @@ test('people search reports a filter a provider could not apply', async (t) => {
     arguments: { titles: ['Head of Data'], seniority: ['director'], apollo: { enabled: true } },
   });
   const data = result.structuredContent;
-  assert.equal(data.results[0].apollo_id, 'a1');
   const apollo = data.providers.find((p) => p.name === 'apollo');
+  assert.equal(apollo.results[0].apollo_id, 'a1');
+  assert.equal(data.results, undefined);
   assert.deepEqual(apollo.not_applied, ['seniority']);
   assert.deepEqual(api.calls[0].options.person_titles, ['Head of Data']);
   assert.equal(api.calls[0].options.per_page, 5);

@@ -1229,10 +1229,10 @@ Opt-in people and company enrichment over Alexandria's B2B data providers (Apoll
 
 | Tool | Use it for | Providers | How they run |
 | --- | --- | --- | --- |
-| `firecrawl_enrich_people_search` | Finding people by title, employer, location and seniority | apollo, fullenrich, people_data_labs | In parallel, merged by LinkedIn URL |
+| `firecrawl_enrich_people_search` | Finding people by title, employer, location and seniority | apollo, fullenrich, people_data_labs | In parallel, results kept per provider |
 | `firecrawl_enrich_people` | Resolving known people to profiles and work history | fullenrich, apollo, people_data_labs, datalegion | Waterfall in that order |
 | `firecrawl_enrich_contact_info` | Work email, personal email or mobile for known people | fullenrich, datalegion, apollo | Waterfall in that order |
-| `firecrawl_enrich_company_search` | Finding companies by industry, headcount, location, technology or founding year | apollo, fullenrich, people_data_labs | In parallel, merged by domain |
+| `firecrawl_enrich_company_search` | Finding companies by industry, headcount, location, technology or founding year | apollo, fullenrich, people_data_labs | In parallel, results kept per provider |
 | `firecrawl_enrich_company` | Resolving known companies to firmographics | fullenrich, apollo, people_data_labs, datalegion | Waterfall in that order |
 
 Every provider is off until the call enables it with `{"enabled": true}`; a call with none enabled fails with `no_provider_enabled`, the providers it can use, and an example. Some provider blocks also take that provider's own options, such as FullEnrich's `past_company_names` and a People Data Labs `sql` query on the search tools, or Data Legion's `min_confidence` on `firecrawl_enrich_people`; the rest take only `enabled`.
@@ -1248,7 +1248,7 @@ Every provider is off until the call enables it with `{"enabled": true}`; a call
 }
 ```
 
-A waterfall sends each later provider only the inputs earlier ones missed, and results keep input order with `input_index` and `matched`. Search results list the providers that returned each record, with `confidence` (`agreed`, `single_source` or `conflicting`) and any `conflicts`. Every response has a `providers` entry per provider (`status`, records `returned`, `credits`, the shared filters it `applied` and those it could not) and `credits_total`. Tool descriptions list each provider's credit price.
+A waterfall sends each later provider only the inputs earlier ones missed, and results keep input order with `input_index` and `matched`. Lookup results list the providers that returned each record, with `confidence` (`agreed`, `single_source` or `conflicting`) and any `conflicts`. Search results are not merged: each provider's records come back in its own `providers[].results`. Every response has a `providers` entry per provider (`status`, records `returned`, `credits`, the shared filters it `applied` and those it could not) and `credits_total`. Tool descriptions list each provider's credit price.
 
 ### 16. Credit Usage Tool
 

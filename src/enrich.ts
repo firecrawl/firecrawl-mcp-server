@@ -72,7 +72,7 @@ function provider<S extends z.ZodRawShape>(shape: S, about: string) {
 }
 
 const OPT_IN =
-  'Providers are opt-in: pass {"enabled": true} on each provider to run, e.g. "apollo": {"enabled": true}. Enable several to compare and merge their results. ';
+  'Providers are opt-in: pass {"enabled": true} on each provider to run, e.g. "apollo": {"enabled": true}. Enable several to compare their results. ';
 const REPORT =
   'The response lists every provider with its status, records returned, credits charged, and any filters it could not apply.';
 
@@ -181,7 +181,7 @@ type PersonRef = z.infer<typeof personRef>;
 type CompanyRef = z.infer<typeof companyRef>;
 
 const enrichOutputSchema = z.looseObject({
-  results: z.array(z.looseObject({})).optional().describe('Merged records; each lists its sources.'),
+  results: z.array(z.looseObject({})).optional().describe('Lookup tools: one record per input, in input order.'),
   providers: z
     .array(
       z.looseObject({
@@ -189,6 +189,7 @@ const enrichOutputSchema = z.looseObject({
         status: z.string().optional(),
         returned: z.number().optional(),
         credits: z.number().optional(),
+        results: z.array(z.looseObject({})).optional().describe('Search tools: this provider\'s records.'),
       })
     )
     .optional()
@@ -523,37 +524,19 @@ function respond(results: unknown[], providers: ProviderReport[]): ContentResult
   return withStructured(JSON.stringify(data), data);
 }
 
+/** Search responses keep each provider's records in its own report. */
+function respondSearch(found: { report: ProviderReport; records: object[] }[], rest: ProviderReport[]): ContentResult {
+  const providers = [...found.map((f) => compact({ ...f.report, results: f.records })), ...rest.map((r) => compact(r))];
+  const data = { providers, credits_total: providers.reduce((sum, r) => sum + r.credits, 0) };
+  return withStructured(JSON.stringify(data), data);
+}
+
 type Keyed = Record<string, any> & { sources: Provider[]; confidence?: string; conflicts?: Record<string, unknown[]> };
 
 function differs(a: unknown, b: unknown): boolean {
   return typeof a === 'string' && typeof b === 'string'
     ? a.toLowerCase() !== b.toLowerCase()
     : JSON.stringify(a) !== JSON.stringify(b);
-}
-
-/** Merges records that share a key, keeps the first value of each field, and records disagreements on the named fields. */
-function mergeRecords(
-  batches: { provider: Provider; records: object[] }[],
-  keyOf: (record: any) => string | undefined,
-  checked: string[]
-): Keyed[] {
-  const out: Keyed[] = [];
-  const byKey = new Map<string, Keyed>();
-  for (const { provider: p, records } of batches) {
-    for (const record of records) {
-      const key = keyOf(record);
-      const existing = key ? byKey.get(key) : undefined;
-      if (!existing) {
-        const created: Keyed = { ...record, sources: [p] };
-        out.push(created);
-        if (key) byKey.set(key, created);
-        continue;
-      }
-      fold(existing, record, p, checked);
-    }
-  }
-  for (const record of out) settle(record);
-  return out;
 }
 
 function fold(target: Keyed, record: Record<string, any>, p: Provider, checked: string[]) {
@@ -1180,7 +1163,7 @@ export function registerEnrichTools(
     description:
       "Find people by current title, employer and location when you don't know who they are. " +
       OPT_IN +
-      'Enabled providers run in parallel; results merge by LinkedIn URL, and each record lists the providers that returned it and any disagreements. ' +
+      'Enabled providers run in parallel; each provider\'s records come back unmerged in its own providers[].results list. ' +
       'apollo: free, loose title matching, surnames masked (pass apollo_id to firecrawl_enrich_people to resolve). fullenrich: 5 credits per record, the most filters. people_data_labs: 50 credits per record, exact title match. ' +
       REPORT,
     outputSchema: enrichOutputSchema,
@@ -1191,12 +1174,7 @@ export function registerEnrichTools(
       const on = enabledProviders(a, order);
       const ctx = contextFor(session, mcpClient);
       const found = await Promise.all(on.map((p) => peopleSearchProvider(ctx, p, a)));
-      const results = mergeRecords(
-        found.map((f, i) => ({ provider: on[i], records: f.records })),
-        (r: Person) => r.linkedin_url,
-        ['title', 'company']
-      );
-      return respond(results, [...found.map((f) => f.report), ...notEnabled(a, order)]);
+      return respondSearch(found, notEnabled(a, order));
     },
   });
 
@@ -1279,7 +1257,7 @@ export function registerEnrichTools(
     description:
       'Find companies by industry, headcount, location, technology or founding year. ' +
       OPT_IN +
-      'Enabled providers run in parallel and results merge by domain, each record listing the providers that returned it and any disagreements. ' +
+      'Enabled providers run in parallel; each provider\'s records come back unmerged in its own providers[].results list. ' +
       'apollo: 30 credits per page, no industry or founding-year filter. fullenrich: 5 credits per record. people_data_labs: 50 credits per record, no technology filter. ' +
       REPORT,
     outputSchema: enrichOutputSchema,
@@ -1290,12 +1268,7 @@ export function registerEnrichTools(
       const on = enabledProviders(a, order);
       const ctx = contextFor(session, mcpClient);
       const found = await Promise.all(on.map((p) => companySearchProvider(ctx, p, a)));
-      const results = mergeRecords(
-        found.map((f, i) => ({ provider: on[i], records: f.records })),
-        (r: Company) => r.domain,
-        ['name', 'industry', 'hq']
-      );
-      return respond(results, [...found.map((f) => f.report), ...notEnabled(a, order)]);
+      return respondSearch(found, notEnabled(a, order));
     },
   });
 
