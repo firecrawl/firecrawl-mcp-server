@@ -86,7 +86,7 @@ const sqlOrQuery = {
 const peopleSearchParameters = z.strictObject({
   apollo: provider(
     {
-      person_titles: strings('Job titles, e.g. ["Head of Data"]. Similar titles also match; each added title adds results.'),
+      person_titles: strings('Job titles, e.g. ["Head of Data"]. Similar titles also match; adding titles can broaden results.'),
       person_locations: strings('e.g. ["Seattle, US"].'),
       q_organization_domains_list: strings('Employer domains, e.g. ["clerk.com"].'),
       q_keywords: text('Free text matched across the person and their company.'),

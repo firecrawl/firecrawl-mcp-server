@@ -9295,7 +9295,7 @@
       "additionalProperties": false
     }
   },
-  "people_company_search@b5f3864d6132": {
+  "people_company_search@ed8cd4b2250a": {
     "annotations": {
       "title": "Find people or companies",
       "readOnlyHint": true,
@@ -9329,7 +9329,7 @@
               "type": "object",
               "properties": {
                 "person_titles": {
-                  "description": "Job titles, e.g. [\"Head of Data\"]. Similar titles also match; each added title adds results.",
+                  "description": "Job titles, e.g. [\"Head of Data\"]. Similar titles also match; adding titles can broaden results.",
                   "minItems": 1,
                   "type": "array",
                   "items": {
