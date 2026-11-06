@@ -8,6 +8,11 @@ import {
   withFeedbackRefs,
 } from '../dist/alexandria-feedback-tokens.js';
 
+test('the retention contract is 20 tokens for 24 hours', () => {
+  assert.equal(FEEDBACK_TOKEN_LIMIT, 20);
+  assert.equal(FEEDBACK_TOKEN_TTL_MS, 24 * 60 * 60 * 1000);
+});
+
 test('a repeated token keeps its ref and is stored once', () => {
   const store = new FeedbackTokenStore();
   assert.equal(store.add('a'), 'c1');
@@ -18,20 +23,20 @@ test('a repeated token keeps its ref and is stored once', () => {
 
 test('the store keeps the newest tokens up to the limit and never reuses a ref', () => {
   const store = new FeedbackTokenStore();
-  for (let i = 0; i < FEEDBACK_TOKEN_LIMIT + 3; i += 1) store.add(`t${i}`);
-  assert.equal(store.size, FEEDBACK_TOKEN_LIMIT);
+  for (let i = 0; i < 23; i += 1) store.add(`t${i}`);
+  assert.equal(store.size, 20);
   assert.equal(store.tokens()[0], 't3');
   assert.equal(store.tokenForRef('c1'), undefined);
   assert.equal(store.tokenForRef('c4'), 't3');
   store.remove(store.tokens());
-  assert.equal(store.add('fresh'), `c${FEEDBACK_TOKEN_LIMIT + 4}`);
+  assert.equal(store.add('fresh'), 'c24');
 });
 
 test('tokens expire after 24 hours', () => {
   let now = 1_000;
   const store = new FeedbackTokenStore(() => now);
   store.add('old');
-  now += FEEDBACK_TOKEN_TTL_MS - 1;
+  now += 24 * 60 * 60 * 1000 - 1;
   store.add('new');
   assert.deepEqual(store.tokens(), ['old', 'new']);
   now += 2;
@@ -42,7 +47,8 @@ test('tokens expire after 24 hours', () => {
 test('sessions and credentials get separate stores', () => {
   const registry = new FeedbackTokenRegistry();
   const first = registry.forSession('s1', 'fc-a');
-  assert.equal(registry.forSession('s1', 'fc-b'), first);
+  assert.equal(registry.forSession('s1', 'fc-a'), first);
+  assert.notEqual(registry.forSession('s1', 'fc-b'), first);
   assert.notEqual(registry.forSession('s2', 'fc-a'), first);
   const keyed = registry.forSession(undefined, 'fc-a');
   assert.equal(registry.forSession(undefined, 'fc-a'), keyed);

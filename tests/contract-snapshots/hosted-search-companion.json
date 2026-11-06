@@ -23,8 +23,8 @@
       "people_company_search@5d5f19c5291e",
       "people_company_enrich@383c1149c5f7",
       "firecrawl_search@7035ea6860de",
-      "firecrawl_find_tools@3447ec42b55f",
-      "firecrawl_scrape@e689f38fce61"
+      "firecrawl_find_tools@d7e6be2fc683",
+      "firecrawl_scrape@df704578ab3d"
     ]
   },
   "unauthenticated": {

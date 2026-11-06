@@ -61,15 +61,12 @@ export class FeedbackTokenRegistry {
   constructor(private readonly now: () => number = Date.now) {}
 
   /**
-   * The Mcp-Session-Id names the session when the client sent one. Without it
-   * the store is scoped to the caller's credential, so one user's calls never
-   * reach another's feedback.
+   * Scoped to the caller's credential, and to the Mcp-Session-Id when the client
+   * sent one, so a session id reused under another credential never shares tokens.
    */
   forSession(sessionId: unknown, credential: string | undefined): FeedbackTokenStore {
-    const key =
-      typeof sessionId === 'string' && sessionId !== ''
-        ? `session:${sessionId}`
-        : `credential:${createHash('sha256').update(credential ?? '').digest('hex')}`;
+    const owner = createHash('sha256').update(credential ?? '').digest('hex');
+    const key = typeof sessionId === 'string' && sessionId !== '' ? `${owner}:${sessionId}` : owner;
     const existing = this.#stores.get(key);
     const store = existing ?? new FeedbackTokenStore(this.now);
     this.#stores.delete(key);

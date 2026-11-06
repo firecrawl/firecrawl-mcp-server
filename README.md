@@ -1461,7 +1461,7 @@ This uses authenticated `POST /v2/feedback`, without a job ID. It must arrive wi
 
 #### Per-call feedback tokens
 
-Alexandria provider call results can carry a `feedbackToken` so ratings are attributed to the calls they are about. The server keeps each token per MCP session (at most 20, dropped after 24 hours) and shows the agent a short `feedbackRef` such as `c3` in its place, so long tokens never reach the model. `firecrawl_feedback` sends the session's tokens with every Alexandria rating, so the overall `rating` covers every call in the session, and accepts an optional `callRatings` array to rate individual calls by their ref:
+Alexandria provider call results can carry a `feedbackToken` so ratings are attributed to the calls they are about. The server keeps each token per MCP session (keyed by the `Mcp-Session-Id` and the caller's credential, or by the credential alone when the client sends no session id; at most 20 tokens, dropped after 24 hours) and shows the agent a short `feedbackRef` such as `c3` in its place, so long tokens never reach the model. `firecrawl_feedback` sends the session's tokens with every Alexandria rating, so the overall `rating` covers every retained tokenized call in the session, and accepts an optional `callRatings` array to rate individual calls by their ref:
 
 ```json
 {

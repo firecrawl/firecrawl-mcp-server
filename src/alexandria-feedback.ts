@@ -75,15 +75,14 @@ export const ALEXANDRIA_FEEDBACK_HINT = {
     endpoint: 'alexandria',
     rating: '<good | partial | bad>',
     requestedWebsite: {
-      url: '<website the user needed data from>',
-      requestedFunctionality: '<what they needed from it>',
+      url: '<website the data was needed from>',
+      requestedFunctionality: '<what was needed>',
     },
-    objective: '<underlying goal of the task>',
-    rationale: '<why this rating, from observed results>',
-    providerFeedback:
-      '<optional [{name, issue, why}]: providers that were missing, thin, or unavailable>',
-    capabilityFeedback:
-      '<optional [{name, provider, issue, why, requestedFunctionality?}]: capabilities that were missing, wrong, or failed>',
+    objective: '<underlying goal>',
+    rationale: '<why, from observed results>',
+    providerFeedback: '<optional [{name, issue, why}]: provider gaps>',
+    capabilityFeedback: '<optional [{name, provider, issue, why, requestedFunctionality?}]: capability gaps>',
+    callRatings: '<optional [{ref, rating}]: rate single calls by feedbackRef>',
   },
 } as const;
 

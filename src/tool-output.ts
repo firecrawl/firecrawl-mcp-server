@@ -100,6 +100,7 @@ const alexandriaEnvelope = {
   message: str('Guidance that accompanies the result.'),
   nextTool: unknown('A follow-up tool call (`{name, arguments}`) that continues or inspects this result.'),
   feedbackTool: unknown('Pointer to the feedback tool for reporting how this result served the task.'),
+  feedbackRefs: unknown('Retained results only: `[{provider, capability, feedbackRef}]` per call; pass a ref in `callRatings` of the feedback tool to rate that call.'),
 };
 
 // --- src/index.ts tools -----------------------------------------------------

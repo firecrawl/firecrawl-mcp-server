@@ -100,7 +100,7 @@ async function startFakeExchangeApi(options = {}) {
         success: true,
         feedbackId: 'fb-1',
         creditsRefunded: 1,
-        ...(options.rejectedTokens ? { rejectedTokens: options.rejectedTokens } : {}),
+        ...(options.rejectedTokens !== undefined ? { rejectedTokens: options.rejectedTokens } : {}),
       });
     }
 
