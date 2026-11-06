@@ -40,7 +40,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Use `firecrawl_credit_usage` to check credits left or what credits were spent on, by month or day, optionally broken down by endpoint or API key.
 - Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control. The session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
 
-This server lists 29 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 9 tools (search, developer, government, and research search, plus Alexandria catalogue lookup and execution).
+This server lists 29 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 11 tools (search, developer, government, and research search, Alexandria catalogue lookup and execution, and people and company search and enrichment).
 
 ## Installation
 
@@ -88,7 +88,7 @@ A fixed-scope search surface is also hosted at:
 https://mcp.firecrawl.dev/v2/mcp-search
 ```
 
-It exposes a fixed set of nine tools: `firecrawl_search`, `firecrawl_developer_search`, `firecrawl_gov_search`, the four `firecrawl_research_*` tools, and the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`. Its `firecrawl_search` fetches no page content.
+It exposes a fixed set of eleven tools: `firecrawl_search`, `firecrawl_developer_search`, `firecrawl_gov_search`, the four `firecrawl_research_*` tools, the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`, and the [enrich tools](#15b-enrich-tools) `people_company_search` and `people_company_enrich`. Its `firecrawl_search` fetches no page content.
 
 ### Running with npx
 
@@ -1224,7 +1224,7 @@ tool again with the identical payload and `requestId`.
 
 ### 15b. Enrich Tools
 
-People and company search and enrichment over Alexandria's B2B data providers (Apollo, FullEnrich, People Data Labs and Data Legion). Both tools are listed wherever the server has a credential: they are not listed in local keyless mode or to keyless sessions, and the [search-only endpoint](#search-only-endpoint) does not include them. They need an API key on a team with Alexandria access.
+People and company search and enrichment over Alexandria's B2B data providers (Apollo, FullEnrich, People Data Labs and Data Legion). Both tools are listed wherever the server has a credential: they are not listed in local keyless mode or to keyless sessions. The [search-only endpoint](#search-only-endpoint) includes them too. They need an API key on a team with Alexandria access.
 
 | Tool | Use it for | Providers |
 | --- | --- | --- |
@@ -1233,7 +1233,7 @@ People and company search and enrichment over Alexandria's B2B data providers (A
 
 No parameter is shared between providers. Each provider block takes that provider's own parameters under its own names (Apollo's `person_titles`, FullEnrich's `current_position_titles`, a People Data Labs `sql` query), so a filter a provider lacks is simply absent from its block. A provider runs only when the call includes its block; a call with no provider block fails with `no_provider` and the providers the tool can use. Providers differ in coverage, so one can miss what another finds, and the tool descriptions point to `firecrawl_search` when they all miss.
 
-`people_company_search` takes `entity`, and each provider block then takes that provider's search filters for people or for companies. `people_company_enrich` takes, in each provider block, exactly one of `people` or `companies`: that provider's own list of inputs, 1 to 50 per call, and the same kind in every block. Adding `contact_fields` (`work_email`, `personal_email`, `mobile`) to a people enrichment runs the contact providers on the same people instead of the profile lookup; People Data Labs has no contact lookup and reports `skipped`.
+`people_company_search` takes `entity`, and each provider block then takes that provider's search filters for people or for companies. An optional `firecrawl_search` block runs a Firecrawl web search beside the providers, with `firecrawl_search`'s query parameters but no page fetching, and reports its results in its own `providers` entry; it is useful when the providers miss. `people_company_enrich` takes, in each provider block, exactly one of `people` or `companies`: that provider's own list of inputs, 1 to 50 per call, and the same kind in every block. Adding `contact_fields` (`work_email`, `personal_email`, `mobile`) to a people enrichment runs the contact providers on the same people instead of the profile lookup; People Data Labs has no contact lookup and reports `skipped`.
 
 ```json
 {

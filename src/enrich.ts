@@ -7,7 +7,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { type ContentResult, type McpRuntime, UserError } from './mcp/runtime.js';
+import { type ContentResult, type McpRuntime, type ToolExecuteContext, UserError } from './mcp/runtime.js';
 import { requestOrigin } from './origin';
 import { relayExchangeError } from './tool-helpers.js';
 import { withStructured } from './tool-output';
@@ -340,6 +340,8 @@ const enrichOutputSchema = z.looseObject({
         status: z.string().optional(),
         returned: z.number().optional(),
         credits: z.number().optional(),
+        note: z.string().optional().describe('Why the provider failed or skipped inputs.'),
+        retryable: z.boolean().optional().describe('The failure may succeed on a later try.'),
         results: z.array(z.looseObject({})).optional().describe('This provider\'s records; people_company_enrich records carry input_index into this provider\'s input list.'),
         unmatched: z.array(z.number()).optional().describe('people_company_enrich: input indexes this provider did not match.'),
       })
@@ -384,7 +386,7 @@ interface Company {
 }
 
 interface ProviderReport {
-  name: Provider;
+  name: Provider | 'firecrawl_search';
   status: 'ok' | 'empty' | 'error' | 'skipped' | 'not_requested';
   returned: number;
   credits: number;
@@ -655,12 +657,10 @@ const nextToolOf = (entries: Entry[]) => entries.find((e) => e.error?.nextTool)?
 const credits = (entries: Entry[]) =>
   entries.reduce((sum, e) => sum + (typeof e.creditsCost === 'number' ? e.creditsCost : 0), 0);
 
-function requestedProviders(args: Record<string, any>, order: Provider[]): Provider[] {
-  const on = order.filter((p) => args[p] !== undefined);
-  if (on.length) return on;
-  throw new UserError('No provider given. Add a block for each provider to run, with that provider\'s own parameters: ' + order.join(', ') + '.', {
+function noProvider(available: string[]): UserError {
+  return new UserError('No provider given. Add a block for each provider to run, with that provider\'s own parameters: ' + available.join(', ') + '.', {
     code: 'no_provider',
-    available: order,
+    available,
   });
 }
 
@@ -740,14 +740,20 @@ const SEARCH_HINTS: Partial<Record<Provider, Record<string, string>>> = {
   },
 };
 
+/** The filters an apollo or fullenrich search block sets, without its paging fields. */
+function searchFilters(block: Record<string, any>): Record<string, unknown> {
+  return compact(Object.fromEntries(Object.entries(block).filter(([key]) => !['per_page', 'page', 'limit', 'offset'].includes(key))));
+}
+
 async function searchWith(ctx: Context, p: Provider, block: Record<string, any>, spec: SearchSpec): Promise<ProviderReport> {
   if (p === 'datalegion') throw new Error('datalegion has no search capability.');
-  const { per_page, page, limit, offset = 0, sql, query, ...filters } = block;
+  const { per_page, page, limit, offset = 0, sql, query } = block;
+  const filters = searchFilters(block);
   if (p === 'people_data_labs') {
     const { entries, records } = await pdlSearch(ctx, spec.capability[p], has(sql) ? { sql } : { query }, limit, spec.map[p]);
     return finish(p, entries, records, {}, SEARCH_HINTS[p]);
   }
-  if (!Object.keys(compact(filters)).length) {
+  if (!Object.keys(filters).length) {
     return { name: p, status: 'skipped', returned: 0, credits: 0, note: 'No filters given; pass at least one.' };
   }
   const calls: Call[] =
@@ -1095,16 +1101,53 @@ const ENTITY: Record<string, 'person' | 'company'> = {
 type Plan = {
   order: Provider[];
   blocks: Record<string, any>;
-  estimates: Partial<Record<Provider, number>>;
+  estimates: Partial<Record<Provider | 'firecrawl_search', number>>;
   run: (ctx: Context, p: Provider, block: Record<string, any>) => Promise<ProviderReport>;
+  web?: Record<string, any>;
 };
+
+/** The server's own web search, run for the firecrawl_search block of people_company_search. */
+interface WebSearch {
+  parameters: z.ZodType;
+  run: (args: unknown, context: ToolExecuteContext<SessionData>) => Promise<ContentResult>;
+}
+
+const WEB_ABOUT =
+  'Firecrawl web search with the firecrawl_search query parameters, without page fetching: web results such as team pages, profiles and news, useful when providers miss. 2 credits per 10 results.';
+
+/** 2 credits per 10 results, rounded up, for each non-Alexandria source. */
+function webEstimate(args: Record<string, any>): number {
+  const sources = Array.isArray(args.sources) ? args.sources : ['web'];
+  const counted = sources.filter((s: any) => (typeof s === 'string' ? s : s?.type) !== 'alexandria').length || 1;
+  return 2 * Math.ceil(((args.limit ?? 10) * counted) / 10);
+}
+
+async function webReport(web: WebSearch, args: unknown, context: ToolExecuteContext<SessionData>): Promise<ProviderReport> {
+  const name = 'firecrawl_search';
+  try {
+    const result = await web.run(args, context);
+    const response = (result.structuredContent ?? {}) as Record<string, any>;
+    const results = ['web', 'news', 'images'].flatMap((key) => (Array.isArray(response.data?.[key]) ? response.data[key] : []));
+    return compact({ name, status: results.length ? 'ok' : 'empty', returned: results.length, credits: num(response.creditsUsed) ?? 0, results });
+  } catch (error) {
+    return { name, status: 'error', returned: 0, credits: 0, note: error instanceof Error ? error.message : String(error) };
+  }
+}
 
 export function registerEnrichTools(
   server: Pick<McpRuntime<SessionData>, 'addTool'>,
   getClient: GetClient,
   assertCredential: AssertCredential,
-  canList: (session?: SessionData) => boolean
+  canList: (session?: SessionData) => boolean,
+  web: WebSearch
 ): void {
+  const webBlock = web.parameters.optional().describe(WEB_ABOUT);
+  const advertisedSearch = searchParameters.extend({ firecrawl_search: webBlock });
+  const searchSchemas = {
+    person: SEARCH.person.parameters.extend({ firecrawl_search: webBlock }),
+    company: SEARCH.company.parameters.extend({ firecrawl_search: webBlock }),
+  };
+
   function tool<S extends z.ZodObject>(
     name: string,
     annotations: Record<string, unknown>,
@@ -1127,21 +1170,27 @@ export function registerEnrichTools(
         }
         return undefined;
       },
-      execute: async (args: unknown, { session, client: mcpClient }): Promise<ContentResult> => {
-        const { order, blocks, estimates, run } = plan(args as Record<string, any>);
-        const on = requestedProviders(blocks, order);
+      execute: async (args: unknown, context: ToolExecuteContext<SessionData>): Promise<ContentResult> => {
+        const { session, client: mcpClient } = context;
+        const { order, blocks, estimates, run, web: webArgs } = plan(args as Record<string, any>);
+        const on = order.filter((p) => blocks[p] !== undefined);
+        if (!on.length && !webArgs) throw noProvider(name === 'people_company_search' ? [...order, 'firecrawl_search'] : order);
         assertCredential(session);
+        const charged = [...on, ...(webArgs ? (['firecrawl_search'] as const) : [])];
         const max_credits = (args as { max_credits?: number }).max_credits ?? DEFAULT_MAX_CREDITS;
-        const credits_estimate = on.reduce((sum, p) => sum + (estimates[p] ?? 0), 0);
+        const credits_estimate = charged.reduce((sum, p) => sum + (estimates[p] ?? 0), 0);
         if (credits_estimate > max_credits) {
-          const parts = on.filter((p) => estimates[p]).map((p) => p + ' ' + estimates[p]);
+          const parts = charged.filter((p) => estimates[p]).map((p) => p + ' ' + estimates[p]);
           throw new UserError(
             'This call could cost up to ' + credits_estimate + ' credits (' + parts.join(', ') + '), above max_credits ' + max_credits + '. Nothing ran. Raise max_credits, or send fewer inputs, providers or contact fields.',
             { code: 'max_credits_exceeded', credits_estimate, max_credits, estimates }
           );
         }
         const ctx: Context = { client: getClient(session), origin: requestOrigin(mcpClient as any, session), tool: name };
-        const providers = await Promise.all(order.map((p) => (on.includes(p) ? run(ctx, p, blocks[p]) : notRequested(p))));
+        const providers = await Promise.all([
+          ...order.map((p) => (on.includes(p) ? run(ctx, p, blocks[p]) : notRequested(p))),
+          ...(webArgs ? [webReport(web, webArgs, context)] : []),
+        ]);
         const data = { providers, credits_total: providers.reduce((sum, r) => sum + r.credits, 0), credits_estimate, max_credits };
         return withStructured(JSON.stringify(data), data);
       },
@@ -1152,27 +1201,29 @@ export function registerEnrichTools(
     'people_company_search',
     { title: 'Find people or companies', readOnlyHint: true, openWorldHint: true, destructiveHint: false },
     "Find people or companies you don't know yet. Set entity to \"person\" or \"company\", then give each provider its filters for that entity: people by title, employer, location or seniority; companies by industry, headcount, location, technology or founding year. " +
-      'apollo: free for people, 30 credits per page for companies, loose matching. fullenrich: 5 credits per record, the most filters. people_data_labs: 50 credits per record, SQL. ' +
+      'apollo: free for people, 30 credits per page for companies, loose matching. fullenrich: 5 credits per record, the most filters. people_data_labs: 50 credits per record, SQL. firecrawl_search: web results, useful when providers miss, with the firecrawl_search tool\'s query parameters. ' +
       'Example: ' + JSON.stringify(SEARCH_EXAMPLE) + '. ',
-    searchParameters,
+    advertisedSearch,
     (args) => {
       if (typeof args.entity === 'string') args.entity = ENTITY[args.entity.trim().toLowerCase()] ?? args.entity;
       const entity = searchParameters.shape.entity.safeParse(args.entity);
       if (!entity.success) checkArguments('people_company_search', searchParameters.pick({ entity: true }), { entity: args.entity }, SEARCH_EXAMPLE);
-      const { parameters } = SEARCH[entity.data!];
+      const parameters = searchSchemas[entity.data!];
       repairBlocks(args, SEARCH_ORDER, (p) => parameters.shape[p as keyof typeof parameters.shape]);
       repair(parameters, args);
       checkArguments('people_company_search', parameters, args, SEARCH_EXAMPLE);
     },
     (args) => {
-      const { parameters, spec } = SEARCH[searchParameters.shape.entity.parse(args.entity)];
-      const blocks = parameters.parse(args) as Record<string, any>;
+      const entity = searchParameters.shape.entity.parse(args.entity);
+      const blocks = searchSchemas[entity].parse(args) as Record<string, any>;
+      const runs = (p: 'apollo' | 'fullenrich') => blocks[p] !== undefined && Object.keys(searchFilters(blocks[p])).length > 0;
       const estimates = {
-        apollo: args.entity === 'company' ? 30 : 0,
-        fullenrich: 5 * (blocks.fullenrich?.limit ?? 0),
+        apollo: entity === 'company' && runs('apollo') ? 30 : 0,
+        fullenrich: runs('fullenrich') ? 5 * blocks.fullenrich.limit : 0,
         people_data_labs: 50 * (blocks.people_data_labs?.limit ?? 0),
+        firecrawl_search: blocks.firecrawl_search ? webEstimate(blocks.firecrawl_search) : 0,
       };
-      return { order: SEARCH_ORDER, blocks, estimates, run: (ctx, p, block) => searchWith(ctx, p, block, spec) };
+      return { order: SEARCH_ORDER, blocks, estimates, web: blocks.firecrawl_search, run: (ctx, p, block) => searchWith(ctx, p, block, SEARCH[entity].spec) };
     }
   );
 

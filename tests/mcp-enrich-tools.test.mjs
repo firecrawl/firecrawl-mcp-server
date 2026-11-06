@@ -41,6 +41,11 @@ async function startApi(t, respond) {
     for await (const chunk of req) raw += chunk;
     const body = raw ? JSON.parse(raw) : {};
     bodies.push(body);
+    if (req.url.startsWith('/v2/search')) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ success: true, creditsUsed: 2, data: { web: [{ url: 'https://acme.example/team', title: 'Acme team' }] } }));
+      return;
+    }
     const batch = Array.isArray(body.alexandria) ? body.alexandria : [body.alexandria];
     calls.push(...batch);
     const { status = 200, json } = respond?.(batch) ?? {};
@@ -283,6 +288,40 @@ test('max_credits refuses a call that could cost more, before any provider runs'
   assert.notEqual(allowed.isError, true, JSON.stringify(allowed));
   assert.equal(allowed.structuredContent.credits_estimate, 1200);
   assert.equal(allowed.structuredContent.max_credits, 1200);
+});
+
+test('the firecrawl_search block runs a web search beside the providers and reports it separately', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { apiUrl: api.url });
+  const result = await client.callTool({
+    name: 'people_company_search',
+    arguments: { entity: 'person', apollo: { person_titles: ['Head of Data'] }, firecrawl_search: { query: 'Acme head of data', limit: 5 } },
+  });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  const data = result.structuredContent;
+  assert.deepEqual(data.providers.map((p) => p.name), ['apollo', 'fullenrich', 'people_data_labs', 'firecrawl_search']);
+  const web = data.providers[3];
+  assert.deepEqual([web.status, web.returned, web.credits], ['ok', 1, 2]);
+  assert.equal(web.results[0].url, 'https://acme.example/team');
+  assert.equal(data.credits_estimate, 2);
+  assert.equal(data.credits_total, 2);
+  assert.equal(api.bodies.find((body) => body.query).query, 'Acme head of data');
+
+  const alone = await client.callTool({ name: 'people_company_search', arguments: { entity: 'company', firecrawl_search: { query: 'Acme' } } });
+  assert.notEqual(alone.isError, true, JSON.stringify(alone));
+  assert.equal(alone.structuredContent.providers.at(-1).returned, 1);
+
+  const none = await client.callTool({ name: 'people_company_search', arguments: { entity: 'person' } });
+  assert.match(none.content[0].text, /No provider given.*firecrawl_search/);
+});
+
+test('a provider block that will not run adds nothing to the estimate', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { apiUrl: api.url });
+  const result = await client.callTool({ name: 'people_company_search', arguments: { entity: 'company', max_credits: 0, fullenrich: {}, apollo: {} } });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  assert.equal(result.structuredContent.credits_estimate, 0);
+  assert.equal(api.calls.length, 0);
 });
 
 test('provider errors carry the tool name, a hint and retryable', async (t) => {

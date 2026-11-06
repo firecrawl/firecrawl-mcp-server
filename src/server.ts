@@ -1836,6 +1836,75 @@ Enumerate URLs indexed under one website through Firecrawl without fetching each
     },
   });
 
+  /** Runs a web search for firecrawl_search, or for another tool that offers one, which errors then name. */
+  async function runSearch(
+    args: unknown,
+    { session, log, client: mcpClient }: Parameters<RegisteredTool['execute']>[1],
+    tool = 'firecrawl_search'
+  ): Promise<ContentResult> {
+    const { query, ...opts } = args as Record<string, unknown>;
+
+    const requestedSources = normalizeSearchSources(
+      Array.isArray(opts.sources) && opts.sources.length ? opts.sources : ['web']
+    ) as unknown[];
+    const addsAlexandria =
+      hasCredential(session) &&
+      enterpriseAllowsAlexandria(opts.enterprise) &&
+      !hasAlexandria(requestedSources);
+    const searchOpts = {
+      ...opts,
+      sources: addsAlexandria ? withAlexandriaSource(requestedSources) : requestedSources,
+    } as Record<string, unknown>;
+    searchOpts.domainTools ??= defaultDomainTools(searchOpts.sources);
+    searchOpts.toolDetail ??= 'compact';
+
+    if (searchOpts.scrapeOptions) {
+      searchOpts.scrapeOptions = withReadOnlyProfile(
+        transformScrapeParams(searchOpts.scrapeOptions as Record<string, unknown>)
+      );
+    }
+
+    const cleaned = removeEmptyTopLevel(searchOpts);
+    const searchQuery = (query as string | undefined) ?? '';
+    log.info('Searching', { query: searchQuery });
+    const searchBody = {
+      query: searchQuery,
+      ...(cleaned as any),
+      origin: requestOrigin(mcpClient, session),
+    };
+    const byteBudget = searchByteBudget(session?.clientUserAgent);
+    const searchResult = (response: unknown) => {
+      const shown = annotateResultPositions(withoutDiscoveredToolPrices(response));
+      return structuredCompact(byteBudget ? fitSearchResponse(shown, byteBudget) : shown);
+    };
+    const exchangeSource = hasAlexandria(searchBody.sources);
+    if (exchangeSource || searchBody.domainTools)
+      assertExchangeCredential(session);
+    if (isKeylessMode(session)) {
+      const json = await keylessPost('/v2/search', searchBody, session);
+      // Search feedback requires an authenticated account. Do not expose its
+      // identifier to keyless clients, where it would invite an unusable call.
+      // Positions are still stamped: they identify a result regardless of auth.
+      const keylessResponse = { ...(json ?? {}) };
+      delete keylessResponse.id;
+      return searchResult(keylessResponse);
+    }
+    // Call /v2/search through the SDK's HTTP layer (auth + retries) instead
+    // of `client.search()` so we preserve the full response envelope. The
+    // high-level `search()` helper strips `id` and `creditsUsed`, which
+    // supports the optional authenticated `firecrawl_search_feedback` workflow.
+    const client = getClient(session);
+    const postSearch = () =>
+      postSearchWithFallback(
+        client,
+        searchBody,
+        addsAlexandria && opts.domainTools !== true,
+        requestedSources
+      );
+    const httpRes = await relayExchangeError(postSearch, { tool });
+    return searchResult(httpRes?.data ?? {});
+  }
+
   server.addTool({
     name: 'firecrawl_search',
     _meta: { 'anthropic/alwaysLoad': true },
@@ -1871,69 +1940,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         searchQueryIsValid,
         'A query is required. Use Find Tools for catalogue lookup.'
       ),
-    execute: async (args: unknown, { session, log, client: mcpClient }): Promise<ContentResult> => {
-      const { query, ...opts } = args as Record<string, unknown>;
-
-      const requestedSources = normalizeSearchSources(
-        Array.isArray(opts.sources) && opts.sources.length ? opts.sources : ['web']
-      ) as unknown[];
-      const addsAlexandria =
-        hasCredential(session) &&
-        enterpriseAllowsAlexandria(opts.enterprise) &&
-        !hasAlexandria(requestedSources);
-      const searchOpts = {
-        ...opts,
-        sources: addsAlexandria ? withAlexandriaSource(requestedSources) : requestedSources,
-      } as Record<string, unknown>;
-      searchOpts.domainTools ??= defaultDomainTools(searchOpts.sources);
-      searchOpts.toolDetail ??= 'compact';
-
-      if (searchOpts.scrapeOptions) {
-        searchOpts.scrapeOptions = withReadOnlyProfile(
-          transformScrapeParams(searchOpts.scrapeOptions as Record<string, unknown>)
-        );
-      }
-
-      const cleaned = removeEmptyTopLevel(searchOpts);
-      const searchQuery = (query as string | undefined) ?? '';
-      log.info('Searching', { query: searchQuery });
-      const searchBody = {
-        query: searchQuery,
-        ...(cleaned as any),
-        origin: requestOrigin(mcpClient, session),
-      };
-      const byteBudget = searchByteBudget(session?.clientUserAgent);
-      const searchResult = (response: unknown) => {
-        const shown = annotateResultPositions(withoutDiscoveredToolPrices(response));
-        return structuredCompact(byteBudget ? fitSearchResponse(shown, byteBudget) : shown);
-      };
-      const exchangeSource = hasAlexandria(searchBody.sources);
-      if (exchangeSource || searchBody.domainTools)
-        assertExchangeCredential(session);
-      if (isKeylessMode(session)) {
-        const json = await keylessPost('/v2/search', searchBody, session);
-        // Search feedback requires an authenticated account. Do not expose its
-        // identifier to keyless clients, where it would invite an unusable call.
-        // Positions are still stamped: they identify a result regardless of auth.
-        const keylessResponse = { ...(json ?? {}) };
-        delete keylessResponse.id;
-        return searchResult(keylessResponse);
-      }
-      // Call /v2/search through the SDK's HTTP layer (auth + retries) instead
-      // of `client.search()` so we preserve the full response envelope. The
-      // high-level `search()` helper strips `id` and `creditsUsed`, which
-      // supports the optional authenticated `firecrawl_search_feedback` workflow.
-      const client = getClient(session);
-      const postSearch = () =>
-        postSearchWithFallback(
-          client,
-          searchBody,
-          addsAlexandria && opts.domainTools !== true,
-          requestedSources
-        );
-      const httpRes = await relayExchangeError(postSearch, { tool: 'firecrawl_search' });
-      return searchResult(httpRes?.data ?? {});
-    },
+    execute: (args, context) => runSearch(args, context),
   });
 
   async function executeExchangeCalls(
@@ -3285,7 +3292,16 @@ Set \`redactPII\` to request redaction of personally identifiable information in
   registerResearchTools(server, getClient);
   registerDeveloperTools(server, getClient);
   registerGovTools(server, getClient);
-  if (!isLocalKeylessStartup()) registerEnrichTools(server, getClient, assertExchangeCredential, (session) => !isKeylessMode(session));
+  if (!isLocalKeylessStartup()) {
+    registerEnrichTools(server, getClient, assertExchangeCredential, hasCredential, {
+      parameters: z
+        .object({ ...searchToolBaseFields })
+        .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE)
+        .refine(searchCategoriesAreCompatible, SEARCH_CATEGORIES_CONFLICT_MESSAGE)
+        .refine(searchQueryIsValid, 'A query is required.'),
+      run: (args, context) => runSearch(args, context, 'people_company_search'),
+    });
+  }
   registerUsageTools(server, getClient);
 
   hooks.registerExtraTools?.(
