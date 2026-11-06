@@ -7,7 +7,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { type ContentResult, type McpRuntime, UserError } from './mcp/runtime.js';
+import { type ContentResult, type McpRuntime, type Tool, type ToolExecuteContext, UserError } from './mcp/runtime.js';
 import { requestOrigin } from './origin';
 import { relayExchangeError } from './tool-helpers.js';
 import { withStructured } from './tool-output';
@@ -60,8 +60,6 @@ function provider<S extends z.ZodRawShape>(shape: S, about: string, check?: [(va
 
 const has = (value: unknown) => typeof value === 'string' && value.trim() !== '';
 
-const OPT_IN =
-  'Each provider takes its own native parameters; nothing is shared between providers. Include a block only for each provider you want to run, e.g. "apollo": {...}; included providers run in parallel. Providers differ in coverage and filters, so one can miss what another finds. If they all miss, firecrawl_search can find the person or company on the web. ';
 const REPORT = 'The response lists every provider with its status, records, credits charged and any error.';
 const FE_LISTS = 'List filters take [{"value": "...", "exclude"?: true, "exact_match"?: true}]; range filters take [{"min"?: n, "max"?: n}]. ';
 
@@ -70,7 +68,7 @@ const sqlOrQuery: [(value: any) => boolean, string] = [
   'people_data_labs needs exactly one of sql or query',
 ];
 
-const peopleSearchParameters = z.strictObject({
+const peopleSearchBlocks = {
   apollo: provider(
     {
       person_titles: strings('Job titles, e.g. ["Head of Data"]. Loose match; several titles widen the net.'),
@@ -80,7 +78,7 @@ const peopleSearchParameters = z.strictObject({
       per_page: z.number().int().min(1).max(25).default(10),
       page: z.number().int().min(1).optional(),
     },
-    'Apollo people/search. Free. No seniority, industry or headcount filter. Surnames come back masked: pass apollo_id to firecrawl_enrich_people as apollo.details[].id to reveal.'
+    'Apollo people/search. Free. No seniority, industry or headcount filter. Surnames come back masked: pass apollo_id to firecrawl_enrich as people.apollo.details[].id to reveal.'
   ),
   fullenrich: provider(
     {
@@ -124,9 +122,9 @@ const peopleSearchParameters = z.strictObject({
     'People Data Labs person/search. 50 credits per record. Pass sql or query.',
     sqlOrQuery
   ),
-});
+};
 
-const companySearchParameters = z.strictObject({
+const companySearchBlocks = {
   apollo: provider(
     {
       q_organization_name: text('Matched against company names and descriptions.'),
@@ -165,11 +163,11 @@ const companySearchParameters = z.strictObject({
     'People Data Labs company/search. 50 credits per record. Pass sql or query.',
     sqlOrQuery
   ),
-});
+};
 
 const apolloPersonRef = z
   .strictObject({
-    id: text('apollo_id from firecrawl_enrich_people_search.'),
+    id: text('apollo_id from firecrawl_enrich_search.'),
     email: text(),
     linkedin_url: text(),
     name: text('Full name, with domain or organization_name.'),
@@ -208,7 +206,7 @@ const batch = <T extends z.ZodType>(item: T) => z.array(item).min(1).max(50);
 const minLikelihood = z.number().int().min(1).max(10).optional().describe('Minimum match confidence, 1 to 10 (default 6).');
 const minConfidence = z.enum(['high', 'moderate', 'low']).optional();
 
-const peopleParameters = z.strictObject({
+const peopleBlocks = {
   fullenrich: provider(
     {
       people: batch(
@@ -259,12 +257,12 @@ const peopleParameters = z.strictObject({
     { people: batch(dataLegionPersonRef), min_confidence: minConfidence },
     'Data Legion people/enrich-base-no-contact. 20 credits per match.'
   ),
-});
+};
 
 const CONTACT_FIELDS = ['work_email', 'personal_email', 'mobile'] as const;
 type ContactField = (typeof CONTACT_FIELDS)[number];
 
-const contactParameters = z.strictObject({
+const contactBlocks = {
   fullenrich: provider(
     {
       contacts: batch(
@@ -295,9 +293,9 @@ const contactParameters = z.strictObject({
     },
     'Apollo people/bulk-match. 30 credits per match; work email, plus personal emails when asked.'
   ),
-});
+};
 
-const companyParameters = z.strictObject({
+const companyBlocks = {
   fullenrich: provider(
     {
       companies: batch(
@@ -359,22 +357,29 @@ const companyParameters = z.strictObject({
     },
     'Data Legion companies/enrich-base. 20 credits per match.'
   ),
-});
+};
+
+const providerReports = z
+  .array(
+    z.looseObject({
+      name: z.string().optional(),
+      status: z.string().optional(),
+      returned: z.number().optional(),
+      credits: z.number().optional(),
+      results: z.array(z.looseObject({})).optional().describe("This provider's records; lookup records carry input_index into this provider's input list."),
+      unmatched: z.array(z.number()).optional().describe('Lookups: input indexes this provider did not match.'),
+    })
+  )
+  .optional();
 
 const enrichOutputSchema = z.looseObject({
-  providers: z
-    .array(
-      z.looseObject({
-        name: z.string().optional(),
-        status: z.string().optional(),
-        returned: z.number().optional(),
-        credits: z.number().optional(),
-        results: z.array(z.looseObject({})).optional().describe('This provider\'s records; lookup records carry input_index into this provider\'s input list.'),
-        unmatched: z.array(z.number()).optional().describe('Lookup tools: input indexes this provider did not match.'),
-      })
-    )
+  people: providerReports.describe('What each people provider did, with its own records.'),
+  contact_info: providerReports.describe('What each contact provider did, with its own records.'),
+  companies: providerReports.describe('What each company provider did, with its own records.'),
+  firecrawl_search: z
+    .looseObject({ status: z.string().optional(), returned: z.number().optional(), credits: z.number().optional(), response: z.looseObject({}).optional() })
     .optional()
-    .describe('What each provider did, with its own records.'),
+    .describe('Web search: response is what firecrawl_search returns.'),
   credits_total: z.number().optional(),
 });
 
@@ -681,10 +686,9 @@ const nextToolOf = (entries: Entry[]) => entries.find((e) => e.error?.nextTool)?
 const credits = (entries: Entry[]) =>
   entries.reduce((sum, e) => sum + (typeof e.creditsCost === 'number' ? e.creditsCost : 0), 0);
 
-function requestedProviders(args: Record<string, any>, order: Provider[]): Provider[] {
-  const on = order.filter((p) => args[p] !== undefined);
-  if (on.length) return on;
-  throw new UserError('No provider given. Add a block for each provider to run, with that provider\'s own parameters: ' + order.join(', ') + '.', {
+function requestedProviders(group: string, block: Record<string, any>, order: string[]): void {
+  if (order.some((p) => block[p] !== undefined)) return;
+  throw new UserError(group + ' has no provider. Add a block for each provider to run, with that provider\'s own parameters: ' + order.join(', ') + '.', {
     code: 'no_provider',
     available: order,
   });
@@ -714,7 +718,7 @@ const chunks = <T>(items: T[], size: number): T[][] => {
   return out;
 };
 
-// ---------- Search: firecrawl_enrich_people_search, _company_search ----------
+// ---------- Search: firecrawl_enrich_search ----------
 
 interface SearchSpec {
   capability: Record<'apollo' | 'fullenrich' | 'people_data_labs', string>;
@@ -779,7 +783,7 @@ async function searchWith(ctx: Context, p: Provider, block: Record<string, any>,
   return finish(p, entries, records);
 }
 
-// ---------- Lookups: firecrawl_enrich_people, _contact_info, _company ----------
+// ---------- Lookups: firecrawl_enrich ----------
 
 type Hits = Map<number, object>;
 
@@ -948,86 +952,120 @@ async function enrichCompaniesWith(ctx: Context, p: Provider, block: Record<stri
 
 // ---------- Registration ----------
 
+type Run = (ctx: Context, p: Provider, block: Record<string, any>) => Promise<ProviderReport>;
+type SearchTool = Pick<Tool<SessionData>, 'parameters' | 'execute'>;
+
+interface Group {
+  blocks: z.ZodRawShape;
+  about: string;
+  run: Run;
+}
+
+function groupSchema(groups: Record<string, Group>): z.ZodRawShape {
+  return Object.fromEntries(
+    Object.entries(groups).map(([key, g]) => [key, z.strictObject(g.blocks).optional().describe(g.about)])
+  );
+}
+
+async function runGroup(ctx: Context, g: Group, block: Record<string, any>): Promise<ProviderReport[]> {
+  const order = Object.keys(g.blocks) as Provider[];
+  return Promise.all(order.map((p) => (block[p] !== undefined ? g.run(ctx, p, block[p]) : notRequested(p))));
+}
+
+async function firecrawlSearch(search: SearchTool, args: unknown, context: ToolExecuteContext<SessionData>) {
+  try {
+    const result = (await search.execute(args, context)) as ContentResult;
+    const response = (result.structuredContent ?? {}) as Record<string, any>;
+    const data = (response.data ?? {}) as Record<string, unknown>;
+    const returned = Object.values(data).reduce<number>((sum, v) => sum + (Array.isArray(v) ? v.length : 0), 0);
+    return { status: returned ? 'ok' : 'empty', returned, credits: num(response.creditsUsed) ?? 0, response };
+  } catch (error) {
+    return { status: 'error', returned: 0, credits: 0, note: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+const FIRECRAWL_SEARCH_ABOUT =
+  'Firecrawl web search, the same parameters and response as the firecrawl_search tool. Finds people and companies on the open web: team pages, profiles, news. Billed as firecrawl_search.';
+
 export function registerEnrichTools(
   server: Pick<McpRuntime<SessionData>, 'addTool'>,
   getClient: GetClient,
-  assertCredential: AssertCredential
+  assertCredential: AssertCredential,
+  search: SearchTool
 ): void {
   const annotations = (title: string) => ({ title, readOnlyHint: true, openWorldHint: true, destructiveHint: false });
 
-  function tool<S extends z.ZodObject>(
-    name: string,
-    title: string,
-    description: string,
-    parameters: S,
-    order: Provider[],
-    run: (ctx: Context, p: Provider, block: Record<string, any>) => Promise<ProviderReport>
-  ) {
+  function tool(name: string, title: string, description: string, groups: Record<string, Group>, withSearch: boolean) {
+    const keys = Object.keys(groups);
+    const parameters = z.strictObject({
+      ...groupSchema(groups),
+      ...(withSearch ? { firecrawl_search: (search.parameters as z.ZodType).optional().describe(FIRECRAWL_SEARCH_ABOUT) } : {}),
+    });
+    const all = withSearch ? [...keys, 'firecrawl_search'] : keys;
     server.addTool({
       name,
       annotations: annotations(title),
-      description: description + OPT_IN + REPORT,
+      description,
       outputSchema: enrichOutputSchema,
       parameters,
-      execute: async (args: unknown, { session, client: mcpClient }): Promise<ContentResult> => {
+      execute: async (args: unknown, context: ToolExecuteContext<SessionData>): Promise<ContentResult> => {
         const a = parameters.parse(args) as Record<string, any>;
-        const on = requestedProviders(a, order);
-        assertCredential(session);
-        const ctx: Context = { client: getClient(session), origin: requestOrigin(mcpClient as any, session) };
-        const providers = await Promise.all(order.map((p) => (on.includes(p) ? run(ctx, p, a[p]) : notRequested(p))));
-        const data = { providers, credits_total: providers.reduce((sum, r) => sum + r.credits, 0) };
+        const asked = keys.filter((k) => a[k] !== undefined);
+        if (!asked.length && a.firecrawl_search === undefined) {
+          throw new UserError('Nothing to run. Add one of ' + all.join(', ') + ', each with a block per provider to run.', {
+            code: 'no_provider',
+            available: all,
+          });
+        }
+        for (const k of asked) requestedProviders(k, a[k], Object.keys(groups[k].blocks));
+        let ctx: Context | undefined;
+        if (asked.length) {
+          assertCredential(context.session);
+          ctx = { client: getClient(context.session), origin: requestOrigin(context.client as any, context.session) };
+        }
+        const [web, ...reports] = await Promise.all([
+          a.firecrawl_search !== undefined ? firecrawlSearch(search, a.firecrawl_search, context) : undefined,
+          ...asked.map((k) => runGroup(ctx!, groups[k], a[k])),
+        ]);
+        const data: Record<string, unknown> = Object.fromEntries(asked.map((k, n) => [k, reports[n]]));
+        if (web) data.firecrawl_search = web;
+        const all_reports = [...reports.flat(), ...(web ? [web] : [])];
+        data.credits_total = all_reports.reduce((sum, r) => sum + r.credits, 0);
         return withStructured(JSON.stringify(data), data);
       },
     });
   }
 
   tool(
-    'firecrawl_enrich_people_search',
-    'Find people',
-    "Find people by title, employer, location and more when you don't know who they are. " +
-      'apollo: free, loose title match, masked surnames, no seniority filter. fullenrich: 5 credits per record, the most filters (seniority, headcount, past employers, recent job changes). people_data_labs: 50 credits per record, SQL with exact matching. ',
-    peopleSearchParameters,
-    ['apollo', 'fullenrich', 'people_data_labs'],
-    (ctx, p, block) => searchWith(ctx, p, block, PEOPLE_SEARCH)
+    'firecrawl_enrich_search',
+    'Find people and companies',
+    "Find people or companies by title, employer, industry, headcount, location, technology and more when you don't know who they are. " +
+      'people: apollo is free with a loose title match and masked surnames; fullenrich costs 5 credits per record and has the most filters (seniority, past employers, recent job changes); people_data_labs costs 50 per record, SQL with exact matching. ' +
+      'companies: apollo costs 30 credits per page even when empty, no industry or founding-year filter; fullenrich 5 per record, the most filters; people_data_labs 50 per record, SQL. ' +
+      'firecrawl_search: web search for people and companies, the same parameters as the firecrawl_search tool. ' +
+      'Each provider takes its own native parameters; nothing is shared. Include a block only for each provider to run, e.g. {"people": {"apollo": {...}}, "firecrawl_search": {"query": "..."}}; they run in parallel. Providers differ in coverage, so one can miss what another finds. ' +
+      REPORT,
+    {
+      people: { blocks: peopleSearchBlocks, about: 'People search, one block per provider.', run: (ctx, p, block) => searchWith(ctx, p, block, PEOPLE_SEARCH) },
+      companies: { blocks: companySearchBlocks, about: 'Company search, one block per provider.', run: (ctx, p, block) => searchWith(ctx, p, block, COMPANY_SEARCH) },
+    },
+    true
   );
 
   tool(
-    'firecrawl_enrich_people',
-    'Enrich people',
-    'Resolve known people to profiles: current title, employer, location, LinkedIn URL and recent work history. Each provider takes its own list of 1 to 50 people; results carry input_index into that list. ' +
-      'fullenrich: 10 credits per match, LinkedIn URL or name plus company. apollo: 30 per match, takes apollo_id from people search, also returns a work email. people_data_labs: 50 per match, richest history. datalegion: 20 per match. Misses are free. ',
-    peopleParameters,
-    ['fullenrich', 'apollo', 'people_data_labs', 'datalegion'],
-    enrichPeopleWith
-  );
-
-  tool(
-    'firecrawl_enrich_contact_info',
-    'Find contact details',
-    'Find contact details for known people: work email, personal email or mobile number. Each provider takes its own list of 1 to 50 people; results carry input_index into that list. ' +
-      'fullenrich: pick fields; work email 30 credits, personal email 100, mobile 300, per value found. datalegion: 100 per matched person, every field it has. apollo: 30 per match, work email, personal emails with reveal_personal_emails. ',
-    contactParameters,
-    ['fullenrich', 'datalegion', 'apollo'],
-    contactsWith
-  );
-
-  tool(
-    'firecrawl_enrich_company_search',
-    'Find companies',
-    'Find companies by industry, headcount, location, technology or founding year. ' +
-      'apollo: 30 credits per page even when empty, name and description text, no industry or founding-year filter. fullenrich: 5 credits per record, the most filters. people_data_labs: 50 credits per record, SQL. ',
-    companySearchParameters,
-    ['apollo', 'fullenrich', 'people_data_labs'],
-    (ctx, p, block) => searchWith(ctx, p, block, COMPANY_SEARCH)
-  );
-
-  tool(
-    'firecrawl_enrich_company',
-    'Enrich companies',
-    'Resolve known companies to firmographics: industry, headcount, headquarters, founding year, funding and technologies. Each provider takes its own list of 1 to 50 companies; results carry input_index into that list. ' +
-      'fullenrich: 10 credits per match, technologies, domain or LinkedIn URL only. apollo: 30 per match. people_data_labs: 50 per match, funding. datalegion: 20 per match. Misses are free. ',
-    companyParameters,
-    ['fullenrich', 'apollo', 'people_data_labs', 'datalegion'],
-    enrichCompaniesWith
+    'firecrawl_enrich',
+    'Enrich people and companies',
+    'Resolve known people and companies to full records. Each provider takes its own list of 1 to 50 inputs; results carry input_index into that list. Misses are free. ' +
+      'people (title, employer, location, LinkedIn URL, work history): fullenrich 10 credits per match, LinkedIn URL or name plus company; apollo 30, takes apollo_id from firecrawl_enrich_search, also a work email; people_data_labs 50, richest history; datalegion 20. ' +
+      'contact_info (emails, mobile): fullenrich work email 30, personal email 100, mobile 300, per value found; datalegion 100 per matched person; apollo 30, personal emails with reveal_personal_emails. ' +
+      'companies (industry, headcount, HQ, founding year, funding, technologies): fullenrich 10, domain or LinkedIn URL only; apollo 30; people_data_labs 50, funding; datalegion 20. ' +
+      'Each provider takes its own native parameters; nothing is shared. Include a block only for each provider to run, e.g. {"people": {"fullenrich": {...}}}; they run in parallel. Providers differ in coverage, so one can miss what another finds; if they all miss, firecrawl_search can find the person or company on the web. ' +
+      REPORT,
+    {
+      people: { blocks: peopleBlocks, about: 'Profiles for known people, one block per provider.', run: enrichPeopleWith },
+      contact_info: { blocks: contactBlocks, about: 'Emails and phone numbers for known people, one block per provider.', run: contactsWith },
+      companies: { blocks: companyBlocks, about: 'Firmographics for known companies, one block per provider.', run: enrichCompaniesWith },
+    },
+    false
   );
 }

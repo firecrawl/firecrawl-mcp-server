@@ -439,7 +439,7 @@ export interface FirecrawlMcpServerOptions {
   searchFeedback?: boolean;
   /** Register firecrawl_feedback. Defaults to true. */
   endpointFeedback?: boolean;
-  /** Register the firecrawl_enrich_* people and company tools. Defaults to false. */
+  /** Register the firecrawl_enrich_search and firecrawl_enrich people and company tools. Defaults to false. */
   enrichTools?: boolean;
   /** Tag sent as the `integration` field of API requests that accept one, such as `_zed`. */
   integration?: string;
@@ -1839,7 +1839,7 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
     },
   });
 
-  server.addTool({
+  const searchTool: RegisteredTool = {
     name: 'firecrawl_search',
     _meta: { 'anthropic/alwaysLoad': true },
     annotations: {
@@ -1937,7 +1937,8 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       const httpRes = await relayExchangeError(postSearch, { tool: 'firecrawl_search' });
       return searchResult(httpRes?.data ?? {});
     },
-  });
+  };
+  server.addTool(searchTool);
 
   async function executeExchangeCalls(
     session: SessionData | undefined,
@@ -3288,7 +3289,7 @@ Set \`redactPII\` to request redaction of personally identifiable information in
   registerResearchTools(server, getClient);
   registerDeveloperTools(server, getClient);
   registerGovTools(server, getClient);
-  if (config.enrichTools) registerEnrichTools(server, getClient, assertExchangeCredential);
+  if (config.enrichTools) registerEnrichTools(server, getClient, assertExchangeCredential, searchTool);
   registerUsageTools(server, getClient);
 
   hooks.registerExtraTools?.(

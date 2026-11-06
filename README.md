@@ -40,7 +40,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Use `firecrawl_credit_usage` to check credits left or what credits were spent on, by month or day, optionally broken down by endpoint or API key.
 - Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control. The session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
 
-This server lists 27 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. Setting `FIRECRAWL_ENRICH_TOOLS=1` adds the five opt-in [enrich tools](#15b-enrich-tools-firecrawl_enrich_). For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 9 tools (search, developer, government, and research search, plus Alexandria catalogue lookup and execution).
+This server lists 27 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. Setting `FIRECRAWL_ENRICH_TOOLS=1` adds the two opt-in [enrich tools](#15b-enrich-tools-firecrawl_enrich_search-firecrawl_enrich). For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 9 tools (search, developer, government, and research search, plus Alexandria catalogue lookup and execution).
 
 ## Installation
 
@@ -297,7 +297,7 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 - `FIRECRAWL_INTEGRATION` (Optional): Integration tag for apps that launch this server, such as an editor extension
   - Sent as the `integration` field of scrape, batch scrape, crawl, map, search, extract, agent, parse, interact and feedback requests
   - Use a value that starts with `_`, for example `_zed`
-- `FIRECRAWL_ENRICH_TOOLS` (Optional): Set to `1` to register the five [`firecrawl_enrich_*` tools](#15b-enrich-tools-firecrawl_enrich_) for people and company enrichment. Off by default.
+- `FIRECRAWL_ENRICH_TOOLS` (Optional): Set to `1` to register the two [enrich tools](#15b-enrich-tools-firecrawl_enrich_search-firecrawl_enrich), `firecrawl_enrich_search` and `firecrawl_enrich`, for people and company search and enrichment. Off by default.
 
 #### Local HTTP mode
 
@@ -1223,31 +1223,44 @@ for data is not consent, and no automatic acceptance or uncertain retries occur.
 No credits are charged for the blocked retrieval. After the admin confirms acceptance, call the same
 tool again with the identical payload and `requestId`.
 
-### 15b. Enrich Tools (`firecrawl_enrich_*`)
+### 15b. Enrich Tools (`firecrawl_enrich_search`, `firecrawl_enrich`)
 
-Opt-in people and company enrichment over Alexandria's B2B data providers (Apollo, FullEnrich, People Data Labs and Data Legion). Start the server with `FIRECRAWL_ENRICH_TOOLS=1` (or pass `enrichTools: true` programmatically) to register them; they need an API key on a team with Alexandria access.
+Opt-in people and company search and enrichment over Alexandria's B2B data providers (Apollo, FullEnrich, People Data Labs and Data Legion). Start the server with `FIRECRAWL_ENRICH_TOOLS=1` (or pass `enrichTools: true` programmatically) to register them; the Alexandria providers need an API key on a team with Alexandria access.
 
-| Tool | Use it for | Providers |
-| --- | --- | --- |
-| `firecrawl_enrich_people_search` | Finding people by title, employer, location and more | apollo, fullenrich, people_data_labs |
-| `firecrawl_enrich_people` | Resolving known people to profiles and work history | fullenrich, apollo, people_data_labs, datalegion |
-| `firecrawl_enrich_contact_info` | Work email, personal email or mobile for known people | fullenrich, datalegion, apollo |
-| `firecrawl_enrich_company_search` | Finding companies by industry, headcount, location, technology or founding year | apollo, fullenrich, people_data_labs |
-| `firecrawl_enrich_company` | Resolving known companies to firmographics | fullenrich, apollo, people_data_labs, datalegion |
+| Tool | Group | Use it for | Providers |
+| --- | --- | --- | --- |
+| `firecrawl_enrich_search` | `people` | Finding people by title, employer, location and more | apollo, fullenrich, people_data_labs |
+| | `companies` | Finding companies by industry, headcount, location, technology or founding year | apollo, fullenrich, people_data_labs |
+| | `firecrawl_search` | Finding people and companies on the web | Firecrawl web search, the same parameters as `firecrawl_search` |
+| `firecrawl_enrich` | `people` | Resolving known people to profiles and work history | fullenrich, apollo, people_data_labs, datalegion |
+| | `contact_info` | Work email, personal email or mobile for known people | fullenrich, datalegion, apollo |
+| | `companies` | Resolving known companies to firmographics | fullenrich, apollo, people_data_labs, datalegion |
 
-No parameter is shared between providers. Each provider block takes that provider's own parameters under its own names (Apollo's `person_titles`, FullEnrich's `current_position_titles`, a People Data Labs `sql` query), so a filter a provider lacks is simply absent from its block. A provider runs only when the call includes its block; a call with no provider block fails with `no_provider` and the providers the tool can use. Providers differ in coverage, so one can miss what another finds, and the tool descriptions point to `firecrawl_search` when they all miss. Lookup tools take each provider's own list of inputs, 1 to 50 per call.
+Each group holds one block per provider. No parameter is shared between providers: each block takes that provider's own parameters under its own names (Apollo's `person_titles`, FullEnrich's `current_position_titles`, a People Data Labs `sql` query), so a filter a provider lacks is simply absent from its block. A provider runs only when the call includes its block. A call with no group fails with `no_provider`, and so does a group with no provider block, naming the providers it can use. The `firecrawl_search` block in `firecrawl_enrich_search` takes exactly the parameters of the `firecrawl_search` tool and returns its response. Lookups take each provider's own list of inputs, 1 to 50 per call.
 
 ```json
 {
-  "name": "firecrawl_enrich_company",
+  "name": "firecrawl_enrich_search",
   "arguments": {
-    "fullenrich": { "companies": [{ "domain": "example.com" }] },
-    "datalegion": { "companies": [{ "domain": "example.com" }, { "name": "Example Labs" }] }
+    "people": { "apollo": { "person_titles": ["Head of Data"], "q_organization_domains_list": ["example.com"] } },
+    "firecrawl_search": { "query": "example.com head of data", "limit": 5 }
   }
 }
 ```
 
-Enabled providers run in parallel, and nothing is merged. The response has one `providers` entry per provider with its `status`, records `returned`, `credits` and its own `results`; lookup results carry `input_index` into that provider's input list, and `unmatched` lists the inputs it missed. `credits_total` sums the charges. Tool descriptions list each provider's credit price.
+```json
+{
+  "name": "firecrawl_enrich",
+  "arguments": {
+    "companies": {
+      "fullenrich": { "companies": [{ "domain": "example.com" }] },
+      "datalegion": { "companies": [{ "domain": "example.com" }, { "name": "Example Labs" }] }
+    }
+  }
+}
+```
+
+Requested providers run in parallel, and nothing is merged. The response has one key per requested group listing every provider in that group with its `status`, records `returned`, `credits` and its own `results`; lookup results carry `input_index` into that provider's input list, and `unmatched` lists the inputs it missed. `firecrawl_search` reports its `status`, `returned`, `credits` and the full search `response`. `credits_total` sums the charges. Tool descriptions list each provider's credit price.
 
 ### 16. Credit Usage Tool
 

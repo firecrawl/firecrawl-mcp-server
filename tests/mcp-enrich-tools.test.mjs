@@ -1,4 +1,4 @@
-// The opt-in enrich tools: registration behind enrichTools, the no-provider error,
+// The opt-in enrich tools: registration behind enrichTools, the nothing-to-run errors,
 // schema refusals, and each provider running on its own native parameters.
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -8,13 +8,7 @@ import { createFirecrawlMcpServer } from '../dist/server.js';
 import { getFreePort, startStdio } from './helpers/exchange-mcp.mjs';
 import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
 
-const ENRICH_TOOLS = [
-  'firecrawl_enrich_people_search',
-  'firecrawl_enrich_people',
-  'firecrawl_enrich_contact_info',
-  'firecrawl_enrich_company_search',
-  'firecrawl_enrich_company',
-];
+const ENRICH_TOOLS = ['firecrawl_enrich_search', 'firecrawl_enrich'];
 
 function answer(call) {
   const { provider, capability, options } = call;
@@ -38,6 +32,12 @@ async function startApi(t) {
     let raw = '';
     for await (const chunk of req) raw += chunk;
     const body = raw ? JSON.parse(raw) : {};
+    if (req.url.startsWith('/v2/search')) {
+      calls.push({ search: body });
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ success: true, data: { web: [{ url: 'https://acme.example/team', title: 'Team' }] }, creditsUsed: 2 }));
+      return;
+    }
     const batch = Array.isArray(body.alexandria) ? body.alexandria : [body.alexandria];
     calls.push(...batch);
     res.writeHead(200, { 'content-type': 'application/json' });
@@ -90,7 +90,7 @@ test('an input without an identifier is refused by the schema', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { enrichTools: true, apiUrl: api.url });
   await assert.rejects(
-    client.callTool({ name: 'firecrawl_enrich_people', arguments: { fullenrich: { people: [{ person_name: 'Jane Doe' }] } } }),
+    client.callTool({ name: 'firecrawl_enrich', arguments: { people: { fullenrich: { people: [{ person_name: 'Jane Doe' }] } } } }),
     (error) => /Each fullenrich person needs/.test(error.message) && !/\.\. /.test(error.message)
   );
   assert.equal(api.calls.length, 0);
@@ -99,9 +99,12 @@ test('an input without an identifier is refused by the schema', async (t) => {
 test('a call with no provider block is refused before any provider runs', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { enrichTools: true, apiUrl: api.url });
-  const result = await client.callTool({ name: 'firecrawl_enrich_company', arguments: {} });
-  assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /No provider given/);
+  const empty = await client.callTool({ name: 'firecrawl_enrich', arguments: {} });
+  assert.equal(empty.isError, true);
+  assert.match(empty.content[0].text, /Nothing to run/);
+  const noBlock = await client.callTool({ name: 'firecrawl_enrich', arguments: { companies: {} } });
+  assert.equal(noBlock.isError, true);
+  assert.match(noBlock.content[0].text, /companies has no provider/);
   assert.equal(api.calls.length, 0);
 });
 
@@ -109,16 +112,18 @@ test('company lookup runs each provider on its own inputs and reports them separ
   const api = await startApi(t);
   const client = await connect(t, { enrichTools: true, apiUrl: api.url });
   const result = await client.callTool({
-    name: 'firecrawl_enrich_company',
+    name: 'firecrawl_enrich',
     arguments: {
-      fullenrich: { companies: [{ domain: 'acme.example' }, { domain: 'missing.example' }] },
-      apollo: { details: [{ domain: 'globex.example' }] },
+      companies: {
+        fullenrich: { companies: [{ domain: 'acme.example' }, { domain: 'missing.example' }] },
+        apollo: { details: [{ domain: 'globex.example' }] },
+      },
     },
   });
   assert.notEqual(result.isError, true, JSON.stringify(result));
   const data = result.structuredContent;
-  assert.equal(data.results, undefined);
-  const [fullenrich, apollo, pdl, datalegion] = data.providers;
+  assert.equal(data.people, undefined);
+  const [fullenrich, apollo, pdl, datalegion] = data.companies;
   assert.deepEqual([fullenrich.name, fullenrich.status, fullenrich.credits, fullenrich.unmatched], ['fullenrich', 'ok', 10, [1]]);
   assert.deepEqual(fullenrich.results.map((r) => [r.input_index, r.name]), [[0, 'Acme']]);
   assert.deepEqual(apollo.results.map((r) => [r.input_index, r.name]), [[0, 'Globex']]);
@@ -131,17 +136,38 @@ test('people search passes a provider its own parameters unchanged', async (t) =
   const api = await startApi(t);
   const client = await connect(t, { enrichTools: true, apiUrl: api.url });
   const result = await client.callTool({
-    name: 'firecrawl_enrich_people_search',
+    name: 'firecrawl_enrich_search',
     arguments: {
-      apollo: { person_titles: ['Head of Data'], q_organization_domains_list: ['acme.example'] },
-      fullenrich: {},
+      people: {
+        apollo: { person_titles: ['Head of Data'], q_organization_domains_list: ['acme.example'] },
+        fullenrich: {},
+      },
     },
   });
   const data = result.structuredContent;
-  const apollo = data.providers.find((p) => p.name === 'apollo');
+  const apollo = data.people.find((p) => p.name === 'apollo');
   assert.equal(apollo.results[0].apollo_id, 'a1');
   assert.deepEqual(api.calls[0].options, { person_titles: ['Head of Data'], q_organization_domains_list: ['acme.example'], per_page: 10 });
-  const fullenrich = data.providers.find((p) => p.name === 'fullenrich');
+  const fullenrich = data.people.find((p) => p.name === 'fullenrich');
   assert.equal(fullenrich.status, 'skipped');
   assert.equal(api.calls.length, 1);
+});
+
+test('enrich search runs firecrawl_search as one more provider beside the Alexandria ones', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { enrichTools: true, apiUrl: api.url });
+  const result = await client.callTool({
+    name: 'firecrawl_enrich_search',
+    arguments: {
+      people: { apollo: { person_titles: ['Head of Data'] } },
+      firecrawl_search: { query: 'acme head of data', limit: 3 },
+    },
+  });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  const data = result.structuredContent;
+  assert.deepEqual([data.firecrawl_search.status, data.firecrawl_search.returned, data.firecrawl_search.credits], ['ok', 1, 2]);
+  assert.equal(data.firecrawl_search.response.data.web[0].url, 'https://acme.example/team');
+  assert.equal(api.calls.find((call) => call.search).search.query, 'acme head of data');
+  assert.equal(data.people.find((p) => p.name === 'apollo').status, 'ok');
+  assert.equal(data.credits_total, 2);
 });
