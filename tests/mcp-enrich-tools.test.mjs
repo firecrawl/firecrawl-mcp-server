@@ -29,6 +29,10 @@ function answer(call) {
       data: { status: 'job_pending', jobId: 'j1', enrichmentId: 'e1', pollAfterSeconds: 60, next: { provider: 'firecrawl', capability: 'job-status', options: { id: 'j1' } } },
     };
   }
+  if (provider === 'fullenrich' && capability === 'contacts/work-email' && options.first_name === 'Parked') {
+    const nextTool = { name: 'firecrawl_scrape', arguments: { alexandria: { provider: 'firecrawl', capability: 'job-status', options: { id: 'j3' } } } };
+    return { creditsCost: 0, error: { code: 'job_pending', message: 'Still running.', nextTool } };
+  }
   if (provider === 'fullenrich' && capability === 'contacts/work-email' && options.first_name === 'Unread') {
     return { creditsCost: 0, error: { code: 'job_pending', message: 'Upstream job e2 is still running; repeating this call starts another one.' } };
   }
@@ -424,7 +428,13 @@ test('a FullEnrich contact still running upstream is reported as pending, not un
     name: 'people_company_enrich',
     arguments: {
       contact_fields: ['work_email'],
-      fullenrich: { people: [{ person_name: 'Pending Person', company_domain: 'acme.example' }, { person_name: 'Unread Person', company_domain: 'acme.example' }] },
+      fullenrich: {
+        people: [
+          { person_name: 'Pending Person', company_domain: 'acme.example' },
+          { person_name: 'Unread Person', company_domain: 'acme.example' },
+          { person_name: 'Parked Person', company_domain: 'acme.example' },
+        ],
+      },
     },
   });
   assert.notEqual(result.isError, true, JSON.stringify(result));
@@ -438,7 +448,12 @@ test('a FullEnrich contact still running upstream is reported as pending, not un
     next_tool: { name: 'firecrawl_scrape', arguments: { alexandria: { provider: 'firecrawl', capability: 'job-status', options: { id: 'j1' } } } },
   });
   assert.deepEqual(fullenrich.pending[1], { input_index: 1, field: 'work_email', note: 'Upstream job e2 is still running; repeating this call starts another one.' });
-  assert.match(fullenrich.note, /Read each with its next_tool after poll_after_seconds/);
+  assert.deepEqual(fullenrich.pending[2], {
+    input_index: 2,
+    field: 'work_email',
+    next_tool: { name: 'firecrawl_scrape', arguments: { alexandria: { provider: 'firecrawl', capability: 'job-status', options: { id: 'j3' } } } },
+  });
+  assert.match(fullenrich.note, /Read each entry that has a next_tool with it after poll_after_seconds; an entry without one cannot be read later/);
   assert.equal(fullenrich.retryable, undefined);
 });
 

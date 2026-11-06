@@ -894,7 +894,7 @@ function withMissing(report: ProviderReport, fields: ContactField[]): ProviderRe
 }
 
 const PENDING_NOTE =
-  'Pending inputs were still running upstream when the request ended, and nothing was charged for them. Read each with its next_tool after poll_after_seconds; the first read of a finished result is billed once, later reads are free.';
+  'Pending inputs were still running upstream when the request ended, and nothing was charged for them. Read each entry that has a next_tool with it after poll_after_seconds; an entry without one cannot be read later from this response. The first read of a finished result is billed once, later reads are free.';
 
 async function contactsWith(ctx: Context, p: Provider, block: Record<string, any>, fields: ContactField[]): Promise<ProviderReport> {
   if (p === 'datalegion') return withMissing(await dataLegionPeople(ctx, block, 'people/enrich-base-with-contact'), fields);
@@ -923,8 +923,8 @@ async function contactsWith(ctx: Context, p: Provider, block: Record<string, any
           field,
           job_id: str(job.jobId),
           poll_after_seconds: num(job.pollAfterSeconds),
-          next_tool: isPlain(job.next) ? { name: 'firecrawl_scrape', arguments: { alexandria: job.next } } : undefined,
-          note: job.next ? undefined : entry.error?.message,
+          next_tool: isPlain(job.next) ? { name: 'firecrawl_scrape', arguments: { alexandria: job.next } } : entry.error?.nextTool,
+          note: job.next || entry.error?.nextTool ? undefined : entry.error?.message,
         })
       );
       return;
