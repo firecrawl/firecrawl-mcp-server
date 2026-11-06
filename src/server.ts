@@ -439,8 +439,6 @@ export interface FirecrawlMcpServerOptions {
   searchFeedback?: boolean;
   /** Register firecrawl_feedback. Defaults to true. */
   endpointFeedback?: boolean;
-  /** Register the people and company search and lookup tools. Defaults to false. */
-  enrichTools?: boolean;
   /** Tag sent as the `integration` field of API requests that accept one, such as `_zed`. */
   integration?: string;
   /**
@@ -666,7 +664,6 @@ export function createFirecrawlMcpServer(
     requireCredential: options.requireCredential ?? false,
     searchFeedback: options.searchFeedback ?? true,
     endpointFeedback: options.endpointFeedback ?? true,
-    enrichTools: options.enrichTools ?? false,
     integration: integrationFrom(options.integration),
   };
   const logging = options.logging ?? config.transport === 'httpStream';
@@ -3288,7 +3285,7 @@ Set \`redactPII\` to request redaction of personally identifiable information in
   registerResearchTools(server, getClient);
   registerDeveloperTools(server, getClient);
   registerGovTools(server, getClient);
-  if (config.enrichTools) registerEnrichTools(server, getClient, assertExchangeCredential);
+  if (!isLocalKeylessStartup()) registerEnrichTools(server, getClient, assertExchangeCredential, (session) => !isKeylessMode(session));
   registerUsageTools(server, getClient);
 
   hooks.registerExtraTools?.(

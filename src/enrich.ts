@@ -65,6 +65,10 @@ const OPT_IN =
 const REPORT = 'The response lists every provider with its status, records, credits charged and any error.';
 const FE_LISTS = 'List filters take [{"value": "...", "exclude"?: true, "exact_match"?: true}]; range filters take [{"min"?: n, "max"?: n}]. ';
 
+const SENIORITY_LEVELS = 'One of Owner, Founder, C-Level, Partner, VP, Head, Director, Manager or Senior';
+const SENIORITY = new Set(['owner', 'founder', 'c-level', 'partner', 'vp', 'head', 'director', 'manager', 'senior']);
+const INDUSTRIES = "LinkedIn's current industry names, e.g. Software Development or Computer and Network Security, not Computer Software.";
+
 const sqlOrQuery: [(value: any) => boolean, string] = [
   (v) => has(v.sql) !== (v.query !== undefined),
   'people_data_labs needs exactly one of sql or query',
@@ -80,19 +84,23 @@ const peopleSearchParameters = z.strictObject({
       per_page: z.number().int().min(1).max(25).default(10),
       page: z.number().int().min(1).optional(),
     },
-    'Apollo people/search. Free. No seniority, industry or headcount filter. Surnames come back masked: pass apollo_id to people_company_lookup as apollo.people[].id to reveal.'
+    'Apollo people/search. Free. No seniority, industry or headcount filter. Surnames come back masked: pass apollo_id to people_company_enrich as apollo.people[].id to reveal.'
   ),
   fullenrich: provider(
     {
       current_position_titles: matches('e.g. [{"value":"Head of Data"}].'),
-      current_position_seniority_level: matches('Founder, C-Level, VP, Head, Director, Manager or Senior.'),
+      current_position_seniority_level: z
+        .array(match.refine((m) => SENIORITY.has(m.value.trim().toLowerCase()), { message: SENIORITY_LEVELS }))
+        .min(1)
+        .optional()
+        .describe(SENIORITY_LEVELS + '.'),
       current_position_job_functions: matches(),
       current_position_sub_functions: matches(),
       current_position_years_in: ranges(),
       current_company_names: matches(),
       current_company_domains: matches('Exact match recommended.'),
       current_company_professional_network_urls: matches('Employer LinkedIn URLs.'),
-      current_company_industries: matches(),
+      current_company_industries: matches(INDUSTRIES),
       current_company_specialties: matches(),
       current_company_technologies: matches(),
       current_company_types: matches('e.g. Privately Held, Public Company.'),
@@ -141,7 +149,7 @@ const companySearchParameters = z.strictObject({
   fullenrich: provider(
     {
       keywords: matches('Words in the company description.'),
-      industries: matches(),
+      industries: matches(INDUSTRIES),
       specialties: matches(),
       technologies: matches(),
       types: matches('e.g. Privately Held, Public Company.'),
@@ -167,8 +175,17 @@ const companySearchParameters = z.strictObject({
   ),
 });
 
+const DEFAULT_MAX_CREDITS = 1000;
+const maxCredits = z
+  .number()
+  .int()
+  .min(0)
+  .optional()
+  .describe('Most credits this call may spend, default ' + DEFAULT_MAX_CREDITS + '. A call that could cost more, if every record were found, is refused before any provider runs.');
+
 const searchParameters = z.strictObject({
-  entity: z.enum(['person', 'company']).describe("What to find. Each provider block then takes that entity's filters."),
+  entity: z.enum(['person', 'company']).describe('"person" to find people, "company" to find companies. Each provider block then takes that entity\'s filters.'),
+  max_credits: maxCredits,
   apollo: either(peopleSearchParameters.shape.apollo, companySearchParameters.shape.apollo),
   fullenrich: either(peopleSearchParameters.shape.fullenrich, companySearchParameters.shape.fullenrich),
   people_data_labs: either(peopleSearchParameters.shape.people_data_labs, companySearchParameters.shape.people_data_labs),
@@ -289,6 +306,7 @@ const CONTACT_FIELDS = ['work_email', 'personal_email', 'mobile'] as const;
 type ContactField = (typeof CONTACT_FIELDS)[number];
 
 const lookupParameters = z.strictObject({
+  max_credits: maxCredits,
   contact_fields: z
     .array(z.enum(CONTACT_FIELDS))
     .min(1)
@@ -322,13 +340,15 @@ const enrichOutputSchema = z.looseObject({
         status: z.string().optional(),
         returned: z.number().optional(),
         credits: z.number().optional(),
-        results: z.array(z.looseObject({})).optional().describe('This provider\'s records; lookup records carry input_index into this provider\'s input list.'),
-        unmatched: z.array(z.number()).optional().describe('Lookup tools: input indexes this provider did not match.'),
+        results: z.array(z.looseObject({})).optional().describe('This provider\'s records; people_company_enrich records carry input_index into this provider\'s input list.'),
+        unmatched: z.array(z.number()).optional().describe('people_company_enrich: input indexes this provider did not match.'),
       })
     )
     .optional()
     .describe('What each provider did, with its own records.'),
   credits_total: z.number().optional(),
+  credits_estimate: z.number().optional().describe('The most this call could have cost, checked against max_credits before it ran.'),
+  max_credits: z.number().optional(),
 });
 
 // ---------- Normalized records ----------
@@ -371,6 +391,7 @@ interface ProviderReport {
   attempted?: number;
   next_tool?: unknown;
   note?: string;
+  retryable?: boolean;
   results?: object[];
   unmatched?: number[];
 }
@@ -588,6 +609,7 @@ type Entry = { data?: any; error?: { code?: string; message?: string; nextTool?:
 interface Context {
   client: any;
   origin: string;
+  tool: string;
 }
 
 /** Runs one provider's calls, ten per request, and returns one entry per call in order. */
@@ -605,7 +627,7 @@ async function runCalls(ctx: Context, p: Provider, calls: Call[]): Promise<Entry
               { alexandria: chunk.map((c) => ({ provider: SLUG[p], ...c })), origin: ctx.origin },
               { headers: { 'x-request-id': requestId } }
             ),
-          { tool: 'firecrawl_scrape', requestId, providers: [SLUG[p]] }
+          { tool: ctx.tool, requestId, providers: [SLUG[p]] }
         );
         const entries = response?.data?.data?.alexandria;
         if (!Array.isArray(entries)) throw new Error('Unexpected response shape.');
@@ -624,10 +646,9 @@ async function runCalls(ctx: Context, p: Provider, calls: Call[]): Promise<Entry
 
 const isMiss = (entry: Entry) => entry.error?.code === 'not_found';
 
-function errorNote(entries: Entry[]): string | undefined {
-  const failed = entries.find((e) => e.error && !isMiss(e));
-  return failed ? [failed.error?.code, failed.error?.message].filter(Boolean).join(': ') : undefined;
-}
+const RETRYABLE = new Set(['provider_error', 'provider_unavailable', 'provider_rate_limited', 'request_timeout']);
+
+const failureOf = (entries: Entry[]) => entries.find((e) => e.error && !isMiss(e))?.error;
 
 const nextToolOf = (entries: Entry[]) => entries.find((e) => e.error?.nextTool)?.error?.nextTool;
 
@@ -647,14 +668,17 @@ function notRequested(name: Provider): ProviderReport {
   return { name, status: 'not_requested', returned: 0, credits: 0 };
 }
 
-function finish(p: Provider, entries: Entry[], records: object[], extra: Partial<ProviderReport> = {}): ProviderReport {
-  const failure = errorNote(entries);
+/** hints adds what to change to a provider error whose own message does not say. */
+function finish(p: Provider, entries: Entry[], records: object[], extra: Partial<ProviderReport> = {}, hints: Record<string, string> = {}): ProviderReport {
+  const failure = failureOf(entries);
+  const code = failure?.code;
   return compact({
     name: p,
     status: records.length ? 'ok' : failure ? 'error' : 'empty',
     returned: records.length,
     credits: credits(entries),
-    note: failure,
+    note: failure ? [code, [failure.message, code && hints[code]].filter(Boolean).join(' ')].filter(Boolean).join(': ') : undefined,
+    retryable: RETRYABLE.has(code ?? '') || undefined,
     next_tool: nextToolOf(entries),
     results: records,
     ...extra,
@@ -705,12 +729,23 @@ async function pdlSearch(ctx: Context, capability: string, query: Record<string,
   return { entries, records };
 }
 
+const SEARCH_HINTS: Partial<Record<Provider, Record<string, string>>> = {
+  people_data_labs: {
+    invalid_option:
+      'Every field in the query must exist in its schema (https://docs.peopledatalabs.com/docs/fields) and be a subfield, e.g. experience.company.name rather than experience; values are lowercase; LIKE takes at most 20 % wildcards.',
+  },
+  fullenrich: {
+    provider_error:
+      "FullEnrich answers this way when a filter value is not one it knows, often an industry: use LinkedIn's current industry names, e.g. Software Development. If every value is valid, retry later.",
+  },
+};
+
 async function searchWith(ctx: Context, p: Provider, block: Record<string, any>, spec: SearchSpec): Promise<ProviderReport> {
   if (p === 'datalegion') throw new Error('datalegion has no search capability.');
   const { per_page, page, limit, offset = 0, sql, query, ...filters } = block;
   if (p === 'people_data_labs') {
     const { entries, records } = await pdlSearch(ctx, spec.capability[p], has(sql) ? { sql } : { query }, limit, spec.map[p]);
-    return finish(p, entries, records);
+    return finish(p, entries, records, {}, SEARCH_HINTS[p]);
   }
   if (!Object.keys(compact(filters)).length) {
     return { name: p, status: 'skipped', returned: 0, credits: 0, note: 'No filters given; pass at least one.' };
@@ -729,10 +764,10 @@ async function searchWith(ctx: Context, p: Provider, block: Record<string, any>,
     const rows = read(e.data);
     return Array.isArray(rows) ? rows.map(map) : [];
   });
-  return finish(p, entries, records);
+  return finish(p, entries, records, {}, SEARCH_HINTS[p]);
 }
 
-// ---------- Lookups: people_company_lookup ----------
+// ---------- Lookups: people_company_enrich ----------
 
 type Hits = Map<number, object>;
 
@@ -825,7 +860,9 @@ async function contactsWith(ctx: Context, p: Provider, block: Record<string, any
   if (p === 'apollo') return apolloPeople(ctx, block.details, { reveal_personal_emails: block.reveal_personal_emails });
 
   const fields: ContactField[] = block.fields;
-  const plan = (block.contacts as Record<string, string>[]).flatMap((ref, index) => fields.map((field) => ({ index, field, ref })));
+  const contacts: (Record<string, string> | undefined)[] = block.contacts;
+  const plan = contacts.flatMap((ref, index) => (ref ? fields.map((field) => ({ index, field, ref })) : []));
+  const unusable = contacts.flatMap((ref, index) => (ref ? [] : [index]));
   const entries = await runCalls(
     ctx,
     p,
@@ -848,7 +885,10 @@ async function contactsWith(ctx: Context, p: Provider, block: Record<string, any
     if (field === 'work_email') record.email_status = str(found?.status);
     hits.set(index, compact(record));
   });
-  return lookupReport(p, entries, hits, block.contacts.length);
+  const report = lookupReport(p, entries, hits, contacts.length);
+  if (!unusable.length) return report;
+  const skipped = 'Skipped inputs ' + unusable.join(', ') + ': contacts need a person_professional_network_url, or a person_name with company_domain.';
+  return { ...report, note: [report.note, skipped].filter(Boolean).join(' ') };
 }
 
 async function enrichCompaniesWith(ctx: Context, p: Provider, block: Record<string, any>): Promise<ProviderReport> {
@@ -906,11 +946,26 @@ const LOOKUP_ORDER: Provider[] = ['fullenrich', 'apollo', 'people_data_labs', 'd
 const CONTACT_ORDER: Provider[] = ['fullenrich', 'datalegion', 'apollo', 'people_data_labs'];
 
 const SEARCH = {
-  person: { parameters: peopleSearchParameters, spec: PEOPLE_SEARCH },
-  company: { parameters: companySearchParameters, spec: COMPANY_SEARCH },
+  person: { parameters: peopleSearchParameters.extend({ entity: searchParameters.shape.entity, max_credits: maxCredits }), spec: PEOPLE_SEARCH },
+  company: { parameters: companySearchParameters.extend({ entity: searchParameters.shape.entity, max_credits: maxCredits }), spec: COMPANY_SEARCH },
 };
 
-function fullEnrichContact(ref: Record<string, string | undefined>, index: number) {
+const SEARCH_EXAMPLE = {
+  entity: 'person',
+  fullenrich: { current_position_titles: [{ value: 'Head of Data' }], current_company_domains: [{ value: 'example.com', exact_match: true }] },
+  apollo: { person_titles: ['Head of Data'], q_organization_domains_list: ['example.com'] },
+};
+const LOOKUP_EXAMPLE = {
+  contact_fields: ['work_email'],
+  fullenrich: { people: [{ person_name: 'Jane Doe', company_domain: 'example.com' }] },
+};
+
+const PER_MATCH: Record<Provider, number> = { fullenrich: 10, apollo: 30, people_data_labs: 50, datalegion: 20 };
+const FE_CONTACT_PRICE: Record<ContactField, number> = { work_email: 30, personal_email: 100, mobile: 300 };
+const CONTACT_PER_MATCH: Record<Provider, number> = { fullenrich: 0, datalegion: 100, apollo: 30, people_data_labs: 0 };
+
+/** FullEnrich contact parameters for a person, or undefined when the person has no identifier its contact lookup takes. */
+function fullEnrichContact(ref: Record<string, string | undefined>) {
   const [first, ...rest] = (ref.person_name ?? '').trim().split(/\s+/);
   const contact = compact({
     linkedin_url: ref.person_professional_network_url,
@@ -918,11 +973,7 @@ function fullEnrichContact(ref: Record<string, string | undefined>, index: numbe
     last_name: rest.join(' ') || undefined,
     domain: ref.company_domain,
   });
-  if (has(contact.linkedin_url) || (has(contact.first_name) && has(contact.last_name) && has(contact.domain))) return contact;
-  throw new UserError(
-    'With contact_fields, each fullenrich person needs a person_professional_network_url, or a person_name plus company_domain (fullenrich.people.' + index + ').',
-    { code: 'invalid_input' }
-  );
+  return has(contact.linkedin_url) || (has(contact.first_name) && has(contact.last_name) && has(contact.domain)) ? contact : undefined;
 }
 
 /** Maps a lookup block to the provider's native lookup or contact parameters. */
@@ -935,33 +986,163 @@ function nativeLookup(p: Provider, block: Record<string, any>, contactFields?: C
   return { people, ...options };
 }
 
+// ---------- Argument repair ----------
+
+const isPlain = (value: unknown): value is Record<string, any> => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+function defOf(schema: any): any {
+  let def = schema?._zod?.def;
+  while (def && ['optional', 'default', 'nullable'].includes(def.type)) def = def.innerType?._zod?.def;
+  return def;
+}
+
+const shapeOf = (schema: unknown): Record<string, any> | undefined => {
+  const def = defOf(schema);
+  return def?.type === 'object' ? def.shape : undefined;
+};
+
+const RANGE = /^\s*(\d+)\s*(?:[-–,]\s*(\d+)|\+)\s*$/;
+
+/**
+ * Repairs near-miss shapes in place: one item where a list is expected, a string
+ * where a list takes {"value"} items, "51-200" where it takes {"min", "max"}, and
+ * a numeric string where a number is expected. Validation still runs afterwards.
+ */
+function repair(schema: unknown, value: unknown): unknown {
+  const def = defOf(schema);
+  if (def?.type === 'number' && typeof value === 'string' && /^\d+$/.test(value.trim())) return Number(value);
+  if (def?.type === 'array' && value !== undefined && value !== null) {
+    const element = shapeOf(def.element);
+    return (Array.isArray(value) ? value : [value]).map((item) => {
+      if (typeof item === 'string' && element?.value) return { value: item };
+      const range = typeof item === 'string' && element?.min ? RANGE.exec(item) : null;
+      if (range) return compact({ min: Number(range[1]), max: range[2] ? Number(range[2]) : undefined });
+      return repair(def.element, item);
+    });
+  }
+  const shape = def?.type === 'object' ? def.shape : undefined;
+  if (shape && isPlain(value)) {
+    for (const key of Object.keys(value)) if (key in shape) value[key] = repair(shape[key], value[key]);
+  }
+  return value;
+}
+
+/** Moves each provider block to its own key: hyphenated or differently cased names, a [{provider, options}] list, a one-item list, or one extra wrapping key. */
+function repairBlocks(args: Record<string, any>, order: Provider[], blockSchema: (p: Provider) => unknown): void {
+  const providerOf = (name: string) => order.find((p) => p.replace(/_/g, '') === name.toLowerCase().replace(/[-_\s]/g, ''));
+  if (Array.isArray(args.providers) && args.providers.every((call: unknown) => isPlain(call) && providerOf(String(call.provider)))) {
+    for (const { provider, options, ...rest } of args.providers) args[providerOf(provider)!] ??= options ?? rest;
+    delete args.providers;
+  }
+  for (const key of Object.keys(args)) {
+    const p = providerOf(key);
+    if (p && p !== key && args[p] === undefined) {
+      args[p] = args[key];
+      delete args[key];
+    }
+  }
+  for (const p of order) {
+    const shape = shapeOf(blockSchema(p)) ?? {};
+    const fits = (value: unknown) => isPlain(value) && Object.keys(value).some((key) => key in shape);
+    for (let depth = 0; depth < 2; depth++) {
+      const block = args[p];
+      if (Array.isArray(block) && block.length === 1) args[p] = block[0];
+      else if (isPlain(block) && !fits(block) && Object.keys(block).length === 1 && isPlain(Object.values(block)[0])) args[p] = Object.values(block)[0];
+    }
+  }
+}
+
+function fieldsAt(schema: unknown, path: PropertyKey[]): string[] {
+  let current = schema;
+  for (const segment of path) {
+    const def = defOf(current);
+    current = def?.type === 'array' ? def.element : shapeOf(current)?.[segment as string];
+  }
+  return Object.keys(shapeOf(current) ?? {});
+}
+
+function checkArguments(tool: string, schema: z.ZodType, args: unknown, example: object): void {
+  const parsed = schema.safeParse(args);
+  if (parsed.success) return;
+  const issues = parsed.error.issues.slice(0, 5).map((issue) => {
+    const path = issue.path.join('.');
+    if (issue.code !== 'unrecognized_keys') return { path, message: issue.message };
+    const fields = fieldsAt(schema, issue.path);
+    return { path, message: 'unknown field ' + issue.keys.join(', ') + (fields.length ? '; takes ' + fields.join(', ') : '') };
+  });
+  throw new UserError(
+    'Invalid ' + tool + ' arguments. ' + issues.map((i) => (i.path ? i.path + ': ' : '') + i.message).join('; ') + '. Example: ' + JSON.stringify(example),
+    { code: 'invalid_input', issues, example }
+  );
+}
+
+/** Drops the session fields agents carry between Firecrawl tools; no provider takes them. */
+function dropSessionFields(args: Record<string, any>): void {
+  delete args.conversationId;
+  delete args.objective;
+}
+
+const ENTITY: Record<string, 'person' | 'company'> = {
+  person: 'person',
+  people: 'person',
+  persons: 'person',
+  company: 'company',
+  companies: 'company',
+  organization: 'company',
+  organizations: 'company',
+};
+
 type Plan = {
   order: Provider[];
   blocks: Record<string, any>;
+  estimates: Partial<Record<Provider, number>>;
   run: (ctx: Context, p: Provider, block: Record<string, any>) => Promise<ProviderReport>;
 };
 
 export function registerEnrichTools(
   server: Pick<McpRuntime<SessionData>, 'addTool'>,
   getClient: GetClient,
-  assertCredential: AssertCredential
+  assertCredential: AssertCredential,
+  canList: (session?: SessionData) => boolean
 ): void {
-  const annotations = (title: string) => ({ title, readOnlyHint: true, openWorldHint: true, destructiveHint: false });
-
-  function tool<S extends z.ZodObject>(name: string, title: string, description: string, parameters: S, plan: (args: Record<string, any>) => Plan) {
+  function tool<S extends z.ZodObject>(
+    name: string,
+    annotations: Record<string, unknown>,
+    description: string,
+    parameters: S,
+    repairAndCheck: (args: Record<string, any>) => void,
+    plan: (args: Record<string, any>) => Plan
+  ) {
     server.addTool({
       name,
-      annotations: annotations(title),
+      annotations,
+      canList,
       description: description + OPT_IN + REPORT,
       outputSchema: enrichOutputSchema,
       parameters,
+      beforeValidate: (args: unknown) => {
+        if (isPlain(args)) {
+          dropSessionFields(args);
+          repairAndCheck(args);
+        }
+        return undefined;
+      },
       execute: async (args: unknown, { session, client: mcpClient }): Promise<ContentResult> => {
-        const { order, blocks, run } = plan(args as Record<string, any>);
+        const { order, blocks, estimates, run } = plan(args as Record<string, any>);
         const on = requestedProviders(blocks, order);
         assertCredential(session);
-        const ctx: Context = { client: getClient(session), origin: requestOrigin(mcpClient as any, session) };
+        const max_credits = (args as { max_credits?: number }).max_credits ?? DEFAULT_MAX_CREDITS;
+        const credits_estimate = on.reduce((sum, p) => sum + (estimates[p] ?? 0), 0);
+        if (credits_estimate > max_credits) {
+          const parts = on.filter((p) => estimates[p]).map((p) => p + ' ' + estimates[p]);
+          throw new UserError(
+            'This call could cost up to ' + credits_estimate + ' credits (' + parts.join(', ') + '), above max_credits ' + max_credits + '. Nothing ran. Raise max_credits, or send fewer inputs, providers or contact fields.',
+            { code: 'max_credits_exceeded', credits_estimate, max_credits, estimates }
+          );
+        }
+        const ctx: Context = { client: getClient(session), origin: requestOrigin(mcpClient as any, session), tool: name };
         const providers = await Promise.all(order.map((p) => (on.includes(p) ? run(ctx, p, blocks[p]) : notRequested(p))));
-        const data = { providers, credits_total: providers.reduce((sum, r) => sum + r.credits, 0) };
+        const data = { providers, credits_total: providers.reduce((sum, r) => sum + r.credits, 0), credits_estimate, max_credits };
         return withStructured(JSON.stringify(data), data);
       },
     });
@@ -969,41 +1150,69 @@ export function registerEnrichTools(
 
   tool(
     'people_company_search',
-    'Find people or companies',
-    "Find people or companies you don't know yet. Set entity, then give each provider its filters for that entity: people by title, employer, location or seniority; companies by industry, headcount, location, technology or founding year. " +
-      'apollo: free for people, 30 credits per page for companies, loose matching. fullenrich: 5 credits per record, the most filters. people_data_labs: 50 credits per record, SQL. ',
+    { title: 'Find people or companies', readOnlyHint: true, openWorldHint: true, destructiveHint: false },
+    "Find people or companies you don't know yet. Set entity to \"person\" or \"company\", then give each provider its filters for that entity: people by title, employer, location or seniority; companies by industry, headcount, location, technology or founding year. " +
+      'apollo: free for people, 30 credits per page for companies, loose matching. fullenrich: 5 credits per record, the most filters. people_data_labs: 50 credits per record, SQL. ' +
+      'Example: ' + JSON.stringify(SEARCH_EXAMPLE) + '. ',
     searchParameters,
     (args) => {
-      const { entity } = searchParameters.parse(args);
-      const rest: Record<string, unknown> = { ...args };
-      delete rest.entity;
-      const { parameters, spec } = SEARCH[entity];
-      return { order: SEARCH_ORDER, blocks: parameters.parse(rest), run: (ctx, p, block) => searchWith(ctx, p, block, spec) };
+      if (typeof args.entity === 'string') args.entity = ENTITY[args.entity.trim().toLowerCase()] ?? args.entity;
+      const entity = searchParameters.shape.entity.safeParse(args.entity);
+      if (!entity.success) checkArguments('people_company_search', searchParameters.pick({ entity: true }), { entity: args.entity }, SEARCH_EXAMPLE);
+      const { parameters } = SEARCH[entity.data!];
+      repairBlocks(args, SEARCH_ORDER, (p) => parameters.shape[p as keyof typeof parameters.shape]);
+      repair(parameters, args);
+      checkArguments('people_company_search', parameters, args, SEARCH_EXAMPLE);
+    },
+    (args) => {
+      const { parameters, spec } = SEARCH[searchParameters.shape.entity.parse(args.entity)];
+      const blocks = parameters.parse(args) as Record<string, any>;
+      const estimates = {
+        apollo: args.entity === 'company' ? 30 : 0,
+        fullenrich: 5 * (blocks.fullenrich?.limit ?? 0),
+        people_data_labs: 50 * (blocks.people_data_labs?.limit ?? 0),
+      };
+      return { order: SEARCH_ORDER, blocks, estimates, run: (ctx, p, block) => searchWith(ctx, p, block, spec) };
     }
   );
 
   tool(
-    'people_company_lookup',
-    'Look up people or companies',
-    'Resolve known people or companies: profiles and work history, or firmographics such as industry, headcount, funding and technologies. Each provider takes its own list of 1 to 50 people or companies; results carry input_index into that list. ' +
-      'Add contact_fields to get work email, personal email or mobile for people. Misses are free. ',
+    'people_company_enrich',
+    // Not read-only: contact_fields reveals contact details the provider charges for.
+    { title: 'Look up and enrich people or companies', readOnlyHint: false, openWorldHint: true, destructiveHint: false },
+    'Look up and enrich known people or companies: profiles and work history, or firmographics such as industry, headcount, funding and technologies. Each provider takes its own list of 1 to 50 people or companies; results carry input_index into that list. ' +
+      'Add contact_fields to get work email, personal email or mobile for people. Misses are free. ' +
+      'Example: ' + JSON.stringify(LOOKUP_EXAMPLE) + '. ',
     lookupParameters,
+    (args) => {
+      repairBlocks(args, LOOKUP_ORDER, (p) => lookupParameters.shape[p]);
+      repair(lookupParameters, args);
+      checkArguments('people_company_enrich', lookupParameters, args, LOOKUP_EXAMPLE);
+    },
     (args) => {
       const a = lookupParameters.parse(args) as Record<string, any>;
       const given = LOOKUP_ORDER.filter((p) => a[p] !== undefined);
+      const both = given.find((p) => !a[p].people === !a[p].companies);
+      if (both) throw new UserError('Give ' + both + ' exactly one of people or companies.', { code: 'invalid_input' });
       const kinds = new Set(given.map((p) => (a[p].people ? 'people' : 'companies')));
-      if (given.some((p) => !a[p].people === !a[p].companies) || kinds.size > 1) {
-        throw new UserError('Give each provider block exactly one of people or companies, and the same one in every block.', { code: 'invalid_input' });
+      if (kinds.size > 1) {
+        const list = given.map((p) => p + ' has ' + (a[p].people ? 'people' : 'companies')).join(', ');
+        throw new UserError('Send people and companies in separate calls: ' + list + '.', { code: 'invalid_input' });
       }
       const people = kinds.has('people');
       const contactFields: ContactField[] | undefined = a.contact_fields;
       if (contactFields && !people) throw new UserError('contact_fields applies to people only.', { code: 'invalid_input' });
       const blocks = Object.fromEntries(given.map((p) => [p, nativeLookup(p, a[p], contactFields)]));
-      if (!people) return { order: LOOKUP_ORDER, blocks, run: enrichCompaniesWith };
-      if (!contactFields) return { order: LOOKUP_ORDER, blocks, run: enrichPeopleWith };
+      const count = (p: Provider) => (a[p]?.people ?? a[p]?.companies ?? []).length;
+      const price = (p: Provider) =>
+        !contactFields ? PER_MATCH[p] : p === 'fullenrich' ? contactFields.reduce((sum, f) => sum + FE_CONTACT_PRICE[f], 0) : CONTACT_PER_MATCH[p];
+      const estimates = Object.fromEntries(given.map((p) => [p, count(p) * price(p)]));
+      if (!people) return { order: LOOKUP_ORDER, blocks, estimates, run: enrichCompaniesWith };
+      if (!contactFields) return { order: LOOKUP_ORDER, blocks, estimates, run: enrichPeopleWith };
       return {
         order: CONTACT_ORDER,
         blocks,
+        estimates,
         run: async (ctx, p, block) =>
           p === 'people_data_labs'
             ? { name: p, status: 'skipped', returned: 0, credits: 0, note: 'No contact lookup; drop contact_fields to resolve these people.' }
