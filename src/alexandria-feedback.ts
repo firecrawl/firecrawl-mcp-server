@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { FeedbackTokenStore } from './alexandria-feedback-tokens.js';
 
 const detail = z.string().trim().min(1).max(2000);
 const name = z.string().trim().min(1).max(200);
@@ -55,6 +56,15 @@ export const alexandriaFeedbackFields = {
     )
     .max(20)
     .optional(),
+  callRatings: z
+    .array(
+      z.strictObject({
+        ref: z.string().trim().min(1).max(32),
+        rating: z.enum(['good', 'partial', 'bad']),
+      })
+    )
+    .max(20)
+    .optional(),
 };
 
 /** Appended to Alexandria results so the pointer travels with the data the agent is reading. */
@@ -94,6 +104,27 @@ export function withAlexandriaFeedbackHint<T>(
 ): T {
   if (!enabled || !envelope || typeof envelope !== 'object') return envelope;
   return { ...envelope, feedbackTool: ALEXANDRIA_FEEDBACK_HINT };
+}
+
+/** The session's call tokens and per-call ratings in the shape the feedback API takes; unknown refs are reported back. */
+export function alexandriaFeedbackTokens(
+  callRatings: { ref: string; rating: 'good' | 'partial' | 'bad' }[] | undefined,
+  store: FeedbackTokenStore
+) {
+  const rated = new Map<string, 'good' | 'partial' | 'bad'>();
+  const unknownRefs: string[] = [];
+  for (const { ref, rating } of callRatings ?? []) {
+    const token = store.tokenForRef(ref);
+    if (token) rated.set(token, rating);
+    else unknownRefs.push(ref);
+  }
+  const tokens = store.tokens();
+  return {
+    tokens,
+    callRatings: [...rated].map(([token, rating]) => ({ token, rating })),
+    sent: [...new Set([...tokens, ...rated.keys()])],
+    unknownRefs,
+  };
 }
 
 export const alexandriaSessionFeedbackSchema = z.strictObject({

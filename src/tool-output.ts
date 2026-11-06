@@ -187,6 +187,8 @@ export const feedbackOutputSchema = z
     websiteCapReached: bool("Alexandria only: whether this website's daily refund cap is reached; feedback about other websites can still refund."),
     alreadySubmitted: bool('Whether feedback for this job was already recorded.'),
     warning,
+    rejectedTokens: num('Alexandria only: how many call tokens failed verification (expired, other team, or invalid).'),
+    note: str('Details about parts of the submission that were ignored.'),
     data: unknown('Payload returned with the accepted feedback.'),
     raw: str('Response body when it was not JSON.'),
   })

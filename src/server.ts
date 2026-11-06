@@ -2,6 +2,7 @@ import {
   ALEXANDRIA_FEEDBACK_HINT,
   alexandriaCallsWarrantFeedback,
   alexandriaFeedbackFields,
+  alexandriaFeedbackTokens,
   alexandriaSessionFeedbackSchema,
   withAlexandriaFeedbackHint,
 } from './alexandria-feedback.js';
@@ -65,6 +66,7 @@ import {
   ALEXANDRIA_SOURCES_ALWAYS_ON,
 } from './alexandria';
 import { alexandriaOutput } from './alexandria-output';
+import { FeedbackTokenRegistry, FeedbackTokenStore, withFeedbackRefs } from './alexandria-feedback-tokens.js';
 import { registerDeveloperTools } from './developer';
 import { registerGovTools } from './gov';
 import { registerEnrichTools } from './enrich';
@@ -1724,7 +1726,7 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
 `,
     outputSchema: scrapeOutputSchema,
     parameters: scrapeToolParamsSchema,
-    execute: async (args: unknown, { session, log, client: mcpClient }): Promise<ContentResult> => {
+    execute: async (args: unknown, { session, sessionId, log, client: mcpClient }): Promise<ContentResult> => {
       const origin = requestOrigin(mcpClient, session);
       const {
         url,
@@ -1745,7 +1747,7 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
           count: Array.isArray(alexandria) ? alexandria.length : 1,
         });
         return structuredJsonText(
-          await executeExchangeCalls(session, alexandria, suppliedRequestId, options.timeout as number | undefined, origin)
+          await executeExchangeCalls(session, alexandria, suppliedRequestId, options.timeout as number | undefined, origin, false, feedbackStoreFor(session, sessionId))
         );
       }
       const transformed = transformScrapeParams(
@@ -1937,6 +1939,12 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
   } satisfies RegisteredTool;
   server.addTool(searchTool);
 
+  const feedbackTokens = new FeedbackTokenRegistry();
+
+  function feedbackStoreFor(session: SessionData | undefined, sessionId: unknown): FeedbackTokenStore {
+    return feedbackTokens.forSession(sessionId, resolveOutbound(session).credential);
+  }
+
   async function executeExchangeCalls(
     session: SessionData | undefined,
     alexandria:
@@ -1945,7 +1953,8 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
     suppliedRequestId?: string,
     timeout?: number,
     origin = requestOrigin(undefined, session),
-    includeCosts = false
+    includeCosts = false,
+    feedbackStore: FeedbackTokenStore = new FeedbackTokenStore()
   ): Promise<string> {
     assertExchangeCredential(session);
     const client = getClient(session);
@@ -1968,7 +1977,13 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       );
       const calls = Array.isArray(alexandria) ? alexandria : [alexandria];
       return alexandriaOutput(
-        { ...(includeCosts ? (response?.data ?? {}) : withoutResultPrices(response?.data ?? {})), requestId },
+        {
+          ...withFeedbackRefs(
+            includeCosts ? (response?.data ?? {}) : withoutResultPrices(response?.data ?? {}),
+            feedbackStore
+          ),
+          requestId,
+        },
         calls,
         async (body, id) => {
           const result = await (client as any).http.post(
@@ -2482,7 +2497,7 @@ Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\
       description: `
 Submit concise quality feedback for a completed search, scrape, parse, or map job. Provide the endpoint, job ID, rating, and relevant issue codes or small contextual fields; omit large page contents and raw outputs.
 
-For an Alexandria session, set endpoint to \`alexandria\`, omit jobId, and provide requestedWebsite (url and requestedFunctionality), objective, rationale, and rating. objective is the underlying goal behind the session: what you or your user were ultimately trying to accomplish (for example, "shortlist federal IT contracts to bid on this quarter"), not only what was needed from this website. Optional providerFeedback and capabilityFeedback describe gaps or errors. Capability issues: new_capability_request (requires requestedFunctionality), missing_capability, insufficient_functionality, incorrect_result, execution_error, other. Alexandria feedback must arrive within 20 minutes of the team's latest Alexandria search, discovery, or execution; later feedback is rejected. Eligible feedback can refund 1 credit; refunds are subject to daily caps per website and per team.
+For an Alexandria session, set endpoint to \`alexandria\`, omit jobId, and provide requestedWebsite (url and requestedFunctionality), objective, rationale, and rating. objective is the underlying goal behind the session: what you or your user were ultimately trying to accomplish (for example, "shortlist federal IT contracts to bid on this quarter"), not only what was needed from this website. Optional providerFeedback and capabilityFeedback describe gaps or errors. Capability issues: new_capability_request (requires requestedFunctionality), missing_capability, insufficient_functionality, incorrect_result, execution_error, other. Alexandria results carry a feedbackRef per call. The overall rating covers every call in this session; callRatings [{ref, rating}] rate individual calls by feedbackRef. Alexandria feedback must arrive within 20 minutes of the team's latest Alexandria search, discovery, or execution; later feedback is rejected. Eligible feedback can refund 1 credit; refunds are subject to daily caps per website and per team.
 
 Returns submission status, feedback ID, and accounting fields.
 `,
@@ -2514,7 +2529,7 @@ Returns submission status, feedback ID, and accounting fields.
       }),
       execute: async (
         args: unknown,
-        { session, log, client: mcpClient }
+        { session, sessionId, log, client: mcpClient }
       ): Promise<ContentResult> => {
         assertFeedbackAvailable(session);
         const origin = requestOrigin(mcpClient, session);
@@ -2562,8 +2577,17 @@ Returns submission status, feedback ID, and accounting fields.
           throw new Error('Unauthorized: missing API key for feedback.');
         }
 
-        const body = endpoint === 'alexandria'
-          ? { ...alexandriaSessionFeedbackSchema.parse(args), origin }
+        const feedbackStore = feedbackStoreFor(session, sessionId);
+        const alexandriaArgs = endpoint === 'alexandria' ? alexandriaSessionFeedbackSchema.parse(args) : undefined;
+        const attribution = alexandriaArgs && alexandriaFeedbackTokens(alexandriaArgs.callRatings, feedbackStore);
+        const body = alexandriaArgs && attribution
+          ? {
+              ...alexandriaArgs,
+              callRatings: undefined,
+              ...(attribution.tokens.length ? { tokens: attribution.tokens } : {}),
+              ...(attribution.callRatings.length ? { callRatings: attribution.callRatings } : {}),
+              origin,
+            }
           : removeEmptyTopLevel({
           endpoint,
           jobId,
@@ -2618,6 +2642,15 @@ Returns submission status, feedback ID, and accounting fields.
           });
         }
 
+        if (attribution) {
+          if (parsed?.success !== false) feedbackStore.remove(attribution.sent);
+          if (attribution.unknownRefs.length) {
+            return structuredText({
+              ...parsed,
+              note: `Ignored call ratings for unknown or expired refs: ${attribution.unknownRefs.join(', ')}.`,
+            });
+          }
+        }
         return structuredText(parsed);
       },
     });

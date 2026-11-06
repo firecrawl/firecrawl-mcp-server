@@ -7,6 +7,7 @@ export default defineConfig({
     'www-authenticate': 'src/mcp/www-authenticate.ts',
     origin: 'src/origin.ts',
     integration: 'src/integration.ts',
+    'alexandria-feedback-tokens': 'src/alexandria-feedback-tokens.ts',
     'introspection-cache': 'src/service/introspection-cache.ts',
     'keyless-signup-link': 'src/keyless-signup-link.ts',
   },
