@@ -8190,7 +8190,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "people_company_enrich@7ad8d409baca": {
+  "people_company_enrich@de6f1b10c143": {
     "annotations": {
       "title": "Look up and enrich people or companies",
       "readOnlyHint": false,
@@ -8231,6 +8231,25 @@
               "maxItems": 50,
               "type": "array",
               "items": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "person_professional_network_url"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "person_name",
+                      "company_domain"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "person_name",
+                      "company_professional_network_url"
+                    ]
+                  }
+                ],
                 "type": "object",
                 "properties": {
                   "person_professional_network_url": {
@@ -8257,6 +8276,18 @@
               "maxItems": 50,
               "type": "array",
               "items": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "domain"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "professional_network_url"
+                    ]
+                  }
+                ],
                 "type": "object",
                 "properties": {
                   "domain": {
@@ -8283,6 +8314,49 @@
               "maxItems": 50,
               "type": "array",
               "items": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "id"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "email"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "linkedin_url"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "name",
+                      "domain"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "name",
+                      "organization_name"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "first_name",
+                      "last_name",
+                      "domain"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "first_name",
+                      "last_name",
+                      "organization_name"
+                    ]
+                  }
+                ],
                 "type": "object",
                 "properties": {
                   "id": {
@@ -8321,6 +8395,28 @@
               "maxItems": 50,
               "type": "array",
               "items": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "domain"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "linkedin_url"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "name"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "website"
+                    ]
+                  }
+                ],
                 "type": "object",
                 "properties": {
                   "domain": {
@@ -8351,6 +8447,67 @@
               "maxItems": 50,
               "type": "array",
               "items": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "profile"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "email"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "phone"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "pdl_id"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "name",
+                      "company"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "name",
+                      "school"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "name",
+                      "location"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "first_name",
+                      "last_name",
+                      "company"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "first_name",
+                      "last_name",
+                      "school"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "first_name",
+                      "last_name",
+                      "location"
+                    ]
+                  }
+                ],
                 "type": "object",
                 "properties": {
                   "profile": {
@@ -8394,6 +8551,33 @@
               "maxItems": 50,
               "type": "array",
               "items": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "website"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "profile"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "ticker"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "pdl_id"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "name"
+                    ]
+                  }
+                ],
                 "type": "object",
                 "properties": {
                   "website": {
@@ -8440,6 +8624,39 @@
               "maxItems": 50,
               "type": "array",
               "items": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "social_url"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "email"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "linkedin_id"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "legion_id"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "full_name"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "first_name",
+                      "last_name"
+                    ]
+                  }
+                ],
                 "type": "object",
                 "properties": {
                   "social_url": {
@@ -8492,6 +8709,38 @@
               "maxItems": 50,
               "type": "array",
               "items": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "domain"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "social_url"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "name"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "linkedin_id"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "ticker_symbol"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "legion_id"
+                    ]
+                  }
+                ],
                 "type": "object",
                 "properties": {
                   "domain": {
@@ -8600,7 +8849,7 @@
       "additionalProperties": false
     }
   },
-  "people_company_search@b5366b1c63ac": {
+  "people_company_search@1891ce34a159": {
     "annotations": {
       "title": "Find people or companies",
       "readOnlyHint": true,
@@ -9583,6 +9832,18 @@
         "people_data_labs": {
           "anyOf": [
             {
+              "oneOf": [
+                {
+                  "required": [
+                    "sql"
+                  ]
+                },
+                {
+                  "required": [
+                    "query"
+                  ]
+                }
+              ],
               "description": "entity person: People Data Labs person/search. 50 credits per record. Pass sql or query.",
               "type": "object",
               "properties": {
@@ -9609,6 +9870,18 @@
               "additionalProperties": false
             },
             {
+              "oneOf": [
+                {
+                  "required": [
+                    "sql"
+                  ]
+                },
+                {
+                  "required": [
+                    "query"
+                  ]
+                }
+              ],
               "description": "entity company: People Data Labs company/search. 50 credits per record. Pass sql or query.",
               "type": "object",
               "properties": {

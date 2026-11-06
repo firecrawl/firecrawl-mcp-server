@@ -9,13 +9,6 @@ import { getFreePort, startStdio } from './helpers/exchange-mcp.mjs';
 import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
 
 const ENRICH_TOOLS = ['people_company_search', 'people_company_enrich'];
-const REPLACED_TOOLS = [
-  'firecrawl_enrich_people_search',
-  'firecrawl_enrich_people',
-  'firecrawl_enrich_contacts',
-  'firecrawl_enrich_company_search',
-  'firecrawl_enrich_company',
-];
 
 function answer(call) {
   const { provider, capability, options } = call;
@@ -72,11 +65,9 @@ async function connect(t, options, session = { authType: 'api-key', firecrawlApi
   return client;
 }
 
-test('the enrich tools are listed by default and the tools they replace are not', async (t) => {
+test('the enrich tools are listed by default', async (t) => {
   const client = await connect(t, {});
   const all = (await client.listTools()).tools;
-  const names = all.map((tool) => tool.name);
-  for (const name of REPLACED_TOOLS) assert.ok(!names.includes(name), name + ' is not listed');
   const tools = all.filter((tool) => ENRICH_TOOLS.includes(tool.name));
   assert.deepEqual(tools.map((tool) => tool.name).sort(), [...ENRICH_TOOLS].sort());
   for (const tool of tools) {
@@ -120,7 +111,7 @@ test('a call with no provider block is refused before any provider runs', async 
   assert.equal(api.calls.length, 0);
 });
 
-test('company lookup runs each provider on its own inputs and reports them separately', async (t) => {
+test('company enrichment runs each provider on its own inputs and reports them separately', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { apiUrl: api.url });
   const result = await client.callTool({
@@ -174,7 +165,7 @@ test('search refuses a provider block written for the other entity', async (t) =
   assert.equal(api.calls.length, 0);
 });
 
-test('lookup refuses people and companies in one call', async (t) => {
+test('enrich refuses people and companies in one call', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { apiUrl: api.url });
   const result = await client.callTool({
@@ -362,4 +353,37 @@ test('a contact lookup skips a FullEnrich person it cannot identify and still ru
   const fullenrich = result.structuredContent.providers.find((p) => p.name === 'fullenrich');
   assert.match(fullenrich.note, /Skipped inputs 0/);
   assert.deepEqual(api.calls.map((call) => call.provider), ['apollo']);
+});
+
+test('Apollo runs a contact lookup only for the fields it has, and keeps only matches that carry them', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { apiUrl: api.url });
+  const mobile = await client.callTool({ name: 'people_company_enrich', arguments: { contact_fields: ['mobile'], apollo: { people: [{ email: 'ada@acme.example' }] } } });
+  assert.notEqual(mobile.isError, true, JSON.stringify(mobile));
+  const apollo = mobile.structuredContent.providers.find((p) => p.name === 'apollo');
+  assert.deepEqual([apollo.status, apollo.note], ['skipped', 'Apollo has no mobile lookup.']);
+  assert.equal(mobile.structuredContent.credits_estimate, 0);
+  assert.equal(api.calls.length, 0);
+});
+
+test('an Alexandria-only web search block adds nothing to the estimate', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { apiUrl: api.url });
+  const result = await client.callTool({ name: 'people_company_search', arguments: { entity: 'company', max_credits: 0, firecrawl_search: { query: 'Acme', sources: ['alexandria'] } } });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  assert.equal(result.structuredContent.credits_estimate, 0);
+});
+
+test('the published schema carries the identifier rules', async (t) => {
+  const client = await connect(t, {});
+  const { tools } = await client.listTools();
+  const enrich = tools.find((tool) => tool.name === 'people_company_enrich');
+  assert.deepEqual(enrich.inputSchema.properties.fullenrich.properties.people.items.anyOf, [
+    { required: ['person_professional_network_url'] },
+    { required: ['person_name', 'company_domain'] },
+    { required: ['person_name', 'company_professional_network_url'] },
+  ]);
+  const search = tools.find((tool) => tool.name === 'people_company_search');
+  const pdl = search.inputSchema.properties.people_data_labs.anyOf;
+  for (const branch of pdl) assert.deepEqual(branch.oneOf, [{ required: ['sql'] }, { required: ['query'] }]);
 });

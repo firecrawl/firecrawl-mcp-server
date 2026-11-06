@@ -17,11 +17,11 @@ try {
   if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
 }
 
-const TRUTHY_ENV_VALUES = new Set(['1', 'true', 'yes', 'on']);
+const FEEDBACK_DISABLED_VALUES = new Set(['1', 'true', 'yes', 'on']);
 
-function envFlagEnabled(...keys: string[]): boolean {
+function feedbackEnvEnabled(...keys: string[]): boolean {
   return keys.some((key) =>
-    TRUTHY_ENV_VALUES.has((process.env[key] || '').trim().toLowerCase())
+    FEEDBACK_DISABLED_VALUES.has((process.env[key] || '').trim().toLowerCase())
   );
 }
 
@@ -33,11 +33,11 @@ const apiKey = resolveCredentialFromEnv();
 const apiUrl = process.env.FIRECRAWL_API_URL;
 const primaryProfile = makePrimaryProfile();
 
-const searchFeedbackDisabled = envFlagEnabled(
+const searchFeedbackDisabled = feedbackEnvEnabled(
   'FIRECRAWL_NO_SEARCH_FEEDBACK',
   'FIRECRAWL_DISABLE_SEARCH_FEEDBACK'
 );
-const endpointFeedbackDisabled = envFlagEnabled(
+const endpointFeedbackDisabled = feedbackEnvEnabled(
   'FIRECRAWL_NO_ENDPOINT_FEEDBACK',
   'FIRECRAWL_DISABLE_ENDPOINT_FEEDBACK'
 );

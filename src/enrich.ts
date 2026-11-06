@@ -53,14 +53,22 @@ const ranges = (about?: string) => {
 const strings = (about: string) => z.array(z.string().min(1)).min(1).optional().describe(about);
 const text = (about?: string) => (about ? z.string().optional().describe(about) : z.string().optional());
 
-function provider<S extends z.ZodRawShape>(shape: S, about: string, check?: [(value: any) => boolean, string]) {
+function provider<S extends z.ZodRawShape>(shape: S, about: string, rule?: { check: (value: any) => boolean; message: string; schema: Record<string, unknown> }) {
   const block = z.strictObject(shape);
-  return (check ? block.refine(check[0], { message: check[1] }) : block).optional().describe(about);
+  return (rule ? block.refine(rule.check, { message: rule.message }).meta(rule.schema) : block).optional().describe(about);
+}
+
+/** An input that needs every field of at least one set, checked at runtime and published as the same rule in its JSON Schema. */
+function needsOneOf<S extends z.ZodRawShape>(shape: S, sets: string[][], message: string) {
+  return z
+    .strictObject(shape)
+    .refine((r: Record<string, unknown>) => sets.some((set) => set.every((key) => has(r[key]))), { message })
+    .meta({ anyOf: sets.map((required) => ({ required })) });
 }
 
 const has = (value: unknown) => typeof value === 'string' && value.trim() !== '';
 
-const OPT_IN =
+const PROVIDER_BLOCKS =
   'Each provider takes its own native parameters; nothing is shared between providers. Include a block only for each provider you want to run, e.g. "apollo": {...}; included providers run in parallel. Providers differ in coverage and filters, so one can miss what another finds. If they all miss, firecrawl_search can find the person or company on the web. ';
 const REPORT = 'The response lists every provider with its status, records, credits charged and any error.';
 const FE_LISTS = 'List filters take [{"value": "...", "exclude"?: true, "exact_match"?: true}]; range filters take [{"min"?: n, "max"?: n}]. ';
@@ -69,10 +77,11 @@ const SENIORITY_LEVELS = 'One of Owner, Founder, C-Level, Partner, VP, Head, Dir
 const SENIORITY = new Set(['owner', 'founder', 'c-level', 'partner', 'vp', 'head', 'director', 'manager', 'senior']);
 const INDUSTRIES = "LinkedIn's current industry names, e.g. Software Development or Computer and Network Security, not Computer Software.";
 
-const sqlOrQuery: [(value: any) => boolean, string] = [
-  (v) => has(v.sql) !== (v.query !== undefined),
-  'people_data_labs needs exactly one of sql or query',
-];
+const sqlOrQuery = {
+  check: (v: any) => has(v.sql) !== (v.query !== undefined),
+  message: 'people_data_labs needs exactly one of sql or query',
+  schema: { oneOf: [{ required: ['sql'] }, { required: ['query'] }] },
+};
 
 const peopleSearchParameters = z.strictObject({
   apollo: provider(
@@ -197,8 +206,10 @@ function either(person: z.ZodOptional<z.ZodType>, company: z.ZodOptional<z.ZodTy
     .optional();
 }
 
-const apolloPersonRef = z
-  .strictObject({
+const NAME_SETS = (names: string[][], others: string[]) => names.flatMap((name) => others.map((other) => [...name, other]));
+
+const apolloPersonRef = needsOneOf(
+  {
     id: text('apollo_id from people_company_search.'),
     email: text(),
     linkedin_url: text(),
@@ -207,14 +218,13 @@ const apolloPersonRef = z
     last_name: text(),
     domain: text('Employer domain.'),
     organization_name: text(),
-  })
-  .refine(
-    (r) => has(r.id) || has(r.email) || has(r.linkedin_url) || ((has(r.name) || (has(r.first_name) && has(r.last_name))) && (has(r.domain) || has(r.organization_name))),
-    { message: 'Each apollo person needs an id, email, linkedin_url, or a name plus domain or organization_name' }
-  );
+  },
+  [['id'], ['email'], ['linkedin_url'], ...NAME_SETS([['name'], ['first_name', 'last_name']], ['domain', 'organization_name'])],
+  'Each apollo person needs an id, email, linkedin_url, or a name plus domain or organization_name'
+);
 
-const dataLegionPersonRef = z
-  .strictObject({
+const dataLegionPersonRef = needsOneOf(
+  {
     social_url: text('LinkedIn or other social profile URL.'),
     email: text(),
     linkedin_id: text(),
@@ -228,79 +238,81 @@ const dataLegionPersonRef = z
     state: text(),
     country: text(),
     school: text(),
-  })
-  .refine(
-    (r) => has(r.social_url) || has(r.email) || has(r.linkedin_id) || has(r.legion_id) || has(r.full_name) || (has(r.first_name) && has(r.last_name)),
-    { message: 'Each datalegion person needs a social_url, email, linkedin_id, legion_id or a name' }
-  );
+  },
+  [['social_url'], ['email'], ['linkedin_id'], ['legion_id'], ['full_name'], ['first_name', 'last_name']],
+  'Each datalegion person needs a social_url, email, linkedin_id, legion_id or a name'
+);
 
 const batch = <T extends z.ZodType>(item: T) => z.array(item).min(1).max(50);
 const minLikelihood = z.number().int().min(1).max(10).optional().describe('Minimum match confidence, 1 to 10 (default 6).');
 const minConfidence = z.enum(['high', 'moderate', 'low']).optional();
 
-const fullEnrichPersonRef = z
-          .strictObject({
-            person_professional_network_url: text('LinkedIn profile URL. Enough on its own.'),
-            person_name: text('Full name, with a company identifier.'),
-            company_domain: text(),
-            company_professional_network_url: text('Employer LinkedIn URL.'),
-          })
-          .refine((r) => has(r.person_professional_network_url) || (has(r.person_name) && (has(r.company_domain) || has(r.company_professional_network_url))), {
-            message: 'Each fullenrich person needs a person_professional_network_url, or a person_name plus company_domain or company_professional_network_url',
-          });
+const fullEnrichPersonRef = needsOneOf(
+  {
+    person_professional_network_url: text('LinkedIn profile URL. Enough on its own.'),
+    person_name: text('Full name, with a company identifier.'),
+    company_domain: text(),
+    company_professional_network_url: text('Employer LinkedIn URL.'),
+  },
+  [['person_professional_network_url'], ['person_name', 'company_domain'], ['person_name', 'company_professional_network_url']],
+  'Each fullenrich person needs a person_professional_network_url, or a person_name plus company_domain or company_professional_network_url'
+);
 
-const pdlPersonRef = z
-          .strictObject({
-            profile: text('LinkedIn or other social profile URL.'),
-            email: text(),
-            phone: text(),
-            pdl_id: text(),
-            name: text(),
-            first_name: text(),
-            last_name: text(),
-            company: text('Employer name or domain.'),
-            school: text(),
-            location: text(),
-          })
-          .refine(
-            (r) => has(r.profile) || has(r.email) || has(r.phone) || has(r.pdl_id) || ((has(r.name) || (has(r.first_name) && has(r.last_name))) && (has(r.company) || has(r.school) || has(r.location))),
-            { message: 'Each people_data_labs request needs a profile, email, phone, pdl_id, or a name plus company, school or location' }
-          );
+const pdlPersonRef = needsOneOf(
+  {
+    profile: text('LinkedIn or other social profile URL.'),
+    email: text(),
+    phone: text(),
+    pdl_id: text(),
+    name: text(),
+    first_name: text(),
+    last_name: text(),
+    company: text('Employer name or domain.'),
+    school: text(),
+    location: text(),
+  },
+  [['profile'], ['email'], ['phone'], ['pdl_id'], ...NAME_SETS([['name'], ['first_name', 'last_name']], ['company', 'school', 'location'])],
+  'Each people_data_labs request needs a profile, email, phone, pdl_id, or a name plus company, school or location'
+);
 
-const fullEnrichCompanyRef = z
-          .strictObject({ domain: text('e.g. stripe.com.'), professional_network_url: text('LinkedIn company URL.') })
-          .refine((r) => has(r.domain) || has(r.professional_network_url), { message: 'Each fullenrich company needs a domain or professional_network_url' });
+const fullEnrichCompanyRef = needsOneOf(
+  { domain: text('e.g. stripe.com.'), professional_network_url: text('LinkedIn company URL.') },
+  [['domain'], ['professional_network_url']],
+  'Each fullenrich company needs a domain or professional_network_url'
+);
 
-const apolloCompanyRef = z
-          .strictObject({ domain: text(), linkedin_url: text(), name: text(), website: text() })
-          .refine((r) => has(r.domain) || has(r.linkedin_url) || has(r.name) || has(r.website), { message: 'Each apollo company needs a domain, linkedin_url, name or website' });
+const apolloCompanyRef = needsOneOf(
+  { domain: text(), linkedin_url: text(), name: text(), website: text() },
+  [['domain'], ['linkedin_url'], ['name'], ['website']],
+  'Each apollo company needs a domain, linkedin_url, name or website'
+);
 
-const pdlCompanyRef = z
-          .strictObject({
-            website: text('Most reliable identifier.'),
-            profile: text('LinkedIn company URL.'),
-            ticker: text(),
-            pdl_id: text(),
-            name: text('Weakest identifier; ambiguous names miss.'),
-            location: text('Helps a name match; never enough alone.'),
-          })
-          .refine((r) => has(r.website) || has(r.profile) || has(r.ticker) || has(r.pdl_id) || has(r.name), {
-            message: 'Each people_data_labs company needs a website, profile, ticker, pdl_id or name',
-          });
+const pdlCompanyRef = needsOneOf(
+  {
+    website: text('Most reliable identifier.'),
+    profile: text('LinkedIn company URL.'),
+    ticker: text(),
+    pdl_id: text(),
+    name: text('Weakest identifier; ambiguous names miss.'),
+    location: text('Helps a name match; never enough alone.'),
+  },
+  [['website'], ['profile'], ['ticker'], ['pdl_id'], ['name']],
+  'Each people_data_labs company needs a website, profile, ticker, pdl_id or name'
+);
 
-const dataLegionCompanyRef = z
-          .strictObject({
-            domain: text(),
-            social_url: text('LinkedIn company URL.'),
-            name: text('Fuzzy match; add industry or domain for ambiguous names.'),
-            linkedin_id: text(),
-            ticker_symbol: text(),
-            legion_id: text(),
-            industry: text(),
-          })
-          .refine((r) => has(r.domain) || has(r.social_url) || has(r.name) || has(r.linkedin_id) || has(r.ticker_symbol) || has(r.legion_id), {
-            message: 'Each datalegion company needs a domain, social_url, name, linkedin_id, ticker_symbol or legion_id',
-          });
+const dataLegionCompanyRef = needsOneOf(
+  {
+    domain: text(),
+    social_url: text('LinkedIn company URL.'),
+    name: text('Fuzzy match; add industry or domain for ambiguous names.'),
+    linkedin_id: text(),
+    ticker_symbol: text(),
+    legion_id: text(),
+    industry: text(),
+  },
+  [['domain'], ['social_url'], ['name'], ['linkedin_id'], ['ticker_symbol'], ['legion_id']],
+  'Each datalegion company needs a domain, social_url, name, linkedin_id, ticker_symbol or legion_id'
+);
 
 const CONTACT_FIELDS = ['work_email', 'personal_email', 'mobile'] as const;
 type ContactField = (typeof CONTACT_FIELDS)[number];
@@ -793,7 +805,8 @@ function perEntry(entries: Entry[], read: (entry: Entry) => object | undefined):
   return hits;
 }
 
-async function apolloPeople(ctx: Context, details: object[], extra: Record<string, unknown> = {}): Promise<ProviderReport> {
+/** wanted keeps only matches that carry one of those contact fields. */
+async function apolloPeople(ctx: Context, details: object[], extra: Record<string, unknown> = {}, wanted?: ContactField[]): Promise<ProviderReport> {
   const batches = chunks(details, 10);
   const entries = await runCalls(
     ctx,
@@ -804,7 +817,8 @@ async function apolloPeople(ctx: Context, details: object[], extra: Record<strin
   batches.forEach((chunk, c) => {
     const found = Array.isArray(entries[c]?.data?.matches) ? entries[c].data.matches : [];
     chunk.forEach((_, i) => {
-      if (found[i]) hits.set(c * 10 + i, apolloPerson(found[i]));
+      const record = found[i] ? apolloPerson(found[i]) : undefined;
+      if (record && (!wanted || wanted.some((field) => record[field as keyof Person]))) hits.set(c * 10 + i, record);
     });
   });
   return lookupReport('apollo', entries, hits, details.length);
@@ -863,9 +877,13 @@ const FE_CONTACT: Record<ContactField, string> = {
 
 async function contactsWith(ctx: Context, p: Provider, block: Record<string, any>): Promise<ProviderReport> {
   if (p === 'datalegion') return dataLegionPeople(ctx, block, 'people/enrich-base-with-contact');
-  if (p === 'apollo') return apolloPeople(ctx, block.details, { reveal_personal_emails: block.reveal_personal_emails });
-
   const fields: ContactField[] = block.fields;
+  if (p === 'apollo') {
+    const wanted = fields.filter((field) => field !== 'mobile');
+    if (!wanted.length) return { name: p, status: 'skipped', returned: 0, credits: 0, note: 'Apollo has no mobile lookup.' };
+    return apolloPeople(ctx, block.details, { reveal_personal_emails: block.reveal_personal_emails }, wanted);
+  }
+
   const contacts: (Record<string, string> | undefined)[] = block.contacts;
   const plan = contacts.flatMap((ref, index) => (ref ? fields.map((field) => ({ index, field, ref })) : []));
   const unusable = contacts.flatMap((ref, index) => (ref ? [] : [index]));
@@ -985,7 +1003,7 @@ function fullEnrichContact(ref: Record<string, string | undefined>) {
 /** Maps a lookup block to the provider's native lookup or contact parameters. */
 function nativeLookup(p: Provider, block: Record<string, any>, contactFields?: ContactField[]): Record<string, any> {
   const { people, companies, ...options } = block;
-  if (p === 'apollo') return compact({ details: people ?? companies, reveal_personal_emails: contactFields?.includes('personal_email') || undefined });
+  if (p === 'apollo') return compact({ details: people ?? companies, reveal_personal_emails: contactFields?.includes('personal_email') || undefined, fields: contactFields });
   if (!people) return { companies, ...options };
   if (p === 'people_data_labs') return { requests: people, ...options };
   if (p === 'fullenrich' && contactFields) return { contacts: people.map(fullEnrichContact), fields: contactFields };
@@ -1115,10 +1133,10 @@ interface WebSearch {
 const WEB_ABOUT =
   'Firecrawl web search with the firecrawl_search query parameters, without page fetching: web results such as team pages, profiles and news, useful when providers miss. 2 credits per 10 results.';
 
-/** 2 credits per 10 results, rounded up, for each non-Alexandria source. */
+/** 2 credits per 10 results, rounded up, for each source but the free Alexandria one; no sources means web. */
 function webEstimate(args: Record<string, any>): number {
-  const sources = Array.isArray(args.sources) ? args.sources : ['web'];
-  const counted = sources.filter((s: any) => (typeof s === 'string' ? s : s?.type) !== 'alexandria').length || 1;
+  const sources = Array.isArray(args.sources) && args.sources.length ? args.sources : ['web'];
+  const counted = sources.filter((s: any) => (typeof s === 'string' ? s : s?.type) !== 'alexandria').length;
   return 2 * Math.ceil(((args.limit ?? 10) * counted) / 10);
 }
 
@@ -1130,7 +1148,9 @@ async function webReport(web: WebSearch, args: unknown, context: ToolExecuteCont
     const results = ['web', 'news', 'images'].flatMap((key) => (Array.isArray(response.data?.[key]) ? response.data[key] : []));
     return compact({ name, status: results.length ? 'ok' : 'empty', returned: results.length, credits: num(response.creditsUsed) ?? 0, results });
   } catch (error) {
-    return { name, status: 'error', returned: 0, credits: 0, note: error instanceof Error ? error.message : String(error) };
+    const status = (error as any)?.extras?.status ?? (error as any)?.response?.status;
+    const retryable = status === 429 || status >= 500 || undefined;
+    return compact({ name, status: 'error' as const, returned: 0, credits: 0, note: error instanceof Error ? error.message : String(error), retryable });
   }
 }
 
@@ -1160,7 +1180,7 @@ export function registerEnrichTools(
       name,
       annotations,
       canList,
-      description: description + OPT_IN + REPORT,
+      description: description + PROVIDER_BLOCKS + REPORT,
       outputSchema: enrichOutputSchema,
       parameters,
       beforeValidate: (args: unknown) => {
@@ -1256,7 +1276,13 @@ export function registerEnrichTools(
       const blocks = Object.fromEntries(given.map((p) => [p, nativeLookup(p, a[p], contactFields)]));
       const count = (p: Provider) => (a[p]?.people ?? a[p]?.companies ?? []).length;
       const price = (p: Provider) =>
-        !contactFields ? PER_MATCH[p] : p === 'fullenrich' ? contactFields.reduce((sum, f) => sum + FE_CONTACT_PRICE[f], 0) : CONTACT_PER_MATCH[p];
+        !contactFields
+          ? PER_MATCH[p]
+          : p === 'fullenrich'
+            ? contactFields.reduce((sum, f) => sum + FE_CONTACT_PRICE[f], 0)
+            : p === 'apollo' && contactFields.every((f) => f === 'mobile')
+              ? 0
+              : CONTACT_PER_MATCH[p];
       const estimates = Object.fromEntries(given.map((p) => [p, count(p) * price(p)]));
       if (!people) return { order: LOOKUP_ORDER, blocks, estimates, run: enrichCompaniesWith };
       if (!contactFields) return { order: LOOKUP_ORDER, blocks, estimates, run: enrichPeopleWith };
