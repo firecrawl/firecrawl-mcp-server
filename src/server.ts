@@ -1992,6 +1992,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
 
   const findToolsTool: RegisteredTool = {
     name: 'firecrawl_find_tools',
+    _meta: { 'anthropic/alwaysLoad': true },
     annotations: {
       title: 'Find Tools',
       readOnlyHint: true,
@@ -1999,8 +2000,20 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       destructiveHint: false,
       idempotentHint: true,
     },
-    description:
-      'Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers ' + ALEXANDRIA_CATALOGUE_VERTICALS + ': typed, sourced records through published contracts. Prefer normal firecrawl_search for a data task; it already returns matching providers. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Use query for semantic discovery or urls to find providers for a website. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.',
+    description: `
+Find Alexandria data providers for a kind of data. ${ALEXANDRIA_CATALOGUE_SENTENCE}
+
+Write \`query\` as the kind of record you need, not the entity, the question or a web query: providers are matched on what they return. Name the record type and its key fields, and make one call per distinct need. Examples:
+- "Who leads engineering at Stripe, and what is their email?": "people at a company by job title", then "work email for a named person"
+- "Deals on trail running shoes": "retail product prices and discounts by category"
+- "Brazil's inflation since 2020": "consumer price inflation time series by country"
+
+Prefer a provider over scraping pages when the task needs the same fields across several entities, exact figures or timestamps, provenance, or many records; use web results when they already answer the question.
+
+Use \`urls\` to find providers for a website. With no arguments, browse categories, then providers and tools with \`categories\`, \`groups\` and \`level\`.
+
+Query results are capability summaries (provider, capability, description), not data. Pass \`providers\` and \`capabilities\` to read a full contract, then run it with \`firecrawl_scrape\` and an \`alexandria\` body. nextTool identifies further discovery or pagination. Discovery is free; execution is billed per capability.
+`,
     outputSchema: findToolsOutputSchema,
     parameters: findToolsSchema,
     execute: async (args, { session, client: mcpClient }) => {
