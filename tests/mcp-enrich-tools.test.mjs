@@ -1,6 +1,5 @@
 // The opt-in enrich tools: registration behind enrichTools, the opt-in error,
-// per-provider translation, and the waterfall only sending later providers what
-// earlier ones missed.
+// schema refusals, and each provider running on its own native parameters.
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import test from 'node:test';
@@ -87,12 +86,12 @@ test('FIRECRAWL_ENRICH_TOOLS=1 registers the enrich tools on the CLI server', as
   for (const name of ENRICH_TOOLS) assert.ok(names.includes(name), name + ' is listed');
 });
 
-test('a person without an identifier is refused by the schema', async (t) => {
+test('an input without an identifier is refused by the schema', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { enrichTools: true, apiUrl: api.url });
   await assert.rejects(
-    client.callTool({ name: 'firecrawl_enrich_people', arguments: { people: [{ name: 'Jane Doe' }], apollo: { enabled: true } } }),
-    /Each person needs a linkedin_url/
+    client.callTool({ name: 'firecrawl_enrich_people', arguments: { fullenrich: { enabled: true, people: [{ person_name: 'Jane Doe' }] } } }),
+    (error) => /Each fullenrich person needs/.test(error.message) && !/\.\. /.test(error.message)
   );
   assert.equal(api.calls.length, 0);
 });
@@ -100,49 +99,49 @@ test('a person without an identifier is refused by the schema', async (t) => {
 test('a call with no provider enabled is refused before any provider runs', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { enrichTools: true, apiUrl: api.url });
-  const result = await client.callTool({ name: 'firecrawl_enrich_company', arguments: { companies: [{ domain: 'acme.example' }] } });
+  const result = await client.callTool({ name: 'firecrawl_enrich_company', arguments: {} });
   assert.equal(result.isError, true);
   assert.match(result.content[0].text, /No provider is enabled/);
   assert.equal(api.calls.length, 0);
 });
 
-test('the company waterfall sends later providers only what earlier ones missed', async (t) => {
+test('company lookup runs each provider on its own inputs and reports them separately', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { enrichTools: true, apiUrl: api.url });
   const result = await client.callTool({
     name: 'firecrawl_enrich_company',
-    arguments: { companies: [{ domain: 'acme.example' }, { domain: 'globex.example' }], apollo: { enabled: true }, fullenrich: { enabled: true } },
+    arguments: {
+      fullenrich: { enabled: true, companies: [{ domain: 'acme.example' }, { domain: 'missing.example' }] },
+      apollo: { enabled: true, details: [{ domain: 'globex.example' }] },
+    },
   });
   assert.notEqual(result.isError, true, JSON.stringify(result));
   const data = result.structuredContent;
-  assert.deepEqual(data.results.map((r) => [r.input_index, r.matched, r.name, r.sources]), [
-    [0, true, 'Acme', ['fullenrich']],
-    [1, true, 'Globex', ['apollo']],
-  ]);
-  const apollo = api.calls.filter((call) => call.provider === 'apollo');
-  assert.equal(apollo.length, 1);
-  assert.deepEqual(apollo[0].options.details, [{ domain: 'globex.example' }]);
-  assert.deepEqual(data.providers.map((p) => [p.name, p.status, p.credits]), [
-    ['fullenrich', 'ok', 10],
-    ['apollo', 'ok', 30],
-    ['people_data_labs', 'not_enabled', 0],
-    ['datalegion', 'not_enabled', 0],
-  ]);
+  assert.equal(data.results, undefined);
+  const [fullenrich, apollo, pdl, datalegion] = data.providers;
+  assert.deepEqual([fullenrich.name, fullenrich.status, fullenrich.credits, fullenrich.unmatched], ['fullenrich', 'ok', 10, [1]]);
+  assert.deepEqual(fullenrich.results.map((r) => [r.input_index, r.name]), [[0, 'Acme']]);
+  assert.deepEqual(apollo.results.map((r) => [r.input_index, r.name]), [[0, 'Globex']]);
+  assert.deepEqual(api.calls.find((call) => call.provider === 'apollo').options.details, [{ domain: 'globex.example' }]);
+  assert.deepEqual([pdl.status, datalegion.status], ['not_enabled', 'not_enabled']);
   assert.equal(data.credits_total, 40);
 });
 
-test('people search reports a filter a provider could not apply', async (t) => {
+test('people search passes a provider its own parameters unchanged', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { enrichTools: true, apiUrl: api.url });
   const result = await client.callTool({
     name: 'firecrawl_enrich_people_search',
-    arguments: { titles: ['Head of Data'], seniority: ['director'], apollo: { enabled: true } },
+    arguments: {
+      apollo: { enabled: true, person_titles: ['Head of Data'], q_organization_domains_list: ['acme.example'] },
+      fullenrich: { enabled: true },
+    },
   });
   const data = result.structuredContent;
   const apollo = data.providers.find((p) => p.name === 'apollo');
   assert.equal(apollo.results[0].apollo_id, 'a1');
-  assert.equal(data.results, undefined);
-  assert.deepEqual(apollo.not_applied, ['seniority']);
-  assert.deepEqual(api.calls[0].options.person_titles, ['Head of Data']);
-  assert.equal(api.calls[0].options.per_page, 5);
+  assert.deepEqual(api.calls[0].options, { person_titles: ['Head of Data'], q_organization_domains_list: ['acme.example'], per_page: 10 });
+  const fullenrich = data.providers.find((p) => p.name === 'fullenrich');
+  assert.equal(fullenrich.status, 'skipped');
+  assert.equal(api.calls.length, 1);
 });

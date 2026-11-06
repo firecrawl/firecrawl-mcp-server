@@ -1227,28 +1227,27 @@ tool again with the identical payload and `requestId`.
 
 Opt-in people and company enrichment over Alexandria's B2B data providers (Apollo, FullEnrich, People Data Labs and Data Legion). Start the server with `FIRECRAWL_ENRICH_TOOLS=1` (or pass `enrichTools: true` programmatically) to register them; they need an API key on a team with Alexandria access.
 
-| Tool | Use it for | Providers | How they run |
-| --- | --- | --- | --- |
-| `firecrawl_enrich_people_search` | Finding people by title, employer, location and seniority | apollo, fullenrich, people_data_labs | In parallel, results kept per provider |
-| `firecrawl_enrich_people` | Resolving known people to profiles and work history | fullenrich, apollo, people_data_labs, datalegion | Waterfall in that order |
-| `firecrawl_enrich_contact_info` | Work email, personal email or mobile for known people | fullenrich, datalegion, apollo | Waterfall in that order |
-| `firecrawl_enrich_company_search` | Finding companies by industry, headcount, location, technology or founding year | apollo, fullenrich, people_data_labs | In parallel, results kept per provider |
-| `firecrawl_enrich_company` | Resolving known companies to firmographics | fullenrich, apollo, people_data_labs, datalegion | Waterfall in that order |
+| Tool | Use it for | Providers |
+| --- | --- | --- |
+| `firecrawl_enrich_people_search` | Finding people by title, employer, location and more | apollo, fullenrich, people_data_labs |
+| `firecrawl_enrich_people` | Resolving known people to profiles and work history | fullenrich, apollo, people_data_labs, datalegion |
+| `firecrawl_enrich_contact_info` | Work email, personal email or mobile for known people | fullenrich, datalegion, apollo |
+| `firecrawl_enrich_company_search` | Finding companies by industry, headcount, location, technology or founding year | apollo, fullenrich, people_data_labs |
+| `firecrawl_enrich_company` | Resolving known companies to firmographics | fullenrich, apollo, people_data_labs, datalegion |
 
-Every provider is off until the call enables it with `{"enabled": true}`; a call with none enabled fails with `no_provider_enabled`, the providers it can use, and an example. Some provider blocks also take that provider's own options, such as FullEnrich's `past_company_names` and a People Data Labs `sql` query on the search tools, or Data Legion's `min_confidence` on `firecrawl_enrich_people`; the rest take only `enabled`.
+No parameter is shared between providers. Each provider block takes that provider's own parameters under its own names (Apollo's `person_titles`, FullEnrich's `current_position_titles`, a People Data Labs `sql` query), so a filter a provider lacks is simply absent from its block. A provider runs only when its block has `{"enabled": true}`; a call with none enabled fails with `no_provider_enabled`, the providers it can use, and an example. Lookup tools take each provider's own list of inputs, 1 to 50 per call.
 
 ```json
 {
   "name": "firecrawl_enrich_company",
   "arguments": {
-    "companies": [{ "domain": "example.com" }, { "name": "Example Labs" }],
-    "fullenrich": { "enabled": true },
-    "datalegion": { "enabled": true }
+    "fullenrich": { "enabled": true, "companies": [{ "domain": "example.com" }] },
+    "datalegion": { "enabled": true, "companies": [{ "domain": "example.com" }, { "name": "Example Labs" }] }
   }
 }
 ```
 
-A waterfall sends each later provider only the inputs earlier ones missed, and results keep input order with `input_index` and `matched`. Lookup results list the providers that returned each record, with `confidence` (`agreed`, `single_source` or `conflicting`) and any `conflicts`. Search results are not merged: each provider's records come back in its own `providers[].results`. Every response has a `providers` entry per provider (`status`, records `returned`, `credits`, the shared filters it `applied` and those it could not) and `credits_total`. Tool descriptions list each provider's credit price.
+Enabled providers run in parallel, and nothing is merged. The response has one `providers` entry per provider with its `status`, records `returned`, `credits` and its own `results`; lookup results carry `input_index` into that provider's input list, and `unmatched` lists the inputs it missed. `credits_total` sums the charges. Tool descriptions list each provider's credit price.
 
 ### 16. Credit Usage Tool
 

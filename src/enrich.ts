@@ -1,8 +1,8 @@
 /**
  * People and company enrichment over Alexandria's B2B data providers
- * (Apollo, FullEnrich, People Data Labs, Data Legion). Each tool takes one
- * shared input shape, translates it per provider, and reports what every
- * provider ran, matched, charged and could not apply.
+ * (Apollo, FullEnrich, People Data Labs, Data Legion). Each provider block takes
+ * that provider's own parameters; enabled providers run in parallel and each
+ * reports its own records, charge and errors.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -42,81 +42,224 @@ const range = z.strictObject({
   max: z.number().optional(),
   exclude: z.boolean().optional(),
 });
-const bounds = z.strictObject({ min: z.number().optional(), max: z.number().optional() });
-
-const personRef = z.strictObject({
-  name: z.string().optional().describe('Full name.'),
-  company: z.string().optional().describe('Current employer name.'),
-  company_domain: z.string().optional().describe('Employer domain, e.g. linear.app. Best match rate with name.'),
-  linkedin_url: z.string().optional().describe('LinkedIn profile URL. Enough on its own.'),
-  email: z.string().optional().describe('A known email address.'),
-  apollo_id: z.string().optional().describe('apollo_id from a firecrawl_enrich_people_search result. Resolves on apollo only.'),
-});
-
-const identifiesPerson = (ref: { linkedin_url?: string; email?: string; apollo_id?: string; name?: string; company?: string; company_domain?: string }) =>
-  Boolean(ref.linkedin_url || ref.email || ref.apollo_id || (ref.name && (ref.company || ref.company_domain)));
-const NEEDS_IDENTIFIER = { message: 'Each person needs a linkedin_url, an email, an apollo_id, or a name plus company or company_domain.' };
-
-const companyRef = z.strictObject({
-  domain: z.string().optional().describe('Best identifier, e.g. stripe.com.'),
-  linkedin_url: z.string().optional().describe('LinkedIn company URL.'),
-  name: z.string().optional().describe('Name alone matches only on people_data_labs and datalegion.'),
-});
-
-const SENIORITY = ['founder', 'c_suite', 'vp', 'head', 'director', 'manager', 'senior'] as const;
+const matches = (about?: string) => {
+  const schema = z.array(match).min(1).optional();
+  return about ? schema.describe(about) : schema;
+};
+const ranges = (about?: string) => {
+  const schema = z.array(range).min(1).optional();
+  return about ? schema.describe(about) : schema;
+};
+const strings = (about: string) => z.array(z.string().min(1)).min(1).optional().describe(about);
+const text = (about?: string) => (about ? z.string().optional().describe(about) : z.string().optional());
 
 const enabled = z.boolean().describe('true runs this provider.');
 
-function provider<S extends z.ZodRawShape>(shape: S, about: string) {
-  return z.strictObject({ enabled, ...shape }).optional().describe(about);
+function provider<S extends z.ZodRawShape>(shape: S, about: string, check?: [(value: any) => boolean, string]) {
+  const block = z.strictObject({ enabled, ...shape });
+  return (check ? block.refine(check[0], { message: check[1] }) : block).optional().describe(about);
 }
 
+const has = (value: unknown) => typeof value === 'string' && value.trim() !== '';
+
 const OPT_IN =
-  'Providers are opt-in: pass {"enabled": true} on each provider to run, e.g. "apollo": {"enabled": true}. Enable several to compare their results. ';
-const REPORT =
-  'The response lists every provider with its status, records returned, credits charged, and any filters it could not apply.';
+  'Each provider takes its own native parameters; nothing is shared between providers. A provider runs only when its block has {"enabled": true}, e.g. "apollo": {"enabled": true, ...}. Enabled providers run in parallel. ';
+const REPORT = 'The response lists every provider with its status, records, credits charged and any error.';
+const FE_LISTS = 'List filters take [{"value": "...", "exclude"?: true, "exact_match"?: true}]; range filters take [{"min"?: n, "max"?: n}]. ';
+
+const sqlOrQuery: [(value: any) => boolean, string] = [
+  (v) => has(v.sql) !== (v.query !== undefined),
+  'people_data_labs needs exactly one of sql or query',
+];
 
 const peopleSearchParameters = z.strictObject({
-  titles: z.array(z.string().min(1)).min(1).max(10).describe('Current job titles, e.g. ["Head of Data", "Director of Data"].'),
-  location: z.string().optional().describe('City, region or country, e.g. "Seattle", "California", "Germany".'),
-  company: z.string().optional().describe('Current employer name.'),
-  company_domain: z.string().optional().describe('Current employer domain.'),
-  seniority: z.array(z.enum(SENIORITY)).optional().describe('Applied by fullenrich and people_data_labs; apollo runs without it and says so.'),
-  limit: z.number().int().min(1).max(25).default(5).describe('Records per provider.'),
   apollo: provider(
-    { q_keywords: z.string().optional().describe('Free text matched across the person and their company.') },
-    'Apollo. Free. Loose title matching; surnames are masked until enriched.'
+    {
+      person_titles: strings('Job titles, e.g. ["Head of Data"]. Loose match; several titles widen the net.'),
+      person_locations: strings('e.g. ["Seattle, US"].'),
+      q_organization_domains_list: strings('Employer domains, e.g. ["clerk.com"].'),
+      q_keywords: text('Free text matched across the person and their company.'),
+      per_page: z.number().int().min(1).max(25).default(10),
+      page: z.number().int().min(1).optional(),
+    },
+    'Apollo people/search. Free. No seniority, industry or headcount filter. Surnames come back masked: pass apollo_id to firecrawl_enrich_people as apollo.details[].id to reveal.'
   ),
   fullenrich: provider(
     {
-      past_company_names: z.array(match).optional().describe('Previous employers, e.g. [{"value":"Stripe"}].'),
-      past_position_titles: z.array(match).optional(),
-      person_skills: z.array(match).optional(),
-      person_universities: z.array(match).optional(),
-      current_company_industries: z.array(match).optional(),
-      current_company_headcounts: z.array(range).optional().describe('e.g. [{"min":50,"max":500}].'),
-      current_position_years_in: z.array(range).optional(),
-      current_company_days_since_last_job_change: z.array(range).optional().describe('Recent movers, e.g. [{"max":90}].'),
+      current_position_titles: matches('e.g. [{"value":"Head of Data"}].'),
+      current_position_seniority_level: matches('Founder, C-Level, VP, Head, Director, Manager or Senior.'),
+      current_position_job_functions: matches(),
+      current_position_sub_functions: matches(),
+      current_position_years_in: ranges(),
+      current_company_names: matches(),
+      current_company_domains: matches('Exact match recommended.'),
+      current_company_professional_network_urls: matches('Employer LinkedIn URLs.'),
+      current_company_industries: matches(),
+      current_company_specialties: matches(),
+      current_company_technologies: matches(),
+      current_company_types: matches('e.g. Privately Held, Public Company.'),
+      current_company_headquarters: matches(),
+      current_company_headcounts: ranges('e.g. [{"min":50,"max":500}].'),
+      current_company_founded_years: ranges(),
+      current_company_years_at: ranges(),
+      current_company_days_since_last_job_change: ranges('Recent movers, e.g. [{"max":90}].'),
+      person_names: matches(),
+      person_professional_network_urls: matches('LinkedIn profile URLs.'),
+      person_locations: matches('Cities, regions or countries.'),
+      person_languages: matches(),
+      person_skills: matches(),
+      person_universities: matches(),
+      past_position_titles: matches(),
+      past_company_names: matches(),
+      past_company_domains: matches(),
+      limit: z.number().int().min(1).max(25).default(5).describe('Records to return, 5 credits each.'),
+      offset: z.number().int().min(0).max(10000).optional(),
     },
-    'FullEnrich. 5 credits per record. Extra filters apply to FullEnrich only.'
+    'FullEnrich people/search. 5 credits per record. ' + FE_LISTS
   ),
   people_data_labs: provider(
-    { sql: z.string().optional().describe('SELECT * FROM person WHERE ... Replaces the shared filters for PDL. Values are lowercase; job_title matches exactly.') },
-    'People Data Labs. 50 credits per record. Exact title match.'
+    {
+      sql: text("SELECT * FROM person WHERE ... Values are lowercase and match exactly, e.g. job_title = 'head of data'."),
+      query: z.record(z.string(), z.unknown()).optional().describe('Elasticsearch query over the person schema, instead of sql.'),
+      limit: z.number().int().min(1).max(10).default(2).describe('Records to return, 50 credits each.'),
+    },
+    'People Data Labs person/search. 50 credits per record. Pass sql or query.',
+    sqlOrQuery
   ),
 });
 
-const peopleParameters = z.strictObject({
-  people: z.array(personRef.refine(identifiesPerson, NEEDS_IDENTIFIER)).min(1).max(50).describe('Each needs a linkedin_url, an email, an apollo_id, or a name plus company or company_domain.'),
-  fullenrich: provider({}, 'FullEnrich. 10 credits per match.'),
-  apollo: provider({}, 'Apollo. 30 credits per match.'),
+const companySearchParameters = z.strictObject({
+  apollo: provider(
+    {
+      q_organization_name: text('Matched against company names and descriptions.'),
+      organization_num_employees_ranges: strings('Headcount bands, e.g. ["11,50", "51,200"].'),
+      organization_locations: strings('e.g. ["San Francisco, US"].'),
+      currently_using_any_of_technology_uids: strings('Apollo technology ids, lowercase with underscores, e.g. ["snowflake", "google_analytics"].'),
+      per_page: z.number().int().min(1).max(25).default(10),
+      page: z.number().int().min(1).optional(),
+    },
+    'Apollo companies/search. 30 credits per page, empty pages included. No industry or founding-year filter.'
+  ),
+  fullenrich: provider(
+    {
+      keywords: matches('Words in the company description.'),
+      industries: matches(),
+      specialties: matches(),
+      technologies: matches(),
+      types: matches('e.g. Privately Held, Public Company.'),
+      headquarters_locations: matches('Cities, regions or countries.'),
+      headcounts: ranges('e.g. [{"min":50,"max":500}].'),
+      founded_years: ranges(),
+      names: matches(),
+      domains: matches(),
+      professional_network_urls: matches('LinkedIn company URLs.'),
+      limit: z.number().int().min(1).max(25).default(5).describe('Records to return, 5 credits each.'),
+      offset: z.number().int().min(0).max(10000).optional(),
+    },
+    'FullEnrich companies/search. 5 credits per record. ' + FE_LISTS
+  ),
   people_data_labs: provider(
-    { min_likelihood: z.number().int().min(1).max(10).optional().describe('Minimum match confidence, 1 to 10 (default 6).') },
-    'People Data Labs. 50 credits per match; richest work history.'
+    {
+      sql: text("SELECT * FROM company WHERE ... Values are lowercase, e.g. industry = 'computer software'."),
+      query: z.record(z.string(), z.unknown()).optional().describe('Elasticsearch query over the company schema, instead of sql.'),
+      limit: z.number().int().min(1).max(10).default(2).describe('Records to return, 50 credits each.'),
+    },
+    'People Data Labs company/search. 50 credits per record. Pass sql or query.',
+    sqlOrQuery
+  ),
+});
+
+const apolloPersonRef = z
+  .strictObject({
+    id: text('apollo_id from firecrawl_enrich_people_search.'),
+    email: text(),
+    linkedin_url: text(),
+    name: text('Full name, with domain or organization_name.'),
+    first_name: text(),
+    last_name: text(),
+    domain: text('Employer domain.'),
+    organization_name: text(),
+  })
+  .refine(
+    (r) => has(r.id) || has(r.email) || has(r.linkedin_url) || ((has(r.name) || (has(r.first_name) && has(r.last_name))) && (has(r.domain) || has(r.organization_name))),
+    { message: 'Each apollo person needs an id, email, linkedin_url, or a name plus domain or organization_name' }
+  );
+
+const dataLegionPersonRef = z
+  .strictObject({
+    social_url: text('LinkedIn or other social profile URL.'),
+    email: text(),
+    linkedin_id: text(),
+    legion_id: text(),
+    full_name: text(),
+    first_name: text(),
+    last_name: text(),
+    company: text('Company name, website or social URL.'),
+    job_title: text(),
+    city: text(),
+    state: text(),
+    country: text(),
+    school: text(),
+  })
+  .refine(
+    (r) => has(r.social_url) || has(r.email) || has(r.linkedin_id) || has(r.legion_id) || has(r.full_name) || (has(r.first_name) && has(r.last_name)),
+    { message: 'Each datalegion person needs a social_url, email, linkedin_id, legion_id or a name' }
+  );
+
+const batch = <T extends z.ZodType>(item: T) => z.array(item).min(1).max(50);
+const minLikelihood = z.number().int().min(1).max(10).optional().describe('Minimum match confidence, 1 to 10 (default 6).');
+const minConfidence = z.enum(['high', 'moderate', 'low']).optional();
+
+const peopleParameters = z.strictObject({
+  fullenrich: provider(
+    {
+      people: batch(
+        z
+          .strictObject({
+            person_professional_network_url: text('LinkedIn profile URL. Enough on its own.'),
+            person_name: text('Full name, with a company identifier.'),
+            company_domain: text(),
+            company_professional_network_url: text('Employer LinkedIn URL.'),
+          })
+          .refine((r) => has(r.person_professional_network_url) || (has(r.person_name) && (has(r.company_domain) || has(r.company_professional_network_url))), {
+            message: 'Each fullenrich person needs a person_professional_network_url, or a person_name plus company_domain or company_professional_network_url',
+          })
+      ),
+    },
+    'FullEnrich people/lookup. 10 credits per match. No email lookup.'
+  ),
+  apollo: provider(
+    { details: batch(apolloPersonRef) },
+    'Apollo people/bulk-match. 30 credits per match; includes a work email when Apollo has one.'
+  ),
+  people_data_labs: provider(
+    {
+      requests: batch(
+        z
+          .strictObject({
+            profile: text('LinkedIn or other social profile URL.'),
+            email: text(),
+            phone: text(),
+            pdl_id: text(),
+            name: text(),
+            first_name: text(),
+            last_name: text(),
+            company: text('Employer name or domain.'),
+            school: text(),
+            location: text(),
+          })
+          .refine(
+            (r) => has(r.profile) || has(r.email) || has(r.phone) || has(r.pdl_id) || ((has(r.name) || (has(r.first_name) && has(r.last_name))) && (has(r.company) || has(r.school) || has(r.location))),
+            { message: 'Each people_data_labs request needs a profile, email, phone, pdl_id, or a name plus company, school or location' }
+          )
+      ),
+      min_likelihood: minLikelihood,
+    },
+    'People Data Labs person/bulk. 50 credits per match; richest work history.'
   ),
   datalegion: provider(
-    { min_confidence: z.enum(['high', 'moderate', 'low']).optional() },
-    'Data Legion. 20 credits per match.'
+    { people: batch(dataLegionPersonRef), min_confidence: minConfidence },
+    'Data Legion people/enrich-base-no-contact. 20 credits per match.'
   ),
 });
 
@@ -124,64 +267,103 @@ const CONTACT_FIELDS = ['work_email', 'personal_email', 'mobile'] as const;
 type ContactField = (typeof CONTACT_FIELDS)[number];
 
 const contactParameters = z.strictObject({
-  people: z
-    .array(
-      personRef
-        .omit({ email: true })
-        .refine((ref) => Boolean(ref.linkedin_url || (ref.name && (ref.company || ref.company_domain))), {
-          message: 'Each person needs a linkedin_url, or a name plus company or company_domain.',
-        })
-    )
-    .min(1)
-    .max(50)
-    .describe('Each needs a linkedin_url, or a name plus company or company_domain.'),
-  fields: z.array(z.enum(CONTACT_FIELDS)).min(1).describe('Values to find.'),
-  fullenrich: provider({}, 'FullEnrich. Work email 30, personal email 100, mobile 300 credits per value found.'),
-  datalegion: provider({}, 'Data Legion. 100 credits per matched person, every field in one call.'),
-  apollo: provider({}, 'Apollo. Work email only, 30 credits per match.'),
-});
-
-const companySearchParameters = z.strictObject({
-  industries: z.array(z.string().min(1)).optional().describe('Applied by fullenrich and people_data_labs.'),
-  employees: bounds.optional().describe('Headcount range, e.g. {"min":50,"max":500}.'),
-  location: z.string().optional().describe('Headquarters city, region or country.'),
-  technologies: z.array(z.string().min(1)).optional().describe('e.g. ["Snowflake"]. Applied by apollo and fullenrich.'),
-  founded: bounds.optional().describe('Founding year range. Applied by fullenrich and people_data_labs.'),
-  keywords: z.string().optional().describe('What the company does.'),
-  limit: z.number().int().min(1).max(25).default(10).describe('Records per provider.'),
-  apollo: provider(
-    { q_organization_name: z.string().optional().describe('Replaces keywords for Apollo.') },
-    'Apollo. 30 credits per page.'
-  ),
   fullenrich: provider(
     {
-      specialties: z.array(match).optional(),
-      types: z.array(match).optional().describe('e.g. [{"value":"Privately Held"}].'),
+      contacts: batch(
+        z
+          .strictObject({
+            linkedin_url: text('Enough on its own.'),
+            first_name: text(),
+            last_name: text(),
+            domain: text('Employer domain.'),
+            company_name: text(),
+          })
+          .refine((r) => has(r.linkedin_url) || (has(r.first_name) && has(r.last_name) && (has(r.domain) || has(r.company_name))), {
+            message: 'Each fullenrich contact needs a linkedin_url, or first_name, last_name and a domain or company_name',
+          })
+      ),
+      fields: z.array(z.enum(CONTACT_FIELDS)).min(1).describe('Values to find for every contact.'),
     },
-    'FullEnrich. 5 credits per record.'
+    'FullEnrich contacts. Per value found: work_email 30 credits, personal_email 100, mobile 300.'
   ),
-  people_data_labs: provider(
-    { sql: z.string().optional().describe('SELECT * FROM company WHERE ... Replaces the shared filters for PDL.') },
-    'People Data Labs. 50 credits per record.'
+  datalegion: provider(
+    { people: batch(dataLegionPersonRef), min_confidence: minConfidence },
+    'Data Legion people/enrich-base-with-contact. 100 credits per matched person; returns every contact field it has.'
+  ),
+  apollo: provider(
+    {
+      details: batch(apolloPersonRef),
+      reveal_personal_emails: z.boolean().optional().describe('Also return personal emails.'),
+    },
+    'Apollo people/bulk-match. 30 credits per match; work email, plus personal emails when asked.'
   ),
 });
 
 const companyParameters = z.strictObject({
-  companies: z.array(companyRef).min(1).max(50).describe('Each needs a domain, linkedin_url or name.'),
-  fullenrich: provider({}, 'FullEnrich. 10 credits per match; includes technologies.'),
-  apollo: provider({}, 'Apollo. 30 credits per match.'),
-  people_data_labs: provider(
-    { min_likelihood: z.number().int().min(1).max(10).optional().describe('Minimum match confidence, 1 to 10 (default 6).') },
-    'People Data Labs. 50 credits per match; funding history.'
+  fullenrich: provider(
+    {
+      companies: batch(
+        z
+          .strictObject({ domain: text('e.g. stripe.com.'), professional_network_url: text('LinkedIn company URL.') })
+          .refine((r) => has(r.domain) || has(r.professional_network_url), { message: 'Each fullenrich company needs a domain or professional_network_url' })
+      ),
+    },
+    'FullEnrich companies/lookup. 10 credits per match; includes technologies.'
   ),
-  datalegion: provider({}, 'Data Legion. 20 credits per match.'),
+  apollo: provider(
+    {
+      details: batch(
+        z
+          .strictObject({ domain: text(), linkedin_url: text(), name: text(), website: text() })
+          .refine((r) => has(r.domain) || has(r.linkedin_url) || has(r.name) || has(r.website), { message: 'Each apollo company needs a domain, linkedin_url, name or website' })
+      ),
+    },
+    'Apollo companies/bulk-enrich. 30 credits per match. A name alone matches only on an exact name.'
+  ),
+  people_data_labs: provider(
+    {
+      companies: batch(
+        z
+          .strictObject({
+            website: text('Most reliable identifier.'),
+            profile: text('LinkedIn company URL.'),
+            ticker: text(),
+            pdl_id: text(),
+            name: text('Weakest identifier; ambiguous names miss.'),
+            location: text('Helps a name match; never enough alone.'),
+          })
+          .refine((r) => has(r.website) || has(r.profile) || has(r.ticker) || has(r.pdl_id) || has(r.name), {
+            message: 'Each people_data_labs company needs a website, profile, ticker, pdl_id or name',
+          })
+      ),
+      min_likelihood: minLikelihood,
+    },
+    'People Data Labs company/enrich. 50 credits per match; funding history.'
+  ),
+  datalegion: provider(
+    {
+      companies: batch(
+        z
+          .strictObject({
+            domain: text(),
+            social_url: text('LinkedIn company URL.'),
+            name: text('Fuzzy match; add industry or domain for ambiguous names.'),
+            linkedin_id: text(),
+            ticker_symbol: text(),
+            legion_id: text(),
+            industry: text(),
+          })
+          .refine((r) => has(r.domain) || has(r.social_url) || has(r.name) || has(r.linkedin_id) || has(r.ticker_symbol) || has(r.legion_id), {
+            message: 'Each datalegion company needs a domain, social_url, name, linkedin_id, ticker_symbol or legion_id',
+          })
+      ),
+      min_confidence: minConfidence,
+    },
+    'Data Legion companies/enrich-base. 20 credits per match.'
+  ),
 });
 
-type PersonRef = z.infer<typeof personRef>;
-type CompanyRef = z.infer<typeof companyRef>;
-
 const enrichOutputSchema = z.looseObject({
-  results: z.array(z.looseObject({})).optional().describe('Lookup tools: one record per input, in input order.'),
   providers: z
     .array(
       z.looseObject({
@@ -189,11 +371,12 @@ const enrichOutputSchema = z.looseObject({
         status: z.string().optional(),
         returned: z.number().optional(),
         credits: z.number().optional(),
-        results: z.array(z.looseObject({})).optional().describe('Search tools: this provider\'s records.'),
+        results: z.array(z.looseObject({})).optional().describe('This provider\'s records; lookup records carry input_index into this provider\'s input list.'),
+        unmatched: z.array(z.number()).optional().describe('Lookup tools: input indexes this provider did not match.'),
       })
     )
     .optional()
-    .describe('What each provider did.'),
+    .describe('What each provider did, with its own records.'),
   credits_total: z.number().optional(),
 });
 
@@ -236,9 +419,9 @@ interface ProviderReport {
   credits: number;
   attempted?: number;
   next_tool?: unknown;
-  applied?: string[];
-  not_applied?: string[];
   note?: string;
+  results?: object[];
+  unmatched?: number[];
 }
 
 const str = (value: unknown): string | undefined =>
@@ -329,6 +512,7 @@ function apolloPerson(r: any): Person {
     ),
     work_email: emailFrom(r?.email),
     email_status: emailFrom(r?.email) ? str(r?.email_status) : undefined,
+    personal_email: emailFrom(r?.personal_emails),
     apollo_id: str(r?.id),
   });
 }
@@ -509,84 +693,59 @@ function enabledProviders(args: Record<string, any>, order: Provider[]): Provide
   );
 }
 
-function notEnabled(args: Record<string, any>, order: Provider[]): ProviderReport[] {
-  return order
-    .filter((p) => args[p]?.enabled !== true)
-    .map((name) => ({ name, status: 'not_enabled' as const, returned: 0, credits: 0 }));
+
+function notEnabled(name: Provider): ProviderReport {
+  return { name, status: 'not_enabled', returned: 0, credits: 0 };
 }
 
-function respond(results: unknown[], providers: ProviderReport[]): ContentResult {
-  const data = {
-    results,
-    providers: providers.map((r) => compact(r)),
-    credits_total: providers.reduce((sum, r) => sum + r.credits, 0),
-  };
-  return withStructured(JSON.stringify(data), data);
+function finish(p: Provider, entries: Entry[], records: object[], extra: Partial<ProviderReport> = {}): ProviderReport {
+  const failure = errorNote(entries);
+  return compact({
+    name: p,
+    status: records.length ? 'ok' : failure ? 'error' : 'empty',
+    returned: records.length,
+    credits: credits(entries),
+    note: failure,
+    next_tool: nextToolOf(entries),
+    results: records,
+    ...extra,
+  });
 }
 
-/** Search responses keep each provider's records in its own report. */
-function respondSearch(found: { report: ProviderReport; records: object[] }[], rest: ProviderReport[]): ContentResult {
-  const providers = [...found.map((f) => compact({ ...f.report, results: f.records })), ...rest.map((r) => compact(r))];
-  const data = { providers, credits_total: providers.reduce((sum, r) => sum + r.credits, 0) };
-  return withStructured(JSON.stringify(data), data);
-}
-
-type Keyed = Record<string, any> & { sources: Provider[]; confidence?: string; conflicts?: Record<string, unknown[]> };
-
-function differs(a: unknown, b: unknown): boolean {
-  return typeof a === 'string' && typeof b === 'string'
-    ? a.toLowerCase() !== b.toLowerCase()
-    : JSON.stringify(a) !== JSON.stringify(b);
-}
-
-function fold(target: Keyed, record: Record<string, any>, p: Provider, checked: string[]) {
-  if (!target.sources.includes(p)) target.sources.push(p);
-  for (const [field, value] of Object.entries(record)) {
-    if (value === undefined) continue;
-    if (target[field] === undefined) {
-      target[field] = value;
-    } else if (checked.includes(field) && differs(target[field], value)) {
-      target.conflicts ??= {};
-      const seen = (target.conflicts[field] ??= [target[field]]);
-      if (!seen.some((v) => !differs(v, value))) seen.push(value);
-    }
-  }
-}
-
-function settle(record: Keyed) {
-  record.confidence = record.conflicts ? 'conflicting' : record.sources.length > 1 ? 'agreed' : 'single_source';
-}
-
-const providerExtras = (options: object | undefined): Record<string, unknown> =>
-  Object.fromEntries(Object.entries(options ?? {}).filter(([key, value]) => key !== 'enabled' && value !== undefined));
-const firstSegment = (location: string) => location.split(',')[0].trim();
-const sqlText = (value: string) => "'" + value.toLowerCase().replace(/'/g, "''") + "'";
-
-// ---------- firecrawl_enrich_people_search ----------
-
-const FE_SENIORITY: Record<(typeof SENIORITY)[number], string> = {
-  founder: 'Founder', c_suite: 'C-Level', vp: 'VP', head: 'Head', director: 'Director', manager: 'Manager', senior: 'Senior',
-};
-const PDL_SENIORITY: Partial<Record<(typeof SENIORITY)[number], string>> = {
-  founder: 'owner', c_suite: 'cxo', vp: 'vp', director: 'director', manager: 'manager', senior: 'senior',
+const chunks = <T>(items: T[], size: number): T[][] => {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
 };
 
-type Found<T> = { report: ProviderReport; records: T[] };
+// ---------- Search: firecrawl_enrich_people_search, _company_search ----------
 
-async function pdlSearch(
-  ctx: Context,
-  capability: string,
-  sql: string,
-  limit: number,
-  map: (r: any) => object
-): Promise<{ entries: Entry[]; records: object[] }> {
+interface SearchSpec {
+  capability: Record<'apollo' | 'fullenrich' | 'people_data_labs', string>;
+  read: Record<'apollo' | 'fullenrich', (data: any) => unknown>;
+  map: Record<'apollo' | 'fullenrich' | 'people_data_labs', (r: any) => object>;
+}
+
+const PEOPLE_SEARCH: SearchSpec = {
+  capability: { apollo: 'people/search', fullenrich: 'people/search', people_data_labs: 'person/search' },
+  read: { apollo: (d) => d?.people, fullenrich: (d) => d?.people },
+  map: { apollo: apolloPreview, fullenrich: fullEnrichPerson, people_data_labs: pdlPerson },
+};
+
+const COMPANY_SEARCH: SearchSpec = {
+  capability: { apollo: 'companies/search', fullenrich: 'companies/search', people_data_labs: 'company/search' },
+  read: { apollo: (d) => d?.organizations, fullenrich: (d) => d?.companies },
+  map: { apollo: apolloCompany, fullenrich: fullEnrichCompany, people_data_labs: pdlCompany },
+};
+
+async function pdlSearch(ctx: Context, capability: string, query: Record<string, unknown>, limit: number, map: (r: any) => object) {
   const entries: Entry[] = [];
   const records: object[] = [];
   let scroll: string | undefined;
   while (records.length < limit) {
     const size = Math.min(2, limit - records.length);
     const [entry] = await runCalls(ctx, 'people_data_labs', [
-      { capability, options: { sql, size, titlecase: true, ...(scroll ? { scroll_token: scroll } : {}) } },
+      { capability, options: { ...query, size, titlecase: true, ...(scroll ? { scroll_token: scroll } : {}) } },
     ]);
     entries.push(entry);
     const page = Array.isArray(entry.data?.data) ? entry.data.data : [];
@@ -597,359 +756,113 @@ async function pdlSearch(
   return { entries, records };
 }
 
-async function peopleSearchProvider(
-  ctx: Context,
-  p: Provider,
-  a: z.infer<typeof peopleSearchParameters>
-): Promise<Found<Person>> {
-  const applied = ['titles'];
-  const notApplied: string[] = [];
-  let entries: Entry[] = [];
-  let records: Person[] = [];
-  let note: string | undefined;
-
-  if (p === 'apollo') {
-    const keywords = [a.apollo?.q_keywords, a.company_domain ? undefined : a.company].filter(Boolean).join(' ');
-    if (a.location) applied.push('location');
-    if (a.company_domain) applied.push('company_domain');
-    else if (a.company) applied.push('company (as keywords)');
-    if (a.company_domain && a.company) notApplied.push('company');
-    if (a.seniority?.length) {
-      notApplied.push('seniority');
-      note = 'Apollo has no seniority filter; results are not filtered on it.';
-    }
-    entries = await runCalls(ctx, p, [
-      {
-        capability: 'people/search',
-        options: compact({
-          person_titles: a.titles,
-          person_locations: a.location ? [a.location] : undefined,
-          q_organization_domains_list: a.company_domain ? [a.company_domain] : undefined,
-          q_keywords: keywords || undefined,
-          per_page: a.limit,
-        }),
-      },
-    ]);
-    records = (entries[0].data?.people ?? []).map(apolloPreview);
-  }
-
-  if (p === 'fullenrich') {
-    const extra = providerExtras(a.fullenrich);
-    const filters = compact({
-      current_position_titles: a.titles.map((value) => ({ value })),
-      person_locations: a.location ? [{ value: firstSegment(a.location) }] : undefined,
-      current_company_domains: a.company_domain ? [{ value: a.company_domain }] : undefined,
-      current_company_names: !a.company_domain && a.company ? [{ value: a.company }] : undefined,
-      current_position_seniority_level: a.seniority?.map((s) => ({ value: FE_SENIORITY[s] })),
-      ...extra,
-    });
-    for (const key of ['location', 'company_domain', 'seniority'] as const) if (a[key]?.length) applied.push(key);
-    if (a.company) (a.company_domain ? notApplied : applied).push('company');
-    applied.push(...Object.keys(extra));
-    const calls: Call[] = [];
-    for (let offset = 0; offset < a.limit; offset += 6) {
-      calls.push({ capability: 'people/search', options: { ...filters, limit: Math.min(6, a.limit - offset), ...(offset ? { offset } : {}) } });
-    }
-    entries = await runCalls(ctx, p, calls);
-    records = entries.flatMap((e) => (e.data?.people ?? []).map(fullEnrichPerson));
-  }
-
+async function searchWith(ctx: Context, p: Provider, block: Record<string, any>, spec: SearchSpec): Promise<ProviderReport> {
+  if (p === 'datalegion') throw new Error('datalegion has no search capability.');
+  const { enabled: _enabled, per_page, page, limit, offset = 0, sql, query, ...filters } = block;
   if (p === 'people_data_labs') {
-    let sql = str(a.people_data_labs?.sql);
-    if (sql) {
-      applied.splice(0, applied.length, 'sql');
-    } else {
-      const where = ['job_title IN (' + a.titles.map(sqlText).join(', ') + ')'];
-      if (a.location) {
-        const l = sqlText(firstSegment(a.location));
-        where.push('(location_locality = ' + l + ' OR location_region = ' + l + ' OR location_country = ' + l + ')');
-        applied.push('location');
-      }
-      if (a.company_domain) {
-        where.push('job_company_website = ' + sqlText(a.company_domain));
-        applied.push('company_domain');
-      } else if (a.company) {
-        where.push('job_company_name = ' + sqlText(a.company));
-        applied.push('company');
-      }
-      if (a.company_domain && a.company) notApplied.push('company');
-      const levels = (a.seniority ?? []).flatMap((s) => PDL_SENIORITY[s] ?? []);
-      if (levels.length) {
-        where.push('job_title_levels IN (' + levels.map(sqlText).join(', ') + ')');
-        applied.push('seniority');
-      }
-      if (a.seniority?.includes('head')) {
-        notApplied.push('seniority: head');
-        note = 'People Data Labs has no "head" level; it is left out of the seniority filter.';
-      }
-      sql = 'SELECT * FROM person WHERE ' + where.join(' AND ');
-    }
-    const found = await pdlSearch(ctx, 'person/search', sql, a.limit, pdlPerson);
-    entries = found.entries;
-    records = found.records as Person[];
+    const { entries, records } = await pdlSearch(ctx, spec.capability[p], has(sql) ? { sql } : { query }, limit, spec.map[p]);
+    return finish(p, entries, records);
   }
-
-  const failure = errorNote(entries);
-  return {
-    records,
-    report: {
-      name: p,
-      status: records.length ? 'ok' : failure ? 'error' : 'empty',
-      returned: records.length,
-      credits: credits(entries),
-      applied,
-      not_applied: notApplied,
-      note: failure ?? note,
-      next_tool: nextToolOf(entries),
-    },
-  };
+  if (!Object.keys(compact(filters)).length) {
+    return { name: p, status: 'skipped', returned: 0, credits: 0, note: 'No filters given; pass at least one.' };
+  }
+  const calls: Call[] =
+    p === 'apollo'
+      ? [{ capability: spec.capability[p], options: compact({ ...filters, per_page, page }) }]
+      : chunks([...Array(limit).keys()], 6).map((slice) => ({
+          capability: spec.capability.fullenrich,
+          options: { ...filters, limit: slice.length, ...(offset + slice[0] ? { offset: offset + slice[0] } : {}) },
+        }));
+  const entries = await runCalls(ctx, p, calls);
+  const read = spec.read[p];
+  const map = spec.map[p];
+  const records = entries.flatMap((e) => {
+    const rows = read(e.data);
+    return Array.isArray(rows) ? rows.map(map) : [];
+  });
+  return finish(p, entries, records);
 }
 
-// ---------- firecrawl_enrich_company_search ----------
+// ---------- Lookups: firecrawl_enrich_people, _contact_info, _company ----------
 
-async function companySearchProvider(
-  ctx: Context,
-  p: Provider,
-  a: z.infer<typeof companySearchParameters>
-): Promise<Found<Company>> {
-  const applied: string[] = [];
-  const notApplied: string[] = [];
-  let entries: Entry[] = [];
-  let records: Company[] = [];
-  let note: string | undefined;
+type Hits = Map<number, object>;
 
-  if (p === 'apollo') {
-    const keywords = str(a.apollo?.q_organization_name) ?? str(a.keywords);
-    if (a.employees) applied.push('employees');
-    if (a.location) applied.push('location');
-    if (a.technologies?.length) applied.push('technologies');
-    if (keywords) applied.push(a.apollo?.q_organization_name ? 'q_organization_name' : 'keywords');
-    if (a.industries?.length) notApplied.push('industries');
-    if (a.founded) notApplied.push('founded');
-    if (notApplied.length) note = 'Apollo has no ' + notApplied.join(' or ') + ' filter; results are not filtered on it.';
-    entries = await runCalls(ctx, p, [
-      {
-        capability: 'companies/search',
-        options: compact({
-          q_organization_name: keywords,
-          organization_num_employees_ranges: a.employees ? [(a.employees.min ?? 1) + ',' + (a.employees.max ?? 1000000)] : undefined,
-          organization_locations: a.location ? [a.location] : undefined,
-          currently_using_any_of_technology_uids: a.technologies?.map((t) => t.toLowerCase().replace(/[^a-z0-9]+/g, '_')),
-          per_page: a.limit,
-        }),
-      },
-    ]);
-    records = (entries[0].data?.organizations ?? []).map(apolloCompany);
-  }
-
-  if (p === 'fullenrich') {
-    const extra = providerExtras(a.fullenrich);
-    const filters = compact({
-      industries: a.industries?.map((value) => ({ value })),
-      headcounts: a.employees ? [a.employees] : undefined,
-      headquarters_locations: a.location ? [{ value: firstSegment(a.location) }] : undefined,
-      technologies: a.technologies?.map((value) => ({ value })),
-      founded_years: a.founded ? [a.founded] : undefined,
-      keywords: a.keywords ? [{ value: a.keywords }] : undefined,
-      ...extra,
-    });
-    for (const key of ['industries', 'employees', 'location', 'technologies', 'founded', 'keywords'] as const) {
-      const value = a[key];
-      if (Array.isArray(value) ? value.length : value) applied.push(key);
-    }
-    applied.push(...Object.keys(extra));
-    const calls: Call[] = [];
-    for (let offset = 0; offset < a.limit; offset += 6) {
-      calls.push({ capability: 'companies/search', options: { ...filters, limit: Math.min(6, a.limit - offset), ...(offset ? { offset } : {}) } });
-    }
-    entries = await runCalls(ctx, p, calls);
-    records = entries.flatMap((e) => (e.data?.companies ?? []).map(fullEnrichCompany));
-  }
-
-  if (p === 'people_data_labs') {
-    let sql = str(a.people_data_labs?.sql);
-    if (sql) {
-      applied.push('sql');
-    } else {
-      const where: string[] = [];
-      if (a.industries?.length) {
-        where.push('industry IN (' + a.industries.map(sqlText).join(', ') + ')');
-        applied.push('industries');
-      }
-      if (a.employees?.min !== undefined) where.push('employee_count >= ' + Math.ceil(a.employees.min));
-      if (a.employees?.max !== undefined) where.push('employee_count <= ' + Math.floor(a.employees.max));
-      if (a.employees) applied.push('employees');
-      if (a.location) {
-        const l = sqlText(firstSegment(a.location));
-        where.push('(location.locality = ' + l + ' OR location.region = ' + l + ' OR location.country = ' + l + ')');
-        applied.push('location');
-      }
-      if (a.founded?.min !== undefined) where.push('founded >= ' + Math.ceil(a.founded.min));
-      if (a.founded?.max !== undefined) where.push('founded <= ' + Math.floor(a.founded.max));
-      if (a.founded) applied.push('founded');
-      if (a.keywords) {
-        where.push("summary LIKE '%" + a.keywords.toLowerCase().replace(/'/g, "''").replace(/%/g, '') + "%'");
-        applied.push('keywords');
-      }
-      if (a.technologies?.length) {
-        notApplied.push('technologies');
-        note = 'People Data Labs has no technology filter; results are not filtered on it.';
-      }
-      sql = where.length ? 'SELECT * FROM company WHERE ' + where.join(' AND ') : undefined;
-    }
-    if (!sql) {
-      return {
-        records: [],
-        report: { name: p, status: 'skipped', returned: 0, credits: 0, not_applied: notApplied, note: 'People Data Labs needs at least one filter it can apply.' },
-      };
-    }
-    const found = await pdlSearch(ctx, 'company/search', sql, a.limit, pdlCompany);
-    entries = found.entries;
-    records = found.records as Company[];
-  }
-
-  const failure = errorNote(entries);
-  return {
-    records,
-    report: {
-      name: p,
-      status: records.length ? 'ok' : failure ? 'error' : 'empty',
-      returned: records.length,
-      credits: credits(entries),
-      applied,
-      not_applied: notApplied,
-      note: failure ?? note,
-      next_tool: nextToolOf(entries),
-    },
-  };
+function lookupReport(p: Provider, entries: Entry[], hits: Hits, total: number): ProviderReport {
+  const results = [...hits].sort(([a], [b]) => a - b).map(([input_index, record]) => ({ input_index, ...record }));
+  const unmatched = [...Array(total).keys()].filter((i) => !hits.has(i));
+  return finish(p, entries, results, { attempted: total, unmatched });
 }
 
-// ---------- Waterfalls: firecrawl_enrich_people, _contact_info, _company ----------
-
-type Hits<T> = Map<number, T>;
-type Item<R> = { index: number; ref: R; current?: Keyed };
-
-interface Attempt<T> {
-  hits: Hits<T>;
-  entries: Entry[];
-  attempted: number;
-}
-
-const splitName = (name?: string) => {
-  const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
-  return { first_name: parts[0], last_name: parts.slice(1).join(' ') || undefined };
-};
-
-/** Maps one entry per item back to its index. */
-function byEntry<T>(items: Item<unknown>[], entries: Entry[], read: (entry: Entry) => T | undefined): Hits<T> {
-  const hits: Hits<T> = new Map();
-  items.forEach((item, i) => {
-    const record = entries[i] && !entries[i].error ? read(entries[i]) : undefined;
-    if (record && Object.keys(record).length) hits.set(item.index, record);
+/** One entry per input, in order. */
+function perEntry(entries: Entry[], read: (entry: Entry) => object | undefined): Hits {
+  const hits: Hits = new Map();
+  entries.forEach((entry, index) => {
+    const record = entry && !entry.error ? read(entry) : undefined;
+    if (record && Object.keys(record).length) hits.set(index, record);
   });
   return hits;
 }
 
-async function enrichPeopleWith(
-  ctx: Context,
-  p: Provider,
-  items: Item<PersonRef>[],
-  options: Record<string, any>
-): Promise<Attempt<Person>> {
+async function apolloPeople(ctx: Context, details: object[], extra: Record<string, unknown> = {}): Promise<ProviderReport> {
+  const batches = chunks(details, 10);
+  const entries = await runCalls(
+    ctx,
+    'apollo',
+    batches.map((chunk) => ({ capability: 'people/bulk-match', options: compact({ details: chunk, ...extra }) }))
+  );
+  const hits: Hits = new Map();
+  batches.forEach((chunk, c) => {
+    const found = Array.isArray(entries[c]?.data?.matches) ? entries[c].data.matches : [];
+    chunk.forEach((_, i) => {
+      if (found[i]) hits.set(c * 10 + i, apolloPerson(found[i]));
+    });
+  });
+  return lookupReport('apollo', entries, hits, details.length);
+}
+
+async function dataLegionPeople(ctx: Context, block: Record<string, any>, capability: string): Promise<ProviderReport> {
+  const entries = await runCalls(
+    ctx,
+    'datalegion',
+    block.people.map((ref: object) => ({ capability, options: compact({ ...ref, min_confidence: block.min_confidence, titlecase: true }) }))
+  );
+  const hits = perEntry(entries, (e) => (e.data?.matches?.[0]?.person ? dataLegionPerson(e.data.matches[0].person) : undefined));
+  return lookupReport('datalegion', entries, hits, block.people.length);
+}
+
+async function enrichPeopleWith(ctx: Context, p: Provider, block: Record<string, any>): Promise<ProviderReport> {
   if (p === 'fullenrich') {
-    const usable: Item<PersonRef>[] = [];
-    const calls: Call[] = [];
-    for (const item of items) {
-      const { linkedin_url, name, company_domain, company } = item.ref;
-      let call: Call | undefined;
-      if (linkedin_url) call = { capability: 'people/lookup', options: { person_professional_network_url: linkedin_url } };
-      else if (name && company_domain) call = { capability: 'people/lookup', options: { person_name: name, company_domain } };
-      else if (name && company) call = { capability: 'people/search', options: { person_names: [{ value: name }], current_company_names: [{ value: company }], limit: 1 } };
-      if (call) {
-        usable.push(item);
-        calls.push(call);
-      }
-    }
-    const entries = await runCalls(ctx, p, calls);
-    const hits = byEntry(usable, entries, (e) => {
-      const record = e.data?.people?.[0];
-      return record ? fullEnrichPerson(record) : undefined;
-    });
-    return { hits, entries, attempted: usable.length };
-  }
-
-  if (p === 'apollo') {
-    const usable = items.filter(({ ref }) => ref.apollo_id || ref.linkedin_url || ref.email || ref.name);
-    const chunks: Item<PersonRef>[][] = [];
-    for (let i = 0; i < usable.length; i += 10) chunks.push(usable.slice(i, i + 10));
     const entries = await runCalls(
       ctx,
       p,
-      chunks.map((chunk) => ({
-        capability: 'people/bulk-match',
-        options: {
-          details: chunk.map(({ ref }) =>
-            compact({ id: ref.apollo_id, name: ref.name, domain: ref.company_domain, organization_name: ref.company, email: ref.email, linkedin_url: ref.linkedin_url })
-          ),
-        },
-      }))
+      block.people.map((ref: object) => ({ capability: 'people/lookup', options: compact(ref) }))
     );
-    const hits: Hits<Person> = new Map();
-    chunks.forEach((chunk, c) => {
-      const matches = Array.isArray(entries[c]?.data?.matches) ? entries[c].data.matches : [];
-      chunk.forEach((item, i) => {
-        if (matches[i]) hits.set(item.index, apolloPerson(matches[i]));
-      });
-    });
-    return { hits, entries, attempted: usable.length };
+    const hits = perEntry(entries, (e) => (e.data?.people?.[0] ? fullEnrichPerson(e.data.people[0]) : undefined));
+    return lookupReport(p, entries, hits, block.people.length);
   }
+  if (p === 'apollo') return apolloPeople(ctx, block.details);
+  if (p === 'datalegion') return dataLegionPeople(ctx, block, 'people/enrich-base-no-contact');
 
-  if (p === 'people_data_labs') {
-    const usable = items.filter(({ ref }) => ref.linkedin_url || ref.email || (ref.name && (ref.company_domain || ref.company)));
-    const chunks: Item<PersonRef>[][] = [];
-    for (let i = 0; i < usable.length; i += 10) chunks.push(usable.slice(i, i + 10));
-    const entries = await runCalls(
-      ctx,
-      p,
-      chunks.map((chunk) => ({
-        capability: 'person/bulk',
-        options: {
-          min_likelihood: options.min_likelihood ?? 6,
-          titlecase: true,
-          requests: chunk.map(({ index, ref }) => ({
-            params: compact({ profile: ref.linkedin_url, email: ref.email, name: ref.name, company: ref.company_domain ?? ref.company }),
-            metadata: { index },
-          })),
-        },
-      }))
-    );
-    const hits: Hits<Person> = new Map();
-    for (const entry of entries) {
-      for (const row of Array.isArray(entry.data) ? entry.data : []) {
-        if (row?.status === 200 && row.data && typeof row.metadata?.index === 'number') hits.set(row.metadata.index, pdlPerson(row.data));
-      }
-    }
-    return { hits, entries, attempted: usable.length };
-  }
-
-  const usable = items.filter(({ ref }) => ref.linkedin_url || ref.email || ref.name);
+  const batches = chunks<object>(block.requests, 10);
   const entries = await runCalls(
     ctx,
     p,
-    usable.map(({ ref }) => ({
-      capability: 'people/enrich-base-no-contact',
-      options: compact({
-        social_url: ref.linkedin_url,
-        email: ref.email,
-        full_name: ref.name,
-        company: ref.company_domain ?? ref.company,
-        min_confidence: options.min_confidence,
+    batches.map((chunk, c) => ({
+      capability: 'person/bulk',
+      options: {
+        min_likelihood: block.min_likelihood ?? 6,
         titlecase: true,
-      }),
+        requests: chunk.map((params, i) => ({ params: compact(params), metadata: { index: c * 10 + i } })),
+      },
     }))
   );
-  const hits = byEntry(usable, entries, (e) => (e.data?.matches?.[0]?.person ? dataLegionPerson(e.data.matches[0].person) : undefined));
-  return { hits, entries, attempted: usable.length };
+  const hits: Hits = new Map();
+  for (const entry of entries) {
+    for (const row of Array.isArray(entry.data) ? entry.data : []) {
+      if (row?.status === 200 && row.data && typeof row.metadata?.index === 'number') hits.set(row.metadata.index, pdlPerson(row.data));
+    }
+  }
+  return lookupReport(p, entries, hits, block.requests.length);
 }
 
 const FE_CONTACT: Record<ContactField, string> = {
@@ -958,190 +871,83 @@ const FE_CONTACT: Record<ContactField, string> = {
   mobile: 'contacts/mobile',
 };
 
-async function contactsWith(
-  ctx: Context,
-  p: Provider,
-  items: Item<PersonRef & { need: ContactField[] }>[]
-): Promise<Attempt<Person>> {
-  if (p === 'fullenrich') {
-    const plan: { index: number; field: ContactField }[] = [];
-    const calls: Call[] = [];
-    for (const { index, ref } of items) {
-      const company = ref.company_domain ? { domain: ref.company_domain } : ref.company ? { company_name: ref.company } : undefined;
-      if (!ref.linkedin_url && !(ref.name && company)) continue;
-      for (const field of ref.need) {
-        plan.push({ index, field });
-        calls.push({
-          capability: FE_CONTACT[field],
-          options: compact({ linkedin_url: ref.linkedin_url, ...(ref.name ? splitName(ref.name) : {}), ...company }),
-        });
-      }
-    }
-    const entries = await runCalls(ctx, p, calls);
-    const hits: Hits<Person> = new Map();
-    plan.forEach(({ index, field }, i) => {
-      const result = entries[i]?.data?.results?.[0];
-      const info = result?.contact_info;
-      const found =
-        field === 'work_email'
-          ? info?.most_probable_work_email
-          : field === 'personal_email'
-            ? info?.most_probable_personal_email
-            : info?.most_probable_phone;
-      const value = str(found) ?? str(found?.email) ?? str(found?.number) ?? str(found?.phone);
-      if (!value) return;
-      const record = hits.get(index) ?? (result?.profile ? fullEnrichPerson(result.profile) : {});
-      record[field] = value;
-      if (field === 'work_email') record.email_status = str(found?.status);
-      hits.set(index, compact(record));
-    });
-    return { hits, entries, attempted: new Set(plan.map((x) => x.index)).size };
-  }
+async function contactsWith(ctx: Context, p: Provider, block: Record<string, any>): Promise<ProviderReport> {
+  if (p === 'datalegion') return dataLegionPeople(ctx, block, 'people/enrich-base-with-contact');
+  if (p === 'apollo') return apolloPeople(ctx, block.details, { reveal_personal_emails: block.reveal_personal_emails });
 
-  if (p === 'datalegion') {
-    const usable = items.filter(({ ref }) => ref.linkedin_url || ref.name);
-      const entries = await runCalls(
-      ctx,
-      p,
-      usable.map(({ ref }) => ({
-        capability: 'people/enrich-base-with-contact',
-        options: compact({ social_url: ref.linkedin_url, full_name: ref.name, company: ref.company_domain ?? ref.company, titlecase: true }),
-      }))
-    );
-    const hits = byEntry(usable, entries, (e) => (e.data?.matches?.[0]?.person ? dataLegionPerson(e.data.matches[0].person) : undefined));
-    return { hits, entries, attempted: usable.length };
-  }
-
-  return enrichPeopleWith(ctx, 'apollo', items.filter(({ ref }) => ref.need.includes('work_email')), {});
+  const fields: ContactField[] = block.fields;
+  const plan = (block.contacts as Record<string, string>[]).flatMap((ref, index) => fields.map((field) => ({ index, field, ref })));
+  const entries = await runCalls(
+    ctx,
+    p,
+    plan.map(({ field, ref }) => ({ capability: FE_CONTACT[field], options: compact(ref) }))
+  );
+  const hits = new Map<number, Person>();
+  plan.forEach(({ index, field }, i) => {
+    const result = entries[i]?.data?.results?.[0];
+    const info = result?.contact_info;
+    const found =
+      field === 'work_email'
+        ? info?.most_probable_work_email
+        : field === 'personal_email'
+          ? info?.most_probable_personal_email
+          : info?.most_probable_phone;
+    const value = str(found) ?? str(found?.email) ?? str(found?.number) ?? str(found?.phone);
+    if (!value) return;
+    const record = hits.get(index) ?? (result?.profile ? fullEnrichPerson(result.profile) : {});
+    record[field] = value;
+    if (field === 'work_email') record.email_status = str(found?.status);
+    hits.set(index, compact(record));
+  });
+  return lookupReport(p, entries, hits, block.contacts.length);
 }
 
-async function enrichCompaniesWith(
-  ctx: Context,
-  p: Provider,
-  items: Item<CompanyRef>[],
-  options: Record<string, any>
-): Promise<Attempt<Company>> {
-  if (p === 'fullenrich') {
-    const usable = items.filter(({ ref }) => ref.domain || ref.linkedin_url);
-    const entries = await runCalls(
-      ctx,
-      p,
-      usable.map(({ ref }) => ({
-        capability: 'companies/lookup',
-        options: ref.domain ? { domain: domainOf(ref.domain) } : { professional_network_url: ref.linkedin_url },
-      }))
-    );
-    const hits = byEntry(usable, entries, (e) => (e.data?.companies?.[0] ? fullEnrichCompany(e.data.companies[0]) : undefined));
-    return { hits, entries, attempted: usable.length };
-  }
-
+async function enrichCompaniesWith(ctx: Context, p: Provider, block: Record<string, any>): Promise<ProviderReport> {
   if (p === 'apollo') {
-    const usable = items.filter(({ ref }) => ref.domain || ref.linkedin_url || ref.name);
-    const chunks: Item<CompanyRef>[][] = [];
-    for (let i = 0; i < usable.length; i += 10) chunks.push(usable.slice(i, i + 10));
+    const details: Record<string, string>[] = block.details;
+    const batches = chunks(details, 10);
     const entries = await runCalls(
       ctx,
       p,
-      chunks.map((chunk) => ({
-        capability: 'companies/bulk-enrich',
-        options: { details: chunk.map(({ ref }) => compact({ domain: domainOf(ref.domain), linkedin_url: ref.linkedin_url, name: ref.name })) },
-      }))
+      batches.map((chunk) => ({ capability: 'companies/bulk-enrich', options: { details: chunk.map((d) => compact(d)) } }))
     );
-    const hits: Hits<Company> = new Map();
-    chunks.forEach((chunk, c) => {
+    const hits: Hits = new Map();
+    batches.forEach((chunk, c) => {
       const organizations = (Array.isArray(entries[c]?.data?.organizations) ? entries[c].data.organizations : []).filter(Boolean);
-      for (const item of chunk) {
-        const wanted = domainOf(item.ref.domain);
-        const wantedLinkedIn = linkedIn(item.ref.linkedin_url);
+      chunk.forEach((ref, i) => {
+        const wanted = domainOf(ref.domain ?? ref.website);
+        const wantedLinkedIn = linkedIn(ref.linkedin_url);
         const found = organizations.find(
           (o: any) =>
             (wanted && domainOf(o.primary_domain ?? o.website_url) === wanted) ||
             (wantedLinkedIn && linkedIn(o.linkedin_url) === wantedLinkedIn) ||
-            (!wanted && !wantedLinkedIn && item.ref.name && str(o.name)?.toLowerCase() === item.ref.name.toLowerCase())
+            (!wanted && !wantedLinkedIn && ref.name && str(o.name)?.toLowerCase() === ref.name.toLowerCase())
         );
-        if (found) hits.set(item.index, apolloCompany(found));
-      }
+        if (found) hits.set(c * 10 + i, apolloCompany(found));
+      });
     });
-    return { hits, entries, attempted: usable.length };
+    return lookupReport(p, entries, hits, details.length);
   }
 
-  if (p === 'people_data_labs') {
-    const usable = items.filter(({ ref }) => ref.domain || ref.linkedin_url || ref.name);
-    const entries = await runCalls(
-      ctx,
-      p,
-      usable.map(({ ref }) => ({
-        capability: 'company/enrich',
-        options: compact({
-          website: domainOf(ref.domain),
-          profile: ref.domain ? undefined : ref.linkedin_url,
-          name: ref.domain || ref.linkedin_url ? undefined : ref.name,
-          min_likelihood: options.min_likelihood ?? 6,
-          titlecase: true,
-        }),
-      }))
-    );
-    const hits = byEntry(usable, entries, (e) => (e.data?.status === 200 ? pdlCompany(e.data) : undefined));
-    return { hits, entries, attempted: usable.length };
-  }
-
-  const usable = items.filter(({ ref }) => ref.domain || ref.linkedin_url || ref.name);
+  const spec = {
+    fullenrich: { capability: 'companies/lookup', options: {}, read: (e: Entry) => (e.data?.companies?.[0] ? fullEnrichCompany(e.data.companies[0]) : undefined) },
+    people_data_labs: {
+      capability: 'company/enrich',
+      options: { min_likelihood: block.min_likelihood ?? 6, titlecase: true },
+      read: (e: Entry) => (e.data?.status === 200 ? pdlCompany(e.data) : undefined),
+    },
+    datalegion: {
+      capability: 'companies/enrich-base',
+      options: { min_confidence: block.min_confidence, titlecase: true },
+      read: (e: Entry) => (e.data?.matches?.[0]?.company ? dataLegionCompany(e.data.matches[0].company) : undefined),
+    },
+  }[p];
   const entries = await runCalls(
     ctx,
     p,
-    usable.map(({ ref }) => ({
-      capability: 'companies/enrich-base',
-      options: compact({ domain: domainOf(ref.domain), social_url: ref.domain ? undefined : ref.linkedin_url, name: ref.domain || ref.linkedin_url ? undefined : ref.name, titlecase: true }),
-    }))
+    block.companies.map((ref: object) => ({ capability: spec.capability, options: compact({ ...ref, ...spec.options }) }))
   );
-  const hits = byEntry(usable, entries, (e) => (e.data?.matches?.[0]?.company ? dataLegionCompany(e.data.matches[0].company) : undefined));
-  return { hits, entries, attempted: usable.length };
-}
-
-const lacking = (count: number) =>
-  count > 0 ? (count === 1 ? '1 input lacks' : count + ' inputs lack') + ' the identifiers this provider needs.' : undefined;
-
-/** Runs enabled providers in order; each later one only gets the inputs still unresolved. */
-async function waterfall<R, T extends object>(
-  order: Provider[],
-  inputs: R[],
-  done: (record: Keyed | undefined) => boolean,
-  attempt: (p: Provider, items: Item<R>[]) => Promise<Attempt<T>>,
-  checked: string[]
-): Promise<{ results: object[]; reports: ProviderReport[] }> {
-  const merged: (Keyed | undefined)[] = inputs.map(() => undefined);
-  const reports: ProviderReport[] = [];
-  for (const p of order) {
-    const pending = inputs
-      .map((ref, index) => ({ index, ref, current: merged[index] }))
-      .filter(({ current }) => !done(current));
-    if (!pending.length) {
-      reports.push({ name: p, status: 'skipped', returned: 0, credits: 0, attempted: 0, note: 'Every input was already resolved by an earlier provider.' });
-      continue;
-    }
-    const { hits, entries, attempted } = await attempt(p, pending);
-    for (const [index, record] of hits) {
-      const target = merged[index];
-      if (target) fold(target, record as Record<string, any>, p, checked);
-      else merged[index] = { ...record, sources: [p] };
-    }
-    const failure = errorNote(entries);
-    reports.push({
-      name: p,
-      status: hits.size ? 'ok' : failure ? 'error' : attempted ? 'empty' : 'skipped',
-      returned: hits.size,
-      credits: credits(entries),
-      attempted,
-      note: failure ?? lacking(pending.length - attempted),
-      next_tool: nextToolOf(entries),
-    });
-  }
-  const results = merged.map((record, input_index) => {
-    if (!record) return { input_index, matched: false };
-    settle(record);
-    return { input_index, matched: true, ...record };
-  });
-  return { results, reports };
+  return lookupReport(p, entries, perEntry(entries, spec.read), block.companies.length);
 }
 
 // ---------- Registration ----------
@@ -1151,151 +957,81 @@ export function registerEnrichTools(
   getClient: GetClient,
   assertCredential: AssertCredential
 ): void {
-  const contextFor = (session: SessionData | undefined, mcpClient: unknown): Context => {
-    assertCredential(session);
-    return { client: getClient(session), origin: requestOrigin(mcpClient as any, session) };
-  };
   const annotations = (title: string) => ({ title, readOnlyHint: true, openWorldHint: true, destructiveHint: false });
 
-  server.addTool({
-    name: 'firecrawl_enrich_people_search',
-    annotations: annotations('Find people'),
-    description:
-      "Find people by current title, employer and location when you don't know who they are. " +
-      OPT_IN +
-      'Enabled providers run in parallel; each provider\'s records come back unmerged in its own providers[].results list. ' +
-      'apollo: free, loose title matching, surnames masked (pass apollo_id to firecrawl_enrich_people to resolve). fullenrich: 5 credits per record, the most filters. people_data_labs: 50 credits per record, exact title match. ' +
-      REPORT,
-    outputSchema: enrichOutputSchema,
-    parameters: peopleSearchParameters,
-    execute: async (args: unknown, { session, client: mcpClient }): Promise<ContentResult> => {
-      const a = peopleSearchParameters.parse(args);
-      const order: Provider[] = ['apollo', 'fullenrich', 'people_data_labs'];
-      const on = enabledProviders(a, order);
-      const ctx = contextFor(session, mcpClient);
-      const found = await Promise.all(on.map((p) => peopleSearchProvider(ctx, p, a)));
-      return respondSearch(found, notEnabled(a, order));
-    },
-  });
+  function tool<S extends z.ZodObject>(
+    name: string,
+    title: string,
+    description: string,
+    parameters: S,
+    order: Provider[],
+    run: (ctx: Context, p: Provider, block: Record<string, any>) => Promise<ProviderReport>
+  ) {
+    server.addTool({
+      name,
+      annotations: annotations(title),
+      description: description + OPT_IN + REPORT,
+      outputSchema: enrichOutputSchema,
+      parameters,
+      execute: async (args: unknown, { session, client: mcpClient }): Promise<ContentResult> => {
+        const a = parameters.parse(args) as Record<string, any>;
+        const on = enabledProviders(a, order);
+        assertCredential(session);
+        const ctx: Context = { client: getClient(session), origin: requestOrigin(mcpClient as any, session) };
+        const providers = await Promise.all(order.map((p) => (on.includes(p) ? run(ctx, p, a[p]) : notEnabled(p))));
+        const data = { providers, credits_total: providers.reduce((sum, r) => sum + r.credits, 0) };
+        return withStructured(JSON.stringify(data), data);
+      },
+    });
+  }
 
-  server.addTool({
-    name: 'firecrawl_enrich_people',
-    annotations: annotations('Enrich people'),
-    description:
-      'Resolve known people to profiles: current title, employer, location, LinkedIn URL and recent work history. Takes 1 to 50 people per call and batches provider calls. ' +
-      OPT_IN +
-      'Enabled providers run as a waterfall in the order fullenrich, apollo, people_data_labs, datalegion: each later one only gets the people earlier ones missed. Results keep input order with input_index and matched. ' +
-      'fullenrich: 10 credits per match, best with a LinkedIn URL. apollo: 30 per match, also returns a work email when it has one. people_data_labs: 50 per match, richest history. datalegion: 20 per match. Misses are free. ' +
-      REPORT,
-    outputSchema: enrichOutputSchema,
-    parameters: peopleParameters,
-    execute: async (args: unknown, { session, client: mcpClient }): Promise<ContentResult> => {
-      const a = peopleParameters.parse(args);
-      const order: Provider[] = ['fullenrich', 'apollo', 'people_data_labs', 'datalegion'];
-      const on = enabledProviders(a, order);
-      const ctx = contextFor(session, mcpClient);
-      const { results, reports } = await waterfall(
-        on,
-        a.people,
-        (record) => Boolean(record),
-        (p, items) => enrichPeopleWith(ctx, p, items, (a as any)[p] ?? {}),
-        ['title', 'company']
-      );
-      return respond(results, [...reports, ...notEnabled(a, order)]);
-    },
-  });
+  tool(
+    'firecrawl_enrich_people_search',
+    'Find people',
+    "Find people by title, employer, location and more when you don't know who they are. " +
+      'apollo: free, loose title match, masked surnames, no seniority filter. fullenrich: 5 credits per record, the most filters (seniority, headcount, past employers, recent job changes). people_data_labs: 50 credits per record, SQL with exact matching. ',
+    peopleSearchParameters,
+    ['apollo', 'fullenrich', 'people_data_labs'],
+    (ctx, p, block) => searchWith(ctx, p, block, PEOPLE_SEARCH)
+  );
 
-  server.addTool({
-    name: 'firecrawl_enrich_contact_info',
-    annotations: annotations('Find contact details'),
-    description:
-      'Find contact details for known people: work email, personal email or mobile number. Takes 1 to 50 people per call and charges only for values found. ' +
-      OPT_IN +
-      'Enabled providers run as a waterfall in the order fullenrich, datalegion, apollo: each later one only tries people still missing a requested value. ' +
-      'fullenrich: work email 30 credits, personal email 100, mobile 300. datalegion: 100 per matched person, every field in one call. apollo: work email only, 30 per match. ' +
-      REPORT,
-    outputSchema: enrichOutputSchema,
-    parameters: contactParameters,
-    execute: async (args: unknown, { session, client: mcpClient }): Promise<ContentResult> => {
-      const a = contactParameters.parse(args);
-      const order: Provider[] = ['fullenrich', 'datalegion', 'apollo'];
-      const on = enabledProviders(a, order);
-      const ctx = contextFor(session, mcpClient);
-      const missing = (record: Keyed | undefined) => a.fields.filter((f) => !record?.[f]);
-      const { results, reports } = await waterfall(
-        on,
-        a.people,
-        (record) => missing(record).length === 0,
-        (p, items) =>
-          contactsWith(
-            ctx,
-            p,
-            items.map(({ index, ref, current }) => ({ index, ref: { ...ref, need: missing(current) } }))
-          ),
-        ['work_email', 'personal_email', 'mobile']
-      );
-      const unrequested = [
-        ...CONTACT_FIELDS.filter((f) => !a.fields.includes(f)),
-        ...(a.fields.includes('work_email') ? [] : ['email_status']),
-      ];
-      const project = (r: Record<string, any>) => {
-        const kept = Object.fromEntries(Object.entries(r).filter(([key]) => key !== 'conflicts' && !unrequested.includes(key)));
-        const conflicts = Object.fromEntries(Object.entries(r.conflicts ?? {}).filter(([key]) => !unrequested.includes(key)));
-        if (Object.keys(conflicts).length) return { ...kept, conflicts };
-        return r.conflicts ? { ...kept, confidence: r.sources.length > 1 ? 'agreed' : 'single_source' } : kept;
-      };
-      return respond(
-        results.map((r: any) => (r.matched && a.fields.some((f) => r[f]) ? project(r) : { input_index: r.input_index, matched: false })),
-        [...reports, ...notEnabled(a, order)]
-      );
-    },
-  });
+  tool(
+    'firecrawl_enrich_people',
+    'Enrich people',
+    'Resolve known people to profiles: current title, employer, location, LinkedIn URL and recent work history. Each provider takes its own list of 1 to 50 people; results carry input_index into that list. ' +
+      'fullenrich: 10 credits per match, LinkedIn URL or name plus company. apollo: 30 per match, takes apollo_id from people search, also returns a work email. people_data_labs: 50 per match, richest history. datalegion: 20 per match. Misses are free. ',
+    peopleParameters,
+    ['fullenrich', 'apollo', 'people_data_labs', 'datalegion'],
+    enrichPeopleWith
+  );
 
-  server.addTool({
-    name: 'firecrawl_enrich_company_search',
-    annotations: annotations('Find companies'),
-    description:
-      'Find companies by industry, headcount, location, technology or founding year. ' +
-      OPT_IN +
-      'Enabled providers run in parallel; each provider\'s records come back unmerged in its own providers[].results list. ' +
-      'apollo: 30 credits per page, no industry or founding-year filter. fullenrich: 5 credits per record. people_data_labs: 50 credits per record, no technology filter. ' +
-      REPORT,
-    outputSchema: enrichOutputSchema,
-    parameters: companySearchParameters,
-    execute: async (args: unknown, { session, client: mcpClient }): Promise<ContentResult> => {
-      const a = companySearchParameters.parse(args);
-      const order: Provider[] = ['apollo', 'fullenrich', 'people_data_labs'];
-      const on = enabledProviders(a, order);
-      const ctx = contextFor(session, mcpClient);
-      const found = await Promise.all(on.map((p) => companySearchProvider(ctx, p, a)));
-      return respondSearch(found, notEnabled(a, order));
-    },
-  });
+  tool(
+    'firecrawl_enrich_contact_info',
+    'Find contact details',
+    'Find contact details for known people: work email, personal email or mobile number. Each provider takes its own list of 1 to 50 people; results carry input_index into that list. ' +
+      'fullenrich: pick fields; work email 30 credits, personal email 100, mobile 300, per value found. datalegion: 100 per matched person, every field it has. apollo: 30 per match, work email, personal emails with reveal_personal_emails. ',
+    contactParameters,
+    ['fullenrich', 'datalegion', 'apollo'],
+    contactsWith
+  );
 
-  server.addTool({
-    name: 'firecrawl_enrich_company',
-    annotations: annotations('Enrich companies'),
-    description:
-      'Resolve known companies to firmographics: industry, headcount, headquarters, founding year, funding and technologies. Takes 1 to 50 companies per call and batches provider calls. ' +
-      OPT_IN +
-      'Enabled providers run as a waterfall in the order fullenrich, apollo, people_data_labs, datalegion: each later one only gets the companies earlier ones missed. Results keep input order with input_index and matched. ' +
-      'fullenrich: 10 credits per match, includes technologies. apollo: 30 per match. people_data_labs: 50 per match, funding. datalegion: 20 per match. Misses are free. ' +
-      REPORT,
-    outputSchema: enrichOutputSchema,
-    parameters: companyParameters,
-    execute: async (args: unknown, { session, client: mcpClient }): Promise<ContentResult> => {
-      const a = companyParameters.parse(args);
-      const order: Provider[] = ['fullenrich', 'apollo', 'people_data_labs', 'datalegion'];
-      const on = enabledProviders(a, order);
-      const ctx = contextFor(session, mcpClient);
-      const { results, reports } = await waterfall(
-        on,
-        a.companies,
-        (record) => Boolean(record),
-        (p, items) => enrichCompaniesWith(ctx, p, items, (a as any)[p] ?? {}),
-        ['name', 'industry']
-      );
-      return respond(results, [...reports, ...notEnabled(a, order)]);
-    },
-  });
+  tool(
+    'firecrawl_enrich_company_search',
+    'Find companies',
+    'Find companies by industry, headcount, location, technology or founding year. ' +
+      'apollo: 30 credits per page even when empty, name and description text, no industry or founding-year filter. fullenrich: 5 credits per record, the most filters. people_data_labs: 50 credits per record, SQL. ',
+    companySearchParameters,
+    ['apollo', 'fullenrich', 'people_data_labs'],
+    (ctx, p, block) => searchWith(ctx, p, block, COMPANY_SEARCH)
+  );
+
+  tool(
+    'firecrawl_enrich_company',
+    'Enrich companies',
+    'Resolve known companies to firmographics: industry, headcount, headquarters, founding year, funding and technologies. Each provider takes its own list of 1 to 50 companies; results carry input_index into that list. ' +
+      'fullenrich: 10 credits per match, technologies, domain or LinkedIn URL only. apollo: 30 per match. people_data_labs: 50 per match, funding. datalegion: 20 per match. Misses are free. ',
+    companyParameters,
+    ['fullenrich', 'apollo', 'people_data_labs', 'datalegion'],
+    enrichCompaniesWith
+  );
 }
