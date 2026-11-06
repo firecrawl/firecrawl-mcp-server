@@ -80,7 +80,7 @@ const peopleSearchParameters = z.strictObject({
       per_page: z.number().int().min(1).max(25).default(10),
       page: z.number().int().min(1).optional(),
     },
-    'Apollo people/search. Free. No seniority, industry or headcount filter. Surnames come back masked: pass apollo_id to firecrawl_enrich_people as apollo.details[].id to reveal.'
+    'Apollo people/search. Free. No seniority, industry or headcount filter. Surnames come back masked: pass apollo_id to enrich_people as apollo.details[].id to reveal.'
   ),
   fullenrich: provider(
     {
@@ -169,7 +169,7 @@ const companySearchParameters = z.strictObject({
 
 const apolloPersonRef = z
   .strictObject({
-    id: text('apollo_id from firecrawl_enrich_people_search.'),
+    id: text('apollo_id from enrich_people_search.'),
     email: text(),
     linkedin_url: text(),
     name: text('Full name, with domain or organization_name.'),
@@ -714,7 +714,7 @@ const chunks = <T>(items: T[], size: number): T[][] => {
   return out;
 };
 
-// ---------- Search: firecrawl_enrich_people_search, _company_search ----------
+// ---------- Search: enrich_people_search, _company_search ----------
 
 interface SearchSpec {
   capability: Record<'apollo' | 'fullenrich' | 'people_data_labs', string>;
@@ -779,7 +779,7 @@ async function searchWith(ctx: Context, p: Provider, block: Record<string, any>,
   return finish(p, entries, records);
 }
 
-// ---------- Lookups: firecrawl_enrich_people, _contact_info, _company ----------
+// ---------- Lookups: enrich_people, _contact_info, _company ----------
 
 type Hits = Map<number, object>;
 
@@ -982,7 +982,7 @@ export function registerEnrichTools(
   }
 
   tool(
-    'firecrawl_enrich_people_search',
+    'enrich_people_search',
     'Find people',
     "Find people by title, employer, location and more when you don't know who they are. " +
       'apollo: free, loose title match, masked surnames, no seniority filter. fullenrich: 5 credits per record, the most filters (seniority, headcount, past employers, recent job changes). people_data_labs: 50 credits per record, SQL with exact matching. ',
@@ -992,7 +992,7 @@ export function registerEnrichTools(
   );
 
   tool(
-    'firecrawl_enrich_people',
+    'enrich_people',
     'Enrich people',
     'Resolve known people to profiles: current title, employer, location, LinkedIn URL and recent work history. Each provider takes its own list of 1 to 50 people; results carry input_index into that list. ' +
       'fullenrich: 10 credits per match, LinkedIn URL or name plus company. apollo: 30 per match, takes apollo_id from people search, also returns a work email. people_data_labs: 50 per match, richest history. datalegion: 20 per match. Misses are free. ',
@@ -1002,7 +1002,7 @@ export function registerEnrichTools(
   );
 
   tool(
-    'firecrawl_enrich_contact_info',
+    'enrich_contact_info',
     'Find contact details',
     'Find contact details for known people: work email, personal email or mobile number. Each provider takes its own list of 1 to 50 people; results carry input_index into that list. ' +
       'fullenrich: pick fields; work email 30 credits, personal email 100, mobile 300, per value found. datalegion: 100 per matched person, every field it has. apollo: 30 per match, work email, personal emails with reveal_personal_emails. ',
@@ -1012,7 +1012,7 @@ export function registerEnrichTools(
   );
 
   tool(
-    'firecrawl_enrich_company_search',
+    'enrich_company_search',
     'Find companies',
     'Find companies by industry, headcount, location, technology or founding year. ' +
       'apollo: 30 credits per page even when empty, name and description text, no industry or founding-year filter. fullenrich: 5 credits per record, the most filters. people_data_labs: 50 credits per record, SQL. ',
@@ -1022,7 +1022,7 @@ export function registerEnrichTools(
   );
 
   tool(
-    'firecrawl_enrich_company',
+    'enrich_company',
     'Enrich companies',
     'Resolve known companies to firmographics: industry, headcount, headquarters, founding year, funding and technologies. Each provider takes its own list of 1 to 50 companies; results carry input_index into that list. ' +
       'fullenrich: 10 credits per match, technologies, domain or LinkedIn URL only. apollo: 30 per match. people_data_labs: 50 per match, funding. datalegion: 20 per match. Misses are free. ',

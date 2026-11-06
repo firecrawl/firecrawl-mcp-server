@@ -9,11 +9,11 @@ import { getFreePort, startStdio } from './helpers/exchange-mcp.mjs';
 import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
 
 const ENRICH_TOOLS = [
-  'firecrawl_enrich_people_search',
-  'firecrawl_enrich_people',
-  'firecrawl_enrich_contact_info',
-  'firecrawl_enrich_company_search',
-  'firecrawl_enrich_company',
+  'enrich_people_search',
+  'enrich_people',
+  'enrich_contact_info',
+  'enrich_company_search',
+  'enrich_company',
 ];
 
 function answer(call) {
@@ -90,7 +90,7 @@ test('an input without an identifier is refused by the schema', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { enrichTools: true, apiUrl: api.url });
   await assert.rejects(
-    client.callTool({ name: 'firecrawl_enrich_people', arguments: { fullenrich: { people: [{ person_name: 'Jane Doe' }] } } }),
+    client.callTool({ name: 'enrich_people', arguments: { fullenrich: { people: [{ person_name: 'Jane Doe' }] } } }),
     (error) => /Each fullenrich person needs/.test(error.message) && !/\.\. /.test(error.message)
   );
   assert.equal(api.calls.length, 0);
@@ -99,7 +99,7 @@ test('an input without an identifier is refused by the schema', async (t) => {
 test('a call with no provider block is refused before any provider runs', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { enrichTools: true, apiUrl: api.url });
-  const result = await client.callTool({ name: 'firecrawl_enrich_company', arguments: {} });
+  const result = await client.callTool({ name: 'enrich_company', arguments: {} });
   assert.equal(result.isError, true);
   assert.match(result.content[0].text, /No provider given/);
   assert.equal(api.calls.length, 0);
@@ -109,7 +109,7 @@ test('company lookup runs each provider on its own inputs and reports them separ
   const api = await startApi(t);
   const client = await connect(t, { enrichTools: true, apiUrl: api.url });
   const result = await client.callTool({
-    name: 'firecrawl_enrich_company',
+    name: 'enrich_company',
     arguments: {
       fullenrich: { companies: [{ domain: 'acme.example' }, { domain: 'missing.example' }] },
       apollo: { details: [{ domain: 'globex.example' }] },
@@ -131,7 +131,7 @@ test('people search passes a provider its own parameters unchanged', async (t) =
   const api = await startApi(t);
   const client = await connect(t, { enrichTools: true, apiUrl: api.url });
   const result = await client.callTool({
-    name: 'firecrawl_enrich_people_search',
+    name: 'enrich_people_search',
     arguments: {
       apollo: { person_titles: ['Head of Data'], q_organization_domains_list: ['acme.example'] },
       fullenrich: {},
