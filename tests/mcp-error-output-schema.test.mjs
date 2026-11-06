@@ -258,6 +258,38 @@ test('a json format without a prompt or schema is refused with a structured next
   });
 });
 
+const JSON_FORMAT_MESSAGE =
+  'formats "json" needs jsonOptions with a prompt or a schema. To ask a question about the page, use formats ["query"] with queryOptions.prompt instead.';
+const QUERY_FORMAT_MESSAGE = 'formats "query" needs queryOptions with a non-empty prompt.';
+
+for (const { name, args, message, code } of [
+  { name: 'firecrawl_scrape', args: { url: 'https://example.com', formats: ['query'] }, message: QUERY_FORMAT_MESSAGE, code: 'invalid_request' },
+  { name: 'firecrawl_scrape', args: { url: 'https://example.com', formats: ['query'], queryOptions: { prompt: ' ' } }, message: QUERY_FORMAT_MESSAGE, code: 'invalid_request' },
+  { name: 'firecrawl_interact', args: { url: 'https://example.com', prompt: 'Read the title', scrapeOptions: { formats: ['json'] } }, message: JSON_FORMAT_MESSAGE, code: 'invalid_request' },
+  { name: 'firecrawl_interact', args: { url: 'https://example.com', prompt: 'Read the title', scrapeOptions: { formats: ['query'] } }, message: QUERY_FORMAT_MESSAGE, code: 'invalid_request' },
+  { name: 'firecrawl_find_tools', args: { level: 'categories', categories: ['finance'] }, message: 'Category index accepts only level, limit and offset. Select a category to browse providers.', code: 'invalid_input' },
+  { name: 'firecrawl_monitor_create', args: { goal: 'Track pricing' }, message: 'firecrawl_monitor_create requires either `body`, `page`/`pages`, or `queries`.', code: 'invalid_input' },
+  { name: 'firecrawl_monitor_create', args: { page: 'https://example.com' }, message: 'firecrawl_monitor_create shorthand requires `goal`. Use `body` for advanced requests without a goal.', code: 'invalid_input' },
+  { name: 'firecrawl_credit_usage', args: { view: 'current', bin: 'day' }, message: 'bin can only be used with view "historical" or with view omitted.', code: 'invalid_input' },
+  { name: 'firecrawl_credit_usage', args: { byApiKey: true, byEndpoint: true }, message: 'byApiKey and byEndpoint cannot be combined.', code: 'invalid_input' },
+]) {
+  test(`a caller mistake is refused with a code (${name} ${JSON.stringify(args)})`, async (t) => {
+    const events = [];
+    const result = await assertReadableError(t, {
+      apiUrl: 'http://127.0.0.1:9',
+      session: apiKey,
+      name,
+      args,
+      includes: message,
+      onToolResult: (event) => events.push(event),
+    });
+    assert.equal(result.content[0].text, message);
+    const error = events.find((event) => event.status === 'error')?.error;
+    assert.ok(error instanceof UserError, String(error));
+    assert.equal(error.extras.code ?? error.extras.error?.code, code);
+  });
+}
+
 for (const code of [undefined, 'SITE_BLOCKED']) {
   test(`an unsupported site reaches an SDK client as a reason and a next step (API code: ${code ?? 'none'})`, async (t) => {
     const apiUrl = await startRefusingApi(t, 403, {
