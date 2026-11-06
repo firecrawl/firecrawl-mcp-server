@@ -107,7 +107,7 @@ import {
   searchToolBaseFields,
   termsWriteError,
 } from './tool-helpers.js';
-import { normalizeToolArguments } from './tool-arguments.js';
+import { httpUrl, normalizeToolArguments } from './tool-arguments.js';
 
 /**
  * Library entry point: `import { createFirecrawlMcpServer } from 'firecrawl-mcp/server'`.
@@ -1143,7 +1143,7 @@ export function createFirecrawlMcpServer(
   }
 
   const scrapeParamsSchema = z.object({
-    url: z.string().url(),
+    url: httpUrl(),
     formats: z
       .array(
         z.enum([
@@ -1257,7 +1257,7 @@ export function createFirecrawlMcpServer(
   const scrapeToolParamsSchema = scrapeParamsSchema
     .extend({
       ...(SAFE_MODE ? { profile: readOnlyProfileSchema.optional() } : {}),
-      url: z.string().url().optional(),
+      url: httpUrl().optional(),
       timeout: z.number().int().positive().optional().describe("Execution timeout in milliseconds."),
       requestId: z
         .string()
@@ -1713,7 +1713,7 @@ export function createFirecrawlMcpServer(
       destructiveHint: false, // Does not modify, delete, or write to external websites.
     },
     description: `
-Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use \`firecrawl_search\` when additional web sources are needed; on an authenticated session, \`firecrawl_map\` lists a site's URLs and \`firecrawl_crawl\` collects a set of pages.
+Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use \`firecrawl_search\` when additional web sources are needed; on an authenticated session, \`firecrawl_map\` lists a site's URLs and \`firecrawl_crawl\` collects a set of pages. \`url\` may omit the scheme (\`example.com/page\`); it is read as https.
 
 Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch or a smaller \`maxAge\` to bound staleness. A successful response does not by itself confirm the page is still current. ${SAFE_MODE ? 'A named browser profile loads saved session data without saving changes to it.' : 'Browser actions can change the live page when interactive actions are enabled.'} Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback.
 
@@ -1805,11 +1805,11 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
     description: `
 Enumerate URLs indexed under one website through Firecrawl without fetching each page's content. Use this when the request asks for a site's URL inventory, when several relevant pages must be located, or when the desired page URL is unknown. An optional \`search\` term narrows the URL list, while sitemap, subdomain, query-parameter, and result-limit options control coverage.
 
-Returns matching URLs rather than page bodies. Retrieve one page with \`firecrawl_scrape\`; collect content across multiple pages with \`firecrawl_crawl\`. Authenticated responses can include an \`id\` for optional map feedback.
+\`url\` may omit the scheme (\`example.com\`); it is read as https. Returns matching URLs rather than page bodies. Retrieve one page with \`firecrawl_scrape\`; collect content across multiple pages with \`firecrawl_crawl\`. Authenticated responses can include an \`id\` for optional map feedback.
 `,
     outputSchema: mapOutputSchema,
     parameters: z.object({
-      url: z.string().url(),
+      url: httpUrl(),
       search: z.string().optional(),
       sitemap: z.enum(['include', 'skip', 'only']).optional(),
       includeSubdomains: z.boolean().optional(),
@@ -2853,7 +2853,7 @@ The agent only calls Alexandria providers whose terms the team has accepted. \`e
     outputSchema: agentOutputSchema,
     parameters: z.object({
       prompt: z.string().min(1).max(10000),
-      urls: z.array(z.string().url()).optional(),
+      urls: z.array(httpUrl()).optional(),
       schema: z.record(z.string(), z.any()).optional(),
       effort: z
         .enum(['low', 'medium', 'high'])
@@ -3038,7 +3038,7 @@ Returns job status, progress information, and result data when completed.
       idempotentHint: false, // Repeating an interaction can act on the page again.
     },
     description: `
-Open or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either \`url\` or \`scrapeId\`, and either a natural-language \`prompt\` or executable \`code\`; code can run as Bash, Python, or Node with a bounded timeout.
+Open or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either \`url\` (the scheme may be omitted) or \`scrapeId\`, and either a natural-language \`prompt\` or executable \`code\`; code can run as Bash, Python, or Node with a bounded timeout.
 
 The session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped \`scrapeOptions.profile\` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs.
 `,
@@ -3046,7 +3046,7 @@ The session runs in an isolated Firecrawl-hosted browser that never receives the
     parameters: z
       .object({
         scrapeId: z.string().trim().min(1).optional(),
-        url: z.string().trim().url().optional(),
+        url: httpUrl().optional(),
         prompt: z.string().trim().min(1).optional(),
         code: z.string().trim().min(1).optional(),
         language: z.enum(['bash', 'python', 'node']).optional(),

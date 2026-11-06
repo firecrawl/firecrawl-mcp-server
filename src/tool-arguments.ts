@@ -1,8 +1,11 @@
+import { z } from 'zod';
+
 /**
  * Normalizes argument shapes agents commonly send before schema validation,
  * in place: an optional field sent as null is dropped, a numeric string in a
  * number field becomes a number, and a format or parser object the API accepts
- * ({type: 'markdown'}, {type: 'json', schema}) becomes the tool's own form.
+ * ({type: 'markdown'}, {type: 'json', schema}) becomes the tool's own form,
+ * and an `httpUrl()` field sent without a scheme gets `https://`.
  * Validation still runs afterwards, so bounds and enums are unchanged.
  */
 
@@ -22,6 +25,28 @@ const WRAPPER_TYPES = new Set([
 ]);
 
 const NUMERIC_STRING = /^-?\d+(?:\.\d+)?$/;
+const URL_SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
+const HTTP_URL_FIELDS = new WeakSet<object>();
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A page URL field advertised as a plain string, so clients that strip
+ * schemes from full URLs can send `example.com/page`. Do not wrap it in
+ * `.describe()`: the normalizer recognizes this exact instance.
+ */
+export function httpUrl() {
+  const schema = z.string().trim().refine(isHttpUrl, 'Invalid URL');
+  HTTP_URL_FIELDS.add(schema);
+  return schema;
+}
 
 // Option-bearing objects keyed by the list they appear in, mapped to the
 // sibling field this server carries those options in.
@@ -96,7 +121,14 @@ function normalizeObject(
 }
 
 function normalizeValue(schema: Schema, value: unknown): unknown {
-  const def = unwrap(schema)?._zod?.def;
+  const inner = unwrap(schema);
+  if (inner && HTTP_URL_FIELDS.has(inner) && typeof value === 'string') {
+    const url = value.trim();
+    return url && !URL_SCHEME.test(url)
+      ? `https://${url.replace(/^\/\//, '')}`
+      : value;
+  }
+  const def = inner?._zod?.def;
   if (!def) return value;
   if (
     def.type === 'number' &&

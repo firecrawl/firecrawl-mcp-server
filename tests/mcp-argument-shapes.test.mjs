@@ -261,3 +261,28 @@ test('domain filters read a URL naming only a host as that host', async (t) => {
     assert.equal(api.requests.length, before, label);
   }
 });
+
+test('scheme-less URLs are read as https URLs', async (t) => {
+  const { api, full } = await startHosted(t);
+  const calls = [
+    ['firecrawl_scrape', { url: 'example.com/page' }],
+    ['firecrawl_map', { url: 'example.com/page' }],
+    ['firecrawl_interact', { url: 'example.com/page', prompt: 'read the title' }],
+    ['firecrawl_agent', { prompt: 'find the title', urls: ['example.com/page'] }],
+    ['firecrawl_find_tools', { urls: ['example.com/page'] }],
+  ];
+  for (const [name, args] of calls) {
+    const before = api.requests.length;
+    const message = await full(name, args);
+    assert.doesNotMatch(rejectionText(message), /Invalid|validation/i, name);
+    const sent = JSON.stringify(api.requests.slice(before));
+    assert.match(decodeURIComponent(sent), /https:\/\/example\.com\/page/, `${name} sends an https URL`);
+  }
+
+  const before = api.requests.length;
+  for (const url of ['https://<scrubbed-url-domain>/page', 'ftp://example.com/file', '']) {
+    assert.notEqual(rejectionText(await full('firecrawl_scrape', { url })), '', `${url} is refused`);
+  }
+  assert.equal(api.requests.length, before, 'refused URLs never reach the API');
+});
+
