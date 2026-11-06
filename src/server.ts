@@ -439,7 +439,7 @@ export interface FirecrawlMcpServerOptions {
   searchFeedback?: boolean;
   /** Register firecrawl_feedback. Defaults to true. */
   endpointFeedback?: boolean;
-  /** Register the firecrawl_enrich_* people and company tools. Defaults to false. */
+  /** Register the people and company search and lookup tools. Defaults to false. */
   enrichTools?: boolean;
   /** Tag sent as the `integration` field of API requests that accept one, such as `_zed`. */
   integration?: string;
