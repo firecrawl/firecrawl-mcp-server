@@ -1,17 +1,18 @@
 import { z } from 'zod';
 import {
   ALEXANDRIA_CATALOGUE_VERTICALS,
+  ALEXANDRIA_NOTABLE_PRICES,
   ALEXANDRIA_SEARCH_INSTRUCTIONS,
   annotateResultPositions,
   assertExchangeCredential,
   defaultDomainTools,
-  enterpriseAllowsAlexandria,
   type ExtraToolsContext,
   type FirecrawlMcpServerHooks,
   hasAlexandria,
-  normalizeSearchSources,
+  resolveSearchSources,
   postSearchWithFallback,
   relayExchangeError,
+  retryQueryEmbedUnavailable,
   removeEmptyTopLevel,
   requestOrigin,
   SEARCH_CATEGORIES_CONFLICT_MESSAGE,
@@ -24,7 +25,6 @@ import {
   structuredCompact,
   type ToolRegistrar,
   type ToolResult,
-  withAlexandriaSource,
 } from '../server.js';
 import {
   SEARCH_PROFILE_TOOLS,
@@ -42,12 +42,12 @@ Scrape one URL and return its content, or execute catalogued Alexandria capabili
 
 \`firecrawl_search\` and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching Alexandria provider returns typed records in one call.
 
-Alexandria mode: \`alexandria\` selects catalogued capability execution and is mutually exclusive with \`url\`. Alexandria execution is billed per capability (pass includeCosts to firecrawl_find_tools to see prices if you need).
+Alexandria mode: \`alexandria\` selects catalogued capability execution and is mutually exclusive with \`url\`. Alexandria execution is billed per capability (pass includeCosts to firecrawl_find_tools to see prices if you need). ${ALEXANDRIA_NOTABLE_PRICES}
 `;
 }
 
 const SEARCH_SURFACE_FIND_TOOLS_DESCRIPTION =
-  'Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers ' + ALEXANDRIA_CATALOGUE_VERTICALS + ': typed, sourced records through published contracts. Prefer normal firecrawl_search for a data task; it already returns matching providers. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Use query for semantic discovery or urls to find providers for a website. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.';
+  'Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers ' + ALEXANDRIA_CATALOGUE_VERTICALS + ': typed, sourced records through published contracts. Prefer normal firecrawl_search for a data task; it already returns matching providers. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Use query for semantic discovery or urls to find providers for a website. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results. ' + ALEXANDRIA_NOTABLE_PRICES;
 
 // Search-surface variant of firecrawl_search. It takes no scrapeOptions and
 // builds the outbound /v2/search body from an explicit set of fields, so the
@@ -75,7 +75,7 @@ For a legal or regulatory question, \`categories: ["gov"]\` returns results in \
 
 ${ALEXANDRIA_SEARCH_INSTRUCTIONS}
 
-Returns result groups in \`data\` and an operation \`id\`.
+On an authenticated session, omitting sources also requests skills: up to 3 free skill cards in \`data.skills\`. Enterprise zdr or anon searches do not. Returns result groups in \`data\` and an operation \`id\`.
 `,
     outputSchema: searchOutputSchema,
     beforeValidate: args => {
@@ -129,16 +129,11 @@ Returns result groups in \`data\` and an operation \`id\`.
       };
 
       const searchQuery = query ?? '';
-      const requestedSources = normalizeSearchSources(
-        sources?.length ? sources : ['web']
-      ) as unknown[];
-      const addsAlexandria =
-        hasCredential(session) &&
-        enterpriseAllowsAlexandria(enterprise) &&
-        !hasAlexandria(requestedSources);
-      const searchSources = addsAlexandria
-        ? withAlexandriaSource(requestedSources)
-        : requestedSources;
+      const { sources: searchSources, requestedSources, addsAlexandria } = resolveSearchSources({
+        sources,
+        credentialed: hasCredential(session),
+        enterprise,
+      });
 
       // Build the outbound body from allowed fields only. Never spread the raw
       // arguments, so no scrape/content-fetch options can reach the API.
@@ -174,7 +169,11 @@ Returns result groups in \`data\` and an operation \`id\`.
           addsAlexandria && domainTools !== true,
           requestedSources
         );
-      const httpRes = await relayExchangeError(postSearch, { tool: 'firecrawl_search' });
+      const httpRes = await relayExchangeError(
+        () => retryQueryEmbedUnavailable(postSearch),
+        { tool: 'firecrawl_search' }
+      );
+      // Do not attach firecrawl_read_skill hints here. This surface does not register that tool.
       return structuredCompact(annotateResultPositions(httpRes?.data ?? {}));
     },
   });

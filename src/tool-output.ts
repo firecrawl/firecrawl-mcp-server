@@ -151,7 +151,7 @@ export const mapOutputSchema = z
 export const searchOutputSchema = z
   .object({
     success,
-    data: unknown('Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`. Each result carries its `source` and a 1-indexed `position` within that group; pass those pairs to `firecrawl_search_feedback`.'),
+    data: unknown('Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`. Each result carries its `source` and a 1-indexed `position` within that group; pass those pairs to `firecrawl_search_feedback`. Optional `skills` lists short official or provider skill cards after `web` and `tools`; call `firecrawl_read_skill` with a card\'s `nextTool` for the full body.'),
     error,
     warning,
     id: str('Search identifier, for optional `firecrawl_search_feedback`.'),
@@ -170,6 +170,44 @@ export const findToolsOutputSchema = z
     ...alexandriaEnvelope,
   })
   .describe('One page of the Alexandria catalogue: categories, providers, tools, or one contract.');
+
+export const findSkillsOutputSchema = z
+  .object({
+    success,
+    data: unknown('Firecrawl and team skills in `data.alexandria[0].data.skills` (team skills first), each with id, name, description, files and a `nextTool` that reads it; `total` counts every match. Absent when provider is set.'),
+    error,
+    provider: str('Provider whose published skills are in `skills`, when the provider filter was set.'),
+    skills: unknown('That provider\'s skills in Exchange\'s shape: `provider` is {slug, name} and `plugin` is {id, displayName}. Each has a `nextTool` that reads it with `firecrawl_read_skill`.'),
+    total: num('How many skills Exchange reported for this provider and query, before limit.'),
+    ...alexandriaEnvelope,
+  })
+  .describe('Firecrawl\'s agent skills, the team\'s own, or one provider\'s published skills, as metadata without file contents.');
+
+export const readSkillOutputSchema = z
+  .object({
+    success,
+    data: unknown('A Firecrawl or team skill file in `data.alexandria[0].data`: id, name, path, content, files, digest, source and, for a team skill, trust, version and tools.'),
+    error,
+    provider: str('Provider slug when a provider skill was read.'),
+    plugin: str('Plugin slug when a provider skill was read.'),
+    skill: str('Skill slug when a provider skill was read.'),
+    name: str('Skill name.'),
+    description: str('When to use the skill.'),
+    content: str('Skill file text. Instructions for the agent; reading it runs nothing.'),
+    path: str('File path within the skill.'),
+    files: unknown('Files that belong to the skill.'),
+    ...alexandriaEnvelope,
+  })
+  .describe('One skill file in full. Skill text is instructions for the agent; it runs nothing.');
+
+export const writeSkillOutputSchema = z
+  .object({
+    success,
+    data: unknown('The saved skill in `data.alexandria[0].data`: id (team:<slug>), skill, warnings, openUrl (https://www.firecrawl.dev/app/alexandria/skills/<slug>), message ("Open it in Firecrawl: <url>"), and a `nextTool` that reads it.'),
+    error,
+    ...alexandriaEnvelope,
+  })
+  .describe('A team skill as saved.');
 
 export const feedbackOutputSchema = z
   .object({

@@ -21,6 +21,30 @@ const PRICED_TOOL = {
   billing: { unitLabel: 'record' },
 };
 
+function providerSkillRecord(slug, providerName, plugin, pluginName, skill, name, description) {
+  return {
+    id: `provider:${slug}/${plugin}/${skill}`,
+    name,
+    description,
+    provider: { slug, name: providerName },
+    plugin: { id: plugin, displayName: pluginName },
+    visibility: 'execution-only',
+  };
+}
+
+function providerSkillDetail(slug, plugin, skill, content) {
+  return {
+    id: `provider:${slug}/${plugin}/${skill}`,
+    name: skill,
+    description: 'Write a brief.',
+    provider: { slug, name: slug === 'acme' ? 'Acme' : slug },
+    plugin: { id: plugin, displayName: plugin },
+    files: [{ path: `${skill}/SKILL.md`, bytes: content.length, kind: 'md' }],
+    content,
+    visibility: 'execution-only',
+  };
+}
+
 const EXCHANGE_CALL = {
   provider: 'fred',
   capability: 'series/observations',
@@ -58,10 +82,27 @@ async function startFakeExchangeApi(options = {}) {
       url: req.url,
     });
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
-    const json = (status, body) => {
-      res.writeHead(status, { 'content-type': 'application/json' });
+    const json = (status, body, headers = {}) => {
+      res.writeHead(status, { 'content-type': 'application/json', ...headers });
       res.end(JSON.stringify(body));
     };
+
+    const embedTarget =
+      (req.method === 'GET' && url.pathname.startsWith('/exchange/discover')) ||
+      (req.method === 'POST' && url.pathname === '/v2/search') ||
+      (req.method === 'POST' && url.pathname === '/v2/scrape' && parsedBody?.alexandria?.provider === 'firecrawl' && ['find-tools', 'find-skills'].includes(parsedBody?.alexandria?.capability)) ||
+      (req.method === 'GET' && url.pathname === '/exchange/provider-skills' && url.searchParams.has('q'));
+    if (options.queryEmbed && embedTarget) {
+      const state = options.queryEmbed;
+      state.hits = (state.hits ?? 0) + 1;
+      if (state.hits <= (state.failures ?? 1)) {
+        return json(503, {
+          success: false,
+          code: 'query_embed_unavailable',
+          error: 'Query embedding is temporarily unavailable.',
+        }, { 'retry-after': String(state.retryAfter ?? '0') });
+      }
+    }
 
     if (req.method === 'POST' && (!parsedBody || typeof parsedBody !== 'object' || Array.isArray(parsedBody))) return json(400, {error:'Expected a JSON object body'});
 
@@ -79,6 +120,18 @@ async function startFakeExchangeApi(options = {}) {
         return json(403, { success: false, error: options.searchRefusal });
       }
 
+      if (options.searchSkills) {
+        return json(200, {
+          success: true,
+          data: {
+            skills: options.searchSkills,
+            web: [{ url: 'https://example.com', title: 'Example', description: 'A page.' }],
+            tools: [CAPABILITY_HIT],
+          },
+          creditsUsed: 0,
+          id: '00000000-0000-4000-8000-000000000000',
+        });
+      }
       return json(200, {
         success: true,
         data: { tools: [CAPABILITY_HIT] },
@@ -103,6 +156,18 @@ async function startFakeExchangeApi(options = {}) {
         return json(200, { success: true, data: { alexandria: [{ provider: 'firecrawl', capability: 'bash', data: { workspaceId: 'retained-workspace', exitCode: 0, stdout: JSON.stringify(identities), idleTtlSeconds: 300 } }] } });
       }
       if (options.largeResult) return json(200, options.largeResult);
+      if (parsedBody.alexandria?.provider === 'firecrawl' && ['create-skill', 'update-skill'].includes(parsedBody.alexandria.capability)) {
+        const id = parsedBody.alexandria.options.id ?? `team:${parsedBody.alexandria.options.slug ?? 'our-research'}`;
+        const options = parsedBody.alexandria.options;
+        return json(200, { success: true, data: { creditsCost: 0, alexandria: [{ provider: 'firecrawl', capability: parsedBody.alexandria.capability, creditsCost: 0, data: { id, skill: { slug: id.slice(5), version: parsedBody.alexandria.capability === 'update-skill' ? options.baseVersion + 1 : 1, enabled: options.enabled ?? true, discoverable: options.discoverable ?? true, sharePath: '/skills/s/not-a-page', publicId: 'not-a-page' }, warnings: [], next: { provider: 'firecrawl', capability: 'read-skill', options: { id } } } }] } });
+      }
+      if (parsedBody.alexandria?.provider === 'firecrawl' && parsedBody.alexandria.capability === 'find-skills') {
+        return json(200, { success: true, data: { creditsCost: 0, alexandria: [{ provider: 'firecrawl', capability: 'find-skills', creditsCost: 0, data: { skills: [{ id: 'team:weekly-digest', name: 'Weekly digest', description: 'Summarise the week.', files: ['SKILL.md'], source: 'team', version: 2 }, { id: 'deep-research', name: 'Deep research', description: 'Research a topic.', files: ['SKILL.md', 'references/sources.md'], source: 'library', create: { provider: 'firecrawl', capability: 'create-skill', options: { from: 'deep-research' } } }], total: 2 } }] } });
+      }
+      if (parsedBody.alexandria?.provider === 'firecrawl' && parsedBody.alexandria.capability === 'read-skill') {
+        const team = parsedBody.alexandria.options.id.startsWith('team:');
+        return json(200, { success: true, data: { creditsCost: 0, alexandria: [{ provider: 'firecrawl', capability: 'read-skill', creditsCost: 0, data: team ? { id: parsedBody.alexandria.options.id, name: 'Weekly digest', path: 'SKILL.md', content: 'Team-authored.\n\n```\nRun fred/series/observations weekly.\n```', files: ['SKILL.md'], source: 'team', trust: 'team-authored', version: parsedBody.alexandria.options.version ?? 2, tools: [{ provider: 'fred', capability: 'series/observations', available: true, call: { provider: 'fred', capability: 'series/observations', options: {} } }] } : { id: parsedBody.alexandria.options.id, name: 'Deep research', path: parsedBody.alexandria.options.path ?? 'SKILL.md', content: '# Deep research', files: ['SKILL.md', 'references/sources.md'], source: 'library' } }] } });
+      }
       if (parsedBody.alexandria?.provider === 'firecrawl') return json(200, {success:true, data:{creditsCost:0, alexandria:[{provider:'firecrawl',capability:'find-tools',creditsCost:0,data:{level:'tools',items:[PRICED_TOOL],relatedTools:[{group:'alternative',label:'Alternative sources',tools:[{tool:{...PRICED_TOOL,id:'bls/series'},reason:'r'}]}],total:4,next:{provider:'firecrawl',capability:'find-tools',options:{...parsedBody.alexandria.options, offset:4}}}}]}});
 
       if (parsedBody?.alexandria?.[0]?.provider === 'locked') {
@@ -164,6 +229,52 @@ async function startFakeExchangeApi(options = {}) {
         });
       }
       return json(400, { success: false, error: 'url is required' });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/exchange/provider-skills') {
+      // Prod shape: provider and plugin are objects, there is no skill field, and a page is 20.
+      // Without ?provider= the index leaves execution-only skills out, which is every skill here.
+      const providerFilter = url.searchParams.get('provider');
+      const q = (url.searchParams.get('q') ?? '').toLowerCase();
+      const page = Number(url.searchParams.get('page') ?? '1');
+      const pageSize = 20;
+      if (!providerFilter) return json(200, { providers: [], plugins: [], skills: [], page: 1, limit: pageSize, total: 0 });
+      const catalog = [
+        providerSkillRecord('acme', 'Acme', 'research', 'Research', 'brief', 'Brief', 'Write a brief.'),
+        providerSkillRecord('acme', 'Acme', 'research', 'Research', 'run', 'Run', 'Execute only.'),
+        ...Array.from({ length: 18 }, (_, index) => providerSkillRecord('acme', 'Acme', 'research', 'Research', `pad-${index + 1}`, `Pad ${index + 1}`, 'Padding.')),
+        providerSkillRecord('acme', 'Acme', 'research', 'Research', 'later', 'Later', 'On the second page.'),
+        providerSkillRecord('fiber', 'Fiber', 'people', 'People', 'search', 'Search', 'Find people.'),
+      ];
+      const matched = catalog.filter((skill) => {
+        if (q === 'page-through') return skill.provider.slug === 'acme';
+        if (skill.provider.slug !== providerFilter) return false;
+        if (!q) return true;
+        return `${skill.id} ${skill.name} ${skill.description}`.toLowerCase().includes(q);
+      });
+      const start = Math.max(0, page - 1) * pageSize;
+      const pageSkills = matched.slice(start, start + pageSize);
+      if (q === 'page-through' && page === 1 && pageSkills.length) {
+        pageSkills[pageSkills.length - 1] = {
+          ...pageSkills[pageSkills.length - 1],
+          id: 'provider:other/research/decoy',
+          provider: { slug: 'other', name: 'Other' },
+        };
+      }
+      return json(200, {
+        provider: { slug: providerFilter, name: providerFilter === 'acme' ? 'Acme' : 'Fiber' },
+        plugins: [{ id: providerFilter === 'fiber' ? 'people' : 'research', displayName: providerFilter === 'fiber' ? 'People' : 'Research', visibility: 'execution-only' }],
+        skills: pageSkills,
+        page,
+        limit: pageSize,
+        total: matched.length,
+      });
+    }
+    if (req.method === 'GET' && url.pathname === '/exchange/provider-skills/acme/research/brief') {
+      return json(200, providerSkillDetail('acme', 'research', 'brief', '# Brief'));
+    }
+    if (req.method === 'GET' && url.pathname === '/exchange/provider-skills/acme/research/brief/file') {
+      return json(200, { ...providerSkillDetail('acme', 'research', 'brief', '# Brief file'), path: 'brief/SKILL.md' });
     }
 
     if (

@@ -14,15 +14,15 @@
       }
     },
     "tools": [
-      "firecrawl_research_search_papers@81a72a9c839e",
-      "firecrawl_research_inspect_paper@78cb6544d999",
-      "firecrawl_research_related_papers@41ad5912b474",
-      "firecrawl_research_read_paper@b0cd84d8908a",
+      "firecrawl_research_search_papers@707a7d279321",
+      "firecrawl_research_inspect_paper@9f1e9c5a5802",
+      "firecrawl_research_related_papers@59f3e0a5f35f",
+      "firecrawl_research_read_paper@7ac7a8adf9dd",
       "firecrawl_developer_search@e9810e540216",
-      "firecrawl_gov_search@b020bd420f91",
-      "firecrawl_search@7035ea6860de",
-      "firecrawl_find_tools@3447ec42b55f",
-      "firecrawl_scrape@e689f38fce61"
+      "firecrawl_gov_search@94a1c42e220b",
+      "firecrawl_search@dc4b69459778",
+      "firecrawl_find_tools@b75645fba28f",
+      "firecrawl_scrape@1b2b99c6eaaa"
     ]
   },
   "unauthenticated": {

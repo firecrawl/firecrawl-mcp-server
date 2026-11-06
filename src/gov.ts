@@ -8,6 +8,7 @@
 import { z } from 'zod';
 import { type ContentResult, type McpRuntime, UserError } from './mcp/runtime.js';
 import { originHeaders, requestOrigin } from './origin';
+import { INDEX_DAILY_LIMIT_NOTE } from './alexandria';
 import { govSearchOutputSchema, withStructured } from './tool-output';
 
 interface SessionData {
@@ -138,6 +139,8 @@ Search US federal, state, and local statutes, regulations, codes, court opinions
 Optional filters narrow results by jurisdiction, court, court type, cited law or case, and site. Filters keep only pages the index has labeled, so a filtered search can leave out relevant pages, and no results does not mean none exist. Court labels are most complete for federal courts and case-law collections.
 
 Returns ranked results with a position, title, URL, and matched snippet. Results may include historical versions, bill text, agency guidance, and third-party reproductions. Verify the issuer, jurisdiction, enacted/effective status, and version before citing current governing law. Read a known URL or additional page context with firecrawl_scrape. Use general search for non-US questions or missing coverage; no hits does not establish that no applicable law exists.
+
+${INDEX_DAILY_LIMIT_NOTE}
 `,
     outputSchema: govSearchOutputSchema,
     parameters: govSearchParameters,
