@@ -32,6 +32,9 @@ const SEARCH_TOOLS = [
   // Alexandria: catalogue lookup and provider execution.
   'firecrawl_find_tools',
   'firecrawl_scrape',
+  // Alexandria people and company search and enrichment.
+  'people_company_search',
+  'people_company_enrich',
 ];
 
 // A representative sample of the full-surface tools that must NOT leak here.
