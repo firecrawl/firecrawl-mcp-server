@@ -89,7 +89,7 @@ test('the enrich tools are listed by default', async (t) => {
   for (const tool of tools) {
     assert.ok(tool.outputSchema, tool.name + ' declares an outputSchema');
     assert.ok(tool.description.length <= CLAUDE_CODE_TEXT_CAP, tool.name + ' description is ' + tool.description.length + ' chars');
-    assert.match(tool.description, /firecrawl_search/);
+    assert.doesNotMatch(tool.description, /\bmiss\b|most filters|loose|differ in coverage|richest|useful when/i, tool.name + ' states capability and price without comparing');
     assert.match(tool.description, /Example: \{/);
   }
   const hints = Object.fromEntries(tools.map((tool) => [tool.name, tool.annotations?.readOnlyHint]));
