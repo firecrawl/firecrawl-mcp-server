@@ -1,7 +1,7 @@
 /**
  * People and company enrichment over Alexandria's B2B data providers
  * (Apollo, FullEnrich, People Data Labs, Data Legion). Each provider block takes
- * that provider's own parameters; enabled providers run in parallel and each
+ * that provider's own parameters; providers given a block run in parallel and each
  * reports its own records, charge and errors.
  */
 
@@ -53,17 +53,15 @@ const ranges = (about?: string) => {
 const strings = (about: string) => z.array(z.string().min(1)).min(1).optional().describe(about);
 const text = (about?: string) => (about ? z.string().optional().describe(about) : z.string().optional());
 
-const enabled = z.boolean().describe('true runs this provider.');
-
 function provider<S extends z.ZodRawShape>(shape: S, about: string, check?: [(value: any) => boolean, string]) {
-  const block = z.strictObject({ enabled, ...shape });
+  const block = z.strictObject(shape);
   return (check ? block.refine(check[0], { message: check[1] }) : block).optional().describe(about);
 }
 
 const has = (value: unknown) => typeof value === 'string' && value.trim() !== '';
 
 const OPT_IN =
-  'Each provider takes its own native parameters; nothing is shared between providers. A provider runs only when its block has {"enabled": true}, e.g. "apollo": {"enabled": true, ...}. Enabled providers run in parallel. ';
+  'Each provider takes its own native parameters; nothing is shared between providers. Include a block only for each provider you want to run, e.g. "apollo": {...}; included providers run in parallel. Providers differ in coverage and filters, so one can miss what another finds. If they all miss, firecrawl_search can find the person or company on the web. ';
 const REPORT = 'The response lists every provider with its status, records, credits charged and any error.';
 const FE_LISTS = 'List filters take [{"value": "...", "exclude"?: true, "exact_match"?: true}]; range filters take [{"min"?: n, "max"?: n}]. ';
 
@@ -414,7 +412,7 @@ interface Company {
 
 interface ProviderReport {
   name: Provider;
-  status: 'ok' | 'empty' | 'error' | 'skipped' | 'not_enabled';
+  status: 'ok' | 'empty' | 'error' | 'skipped' | 'not_requested';
   returned: number;
   credits: number;
   attempted?: number;
@@ -683,19 +681,17 @@ const nextToolOf = (entries: Entry[]) => entries.find((e) => e.error?.nextTool)?
 const credits = (entries: Entry[]) =>
   entries.reduce((sum, e) => sum + (typeof e.creditsCost === 'number' ? e.creditsCost : 0), 0);
 
-function enabledProviders(args: Record<string, any>, order: Provider[]): Provider[] {
-  const on = order.filter((p) => args[p]?.enabled === true);
+function requestedProviders(args: Record<string, any>, order: Provider[]): Provider[] {
+  const on = order.filter((p) => args[p] !== undefined);
   if (on.length) return on;
-  const example = Object.fromEntries(order.slice(0, 2).map((p) => [p, { enabled: true }]));
-  throw new UserError(
-    'No provider is enabled. Pass {"enabled": true} on each provider to run: ' + order.join(', ') + '. Example: ' + JSON.stringify(example) + '.',
-    { code: 'no_provider_enabled', available: order, example }
-  );
+  throw new UserError('No provider given. Add a block for each provider to run, with that provider\'s own parameters: ' + order.join(', ') + '.', {
+    code: 'no_provider',
+    available: order,
+  });
 }
 
-
-function notEnabled(name: Provider): ProviderReport {
-  return { name, status: 'not_enabled', returned: 0, credits: 0 };
+function notRequested(name: Provider): ProviderReport {
+  return { name, status: 'not_requested', returned: 0, credits: 0 };
 }
 
 function finish(p: Provider, entries: Entry[], records: object[], extra: Partial<ProviderReport> = {}): ProviderReport {
@@ -758,7 +754,7 @@ async function pdlSearch(ctx: Context, capability: string, query: Record<string,
 
 async function searchWith(ctx: Context, p: Provider, block: Record<string, any>, spec: SearchSpec): Promise<ProviderReport> {
   if (p === 'datalegion') throw new Error('datalegion has no search capability.');
-  const { enabled: _enabled, per_page, page, limit, offset = 0, sql, query, ...filters } = block;
+  const { per_page, page, limit, offset = 0, sql, query, ...filters } = block;
   if (p === 'people_data_labs') {
     const { entries, records } = await pdlSearch(ctx, spec.capability[p], has(sql) ? { sql } : { query }, limit, spec.map[p]);
     return finish(p, entries, records);
@@ -975,10 +971,10 @@ export function registerEnrichTools(
       parameters,
       execute: async (args: unknown, { session, client: mcpClient }): Promise<ContentResult> => {
         const a = parameters.parse(args) as Record<string, any>;
-        const on = enabledProviders(a, order);
+        const on = requestedProviders(a, order);
         assertCredential(session);
         const ctx: Context = { client: getClient(session), origin: requestOrigin(mcpClient as any, session) };
-        const providers = await Promise.all(order.map((p) => (on.includes(p) ? run(ctx, p, a[p]) : notEnabled(p))));
+        const providers = await Promise.all(order.map((p) => (on.includes(p) ? run(ctx, p, a[p]) : notRequested(p))));
         const data = { providers, credits_total: providers.reduce((sum, r) => sum + r.credits, 0) };
         return withStructured(JSON.stringify(data), data);
       },

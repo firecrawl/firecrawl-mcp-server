@@ -1,4 +1,4 @@
-// The opt-in enrich tools: registration behind enrichTools, the opt-in error,
+// The opt-in enrich tools: registration behind enrichTools, the no-provider error,
 // schema refusals, and each provider running on its own native parameters.
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -75,7 +75,7 @@ test('enrich tools register only when enrichTools is set', async (t) => {
     assert.equal(tool.annotations?.readOnlyHint, true, tool.name);
     assert.ok(tool.outputSchema, tool.name + ' declares an outputSchema');
     assert.ok(tool.description.length <= CLAUDE_CODE_TEXT_CAP, tool.name + ' description is ' + tool.description.length + ' chars');
-    assert.match(tool.description, /"enabled": true/);
+    assert.match(tool.description, /firecrawl_search/);
   }
 });
 
@@ -90,18 +90,18 @@ test('an input without an identifier is refused by the schema', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { enrichTools: true, apiUrl: api.url });
   await assert.rejects(
-    client.callTool({ name: 'firecrawl_enrich_people', arguments: { fullenrich: { enabled: true, people: [{ person_name: 'Jane Doe' }] } } }),
+    client.callTool({ name: 'firecrawl_enrich_people', arguments: { fullenrich: { people: [{ person_name: 'Jane Doe' }] } } }),
     (error) => /Each fullenrich person needs/.test(error.message) && !/\.\. /.test(error.message)
   );
   assert.equal(api.calls.length, 0);
 });
 
-test('a call with no provider enabled is refused before any provider runs', async (t) => {
+test('a call with no provider block is refused before any provider runs', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { enrichTools: true, apiUrl: api.url });
   const result = await client.callTool({ name: 'firecrawl_enrich_company', arguments: {} });
   assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /No provider is enabled/);
+  assert.match(result.content[0].text, /No provider given/);
   assert.equal(api.calls.length, 0);
 });
 
@@ -111,8 +111,8 @@ test('company lookup runs each provider on its own inputs and reports them separ
   const result = await client.callTool({
     name: 'firecrawl_enrich_company',
     arguments: {
-      fullenrich: { enabled: true, companies: [{ domain: 'acme.example' }, { domain: 'missing.example' }] },
-      apollo: { enabled: true, details: [{ domain: 'globex.example' }] },
+      fullenrich: { companies: [{ domain: 'acme.example' }, { domain: 'missing.example' }] },
+      apollo: { details: [{ domain: 'globex.example' }] },
     },
   });
   assert.notEqual(result.isError, true, JSON.stringify(result));
@@ -123,7 +123,7 @@ test('company lookup runs each provider on its own inputs and reports them separ
   assert.deepEqual(fullenrich.results.map((r) => [r.input_index, r.name]), [[0, 'Acme']]);
   assert.deepEqual(apollo.results.map((r) => [r.input_index, r.name]), [[0, 'Globex']]);
   assert.deepEqual(api.calls.find((call) => call.provider === 'apollo').options.details, [{ domain: 'globex.example' }]);
-  assert.deepEqual([pdl.status, datalegion.status], ['not_enabled', 'not_enabled']);
+  assert.deepEqual([pdl.status, datalegion.status], ['not_requested', 'not_requested']);
   assert.equal(data.credits_total, 40);
 });
 
@@ -133,8 +133,8 @@ test('people search passes a provider its own parameters unchanged', async (t) =
   const result = await client.callTool({
     name: 'firecrawl_enrich_people_search',
     arguments: {
-      apollo: { enabled: true, person_titles: ['Head of Data'], q_organization_domains_list: ['acme.example'] },
-      fullenrich: { enabled: true },
+      apollo: { person_titles: ['Head of Data'], q_organization_domains_list: ['acme.example'] },
+      fullenrich: {},
     },
   });
   const data = result.structuredContent;

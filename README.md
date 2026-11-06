@@ -1235,14 +1235,14 @@ Opt-in people and company enrichment over Alexandria's B2B data providers (Apoll
 | `firecrawl_enrich_company_search` | Finding companies by industry, headcount, location, technology or founding year | apollo, fullenrich, people_data_labs |
 | `firecrawl_enrich_company` | Resolving known companies to firmographics | fullenrich, apollo, people_data_labs, datalegion |
 
-No parameter is shared between providers. Each provider block takes that provider's own parameters under its own names (Apollo's `person_titles`, FullEnrich's `current_position_titles`, a People Data Labs `sql` query), so a filter a provider lacks is simply absent from its block. A provider runs only when its block has `{"enabled": true}`; a call with none enabled fails with `no_provider_enabled`, the providers it can use, and an example. Lookup tools take each provider's own list of inputs, 1 to 50 per call.
+No parameter is shared between providers. Each provider block takes that provider's own parameters under its own names (Apollo's `person_titles`, FullEnrich's `current_position_titles`, a People Data Labs `sql` query), so a filter a provider lacks is simply absent from its block. A provider runs only when the call includes its block; a call with no provider block fails with `no_provider` and the providers the tool can use. Providers differ in coverage, so one can miss what another finds, and the tool descriptions point to `firecrawl_search` when they all miss. Lookup tools take each provider's own list of inputs, 1 to 50 per call.
 
 ```json
 {
   "name": "firecrawl_enrich_company",
   "arguments": {
-    "fullenrich": { "enabled": true, "companies": [{ "domain": "example.com" }] },
-    "datalegion": { "enabled": true, "companies": [{ "domain": "example.com" }, { "name": "Example Labs" }] }
+    "fullenrich": { "companies": [{ "domain": "example.com" }] },
+    "datalegion": { "companies": [{ "domain": "example.com" }, { "name": "Example Labs" }] }
   }
 }
 ```
