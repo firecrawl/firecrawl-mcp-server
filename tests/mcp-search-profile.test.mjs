@@ -46,7 +46,6 @@ const EXCLUDED_TOOLS = [
   'firecrawl_monitor_create',
   'firecrawl_search_feedback',
   'firecrawl_feedback',
-  'firecrawl_research_search_github',
 ];
 
 const SEARCH_ENDPOINT = '/v2/mcp-search';
@@ -443,38 +442,6 @@ test('search surface lists exactly the nine contracted tools', async (t) => {
     assert.equal(names.includes(excluded), false, `${excluded} must not appear`);
   }
   assert.equal(getStderr().includes('TypeError'), false, getStderr());
-});
-
-test('the hidden github tool answers cached callers with a DEPRECATED_TOOL payload', async (t) => {
-  const backend = await startFakeBackend();
-  t.after(() => backend.close());
-  const { searchPort } = await startHostedServer(t, {
-    FIRECRAWL_API_URL: backend.url,
-  });
-
-  // Not on tools/list (EXCLUDED_TOOLS covers that), but a session that cached
-  // the old list must get a pointer to the replacement, not unknown tool.
-  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
-    id: 9,
-    method: 'tools/call',
-    params: {
-      arguments: { query: 'milvus hybrid search' },
-      name: 'firecrawl_research_search_github',
-    },
-    headers: { 'x-api-key': 'fc-test' },
-  });
-  const message = parseSseJson(await res.text());
-  assert.equal(message.result?.isError, true, JSON.stringify(message));
-  assert.equal(message.result.structuredContent.code, 'DEPRECATED_TOOL');
-  assert.equal(
-    message.result.structuredContent.replacement.name,
-    'firecrawl_developer_search'
-  );
-  assert.equal(
-    backend.requests.some((r) => r.url.includes('/research/github')),
-    false,
-    'must not reach the upstream endpoint'
-  );
 });
 
 test('search surface does not expose an excluded tool', async (t) => {

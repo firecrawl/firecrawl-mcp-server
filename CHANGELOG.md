@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Removed
+
+- `firecrawl_research_search_github`. The tool was already hidden from `tools/list` and only returned a `DEPRECATED_TOOL` error, because the research index GitHub search endpoint it called was removed on 2026-11-03. A call to it now gets an unknown-tool error like any other unregistered name. Use `firecrawl_developer_search` for GitHub issues, pull requests, READMEs and code documentation. `tools/list` is unchanged on every surface.
+
 ### Fixed
 
 - `firecrawl_scrape`, `firecrawl_map` and `firecrawl_interact` `url`, and `firecrawl_agent` and `firecrawl_find_tools` `urls`, accept a URL without a scheme (`example.com/page`) and read it as `https://example.com/page`, as `firecrawl_crawl` already did through the API. Some MCP clients rewrite full URLs in tool arguments but pass scheme-less ones through intact, and these calls used to fail with `url: Invalid URL` before reaching the API. The fields are advertised as plain strings, without `format: "uri"` or the `^https?://` pattern, and other schemes are still refused. The scrape, map and interact descriptions say the scheme may be omitted.

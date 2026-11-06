@@ -81,9 +81,6 @@ export const SEARCH_PROFILE_TOOLS = new Set<string>([
   // Alexandria: catalogue lookup and provider execution.
   'firecrawl_find_tools',
   'firecrawl_scrape',
-  // Registered so cached sessions get a DEPRECATED_TOOL payload, hidden from
-  // tools/list via canList. See registerResearchTools.
-  'firecrawl_research_search_github',
 ]);
 
 // Tools whose search-surface registration is a variant with surface-scoped
