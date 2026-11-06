@@ -11,7 +11,9 @@ export const MCP_CONNECTION_GUIDE_URL = 'https://docs.firecrawl.dev/mcp-server';
 
 export const KEYLESS_TOOL_NAMES = new Set([
   'firecrawl_scrape',
-  'firecrawl_search',
+  'firecrawl_web_search',
+  'firecrawl_news_search',
+  'firecrawl_image_search',
   'firecrawl_parse',
 ]);
 

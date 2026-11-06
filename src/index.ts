@@ -119,7 +119,7 @@ if (
   // every other tool needs an API key and will return Unauthorized.
   console.error(
     'No FIRECRAWL_API_KEY or FIRECRAWL_API_URL set — running in keyless mode. ' +
-      'firecrawl_scrape and firecrawl_search are free (rate-limited per IP) against the Firecrawl cloud; ' +
+      'firecrawl_scrape, firecrawl_web_search, firecrawl_news_search and firecrawl_image_search are free (rate-limited per IP) against the Firecrawl cloud; ' +
       'other tools require an API key (get one free at https://firecrawl.dev).'
   );
 }
