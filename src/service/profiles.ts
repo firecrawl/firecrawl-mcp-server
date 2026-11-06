@@ -81,6 +81,9 @@ export const SEARCH_PROFILE_TOOLS = new Set<string>([
   // Alexandria: catalogue lookup and provider execution.
   'firecrawl_find_tools',
   'firecrawl_scrape',
+  // Alexandria people and company search and enrichment.
+  'people_company_search',
+  'people_company_enrich',
 ]);
 
 // Tools whose search-surface registration is a variant with surface-scoped

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Two enrichment tools over Alexandria's B2B data providers, listed by default wherever the server has a credential, including the search-only endpoint (not in local keyless mode and not to keyless sessions): `people_company_search` finds people or companies (`entity: "person" | "company"`), optionally beside web results from a `firecrawl_search` block, and `people_company_enrich` looks up and enriches known people or companies, or with `contact_fields` finds work email, personal email or mobile for known people. Each tool has a block for each provider it supports (from Apollo, FullEnrich, People Data Labs and Data Legion) that takes that provider's own parameters, with nothing shared between providers, and a provider runs only when the call includes its block. Providers given a block run in parallel, and every response reports, per provider, its own records, what it charged and any error, with `retryable` on provider and web search failures a later try may fix. Each call takes `max_credits` (default 1000) and is refused before any provider runs when its estimated most possible cost is higher. Arguments may carry `conversationId` and `objective`, which are dropped; common near-miss shapes are repaired, and an argument that still fails schema validation is refused with the field, what its block takes and an example. These tools add two entries to the default tool list and to the search-only endpoint's fixed tool set.
+
 ### Removed
 
 - `firecrawl_research_search_github`. The tool was already hidden from `tools/list` and only returned a `DEPRECATED_TOOL` error, because the research index GitHub search endpoint it called was removed on 2026-11-03. A call to it now gets an unknown-tool error like any other unregistered name. Use `firecrawl_developer_search` for GitHub issues, pull requests, READMEs and code documentation. `tools/list` is unchanged on every surface.

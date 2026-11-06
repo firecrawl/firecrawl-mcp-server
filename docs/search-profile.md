@@ -20,7 +20,7 @@ within the hour.
 
 ## Tool contract
 
-The search surface exposes exactly these nine tools and nothing else:
+The search surface exposes exactly these eleven tools and nothing else:
 
 | Tool | Purpose |
 | --- | --- |
@@ -33,11 +33,13 @@ The search surface exposes exactly these nine tools and nothing else:
 | `firecrawl_research_read_paper` | Full-text passages from one paper |
 | `firecrawl_find_tools` | Browse the Alexandria catalogue and read provider contracts (free) |
 | `firecrawl_scrape` | Execute an Alexandria capability with an `alexandria` body, or retrieve one supplied URL (billed) |
+| `people_company_search` | Find people or companies through Alexandria's B2B data providers, optionally beside web results (billed) |
+| `people_company_enrich` | Look up and enrich known people or companies, including contact details (billed) |
 
 Registration on this instance is filtered against that allowlist, so any tool
 outside the set, including map, crawl, extract, agent, interact, parse,
 monitor, and the feedback tools, is never registered. `tools/list` reflects
-only these nine tools, and calling any other name returns an unknown-tool
+only these eleven tools, and calling any other name returns an unknown-tool
 error.
 
 `firecrawl_developer_search` queries `/v2/search/developer` and returns the
@@ -87,7 +89,7 @@ access; keyless sessions get an explanatory error before any request.
 Search requires a query and does not accept catalogue browse mode; use
 `firecrawl_find_tools` to browse the catalogue or read a full contract, and
 `firecrawl_scrape` with `alexandria` to execute a capability. Both are part of
-the nine-tool surface.
+the eleven-tool surface.
 
 ## OAuth
 
@@ -127,7 +129,7 @@ proxy routes or the authorization server allowlist.
 
 ## Tests
 
-`tests/mcp-search-profile.test.mjs` asserts the nine-tool contract, unknown-tool
+`tests/mcp-search-profile.test.mjs` asserts the eleven-tool contract, unknown-tool
 rejection, `scrapeOptions` rejection, the clean outbound body, authenticated
 `tools/list`, the path-scoped metadata document, audience acceptance/rejection,
 and that the full surface is unaffected. It runs in CI via `pnpm test`.
