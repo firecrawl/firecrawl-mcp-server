@@ -69,7 +69,7 @@ function needsOneOf<S extends z.ZodRawShape>(shape: S, sets: string[][], message
 const has = (value: unknown) => typeof value === 'string' && value.trim() !== '';
 
 const PROVIDER_BLOCKS =
-  'Each provider takes its own native parameters; nothing is shared between providers. Include a block only for each provider you want to run, e.g. "apollo": {...}; included providers run in parallel. Providers differ in coverage and filters, so one can miss what another finds. If they all miss, firecrawl_search can find the person or company on the web. ';
+  'Each provider takes its own native parameters; nothing is shared between providers. Include a block only for each provider you want to run, e.g. "apollo": {...}; included providers run in parallel. ';
 const REPORT = 'The response lists every provider with its status, records, credits charged and any error.';
 const FE_LISTS = 'List filters take [{"value": "...", "exclude"?: true, "exact_match"?: true}]; range filters take [{"min"?: n, "max"?: n}]. ';
 
@@ -86,7 +86,7 @@ const sqlOrQuery = {
 const peopleSearchParameters = z.strictObject({
   apollo: provider(
     {
-      person_titles: strings('Job titles, e.g. ["Head of Data"]. Loose match; several titles widen the net.'),
+      person_titles: strings('Job titles, e.g. ["Head of Data"]. Similar titles also match; adding titles can broaden results.'),
       person_locations: strings('e.g. ["Seattle, US"].'),
       q_organization_domains_list: strings('Employer domains, e.g. ["clerk.com"].'),
       q_keywords: text('Free text matched across the person and their company.'),
@@ -289,11 +289,11 @@ const apolloCompanyRef = needsOneOf(
 
 const pdlCompanyRef = needsOneOf(
   {
-    website: text('Most reliable identifier.'),
+    website: text('Company website or domain.'),
     profile: text('LinkedIn company URL.'),
     ticker: text(),
     pdl_id: text(),
-    name: text('Weakest identifier; ambiguous names miss.'),
+    name: text('Company name. A name several companies share may not match.'),
     location: text('Helps a name match; never enough alone.'),
   },
   [['website'], ['profile'], ['ticker'], ['pdl_id'], ['name']],
@@ -336,7 +336,7 @@ const lookupParameters = z.strictObject({
   ),
   people_data_labs: provider(
     { people: batch(pdlPersonRef).optional(), companies: batch(pdlCompanyRef).optional(), min_likelihood: minLikelihood },
-    'People Data Labs. people: 50 credits per match, richest work history. companies: 50 credits per match, funding history.'
+    'People Data Labs. people: 50 credits per match, with work history. companies: 50 credits per match, with funding history.'
   ),
   datalegion: provider(
     { people: batch(dataLegionPersonRef).optional(), companies: batch(dataLegionCompanyRef).optional(), min_confidence: minConfidence },
@@ -1169,7 +1169,7 @@ interface WebSearch {
 }
 
 const WEB_ABOUT =
-  'Firecrawl web search with the firecrawl_search query parameters, without page fetching: web results such as team pages, profiles and news, useful when providers miss. 2 credits per 10 results (10 with enterprise zdr), plus 2 per result when the team scans results for threats.';
+  'Firecrawl web search with the firecrawl_search query parameters, without page fetching: web results such as team pages, profiles and news. 2 credits per 10 results (10 with enterprise zdr), plus 2 per result when the team scans results for threats.';
 
 /**
  * The most a web search can cost: 2 credits per 10 results, rounded up (10 with enterprise zdr), for each
@@ -1264,7 +1264,7 @@ export function registerEnrichTools(
     'people_company_search',
     { title: 'Find people or companies', readOnlyHint: true, openWorldHint: true, destructiveHint: false },
     "Find people or companies you don't know yet. Set entity to \"person\" or \"company\", then give each provider its filters for that entity: people by title, employer, location or seniority; companies by industry, headcount, location, technology or founding year. " +
-      'apollo: free for people, 30 credits per page for companies, loose matching. fullenrich: 5 credits per record, the most filters. people_data_labs: 50 credits per record, SQL. firecrawl_search: web results, useful when providers miss, with the firecrawl_search tool\'s query parameters. ' +
+      'apollo: free for people, 30 credits per page for companies. fullenrich: 5 credits per record. people_data_labs: 50 credits per record, SQL or Elasticsearch query. firecrawl_search: web results, with the firecrawl_search tool\'s query parameters. ' +
       'Example: ' + JSON.stringify(SEARCH_EXAMPLE) + '. ',
     advertisedSearch,
     (args) => {
