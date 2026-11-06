@@ -41,6 +41,7 @@ const endpointFeedbackDisabled = feedbackEnvEnabled(
   'FIRECRAWL_NO_ENDPOINT_FEEDBACK',
   'FIRECRAWL_DISABLE_ENDPOINT_FEEDBACK'
 );
+const enrichToolsEnabled = feedbackEnvEnabled('FIRECRAWL_ENRICH_TOOLS');
 
 if (searchFeedbackDisabled) {
   console.error(
@@ -64,6 +65,7 @@ const options: FirecrawlMcpServerOptions = {
   requireCredential: hosted,
   searchFeedback: !searchFeedbackDisabled,
   endpointFeedback: !endpointFeedbackDisabled,
+  enrichTools: enrichToolsEnabled,
   integration: process.env.FIRECRAWL_INTEGRATION,
 };
 const serviceSettings = { hosted, transport, apiKey, apiUrl } as const;
