@@ -1096,6 +1096,25 @@ export function createFirecrawlMcpServer(
     return result;
   }
 
+  // The SDK refuses a json format with neither a prompt nor a schema, and a
+  // query format without a prompt, before sending it, with a plain error that
+  // reaches the client as text alone. Agents that hit the json case have often
+  // put their question in queryOptions.
+  function assertFormatOptions(formats: unknown): void {
+    const list = Array.isArray(formats) ? formats : [];
+    const refuse = (message: string) => {
+      throw new UserError(message, { success: false, error: { code: 'invalid_request', message } });
+    };
+    if (list.some((f: any) => f?.type === 'json' && !f.prompt && !f.schema)) {
+      refuse(
+        'formats "json" needs jsonOptions with a prompt or a schema. To ask a question about the page, use formats ["query"] with queryOptions.prompt instead.'
+      );
+    }
+    if (list.some((f: any) => f?.type === 'query' && !(typeof f.prompt === 'string' && f.prompt.trim()))) {
+      refuse('formats "query" needs queryOptions with a non-empty prompt.');
+    }
+  }
+
   function buildParsersArray(
     args: Record<string, unknown>
   ): Record<string, unknown>[] | undefined {
@@ -1771,15 +1790,7 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
         );
         return structuredText(withoutDiscoveredToolPrices(json?.data ?? json));
       }
-      // The SDK refuses a json format with neither a prompt nor a schema
-      // before sending it, with a plain error that reaches the client as text
-      // alone. Agents that hit it have often put their question in queryOptions.
-      const formats = Array.isArray(cleaned.formats) ? cleaned.formats : [];
-      if (formats.some((f: any) => f?.type === 'json' && !f.prompt && !f.schema)) {
-        const message =
-          'formats "json" needs jsonOptions with a prompt or a schema. To ask a question about the page, use formats ["query"] with queryOptions.prompt instead.';
-        throw new UserError(message, { success: false, error: { code: 'invalid_request', message } });
-      }
+      assertFormatOptions(cleaned.formats);
       const client = getClient(session);
       const res = await relayTermsRequired(
         () =>
@@ -2024,7 +2035,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       const origin = requestOrigin(mcpClient, session);
       let options;
       try { options = findToolsOptions(args as Parameters<typeof findToolsOptions>[0]); }
-      catch (error) { throw new UserError(error instanceof Error ? error.message : String(error)); }
+      catch (error) { throw new UserError(error instanceof Error ? error.message : String(error), { code: 'invalid_input' }); }
       const carry: { includeCosts?: true } = (args as { includeCosts?: boolean }).includeCosts ? { includeCosts: true } : {};
       if (options.level === 'categories') {
         assertExchangeCredential(session);
@@ -3130,6 +3141,7 @@ The session runs in an isolated Firecrawl-hosted browser that never receives the
         const cleanedScrapeOptions = removeEmptyTopLevel(
           transformScrapeParams(scrapeOptions ?? {})
         );
+        assertFormatOptions(cleanedScrapeOptions.formats);
         const scraped = await client.scrape(String(url), {
           ...cleanedScrapeOptions,
           origin,
