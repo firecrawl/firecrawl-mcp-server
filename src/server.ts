@@ -67,6 +67,7 @@ import {
 import { alexandriaOutput } from './alexandria-output';
 import { registerDeveloperTools } from './developer';
 import { registerGovTools } from './gov';
+import { registerEnrichTools } from './enrich';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
 import { fitSearchResponse, searchByteBudget } from './search-budget';
@@ -1835,7 +1836,7 @@ Enumerate URLs indexed under one website through Firecrawl without fetching each
     },
   });
 
-  server.addTool({
+  const searchTool = {
     name: 'firecrawl_search',
     _meta: { 'anthropic/alwaysLoad': true },
     annotations: {
@@ -1870,7 +1871,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         searchQueryIsValid,
         'A query is required. Use Find Tools for catalogue lookup.'
       ),
-    execute: async (args: unknown, { session, log, client: mcpClient }): Promise<ContentResult> => {
+    execute: async (args: unknown, { session, log, client: mcpClient }: ToolContext, tool = 'firecrawl_search'): Promise<ContentResult> => {
       const { query, ...opts } = args as Record<string, unknown>;
 
       const requestedSources = normalizeSearchSources(
@@ -1930,10 +1931,11 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
           addsAlexandria && opts.domainTools !== true,
           requestedSources
         );
-      const httpRes = await relayExchangeError(postSearch, { tool: 'firecrawl_search' });
+      const httpRes = await relayExchangeError(postSearch, { tool });
       return searchResult(httpRes?.data ?? {});
     },
-  });
+  } satisfies RegisteredTool;
+  server.addTool(searchTool);
 
   async function executeExchangeCalls(
     session: SessionData | undefined,
@@ -3284,6 +3286,16 @@ Set \`redactPII\` to request redaction of personally identifiable information in
   registerResearchTools(server, getClient);
   registerDeveloperTools(server, getClient);
   registerGovTools(server, getClient);
+  if (!isLocalKeylessStartup()) {
+    registerEnrichTools(server, getClient, assertExchangeCredential, hasCredential, {
+      parameters: z
+        .object({ ...searchToolBaseFields })
+        .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE)
+        .refine(searchCategoriesAreCompatible, SEARCH_CATEGORIES_CONFLICT_MESSAGE)
+        .refine(searchQueryIsValid, 'A query is required.'),
+      run: (args, context) => searchTool.execute(args, context, 'people_company_search'),
+    });
+  }
   registerUsageTools(server, getClient);
 
   hooks.registerExtraTools?.(
