@@ -1,6 +1,5 @@
-// The opt-in enrich tools: registration behind enrichTools, the opt-in error,
-// per-provider translation, and the waterfall only sending later providers what
-// earlier ones missed.
+// The opt-in enrich tools: registration behind enrichTools, the contradiction
+// errors, not_applied reporting, and each provider running on its own native parameters.
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import test from 'node:test';
@@ -9,13 +8,7 @@ import { createFirecrawlMcpServer } from '../dist/server.js';
 import { getFreePort, startStdio } from './helpers/exchange-mcp.mjs';
 import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
 
-const ENRICH_TOOLS = [
-  'firecrawl_enrich_people_search',
-  'firecrawl_enrich_people',
-  'firecrawl_enrich_contact_info',
-  'firecrawl_enrich_company_search',
-  'firecrawl_enrich_company',
-];
+const ENRICH_TOOLS = ['firecrawl_enrich_search', 'firecrawl_enrich'];
 
 function answer(call) {
   const { provider, capability, options } = call;
@@ -70,13 +63,13 @@ test('enrich tools register only when enrichTools is set', async (t) => {
   for (const name of ENRICH_TOOLS) assert.ok(!offNames.includes(name), name + ' is not listed by default');
 
   const on = await connect(t, { enrichTools: true });
-  const tools = (await on.listTools()).tools.filter((tool) => ENRICH_TOOLS.includes(tool.name));
+  const tools = (await on.listTools()).tools.filter((tool) => tool.name.startsWith('firecrawl_enrich'));
   assert.deepEqual(tools.map((tool) => tool.name).sort(), [...ENRICH_TOOLS].sort());
   for (const tool of tools) {
     assert.equal(tool.annotations?.readOnlyHint, true, tool.name);
     assert.ok(tool.outputSchema, tool.name + ' declares an outputSchema');
     assert.ok(tool.description.length <= CLAUDE_CODE_TEXT_CAP, tool.name + ' description is ' + tool.description.length + ' chars');
-    assert.match(tool.description, /"enabled": true/);
+    assert.equal(JSON.stringify(tool.inputSchema).includes('"oneOf"'), false, tool.name + ' has no oneOf');
   }
 });
 
@@ -87,61 +80,55 @@ test('FIRECRAWL_ENRICH_TOOLS=1 registers the enrich tools on the CLI server', as
   for (const name of ENRICH_TOOLS) assert.ok(names.includes(name), name + ' is listed');
 });
 
-test('a person without an identifier is refused by the schema', async (t) => {
+test('a call with no providers is refused before any provider runs', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { enrichTools: true, apiUrl: api.url });
-  await assert.rejects(
-    client.callTool({ name: 'firecrawl_enrich_people', arguments: { people: [{ name: 'Jane Doe' }], apollo: { enabled: true } } }),
-    /Each person needs a linkedin_url/
-  );
-  assert.equal(api.calls.length, 0);
-});
-
-test('a call with no provider enabled is refused before any provider runs', async (t) => {
-  const api = await startApi(t);
-  const client = await connect(t, { enrichTools: true, apiUrl: api.url });
-  const result = await client.callTool({ name: 'firecrawl_enrich_company', arguments: { companies: [{ domain: 'acme.example' }] } });
+  const result = await client.callTool({ name: 'firecrawl_enrich', arguments: { companies: [{ domain: 'acme.example' }] } });
   assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /No provider is enabled/);
+  assert.match(result.content[0].text, /providers/);
   assert.equal(api.calls.length, 0);
 });
 
-test('the company waterfall sends later providers only what earlier ones missed', async (t) => {
+test('contradictions are refused: both lists, neither list, fields with companies', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { enrichTools: true, apiUrl: api.url });
+  for (const args of [
+    { people: [{ linkedin_url: 'https://www.linkedin.com/in/x' }], companies: [{ domain: 'acme.example' }], providers: ['apollo'] },
+    { providers: ['apollo'] },
+    { companies: [{ domain: 'acme.example' }], fields: ['work_email'], providers: ['apollo'] },
+  ]) {
+    const result = await client.callTool({ name: 'firecrawl_enrich', arguments: args });
+    assert.equal(result.isError, true, JSON.stringify(args));
+  }
+  assert.equal(api.calls.length, 0);
+});
+
+test('company lookup runs listed providers as a waterfall in fixed order', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { enrichTools: true, apiUrl: api.url });
   const result = await client.callTool({
-    name: 'firecrawl_enrich_company',
-    arguments: { companies: [{ domain: 'acme.example' }, { domain: 'globex.example' }], apollo: { enabled: true }, fullenrich: { enabled: true } },
+    name: 'firecrawl_enrich',
+    arguments: { companies: [{ domain: 'acme.example' }, { domain: 'globex.example' }], providers: ['apollo', 'fullenrich'] },
   });
   assert.notEqual(result.isError, true, JSON.stringify(result));
   const data = result.structuredContent;
-  assert.deepEqual(data.results.map((r) => [r.input_index, r.matched, r.name, r.sources]), [
-    [0, true, 'Acme', ['fullenrich']],
-    [1, true, 'Globex', ['apollo']],
-  ]);
-  const apollo = api.calls.filter((call) => call.provider === 'apollo');
-  assert.equal(apollo.length, 1);
-  assert.deepEqual(apollo[0].options.details, [{ domain: 'globex.example' }]);
-  assert.deepEqual(data.providers.map((p) => [p.name, p.status, p.credits]), [
-    ['fullenrich', 'ok', 10],
-    ['apollo', 'ok', 30],
-    ['people_data_labs', 'not_enabled', 0],
-    ['datalegion', 'not_enabled', 0],
-  ]);
+  assert.deepEqual(data.providers.map((p) => p.name), ['fullenrich', 'apollo']);
+  assert.deepEqual(data.results.map((r) => [r.input_index, r.matched, r.name]), [[0, true, 'Acme'], [1, true, 'Globex']]);
+  assert.deepEqual(api.calls.find((call) => call.provider === 'apollo').options.details, [{ domain: 'globex.example' }]);
   assert.equal(data.credits_total, 40);
 });
 
-test('people search reports a filter a provider could not apply', async (t) => {
+test('search translates shared filters and reports what a provider or entity cannot apply', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { enrichTools: true, apiUrl: api.url });
   const result = await client.callTool({
-    name: 'firecrawl_enrich_people_search',
-    arguments: { titles: ['Head of Data'], seniority: ['director'], apollo: { enabled: true } },
+    name: 'firecrawl_enrich_search',
+    arguments: { entity: 'person', titles: ['Head of Data'], company_domain: 'acme.example', seniority: ['head'], industries: ['software'], providers: ['apollo', 'datalegion'] },
   });
   const data = result.structuredContent;
   assert.equal(data.results[0].apollo_id, 'a1');
-  const apollo = data.providers.find((p) => p.name === 'apollo');
-  assert.deepEqual(apollo.not_applied, ['seniority']);
-  assert.deepEqual(api.calls[0].options.person_titles, ['Head of Data']);
-  assert.equal(api.calls[0].options.per_page, 5);
+  assert.deepEqual(api.calls[0].options, { person_titles: ['Head of Data'], q_organization_domains_list: ['acme.example'], per_page: 5 });
+  assert.ok(data.not_applied.includes('seniority (apollo)'), JSON.stringify(data.not_applied));
+  assert.ok(data.not_applied.some((n) => n.startsWith('industries (company filter')));
+  assert.ok(data.not_applied.includes('datalegion (no search)'));
 });
