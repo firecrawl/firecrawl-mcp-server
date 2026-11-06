@@ -6,7 +6,7 @@ import { createServer } from 'node:http';
 import test from 'node:test';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { createFirecrawlMcpServer } from '../dist/server.js';
-import { getFreePort } from './helpers/exchange-mcp.mjs';
+import { getFreePort, startStdio } from './helpers/exchange-mcp.mjs';
 import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
 
 const ENRICH_TOOLS = [
@@ -78,6 +78,23 @@ test('enrich tools register only when enrichTools is set', async (t) => {
     assert.ok(tool.description.length <= CLAUDE_CODE_TEXT_CAP, tool.name + ' description is ' + tool.description.length + ' chars');
     assert.match(tool.description, /"enabled": true/);
   }
+});
+
+test('FIRECRAWL_ENRICH_TOOLS=1 registers the enrich tools on the CLI server', async (t) => {
+  const { client } = await startStdio(t, { CLOUD_SERVICE: 'false', FIRECRAWL_API_KEY: 'fc-test', FIRECRAWL_ENRICH_TOOLS: '1' });
+  const { tools } = await client.request('tools/list', {});
+  const names = tools.map((tool) => tool.name);
+  for (const name of ENRICH_TOOLS) assert.ok(names.includes(name), name + ' is listed');
+});
+
+test('a person without an identifier is refused by the schema', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { enrichTools: true, apiUrl: api.url });
+  await assert.rejects(
+    client.callTool({ name: 'firecrawl_enrich_people', arguments: { people: [{ name: 'Jane Doe' }], apollo: { enabled: true } } }),
+    /Each person needs a linkedin_url/
+  );
+  assert.equal(api.calls.length, 0);
 });
 
 test('a call with no provider enabled is refused before any provider runs', async (t) => {

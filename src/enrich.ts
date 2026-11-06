@@ -53,6 +53,10 @@ const personRef = z.strictObject({
   apollo_id: z.string().optional().describe('apollo_id from a firecrawl_enrich_people_search result. Resolves on apollo only.'),
 });
 
+const identifiesPerson = (ref: { linkedin_url?: string; email?: string; apollo_id?: string; name?: string; company?: string; company_domain?: string }) =>
+  Boolean(ref.linkedin_url || ref.email || ref.apollo_id || (ref.name && (ref.company || ref.company_domain)));
+const NEEDS_IDENTIFIER = { message: 'Each person needs a linkedin_url, an email, an apollo_id, or a name plus company or company_domain.' };
+
 const companyRef = z.strictObject({
   domain: z.string().optional().describe('Best identifier, e.g. stripe.com.'),
   linkedin_url: z.string().optional().describe('LinkedIn company URL.'),
@@ -103,7 +107,7 @@ const peopleSearchParameters = z.strictObject({
 });
 
 const peopleParameters = z.strictObject({
-  people: z.array(personRef).min(1).max(50).describe('Each needs a linkedin_url, an email, or a name plus company or company_domain.'),
+  people: z.array(personRef.refine(identifiesPerson, NEEDS_IDENTIFIER)).min(1).max(50).describe('Each needs a linkedin_url, an email, an apollo_id, or a name plus company or company_domain.'),
   fullenrich: provider({}, 'FullEnrich. 10 credits per match.'),
   apollo: provider({}, 'Apollo. 30 credits per match.'),
   people_data_labs: provider(
@@ -120,7 +124,17 @@ const CONTACT_FIELDS = ['work_email', 'personal_email', 'mobile'] as const;
 type ContactField = (typeof CONTACT_FIELDS)[number];
 
 const contactParameters = z.strictObject({
-  people: z.array(personRef.omit({ email: true })).min(1).max(50).describe('Each needs a linkedin_url, or a name plus company or company_domain.'),
+  people: z
+    .array(
+      personRef
+        .omit({ email: true })
+        .refine((ref) => Boolean(ref.linkedin_url || (ref.name && (ref.company || ref.company_domain))), {
+          message: 'Each person needs a linkedin_url, or a name plus company or company_domain.',
+        })
+    )
+    .min(1)
+    .max(50)
+    .describe('Each needs a linkedin_url, or a name plus company or company_domain.'),
   fields: z.array(z.enum(CONTACT_FIELDS)).min(1).describe('Values to find.'),
   fullenrich: provider({}, 'FullEnrich. Work email 30, personal email 100, mobile 300 credits per value found.'),
   datalegion: provider({}, 'Data Legion. 100 credits per matched person, every field in one call.'),
@@ -220,6 +234,7 @@ interface ProviderReport {
   returned: number;
   credits: number;
   attempted?: number;
+  next_tool?: unknown;
   applied?: string[];
   not_applied?: string[];
   note?: string;
@@ -432,7 +447,7 @@ function dataLegionCompany(c: any): Company {
 // ---------- Alexandria execution ----------
 
 type Call = { capability: string; options: Record<string, unknown> };
-type Entry = { data?: any; error?: { code?: string; message?: string }; creditsCost?: number };
+type Entry = { data?: any; error?: { code?: string; message?: string; nextTool?: unknown }; creditsCost?: number };
 
 interface Context {
   client: any;
@@ -462,7 +477,9 @@ async function runCalls(ctx: Context, p: Provider, calls: Call[]): Promise<Entry
       } catch (error) {
         if ((error as any)?.response?.status === 401) throw error;
         const message = error instanceof Error ? error.message : String(error);
-        return chunk.map(() => ({ error: { code: 'request_failed', message } }));
+        const extras = error instanceof UserError ? error.extras : undefined;
+        const code = typeof extras?.code === 'string' ? extras.code : 'request_failed';
+        return chunk.map(() => ({ error: compact({ code, message, nextTool: extras?.nextTool }) }));
       }
     })
   );
@@ -475,6 +492,8 @@ function errorNote(entries: Entry[]): string | undefined {
   const failed = entries.find((e) => e.error && !isMiss(e));
   return failed ? [failed.error?.code, failed.error?.message].filter(Boolean).join(': ') : undefined;
 }
+
+const nextToolOf = (entries: Entry[]) => entries.find((e) => e.error?.nextTool)?.error?.nextTool;
 
 const credits = (entries: Entry[]) =>
   entries.reduce((sum, e) => sum + (typeof e.creditsCost === 'number' ? e.creditsCost : 0), 0);
@@ -611,6 +630,7 @@ async function peopleSearchProvider(
     if (a.location) applied.push('location');
     if (a.company_domain) applied.push('company_domain');
     else if (a.company) applied.push('company (as keywords)');
+    if (a.company_domain && a.company) notApplied.push('company');
     if (a.seniority?.length) {
       notApplied.push('seniority');
       note = 'Apollo has no seniority filter; results are not filtered on it.';
@@ -640,7 +660,8 @@ async function peopleSearchProvider(
       current_position_seniority_level: a.seniority?.map((s) => ({ value: FE_SENIORITY[s] })),
       ...extra,
     });
-    for (const key of ['location', 'company_domain', 'company', 'seniority'] as const) if (a[key]?.length) applied.push(key);
+    for (const key of ['location', 'company_domain', 'seniority'] as const) if (a[key]?.length) applied.push(key);
+    if (a.company) (a.company_domain ? notApplied : applied).push('company');
     applied.push(...Object.keys(extra));
     const calls: Call[] = [];
     for (let offset = 0; offset < a.limit; offset += 6) {
@@ -668,6 +689,7 @@ async function peopleSearchProvider(
         where.push('job_company_name = ' + sqlText(a.company));
         applied.push('company');
       }
+      if (a.company_domain && a.company) notApplied.push('company');
       const levels = (a.seniority ?? []).flatMap((s) => PDL_SENIORITY[s] ?? []);
       if (levels.length) {
         where.push('job_title_levels IN (' + levels.map(sqlText).join(', ') + ')');
@@ -695,6 +717,7 @@ async function peopleSearchProvider(
       applied,
       not_applied: notApplied,
       note: failure ?? note,
+      next_tool: nextToolOf(entries),
     },
   };
 }
@@ -770,7 +793,7 @@ async function companySearchProvider(
         where.push('industry IN (' + a.industries.map(sqlText).join(', ') + ')');
         applied.push('industries');
       }
-      if (a.employees?.min !== undefined) where.push('employee_count >= ' + Math.floor(a.employees.min));
+      if (a.employees?.min !== undefined) where.push('employee_count >= ' + Math.ceil(a.employees.min));
       if (a.employees?.max !== undefined) where.push('employee_count <= ' + Math.floor(a.employees.max));
       if (a.employees) applied.push('employees');
       if (a.location) {
@@ -778,7 +801,7 @@ async function companySearchProvider(
         where.push('(location.locality = ' + l + ' OR location.region = ' + l + ' OR location.country = ' + l + ')');
         applied.push('location');
       }
-      if (a.founded?.min !== undefined) where.push('founded >= ' + Math.floor(a.founded.min));
+      if (a.founded?.min !== undefined) where.push('founded >= ' + Math.ceil(a.founded.min));
       if (a.founded?.max !== undefined) where.push('founded <= ' + Math.floor(a.founded.max));
       if (a.founded) applied.push('founded');
       if (a.keywords) {
@@ -813,6 +836,7 @@ async function companySearchProvider(
       applied,
       not_applied: notApplied,
       note: failure ?? note,
+      next_tool: nextToolOf(entries),
     },
   };
 }
@@ -1126,6 +1150,7 @@ async function waterfall<R, T extends object>(
       credits: credits(entries),
       attempted,
       note: failure ?? lacking(pending.length - attempted),
+      next_tool: nextToolOf(entries),
     });
   }
   const results = merged.map((record, input_index) => {
@@ -1231,8 +1256,18 @@ export function registerEnrichTools(
           ),
         ['work_email', 'personal_email', 'mobile']
       );
+      const unrequested = [
+        ...CONTACT_FIELDS.filter((f) => !a.fields.includes(f)),
+        ...(a.fields.includes('work_email') ? [] : ['email_status']),
+      ];
+      const project = (r: Record<string, any>) => {
+        const kept = Object.fromEntries(Object.entries(r).filter(([key]) => key !== 'conflicts' && !unrequested.includes(key)));
+        const conflicts = Object.fromEntries(Object.entries(r.conflicts ?? {}).filter(([key]) => !unrequested.includes(key)));
+        if (Object.keys(conflicts).length) return { ...kept, conflicts };
+        return r.conflicts ? { ...kept, confidence: r.sources.length > 1 ? 'agreed' : 'single_source' } : kept;
+      };
       return respond(
-        results.map((r: any) => (r.matched && a.fields.some((f) => r[f]) ? r : { input_index: r.input_index, matched: false })),
+        results.map((r: any) => (r.matched && a.fields.some((f) => r[f]) ? project(r) : { input_index: r.input_index, matched: false })),
         [...reports, ...notEnabled(a, order)]
       );
     },

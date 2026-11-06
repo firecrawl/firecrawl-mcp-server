@@ -1235,7 +1235,7 @@ Opt-in people and company enrichment over Alexandria's B2B data providers (Apoll
 | `firecrawl_enrich_company_search` | Finding companies by industry, headcount, location, technology or founding year | apollo, fullenrich, people_data_labs | In parallel, merged by domain |
 | `firecrawl_enrich_company` | Resolving known companies to firmographics | fullenrich, apollo, people_data_labs, datalegion | Waterfall in that order |
 
-Every provider is off until the call enables it with `{"enabled": true}`; a call with none enabled fails with `no_provider_enabled`, the providers it can use, and an example. Each provider block also takes that provider's own extra filters, such as FullEnrich's `past_company_names` or a People Data Labs `sql` query.
+Every provider is off until the call enables it with `{"enabled": true}`; a call with none enabled fails with `no_provider_enabled`, the providers it can use, and an example. Some provider blocks also take that provider's own options, such as FullEnrich's `past_company_names` and a People Data Labs `sql` query on the search tools, or Data Legion's `min_confidence` on `firecrawl_enrich_people`; the rest take only `enabled`.
 
 ```json
 {
