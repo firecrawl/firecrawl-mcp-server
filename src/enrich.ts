@@ -239,8 +239,8 @@ const dataLegionPersonRef = needsOneOf(
     country: text(),
     school: text(),
   },
-  [['social_url'], ['email'], ['linkedin_id'], ['legion_id'], ['full_name'], ['first_name', 'last_name']],
-  'Each datalegion person needs a social_url, email, linkedin_id, legion_id or a name'
+  [['social_url'], ['email'], ['linkedin_id'], ['legion_id'], ...NAME_SETS([['full_name'], ['first_name', 'last_name']], ['company', 'job_title', 'city', 'state', 'country', 'school'])],
+  'Each datalegion person needs a social_url, email, linkedin_id or legion_id, or a full name (full_name, or first_name and last_name) plus company, job_title, city, state, country or school'
 );
 
 const batch = <T extends z.ZodType>(item: T) => z.array(item).min(1).max(50);
@@ -356,6 +356,10 @@ const enrichOutputSchema = z.looseObject({
         retryable: z.boolean().optional().describe('The failure may succeed on a later try.'),
         results: z.array(z.looseObject({})).optional().describe('This provider\'s records; people_company_enrich records carry input_index into this provider\'s input list.'),
         unmatched: z.array(z.number()).optional().describe('people_company_enrich: input indexes this provider did not match.'),
+        pending: z
+          .array(z.looseObject({}))
+          .optional()
+          .describe('people_company_enrich: inputs still running upstream, each with input_index and, when it can be read later, next_tool.'),
       })
     )
     .optional()
@@ -399,13 +403,14 @@ interface Company {
 
 interface ProviderReport {
   name: Provider | 'firecrawl_search';
-  status: 'ok' | 'empty' | 'error' | 'skipped' | 'not_requested';
+  status: 'ok' | 'empty' | 'pending' | 'error' | 'skipped' | 'not_requested';
   returned: number;
   credits: number;
   attempted?: number;
   next_tool?: unknown;
   note?: string;
   retryable?: boolean;
+  pending?: object[];
   results?: object[];
   unmatched?: number[];
 }
@@ -662,7 +667,9 @@ const isMiss = (entry: Entry) => entry.error?.code === 'not_found';
 
 const RETRYABLE = new Set(['provider_error', 'provider_unavailable', 'provider_rate_limited', 'request_timeout']);
 
-const failureOf = (entries: Entry[]) => entries.find((e) => e.error && !isMiss(e))?.error;
+const isPending = (entry: Entry | undefined) => entry?.data?.status === 'job_pending' || entry?.error?.code === 'job_pending';
+
+const failureOf = (entries: Entry[]) => entries.find((e) => e.error && !isMiss(e) && !isPending(e))?.error;
 
 const nextToolOf = (entries: Entry[]) => entries.find((e) => e.error?.nextTool)?.error?.nextTool;
 
@@ -789,10 +796,12 @@ async function searchWith(ctx: Context, p: Provider, block: Record<string, any>,
 
 type Hits = Map<number, object>;
 
-function lookupReport(p: Provider, entries: Entry[], hits: Hits, total: number): ProviderReport {
+function lookupReport(p: Provider, entries: Entry[], hits: Hits, total: number, pending: { input_index: number }[] = []): ProviderReport {
   const results = [...hits].sort(([a], [b]) => a - b).map(([input_index, record]) => ({ input_index, ...record }));
-  const unmatched = [...Array(total).keys()].filter((i) => !hits.has(i));
-  return finish(p, entries, results, { attempted: total, unmatched });
+  const waiting = new Set(pending.map((item) => item.input_index));
+  const unmatched = [...Array(total).keys()].filter((i) => !hits.has(i) && !waiting.has(i));
+  const report = finish(p, entries, results, { attempted: total, unmatched, pending: pending.length ? pending : undefined });
+  return report.status === 'empty' && pending.length ? { ...report, status: 'pending' } : report;
 }
 
 /** One entry per input, in order. */
@@ -805,8 +814,7 @@ function perEntry(entries: Entry[], read: (entry: Entry) => object | undefined):
   return hits;
 }
 
-/** wanted keeps only matches that carry one of those contact fields. */
-async function apolloPeople(ctx: Context, details: object[], extra: Record<string, unknown> = {}, wanted?: ContactField[]): Promise<ProviderReport> {
+async function apolloPeople(ctx: Context, details: object[], extra: Record<string, unknown> = {}): Promise<ProviderReport> {
   const batches = chunks(details, 10);
   const entries = await runCalls(
     ctx,
@@ -817,8 +825,7 @@ async function apolloPeople(ctx: Context, details: object[], extra: Record<strin
   batches.forEach((chunk, c) => {
     const found = Array.isArray(entries[c]?.data?.matches) ? entries[c].data.matches : [];
     chunk.forEach((_, i) => {
-      const record = found[i] ? apolloPerson(found[i]) : undefined;
-      if (record && (!wanted || wanted.some((field) => record[field as keyof Person]))) hits.set(c * 10 + i, record);
+      if (found[i]) hits.set(c * 10 + i, apolloPerson(found[i]));
     });
   });
   return lookupReport('apollo', entries, hits, details.length);
@@ -875,13 +882,25 @@ const FE_CONTACT: Record<ContactField, string> = {
   mobile: 'contacts/mobile',
 };
 
-async function contactsWith(ctx: Context, p: Provider, block: Record<string, any>): Promise<ProviderReport> {
-  if (p === 'datalegion') return dataLegionPeople(ctx, block, 'people/enrich-base-with-contact');
-  const fields: ContactField[] = block.fields;
+/** A matched person's requested contact fields the provider did not return, so a charged match is never read as having them. */
+function withMissing(report: ProviderReport, fields: ContactField[]): ProviderReport {
+  if (!report.results) return report;
+  const results = report.results.map((item) => {
+    const record = item as Record<string, unknown>;
+    const missing = fields.filter((field) => !record[field]);
+    return missing.length ? { ...record, missing } : record;
+  });
+  return { ...report, results };
+}
+
+const PENDING_NOTE =
+  'Pending inputs were still running upstream when the request ended, and nothing was charged for them. Read each with its next_tool after poll_after_seconds; the first read of a finished result is billed once, later reads are free.';
+
+async function contactsWith(ctx: Context, p: Provider, block: Record<string, any>, fields: ContactField[]): Promise<ProviderReport> {
+  if (p === 'datalegion') return withMissing(await dataLegionPeople(ctx, block, 'people/enrich-base-with-contact'), fields);
   if (p === 'apollo') {
-    const wanted = fields.filter((field) => field !== 'mobile');
-    if (!wanted.length) return { name: p, status: 'skipped', returned: 0, credits: 0, note: 'Apollo has no mobile lookup.' };
-    return apolloPeople(ctx, block.details, { reveal_personal_emails: block.reveal_personal_emails }, wanted);
+    if (fields.every((field) => field === 'mobile')) return { name: p, status: 'skipped', returned: 0, credits: 0, note: 'Apollo has no mobile lookup.' };
+    return withMissing(await apolloPeople(ctx, block.details, { reveal_personal_emails: block.reveal_personal_emails }), fields);
   }
 
   const contacts: (Record<string, string> | undefined)[] = block.contacts;
@@ -893,8 +912,24 @@ async function contactsWith(ctx: Context, p: Provider, block: Record<string, any
     plan.map(({ field, ref }) => ({ capability: FE_CONTACT[field], options: compact(ref) }))
   );
   const hits = new Map<number, Person>();
+  const pending: Record<string, unknown>[] = [];
   plan.forEach(({ index, field }, i) => {
-    const result = entries[i]?.data?.results?.[0];
+    const entry = entries[i];
+    if (isPending(entry)) {
+      const job = entry.data ?? {};
+      pending.push(
+        compact({
+          input_index: index,
+          field,
+          job_id: str(job.jobId),
+          poll_after_seconds: num(job.pollAfterSeconds),
+          next_tool: isPlain(job.next) ? { name: 'firecrawl_scrape', arguments: { alexandria: job.next } } : undefined,
+          note: job.next ? undefined : entry.error?.message,
+        })
+      );
+      return;
+    }
+    const result = entry?.data?.results?.[0];
     const info = result?.contact_info;
     const found =
       field === 'work_email'
@@ -909,10 +944,13 @@ async function contactsWith(ctx: Context, p: Provider, block: Record<string, any
     if (field === 'work_email') record.email_status = str(found?.status);
     hits.set(index, compact(record));
   });
-  const report = lookupReport(p, entries, hits, contacts.length);
-  if (!unusable.length) return report;
-  const skipped = 'Skipped inputs ' + unusable.join(', ') + ': contacts need a person_professional_network_url, or a person_name with company_domain.';
-  return { ...report, note: [report.note, skipped].filter(Boolean).join(' ') };
+  const report = lookupReport(p, entries, hits, contacts.length, pending as { input_index: number }[]);
+  const skipped = unusable.length
+    ? 'Skipped inputs ' + unusable.join(', ') + ': contacts need a person_professional_network_url, or a person_name with company_domain.'
+    : undefined;
+  const resumable = pending.some((item) => item.next_tool) ? PENDING_NOTE : undefined;
+  const note = [report.note, resumable, skipped].filter(Boolean).join(' ');
+  return note ? { ...report, note } : report;
 }
 
 async function enrichCompaniesWith(ctx: Context, p: Provider, block: Record<string, any>): Promise<ProviderReport> {
@@ -1131,13 +1169,18 @@ interface WebSearch {
 }
 
 const WEB_ABOUT =
-  'Firecrawl web search with the firecrawl_search query parameters, without page fetching: web results such as team pages, profiles and news, useful when providers miss. 2 credits per 10 results.';
+  'Firecrawl web search with the firecrawl_search query parameters, without page fetching: web results such as team pages, profiles and news, useful when providers miss. 2 credits per 10 results (10 with enterprise zdr), plus 2 per result when the team scans results for threats.';
 
-/** 2 credits per 10 results, rounded up, for each source but the free Alexandria one; no sources means web. */
+/**
+ * The most a web search can cost: 2 credits per 10 results, rounded up (10 with enterprise zdr), for each
+ * source but the free Alexandria one, plus 2 per result for a team that scans results for threats, which
+ * this server cannot see. No sources means web.
+ */
 function webEstimate(args: Record<string, any>): number {
   const sources = Array.isArray(args.sources) && args.sources.length ? args.sources : ['web'];
-  const counted = sources.filter((s: any) => (typeof s === 'string' ? s : s?.type) !== 'alexandria').length;
-  return 2 * Math.ceil(((args.limit ?? 10) * counted) / 10);
+  const results = (args.limit ?? 10) * sources.filter((s: any) => (typeof s === 'string' ? s : s?.type) !== 'alexandria').length;
+  const perTen = Array.isArray(args.enterprise) && args.enterprise.includes('zdr') ? 10 : 2;
+  return perTen * Math.ceil(results / 10) + 2 * results;
 }
 
 async function webReport(web: WebSearch, args: unknown, context: ToolExecuteContext<SessionData>): Promise<ProviderReport> {
@@ -1293,7 +1336,7 @@ export function registerEnrichTools(
         run: async (ctx, p, block) =>
           p === 'people_data_labs'
             ? { name: p, status: 'skipped', returned: 0, credits: 0, note: 'No contact lookup; drop contact_fields to resolve these people.' }
-            : contactsWith(ctx, p, block),
+            : contactsWith(ctx, p, block, contactFields),
       };
     }
   );

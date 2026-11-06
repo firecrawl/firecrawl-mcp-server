@@ -8190,7 +8190,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "people_company_enrich@7a6ab7d6fe4d": {
+  "people_company_enrich@383c1149c5f7": {
     "annotations": {
       "title": "Look up and enrich people or companies",
       "readOnlyHint": false,
@@ -8873,10 +8873,84 @@
                   },
                   {
                     "required": [
-                      "full_name"
+                      "full_name",
+                      "company"
                     ],
                     "properties": {
                       "full_name": {
+                        "pattern": "\\S"
+                      },
+                      "company": {
+                        "pattern": "\\S"
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "full_name",
+                      "job_title"
+                    ],
+                    "properties": {
+                      "full_name": {
+                        "pattern": "\\S"
+                      },
+                      "job_title": {
+                        "pattern": "\\S"
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "full_name",
+                      "city"
+                    ],
+                    "properties": {
+                      "full_name": {
+                        "pattern": "\\S"
+                      },
+                      "city": {
+                        "pattern": "\\S"
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "full_name",
+                      "state"
+                    ],
+                    "properties": {
+                      "full_name": {
+                        "pattern": "\\S"
+                      },
+                      "state": {
+                        "pattern": "\\S"
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "full_name",
+                      "country"
+                    ],
+                    "properties": {
+                      "full_name": {
+                        "pattern": "\\S"
+                      },
+                      "country": {
+                        "pattern": "\\S"
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "full_name",
+                      "school"
+                    ],
+                    "properties": {
+                      "full_name": {
+                        "pattern": "\\S"
+                      },
+                      "school": {
                         "pattern": "\\S"
                       }
                     }
@@ -8884,13 +8958,107 @@
                   {
                     "required": [
                       "first_name",
-                      "last_name"
+                      "last_name",
+                      "company"
                     ],
                     "properties": {
                       "first_name": {
                         "pattern": "\\S"
                       },
                       "last_name": {
+                        "pattern": "\\S"
+                      },
+                      "company": {
+                        "pattern": "\\S"
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "first_name",
+                      "last_name",
+                      "job_title"
+                    ],
+                    "properties": {
+                      "first_name": {
+                        "pattern": "\\S"
+                      },
+                      "last_name": {
+                        "pattern": "\\S"
+                      },
+                      "job_title": {
+                        "pattern": "\\S"
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "first_name",
+                      "last_name",
+                      "city"
+                    ],
+                    "properties": {
+                      "first_name": {
+                        "pattern": "\\S"
+                      },
+                      "last_name": {
+                        "pattern": "\\S"
+                      },
+                      "city": {
+                        "pattern": "\\S"
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "first_name",
+                      "last_name",
+                      "state"
+                    ],
+                    "properties": {
+                      "first_name": {
+                        "pattern": "\\S"
+                      },
+                      "last_name": {
+                        "pattern": "\\S"
+                      },
+                      "state": {
+                        "pattern": "\\S"
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "first_name",
+                      "last_name",
+                      "country"
+                    ],
+                    "properties": {
+                      "first_name": {
+                        "pattern": "\\S"
+                      },
+                      "last_name": {
+                        "pattern": "\\S"
+                      },
+                      "country": {
+                        "pattern": "\\S"
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "first_name",
+                      "last_name",
+                      "school"
+                    ],
+                    "properties": {
+                      "first_name": {
+                        "pattern": "\\S"
+                      },
+                      "last_name": {
+                        "pattern": "\\S"
+                      },
+                      "school": {
                         "pattern": "\\S"
                       }
                     }
@@ -9099,6 +9267,15 @@
                 "items": {
                   "type": "number"
                 }
+              },
+              "pending": {
+                "description": "people_company_enrich: inputs still running upstream, each with input_index and, when it can be read later, next_tool.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": {}
+                }
               }
             },
             "additionalProperties": {}
@@ -9118,7 +9295,7 @@
       "additionalProperties": false
     }
   },
-  "people_company_search@1891ce34a159": {
+  "people_company_search@5d5f19c5291e": {
     "annotations": {
       "title": "Find people or companies",
       "readOnlyHint": true,
@@ -10179,7 +10356,7 @@
           ]
         },
         "firecrawl_search": {
-          "description": "Firecrawl web search with the firecrawl_search query parameters, without page fetching: web results such as team pages, profiles and news, useful when providers miss. 2 credits per 10 results.",
+          "description": "Firecrawl web search with the firecrawl_search query parameters, without page fetching: web results such as team pages, profiles and news, useful when providers miss. 2 credits per 10 results (10 with enterprise zdr), plus 2 per result when the team scans results for threats.",
           "type": "object",
           "properties": {
             "toolDetail": {
@@ -10356,6 +10533,15 @@
                 "type": "array",
                 "items": {
                   "type": "number"
+                }
+              },
+              "pending": {
+                "description": "people_company_enrich: inputs still running upstream, each with input_index and, when it can be read later, next_tool.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": {}
                 }
               }
             },

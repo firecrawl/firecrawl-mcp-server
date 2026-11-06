@@ -20,6 +20,18 @@ function answer(call) {
   if (provider === 'apollo' && capability === 'companies/bulk-enrich') {
     return { creditsCost: 30, data: { organizations: [{ name: 'Globex', primary_domain: 'globex.example', estimated_num_employees: 40 }] } };
   }
+  if (provider === 'apollo' && capability === 'people/bulk-match' && options.details?.[0]?.email === 'grace@acme.example') {
+    return { creditsCost: 30, data: { matches: [{ id: 'a2', first_name: 'Grace', last_name: 'Hopper', title: 'Admiral', email: null }] } };
+  }
+  if (provider === 'fullenrich' && capability === 'contacts/work-email' && options.first_name === 'Pending') {
+    return {
+      creditsCost: 0,
+      data: { status: 'job_pending', jobId: 'j1', enrichmentId: 'e1', pollAfterSeconds: 60, next: { provider: 'firecrawl', capability: 'job-status', options: { id: 'j1' } } },
+    };
+  }
+  if (provider === 'fullenrich' && capability === 'contacts/work-email' && options.first_name === 'Unread') {
+    return { creditsCost: 0, error: { code: 'job_pending', message: 'Upstream job e2 is still running; repeating this call starts another one.' } };
+  }
   if (provider === 'apollo' && capability === 'people/search') {
     return { creditsCost: 0, data: { people: [{ id: 'a1', first_name: 'Ada', last_name_obfuscated: 'L***e', title: 'Head of Data', organization: { name: 'Acme' } }] } };
   }
@@ -294,7 +306,7 @@ test('the firecrawl_search block runs a web search beside the providers and repo
   const web = data.providers[3];
   assert.deepEqual([web.status, web.returned, web.credits], ['ok', 1, 2]);
   assert.equal(web.results[0].url, 'https://acme.example/team');
-  assert.equal(data.credits_estimate, 2);
+  assert.equal(data.credits_estimate, 12);
   assert.equal(data.credits_total, 2);
   assert.equal(api.bodies.find((body) => body.query).query, 'Acme head of data');
 
@@ -387,4 +399,70 @@ test('the published schema carries the identifier rules', async (t) => {
   const search = tools.find((tool) => tool.name === 'people_company_search');
   const pdl = search.inputSchema.properties.people_data_labs.anyOf;
   for (const branch of pdl) assert.deepEqual(branch.oneOf, [{ required: ['sql'] }, { required: ['query'] }]);
+});
+
+
+test('an Apollo contact match without the requested fields stays a match and lists them as missing', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { apiUrl: api.url });
+  const result = await client.callTool({
+    name: 'people_company_enrich',
+    arguments: { contact_fields: ['work_email', 'mobile'], apollo: { people: [{ email: 'grace@acme.example' }] } },
+  });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  const apollo = result.structuredContent.providers.find((p) => p.name === 'apollo');
+  assert.deepEqual([apollo.status, apollo.returned, apollo.credits, apollo.unmatched], ['ok', 1, 30, undefined]);
+  assert.equal(apollo.results[0].name, 'Grace Hopper');
+  assert.deepEqual(apollo.results[0].missing, ['work_email', 'mobile']);
+  assert.equal('work_email' in apollo.results[0], false);
+});
+
+test('a FullEnrich contact still running upstream is reported as pending, not unmatched', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { apiUrl: api.url });
+  const result = await client.callTool({
+    name: 'people_company_enrich',
+    arguments: {
+      contact_fields: ['work_email'],
+      fullenrich: { people: [{ person_name: 'Pending Person', company_domain: 'acme.example' }, { person_name: 'Unread Person', company_domain: 'acme.example' }] },
+    },
+  });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  const fullenrich = result.structuredContent.providers[0];
+  assert.deepEqual([fullenrich.status, fullenrich.unmatched, fullenrich.credits], ['pending', undefined, 0]);
+  assert.deepEqual(fullenrich.pending[0], {
+    input_index: 0,
+    field: 'work_email',
+    job_id: 'j1',
+    poll_after_seconds: 60,
+    next_tool: { name: 'firecrawl_scrape', arguments: { alexandria: { provider: 'firecrawl', capability: 'job-status', options: { id: 'j1' } } } },
+  });
+  assert.deepEqual(fullenrich.pending[1], { input_index: 1, field: 'work_email', note: 'Upstream job e2 is still running; repeating this call starts another one.' });
+  assert.match(fullenrich.note, /Read each with its next_tool after poll_after_seconds/);
+  assert.equal(fullenrich.retryable, undefined);
+});
+
+test('the web search estimate covers enterprise zdr pricing and threat scanning', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { apiUrl: api.url });
+  const refused = await client.callTool({
+    name: 'people_company_search',
+    arguments: { entity: 'company', max_credits: 29, firecrawl_search: { query: 'Acme', limit: 10, enterprise: ['zdr'] } },
+  });
+  assert.equal(refused.isError, true);
+  assert.match(refused.content[0].text, /could cost up to 30 credits \(firecrawl_search 30\)/);
+  assert.equal(api.bodies.length, 0);
+});
+
+test('a DataLegion person needs an identifier or a full name with context', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { apiUrl: api.url });
+  for (const person of [{ full_name: 'Ada Lovelace' }, { first_name: 'Ada', last_name: 'Lovelace' }, { first_name: 'Ada', company: 'Acme' }]) {
+    const result = await client.callTool({ name: 'people_company_enrich', arguments: { datalegion: { people: [person] } } });
+    assert.equal(result.isError, true, JSON.stringify(person));
+    assert.match(result.content[0].text, /Each datalegion person needs/);
+  }
+  const ok = await client.callTool({ name: 'people_company_enrich', arguments: { datalegion: { people: [{ first_name: 'Ada', last_name: 'Lovelace', company: 'Acme' }] } } });
+  assert.notEqual(ok.isError, true, JSON.stringify(ok));
+  assert.deepEqual(api.calls.map((call) => call.options.company), ['Acme']);
 });
