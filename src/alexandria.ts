@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { httpUrl } from './tool-arguments.js';
 
 const catalogueTypes = ['alexandria', 'exchange'] as const;
 export const searchSourceSchema = z.union([
@@ -53,12 +54,7 @@ export const findToolsSchema = z
   .object({
     query: z.string().trim().min(1).max(2000).optional().describe('Semantic lookup of tools for the data you need. Selectors constrain the search.'),
     urls: z
-      .array(
-        z
-          .string()
-          .url()
-          .regex(/^https?:\/\//)
-      )
+      .array(httpUrl())
       .min(1)
       .max(100)
       .optional(),
