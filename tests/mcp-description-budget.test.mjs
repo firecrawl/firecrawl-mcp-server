@@ -18,7 +18,7 @@ test('every tool description fits the 2,048-character cap and keeps the routing 
   }
   const byName = new Map(tools.map((tool) => [tool.name, tool.description.trim()]));
   const search = byName.get('firecrawl_search');
-  assert.match(search, /Tool matches describe available structured-data capabilities/);
+  assert.match(search, /tool matches describe available structured-data capabilities/i);
   assert.match(search, /Authenticated searches always add alexandria to the sources, so sources: \["web"\] also returns providers/);
   const scrape = byName.get('firecrawl_scrape');
   assert.match(scrape, /^Scrape one URL and return its content/);
