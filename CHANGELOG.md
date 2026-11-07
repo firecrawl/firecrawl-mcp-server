@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Removed
+
+- `firecrawl_research_search_github`. The tool was already hidden from `tools/list` and only returned a `DEPRECATED_TOOL` error, because the research index GitHub search endpoint it called was removed on 2026-11-03. A call to it now gets an unknown-tool error like any other unregistered name. Use `firecrawl_developer_search` for GitHub issues, pull requests, READMEs and code documentation. `tools/list` is unchanged on every surface.
+
 ### Fixed
 
 - More argument mistakes are refused as tool errors with an error code, like the json format check: a `query` format without `queryOptions.prompt` in `firecrawl_scrape` and in `firecrawl_interact` `scrapeOptions` (`invalid_request`, with the text `formats "query" needs queryOptions with a non-empty prompt.` in place of the SDK's `query format requires a non-empty 'prompt' string`), a `json` format without a prompt or schema in `firecrawl_interact` `scrapeOptions` (`invalid_request`), and the input checks of `firecrawl_find_tools`, `firecrawl_monitor_create` and `firecrawl_credit_usage` (`invalid_input`). The error code reaches `onToolResult` on the thrown `UserError`'s `extras`, and for the `invalid_input` tools only there: their `outputSchema` does not declare `code`, so the code is not in the client's `structuredContent`. The text block no longer carries the `Tool '<name>' execution failed:` prefix for these errors.
