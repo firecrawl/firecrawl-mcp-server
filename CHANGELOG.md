@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- `firecrawl_gov_search` asks `/v2/search/gov` for `sources=gov` and returns the `gov` results. Each row in `structuredContent.results` keeps `url`, `title`, `description` and `position`, and also carries the index's labels when it has them: `jurisdiction`, `court`, `courtType`, `cites`, `citedAs`, `lang` and `updatedAt`. The text block, the tool description and the input schema are unchanged. Against an API that does not accept `sources` yet, which answers only `web`, the tool returns those results as before.
+
 ### Fixed
 
 - More argument mistakes are refused as tool errors with an error code, like the json format check: a `query` format without `queryOptions.prompt` in `firecrawl_scrape` and in `firecrawl_interact` `scrapeOptions` (`invalid_request`, with the text `formats "query" needs queryOptions with a non-empty prompt.` in place of the SDK's `query format requires a non-empty 'prompt' string`), a `json` format without a prompt or schema in `firecrawl_interact` `scrapeOptions` (`invalid_request`), and the input checks of `firecrawl_find_tools`, `firecrawl_monitor_create` and `firecrawl_credit_usage` (`invalid_input`). The error code reaches `onToolResult` on the thrown `UserError`'s `extras`, and for the `invalid_input` tools only there: their `outputSchema` does not declare `code`, so the code is not in the client's `structuredContent`. The text block no longer carries the `Tool '<name>' execution failed:` prefix for these errors.
