@@ -13,16 +13,16 @@
     }
   },
   "tools": [
-    "firecrawl_scrape@416a9a3521b2",
+    "firecrawl_scrape@1c581f319960",
     "firecrawl_map@3214f5d6a1a4",
     "firecrawl_search@c8053ef92701",
-    "firecrawl_find_tools@3447ec42b55f",
-    "firecrawl_find_skills@53b379440d9f",
-    "firecrawl_read_skill@4aa9f6c48aea",
-    "firecrawl_create_skill@b4d879fc1361",
-    "firecrawl_update_skill@aacd885b6640",
-    "firecrawl_search_feedback@89ed89c8e729",
-    "firecrawl_feedback@8019b623f506",
+    "firecrawl_find_tools@d7e6be2fc683",
+    "firecrawl_find_skills@dd79781bb2e6",
+    "firecrawl_read_skill@fc1f37180667",
+    "firecrawl_create_skill@e7ad3988ab40",
+    "firecrawl_update_skill@d0abc9a9ac28",
+    "firecrawl_search_feedback@6ca0521ad2bd",
+    "firecrawl_feedback@771747894435",
     "firecrawl_crawl@f65a92a7a6ca",
     "firecrawl_check_crawl_status@723e60af703e",
     "firecrawl_agent@f3221ea5dbb1",
@@ -44,6 +44,8 @@
     "firecrawl_research_read_paper@b0cd84d8908a",
     "firecrawl_developer_search@e9810e540216",
     "firecrawl_gov_search@b020bd420f91",
+    "people_company_search@ed8cd4b2250a",
+    "people_company_enrich@c021f960184e",
     "firecrawl_credit_usage@5b79f64c3f82"
   ],
   "calls": {

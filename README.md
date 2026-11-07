@@ -40,7 +40,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Use `firecrawl_credit_usage` to check credits left or what credits were spent on, by month or day, optionally broken down by endpoint or API key.
 - Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control. The session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
 
-This server lists 27 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 9 tools (search, developer, government, and research search, plus Alexandria catalogue lookup and execution).
+This server lists 29 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 11 tools (search, developer, government, and research search, Alexandria catalogue lookup and execution, and people and company search and enrichment).
 
 ## Installation
 
@@ -88,7 +88,7 @@ A fixed-scope search surface is also hosted at:
 https://mcp.firecrawl.dev/v2/mcp-search
 ```
 
-It exposes a fixed set of nine tools: `firecrawl_search`, `firecrawl_developer_search`, `firecrawl_gov_search`, the four `firecrawl_research_*` tools, and the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`. Its `firecrawl_search` fetches no page content.
+It exposes a fixed set of eleven tools: `firecrawl_search`, `firecrawl_developer_search`, `firecrawl_gov_search`, the four `firecrawl_research_*` tools, the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`, and the [enrich tools](#15b-enrich-tools) `people_company_search` and `people_company_enrich`. Its `firecrawl_search` fetches no page content.
 
 ### Running with npx
 
@@ -1222,6 +1222,44 @@ for data is not consent, and no automatic acceptance or uncertain retries occur.
 No credits are charged for the blocked retrieval. After the admin confirms acceptance, call the same
 tool again with the identical payload and `requestId`.
 
+### 15b. Enrich Tools
+
+People and company search and enrichment over Alexandria's B2B data providers (Apollo, FullEnrich, People Data Labs and Data Legion). Both tools are listed wherever the server has a credential: they are not listed in local keyless mode or to keyless sessions. The [search-only endpoint](#search-only-endpoint) includes them too. They need a Firecrawl credential (an API key or OAuth access) on a team with Alexandria access.
+
+| Tool | Use it for | Providers |
+| --- | --- | --- |
+| `people_company_search` | Finding people (`entity: "person"`) by title, employer, location and more, or companies (`entity: "company"`) by industry, headcount, location, technology or founding year | apollo, fullenrich, people_data_labs |
+| `people_company_enrich` | Resolving known people to profiles and work history, or known companies to firmographics. With `contact_fields`, finding work email, personal email or mobile for known people | fullenrich, apollo, people_data_labs, datalegion |
+
+No parameter is shared between providers. Each provider block takes that provider's own parameters under its own names (Apollo's `person_titles`, FullEnrich's `current_position_titles`, a People Data Labs `sql` query or Elasticsearch `query`), so a filter a provider lacks is simply absent from its block. A provider runs only when the call includes its block; a call with no provider block (and, for `people_company_search`, no `firecrawl_search` block) fails with `no_provider` and the blocks the tool takes.
+
+`people_company_search` takes `entity`, and each provider block then takes that provider's search filters for people or for companies. An optional `firecrawl_search` block runs a Firecrawl web search beside the providers, with `firecrawl_search`'s query parameters but no page fetching, and reports its results in its own `providers` entry. `people_company_enrich` takes, in each provider block, exactly one of `people` or `companies`: that provider's own list of inputs, 1 to 50 per call, and the same kind in every block. Adding `contact_fields` (`work_email`, `personal_email`, `mobile`) to a people enrichment runs the contact providers on the same people instead of the profile lookup; People Data Labs has no contact lookup and reports `skipped`.
+
+```json
+{
+  "name": "people_company_enrich",
+  "arguments": {
+    "fullenrich": { "companies": [{ "domain": "example.com" }] },
+    "datalegion": { "companies": [{ "domain": "example.com" }, { "name": "Example Labs" }] }
+  }
+}
+```
+
+```json
+{
+  "name": "people_company_enrich",
+  "arguments": {
+    "contact_fields": ["work_email"],
+    "fullenrich": { "people": [{ "person_name": "Jane Doe", "company_domain": "example.com" }] },
+    "apollo": { "people": [{ "name": "Jane Doe", "domain": "example.com" }] }
+  }
+}
+```
+
+Enabled providers run in parallel, and nothing is merged. The response has one `providers` entry per provider with its `status`, records `returned`, `credits` and its own `results`; `people_company_enrich` results carry `input_index` into that provider's input list, and `unmatched` lists the inputs it missed. A failed provider has a `note`, and `retryable: true` when the provider may succeed on a later try. With `contact_fields`, an Apollo or Data Legion match (charged per match) that lacks a requested field lists it in `missing`; FullEnrich charges and returns only the values it finds, and a FullEnrich contact still running upstream is listed under `pending` (with a `next_tool` to read it later when one is available) instead of under `unmatched`. `credits_total` sums the charges. Tool descriptions list each provider's credit price.
+
+Both tools take `max_credits` (default 1000). Before any provider runs, the call's most possible cost is estimated from those prices as if every record were found; a call whose estimate is higher fails with `max_credits_exceeded` and the estimate per provider, and a call that runs reports `credits_estimate` and `max_credits`. Both tools also accept, and drop, the `conversationId` and `objective` fields agents carry between Firecrawl tools, and repair common near-miss shapes before validating: a single item where a list is expected, plain strings for FullEnrich `{"value"}` filters, `"51-200"` for FullEnrich ranges, and a provider block sent as a one-item list or under an extra key. An argument that still fails names the field, the fields its block takes, and an example call.
+
 ### 16. Credit Usage Tool
 
 The tool requires an authenticated Firecrawl account and is read-only.
@@ -1420,5 +1458,24 @@ The existing `firecrawl_feedback` tool accepts `endpoint: "alexandria"`:
 The optional `objective` is the underlying goal of the session: what the agent or its user was ultimately trying to accomplish, beyond the single website in `requestedWebsite`.
 
 This uses authenticated `POST /v2/feedback`, without a job ID. It must arrive within 20 minutes of the team's most recent Alexandria search, discovery, or execution; later feedback is rejected with `FEEDBACK_WINDOW_EXPIRED`. Eligible feedback can refund 1 credit, subject to daily caps of 10 credits per website and 100 credits per team (UTC day). Past either cap, feedback is still recorded with no refund, and the response sets `websiteCapReached` or `dailyCapReached`. Optional `providerFeedback` and `capabilityFeedback` arrays describe coverage gaps and execution issues; the tool schema lists supported issue values. A `new_capability_request` requires `requestedFunctionality`; `missing_capability` (the provider exists but lacks the capability) does not. Existing feedback opt-out and authentication controls apply.
+
+#### Per-call feedback tokens
+
+Alexandria provider call results can carry a `feedbackToken` so ratings are attributed to the calls they are about. The server keeps each token per MCP session (keyed by the `Mcp-Session-Id` and the caller's credential, or by the credential alone when the client sends no session id; at most 20 tokens, dropped after 24 hours) and shows the agent a short `feedbackRef` such as `c3` in its place, so long tokens never reach the model. `firecrawl_feedback` sends the session's tokens with every Alexandria rating, so the overall `rating` covers every retained tokenized call in the session, and accepts an optional `callRatings` array to rate individual calls by their ref:
+
+```json
+{
+  "endpoint": "alexandria",
+  "rating": "partial",
+  "requestedWebsite": { "url": "https://example.com", "requestedFunctionality": "Find records" },
+  "rationale": "The search call worked, the detail call failed",
+  "callRatings": [
+    { "ref": "c1", "rating": "good" },
+    { "ref": "c2", "rating": "bad" }
+  ]
+}
+```
+
+Refs that are unknown or expired are ignored, and the result says so in `note`. A successful submission clears the tokens it sent, so the next rating covers only new calls. Results that carry no token (for example under zero data retention) keep working as before.
 
 Eligible Alexandria execution and discovery results include a `feedbackTool` pointer with the tool name and a skeleton of the arguments. The pointer is omitted for Firecrawl-internal calls such as `bash` and when `firecrawl_feedback` is not registered (`FIRECRAWL_NO_ENDPOINT_FEEDBACK` or keyless startup).

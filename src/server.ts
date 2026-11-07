@@ -2,6 +2,7 @@ import {
   ALEXANDRIA_FEEDBACK_HINT,
   alexandriaCallsWarrantFeedback,
   alexandriaFeedbackFields,
+  alexandriaFeedbackTokens,
   alexandriaSessionFeedbackSchema,
   withAlexandriaFeedbackHint,
 } from './alexandria-feedback.js';
@@ -73,8 +74,10 @@ import {
   ALEXANDRIA_SOURCES_ALWAYS_ON,
 } from './alexandria';
 import { alexandriaOutput } from './alexandria-output';
+import { FeedbackTokenRegistry, FeedbackTokenStore, withFeedbackRefs } from './alexandria-feedback-tokens.js';
 import { registerDeveloperTools } from './developer';
 import { registerGovTools } from './gov';
+import { registerEnrichTools } from './enrich';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
 import { fitSearchResponse, searchByteBudget } from './search-budget';
@@ -1101,6 +1104,25 @@ export function createFirecrawlMcpServer(
     return result;
   }
 
+  // The SDK refuses a json format with neither a prompt nor a schema, and a
+  // query format without a prompt, before sending it, with a plain error that
+  // reaches the client as text alone. Agents that hit the json case have often
+  // put their question in queryOptions.
+  function assertFormatOptions(formats: unknown): void {
+    const list = Array.isArray(formats) ? formats : [];
+    const refuse = (message: string) => {
+      throw new UserError(message, { success: false, error: { code: 'invalid_request', message } });
+    };
+    if (list.some((f: any) => f?.type === 'json' && !f.prompt && !f.schema)) {
+      refuse(
+        'formats "json" needs jsonOptions with a prompt or a schema. To ask a question about the page, use formats ["query"] with queryOptions.prompt instead.'
+      );
+    }
+    if (list.some((f: any) => f?.type === 'query' && !(typeof f.prompt === 'string' && f.prompt.trim()))) {
+      refuse('formats "query" needs queryOptions with a non-empty prompt.');
+    }
+  }
+
   function buildParsersArray(
     args: Record<string, unknown>
   ): Record<string, unknown>[] | undefined {
@@ -1731,7 +1753,7 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
 `,
     outputSchema: scrapeOutputSchema,
     parameters: scrapeToolParamsSchema,
-    execute: async (args: unknown, { session, log, client: mcpClient }): Promise<ContentResult> => {
+    execute: async (args: unknown, { session, sessionId, log, client: mcpClient }): Promise<ContentResult> => {
       const origin = requestOrigin(mcpClient, session);
       const {
         url,
@@ -1752,7 +1774,7 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
           count: Array.isArray(alexandria) ? alexandria.length : 1,
         });
         return structuredJsonText(
-          await executeExchangeCalls(session, alexandria, suppliedRequestId, options.timeout as number | undefined, origin)
+          await executeExchangeCalls(session, alexandria, suppliedRequestId, options.timeout as number | undefined, origin, false, feedbackStoreFor(session, sessionId))
         );
       }
       const transformed = transformScrapeParams(
@@ -1776,15 +1798,7 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
         );
         return structuredText(withoutDiscoveredToolPrices(json?.data ?? json));
       }
-      // The SDK refuses a json format with neither a prompt nor a schema
-      // before sending it, with a plain error that reaches the client as text
-      // alone. Agents that hit it have often put their question in queryOptions.
-      const formats = Array.isArray(cleaned.formats) ? cleaned.formats : [];
-      if (formats.some((f: any) => f?.type === 'json' && !f.prompt && !f.schema)) {
-        const message =
-          'formats "json" needs jsonOptions with a prompt or a schema. To ask a question about the page, use formats ["query"] with queryOptions.prompt instead.';
-        throw new UserError(message, { success: false, error: { code: 'invalid_request', message } });
-      }
+      assertFormatOptions(cleaned.formats);
       const client = getClient(session);
       const res = await relayTermsRequired(
         () =>
@@ -1843,7 +1857,7 @@ Enumerate URLs indexed under one website through Firecrawl without fetching each
     },
   });
 
-  server.addTool({
+  const searchTool = {
     name: 'firecrawl_search',
     _meta: { 'anthropic/alwaysLoad': true },
     annotations: {
@@ -1878,7 +1892,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         searchQueryIsValid,
         'A query is required. Use Find Tools for catalogue lookup.'
       ),
-    execute: async (args: unknown, { session, log, client: mcpClient }): Promise<ContentResult> => {
+    execute: async (args: unknown, { session, log, client: mcpClient }: ToolContext, tool = 'firecrawl_search'): Promise<ContentResult> => {
       const { query, ...opts } = args as Record<string, unknown>;
 
       const requestedSources = normalizeSearchSources(
@@ -1938,10 +1952,17 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
           addsAlexandria && opts.domainTools !== true,
           requestedSources
         );
-      const httpRes = await relayExchangeError(postSearch, { tool: 'firecrawl_search' });
+      const httpRes = await relayExchangeError(postSearch, { tool });
       return searchResult(httpRes?.data ?? {});
     },
-  });
+  } satisfies RegisteredTool;
+  server.addTool(searchTool);
+
+  const feedbackTokens = new FeedbackTokenRegistry();
+
+  function feedbackStoreFor(session: SessionData | undefined, sessionId: unknown): FeedbackTokenStore {
+    return feedbackTokens.forSession(sessionId, resolveOutbound(session).credential);
+  }
 
   async function executeExchangeCalls(
     session: SessionData | undefined,
@@ -1951,7 +1972,8 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
     suppliedRequestId?: string,
     timeout?: number,
     origin = requestOrigin(undefined, session),
-    includeCosts = false
+    includeCosts = false,
+    feedbackStore: FeedbackTokenStore = new FeedbackTokenStore()
   ): Promise<string> {
     assertExchangeCredential(session);
     const client = getClient(session);
@@ -1974,7 +1996,13 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       );
       const calls = Array.isArray(alexandria) ? alexandria : [alexandria];
       return alexandriaOutput(
-        { ...(includeCosts ? (response?.data ?? {}) : withoutResultPrices(response?.data ?? {})), requestId },
+        {
+          ...withFeedbackRefs(
+            includeCosts ? (response?.data ?? {}) : withoutResultPrices(response?.data ?? {}),
+            feedbackStore
+          ),
+          requestId,
+        },
         calls,
         async (body, id) => {
           const result = await (client as any).http.post(
@@ -2015,7 +2043,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       const origin = requestOrigin(mcpClient, session);
       let options;
       try { options = findToolsOptions(args as Parameters<typeof findToolsOptions>[0]); }
-      catch (error) { throw new UserError(error instanceof Error ? error.message : String(error)); }
+      catch (error) { throw new UserError(error instanceof Error ? error.message : String(error), { code: 'invalid_input' }); }
       const carry: { includeCosts?: true } = (args as { includeCosts?: boolean }).includeCosts ? { includeCosts: true } : {};
       if (options.level === 'categories') {
         assertExchangeCredential(session);
@@ -2578,7 +2606,7 @@ Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\
       description: `
 Submit concise quality feedback for a completed search, scrape, parse, or map job. Provide the endpoint, job ID, rating, and relevant issue codes or small contextual fields; omit large page contents and raw outputs.
 
-For an Alexandria session, set endpoint to \`alexandria\`, omit jobId, and provide requestedWebsite (url and requestedFunctionality), objective, rationale, and rating. objective is the underlying goal behind the session: what you or your user were ultimately trying to accomplish (for example, "shortlist federal IT contracts to bid on this quarter"), not only what was needed from this website. Optional providerFeedback and capabilityFeedback describe gaps or errors. Capability issues: new_capability_request (requires requestedFunctionality), missing_capability, insufficient_functionality, incorrect_result, execution_error, other. Alexandria feedback must arrive within 20 minutes of the team's latest Alexandria search, discovery, or execution; later feedback is rejected. Eligible feedback can refund 1 credit; refunds are subject to daily caps per website and per team.
+For an Alexandria session, set endpoint to \`alexandria\`, omit jobId, and provide requestedWebsite (url and requestedFunctionality), objective, rationale, and rating. objective is the underlying goal behind the session: what you or your user were ultimately trying to accomplish (for example, "shortlist federal IT contracts to bid on this quarter"), not only what was needed from this website. Optional providerFeedback and capabilityFeedback describe gaps or errors. Capability issues: new_capability_request (requires requestedFunctionality), missing_capability, insufficient_functionality, incorrect_result, execution_error, other. Alexandria results carry a feedbackRef per call. The overall rating covers every call in this session; callRatings [{ref, rating}] rate individual calls by feedbackRef. Alexandria feedback must arrive within 20 minutes of the team's latest Alexandria search, discovery, or execution; later feedback is rejected. Eligible feedback can refund 1 credit; refunds are subject to daily caps per website and per team.
 
 Returns submission status, feedback ID, and accounting fields.
 `,
@@ -2610,7 +2638,7 @@ Returns submission status, feedback ID, and accounting fields.
       }),
       execute: async (
         args: unknown,
-        { session, log, client: mcpClient }
+        { session, sessionId, log, client: mcpClient }
       ): Promise<ContentResult> => {
         assertFeedbackAvailable(session);
         const origin = requestOrigin(mcpClient, session);
@@ -2658,8 +2686,17 @@ Returns submission status, feedback ID, and accounting fields.
           throw new Error('Unauthorized: missing API key for feedback.');
         }
 
-        const body = endpoint === 'alexandria'
-          ? { ...alexandriaSessionFeedbackSchema.parse(args), origin }
+        const feedbackStore = feedbackStoreFor(session, sessionId);
+        const alexandriaArgs = endpoint === 'alexandria' ? alexandriaSessionFeedbackSchema.parse(args) : undefined;
+        const attribution = alexandriaArgs && alexandriaFeedbackTokens(alexandriaArgs.callRatings, feedbackStore);
+        const body = alexandriaArgs && attribution
+          ? {
+              ...alexandriaArgs,
+              callRatings: undefined,
+              ...(attribution.tokens.length ? { tokens: attribution.tokens } : {}),
+              ...(attribution.callRatings.length ? { callRatings: attribution.callRatings } : {}),
+              origin,
+            }
           : removeEmptyTopLevel({
           endpoint,
           jobId,
@@ -2714,6 +2751,15 @@ Returns submission status, feedback ID, and accounting fields.
           });
         }
 
+        if (attribution) {
+          if (parsed?.success !== false) feedbackStore.remove(attribution.sent);
+          if (attribution.unknownRefs.length) {
+            return structuredText({
+              ...parsed,
+              note: `Ignored call ratings for unknown or expired refs: ${attribution.unknownRefs.join(', ')}.`,
+            });
+          }
+        }
         return structuredText(parsed);
       },
     });
@@ -3193,6 +3239,7 @@ The session runs in an isolated Firecrawl-hosted browser that never receives the
         const cleanedScrapeOptions = removeEmptyTopLevel(
           transformScrapeParams(scrapeOptions ?? {})
         );
+        assertFormatOptions(cleanedScrapeOptions.formats);
         const scraped = await client.scrape(String(url), {
           ...cleanedScrapeOptions,
           origin,
@@ -3382,6 +3429,16 @@ Set \`redactPII\` to request redaction of personally identifiable information in
   registerResearchTools(server, getClient);
   registerDeveloperTools(server, getClient);
   registerGovTools(server, getClient);
+  if (!isLocalKeylessStartup()) {
+    registerEnrichTools(server, getClient, assertExchangeCredential, hasCredential, {
+      parameters: z
+        .object({ ...searchToolBaseFields })
+        .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE)
+        .refine(searchCategoriesAreCompatible, SEARCH_CATEGORIES_CONFLICT_MESSAGE)
+        .refine(searchQueryIsValid, 'A query is required.'),
+      run: (args, context) => searchTool.execute(args, context, 'people_company_search'),
+    });
+  }
   registerUsageTools(server, getClient);
 
   hooks.registerExtraTools?.(

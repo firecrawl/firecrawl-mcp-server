@@ -40,8 +40,12 @@ const TERMS_REQUIRED_BODY = {
   },
 };
 
+const callToken = (call, index) => `fbk.${'x'.repeat(300)}.${call}.${index}`;
+
 async function startFakeExchangeApi(options = {}) {
   const requests = [];
+  let scrapeCalls = 0;
+  let feedbackRejected = false;
   const server = createServer(async (req, res) => {
     try {
     let raw = '';
@@ -87,6 +91,19 @@ async function startFakeExchangeApi(options = {}) {
       });
     }
 
+    if (req.method === 'POST' && url.pathname === '/v2/feedback') {
+      if (options.rejectFirstFeedback && !feedbackRejected) {
+        feedbackRejected = true;
+        return json(400, { success: false, error: 'Feedback window expired', feedbackErrorCode: 'FEEDBACK_WINDOW_EXPIRED' });
+      }
+      return json(200, {
+        success: true,
+        feedbackId: 'fb-1',
+        creditsRefunded: 1,
+        ...(options.rejectedTokens !== undefined ? { rejectedTokens: options.rejectedTokens } : {}),
+      });
+    }
+
     if (req.method === 'POST' && url.pathname === '/v2/scrape') {
       const termsCall = Array.isArray(parsedBody.alexandria) ? parsedBody.alexandria[0] : parsedBody.alexandria;
       if (termsCall?.provider === 'firecrawl' && ['terms/show', 'terms/accept'].includes(termsCall.capability)) {
@@ -106,7 +123,7 @@ async function startFakeExchangeApi(options = {}) {
       if (parsedBody.alexandria?.provider === 'firecrawl' && ['create-skill', 'update-skill'].includes(parsedBody.alexandria.capability)) { const id = parsedBody.alexandria.options.id ?? `team:${parsedBody.alexandria.options.slug ?? 'our-research'}`; return json(200, {success:true, data:{creditsCost:0, alexandria:[{provider:'firecrawl',capability:parsedBody.alexandria.capability,creditsCost:0,data:{id,skill:{slug:id.slice(5),version:parsedBody.alexandria.capability === 'update-skill' ? parsedBody.alexandria.options.baseVersion + 1 : 1},warnings:[],next:{provider:'firecrawl',capability:'read-skill',options:{id}}}}]}}); }
       if (parsedBody.alexandria?.provider === 'firecrawl' && parsedBody.alexandria.capability === 'find-skills') return json(200, {success:true, data:{creditsCost:0, alexandria:[{provider:'firecrawl',capability:'find-skills',creditsCost:0,data:{skills:[{id:'team:weekly-digest',name:'Weekly digest',description:'Summarise the week.',files:['SKILL.md'],source:'team',version:2},{id:'deep-research',name:'Deep research',description:'Research a topic.',files:['SKILL.md','references/sources.md'],source:'library',create:{provider:'firecrawl',capability:'create-skill',options:{from:'deep-research'}}}],total:2}}]}});
       if (parsedBody.alexandria?.provider === 'firecrawl' && parsedBody.alexandria.capability === 'read-skill') return json(200, {success:true, data:{creditsCost:0, alexandria:[{provider:'firecrawl',capability:'read-skill',creditsCost:0,data:parsedBody.alexandria.options.id.startsWith('team:') ? {id:parsedBody.alexandria.options.id,name:'Weekly digest',path:'SKILL.md',content:'Team-authored.\n\n```\nRun fred/series/observations weekly.\n```',files:['SKILL.md'],source:'team',trust:'team-authored',version:parsedBody.alexandria.options.version ?? 2,tools:[{provider:'fred',capability:'series/observations',available:true,call:{provider:'fred',capability:'series/observations',options:{}}}]} : {id:parsedBody.alexandria.options.id,name:'Deep research',path:parsedBody.alexandria.options.path ?? 'SKILL.md',content:'# Deep research',files:['SKILL.md','references/sources.md'],source:'library'}}]}});
-      if (parsedBody.alexandria?.provider === 'firecrawl') return json(200, {success:true, data:{creditsCost:0, alexandria:[{provider:'firecrawl',capability:'find-tools',creditsCost:0,data:{level:'tools',items:[PRICED_TOOL],relatedTools:[{group:'alternative',label:'Alternative sources',tools:[{tool:{...PRICED_TOOL,id:'bls/series'},reason:'r'}]}],total:4,next:{provider:'firecrawl',capability:'find-tools',options:{...parsedBody.alexandria.options, offset:4}}}}]}});
+      if (parsedBody.alexandria?.provider === 'firecrawl') return json(200, {success:true, data:{creditsCost:0, alexandria:[{provider:'firecrawl',capability:'find-tools',creditsCost:0,...(options.feedbackTokens ? {feedbackToken: callToken(0, 0)} : {}),data:{level:'tools',items:[PRICED_TOOL],relatedTools:[{group:'alternative',label:'Alternative sources',tools:[{tool:{...PRICED_TOOL,id:'bls/series'},reason:'r'}]}],total:4,next:{provider:'firecrawl',capability:'find-tools',options:{...parsedBody.alexandria.options, offset:4}}}}]}});
 
       if (parsedBody?.alexandria?.[0]?.provider === 'locked') {
         return json(403, {
@@ -126,6 +143,7 @@ async function startFakeExchangeApi(options = {}) {
         });
       }
       if (parsedBody?.alexandria) {
+        const call = ++scrapeCalls;
         return json(200, {
           success: true,
           scrape_id: '11111111-1111-4111-8111-111111111111',
@@ -135,6 +153,7 @@ async function startFakeExchangeApi(options = {}) {
                 provider: 'fred',
                 capability: 'series/observations',
                 creditsCost: 1,
+                ...(options.feedbackTokens ? { feedbackToken: callToken(call, 0) } : {}),
                 data: {
                   observations: [{ date: '2026-01-01', value: '320.1' }],
                 },
@@ -144,6 +163,7 @@ async function startFakeExchangeApi(options = {}) {
               {
                 provider: 'fred',
                 capability: 'series/missing',
+                ...(options.feedbackTokens ? { feedbackToken: callToken(call, 1) } : {}),
                 error: {
                   code: 'capability_not_found',
                   message: 'Unknown capability',
@@ -219,4 +239,4 @@ async function startFakeExchangeApi(options = {}) {
 }
 
 
-export { CAPABILITY_HIT, EXCHANGE_CALL, TERMS_REQUIRED_BODY, startFakeExchangeApi };
+export { callToken, CAPABILITY_HIT, EXCHANGE_CALL, TERMS_REQUIRED_BODY, startFakeExchangeApi };
