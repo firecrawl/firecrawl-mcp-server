@@ -10,7 +10,7 @@
  */
 
 import { z } from 'zod';
-import type { ContentResult, McpRuntime } from './mcp/runtime.js';
+import { type ContentResult, type McpRuntime, UserError } from './mcp/runtime.js';
 import { originHeaders, requestOrigin } from './origin';
 import {
   monitorCheckOutputSchema,
@@ -137,15 +137,17 @@ function buildMonitorCreateBody(
   const isSearch = queries.length > 0;
 
   if (urls.length === 0 && !isSearch) {
-    throw new Error(
-      'firecrawl_monitor_create requires either `body`, `page`/`pages`, or `queries`.'
+    throw new UserError(
+      'firecrawl_monitor_create requires either `body`, `page`/`pages`, or `queries`.',
+      { code: 'invalid_input' }
     );
   }
 
   const goal = typeof args.goal === 'string' ? args.goal.trim() : '';
   if (!goal) {
-    throw new Error(
-      'firecrawl_monitor_create shorthand requires `goal`. Use `body` for advanced requests without a goal.'
+    throw new UserError(
+      'firecrawl_monitor_create shorthand requires `goal`. Use `body` for advanced requests without a goal.',
+      { code: 'invalid_input' }
     );
   }
 

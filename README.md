@@ -1459,4 +1459,23 @@ The optional `objective` is the underlying goal of the session: what the agent o
 
 This uses authenticated `POST /v2/feedback`, without a job ID. It must arrive within 20 minutes of the team's most recent Alexandria search, discovery, or execution; later feedback is rejected with `FEEDBACK_WINDOW_EXPIRED`. Eligible feedback can refund 1 credit, subject to daily caps of 10 credits per website and 100 credits per team (UTC day). Past either cap, feedback is still recorded with no refund, and the response sets `websiteCapReached` or `dailyCapReached`. Optional `providerFeedback` and `capabilityFeedback` arrays describe coverage gaps and execution issues; the tool schema lists supported issue values. A `new_capability_request` requires `requestedFunctionality`; `missing_capability` (the provider exists but lacks the capability) does not. Existing feedback opt-out and authentication controls apply.
 
+#### Per-call feedback tokens
+
+Alexandria provider call results can carry a `feedbackToken` so ratings are attributed to the calls they are about. The server keeps each token per MCP session (keyed by the `Mcp-Session-Id` and the caller's credential, or by the credential alone when the client sends no session id; at most 20 tokens, dropped after 24 hours) and shows the agent a short `feedbackRef` such as `c3` in its place, so long tokens never reach the model. `firecrawl_feedback` sends the session's tokens with every Alexandria rating, so the overall `rating` covers every retained tokenized call in the session, and accepts an optional `callRatings` array to rate individual calls by their ref:
+
+```json
+{
+  "endpoint": "alexandria",
+  "rating": "partial",
+  "requestedWebsite": { "url": "https://example.com", "requestedFunctionality": "Find records" },
+  "rationale": "The search call worked, the detail call failed",
+  "callRatings": [
+    { "ref": "c1", "rating": "good" },
+    { "ref": "c2", "rating": "bad" }
+  ]
+}
+```
+
+Refs that are unknown or expired are ignored, and the result says so in `note`. A successful submission clears the tokens it sent, so the next rating covers only new calls. Results that carry no token (for example under zero data retention) keep working as before.
+
 Eligible Alexandria execution and discovery results include a `feedbackTool` pointer with the tool name and a skeleton of the arguments. The pointer is omitted for Firecrawl-internal calls such as `bash` and when `firecrawl_feedback` is not registered (`FIRECRAWL_NO_ENDPOINT_FEEDBACK` or keyless startup).

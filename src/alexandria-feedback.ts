@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { FeedbackTokenStore } from './alexandria-feedback-tokens.js';
 
 const detail = z.string().trim().min(1).max(2000);
 const name = z.string().trim().min(1).max(200);
@@ -55,6 +56,15 @@ export const alexandriaFeedbackFields = {
     )
     .max(20)
     .optional(),
+  callRatings: z
+    .array(
+      z.strictObject({
+        ref: z.string().trim().min(1).max(32),
+        rating: z.enum(['good', 'partial', 'bad']),
+      })
+    )
+    .max(20)
+    .optional(),
 };
 
 /** Appended to Alexandria results so the pointer travels with the data the agent is reading. */
@@ -65,15 +75,14 @@ export const ALEXANDRIA_FEEDBACK_HINT = {
     endpoint: 'alexandria',
     rating: '<good | partial | bad>',
     requestedWebsite: {
-      url: '<website the user needed data from>',
-      requestedFunctionality: '<what they needed from it>',
+      url: '<website the data was needed from>',
+      requestedFunctionality: '<what was needed>',
     },
-    objective: '<underlying goal of the task>',
-    rationale: '<why this rating, from observed results>',
-    providerFeedback:
-      '<optional [{name, issue, why}]: providers that were missing, thin, or unavailable>',
-    capabilityFeedback:
-      '<optional [{name, provider, issue, why, requestedFunctionality?}]: capabilities that were missing, wrong, or failed>',
+    objective: '<underlying goal>',
+    rationale: '<why, from observed results>',
+    providerFeedback: '<optional [{name, issue, why}]: provider gaps>',
+    capabilityFeedback: '<optional [{name, provider, issue, why, requestedFunctionality?}]: capability gaps>',
+    callRatings: '<optional [{ref, rating}]: rate single calls by feedbackRef>',
   },
 } as const;
 
@@ -94,6 +103,27 @@ export function withAlexandriaFeedbackHint<T>(
 ): T {
   if (!enabled || !envelope || typeof envelope !== 'object') return envelope;
   return { ...envelope, feedbackTool: ALEXANDRIA_FEEDBACK_HINT };
+}
+
+/** The session's call tokens and per-call ratings in the shape the feedback API takes; unknown refs are reported back. */
+export function alexandriaFeedbackTokens(
+  callRatings: { ref: string; rating: 'good' | 'partial' | 'bad' }[] | undefined,
+  store: FeedbackTokenStore
+) {
+  const rated = new Map<string, 'good' | 'partial' | 'bad'>();
+  const unknownRefs: string[] = [];
+  for (const { ref, rating } of callRatings ?? []) {
+    const token = store.tokenForRef(ref);
+    if (token) rated.set(token, rating);
+    else unknownRefs.push(ref);
+  }
+  const tokens = store.tokens();
+  return {
+    tokens,
+    callRatings: [...rated].map(([token, rating]) => ({ token, rating })),
+    sent: [...new Set([...tokens, ...rated.keys()])],
+    unknownRefs,
+  };
 }
 
 export const alexandriaSessionFeedbackSchema = z.strictObject({

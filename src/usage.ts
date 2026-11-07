@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import type { ContentResult, McpRuntime } from './mcp/runtime.js';
+import { type ContentResult, type McpRuntime, UserError } from './mcp/runtime.js';
 import { originHeaders, requestOrigin, type McpClient } from './origin';
 import { creditUsageOutputSchema, structuredText } from './tool-output';
 
@@ -126,12 +126,13 @@ This tool cannot attribute credits to individual jobs, URLs, or MCP clients. Eac
             ? 'bin'
             : undefined;
       if (view === 'current' && historicalOption) {
-        throw new Error(
-          `${historicalOption} can only be used with view "historical" or with view omitted.`
+        throw new UserError(
+          `${historicalOption} can only be used with view "historical" or with view omitted.`,
+          { code: 'invalid_input' }
         );
       }
       if (byApiKey && byEndpoint) {
-        throw new Error('byApiKey and byEndpoint cannot be combined.');
+        throw new UserError('byApiKey and byEndpoint cannot be combined.', { code: 'invalid_input' });
       }
 
       const client = getClient(session) as UsageClient;
