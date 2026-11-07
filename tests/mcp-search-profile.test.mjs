@@ -435,7 +435,7 @@ test('search surface lists exactly the nine contracted tools', async (t) => {
   assert.doesNotMatch(search.description, /scrapeOptions/);
   assert.match(search.description, /firecrawl_scrape with an alexandria body/);
   assert.match(search.description, /firecrawl_find_tools/);
-  assert.match(search.description, /ranked results with query-relevant highlights\./i);
+  assert.match(search.description, /ranked results with query-relevant highlights[.;]/i);
   assert.match(
     search.inputSchema.properties.highlights.description,
     /highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned/i
