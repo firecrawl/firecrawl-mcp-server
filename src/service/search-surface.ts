@@ -38,11 +38,13 @@ import {
 // on the search surface in place of the module-level tools above.
 function searchSurfaceScrapeDescription(safeMode: boolean): string {
   return `
-Scrape one URL and return its content, or execute catalogued Alexandria capabilities. URL mode returns markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema, plus page metadata. Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch. A successful response does not by itself confirm the page is still current. ${safeMode ? 'A named browser profile loads saved session data without saving changes to it.' : 'Browser actions can change the live page, and a named browser profile can load saved session data and overwrite its stored state.'}
+Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use \`firecrawl_search\` when additional web sources are needed. \`url\` may omit the scheme (\`example.com/page\`); it is read as https.
 
-\`firecrawl_search\` and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching Alexandria provider returns typed records in one call.
+Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch or a smaller \`maxAge\` to bound staleness. A successful response does not by itself confirm the page is still current. ${safeMode ? 'A named browser profile loads saved session data without saving changes to it.' : 'Browser actions can change the live page, and a named browser profile can load saved session data and overwrite its stored state.'}
 
-Alexandria mode: \`alexandria\` selects catalogued capability execution and is mutually exclusive with \`url\`. Alexandria execution is billed per capability (pass includeCosts to firecrawl_find_tools to see prices if you need).
+On an authenticated session, \`firecrawl_search\` and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.
+
+With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capabilities instead of fetching a page. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.
 `;
 }
 
@@ -67,7 +69,7 @@ function registerMarketplaceSearchTool(
       destructiveHint: false,
     },
     description: `
-Search web and specialized indexes, returning ranked results with query-relevant highlights. Each web result is a title, URL, and description. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit result types to \`research\`, \`pdf\`, \`developer\`, or \`gov\`.
+Use this when you need current or specific information from the web: recent events, latest releases and versions, prices, people and companies, statistics, or any fact that may have changed since your training data or that you are not sure of. Returns ranked results with query-relevant highlights; each web result is a title, URL, and description. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit result types to \`research\`, \`pdf\`, \`developer\`, or \`gov\`.
 
 For a programming question, add \`categories: ["developer"]\`. It searches an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and returns the results in \`data.web\` with \`category: "developer"\`.
 
@@ -75,7 +77,7 @@ For a legal or regulatory question, \`categories: ["gov"]\` returns results in \
 
 ${ALEXANDRIA_SEARCH_INSTRUCTIONS}
 
-Returns result groups in \`data\` and an operation \`id\`.
+Returns result groups in \`data\` and an operation \`id\` for optional search feedback.
 `,
     outputSchema: searchOutputSchema,
     beforeValidate: args => {
