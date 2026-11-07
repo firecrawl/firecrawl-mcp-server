@@ -2,6 +2,7 @@ import {
   ALEXANDRIA_FEEDBACK_HINT,
   alexandriaCallsWarrantFeedback,
   alexandriaFeedbackFields,
+  alexandriaFeedbackTokens,
   alexandriaSessionFeedbackSchema,
   withAlexandriaFeedbackHint,
 } from './alexandria-feedback.js';
@@ -65,8 +66,10 @@ import {
   ALEXANDRIA_SOURCES_ALWAYS_ON,
 } from './alexandria';
 import { alexandriaOutput } from './alexandria-output';
+import { FeedbackTokenRegistry, FeedbackTokenStore, withFeedbackRefs } from './alexandria-feedback-tokens.js';
 import { registerDeveloperTools } from './developer';
 import { registerGovTools } from './gov';
+import { registerEnrichTools } from './enrich';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
 import { fitSearchResponse, searchByteBudget } from './search-budget';
@@ -107,7 +110,7 @@ import {
   searchToolBaseFields,
   termsWriteError,
 } from './tool-helpers.js';
-import { normalizeToolArguments } from './tool-arguments.js';
+import { httpUrl, normalizeToolArguments } from './tool-arguments.js';
 
 /**
  * Library entry point: `import { createFirecrawlMcpServer } from 'firecrawl-mcp/server'`.
@@ -623,7 +626,7 @@ const OUT_OF_CREDITS_INSTRUCTION =
   'If Firecrawl reports that credits ran out or the daily limit without an account was reached, end your final answer with the line it provides, link included.';
 const FULL_PROFILE_INSTRUCTIONS =
   `${OUT_OF_CREDITS_INSTRUCTION} Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. Authenticated firecrawl_search returns web results together with matching Alexandria providers in data.tools. ${ALEXANDRIA_CATALOGUE_SENTENCE} A matching provider can return the same fields across several entities, provenance, exact figures or timestamps, or a large set of records through firecrawl_scrape with its published contract. If web results already answer the question, use them. For the same fields across multiple pages, firecrawl_find_tools offers free provider discovery. Use firecrawl_find_tools to read a contract that was not returned in full or to browse the catalogue by category. ${ALEXANDRIA_SOURCES_ALWAYS_ON} If no provider fits, continue with web search or firecrawl_agent. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question (code behaviour, a library or framework, an API contract, an error message, or a known bug), firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of public repositories, GitHub issues, merged pull requests, READMEs, and code documentation. For a legal or regulatory question, firecrawl_gov_search searches primary law and regulatory material from US federal, state, and local government sources: statutes, regulations, codes, court opinions, and other government publications; firecrawl_search with categories: ["gov"] reaches the same sources and cannot be combined with other categories. firecrawl_search with sources: [{type: "alexandria"}] returns compact tool summaries in data.tools; toolDetail: "full" includes contracts, firecrawl_find_tools starts with categories, lists providers, then compact tools, and expands the selected full contract, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities and returns their results. Provide only the required inputs and account for stated network or external side effects.`;
-const KEYLESS_PROFILE_INSTRUCTIONS = `${OUT_OF_CREDITS_INSTRUCTION} Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. Alexandria provider calls require a Firecrawl API key and are not included in the hosted keyless tier. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: ["gov"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index and repository research, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.`;
+const KEYLESS_PROFILE_INSTRUCTIONS = `${OUT_OF_CREDITS_INSTRUCTION} Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. Alexandria provider calls require a Firecrawl API key and are not included in the hosted keyless tier. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: ["gov"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index research, firecrawl_developer_search for Developer Index searches of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.`;
 
 function deprecatedExtractPayload() {
   return {
@@ -1093,6 +1096,25 @@ export function createFirecrawlMcpServer(
     return result;
   }
 
+  // The SDK refuses a json format with neither a prompt nor a schema, and a
+  // query format without a prompt, before sending it, with a plain error that
+  // reaches the client as text alone. Agents that hit the json case have often
+  // put their question in queryOptions.
+  function assertFormatOptions(formats: unknown): void {
+    const list = Array.isArray(formats) ? formats : [];
+    const refuse = (message: string) => {
+      throw new UserError(message, { success: false, error: { code: 'invalid_request', message } });
+    };
+    if (list.some((f: any) => f?.type === 'json' && !f.prompt && !f.schema)) {
+      refuse(
+        'formats "json" needs jsonOptions with a prompt or a schema. To ask a question about the page, use formats ["query"] with queryOptions.prompt instead.'
+      );
+    }
+    if (list.some((f: any) => f?.type === 'query' && !(typeof f.prompt === 'string' && f.prompt.trim()))) {
+      refuse('formats "query" needs queryOptions with a non-empty prompt.');
+    }
+  }
+
   function buildParsersArray(
     args: Record<string, unknown>
   ): Record<string, unknown>[] | undefined {
@@ -1143,7 +1165,7 @@ export function createFirecrawlMcpServer(
   }
 
   const scrapeParamsSchema = z.object({
-    url: z.string().url(),
+    url: httpUrl(),
     formats: z
       .array(
         z.enum([
@@ -1257,7 +1279,7 @@ export function createFirecrawlMcpServer(
   const scrapeToolParamsSchema = scrapeParamsSchema
     .extend({
       ...(SAFE_MODE ? { profile: readOnlyProfileSchema.optional() } : {}),
-      url: z.string().url().optional(),
+      url: httpUrl().optional(),
       timeout: z.number().int().positive().optional().describe("Execution timeout in milliseconds."),
       requestId: z
         .string()
@@ -1519,12 +1541,13 @@ export function createFirecrawlMcpServer(
     } catch {
       parsed = { raw: responseText };
     }
-    if (!response.ok) {
+    if (!response.ok || parsed?.success === false) {
       throw new CoreHttpError(
         parsed?.error ||
           parsed?.message ||
           `Firecrawl request failed (HTTP ${response.status})`,
-        response.status
+        response.status,
+        parsed?.code
       );
     }
     return parsed;
@@ -1712,7 +1735,7 @@ export function createFirecrawlMcpServer(
       destructiveHint: false, // Does not modify, delete, or write to external websites.
     },
     description: `
-Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use \`firecrawl_search\` when additional web sources are needed; on an authenticated session, \`firecrawl_map\` lists a site's URLs and \`firecrawl_crawl\` collects a set of pages.
+Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use \`firecrawl_search\` when additional web sources are needed; on an authenticated session, \`firecrawl_map\` lists a site's URLs and \`firecrawl_crawl\` collects a set of pages. \`url\` may omit the scheme (\`example.com/page\`); it is read as https.
 
 Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch or a smaller \`maxAge\` to bound staleness. A successful response does not by itself confirm the page is still current. ${SAFE_MODE ? 'A named browser profile loads saved session data without saving changes to it.' : 'Browser actions can change the live page when interactive actions are enabled.'} Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback.
 
@@ -1722,7 +1745,7 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
 `,
     outputSchema: scrapeOutputSchema,
     parameters: scrapeToolParamsSchema,
-    execute: async (args: unknown, { session, log, client: mcpClient }): Promise<ContentResult> => {
+    execute: async (args: unknown, { session, sessionId, log, client: mcpClient }): Promise<ContentResult> => {
       const origin = requestOrigin(mcpClient, session);
       const {
         url,
@@ -1743,7 +1766,7 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
           count: Array.isArray(alexandria) ? alexandria.length : 1,
         });
         return structuredJsonText(
-          await executeExchangeCalls(session, alexandria, suppliedRequestId, options.timeout as number | undefined, origin)
+          await executeExchangeCalls(session, alexandria, suppliedRequestId, options.timeout as number | undefined, origin, false, feedbackStoreFor(session, sessionId))
         );
       }
       const transformed = transformScrapeParams(
@@ -1767,6 +1790,7 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
         );
         return structuredText(withoutDiscoveredToolPrices(json?.data ?? json));
       }
+      assertFormatOptions(cleaned.formats);
       const client = getClient(session);
       const res = await relayTermsRequired(
         () =>
@@ -1795,11 +1819,11 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
     description: `
 Enumerate URLs indexed under one website through Firecrawl without fetching each page's content. Use this when the request asks for a site's URL inventory, when several relevant pages must be located, or when the desired page URL is unknown. An optional \`search\` term narrows the URL list, while sitemap, subdomain, query-parameter, and result-limit options control coverage.
 
-Returns matching URLs rather than page bodies. Retrieve one page with \`firecrawl_scrape\`; collect content across multiple pages with \`firecrawl_crawl\`. Authenticated responses can include an \`id\` for optional map feedback.
+\`url\` may omit the scheme (\`example.com\`); it is read as https. Returns matching URLs rather than page bodies. Retrieve one page with \`firecrawl_scrape\`; collect content across multiple pages with \`firecrawl_crawl\`. Authenticated responses can include an \`id\` for optional map feedback.
 `,
     outputSchema: mapOutputSchema,
     parameters: z.object({
-      url: z.string().url(),
+      url: httpUrl(),
       search: z.string().optional(),
       sitemap: z.enum(['include', 'skip', 'only']).optional(),
       includeSubdomains: z.boolean().optional(),
@@ -1825,7 +1849,7 @@ Returns matching URLs rather than page bodies. Retrieve one page with \`firecraw
     },
   });
 
-  server.addTool({
+  const searchTool = {
     name: 'firecrawl_search',
     _meta: { 'anthropic/alwaysLoad': true },
     annotations: {
@@ -1860,7 +1884,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         searchQueryIsValid,
         'A query is required. Use Find Tools for catalogue lookup.'
       ),
-    execute: async (args: unknown, { session, log, client: mcpClient }): Promise<ContentResult> => {
+    execute: async (args: unknown, { session, log, client: mcpClient }: ToolContext, tool = 'firecrawl_search'): Promise<ContentResult> => {
       const { query, ...opts } = args as Record<string, unknown>;
 
       const requestedSources = normalizeSearchSources(
@@ -1920,10 +1944,17 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
           addsAlexandria && opts.domainTools !== true,
           requestedSources
         );
-      const httpRes = await relayExchangeError(postSearch, { tool: 'firecrawl_search' });
+      const httpRes = await relayExchangeError(postSearch, { tool });
       return searchResult(httpRes?.data ?? {});
     },
-  });
+  } satisfies RegisteredTool;
+  server.addTool(searchTool);
+
+  const feedbackTokens = new FeedbackTokenRegistry();
+
+  function feedbackStoreFor(session: SessionData | undefined, sessionId: unknown): FeedbackTokenStore {
+    return feedbackTokens.forSession(sessionId, resolveOutbound(session).credential);
+  }
 
   async function executeExchangeCalls(
     session: SessionData | undefined,
@@ -1933,7 +1964,8 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
     suppliedRequestId?: string,
     timeout?: number,
     origin = requestOrigin(undefined, session),
-    includeCosts = false
+    includeCosts = false,
+    feedbackStore: FeedbackTokenStore = new FeedbackTokenStore()
   ): Promise<string> {
     assertExchangeCredential(session);
     const client = getClient(session);
@@ -1956,7 +1988,13 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       );
       const calls = Array.isArray(alexandria) ? alexandria : [alexandria];
       return alexandriaOutput(
-        { ...(includeCosts ? (response?.data ?? {}) : withoutResultPrices(response?.data ?? {})), requestId },
+        {
+          ...withFeedbackRefs(
+            includeCosts ? (response?.data ?? {}) : withoutResultPrices(response?.data ?? {}),
+            feedbackStore
+          ),
+          requestId,
+        },
         calls,
         async (body, id) => {
           const result = await (client as any).http.post(
@@ -1997,7 +2035,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       const origin = requestOrigin(mcpClient, session);
       let options;
       try { options = findToolsOptions(args as Parameters<typeof findToolsOptions>[0]); }
-      catch (error) { throw new UserError(error instanceof Error ? error.message : String(error)); }
+      catch (error) { throw new UserError(error instanceof Error ? error.message : String(error), { code: 'invalid_input' }); }
       const carry: { includeCosts?: true } = (args as { includeCosts?: boolean }).includeCosts ? { includeCosts: true } : {};
       if (options.level === 'categories') {
         assertExchangeCredential(session);
@@ -2071,7 +2109,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       body: JSON.stringify(withIntegration(path, body, config.integration)),
     });
     const json: any = await response.json().catch(() => ({}));
-    if (!response.ok) {
+    if (!response.ok || json?.success === false) {
       if (isKeylessMode(session) && response.status === 429) {
         // The API normally supplies requests|credits. Preserve a structured,
         // non-specific recovery payload during a skewed or legacy deployment.
@@ -2090,7 +2128,8 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       }
       throw new CoreHttpError(
         json?.error || `Firecrawl request failed (HTTP ${response.status})`,
-        response.status
+        response.status,
+        json?.code
       );
     }
     return json;
@@ -2403,7 +2442,7 @@ Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\
             success: false,
             status: response.status,
             feedbackErrorCode: parsed?.feedbackErrorCode,
-            error: parsed?.error ?? `HTTP ${response.status}`,
+            error: feedbackRejectionError(parsed, response.status),
             retryable: response.status >= 500,
           });
         }
@@ -2421,6 +2460,28 @@ Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\
     if (!isKeylessMode(session)) return;
     const payload = recoveryPayload('KEYLESS_TOOL_NOT_AVAILABLE', session?.requestId);
     throw new UserError(String(payload.message), payload);
+  }
+
+  /**
+   * The API's rejection text followed by its validation messages, so an
+   * INVALID_BODY rejection says which rule the body broke (for example a
+   * `good` rating with no valuable result) instead of only "Invalid request body".
+   * Every other rejection keeps the API's text as it is.
+   */
+  function feedbackRejectionError(parsed: any, status: number): string {
+    const error = String(parsed?.error ?? `HTTP ${status}`);
+    if (parsed?.feedbackErrorCode !== 'INVALID_BODY') return error;
+    const details: unknown[] = Array.isArray(parsed?.details) ? parsed.details : [];
+    const messages = [
+      ...new Set(
+        details.flatMap((issue: any) => {
+          if (typeof issue?.message !== 'string' || issue.message === '') return [];
+          const path = Array.isArray(issue.path) ? issue.path.join('.') : '';
+          return [path ? `${path}: ${issue.message}` : issue.message];
+        })
+      ),
+    ].slice(0, 5);
+    return messages.length > 0 ? `${error}: ${messages.join('; ')}` : error;
   }
 
   /** Whether firecrawl_feedback is registered on this instance, so Alexandria results only point at a tool that exists. */
@@ -2447,7 +2508,7 @@ Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\
       description: `
 Submit concise quality feedback for a completed search, scrape, parse, or map job. Provide the endpoint, job ID, rating, and relevant issue codes or small contextual fields; omit large page contents and raw outputs.
 
-For an Alexandria session, set endpoint to \`alexandria\`, omit jobId, and provide requestedWebsite (url and requestedFunctionality), objective, rationale, and rating. objective is the underlying goal behind the session: what you or your user were ultimately trying to accomplish (for example, "shortlist federal IT contracts to bid on this quarter"), not only what was needed from this website. Optional providerFeedback and capabilityFeedback describe gaps or errors. Capability issues: new_capability_request (requires requestedFunctionality), missing_capability, insufficient_functionality, incorrect_result, execution_error, other. Alexandria feedback must arrive within 20 minutes of the team's latest Alexandria search, discovery, or execution; later feedback is rejected. Eligible feedback can refund 1 credit; refunds are subject to daily caps per website and per team.
+For an Alexandria session, set endpoint to \`alexandria\`, omit jobId, and provide requestedWebsite (url and requestedFunctionality), objective, rationale, and rating. objective is the underlying goal behind the session: what you or your user were ultimately trying to accomplish (for example, "shortlist federal IT contracts to bid on this quarter"), not only what was needed from this website. Optional providerFeedback and capabilityFeedback describe gaps or errors. Capability issues: new_capability_request (requires requestedFunctionality), missing_capability, insufficient_functionality, incorrect_result, execution_error, other. Alexandria results carry a feedbackRef per call. The overall rating covers every call in this session; callRatings [{ref, rating}] rate individual calls by feedbackRef. Alexandria feedback must arrive within 20 minutes of the team's latest Alexandria search, discovery, or execution; later feedback is rejected. Eligible feedback can refund 1 credit; refunds are subject to daily caps per website and per team.
 
 Returns submission status, feedback ID, and accounting fields.
 `,
@@ -2470,20 +2531,16 @@ Returns submission status, feedback ID, and accounting fields.
         if (value.endpoint === 'alexandria') {
           const parsed = alexandriaSessionFeedbackSchema.safeParse(value);
           if (!parsed.success) for (const issue of parsed.error.issues) ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message });
-        } else {
-          if (!value.jobId) {
-            ctx.addIssue({ code: 'custom', path: ['jobId'], message: 'jobId is required for job feedback' });
-          }
-          for (const field of Object.keys(alexandriaFeedbackFields) as (keyof typeof alexandriaFeedbackFields)[]) {
-            if (value[field] !== undefined) {
-              ctx.addIssue({ code: 'custom', path: [field], message: `${field} is only supported for Alexandria feedback` });
-            }
-          }
+        } else if (!value.jobId) {
+          // The Alexandria-only fields are accepted here and left out of the
+          // job feedback body (rationale stands in for a missing note), since
+          // agents carry objective over from the search and scrape calls.
+          ctx.addIssue({ code: 'custom', path: ['jobId'], message: 'jobId is required for job feedback' });
         }
       }),
       execute: async (
         args: unknown,
-        { session, log, client: mcpClient }
+        { session, sessionId, log, client: mcpClient }
       ): Promise<ContentResult> => {
         assertFeedbackAvailable(session);
         const origin = requestOrigin(mcpClient, session);
@@ -2494,6 +2551,7 @@ Returns submission status, feedback ID, and accounting fields.
           issues,
           tags,
           note,
+          rationale,
           valuableSources,
           missingContent,
           querySuggestions,
@@ -2507,6 +2565,7 @@ Returns submission status, feedback ID, and accounting fields.
           issues?: string[];
           tags?: string[];
           note?: string;
+          rationale?: string;
           valuableSources?: { url: string; reason?: string }[];
           missingContent?: { topic: string; description?: string }[];
           querySuggestions?: string;
@@ -2529,15 +2588,24 @@ Returns submission status, feedback ID, and accounting fields.
           throw new Error('Unauthorized: missing API key for feedback.');
         }
 
-        const body = endpoint === 'alexandria'
-          ? { ...alexandriaSessionFeedbackSchema.parse(args), origin }
+        const feedbackStore = feedbackStoreFor(session, sessionId);
+        const alexandriaArgs = endpoint === 'alexandria' ? alexandriaSessionFeedbackSchema.parse(args) : undefined;
+        const attribution = alexandriaArgs && alexandriaFeedbackTokens(alexandriaArgs.callRatings, feedbackStore);
+        const body = alexandriaArgs && attribution
+          ? {
+              ...alexandriaArgs,
+              callRatings: undefined,
+              ...(attribution.tokens.length ? { tokens: attribution.tokens } : {}),
+              ...(attribution.callRatings.length ? { callRatings: attribution.callRatings } : {}),
+              origin,
+            }
           : removeEmptyTopLevel({
           endpoint,
           jobId,
           rating,
           issues,
           tags,
-          note,
+          note: note ?? rationale,
           valuableSources,
           missingContent,
           querySuggestions,
@@ -2580,11 +2648,20 @@ Returns submission status, feedback ID, and accounting fields.
             success: false,
             status: response.status,
             feedbackErrorCode: parsed?.feedbackErrorCode,
-            error: parsed?.error ?? `HTTP ${response.status}`,
+            error: feedbackRejectionError(parsed, response.status),
             retryable: response.status >= 500,
           });
         }
 
+        if (attribution) {
+          if (parsed?.success !== false) feedbackStore.remove(attribution.sent);
+          if (attribution.unknownRefs.length) {
+            return structuredText({
+              ...parsed,
+              note: `Ignored call ratings for unknown or expired refs: ${attribution.unknownRefs.join(', ')}.`,
+            });
+          }
+        }
         return structuredText(parsed);
       },
     });
@@ -2822,7 +2899,7 @@ The agent only calls Alexandria providers whose terms the team has accepted. \`e
     outputSchema: agentOutputSchema,
     parameters: z.object({
       prompt: z.string().min(1).max(10000),
-      urls: z.array(z.string().url()).optional(),
+      urls: z.array(httpUrl()).optional(),
       schema: z.record(z.string(), z.any()).optional(),
       effort: z
         .enum(['low', 'medium', 'high'])
@@ -3007,15 +3084,15 @@ Returns job status, progress information, and result data when completed.
       idempotentHint: false, // Repeating an interaction can act on the page again.
     },
     description: `
-Open or reuse a live browser session to navigate a page, click controls, fill fields, or run browser code. Provide either \`url\` or \`scrapeId\`, and either a natural-language \`prompt\` or executable \`code\`; code can run as Bash, Python, or Node with a bounded timeout.
+Open or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either \`url\` (the scheme may be omitted) or \`scrapeId\`, and either a natural-language \`prompt\` or executable \`code\`; code can run as Bash, Python, or Node with a bounded timeout.
 
-This acts on the live site, so actions such as form submission can create persistent external side effects. Returns execution output, stdout/stderr, exit status, and session viewing URLs.
+The session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped \`scrapeOptions.profile\` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs.
 `,
     outputSchema: interactOutputSchema,
     parameters: z
       .object({
         scrapeId: z.string().trim().min(1).optional(),
-        url: z.string().trim().url().optional(),
+        url: httpUrl().optional(),
         prompt: z.string().trim().min(1).optional(),
         code: z.string().trim().min(1).optional(),
         language: z.enum(['bash', 'python', 'node']).optional(),
@@ -3061,7 +3138,10 @@ This acts on the live site, so actions such as form submission can create persis
       const openedFromUrl = !scrapeId;
       if (openedFromUrl) {
         log.info('Opening interact session from url', { url });
-        const cleanedScrapeOptions = removeEmptyTopLevel(scrapeOptions ?? {});
+        const cleanedScrapeOptions = removeEmptyTopLevel(
+          transformScrapeParams(scrapeOptions ?? {})
+        );
+        assertFormatOptions(cleanedScrapeOptions.formats);
         const scraped = await client.scrape(String(url), {
           ...cleanedScrapeOptions,
           origin,
@@ -3224,18 +3304,23 @@ Set \`redactPII\` to request redaction of personally identifiable information in
       });
 
       const responseText = await response.text();
-      if (!response.ok) {
+      let parsed: any;
+      try {
+        parsed = JSON.parse(responseText);
+      } catch {
+        // Preserve non-JSON responses as raw text below.
+      }
+      if (!response.ok || parsed?.success === false) {
         throw new CoreHttpError(
           `Parse request failed with status ${response.status}: ${responseText}`,
-          response.status
+          response.status,
+          parsed?.code
         );
       }
 
-      try {
-        return structuredText(JSON.parse(responseText));
-      } catch {
-        return withStructured(responseText, { raw: responseText });
-      }
+      return parsed === undefined
+        ? withStructured(responseText, { raw: responseText })
+        : structuredText(parsed);
     },
   });
 
@@ -3246,6 +3331,16 @@ Set \`redactPII\` to request redaction of personally identifiable information in
   registerResearchTools(server, getClient);
   registerDeveloperTools(server, getClient);
   registerGovTools(server, getClient);
+  if (!isLocalKeylessStartup()) {
+    registerEnrichTools(server, getClient, assertExchangeCredential, hasCredential, {
+      parameters: z
+        .object({ ...searchToolBaseFields })
+        .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE)
+        .refine(searchCategoriesAreCompatible, SEARCH_CATEGORIES_CONFLICT_MESSAGE)
+        .refine(searchQueryIsValid, 'A query is required.'),
+      run: (args, context) => searchTool.execute(args, context, 'people_company_search'),
+    });
+  }
   registerUsageTools(server, getClient);
 
   hooks.registerExtraTools?.(

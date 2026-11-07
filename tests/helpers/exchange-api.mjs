@@ -40,8 +40,12 @@ const TERMS_REQUIRED_BODY = {
   },
 };
 
+const callToken = (call, index) => `fbk.${'x'.repeat(300)}.${call}.${index}`;
+
 async function startFakeExchangeApi(options = {}) {
   const requests = [];
+  let scrapeCalls = 0;
+  let feedbackRejected = false;
   const server = createServer(async (req, res) => {
     try {
     let raw = '';
@@ -87,6 +91,19 @@ async function startFakeExchangeApi(options = {}) {
       });
     }
 
+    if (req.method === 'POST' && url.pathname === '/v2/feedback') {
+      if (options.rejectFirstFeedback && !feedbackRejected) {
+        feedbackRejected = true;
+        return json(400, { success: false, error: 'Feedback window expired', feedbackErrorCode: 'FEEDBACK_WINDOW_EXPIRED' });
+      }
+      return json(200, {
+        success: true,
+        feedbackId: 'fb-1',
+        creditsRefunded: 1,
+        ...(options.rejectedTokens !== undefined ? { rejectedTokens: options.rejectedTokens } : {}),
+      });
+    }
+
     if (req.method === 'POST' && url.pathname === '/v2/scrape') {
       const termsCall = Array.isArray(parsedBody.alexandria) ? parsedBody.alexandria[0] : parsedBody.alexandria;
       if (termsCall?.provider === 'firecrawl' && ['terms/show', 'terms/accept'].includes(termsCall.capability)) {
@@ -103,7 +120,7 @@ async function startFakeExchangeApi(options = {}) {
         return json(200, { success: true, data: { alexandria: [{ provider: 'firecrawl', capability: 'bash', data: { workspaceId: 'retained-workspace', exitCode: 0, stdout: JSON.stringify(identities), idleTtlSeconds: 300 } }] } });
       }
       if (options.largeResult) return json(200, options.largeResult);
-      if (parsedBody.alexandria?.provider === 'firecrawl') return json(200, {success:true, data:{creditsCost:0, alexandria:[{provider:'firecrawl',capability:'find-tools',creditsCost:0,data:{level:'tools',items:[PRICED_TOOL],relatedTools:[{group:'alternative',label:'Alternative sources',tools:[{tool:{...PRICED_TOOL,id:'bls/series'},reason:'r'}]}],total:4,next:{provider:'firecrawl',capability:'find-tools',options:{...parsedBody.alexandria.options, offset:4}}}}]}});
+      if (parsedBody.alexandria?.provider === 'firecrawl') return json(200, {success:true, data:{creditsCost:0, alexandria:[{provider:'firecrawl',capability:'find-tools',creditsCost:0,...(options.feedbackTokens ? {feedbackToken: callToken(0, 0)} : {}),data:{level:'tools',items:[PRICED_TOOL],relatedTools:[{group:'alternative',label:'Alternative sources',tools:[{tool:{...PRICED_TOOL,id:'bls/series'},reason:'r'}]}],total:4,next:{provider:'firecrawl',capability:'find-tools',options:{...parsedBody.alexandria.options, offset:4}}}}]}});
 
       if (parsedBody?.alexandria?.[0]?.provider === 'locked') {
         return json(403, {
@@ -123,6 +140,7 @@ async function startFakeExchangeApi(options = {}) {
         });
       }
       if (parsedBody?.alexandria) {
+        const call = ++scrapeCalls;
         return json(200, {
           success: true,
           scrape_id: '11111111-1111-4111-8111-111111111111',
@@ -132,6 +150,7 @@ async function startFakeExchangeApi(options = {}) {
                 provider: 'fred',
                 capability: 'series/observations',
                 creditsCost: 1,
+                ...(options.feedbackTokens ? { feedbackToken: callToken(call, 0) } : {}),
                 data: {
                   observations: [{ date: '2026-01-01', value: '320.1' }],
                 },
@@ -141,6 +160,7 @@ async function startFakeExchangeApi(options = {}) {
               {
                 provider: 'fred',
                 capability: 'series/missing',
+                ...(options.feedbackTokens ? { feedbackToken: callToken(call, 1) } : {}),
                 error: {
                   code: 'capability_not_found',
                   message: 'Unknown capability',
@@ -164,6 +184,14 @@ async function startFakeExchangeApi(options = {}) {
         });
       }
       return json(400, { success: false, error: 'url is required' });
+    }
+
+    if (
+      req.method === 'GET' &&
+      url.pathname === '/v2/search/research/papers' &&
+      options.papers
+    ) {
+      return json(200, options.papers);
     }
 
     if (req.method === 'GET' && url.pathname.startsWith('/exchange/discover')) {
@@ -208,4 +236,4 @@ async function startFakeExchangeApi(options = {}) {
 }
 
 
-export { CAPABILITY_HIT, EXCHANGE_CALL, TERMS_REQUIRED_BODY, startFakeExchangeApi };
+export { callToken, CAPABILITY_HIT, EXCHANGE_CALL, TERMS_REQUIRED_BODY, startFakeExchangeApi };

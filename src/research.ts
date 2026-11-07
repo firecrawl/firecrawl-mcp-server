@@ -67,14 +67,11 @@ function withQuery(path: string, params: URLSearchParams): string {
 
 // --- result formatting (ported from research-index-front/src/agent_eval.ts) ---
 
-// Max authors to print per paper (with affiliations); the rest collapse to a
-// "+N more" tail so a large collaboration doesn't flood the context.
+// Max authors to print per paper; the rest collapse to a tail so a large
+// collaboration doesn't flood the context.
 const MAX_AUTHORS = 15;
 // Cap each abstract so a page of hits stays within the MCP output-token limit.
 const MAX_ABSTRACT_CHARS = 600;
-// Per-affiliation char cap — keeps one long org string (e.g. a full multi-dept
-// university address) from bloating the authors line.
-const MAX_AFFIL_CHARS = 60;
 // Hard ceiling on the whole authors line, as a final guard.
 const MAX_AUTHORS_LINE_CHARS = 400;
 
@@ -84,9 +81,7 @@ interface PaperHit {
   ids?: Record<string, string[]>;
   title?: string;
   abstract?: string;
-  // Search/metadata responses give a comma-joined string; some shapes give the
-  // structured form — handle both.
-  authors?: string | { name: string; affiliation?: string }[];
+  authors?: string | string[];
   categories?: string[];
   createdDate?: string;
   updateDate?: string;
@@ -97,34 +92,34 @@ function displayId(p: PaperHit): string {
   return p.primaryId ?? 'missing-primary-id';
 }
 
-/** Format the authors line, accepting either the string or structured form. */
-function fmtAuthors(
-  authors?: string | { name: string; affiliation?: string }[]
-): string | null {
+function fmtAuthors(authors?: PaperHit['authors']): string | null {
   if (!authors) return null;
-  let shown: string[];
-  let total: number;
-  if (typeof authors === 'string') {
-    const names = authors
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (names.length === 0) return null;
-    total = names.length;
-    shown = names.slice(0, MAX_AUTHORS);
-  } else {
-    if (authors.length === 0) return null;
-    total = authors.length;
-    shown = authors.slice(0, MAX_AUTHORS).map((a) => {
-      const aff = a.affiliation?.trim();
-      return aff ? `${a.name} (${aff.slice(0, MAX_AFFIL_CHARS)})` : a.name;
-    });
-  }
-  const extra = total > MAX_AUTHORS ? `; +${total - MAX_AUTHORS} more` : '';
-  return ('Authors: ' + shown.join('; ') + extra).slice(
-    0,
-    MAX_AUTHORS_LINE_CHARS
+  const names = (typeof authors === 'string' ? authors.split(',') : authors)
+    .map((name) => name.trim())
+    .filter(Boolean);
+  if (names.length === 0) return null;
+  const extra =
+    names.length > MAX_AUTHORS
+      ? typeof authors === 'string'
+        ? `; +${names.length - MAX_AUTHORS} more`
+        : '; et al.'
+      : '';
+  return (
+    ('Authors: ' + names.slice(0, MAX_AUTHORS).join('; ')).slice(
+      0,
+      MAX_AUTHORS_LINE_CHARS - extra.length
+    ) + extra
   );
+}
+
+function fmtDates(paper: PaperHit): string | null {
+  const dates = [
+    paper.createdDate ? `created ${paper.createdDate}` : '',
+    paper.updateDate ? `updated ${paper.updateDate}` : '',
+  ]
+    .filter(Boolean)
+    .join('; ');
+  return dates ? `Dates: ${dates}` : null;
 }
 
 /** Render ranked papers as `[id] title` / authors / abstract blocks. */
@@ -135,6 +130,8 @@ function fmtHits(results?: PaperHit[]): string {
       const lines = [`## [${displayId(r)}] ${r.title ?? '(untitled)'}`];
       const authors = fmtAuthors(r.authors);
       if (authors) lines.push(authors);
+      const dates = fmtDates(r);
+      if (dates) lines.push(dates);
       lines.push(
         (r.abstract || '(no abstract)')
           .replace(/\s+/g, ' ')
@@ -143,6 +140,35 @@ function fmtHits(results?: PaperHit[]): string {
       return lines.join('\n');
     })
     .join('\n\n');
+}
+
+/**
+ * The research API answers a paper ID it does not know with 404, which the
+ * HTTP client raises as a bare "Request failed with status code 404". Inspect
+ * and read report it as a paper that was not found, as their output schemas
+ * describe, so the agent learns the ID is wrong. Null means not found.
+ */
+async function paperRequest<T>(
+  request: () => Promise<{ data: T }>
+): Promise<{ data: T } | null> {
+  try {
+    return await request();
+  } catch (error) {
+    const response = (error as {
+      response?: { status?: unknown; data?: { success?: unknown; code?: unknown; error?: unknown } };
+    })?.response;
+    if (
+      response?.status === 404 &&
+      response.data?.success === false &&
+      response.data.code === 'NOT_FOUND' &&
+      response.data.error === 'paper metadata not found'
+    ) return null;
+    throw error;
+  }
+}
+
+function paperNotFound(paperId: string): string {
+  return `(paper not found: no indexed paper has the ID ${JSON.stringify(paperId)}. Use a paperId or primaryId from firecrawl_research_search_papers results.)`;
 }
 
 function fmtPaperMetadata(paper?: PaperHit): string {
@@ -165,13 +191,8 @@ function fmtPaperMetadata(paper?: PaperHit): string {
     lines.push(`Categories: ${paper.categories.join(', ')}`);
   }
 
-  const dates = [
-    paper.createdDate ? `created ${paper.createdDate}` : '',
-    paper.updateDate ? `updated ${paper.updateDate}` : '',
-  ]
-    .filter(Boolean)
-    .join('; ');
-  if (dates) lines.push(`Dates: ${dates}`);
+  const dates = fmtDates(paper);
+  if (dates) lines.push(dates);
 
   lines.push('');
   lines.push('## Abstract');
@@ -210,7 +231,7 @@ export function registerResearchTools(
       destructiveHint: false, // Query-only; no writes to external sources or the research index.
     },
     description: `
-Search paper metadata and abstracts with a natural-language query across the indexed corpus, which spans biomedical, life-science, and clinical literature (PubMed, bioRxiv, medRxiv) alongside arXiv and other scientific sources. Optional author, category, and date filters constrain results.
+Search paper metadata and abstracts with a natural-language query across the indexed corpus, which spans biomedical, life-science, and clinical literature (PubMed, bioRxiv, medRxiv) alongside arXiv and other scientific sources. Optional author, category, date, and sort options constrain or reorder results.
 
 Several distinct framings of the same question surface different papers than a single query does.
 
@@ -256,18 +277,25 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
         .describe(
           'Inclusive upper bound on created/updated date (`YYYY-MM-DD`).'
         ),
+      sort: z
+        .enum(['relevance', 'date_desc'])
+        .optional()
+        .describe(
+          '`relevance` (default) or `date_desc`, which returns the newest of the most relevant matches, newest first by created date. It does not list every paper in a date range; add `from` (and `to`) for that.'
+        ),
     }),
     execute: async (
       args: unknown,
       { session, client: mcpClient }
     ): Promise<ContentResult> => {
-      const { query, k, authors, categories, from, to } = args as {
+      const { query, k, authors, categories, from, to, sort } = args as {
         query: string;
         k?: number;
         authors?: string[];
         categories?: string[];
         from?: string;
         to?: string;
+        sort?: 'relevance' | 'date_desc';
       };
       const params = new URLSearchParams();
       appendParam(params, 'query', query);
@@ -276,6 +304,7 @@ Returns ranked papers with canonical IDs, titles, authors, and abstracts.
       appendParam(params, 'categories', categories);
       appendParam(params, 'from', from);
       appendParam(params, 'to', to);
+      appendParam(params, 'sort', sort);
       const client = getClient(session) as ClientLike;
       const res = await client.http.get<{ results?: PaperHit[] }>(
         withQuery(`${BASE}/papers`, params),
@@ -313,10 +342,13 @@ Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DO
     ): Promise<ContentResult> => {
       const { paperId } = args as { paperId: string };
       const client = getClient(session) as ClientLike;
-      const res = await client.http.get<{ paper?: PaperHit }>(
-        `${BASE}/papers/${encodeURIComponent(paperId)}`,
-        originHeaders(requestOrigin(mcpClient, session))
+      const res = await paperRequest(() =>
+        client.http.get<{ paper?: PaperHit }>(
+          `${BASE}/papers/${encodeURIComponent(paperId)}`,
+          originHeaders(requestOrigin(mcpClient, session))
+        )
       );
+      if (!res) return withStructured(paperNotFound(paperId), {});
       const paper = res.data?.paper;
       return withStructured(
         fmtPaperMetadata(paper),
@@ -436,10 +468,13 @@ Returns matching passages or a notice when full text is unavailable.
       appendParam(params, 'query', question);
       appendParam(params, 'k', k);
       const client = getClient(session) as ClientLike;
-      const res = await client.http.get<{ passages?: { text: string }[] }>(
-        withQuery(`${BASE}/papers/${encodeURIComponent(paperId)}`, params),
-        originHeaders(requestOrigin(mcpClient, session))
+      const res = await paperRequest(() =>
+        client.http.get<{ passages?: { text: string }[] }>(
+          withQuery(`${BASE}/papers/${encodeURIComponent(paperId)}`, params),
+          originHeaders(requestOrigin(mcpClient, session))
+        )
       );
+      if (!res) return withStructured(paperNotFound(paperId), { passages: [] });
       const passages = res.data?.passages ?? [];
       return withStructured(
         passages.length

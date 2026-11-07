@@ -1,17 +1,19 @@
 import { SdkError } from 'firecrawl';
 
 /**
- * A non-2xx answer from Core on a path that does not go through the SDK. The
+ * A failed answer from Core on a path that does not go through the SDK. The
  * status travels with the error so a credential rejection stays recognisable
  * wherever it was raised, rather than being inferred from a message string.
  */
 export class CoreHttpError extends Error {
   readonly status: number;
+  readonly code?: string;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, code?: unknown) {
     super(message);
     this.name = 'CoreHttpError';
     this.status = status;
+    this.code = typeof code === 'string' ? code : undefined;
   }
 }
 
@@ -34,6 +36,12 @@ const STATUS_CODES: Readonly<Record<number, string>> = {
   429: 'rate_limited',
 };
 
+// The API refuses a site it does not serve with text written for a person: an
+// apology and a sales contact. An agent gets the reason and what to do instead.
+const UNSUPPORTED_SITE = /we do not support this site/i;
+const UNSUPPORTED_SITE_MESSAGE =
+  "Firecrawl can't scrape this site because it is currently not supported. Check Alexandria for a relevant provider if available, or use another source.";
+
 export type ApiErrorDetails = {
   code: string;
   status: number;
@@ -52,16 +60,24 @@ function retryAfterSeconds(details: unknown, message: string): number | undefine
 /**
  * The machine-readable shape of a failed Firecrawl API request, for a
  * CoreHttpError or an SDK error with an HTTP status: the API's own error code
- * when the SDK reports one, else a name for the status. Undefined for any other
+ * when the response supplies one, else a name for the status. Undefined for any other
  * error, such as a bug, a network error or an error an embedder's tool throws.
+ * The API answers some failed requests, such as a scrape whose host has no DNS
+ * record, with 200 and `success: false`; either error type can carry the API's
+ * code, and that counts as a failed request too.
  */
 export function apiErrorDetails(error: unknown): ApiErrorDetails | undefined {
   if (!(error instanceof CoreHttpError || error instanceof SdkError)) return undefined;
   const status = error.status;
-  if (status === undefined || status < 400 || status >= 600) return undefined;
+  if (status === undefined) return undefined;
   const sdk = error instanceof SdkError ? error : undefined;
   const apiCode =
-    sdk?.code && API_CODE.test(sdk.code) && !TRANSPORT_CODE.test(sdk.code) ? sdk.code : undefined;
+    error.code && API_CODE.test(error.code) && !TRANSPORT_CODE.test(error.code) ? error.code : undefined;
+  const answeredFailure = status >= 200 && status < 300 && apiCode !== undefined;
+  if ((status < 400 || status >= 600) && !answeredFailure) return undefined;
+  if (UNSUPPORTED_SITE.test(error.message)) {
+    return { code: 'unsupported_site', status, message: UNSUPPORTED_SITE_MESSAGE };
+  }
   const retryAfter = retryAfterSeconds(sdk?.details, error.message);
   return {
     code: apiCode ?? STATUS_CODES[status] ?? (status >= 500 ? 'server_error' : `http_${status}`),
