@@ -2106,7 +2106,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_find_tools@d7e6be2fc683": {
+  "firecrawl_find_tools@e06eebbb96f1": {
     "annotations": {
       "title": "Find Tools",
       "readOnlyHint": true,
@@ -2115,7 +2115,7 @@
       "idempotentHint": true
     },
     "title": "Find Tools",
-    "description": "Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more: typed, sourced records through published contracts. Prefer normal firecrawl_search for a data task; it already returns matching providers. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Use query for semantic discovery or urls to find providers for a website. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.",
+    "description": "Find Alexandria data providers and workflows for a question, or read a selected contract. Alexandria covers companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more: typed, sourced records through published contracts. After a web search, pass its result URLs as urls and the question as query. Use this when results are blocked, rendered by JavaScript or behind a login, only partly answer, look out of date, or the answer needs structured, current or bulk records (listings, profiles, prices, transcripts, contacts); it also checks a web answer against a primary source. Discovery is free. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2127,6 +2127,7 @@
           "maxLength": 2000
         },
         "urls": {
+          "description": "Result URLs from a web search you already ran, or pages the data comes from. With query, ranks the tools for those sites first and still returns matches from the rest of the catalogue; alone, lists the tools for those sites.",
           "minItems": 1,
           "maxItems": 100,
           "type": "array",

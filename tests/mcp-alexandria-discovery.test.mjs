@@ -79,3 +79,26 @@ test('includeCosts returns per-capability prices and carries through navigation'
   assert.equal(root.nextTool.arguments.includeCosts, true);
   assert.equal(root.items[0].nextTool.arguments.includeCosts, true);
 });
+
+test('search-result URLs that match no provider fall back to ranking the question across the catalogue', async (t) => {
+  const { api, client } = await startStdioWithApi(t, { emptyForUrls: true });
+  const call = arguments_ => client.request('tools/call', { name: 'firecrawl_find_tools', arguments: arguments_ });
+  const urls = ['https://www.yelp.com/search?find_desc=coffee', 'https://sf.eater.com/maps/best-coffee'];
+  const page = toolText(await call({ query: 'coffee shops in the Mission with ratings', urls })).data.alexandria[0].data;
+  const sent = api.requests.filter(request => request.body?.alexandria?.capability === 'find-tools').map(request => request.body.alexandria.options);
+  assert.deepEqual(sent.map(options => options.urls), [urls, undefined]);
+  assert.equal(sent[1].query, 'coffee shops in the Mission with ratings');
+  assert.equal(page.total, 4);
+  assert.equal(page.warnings[0], 'No tools for these URLs; ranked by query across the catalogue.');
+  const before = api.requests.length;
+  toolText(await call({ urls }));
+  assert.equal(api.requests.length, before + 1, 'URLs alone are a browse; an empty one is the answer');
+});
+
+test('find tools tells agents to pass their own search results', async (t) => {
+  const { client } = await startStdioWithApi(t);
+  const tool = (await client.request('tools/list', {})).tools.find(entry => entry.name === 'firecrawl_find_tools');
+  assert.match(tool.description, /After a web search, pass its result URLs as urls and the question as query/);
+  assert.ok(tool.description.length <= 2048, `description is ${tool.description.length} characters`);
+  assert.match(tool.inputSchema.properties.urls.description, /Result URLs from a web search you already ran/);
+});
