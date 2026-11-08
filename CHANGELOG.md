@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Changed
+
+- `people_company_search` and `people_company_enrich` state their limits and rules in the tool descriptions and repair or explain more mistakes:
+  - A page size above its maximum (Apollo `per_page` 25, FullEnrich `limit` 25, People Data Labs `limit` 10) runs at the maximum with a `note`, where it used to be refused. The maximum is in each field's description and advertised schema.
+  - A call whose every provider block errors or is skipped fails with `no_provider_ran`, each provider's reason, the credits charged and an example of a working call. It used to return a normal result with only errored or skipped providers. The per-provider report is still in `structuredContent`.
+  - The `firecrawl_search` block is estimated at its listed price, 2 credits per 10 results (10 with enterprise zdr), without the 2 credits per result a team that scans results pays. That charge is described, and `max_credits` does not count it.
+  - `entity` is described as required, exactly `"person"` or `"company"`. When it is missing and the filter names belong to only one of the two, it is taken from them; otherwise the error names it and every unknown top-level field.
+  - The `max_credits` description says how the estimate is made and that 0 runs only free calls. A `max_credits_exceeded` error includes the same call with `max_credits` raised to the estimate.
+  - `contact_fields` is described as people only. Every argument error names all invalid fields, not the first five, and every enrich shape error (no provider, people and companies mixed, `contact_fields` with companies) includes an example call, built from the caller's own arguments when they are short.
+
 ### Fixed
 
 - More argument mistakes are refused as tool errors with an error code, like the json format check: a `query` format without `queryOptions.prompt` in `firecrawl_scrape` and in `firecrawl_interact` `scrapeOptions` (`invalid_request`, with the text `formats "query" needs queryOptions with a non-empty prompt.` in place of the SDK's `query format requires a non-empty 'prompt' string`), a `json` format without a prompt or schema in `firecrawl_interact` `scrapeOptions` (`invalid_request`), and the input checks of `firecrawl_find_tools`, `firecrawl_monitor_create` and `firecrawl_credit_usage` (`invalid_input`). The error code reaches `onToolResult` on the thrown `UserError`'s `extras`, and for the `invalid_input` tools only there: their `outputSchema` does not declare `code`, so the code is not in the client's `structuredContent`. The text block no longer carries the `Tool '<name>' execution failed:` prefix for these errors.
