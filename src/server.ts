@@ -58,7 +58,7 @@ import {
   withAlexandriaSource,
   enterpriseAllowsAlexandria,
   searchQueryIsValid,
-  ALEXANDRIA_SEARCH_LEAD,
+  ALEXANDRIA_SEARCH_INSTRUCTIONS,
   ALEXANDRIA_CONTRACT_GUIDANCE,
   ALEXANDRIA_TERMS_GUIDANCE,
   ALEXANDRIA_CATALOGUE_SENTENCE,
@@ -1859,13 +1859,15 @@ Enumerate URLs indexed under one website through Firecrawl without fetching each
       destructiveHint: false, // Query-only; no destructive side effects on external entities.
     },
     description: `
-Search web, news, or image sources and return ranked results with query-relevant highlights. Use it for current information, or to list businesses, people, products, jobs or events with websites, prices or contacts. Each web result is a title, URL, and description; use \`firecrawl_scrape\` on a result URL when the excerpt is not enough.
+Use this when you need current or specific information from the web: recent events, latest releases and versions, prices, people and companies, statistics, or any fact that may have changed since your training data or that you are not sure of. Returns ranked results with query-relevant highlights; each web result is a title, URL, and description. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit result types to \`research\`, \`pdf\`, \`developer\`, or \`gov\`.
 
-${ALEXANDRIA_SEARCH_LEAD}
+For a programming question, add \`categories: ["developer"]\`. It searches an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and returns the results in \`data.web\` with \`category: "developer"\`.
 
-On an authenticated session, tool matches describe available capabilities; \`firecrawl_find_tools\` returns their contracts and \`firecrawl_scrape\` with an \`alexandria\` body executes a selected capability. Keyless sessions get no Alexandria matches in data.tools.
+For a legal or regulatory question, \`categories: ["gov"]\` returns results in \`data.web\` with \`category: "gov"\` and cannot be combined with other categories; authenticated sessions also have \`firecrawl_gov_search\` as the dedicated tool. Verify gov results' issuer, jurisdiction, status, and version before citing current law.
 
-For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`. For a legal or regulatory question, \`categories: ["gov"]\` returns hits in \`data.web\` with \`category: "gov"\` and cannot be combined with other categories; authenticated sessions also have \`firecrawl_gov_search\` as the dedicated tool. Verify gov results' issuer, jurisdiction, status, and version before citing current law. \`categories: ["research"]\` restricts web results to research-affiliated websites; the \`firecrawl_research_*\` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
+${ALEXANDRIA_SEARCH_INSTRUCTIONS}
+
+Returns result groups in \`data\` and an operation \`id\`.
 `,
     outputSchema: searchOutputSchema,
     parameters: z

@@ -1405,11 +1405,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.doesNotMatch(byName.get('firecrawl_search').description, /not the page/i);
   assert.match(
     byName.get('firecrawl_search').description,
-    /use `firecrawl_scrape` on a result URL when the excerpt is not enough/i
-  );
-  assert.match(
-    byName.get('firecrawl_search').description,
-    /ranked results with query-relevant highlights\./i
+    /ranked results with query-relevant highlights[.;]/i
   );
   assert.match(
     searchParams.highlights.description,
@@ -1417,7 +1413,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   assert.match(
     byName.get('firecrawl_search').description,
-    /authenticated responses can include an `id` for optional search feedback/i
+    /result groups in `data` and an operation `id`/i
   );
   assert.match(
     byName.get('firecrawl_parse').description,
@@ -1467,8 +1463,8 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   // The two surfaces that both answer to "research" must stay distinguishable.
   assert.match(
-    byName.get('firecrawl_search').description,
-    /categories: \["research"\].*research-affiliated websites.*`firecrawl_research_\*` tools are a separate surface.*PubMed, bioRxiv, medRxiv.*arXiv/is
+    byName.get('firecrawl_search').inputSchema.properties.categories.description,
+    /`research` restricts ordinary web results to research-affiliated websites.*separate from the `firecrawl_research_\*` tools.*PubMed, bioRxiv, medRxiv.*arXiv/is
   );
   assert.match(
     byName.get('firecrawl_search').description,
@@ -1745,7 +1741,7 @@ test('local keyless stdio keeps profile guidance keyless-scoped and omits feedba
   assert.ok(search);
   assert.match(
     search.description,
-    /authenticated responses can include an `id` for optional search feedback/i
+    /result groups in `data` and an operation `id`/i
   );
 });
 
