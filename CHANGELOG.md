@@ -2,11 +2,9 @@
 
 ## [Unreleased]
 
-### Changed
+### Fixed
 
 - `firecrawl_find_tools` says when it is useful (web results that are blocked, rendered by JavaScript or behind a login, partial or out of date, or answers that need structured, current or bulk records) and that it takes the question as `query` and, optionally, `urls` such as web search results. It replaces "Use query for semantic discovery or urls to find providers for a website." `urls` gets a description. Since firecrawl/exchange#1342, `urls` with `query` ranks the tools for those sites first and still matches the rest of the catalogue, so search-result URLs from any search can be passed as they are.
-
-### Fixed
 
 - More argument mistakes are refused as tool errors with an error code, like the json format check: a `query` format without `queryOptions.prompt` in `firecrawl_scrape` and in `firecrawl_interact` `scrapeOptions` (`invalid_request`, with the text `formats "query" needs queryOptions with a non-empty prompt.` in place of the SDK's `query format requires a non-empty 'prompt' string`), a `json` format without a prompt or schema in `firecrawl_interact` `scrapeOptions` (`invalid_request`), and the input checks of `firecrawl_find_tools`, `firecrawl_monitor_create` and `firecrawl_credit_usage` (`invalid_input`). The error code reaches `onToolResult` on the thrown `UserError`'s `extras`, and for the `invalid_input` tools only there: their `outputSchema` does not declare `code`, so the code is not in the client's `structuredContent`. The text block no longer carries the `Tool '<name>' execution failed:` prefix for these errors.
 
