@@ -58,7 +58,7 @@ export const findToolsSchema = z
       .min(1)
       .max(100)
       .optional()
-      .describe('URLs related to the question, such as web search results or a page the data comes from. With query, tools for those sites rank first and the rest of the catalogue still matches; alone, lists the tools for those sites.'),
+      .describe('URLs related to the question, such as web search results or a page the data comes from. With query, tools for those sites rank first and the rest of the catalogue still matches.'),
     providers: z.array(z.string().min(1)).min(1).max(50).optional().describe('Values from each listed tool\'s `provider` field (e.g. "apps-apple-com"). Alone, lists that provider\'s compact tools; with capabilities, scopes them.'),
     categories: z.array(z.string().min(1)).min(1).max(50).optional().describe('Category IDs returned by an empty call. Lists providers by default.'),
     groups: z.array(z.string().min(1)).min(1).max(50).optional().describe('Optional group IDs for explicit group browsing.'),
@@ -73,10 +73,6 @@ export const findToolsSchema = z
 
 export const ALEXANDRIA_CATALOGUE_VERTICALS =
   'companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more';
-export const FIND_TOOLS_DESCRIPTION =
-  'Find Alexandria data providers and workflows for a question, or read a selected contract. Alexandria covers ' +
-  ALEXANDRIA_CATALOGUE_VERTICALS +
-  ': typed, sourced records through published contracts. Useful when web results are blocked, rendered by JavaScript or behind a login, partial or out of date, or when the answer needs structured, current or bulk records (listings, profiles, prices, transcripts, contacts), or to check a web answer against a primary source. Takes the question as query and, optionally, urls such as web search results. Discovery is free. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.';
 export const ALEXANDRIA_CATALOGUE_SENTENCE =
   "Alexandria is Firecrawl's catalogue of data providers and workflows across " + ALEXANDRIA_CATALOGUE_VERTICALS + '; providers return typed, sourced records through published contracts.';
 export const ALEXANDRIA_SOURCES_ALWAYS_ON =
@@ -103,19 +99,6 @@ export function findToolsOptions(args: z.infer<typeof findToolsSchema>) {
   return { ...selectors, ...(expand !== undefined ? { expand } : {}), level, limit: args.limit ?? 20,
     ...(args.expand === undefined && args.capabilities?.length ? { expand: level === 'tools' ? ['options', 'response', 'examples'] as const : [] } : {}),
   };
-}
-
-/** Matches in a Find Tools envelope, or undefined when the page is not a ranked tool list. */
-export function findToolsTotal(envelope: any): number | undefined {
-  const page = envelope?.data?.alexandria?.[0]?.data;
-  return page && Array.isArray(page.items) && typeof page.total === 'number' ? page.total : undefined;
-}
-
-/** Adds a note to the Find Tools page warnings, where an agent already reads them. */
-export function withFindToolsWarning(envelope: any, warning: string) {
-  const page = envelope?.data?.alexandria?.[0]?.data;
-  if (page && typeof page === 'object') page.warnings = [warning, ...(Array.isArray(page.warnings) ? page.warnings : [])];
-  return envelope;
 }
 
 export function withFindToolsNavigation(envelope: any, carry: Record<string, unknown> = {}) {

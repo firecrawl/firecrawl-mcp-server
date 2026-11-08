@@ -64,9 +64,6 @@ import {
   ALEXANDRIA_CATALOGUE_SENTENCE,
   ALEXANDRIA_CATALOGUE_VERTICALS,
   ALEXANDRIA_SOURCES_ALWAYS_ON,
-  FIND_TOOLS_DESCRIPTION,
-  findToolsTotal,
-  withFindToolsWarning,
 } from './alexandria';
 import { alexandriaOutput } from './alexandria-output';
 import { FeedbackTokenRegistry, FeedbackTokenStore, withFeedbackRefs } from './alexandria-feedback-tokens.js';
@@ -522,7 +519,6 @@ export {
 export {
   ALEXANDRIA_CATALOGUE_VERTICALS,
   ALEXANDRIA_SEARCH_INSTRUCTIONS,
-  FIND_TOOLS_DESCRIPTION,
   defaultDomainTools,
   hasAlexandria,
   normalizeSearchSources,
@@ -2034,7 +2030,7 @@ Returns result groups in \`data\` and an operation \`id\`.
       idempotentHint: true,
     },
     description:
-      FIND_TOOLS_DESCRIPTION,
+      'Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers ' + ALEXANDRIA_CATALOGUE_VERTICALS + ': typed, sourced records through published contracts. Prefer normal firecrawl_search for a data task; it already returns matching providers. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Useful when web results are blocked, rendered by JavaScript or behind a login, partial or out of date, or when the answer needs structured, current or bulk records (listings, profiles, prices, transcripts, contacts). Takes the question as query and, optionally, urls such as web search results. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.',
     outputSchema: findToolsOutputSchema,
     parameters: findToolsSchema,
     execute: async (args, { session, client: mcpClient }) => {
@@ -2062,14 +2058,8 @@ Returns result groups in \`data\` and an operation \`id\`.
         if (offset + options.limit < rows.length) page.nextTool = { name: 'firecrawl_find_tools', arguments: { level: 'categories', limit: options.limit, offset: offset + options.limit, ...carry } };
         return structuredCompact(withAlexandriaFeedbackHint(withFindToolsNavigation({ success: true, data: { alexandria: [{ provider: 'firecrawl', capability: 'find-tools', data: page }] } }, carry), alexandriaFeedbackAvailable()));
       }
-      let envelope = JSON.parse(await executeExchangeCalls(session, { provider: 'firecrawl', capability: 'find-tools', options }, undefined, undefined, origin, carry.includeCosts));
-      // Search-result URLs are mostly hosts no provider covers. Where the catalogue still filters by
-      // them, an empty match is no answer: rank the question across the whole catalogue instead.
-      if (options.urls?.length && options.query && findToolsTotal(envelope) === 0) {
-        const { urls: _urls, ...wide } = options;
-        const retried = JSON.parse(await executeExchangeCalls(session, { provider: 'firecrawl', capability: 'find-tools', options: wide }, undefined, undefined, origin, carry.includeCosts));
-        envelope = withFindToolsWarning(retried, 'No tools for these URLs; ranked by query across the catalogue.');
-      }
+      const result = await executeExchangeCalls(session, { provider: 'firecrawl', capability: 'find-tools', options }, undefined, undefined, origin, carry.includeCosts);
+      const envelope = JSON.parse(result);
       return structuredCompact(withFindToolsNavigation(carry.includeCosts ? envelope : withoutFindToolsPrices(envelope), carry));
     },
   };
