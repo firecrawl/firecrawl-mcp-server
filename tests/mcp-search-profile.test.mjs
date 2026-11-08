@@ -195,6 +195,20 @@ async function startFakeBackend(options = {}) {
     }
 
     if (req.method === 'GET' && req.url?.startsWith('/v2/search/gov')) {
+      if (
+        options.govRefusesSources &&
+        new URL(req.url, 'http://localhost').searchParams.has('sources')
+      ) {
+        res.writeHead(400, { 'content-type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            success: false,
+            error: 'Bad Request',
+            details: [{ code: 'unrecognized_keys', keys: ['sources'] }],
+          })
+        );
+        return;
+      }
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify({
@@ -810,7 +824,10 @@ test('search firecrawl_developer_search queries the developer index and returns 
 });
 
 test('search firecrawl_gov_search reads web results from an API without sources', async (t) => {
-  const backend = await startFakeBackend({ govGroup: 'web' });
+  const backend = await startFakeBackend({
+    govGroup: 'web',
+    govRefusesSources: true,
+  });
   t.after(() => backend.close());
   const { searchPort } = await startHostedServer(t, {
     FIRECRAWL_API_URL: backend.url,
@@ -831,6 +848,15 @@ test('search firecrawl_gov_search reads web results from an API without sources'
   assert.deepEqual(
     message.result.structuredContent.results.map((result) => result.url),
     ['https://www.ecfr.gov/current/title-21/part-101']
+  );
+  const govCalls = backend.requests.filter((request) =>
+    request.url?.startsWith('/v2/search/gov')
+  );
+  assert.deepEqual(
+    govCalls.map((request) =>
+      new URL(request.url, 'http://localhost').searchParams.get('sources')
+    ),
+    ['gov', null]
   );
 });
 
