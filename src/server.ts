@@ -1867,7 +1867,7 @@ For a legal or regulatory question, \`categories: ["gov"]\` returns results in \
 
 ${ALEXANDRIA_SEARCH_INSTRUCTIONS}
 
-Returns result groups in \`data\` and an operation \`id\` for optional search feedback.
+Returns result groups in \`data\` and an operation \`id\`.
 `,
     outputSchema: searchOutputSchema,
     parameters: z

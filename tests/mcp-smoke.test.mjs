@@ -1413,7 +1413,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   assert.match(
     byName.get('firecrawl_search').description,
-    /an operation `id` for optional search feedback/i
+    /result groups in `data` and an operation `id`/i
   );
   assert.match(
     byName.get('firecrawl_parse').description,
@@ -1741,7 +1741,7 @@ test('local keyless stdio keeps profile guidance keyless-scoped and omits feedba
   assert.ok(search);
   assert.match(
     search.description,
-    /an operation `id` for optional search feedback/i
+    /result groups in `data` and an operation `id`/i
   );
 });
 
