@@ -8273,7 +8273,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "people_company_enrich@b6d1361339bc": {
+  "people_company_enrich@cd4860dabc3f": {
     "annotations": {
       "title": "Look up and enrich people or companies",
       "readOnlyHint": false,
@@ -8281,7 +8281,7 @@
       "destructiveHint": false
     },
     "title": "Look up and enrich people or companies",
-    "description": "Look up and enrich known people or companies: profiles and work history, or firmographics such as industry, headcount, funding and technologies. Each provider takes its own list of 1 to 50 people or companies; results carry input_index into that list. Add contact_fields to get work email, personal email or mobile for people. Misses are free. Example: {\"contact_fields\":[\"work_email\"],\"fullenrich\":{\"people\":[{\"person_name\":\"Jane Doe\",\"company_domain\":\"example.com\"}]}}. Each provider takes its own native parameters; nothing is shared between providers. Include a block only for each provider you want to run, e.g. \"apollo\": {...}; included providers run in parallel. The response lists every provider with its status, records, credits charged and any error.",
+    "description": "Look up and enrich known people or companies: profiles and work history, or firmographics such as industry, headcount, funding and technologies. Each provider takes its own list of 1 to 50 people or companies, all with the same fields: a person is {linkedin_url, email, name or first_name and last_name, company_domain, company_name, apollo_id, pdl_id, legion_id}, a company is {domain, linkedin_url, name}; each provider's block says which of them it needs. Results carry input_index into that list. Add contact_fields to get work email, personal email or mobile for people. Misses are free. Example: {\"contact_fields\":[\"work_email\"],\"fullenrich\":{\"people\":[{\"name\":\"Jane Doe\",\"company_domain\":\"example.com\"}]}}. Include a block only for each provider you want to run, e.g. \"apollo\": {...}; included providers run in parallel. The response lists every provider with its status, records, credits charged and any error.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -8306,7 +8306,7 @@
           }
         },
         "fullenrich": {
-          "description": "FullEnrich. people: 10 credits per match, no email. companies: 10 credits per match, includes technologies.",
+          "description": "FullEnrich. people: 10 credits per match, no email. companies: 10 credits per match, includes technologies. Each person needs a linkedin_url, or a name (or first_name and last_name) plus company_domain. Each company needs a domain or linkedin_url.",
           "type": "object",
           "properties": {
             "people": {
@@ -8314,61 +8314,45 @@
               "maxItems": 50,
               "type": "array",
               "items": {
-                "anyOf": [
-                  {
-                    "required": [
-                      "person_professional_network_url"
-                    ],
-                    "properties": {
-                      "person_professional_network_url": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "person_name",
-                      "company_domain"
-                    ],
-                    "properties": {
-                      "person_name": {
-                        "pattern": "\\S"
-                      },
-                      "company_domain": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "person_name",
-                      "company_professional_network_url"
-                    ],
-                    "properties": {
-                      "person_name": {
-                        "pattern": "\\S"
-                      },
-                      "company_professional_network_url": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  }
-                ],
                 "type": "object",
                 "properties": {
-                  "person_professional_network_url": {
-                    "description": "LinkedIn profile URL. Enough on its own.",
+                  "linkedin_url": {
+                    "description": "LinkedIn profile URL. Enough on its own for every provider.",
                     "type": "string"
                   },
-                  "person_name": {
-                    "description": "Full name, with a company identifier.",
+                  "email": {
+                    "description": "Email address. Enough on its own for apollo, people_data_labs and datalegion.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Full name, with company_domain or company_name.",
+                    "type": "string"
+                  },
+                  "first_name": {
+                    "description": "With last_name, instead of name.",
+                    "type": "string"
+                  },
+                  "last_name": {
                     "type": "string"
                   },
                   "company_domain": {
+                    "description": "Employer domain, e.g. stripe.com.",
                     "type": "string"
                   },
-                  "company_professional_network_url": {
-                    "description": "Employer LinkedIn URL.",
+                  "company_name": {
+                    "description": "Employer name.",
+                    "type": "string"
+                  },
+                  "apollo_id": {
+                    "description": "apollo_id from people_company_search; apollo only.",
+                    "type": "string"
+                  },
+                  "pdl_id": {
+                    "description": "people_data_labs only.",
+                    "type": "string"
+                  },
+                  "legion_id": {
+                    "description": "datalegion only.",
                     "type": "string"
                   }
                 },
@@ -8380,36 +8364,18 @@
               "maxItems": 50,
               "type": "array",
               "items": {
-                "anyOf": [
-                  {
-                    "required": [
-                      "domain"
-                    ],
-                    "properties": {
-                      "domain": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "professional_network_url"
-                    ],
-                    "properties": {
-                      "professional_network_url": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  }
-                ],
                 "type": "object",
                 "properties": {
                   "domain": {
-                    "description": "e.g. stripe.com.",
+                    "description": "e.g. stripe.com. Enough on its own for every provider.",
                     "type": "string"
                   },
-                  "professional_network_url": {
-                    "description": "LinkedIn company URL.",
+                  "linkedin_url": {
+                    "description": "LinkedIn company URL. Enough on its own for every provider.",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "Company name; not fullenrich. A name several companies share may not match.",
                     "type": "string"
                   }
                 },
@@ -8420,7 +8386,7 @@
           "additionalProperties": false
         },
         "apollo": {
-          "description": "Apollo. people: 30 credits per match, includes a work email when Apollo has one. companies: 30 credits per match; a name alone matches only on an exact name.",
+          "description": "Apollo. people: 30 credits per match, includes a work email when Apollo has one. companies: 30 credits per match; a name alone matches only on an exact name. Each person needs an apollo_id, email or linkedin_url, or a name (or first_name and last_name) plus company_domain or company_name. Each company needs a domain, linkedin_url or name.",
           "type": "object",
           "properties": {
             "people": {
@@ -8428,129 +8394,45 @@
               "maxItems": 50,
               "type": "array",
               "items": {
-                "anyOf": [
-                  {
-                    "required": [
-                      "id"
-                    ],
-                    "properties": {
-                      "id": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "email"
-                    ],
-                    "properties": {
-                      "email": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "linkedin_url"
-                    ],
-                    "properties": {
-                      "linkedin_url": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "name",
-                      "domain"
-                    ],
-                    "properties": {
-                      "name": {
-                        "pattern": "\\S"
-                      },
-                      "domain": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "name",
-                      "organization_name"
-                    ],
-                    "properties": {
-                      "name": {
-                        "pattern": "\\S"
-                      },
-                      "organization_name": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "domain"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "domain": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "organization_name"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "organization_name": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  }
-                ],
                 "type": "object",
                 "properties": {
-                  "id": {
-                    "description": "apollo_id from people_company_search.",
+                  "linkedin_url": {
+                    "description": "LinkedIn profile URL. Enough on its own for every provider.",
                     "type": "string"
                   },
                   "email": {
-                    "type": "string"
-                  },
-                  "linkedin_url": {
+                    "description": "Email address. Enough on its own for apollo, people_data_labs and datalegion.",
                     "type": "string"
                   },
                   "name": {
-                    "description": "Full name, with domain or organization_name.",
+                    "description": "Full name, with company_domain or company_name.",
                     "type": "string"
                   },
                   "first_name": {
+                    "description": "With last_name, instead of name.",
                     "type": "string"
                   },
                   "last_name": {
                     "type": "string"
                   },
-                  "domain": {
-                    "description": "Employer domain.",
+                  "company_domain": {
+                    "description": "Employer domain, e.g. stripe.com.",
                     "type": "string"
                   },
-                  "organization_name": {
+                  "company_name": {
+                    "description": "Employer name.",
+                    "type": "string"
+                  },
+                  "apollo_id": {
+                    "description": "apollo_id from people_company_search; apollo only.",
+                    "type": "string"
+                  },
+                  "pdl_id": {
+                    "description": "people_data_labs only.",
+                    "type": "string"
+                  },
+                  "legion_id": {
+                    "description": "datalegion only.",
                     "type": "string"
                   }
                 },
@@ -8562,60 +8444,18 @@
               "maxItems": 50,
               "type": "array",
               "items": {
-                "anyOf": [
-                  {
-                    "required": [
-                      "domain"
-                    ],
-                    "properties": {
-                      "domain": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "linkedin_url"
-                    ],
-                    "properties": {
-                      "linkedin_url": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "name"
-                    ],
-                    "properties": {
-                      "name": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "website"
-                    ],
-                    "properties": {
-                      "website": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  }
-                ],
                 "type": "object",
                 "properties": {
                   "domain": {
+                    "description": "e.g. stripe.com. Enough on its own for every provider.",
                     "type": "string"
                   },
                   "linkedin_url": {
+                    "description": "LinkedIn company URL. Enough on its own for every provider.",
                     "type": "string"
                   },
                   "name": {
-                    "type": "string"
-                  },
-                  "website": {
+                    "description": "Company name; not fullenrich. A name several companies share may not match.",
                     "type": "string"
                   }
                 },
@@ -8626,7 +8466,7 @@
           "additionalProperties": false
         },
         "people_data_labs": {
-          "description": "People Data Labs. people: 50 credits per match, with work history. companies: 50 credits per match, with funding history.",
+          "description": "People Data Labs. people: 50 credits per match, with work history. companies: 50 credits per match, with funding history. Each person needs a pdl_id, linkedin_url or email, or a name (or first_name and last_name) plus company_domain or company_name. Each company needs a domain, linkedin_url or name.",
           "type": "object",
           "properties": {
             "people": {
@@ -8634,176 +8474,45 @@
               "maxItems": 50,
               "type": "array",
               "items": {
-                "anyOf": [
-                  {
-                    "required": [
-                      "profile"
-                    ],
-                    "properties": {
-                      "profile": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "email"
-                    ],
-                    "properties": {
-                      "email": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "phone"
-                    ],
-                    "properties": {
-                      "phone": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "pdl_id"
-                    ],
-                    "properties": {
-                      "pdl_id": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "name",
-                      "company"
-                    ],
-                    "properties": {
-                      "name": {
-                        "pattern": "\\S"
-                      },
-                      "company": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "name",
-                      "school"
-                    ],
-                    "properties": {
-                      "name": {
-                        "pattern": "\\S"
-                      },
-                      "school": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "name",
-                      "location"
-                    ],
-                    "properties": {
-                      "name": {
-                        "pattern": "\\S"
-                      },
-                      "location": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "company"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "company": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "school"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "school": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "location"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "location": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  }
-                ],
                 "type": "object",
                 "properties": {
-                  "profile": {
-                    "description": "LinkedIn or other social profile URL.",
+                  "linkedin_url": {
+                    "description": "LinkedIn profile URL. Enough on its own for every provider.",
                     "type": "string"
                   },
                   "email": {
-                    "type": "string"
-                  },
-                  "phone": {
-                    "type": "string"
-                  },
-                  "pdl_id": {
+                    "description": "Email address. Enough on its own for apollo, people_data_labs and datalegion.",
                     "type": "string"
                   },
                   "name": {
+                    "description": "Full name, with company_domain or company_name.",
                     "type": "string"
                   },
                   "first_name": {
+                    "description": "With last_name, instead of name.",
                     "type": "string"
                   },
                   "last_name": {
                     "type": "string"
                   },
-                  "company": {
-                    "description": "Employer name or domain.",
+                  "company_domain": {
+                    "description": "Employer domain, e.g. stripe.com.",
                     "type": "string"
                   },
-                  "school": {
+                  "company_name": {
+                    "description": "Employer name.",
                     "type": "string"
                   },
-                  "location": {
+                  "apollo_id": {
+                    "description": "apollo_id from people_company_search; apollo only.",
+                    "type": "string"
+                  },
+                  "pdl_id": {
+                    "description": "people_data_labs only.",
+                    "type": "string"
+                  },
+                  "legion_id": {
+                    "description": "datalegion only.",
                     "type": "string"
                   }
                 },
@@ -8815,80 +8524,18 @@
               "maxItems": 50,
               "type": "array",
               "items": {
-                "anyOf": [
-                  {
-                    "required": [
-                      "website"
-                    ],
-                    "properties": {
-                      "website": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "profile"
-                    ],
-                    "properties": {
-                      "profile": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "ticker"
-                    ],
-                    "properties": {
-                      "ticker": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "pdl_id"
-                    ],
-                    "properties": {
-                      "pdl_id": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "name"
-                    ],
-                    "properties": {
-                      "name": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  }
-                ],
                 "type": "object",
                 "properties": {
-                  "website": {
-                    "description": "Company website or domain.",
+                  "domain": {
+                    "description": "e.g. stripe.com. Enough on its own for every provider.",
                     "type": "string"
                   },
-                  "profile": {
-                    "description": "LinkedIn company URL.",
-                    "type": "string"
-                  },
-                  "ticker": {
-                    "type": "string"
-                  },
-                  "pdl_id": {
+                  "linkedin_url": {
+                    "description": "LinkedIn company URL. Enough on its own for every provider.",
                     "type": "string"
                   },
                   "name": {
-                    "description": "Company name. A name several companies share may not match.",
-                    "type": "string"
-                  },
-                  "location": {
-                    "description": "Helps a name match; never enough alone.",
+                    "description": "Company name; not fullenrich. A name several companies share may not match.",
                     "type": "string"
                   }
                 },
@@ -8905,7 +8552,7 @@
           "additionalProperties": false
         },
         "datalegion": {
-          "description": "Data Legion. 20 credits per matched person or company.",
+          "description": "Data Legion. 20 credits per matched person or company. Each person needs a legion_id, linkedin_url or email, or a name (or first_name and last_name) plus company_domain or company_name. Each company needs a domain, linkedin_url or name.",
           "type": "object",
           "properties": {
             "people": {
@@ -8913,281 +8560,45 @@
               "maxItems": 50,
               "type": "array",
               "items": {
-                "anyOf": [
-                  {
-                    "required": [
-                      "social_url"
-                    ],
-                    "properties": {
-                      "social_url": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "email"
-                    ],
-                    "properties": {
-                      "email": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "linkedin_id"
-                    ],
-                    "properties": {
-                      "linkedin_id": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "legion_id"
-                    ],
-                    "properties": {
-                      "legion_id": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "full_name",
-                      "company"
-                    ],
-                    "properties": {
-                      "full_name": {
-                        "pattern": "\\S"
-                      },
-                      "company": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "full_name",
-                      "job_title"
-                    ],
-                    "properties": {
-                      "full_name": {
-                        "pattern": "\\S"
-                      },
-                      "job_title": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "full_name",
-                      "city"
-                    ],
-                    "properties": {
-                      "full_name": {
-                        "pattern": "\\S"
-                      },
-                      "city": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "full_name",
-                      "state"
-                    ],
-                    "properties": {
-                      "full_name": {
-                        "pattern": "\\S"
-                      },
-                      "state": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "full_name",
-                      "country"
-                    ],
-                    "properties": {
-                      "full_name": {
-                        "pattern": "\\S"
-                      },
-                      "country": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "full_name",
-                      "school"
-                    ],
-                    "properties": {
-                      "full_name": {
-                        "pattern": "\\S"
-                      },
-                      "school": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "company"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "company": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "job_title"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "job_title": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "city"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "city": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "state"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "state": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "country"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "country": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "school"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "school": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  }
-                ],
                 "type": "object",
                 "properties": {
-                  "social_url": {
-                    "description": "LinkedIn or other social profile URL.",
+                  "linkedin_url": {
+                    "description": "LinkedIn profile URL. Enough on its own for every provider.",
                     "type": "string"
                   },
                   "email": {
+                    "description": "Email address. Enough on its own for apollo, people_data_labs and datalegion.",
                     "type": "string"
                   },
-                  "linkedin_id": {
-                    "type": "string"
-                  },
-                  "legion_id": {
-                    "type": "string"
-                  },
-                  "full_name": {
+                  "name": {
+                    "description": "Full name, with company_domain or company_name.",
                     "type": "string"
                   },
                   "first_name": {
+                    "description": "With last_name, instead of name.",
                     "type": "string"
                   },
                   "last_name": {
                     "type": "string"
                   },
-                  "company": {
-                    "description": "Company name, website or social URL.",
+                  "company_domain": {
+                    "description": "Employer domain, e.g. stripe.com.",
                     "type": "string"
                   },
-                  "job_title": {
+                  "company_name": {
+                    "description": "Employer name.",
                     "type": "string"
                   },
-                  "city": {
+                  "apollo_id": {
+                    "description": "apollo_id from people_company_search; apollo only.",
                     "type": "string"
                   },
-                  "state": {
+                  "pdl_id": {
+                    "description": "people_data_labs only.",
                     "type": "string"
                   },
-                  "country": {
-                    "type": "string"
-                  },
-                  "school": {
+                  "legion_id": {
+                    "description": "datalegion only.",
                     "type": "string"
                   }
                 },
@@ -9199,91 +8610,18 @@
               "maxItems": 50,
               "type": "array",
               "items": {
-                "anyOf": [
-                  {
-                    "required": [
-                      "domain"
-                    ],
-                    "properties": {
-                      "domain": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "social_url"
-                    ],
-                    "properties": {
-                      "social_url": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "name"
-                    ],
-                    "properties": {
-                      "name": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "linkedin_id"
-                    ],
-                    "properties": {
-                      "linkedin_id": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "ticker_symbol"
-                    ],
-                    "properties": {
-                      "ticker_symbol": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "legion_id"
-                    ],
-                    "properties": {
-                      "legion_id": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  }
-                ],
                 "type": "object",
                 "properties": {
                   "domain": {
+                    "description": "e.g. stripe.com. Enough on its own for every provider.",
                     "type": "string"
                   },
-                  "social_url": {
-                    "description": "LinkedIn company URL.",
+                  "linkedin_url": {
+                    "description": "LinkedIn company URL. Enough on its own for every provider.",
                     "type": "string"
                   },
                   "name": {
-                    "description": "Fuzzy match; add industry or domain for ambiguous names.",
-                    "type": "string"
-                  },
-                  "linkedin_id": {
-                    "type": "string"
-                  },
-                  "ticker_symbol": {
-                    "type": "string"
-                  },
-                  "legion_id": {
-                    "type": "string"
-                  },
-                  "industry": {
+                    "description": "Company name; not fullenrich. A name several companies share may not match.",
                     "type": "string"
                   }
                 },
@@ -9378,7 +8716,7 @@
       "additionalProperties": false
     }
   },
-  "people_company_search@6b7498c06e54": {
+  "people_company_search@3d5f814fd57e": {
     "annotations": {
       "title": "Find people or companies",
       "readOnlyHint": true,
@@ -9386,7 +8724,7 @@
       "destructiveHint": false
     },
     "title": "Find people or companies",
-    "description": "Find people or companies you don't know yet. Set entity to \"person\" or \"company\", then give each provider its filters for that entity: people by title, employer, location or seniority; companies by industry, headcount, location, technology or founding year. apollo: free for people, 30 credits per page for companies. fullenrich: 5 credits per record. people_data_labs: 50 credits per record, SQL or Elasticsearch query. firecrawl_search: web results, with the firecrawl_search tool's query parameters. Example: {\"entity\":\"person\",\"fullenrich\":{\"current_position_titles\":[{\"value\":\"Head of Data\"}],\"current_company_domains\":[{\"value\":\"example.com\",\"exact_match\":true}]},\"apollo\":{\"person_titles\":[\"Head of Data\"],\"q_organization_domains_list\":[\"example.com\"]}}. Each provider takes its own native parameters; nothing is shared between providers. Include a block only for each provider you want to run, e.g. \"apollo\": {...}; included providers run in parallel. The response lists every provider with its status, records, credits charged and any error.",
+    "description": "Find people or companies you don't know yet. Set entity to \"person\" or \"company\", then give each provider its filters for that entity: people by title, employer, location or seniority; companies by industry, headcount, location, technology or founding year. Each provider takes its own native filters; nothing is shared between providers. apollo: free for people, 30 credits per page for companies. fullenrich: 5 credits per record. people_data_labs: 50 credits per record, SQL or Elasticsearch query. firecrawl_search: web results, with the firecrawl_search tool's query parameters. Example: {\"entity\":\"person\",\"fullenrich\":{\"current_position_titles\":[{\"value\":\"Head of Data\"}],\"current_company_domains\":[{\"value\":\"example.com\",\"exact_match\":true}]},\"apollo\":{\"person_titles\":[\"Head of Data\"],\"q_organization_domains_list\":[\"example.com\"]}}. Include a block only for each provider you want to run, e.g. \"apollo\": {...}; included providers run in parallel. The response lists every provider with its status, records, credits charged and any error.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",

@@ -61,18 +61,9 @@ function provider<S extends z.ZodRawShape>(shape: S, about: string, rule?: { che
   return (rule ? block.refine(rule.check, { message: rule.message }).meta(rule.schema) : block).optional().describe(about);
 }
 
-/** An input that needs every field of at least one set, checked at runtime and published as the same rule in its JSON Schema. */
-function needsOneOf<S extends z.ZodRawShape>(shape: S, sets: string[][], message: string) {
-  return z
-    .strictObject(shape)
-    .refine((r: Record<string, unknown>) => sets.some((set) => set.every((key) => has(r[key]))), { message })
-    .meta({ anyOf: sets.map((required) => ({ required, properties: Object.fromEntries(required.map((key) => [key, { pattern: '\\S' }])) })) });
-}
-
 const has = (value: unknown) => typeof value === 'string' && value.trim() !== '';
 
-const PROVIDER_BLOCKS =
-  'Each provider takes its own native parameters; nothing is shared between providers. Include a block only for each provider you want to run, e.g. "apollo": {...}; included providers run in parallel. ';
+const PROVIDER_BLOCKS = 'Include a block only for each provider you want to run, e.g. "apollo": {...}; included providers run in parallel. ';
 const REPORT = 'The response lists every provider with its status, records, credits charged and any error.';
 const FE_LISTS = 'List filters take [{"value": "...", "exclude"?: true, "exact_match"?: true}]; range filters take [{"min"?: n, "max"?: n}]. ';
 
@@ -211,113 +202,80 @@ function either(person: z.ZodOptional<z.ZodType>, company: z.ZodOptional<z.ZodTy
     .optional();
 }
 
-const NAME_SETS = (names: string[][], others: string[]) => names.flatMap((name) => others.map((other) => [...name, other]));
-
-const apolloPersonRef = needsOneOf(
-  {
-    id: text('apollo_id from people_company_search.'),
-    email: text(),
-    linkedin_url: text(),
-    name: text('Full name, with domain or organization_name.'),
-    first_name: text(),
-    last_name: text(),
-    domain: text('Employer domain.'),
-    organization_name: text(),
-  },
-  [['id'], ['email'], ['linkedin_url'], ...NAME_SETS([['name'], ['first_name', 'last_name']], ['domain', 'organization_name'])],
-  'Each apollo person needs an id, email, linkedin_url, or a name plus domain or organization_name'
-);
-
-const dataLegionPersonRef = needsOneOf(
-  {
-    social_url: text('LinkedIn or other social profile URL.'),
-    email: text(),
-    linkedin_id: text(),
-    legion_id: text(),
-    full_name: text(),
-    first_name: text(),
-    last_name: text(),
-    company: text('Company name, website or social URL.'),
-    job_title: text(),
-    city: text(),
-    state: text(),
-    country: text(),
-    school: text(),
-  },
-  [['social_url'], ['email'], ['linkedin_id'], ['legion_id'], ...NAME_SETS([['full_name'], ['first_name', 'last_name']], ['company', 'job_title', 'city', 'state', 'country', 'school'])],
-  'Each datalegion person needs a social_url, email, linkedin_id or legion_id, or a full name (full_name, or first_name and last_name) plus company, job_title, city, state, country or school'
-);
-
 const batch = <T extends z.ZodType>(item: T) => z.array(item).min(1).max(50);
 const minLikelihood = z.number().int().min(1).max(10).optional().describe('Minimum match confidence, 1 to 10 (default 6).');
 const minConfidence = z.enum(['high', 'moderate', 'low']).optional();
 
-const fullEnrichPersonRef = needsOneOf(
-  {
-    person_professional_network_url: text('LinkedIn profile URL. Enough on its own.'),
-    person_name: text('Full name, with a company identifier.'),
-    company_domain: text(),
-    company_professional_network_url: text('Employer LinkedIn URL.'),
+/** One person reference for every provider; translated to each provider's own parameter names before it runs. */
+const personRef = z.strictObject({
+  linkedin_url: text('LinkedIn profile URL. Enough on its own for every provider.'),
+  email: text('Email address. Enough on its own for apollo, people_data_labs and datalegion.'),
+  name: text('Full name, with company_domain or company_name.'),
+  first_name: text('With last_name, instead of name.'),
+  last_name: text(),
+  company_domain: text('Employer domain, e.g. stripe.com.'),
+  company_name: text('Employer name.'),
+  apollo_id: text('apollo_id from people_company_search; apollo only.'),
+  pdl_id: text('people_data_labs only.'),
+  legion_id: text('datalegion only.'),
+});
+
+/** One company reference for every provider. */
+const companyRef = z.strictObject({
+  domain: text('e.g. stripe.com. Enough on its own for every provider.'),
+  linkedin_url: text('LinkedIn company URL. Enough on its own for every provider.'),
+  name: text('Company name; not fullenrich. A name several companies share may not match.'),
+});
+
+type PersonRef = z.infer<typeof personRef>;
+type CompanyRef = z.infer<typeof companyRef>;
+
+const fullName = (r: PersonRef) => (has(r.name) ? r.name : has(r.first_name) && has(r.last_name) ? r.first_name + ' ' + r.last_name : undefined);
+
+/** What each provider needs from a shared reference, and its own parameters for it. */
+const IDENTITY: Record<Provider, { person: string; company: string; personOk: (r: PersonRef) => boolean; companyOk: (r: CompanyRef) => boolean; toPerson: (r: PersonRef) => object; toCompany: (r: CompanyRef) => object }> = {
+  fullenrich: {
+    person: 'a linkedin_url, or a name (or first_name and last_name) plus company_domain',
+    company: 'a domain or linkedin_url',
+    personOk: (r) => has(r.linkedin_url) || (!!fullName(r) && has(r.company_domain)),
+    companyOk: (r) => has(r.domain) || has(r.linkedin_url),
+    toPerson: (r) => compact({ person_professional_network_url: r.linkedin_url, person_name: fullName(r), company_domain: r.company_domain }),
+    toCompany: (r) => compact({ domain: r.domain, professional_network_url: r.linkedin_url }),
   },
-  [['person_professional_network_url'], ['person_name', 'company_domain'], ['person_name', 'company_professional_network_url']],
-  'Each fullenrich person needs a person_professional_network_url, or a person_name plus company_domain or company_professional_network_url'
-);
-
-const pdlPersonRef = needsOneOf(
-  {
-    profile: text('LinkedIn or other social profile URL.'),
-    email: text(),
-    phone: text(),
-    pdl_id: text(),
-    name: text(),
-    first_name: text(),
-    last_name: text(),
-    company: text('Employer name or domain.'),
-    school: text(),
-    location: text(),
+  apollo: {
+    person: 'an apollo_id, email or linkedin_url, or a name (or first_name and last_name) plus company_domain or company_name',
+    company: 'a domain, linkedin_url or name',
+    personOk: (r) => has(r.apollo_id) || has(r.email) || has(r.linkedin_url) || (!!fullName(r) && (has(r.company_domain) || has(r.company_name))),
+    companyOk: (r) => has(r.domain) || has(r.linkedin_url) || has(r.name),
+    toPerson: (r) =>
+      compact({ id: r.apollo_id, email: r.email, linkedin_url: r.linkedin_url, name: r.name, first_name: r.first_name, last_name: r.last_name, domain: r.company_domain, organization_name: r.company_name }),
+    toCompany: (r) => compact({ domain: r.domain, linkedin_url: r.linkedin_url, name: r.name }),
   },
-  [['profile'], ['email'], ['phone'], ['pdl_id'], ...NAME_SETS([['name'], ['first_name', 'last_name']], ['company', 'school', 'location'])],
-  'Each people_data_labs request needs a profile, email, phone, pdl_id, or a name plus company, school or location'
-);
-
-const fullEnrichCompanyRef = needsOneOf(
-  { domain: text('e.g. stripe.com.'), professional_network_url: text('LinkedIn company URL.') },
-  [['domain'], ['professional_network_url']],
-  'Each fullenrich company needs a domain or professional_network_url'
-);
-
-const apolloCompanyRef = needsOneOf(
-  { domain: text(), linkedin_url: text(), name: text(), website: text() },
-  [['domain'], ['linkedin_url'], ['name'], ['website']],
-  'Each apollo company needs a domain, linkedin_url, name or website'
-);
-
-const pdlCompanyRef = needsOneOf(
-  {
-    website: text('Company website or domain.'),
-    profile: text('LinkedIn company URL.'),
-    ticker: text(),
-    pdl_id: text(),
-    name: text('Company name. A name several companies share may not match.'),
-    location: text('Helps a name match; never enough alone.'),
+  people_data_labs: {
+    person: 'a pdl_id, linkedin_url or email, or a name (or first_name and last_name) plus company_domain or company_name',
+    company: 'a domain, linkedin_url or name',
+    personOk: (r) => has(r.pdl_id) || has(r.linkedin_url) || has(r.email) || (!!fullName(r) && (has(r.company_domain) || has(r.company_name))),
+    companyOk: (r) => has(r.domain) || has(r.linkedin_url) || has(r.name),
+    toPerson: (r) =>
+      compact({ pdl_id: r.pdl_id, profile: r.linkedin_url, email: r.email, name: r.name, first_name: r.first_name, last_name: r.last_name, company: r.company_domain ?? r.company_name }),
+    toCompany: (r) => compact({ website: r.domain, profile: r.linkedin_url, name: r.name }),
   },
-  [['website'], ['profile'], ['ticker'], ['pdl_id'], ['name']],
-  'Each people_data_labs company needs a website, profile, ticker, pdl_id or name'
-);
-
-const dataLegionCompanyRef = needsOneOf(
-  {
-    domain: text(),
-    social_url: text('LinkedIn company URL.'),
-    name: text('Fuzzy match; add industry or domain for ambiguous names.'),
-    linkedin_id: text(),
-    ticker_symbol: text(),
-    legion_id: text(),
-    industry: text(),
+  datalegion: {
+    person: 'a legion_id, linkedin_url or email, or a name (or first_name and last_name) plus company_domain or company_name',
+    company: 'a domain, linkedin_url or name',
+    personOk: (r) => has(r.legion_id) || has(r.linkedin_url) || has(r.email) || (!!fullName(r) && (has(r.company_domain) || has(r.company_name))),
+    companyOk: (r) => has(r.domain) || has(r.linkedin_url) || has(r.name),
+    toPerson: (r) =>
+      compact({ legion_id: r.legion_id, social_url: r.linkedin_url, email: r.email, full_name: r.name, first_name: r.first_name, last_name: r.last_name, company: r.company_name ?? r.company_domain }),
+    toCompany: (r) => compact({ domain: r.domain, social_url: r.linkedin_url, name: r.name }),
   },
-  [['domain'], ['social_url'], ['name'], ['linkedin_id'], ['ticker_symbol'], ['legion_id']],
-  'Each datalegion company needs a domain, social_url, name, linkedin_id, ticker_symbol or legion_id'
-);
+};
+
+const identityBlock = (p: Provider, about: string, options: z.ZodRawShape = {}) =>
+  provider(
+    { people: batch(personRef).optional(), companies: batch(companyRef).optional(), ...options },
+    about + ' Each person needs ' + IDENTITY[p].person + '. Each company needs ' + IDENTITY[p].company + '.'
+  );
 
 const CONTACT_FIELDS = ['work_email', 'personal_email', 'mobile'] as const;
 type ContactField = (typeof CONTACT_FIELDS)[number];
@@ -331,23 +289,38 @@ const lookupParameters = z.strictObject({
     .describe(
       'People only; never send it with companies. Finds these contact values instead of profiles. fullenrich: work_email 30 credits, personal_email 100, mobile 300, per value found. datalegion: 100 per matched person, every contact field it has. apollo: 30 per match, work email, plus personal emails when personal_email is listed. people_data_labs has no contact lookup.'
     ),
-  fullenrich: provider(
-    { people: batch(fullEnrichPersonRef).optional(), companies: batch(fullEnrichCompanyRef).optional() },
-    'FullEnrich. people: 10 credits per match, no email. companies: 10 credits per match, includes technologies.'
-  ),
-  apollo: provider(
-    { people: batch(apolloPersonRef).optional(), companies: batch(apolloCompanyRef).optional() },
+  fullenrich: identityBlock('fullenrich', 'FullEnrich. people: 10 credits per match, no email. companies: 10 credits per match, includes technologies.'),
+  apollo: identityBlock(
+    'apollo',
     'Apollo. people: 30 credits per match, includes a work email when Apollo has one. companies: 30 credits per match; a name alone matches only on an exact name.'
   ),
-  people_data_labs: provider(
-    { people: batch(pdlPersonRef).optional(), companies: batch(pdlCompanyRef).optional(), min_likelihood: minLikelihood },
-    'People Data Labs. people: 50 credits per match, with work history. companies: 50 credits per match, with funding history.'
+  people_data_labs: identityBlock(
+    'people_data_labs',
+    'People Data Labs. people: 50 credits per match, with work history. companies: 50 credits per match, with funding history.',
+    { min_likelihood: minLikelihood }
   ),
-  datalegion: provider(
-    { people: batch(dataLegionPersonRef).optional(), companies: batch(dataLegionCompanyRef).optional(), min_confidence: minConfidence },
-    'Data Legion. 20 credits per matched person or company.'
-  ),
+  datalegion: identityBlock('datalegion', 'Data Legion. 20 credits per matched person or company.', { min_confidence: minConfidence }),
 });
+
+/** Every shared reference a provider cannot use, as issues naming the input and what that provider needs. */
+function identityIssues(args: Record<string, any>): { path: string; message: string }[] {
+  return LOOKUP_ORDER.flatMap((p) =>
+    (['people', 'companies'] as const).flatMap((kind) =>
+      (Array.isArray(args[p]?.[kind]) ? args[p][kind] : []).flatMap((ref: any, i: number) => {
+        const ok = kind === 'people' ? IDENTITY[p].personOk(ref) : IDENTITY[p].companyOk(ref);
+        if (ok) return [];
+        const given = Object.keys(ref ?? {}).filter((key) => has(ref[key]));
+        return [{ path: p + '.' + kind + '.' + i, message: 'needs ' + (kind === 'people' ? IDENTITY[p].person : IDENTITY[p].company) + (given.length ? '; has ' + given.join(', ') : '') }];
+      })
+    )
+  );
+}
+
+/** The provider's own lookup block for a block of shared references. */
+function toNative(p: Provider, block: Record<string, any>): Record<string, any> {
+  const { people, companies, ...options } = block;
+  return compact({ ...options, people: people?.map(IDENTITY[p].toPerson), companies: companies?.map(IDENTITY[p].toCompany) });
+}
 
 const enrichOutputSchema = z.looseObject({
   providers: z
@@ -1024,15 +997,10 @@ const SEARCH_EXAMPLE = {
 };
 const LOOKUP_EXAMPLE = {
   contact_fields: ['work_email'],
-  fullenrich: { people: [{ person_name: 'Jane Doe', company_domain: 'example.com' }] },
+  fullenrich: { people: [{ name: 'Jane Doe', company_domain: 'example.com' }] },
 };
 const COMPANY_EXAMPLE = { fullenrich: { companies: [{ domain: 'example.com' }] } };
-const EXAMPLE_PERSON: Record<Provider, object> = {
-  fullenrich: { person_name: 'Jane Doe', company_domain: 'example.com' },
-  apollo: { name: 'Jane Doe', domain: 'example.com' },
-  people_data_labs: { name: 'Jane Doe', company: 'example.com' },
-  datalegion: { full_name: 'Jane Doe', company: 'example.com' },
-};
+const EXAMPLE_PERSON = { name: 'Jane Doe', company_domain: 'example.com' };
 
 /** The calls to send instead, built from the caller's own arguments when they are short enough to quote, else the fallbacks. */
 function examples(calls: object[], fallback: object[]): string {
@@ -1320,7 +1288,7 @@ export function registerEnrichTools(
     'people_company_search',
     { title: 'Find people or companies', readOnlyHint: true, openWorldHint: true, destructiveHint: false },
     "Find people or companies you don't know yet. Set entity to \"person\" or \"company\", then give each provider its filters for that entity: people by title, employer, location or seniority; companies by industry, headcount, location, technology or founding year. " +
-      'apollo: free for people, 30 credits per page for companies. fullenrich: 5 credits per record. people_data_labs: 50 credits per record, SQL or Elasticsearch query. firecrawl_search: web results, with the firecrawl_search tool\'s query parameters. ' +
+      'Each provider takes its own native filters; nothing is shared between providers. apollo: free for people, 30 credits per page for companies. fullenrich: 5 credits per record. people_data_labs: 50 credits per record, SQL or Elasticsearch query. firecrawl_search: web results, with the firecrawl_search tool\'s query parameters. ' +
       'Example: ' + JSON.stringify(SEARCH_EXAMPLE) + '. ',
     advertisedSearch,
     SEARCH_EXAMPLE,
@@ -1375,7 +1343,7 @@ export function registerEnrichTools(
     'people_company_enrich',
     // Not read-only: contact_fields reveals contact details the provider charges for.
     { title: 'Look up and enrich people or companies', readOnlyHint: false, openWorldHint: true, destructiveHint: false },
-    'Look up and enrich known people or companies: profiles and work history, or firmographics such as industry, headcount, funding and technologies. Each provider takes its own list of 1 to 50 people or companies; results carry input_index into that list. ' +
+    'Look up and enrich known people or companies: profiles and work history, or firmographics such as industry, headcount, funding and technologies. Each provider takes its own list of 1 to 50 people or companies, all with the same fields: a person is {linkedin_url, email, name or first_name and last_name, company_domain, company_name, apollo_id, pdl_id, legion_id}, a company is {domain, linkedin_url, name}; each provider\'s block says which of them it needs. Results carry input_index into that list. ' +
       'Add contact_fields to get work email, personal email or mobile for people. Misses are free. ' +
       'Example: ' + JSON.stringify(LOOKUP_EXAMPLE) + '. ',
     lookupParameters,
@@ -1384,6 +1352,13 @@ export function registerEnrichTools(
       repairBlocks(args, LOOKUP_ORDER, (p) => lookupParameters.shape[p]);
       repair(lookupParameters, args);
       checkArguments('people_company_enrich', lookupParameters, args, LOOKUP_EXAMPLE);
+      const issues = identityIssues(args);
+      if (issues.length) {
+        throw new UserError(
+          'Invalid people_company_enrich arguments. ' + issues.map((i) => i.path + ': ' + i.message).join('; ') + '. Example: ' + JSON.stringify(LOOKUP_EXAMPLE),
+          { code: 'invalid_input', issues, example: LOOKUP_EXAMPLE }
+        );
+      }
     },
     (args) => {
       const a = lookupParameters.parse(args) as Record<string, any>;
@@ -1392,7 +1367,7 @@ export function registerEnrichTools(
       if (both) {
         const split = a[both].people
           ? [{ [both]: { people: a[both].people } }, { [both]: { companies: a[both].companies } }]
-          : [{ [both]: { people: [EXAMPLE_PERSON[both]] } }];
+          : [{ [both]: { people: [EXAMPLE_PERSON] } }];
         throw new UserError('Give ' + both + ' exactly one of people or companies, one kind per call. ' + examples(split, [LOOKUP_EXAMPLE, COMPANY_EXAMPLE]), { code: 'invalid_input' });
       }
       const kinds = new Set(given.map((p) => (a[p].people ? 'people' : 'companies')));
@@ -1408,7 +1383,7 @@ export function registerEnrichTools(
         delete without.contact_fields;
         throw new UserError('contact_fields applies to people only, and these are companies. Drop contact_fields to get their firmographics. ' + examples([without], [COMPANY_EXAMPLE]), { code: 'invalid_input' });
       }
-      const blocks = Object.fromEntries(given.map((p) => [p, nativeLookup(p, a[p], contactFields)]));
+      const blocks = Object.fromEntries(given.map((p) => [p, nativeLookup(p, toNative(p, a[p]), contactFields)]));
       const count = (p: Provider) => (a[p]?.people ?? a[p]?.companies ?? []).length;
       const price = (p: Provider) =>
         !contactFields

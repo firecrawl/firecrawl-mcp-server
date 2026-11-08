@@ -112,9 +112,9 @@ test('a keyless session does not list the enrich tools', async (t) => {
 test('an input without an identifier is refused before any provider runs', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { apiUrl: api.url });
-  const result = await client.callTool({ name: 'people_company_enrich', arguments: { fullenrich: { people: [{ person_name: 'Jane Doe' }] } } });
+  const result = await client.callTool({ name: 'people_company_enrich', arguments: { fullenrich: { people: [{ name: 'Jane Doe', company_name: 'Acme' }] } } });
   assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /fullenrich\.people\.0: Each fullenrich person needs/);
+  assert.match(result.content[0].text, /fullenrich\.people\.0: needs a linkedin_url, or a name \(or first_name and last_name\) plus company_domain; has name, company_name/);
   assert.equal(api.calls.length, 0);
 });
 
@@ -200,7 +200,7 @@ test('contact_fields runs the contact providers on the same people', async (t) =
     name: 'people_company_enrich',
     arguments: {
       contact_fields: ['work_email'],
-      fullenrich: { people: [{ person_name: 'Ada Lovelace', company_domain: 'acme.example' }] },
+      fullenrich: { people: [{ name: 'Ada Lovelace', company_domain: 'acme.example' }] },
       apollo: { people: [{ email: 'ada@acme.example' }] },
       people_data_labs: { people: [{ email: 'ada@acme.example' }] },
     },
@@ -286,7 +286,7 @@ test('an invalid argument names the field, what the block takes and an example',
 test('max_credits refuses a call that could cost more, before any provider runs', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { apiUrl: api.url });
-  const people = Array.from({ length: 40 }, (_, i) => ({ person_professional_network_url: 'https://www.linkedin.com/in/p' + i }));
+  const people = Array.from({ length: 40 }, (_, i) => ({ linkedin_url: 'https://www.linkedin.com/in/p' + i }));
   const refused = await client.callTool({ name: 'people_company_enrich', arguments: { contact_fields: ['work_email'], fullenrich: { people } } });
   assert.equal(refused.isError, true);
   assert.match(refused.content[0].text, /could cost up to 1200 credits \(fullenrich 1200\), above max_credits 1000/);
@@ -374,21 +374,25 @@ test('provider errors carry the tool name, a hint and retryable', async (t) => {
   assert.match(fullenrich.note, /^provider_error: We couldn’t complete this request\. Please try again later\. FullEnrich answers this way when a filter value/);
 });
 
-test('a contact lookup skips a FullEnrich person it cannot identify and still runs the other providers', async (t) => {
+test('one shared person runs on every provider under its own parameter names', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { apiUrl: api.url });
+  const ada = { name: 'Ada Lovelace', company_domain: 'acme.example', company_name: 'Acme', linkedin_url: 'https://www.linkedin.com/in/ada' };
   const result = await client.callTool({
     name: 'people_company_enrich',
-    arguments: {
-      contact_fields: ['work_email'],
-      fullenrich: { people: [{ person_name: 'Ada Lovelace', company_professional_network_url: 'https://www.linkedin.com/company/acme' }] },
-      apollo: { people: [{ email: 'ada@acme.example' }] },
-    },
+    arguments: { fullenrich: { people: [ada] }, apollo: { people: [ada] }, people_data_labs: { people: [ada] }, datalegion: { people: [ada] } },
   });
   assert.notEqual(result.isError, true, JSON.stringify(result));
-  const fullenrich = result.structuredContent.providers.find((p) => p.name === 'fullenrich');
-  assert.match(fullenrich.note, /Skipped inputs 0/);
-  assert.deepEqual(api.calls.map((call) => call.provider), ['apollo']);
+  const options = Object.fromEntries(api.calls.map((call) => [call.provider, call.options]));
+  assert.deepEqual(options.fullenrich, { person_professional_network_url: ada.linkedin_url, person_name: 'Ada Lovelace', company_domain: 'acme.example' });
+  assert.deepEqual(options.apollo.details, [{ linkedin_url: ada.linkedin_url, name: 'Ada Lovelace', domain: 'acme.example', organization_name: 'Acme' }]);
+  assert.deepEqual(options['people-data-labs'].requests[0].params, { profile: ada.linkedin_url, name: 'Ada Lovelace', company: 'acme.example' });
+  assert.equal(options.datalegion.social_url, ada.linkedin_url);
+  assert.equal(options.datalegion.company, 'Acme');
+
+  const company = await client.callTool({ name: 'people_company_enrich', arguments: { people_data_labs: { companies: [{ domain: 'acme.example', name: 'Acme' }] } } });
+  assert.notEqual(company.isError, true, JSON.stringify(company));
+  assert.equal(api.calls.at(-1).options.website, 'acme.example');
 });
 
 test('Apollo runs a contact lookup only for the fields it has, and keeps only matches that carry them', async (t) => {
@@ -415,12 +419,9 @@ test('the published schema carries the identifier rules', async (t) => {
   const client = await connect(t, {});
   const { tools } = await client.listTools();
   const enrich = tools.find((tool) => tool.name === 'people_company_enrich');
-  const nonBlank = (...keys) => ({ required: keys, properties: Object.fromEntries(keys.map((key) => [key, { pattern: '\\S' }])) });
-  assert.deepEqual(enrich.inputSchema.properties.fullenrich.properties.people.items.anyOf, [
-    nonBlank('person_professional_network_url'),
-    nonBlank('person_name', 'company_domain'),
-    nonBlank('person_name', 'company_professional_network_url'),
-  ]);
+  const person = Object.keys(enrich.inputSchema.properties.fullenrich.properties.people.items.properties);
+  assert.deepEqual(person, ['linkedin_url', 'email', 'name', 'first_name', 'last_name', 'company_domain', 'company_name', 'apollo_id', 'pdl_id', 'legion_id']);
+  assert.match(enrich.inputSchema.properties.fullenrich.description, /Each person needs a linkedin_url, or a name/);
   const search = tools.find((tool) => tool.name === 'people_company_search');
   const pdl = search.inputSchema.properties.people_data_labs.anyOf;
   for (const branch of pdl) assert.deepEqual(branch.oneOf, [{ required: ['sql'] }, { required: ['query'] }]);
@@ -451,9 +452,9 @@ test('a FullEnrich contact still running upstream is reported as pending, not un
       contact_fields: ['work_email'],
       fullenrich: {
         people: [
-          { person_name: 'Pending Person', company_domain: 'acme.example' },
-          { person_name: 'Unread Person', company_domain: 'acme.example' },
-          { person_name: 'Parked Person', company_domain: 'acme.example' },
+          { name: 'Pending Person', company_domain: 'acme.example' },
+          { name: 'Unread Person', company_domain: 'acme.example' },
+          { name: 'Parked Person', company_domain: 'acme.example' },
         ],
       },
     },
@@ -495,7 +496,7 @@ test('enrich shape errors carry an example built from the call', async (t) => {
   const client = await connect(t, { apiUrl: api.url });
   const mixed = await client.callTool({
     name: 'people_company_enrich',
-    arguments: { fullenrich: { people: [{ person_professional_network_url: 'https://www.linkedin.com/in/ada' }] }, apollo: { companies: [{ domain: 'acme.example' }] } },
+    arguments: { fullenrich: { people: [{ linkedin_url: 'https://www.linkedin.com/in/ada' }] }, apollo: { companies: [{ domain: 'acme.example' }] } },
   });
   assert.equal(mixed.isError, true);
   assert.match(mixed.content[0].text, /separate calls.*Example calls: \{"fullenrich":\{"people".*then \{"apollo":\{"companies"/);
@@ -510,12 +511,12 @@ test('enrich shape errors carry an example built from the call', async (t) => {
 test('a DataLegion person needs an identifier or a full name with context', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { apiUrl: api.url });
-  for (const person of [{ full_name: 'Ada Lovelace' }, { first_name: 'Ada', last_name: 'Lovelace' }, { first_name: 'Ada', company: 'Acme' }]) {
+  for (const person of [{ name: 'Ada Lovelace' }, { first_name: 'Ada', last_name: 'Lovelace' }, { first_name: 'Ada', company_name: 'Acme' }]) {
     const result = await client.callTool({ name: 'people_company_enrich', arguments: { datalegion: { people: [person] } } });
     assert.equal(result.isError, true, JSON.stringify(person));
-    assert.match(result.content[0].text, /Each datalegion person needs/);
+    assert.match(result.content[0].text, /datalegion\.people\.0: needs a legion_id, linkedin_url or email/);
   }
-  const ok = await client.callTool({ name: 'people_company_enrich', arguments: { datalegion: { people: [{ first_name: 'Ada', last_name: 'Lovelace', company: 'Acme' }] } } });
+  const ok = await client.callTool({ name: 'people_company_enrich', arguments: { datalegion: { people: [{ first_name: 'Ada', last_name: 'Lovelace', company_name: 'Acme' }] } } });
   assert.notEqual(ok.isError, true, JSON.stringify(ok));
   assert.deepEqual(api.calls.map((call) => call.options.company), ['Acme']);
 });
