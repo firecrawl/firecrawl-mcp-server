@@ -95,10 +95,12 @@ test('search-result URLs that match no provider fall back to ranking the questio
   assert.equal(api.requests.length, before + 1, 'URLs alone are a browse; an empty one is the answer');
 });
 
-test('find tools tells agents to pass their own search results', async (t) => {
+test('find tools states when it is useful and that it takes search-result urls', async (t) => {
   const { client } = await startStdioWithApi(t);
   const tool = (await client.request('tools/list', {})).tools.find(entry => entry.name === 'firecrawl_find_tools');
-  assert.match(tool.description, /After a web search, pass its result URLs as urls and the question as query/);
+  assert.match(tool.description, /Useful when web results are blocked, rendered by JavaScript or behind a login, partial or out of date/);
+  assert.match(tool.description, /optionally, urls such as web search results/);
+  assert.doesNotMatch(tool.description, /\b(prefer|always|before settling)\b/i);
   assert.ok(tool.description.length <= 2048, `description is ${tool.description.length} characters`);
-  assert.match(tool.inputSchema.properties.urls.description, /Result URLs from a web search you already ran/);
+  assert.match(tool.inputSchema.properties.urls.description, /URLs related to the question, such as web search results/);
 });
