@@ -11,6 +11,7 @@
   - `entity` is described as required, exactly `"person"` or `"company"`. A call without it, or with another value, is refused with an error that names it, every unknown top-level field and an example call.
   - The `max_credits` description says how the estimate is made and that 0 runs only free calls. A `max_credits_exceeded` error gives the minimum `max_credits`, and the same call raised to it when the call is short enough to quote.
   - `contact_fields` is described as people only. Every argument error that reaches schema validation names all invalid fields, not the first five, and every enrich shape error (no provider, people and companies mixed, `contact_fields` with companies) includes an example call, built from the caller's own arguments when they are short.
+- `firecrawl_find_tools` is marked always-load (`_meta["anthropic/alwaysLoad"]`), so clients that defer MCP tools behind a tool search, such as Claude Code, list it with the agent's other tools from the first turn. Its description no longer tells the agent to prefer `firecrawl_search` for data tasks. In agent evals, both changes together made agents look up and run Alexandria providers on data tasks much more often, with no extra lookups on tasks that need only the web.
 
 ### Fixed
 
