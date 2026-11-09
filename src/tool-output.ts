@@ -265,8 +265,10 @@ export const interactOutputSchema = z
     stderr: str('Standard error of the executed code.'),
     exitCode: num('Exit status of the executed code.'),
     data: unknown('Payload returned by the interaction.'),
-    sessionUrl: str('URL for viewing the live session.'),
-    liveUrl: str('URL for viewing the live session.'),
+    sessionId: str('Browser session behind this scrape.'),
+    liveViewUrl: str('Read-only live view of the browser session.'),
+    interactiveLiveViewUrl: str('Live view a person can use to control the browser session, e.g. to solve a captcha or log in.'),
+    cdpUrl: str('Chrome DevTools Protocol WebSocket URL for the browser session.'),
   })
   .describe('Result of a browser interaction, with the session identifier to continue or stop it.');
 
