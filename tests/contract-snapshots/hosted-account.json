@@ -22,7 +22,7 @@
       "firecrawl_feedback@771747894435",
       "firecrawl_crawl@edf6dda29b37",
       "firecrawl_check_crawl_status@723e60af703e",
-      "firecrawl_agent@f3221ea5dbb1",
+      "firecrawl_agent@54c127a663f8",
       "firecrawl_agent_status@6c6e5f971f8e",
       "firecrawl_interact@8040e21dad51",
       "firecrawl_interact_stop@e5b6a01c6cc2",
@@ -42,7 +42,7 @@
       "firecrawl_developer_search@e9810e540216",
       "firecrawl_gov_search@b020bd420f91",
       "people_company_search@ed8cd4b2250a",
-      "people_company_enrich@c021f960184e",
+      "people_company_enrich@77996c1772bd",
       "firecrawl_credit_usage@5b79f64c3f82"
     ]
   },
