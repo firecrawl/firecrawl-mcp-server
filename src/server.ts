@@ -2885,7 +2885,7 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
     name: 'firecrawl_agent',
     annotations: {
       title: 'Firecrawl agent',
-      readOnlyHint: false, // Starts an autonomous research agent job on the Firecrawl API.
+      readOnlyHint: true, // Researches and returns data; the job it starts changes nothing on the web or in the account.
       openWorldHint: true, // The agent browses and searches the open web to fulfill the prompt.
       destructiveHint: false, // Gathers information only; does not delete external data or user resources.
       idempotentHint: false, // Each call starts a new research job and is billed again.
