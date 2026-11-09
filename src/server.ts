@@ -110,7 +110,7 @@ import {
   searchToolBaseFields,
   termsWriteError,
 } from './tool-helpers.js';
-import { httpUrl, normalizeToolArguments } from './tool-arguments.js';
+import { httpUrl, normalizeToolArguments, unknownArguments } from './tool-arguments.js';
 
 /**
  * Library entry point: `import { createFirecrawlMcpServer } from 'firecrawl-mcp/server'`.
@@ -828,6 +828,32 @@ export function createFirecrawlMcpServer(
     );
   }
 
+  const MAX_LISTED_UNKNOWN_ARGUMENTS = 10;
+
+  // Tool inputs are listed with `additionalProperties: false`, but a plain
+  // zod object strips unknown keys, so a misspelled option (`maxage` for
+  // `maxAge`) would be dropped and the call would still succeed without it.
+  function assertKnownArguments(tool: string, parameters: unknown, args: unknown): void {
+    const all = unknownArguments(parameters, args, tool);
+    if (all.length === 0) return;
+    // A call with a great many unknown fields would otherwise echo them all.
+    const unknown = all.slice(0, MAX_LISTED_UNKNOWN_ARGUMENTS);
+    const more = all.length - unknown.length;
+    const names = unknown.map(({ path }) => `"${path}"`).join(', ') + (more ? ` and ${more} more` : '');
+    const hints = unknown
+      .filter(({ suggestion }) => suggestion)
+      .map(({ path, suggestion }) => `Did you mean "${suggestion}" for "${path}"?`);
+    const message = [
+      `${tool} does not accept ${names}; the call was not run.`,
+      'Use only the fields in the tool\'s input schema.',
+      ...hints,
+    ].join(' ');
+    throw new UserError(message, {
+      success: false,
+      error: { code: 'invalid_request', message, fields: unknown.map(({ path }) => path) },
+    });
+  }
+
   /**
    * Every tool runs inside this pipeline: argument normalization before
    * validation, a per-call session copy carrying a request ID, then
@@ -904,7 +930,14 @@ export function createFirecrawlMcpServer(
       ...wrapped,
       beforeValidate: (args, session) => {
         normalizeToolArguments(wrapped.parameters, args);
-        return delivered(() => wrapped.beforeValidate?.(args, session));
+        // The tool's own hook runs first: it may refuse the call (a credential
+        // gate) or remove fields it tolerates before unknown fields are checked.
+        return delivered(async () => {
+          const early = await wrapped.beforeValidate?.(args, session);
+          if (early !== undefined) return early;
+          assertKnownArguments(wrapped.name, wrapped.parameters, args);
+          return undefined;
+        });
       },
       execute: (args, context) => {
         const session = copySession(context.session);
