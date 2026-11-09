@@ -430,12 +430,16 @@ test('page-size maximums are advertised in the input schema', async (t) => {
   assert.ok(maximums.includes('"maximum":25') && maximums.includes('"maximum":10'), JSON.stringify(maximums));
 });
 
-test('a missing entity is inferred from the filter names', async (t) => {
+test('a missing entity is refused with an example, not guessed from the filters', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { apiUrl: api.url });
   const result = await client.callTool({ name: 'people_company_search', arguments: { apollo: { organization_num_employees_ranges: ['51,200'], organization_locations: ['Boston, US'] } } });
-  assert.notEqual(result.isError, true, JSON.stringify(result));
-  assert.equal(api.calls[0].capability, 'companies/search');
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /entity: required, exactly "person" or "company"\. Example: \{"entity":"person"/);
+  const typed = await client.callTool({ name: 'people_company_search', arguments: { type: 'company', apollo: { q_organization_name: 'Acme' } } });
+  assert.equal(typed.isError, true);
+  assert.match(typed.content[0].text, /entity: required, exactly "person" or "company"; unknown field type; takes /);
+  assert.equal(api.calls.length, 0);
 });
 
 test('provider errors carry the tool name, a hint and retryable', async (t) => {

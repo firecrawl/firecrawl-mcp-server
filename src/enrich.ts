@@ -1178,34 +1178,6 @@ const ENTITY: Record<string, 'person' | 'company'> = {
   organizations: 'company',
 };
 
-const PAGING = ['per_page', 'page', 'limit', 'offset', 'sql', 'query'];
-const filterKeys = (schema: z.ZodObject) =>
-  new Set(SEARCH_ORDER.flatMap((p) => Object.keys(shapeOf(schema.shape[p]) ?? {})).filter((key) => !PAGING.includes(key)));
-
-/**
- * Settles entity before validation: an alias value (people, organization), an entity_type, type or kind
- * key, or, when entity is missing or unknown, the entity whose filter names the provider blocks use.
- */
-function inferEntity(args: Record<string, any>): void {
-  for (const key of ['entity_type', 'type', 'kind']) {
-    if (args.entity === undefined && typeof args[key] === 'string' && ENTITY[args[key].trim().toLowerCase()]) {
-      args.entity = args[key];
-      delete args[key];
-    }
-  }
-  if (typeof args.entity === 'string') args.entity = ENTITY[args.entity.trim().toLowerCase()] ?? args.entity;
-  if (args.entity === 'person' || args.entity === 'company') return;
-  const person = filterKeys(peopleSearchParameters);
-  const company = filterKeys(companySearchParameters);
-  const blocks = Object.values(args).flatMap((value) => (Array.isArray(value) ? value : [value])).filter(isPlain);
-  const keys = blocks.flatMap((block) => Object.keys(block));
-  const sql = blocks.map((block) => (typeof block.sql === 'string' ? block.sql.toLowerCase() : '')).join(' ');
-  const personHits = keys.filter((key) => person.has(key) && !company.has(key)).length + (/\bfrom\s+person\b/.test(sql) ? 1 : 0);
-  const companyHits = keys.filter((key) => company.has(key) && !person.has(key)).length + (/\bfrom\s+company\b/.test(sql) ? 1 : 0);
-  if (personHits && !companyHits) args.entity = 'person';
-  else if (companyHits && !personHits) args.entity = 'company';
-}
-
 type Plan = {
   order: Provider[];
   blocks: Record<string, any>;
@@ -1332,7 +1304,7 @@ export function registerEnrichTools(
     advertisedSearch,
     SEARCH_EXAMPLE,
     (args) => {
-      inferEntity(args);
+      if (typeof args.entity === 'string') args.entity = ENTITY[args.entity.trim().toLowerCase()] ?? args.entity;
       const entity = searchParameters.shape.entity.safeParse(args.entity);
       if (!entity.success) {
         const known = Object.keys(advertisedSearch.shape);
