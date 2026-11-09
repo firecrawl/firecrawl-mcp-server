@@ -15,7 +15,7 @@
   "tools": [
     "firecrawl_scrape@1c581f319960",
     "firecrawl_map@3214f5d6a1a4",
-    "firecrawl_search@b2d946bd62de",
+    "firecrawl_search@20e3f993315a",
     "firecrawl_find_tools@d7ff9347d628",
     "firecrawl_crawl@f65a92a7a6ca",
     "firecrawl_check_crawl_status@723e60af703e",
