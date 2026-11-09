@@ -370,7 +370,7 @@ Use this guide to select the right tool for your task:
 - **If you need multi-source research that returns structured data, do not know the URLs, or the answer spans several sites** (an entity plus its fields, a list, a dataset): use **agent**
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
 - **If you need interactive browser automation** (click, type, navigate): use **interact** with a URL for a fresh page, or **scrape** + **interact** when you already scraped the page or need tighter scrape control
-- **If you need structured records** (the same fields across several entities, exact figures, provenance, or many records): find an Alexandria provider with **find_tools** `query`, read its contract with **find_tools** `providers` and `capabilities`, and execute it with **scrape** `alexandria`
+- **If you need structured records a catalogued provider can return** (the same fields across several entities, exact figures, provenance, or many records): find an Alexandria provider with **find_tools** `query`, read its contract with **find_tools** `providers` and `capabilities`, and execute it with **scrape** `alexandria`. When no provider fits, fall back to **agent** for open-ended research
 
 ### Quick Reference Table
 
