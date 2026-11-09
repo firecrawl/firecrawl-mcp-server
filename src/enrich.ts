@@ -1358,8 +1358,8 @@ export function registerEnrichTools(
 
   tool(
     'people_company_enrich',
-    // Not read-only: contact_fields reveals contact details the provider charges for.
-    { title: 'Look up and enrich people or companies', readOnlyHint: false, openWorldHint: true, destructiveHint: false },
+    // Read-only: looks records up and returns them; contact_fields costs credits but changes nothing.
+    { title: 'Look up and enrich people or companies', readOnlyHint: true, openWorldHint: true, destructiveHint: false },
     'Look up and enrich known people or companies: profiles and work history, or firmographics such as industry, headcount, funding and technologies. Each provider block takes people, companies or both, each its own list of 1 to 50. A block with both runs them as two requests and reports two entries, kind "people" and kind "companies"; results carry input_index into their entry\'s list. ' +
       'Add contact_fields to get work email, personal email or mobile for people. Misses are free. ' +
       'Example: ' + JSON.stringify(LOOKUP_EXAMPLE) + '. ',

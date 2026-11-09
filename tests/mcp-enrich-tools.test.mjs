@@ -93,7 +93,7 @@ test('the enrich tools are listed by default', async (t) => {
     assert.match(tool.description, /Example: \{/);
   }
   const hints = Object.fromEntries(tools.map((tool) => [tool.name, tool.annotations?.readOnlyHint]));
-  assert.deepEqual(hints, { people_company_search: true, people_company_enrich: false });
+  assert.deepEqual(hints, { people_company_search: true, people_company_enrich: true });
 });
 
 test('the CLI server with an API key lists the enrich tools', async (t) => {
