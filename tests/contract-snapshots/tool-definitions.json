@@ -2106,7 +2106,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_find_tools@20069524ed5b": {
+  "firecrawl_find_tools@ab99afba6f1d": {
     "annotations": {
       "title": "Find Tools",
       "readOnlyHint": true,
@@ -2115,7 +2115,7 @@
       "idempotentHint": true
     },
     "title": "Find Tools",
-    "description": "Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more: typed, sourced records through published contracts. Prefer normal firecrawl_search for a data task; it already returns matching providers. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Reaches data beyond the open web: records from licensed databases and provider APIs, and website data that takes more than a single fetch to collect, such as results from on-site search, filters or forms, paginated listings, and pages rendered by JavaScript. Also helps when web results only partly answer or look out of date. Useful when the answer needs structured, current or bulk records: company and people data, business reviews, product prices, property and job listings, flights and hotels, and search trends. Takes the question as query and, optionally, urls such as web search results. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.",
+    "description": "Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more: typed, sourced records through published contracts. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Reaches data beyond the open web: records from licensed databases and provider APIs, and website data that takes more than a single fetch to collect, such as results from on-site search, filters or forms, paginated listings, and pages rendered by JavaScript. Also helps when web results only partly answer or look out of date. Useful when the answer needs structured, current or bulk records: company and people data, business reviews, product prices, property and job listings, flights and hotels, and search trends. Takes the question as query and, optionally, urls such as web search results. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2372,6 +2372,9 @@
         }
       },
       "additionalProperties": false
+    },
+    "_meta": {
+      "anthropic/alwaysLoad": true
     }
   },
   "firecrawl_gov_search@b020bd420f91": {
@@ -2577,7 +2580,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_interact@91e5d3af32e0": {
+  "firecrawl_interact@8040e21dad51": {
     "annotations": {
       "title": "Firecrawl interact",
       "readOnlyHint": false,
@@ -2586,7 +2589,7 @@
       "idempotentHint": false
     },
     "title": "Firecrawl interact",
-    "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either `url` (the scheme may be omitted) or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThe session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped `scrapeOptions.profile` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs.\n",
+    "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either `url` (the scheme may be omitted) or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThe session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped `scrapeOptions.profile` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs. When the page needs the user to act, share `interactiveLiveViewUrl` with the user only, so they can take over the session.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2898,8 +2901,8 @@
         "data": {
           "description": "Payload returned by the interaction."
         },
-        "sessionUrl": {
-          "description": "URL for viewing the live session.",
+        "sessionId": {
+          "description": "Browser session behind this scrape.",
           "anyOf": [
             {
               "type": "string"
@@ -2909,8 +2912,19 @@
             }
           ]
         },
-        "liveUrl": {
-          "description": "URL for viewing the live session.",
+        "liveViewUrl": {
+          "description": "Read-only live view of the browser session.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "interactiveLiveViewUrl": {
+          "description": "Live view the user can use to control the browser session.",
           "anyOf": [
             {
               "type": "string"
@@ -2924,7 +2938,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_interact@c95ca74e3f74": {
+  "firecrawl_interact@daa715f1647d": {
     "annotations": {
       "title": "Firecrawl interact",
       "readOnlyHint": false,
@@ -2933,7 +2947,7 @@
       "idempotentHint": false
     },
     "title": "Firecrawl interact",
-    "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either `url` (the scheme may be omitted) or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThe session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped `scrapeOptions.profile` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs.\n",
+    "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either `url` (the scheme may be omitted) or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThe session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped `scrapeOptions.profile` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs. When the page needs the user to act, share `interactiveLiveViewUrl` with the user only, so they can take over the session.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3295,8 +3309,8 @@
         "data": {
           "description": "Payload returned by the interaction."
         },
-        "sessionUrl": {
-          "description": "URL for viewing the live session.",
+        "sessionId": {
+          "description": "Browser session behind this scrape.",
           "anyOf": [
             {
               "type": "string"
@@ -3306,8 +3320,19 @@
             }
           ]
         },
-        "liveUrl": {
-          "description": "URL for viewing the live session.",
+        "liveViewUrl": {
+          "description": "Read-only live view of the browser session.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "interactiveLiveViewUrl": {
+          "description": "Live view the user can use to control the browser session.",
           "anyOf": [
             {
               "type": "string"
@@ -3892,7 +3917,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_monitor_update@1af896471afb": {
+  "firecrawl_monitor_update@adf5af8dd01e": {
     "annotations": {
       "title": "Update Firecrawl monitor",
       "readOnlyHint": false,
@@ -3901,7 +3926,7 @@
       "idempotentHint": true
     },
     "title": "Update Firecrawl monitor",
-    "description": "\nPatch an existing monitor by ID. The body can change its name, active/paused status, schedule, targets, goal, judging, webhook, notifications, or retention; these changes affect future scheduled checks.\n\nReturns the updated monitor.\n",
+    "description": "\nPatch an existing monitor by ID; changes affect future scheduled checks. Pause or resume it with `status` (\"paused\" or \"active\"). Reschedule it with `scheduleText` (plain language, e.g. \"every 6 hours\") or `cron`, plus `timezone`; a new schedule without `timezone` runs in UTC. For other fields pass `body`, a partial monitor in the create shape (name, targets, goal, judgeEnabled, webhook, notification, retentionDays), e.g. `{\"name\": \"Pricing watch\"}`. The parameters are merged into `body` as `{\"status\": ..., \"schedule\": {\"text\" or \"cron\": ..., \"timezone\": ...}}` and override the same keys there. At least one change is required.\n\nReturns the updated monitor.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3915,11 +3940,26 @@
             "type": "string"
           },
           "additionalProperties": true
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "paused"
+          ]
+        },
+        "scheduleText": {
+          "type": "string"
+        },
+        "cron": {
+          "type": "string"
+        },
+        "timezone": {
+          "type": "string"
         }
       },
       "required": [
-        "id",
-        "body"
+        "id"
       ],
       "additionalProperties": false
     },

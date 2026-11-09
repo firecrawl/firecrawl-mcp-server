@@ -49,7 +49,7 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
 }
 
 const SEARCH_SURFACE_FIND_TOOLS_DESCRIPTION =
-  'Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers ' + ALEXANDRIA_CATALOGUE_VERTICALS + ': typed, sourced records through published contracts. Prefer normal firecrawl_search for a data task; it already returns matching providers. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Reaches data beyond the open web: records from licensed databases and provider APIs, and website data that takes more than a single fetch to collect, such as results from on-site search, filters or forms, paginated listings, and pages rendered by JavaScript. Also helps when web results only partly answer or look out of date. Useful when the answer needs structured, current or bulk records: company and people data, business reviews, product prices, property and job listings, flights and hotels, and search trends. Takes the question as query and, optionally, urls such as web search results. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.';
+  'Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers ' + ALEXANDRIA_CATALOGUE_VERTICALS + ': typed, sourced records through published contracts. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Reaches data beyond the open web: records from licensed databases and provider APIs, and website data that takes more than a single fetch to collect, such as results from on-site search, filters or forms, paginated listings, and pages rendered by JavaScript. Also helps when web results only partly answer or look out of date. Useful when the answer needs structured, current or bulk records: company and people data, business reviews, product prices, property and job listings, flights and hotels, and search trends. Takes the question as query and, optionally, urls such as web search results. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.';
 
 // Search-surface variant of firecrawl_search. It takes no scrapeOptions and
 // builds the outbound /v2/search body from an explicit set of fields, so the
@@ -215,6 +215,7 @@ export function searchSurfaceTools({
     if (findTools) {
       surface.addTool({
         ...findTools,
+        _meta: { 'anthropic/alwaysLoad': true },
         description: SEARCH_SURFACE_FIND_TOOLS_DESCRIPTION,
       });
     }

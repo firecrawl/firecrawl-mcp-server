@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- `firecrawl_find_tools` is marked always-load (`_meta["anthropic/alwaysLoad"]`), so clients that defer MCP tools behind a tool search, such as Claude Code, list it with the agent's other tools from the first turn. Its description no longer tells the agent to prefer `firecrawl_search` for data tasks. In agent evals, both changes together made agents look up and run Alexandria providers on data tasks much more often, with no extra lookups on tasks that need only the web.
+
 ### Fixed
 
 - `firecrawl_find_tools` says it reaches data beyond the open web (records from licensed databases and provider APIs, and website data that takes more than a single fetch to collect: results from on-site search, filters or forms, paginated listings, and pages rendered by JavaScript; also web results that only partly answer or look out of date), when it is useful (answers that need structured, current or bulk records: company and people data, business reviews, product prices, property and job listings, flights and hotels, and search trends) and that it takes the question as `query` and, optionally, `urls` such as web search results. It replaces "Use query for semantic discovery or urls to find providers for a website." `urls` gets a description. Since firecrawl/exchange#1342, `urls` with `query` ranks the tools for those sites first and still matches the rest of the catalogue, so search-result URLs from any search can be passed as they are.

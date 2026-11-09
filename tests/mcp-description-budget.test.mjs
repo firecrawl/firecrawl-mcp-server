@@ -23,7 +23,7 @@ test('every tool description fits the 2,048-character cap and keeps the routing 
   const scrape = byName.get('firecrawl_scrape');
   assert.match(scrape, /^Scrape one URL and return its content/);
   assert.match(scrape, /`firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages/);
-  assert.match(byName.get('firecrawl_find_tools'), /Prefer normal firecrawl_search/);
+  assert.doesNotMatch(byName.get('firecrawl_find_tools'), /Prefer normal firecrawl_search/);
   assert.match(byName.get('firecrawl_find_tools'), /Reaches data beyond the open web: records from licensed databases and provider APIs, and website data that takes more than a single fetch/);
   assert.match(byName.get('firecrawl_find_tools'), /Takes the question as query and, optionally, urls such as web search results/);
 });
