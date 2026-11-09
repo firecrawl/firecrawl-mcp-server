@@ -3088,7 +3088,7 @@ Returns job status, progress information, and result data when completed.
     description: `
 Open or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either \`url\` (the scheme may be omitted) or \`scrapeId\`, and either a natural-language \`prompt\` or executable \`code\`; code can run as Bash, Python, or Node with a bounded timeout.
 
-The session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped \`scrapeOptions.profile\` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs. When the page needs a person (a captcha or a login), give the user \`interactiveLiveViewUrl\` so they can take over the session.
+The session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped \`scrapeOptions.profile\` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs. When the page needs the user to act, share \`interactiveLiveViewUrl\` with the user only, so they can take over the session.
 `,
     outputSchema: interactOutputSchema,
     parameters: z
@@ -3171,16 +3171,12 @@ The session runs in an isolated Firecrawl-hosted browser that never receives the
       if (language) interactArgs.language = language;
       if (timeout != null) interactArgs.timeout = timeout;
       const res = await client.interact(activeScrapeId, interactArgs as any);
-      if (openedFromUrl && res && typeof res === 'object' && !Array.isArray(res)) {
-        return structuredText({
-          ...(res as unknown as Record<string, unknown>),
-          scrapeId: activeScrapeId,
-        });
+      if (!res || typeof res !== 'object' || Array.isArray(res)) {
+        return structuredText(openedFromUrl ? { scrapeId: activeScrapeId, result: res } : res);
       }
-      if (openedFromUrl) {
-        return structuredText({ scrapeId: activeScrapeId, result: res });
-      }
-      return structuredText(res);
+      const payload = { ...(res as unknown as Record<string, unknown>) };
+      delete payload.cdpUrl;
+      return structuredText(openedFromUrl ? { ...payload, scrapeId: activeScrapeId } : payload);
     },
   });
 

@@ -11,7 +11,7 @@ const INTERACT_RESPONSE = {
   cdpUrl: 'wss://browser.firecrawl.dev/cdp/session-live-1',
   liveViewUrl: 'https://liveview.firecrawl.dev/session-live-1',
   interactiveLiveViewUrl: 'https://liveview.firecrawl.dev/session-live-1?interactive=true',
-  output: 'The page asks for a captcha.',
+  output: 'The page is ready.',
   stdout: '',
   result: '',
   stderr: '',
@@ -31,7 +31,7 @@ async function startFakeApi(t) {
       return;
     }
     if (req.method === 'POST' && req.url === '/v2/scrape') {
-      res.end(JSON.stringify({ success: true, data: { markdown: '# Login', metadata: { scrapeId: 'job-live' } } }));
+      res.end(JSON.stringify({ success: true, data: { markdown: '# Start', metadata: { scrapeId: 'job-live' } } }));
       return;
     }
     res.writeHead(404);
@@ -42,7 +42,7 @@ async function startFakeApi(t) {
   return { url: `http://127.0.0.1:${server.address().port}`, requests };
 }
 
-test('interact structured output keeps the live view URLs the API returns', async (t) => {
+test('interact output keeps the live view URLs and leaves out cdpUrl', async (t) => {
   const api = await startFakeApi(t);
   const { client } = await startStdio(t, {
     CLOUD_SERVICE: 'false',
@@ -52,14 +52,17 @@ test('interact structured output keeps the live view URLs the API returns', asyn
 
   const { tools } = await client.request('tools/list', {});
   const interact = tools.find((tool) => tool.name === 'firecrawl_interact');
-  for (const key of ['sessionId', 'liveViewUrl', 'interactiveLiveViewUrl', 'cdpUrl']) {
+  for (const key of ['sessionId', 'liveViewUrl', 'interactiveLiveViewUrl']) {
     assert.ok(interact.outputSchema.properties[key], `${key} is declared in the output schema`);
   }
+  assert.equal(interact.outputSchema.properties.cdpUrl, undefined, 'cdpUrl is not declared in the output schema');
   assert.match(interact.description, /`interactiveLiveViewUrl`/);
+  assert.doesNotMatch(interact.description, /captcha/i);
+  assert.doesNotMatch(interact.description, /login/i);
 
   for (const { args, scrapedUrls } of [
-    { args: { scrapeId: 'job-live', prompt: 'Log in' }, scrapedUrls: [] },
-    { args: { url: 'https://example.com/login', prompt: 'Log in' }, scrapedUrls: ['https://example.com/login'] },
+    { args: { scrapeId: 'job-live', prompt: 'Open the menu' }, scrapedUrls: [] },
+    { args: { url: 'https://example.com/start', prompt: 'Open the menu' }, scrapedUrls: ['https://example.com/start'] },
   ]) {
     const before = api.requests.length;
     const result = await client.request('tools/call', { name: 'firecrawl_interact', arguments: args });
@@ -75,9 +78,13 @@ test('interact structured output keeps the live view URLs the API returns', asyn
     const structured = result.structuredContent;
     assert.equal(structured.interactiveLiveViewUrl, INTERACT_RESPONSE.interactiveLiveViewUrl);
     assert.equal(structured.liveViewUrl, INTERACT_RESPONSE.liveViewUrl);
-    assert.equal(structured.cdpUrl, INTERACT_RESPONSE.cdpUrl);
     assert.equal(structured.sessionId, INTERACT_RESPONSE.sessionId);
     assert.equal(structured.output, INTERACT_RESPONSE.output);
+    assert.equal('cdpUrl' in structured, false, 'structuredContent leaves out cdpUrl');
+    const text = result.content.map((part) => part.text ?? '').join('\n');
+    assert.doesNotMatch(text, /cdpUrl/, 'text content leaves out cdpUrl');
+    assert.equal(text.includes(INTERACT_RESPONSE.cdpUrl), false, 'text content leaves out the CDP URL');
+    assert.equal(text.includes(INTERACT_RESPONSE.interactiveLiveViewUrl), true, 'text content keeps the interactive live view URL');
   }
   assert.equal(
     api.requests.filter((request) => request.url === '/v2/scrape/job-live/interact').length,
