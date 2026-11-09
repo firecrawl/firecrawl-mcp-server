@@ -224,6 +224,70 @@ function buildMonitorCreateBody(
   };
 }
 
+function trimmedString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function plainObject(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? { ...(value as Record<string, unknown>) }
+    : undefined;
+}
+
+/**
+ * The PATCH body for firecrawl_monitor_update. The first-class `status`,
+ * `scheduleText`, `cron` and `timezone` parameters are merged into `body` and
+ * override the same keys there. The API's schedule takes `cron` or `text`, not
+ * both, and replaces the stored schedule whole (timezone defaults to UTC).
+ */
+function buildMonitorUpdateBody(
+  args: Record<string, unknown>
+): Record<string, unknown> {
+  const body = plainObject(args.body) ?? {};
+  const status = trimmedString(args.status);
+  const scheduleText = trimmedString(args.scheduleText);
+  const cron = trimmedString(args.cron);
+  const timezone = trimmedString(args.timezone);
+
+  if (scheduleText && cron) {
+    throw new UserError(
+      'firecrawl_monitor_update takes either `scheduleText` or `cron`, not both.',
+      { code: 'invalid_input' }
+    );
+  }
+
+  if (status) body.status = status;
+
+  if (scheduleText || cron || timezone) {
+    const schedule = plainObject(body.schedule) ?? {};
+    if (scheduleText) {
+      delete schedule.cron;
+      schedule.text = scheduleText;
+    }
+    if (cron) {
+      delete schedule.text;
+      schedule.cron = cron;
+    }
+    if (timezone) schedule.timezone = timezone;
+    if (!trimmedString(schedule.text) && !trimmedString(schedule.cron)) {
+      throw new UserError(
+        'firecrawl_monitor_update replaces the whole schedule, so `timezone` needs `scheduleText` or `cron` with it.',
+        { code: 'invalid_input' }
+      );
+    }
+    body.schedule = schedule;
+  }
+
+  if (Object.keys(body).length === 0) {
+    throw new UserError(
+      'firecrawl_monitor_update needs at least one change: `status`, `scheduleText`, `cron`, `timezone`, or `body`.',
+      { code: 'invalid_input' }
+    );
+  }
+
+  return body;
+}
+
 export function registerMonitorTools(
   server: Pick<McpRuntime<SessionData>, 'addTool'>,
   api: MonitorApiConfig
@@ -346,23 +410,25 @@ Retrieve one monitor by ID, including its configuration and current state. This 
       idempotentHint: true, // Applying the same changes again leaves the monitor in the same state.
     },
     description: `
-Patch an existing monitor by ID. The body can change its name, active/paused status, schedule, targets, goal, judging, webhook, notifications, or retention; these changes affect future scheduled checks.
+Patch an existing monitor by ID; changes affect future scheduled checks. Pause or resume it with \`status\` ("paused" or "active"). Reschedule it with \`scheduleText\` (plain language, e.g. "every 6 hours") or \`cron\`, plus \`timezone\`; a new schedule without \`timezone\` runs in UTC. For other fields pass \`body\`, a partial monitor in the create shape (name, targets, goal, judgeEnabled, webhook, notification, retentionDays), e.g. \`{"name": "Pricing watch"}\`. The parameters are merged into \`body\` as \`{"status": ..., "schedule": {"text" or "cron": ..., "timezone": ...}}\` and override the same keys there. At least one change is required.
 
 Returns the updated monitor.
 `,
     outputSchema: monitorOutputSchema,
     parameters: z.object({
       id: z.string(),
-      body: z.record(z.string(), z.any()),
+      body: z.record(z.string(), z.any()).optional(),
+      status: z.enum(['active', 'paused']).optional(),
+      scheduleText: z.string().optional(),
+      cron: z.string().optional(),
+      timezone: z.string().optional(),
     }),
     execute: async (
       args: unknown,
       { session, client: mcpClient }
     ): Promise<ContentResult> => {
-      const { id, body } = args as {
-        id: string;
-        body: Record<string, unknown>;
-      };
+      const { id } = args as { id: string };
+      const body = buildMonitorUpdateBody(args as Record<string, unknown>);
       const res = await monitorRequest(
         api,
         session,

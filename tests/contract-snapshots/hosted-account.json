@@ -30,7 +30,7 @@
       "firecrawl_monitor_create@0d6416cf08a6",
       "firecrawl_monitor_list@341234ca0b9f",
       "firecrawl_monitor_get@fc9fcdd39233",
-      "firecrawl_monitor_update@1af896471afb",
+      "firecrawl_monitor_update@adf5af8dd01e",
       "firecrawl_monitor_delete@80bfa0d3a0ca",
       "firecrawl_monitor_run@5aaecda5b2c7",
       "firecrawl_monitor_checks@a2ea52047456",

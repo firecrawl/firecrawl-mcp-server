@@ -487,6 +487,17 @@ async function startFakeFirecrawlApi({ searchResponse } = {}) {
       return;
     }
 
+    if (req.method === 'PATCH' && req.url?.startsWith('/v2/monitor/')) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: { id: req.url.slice('/v2/monitor/'.length) },
+          success: true,
+        })
+      );
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/v2/monitor') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
@@ -1794,6 +1805,74 @@ test('monitor create gives queries precedence over page targets', async (t) => {
   assert.deepEqual(monitorRequests[1].body.targets, [
     { type: 'scrape', urls: ['https://example.com/retained'] },
   ]);
+});
+
+test('monitor update pauses and reschedules from top-level parameters', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-monitor-update', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const { tools } = await client.request('tools/list');
+  const update = tools.find((tool) => tool.name === 'firecrawl_monitor_update');
+  assert.deepEqual(update.inputSchema.required, ['id']);
+  for (const key of ['body', 'status', 'scheduleText', 'cron', 'timezone']) {
+    assert.ok(update.inputSchema.properties[key], `${key} is advertised`);
+  }
+  assert.deepEqual(update.inputSchema.properties.status.enum, ['active', 'paused']);
+
+  for (const args of [
+    { id: 'mon_001', status: 'paused' },
+    { id: 'mon_001', scheduleText: 'every 6 hours', timezone: 'Europe/Berlin' },
+    {
+      id: 'mon_001',
+      cron: '0 9 * * 1',
+      status: 'active',
+      body: {
+        name: 'Pricing watch',
+        status: 'paused',
+        schedule: { text: 'every hour', timezone: 'Asia/Tokyo' },
+      },
+    },
+    { id: 'mon_001', body: { schedule: { cron: '0 * * * *' } }, timezone: 'UTC' },
+    { id: 'mon_001', body: { name: 'Renamed' } },
+  ]) {
+    const result = await client.request('tools/call', {
+      arguments: args,
+      name: 'firecrawl_monitor_update',
+    });
+    assert.notEqual(result.isError, true, JSON.stringify(result));
+  }
+
+  const patches = fakeApi.requests.filter(
+    (request) => request.method === 'PATCH' && request.url === '/v2/monitor/mon_001'
+  );
+  assert.deepEqual(
+    patches.map((request) => request.body),
+    [
+      { status: 'paused' },
+      { schedule: { text: 'every 6 hours', timezone: 'Europe/Berlin' } },
+      {
+        name: 'Pricing watch',
+        status: 'active',
+        schedule: { cron: '0 9 * * 1', timezone: 'Asia/Tokyo' },
+      },
+      { schedule: { cron: '0 * * * *', timezone: 'UTC' } },
+      { name: 'Renamed' },
+    ]
+  );
 });
 
 test('developer search serves server-shaped passages uncapped', async (t) => {
