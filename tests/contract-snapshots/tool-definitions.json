@@ -2106,7 +2106,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_find_tools@d7e6be2fc683": {
+  "firecrawl_find_tools@c5befe4ba73b": {
     "annotations": {
       "title": "Find Tools",
       "readOnlyHint": true,
@@ -2115,7 +2115,7 @@
       "idempotentHint": true
     },
     "title": "Find Tools",
-    "description": "Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more: typed, sourced records through published contracts. Prefer normal firecrawl_search for a data task; it already returns matching providers. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Use query for semantic discovery or urls to find providers for a website. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.",
+    "description": "Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more: typed, sourced records through published contracts. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Use query for semantic discovery or urls to find providers for a website. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2371,6 +2371,9 @@
         }
       },
       "additionalProperties": false
+    },
+    "_meta": {
+      "anthropic/alwaysLoad": true
     }
   },
   "firecrawl_gov_search@b020bd420f91": {
@@ -2576,7 +2579,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_interact@91e5d3af32e0": {
+  "firecrawl_interact@8040e21dad51": {
     "annotations": {
       "title": "Firecrawl interact",
       "readOnlyHint": false,
@@ -2585,7 +2588,7 @@
       "idempotentHint": false
     },
     "title": "Firecrawl interact",
-    "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either `url` (the scheme may be omitted) or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThe session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped `scrapeOptions.profile` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs.\n",
+    "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either `url` (the scheme may be omitted) or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThe session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped `scrapeOptions.profile` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs. When the page needs the user to act, share `interactiveLiveViewUrl` with the user only, so they can take over the session.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2897,8 +2900,8 @@
         "data": {
           "description": "Payload returned by the interaction."
         },
-        "sessionUrl": {
-          "description": "URL for viewing the live session.",
+        "sessionId": {
+          "description": "Browser session behind this scrape.",
           "anyOf": [
             {
               "type": "string"
@@ -2908,8 +2911,19 @@
             }
           ]
         },
-        "liveUrl": {
-          "description": "URL for viewing the live session.",
+        "liveViewUrl": {
+          "description": "Read-only live view of the browser session.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "interactiveLiveViewUrl": {
+          "description": "Live view the user can use to control the browser session.",
           "anyOf": [
             {
               "type": "string"
@@ -2923,7 +2937,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_interact@c95ca74e3f74": {
+  "firecrawl_interact@daa715f1647d": {
     "annotations": {
       "title": "Firecrawl interact",
       "readOnlyHint": false,
@@ -2932,7 +2946,7 @@
       "idempotentHint": false
     },
     "title": "Firecrawl interact",
-    "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either `url` (the scheme may be omitted) or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThe session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped `scrapeOptions.profile` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs.\n",
+    "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either `url` (the scheme may be omitted) or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThe session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped `scrapeOptions.profile` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs. When the page needs the user to act, share `interactiveLiveViewUrl` with the user only, so they can take over the session.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3294,8 +3308,8 @@
         "data": {
           "description": "Payload returned by the interaction."
         },
-        "sessionUrl": {
-          "description": "URL for viewing the live session.",
+        "sessionId": {
+          "description": "Browser session behind this scrape.",
           "anyOf": [
             {
               "type": "string"
@@ -3305,8 +3319,19 @@
             }
           ]
         },
-        "liveUrl": {
-          "description": "URL for viewing the live session.",
+        "liveViewUrl": {
+          "description": "Read-only live view of the browser session.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "interactiveLiveViewUrl": {
+          "description": "Live view the user can use to control the browser session.",
           "anyOf": [
             {
               "type": "string"
