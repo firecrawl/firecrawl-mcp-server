@@ -318,6 +318,9 @@ export async function relayExchangeError(
   }
 }
 
+/** Tells the API that the MCP server, not the caller, added alexandria to the sources. */
+export const IMPLICIT_ALEXANDRIA_HEADER = 'x-firecrawl-implicit-alexandria';
+
 /** Retries without Alexandria, on fallbackSources, when tools the caller did not ask for are refused. */
 export async function postSearchWithFallback(
   client: any,
@@ -326,7 +329,11 @@ export async function postSearchWithFallback(
   fallbackSources: unknown[] = ['web']
 ): Promise<any> {
   try {
-    return await client.http.post('/v2/search', body);
+    return await client.http.post(
+      '/v2/search',
+      body,
+      implicitTools ? { headers: { [IMPLICIT_ALEXANDRIA_HEADER]: '1' } } : undefined
+    );
   } catch (error) {
     const response = (error as any)?.response;
     const unavailable = [
