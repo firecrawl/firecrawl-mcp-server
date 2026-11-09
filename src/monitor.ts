@@ -269,13 +269,26 @@ function buildMonitorUpdateBody(
       schedule.cron = cron;
     }
     if (timezone) schedule.timezone = timezone;
-    if (!trimmedString(schedule.text) && !trimmedString(schedule.cron)) {
+    body.schedule = schedule;
+  }
+
+  // Validate the final schedule, whether it came from `body` or the parameters.
+  const schedule = plainObject(body.schedule);
+  if (schedule) {
+    const hasText = Boolean(trimmedString(schedule.text));
+    const hasCron = Boolean(trimmedString(schedule.cron));
+    if (hasText && hasCron) {
+      throw new UserError(
+        'firecrawl_monitor_update takes a schedule with either `text` or `cron`, not both.',
+        { code: 'invalid_input' }
+      );
+    }
+    if (!hasText && !hasCron) {
       throw new UserError(
         'firecrawl_monitor_update replaces the whole schedule, so `timezone` needs `scheduleText` or `cron` with it.',
         { code: 'invalid_input' }
       );
     }
-    body.schedule = schedule;
   }
 
   if (Object.keys(body).length === 0) {

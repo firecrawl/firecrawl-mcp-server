@@ -1848,6 +1848,11 @@ test('monitor update pauses and reschedules from top-level parameters', async (t
     },
     { id: 'mon_001', body: { schedule: { cron: '0 * * * *' } }, timezone: 'UTC' },
     { id: 'mon_001', body: { name: 'Renamed' } },
+    {
+      id: 'mon_001',
+      scheduleText: 'every day at 9am',
+      body: { schedule: { text: 'every hour', cron: '0 * * * *' } },
+    },
   ]) {
     const result = await client.request('tools/call', {
       arguments: args,
@@ -1871,6 +1876,7 @@ test('monitor update pauses and reschedules from top-level parameters', async (t
       },
       { schedule: { cron: '0 * * * *', timezone: 'UTC' } },
       { name: 'Renamed' },
+      { schedule: { text: 'every day at 9am' } },
     ]
   );
 });
