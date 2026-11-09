@@ -646,7 +646,7 @@ interface Context {
 
 const TERMS_CODE = 'third_party_data_terms_required';
 
-/** Records a provider whose terms the organization has not accepted, and words its error for a call that can leave that provider out. */
+/** Records a provider whose terms the organization has not accepted and says where an admin accepts them; the tool adds what to retry with. */
 function gate(ctx: Context, p: Provider, entry: Entry): Entry {
   if (entry.error?.code?.toLowerCase() !== TERMS_CODE) return entry;
   const action = (isPlain(entry.error.requiresAction) ? entry.error.requiresAction : isPlain(entry.requiresAction) ? entry.requiresAction : {}) as Record<string, unknown>;
@@ -654,7 +654,7 @@ function gate(ctx: Context, p: Provider, entry: Entry): Entry {
   ctx.gated.set(p, terms);
   const message =
     'An organization admin must accept the ' + p + " provider's terms" + (terms.version ? ' (version ' + terms.version + ')' : '') + ' at ' + terms.url + ' before ' + p + ' can run. ' +
-    'Terms are accepted in the Firecrawl dashboard, not through this connection. Retry without ' + p + ', or wait until the terms are accepted and retry the same call.';
+    'Terms are accepted in the Firecrawl dashboard, not through this connection.';
   return { ...entry, error: { ...entry.error, message } };
 }
 
@@ -1260,7 +1260,7 @@ export function registerEnrichTools(
     description: string,
     parameters: S,
     example: (args: Record<string, any>) => object,
-    alternative: (args: Record<string, any>, gated: ReadonlyMap<Provider, TermsGate>) => Record<string, any> | undefined,
+    alternative: (args: Record<string, any>, excluded: ReadonlySet<Provider>) => Record<string, any> | undefined,
     repairAndCheck: (args: Record<string, any>) => void,
     plan: (args: Record<string, any>) => Plan
   ) {
@@ -1298,28 +1298,32 @@ export function registerEnrichTools(
           );
         }
         const ctx: Context = { client: getClient(session), origin: requestOrigin(mcpClient as any, session), tool: name, gated: new Map() };
-        const providers = (
+        const reports = (
           await Promise.all([
             ...order.map((p) => (on.includes(p) ? run(ctx, p, blocks[p]) : notRequested(p))),
             ...(webArgs ? [webReport(web, webArgs, context)] : []),
           ])
         ).flat();
+        const failed = reports.filter((r) => r.status === 'error');
+        const excluded = new Set([...ctx.gated.keys(), ...failed.flatMap((r) => (r.name === 'firecrawl_search' ? [] : [r.name]))]);
+        const alt = ctx.gated.size ? alternative(args as Record<string, any>, excluded) : undefined;
+        const others = alt ? order.filter((p) => alt[p] !== undefined) : [];
+        const retry = (r: ProviderReport) =>
+          'Retry without ' + r.name + (others.length ? ', for example with ' + others.join(' or ') : '') + ', or wait until the terms are accepted and retry the same call.';
+        const providers = reports.map((r) => (r.status === 'error' && r.name !== 'firecrawl_search' && ctx.gated.has(r.name) ? { ...r, note: [r.note, retry(r)].filter(Boolean).join(' ') } : r));
         const data = { providers, credits_total: providers.reduce((sum, r) => sum + r.credits, 0), credits_estimate, max_credits };
         const ran = providers.filter((r) => r.status !== 'not_requested');
-        const failed = ran.filter((r) => r.status === 'error');
         const succeeded = ran.some((r) => r.status === 'ok' || r.status === 'empty' || r.status === 'pending');
         if (!succeeded && failed.length && failed.every((r) => r.name !== 'firecrawl_search' && ctx.gated.has(r.name))) {
           const gated = [...new Set(failed.map((r) => r.name as Provider))];
           const terms = gated.map((p) => ({ provider: p, ...ctx.gated.get(p)! }));
-          const alt = alternative(args as Record<string, any>, ctx.gated);
           const cost = alt ? Object.values(plan(alt).estimates).reduce((sum: number, n) => sum + (n ?? 0), 0) : 0;
           const example = alt ? { ...alt, max_credits: cost } : undefined;
-          const others = alt ? order.filter((p) => alt[p] !== undefined) : [];
           throw new UserError(
             terms.map((t) => 'An organization admin must accept the ' + t.provider + " provider's terms" + (t.version ? ' (version ' + t.version + ')' : '') + ' at ' + t.url + ' before ' + t.provider + ' can run.').join(' ') +
               ' Terms are accepted in the Firecrawl dashboard, not through this connection. Credits charged: ' + data.credits_total + '. ' +
               (example
-                ? 'Retry without ' + gated.join(' and ') + ', for example with ' + others.join(' and ') + ', which costs up to ' + cost + ' credits for this call, so it needs max_credits of at least ' + cost + ': ' + JSON.stringify(example) + '. Or wait until the terms are accepted and retry the same call.'
+                ? 'Retry without ' + gated.join(' and ') + ', for example with ' + others.join(' and ') + ': ' + JSON.stringify(example) + '. Or wait until the terms are accepted and retry the same call.'
                 : 'Retry once the terms are accepted.'),
             { code: TERMS_CODE, ...data, terms, ...(example ? { example, minimum_max_credits: cost } : {}) }
           );
@@ -1345,8 +1349,8 @@ export function registerEnrichTools(
       'Example: ' + JSON.stringify(SEARCH_EXAMPLE) + '. ',
     advertisedSearch,
     searchExample,
-    (args, gated) => {
-      const alt = Object.fromEntries(Object.entries(searchExample(args)).filter(([key]) => !gated.has(key as Provider)));
+    (args, excluded) => {
+      const alt = Object.fromEntries(Object.entries(searchExample(args)).filter(([key]) => !excluded.has(key as Provider)));
       return SEARCH_ORDER.some((p) => alt[p] !== undefined) ? alt : undefined;
     },
     (args) => {
@@ -1405,8 +1409,8 @@ export function registerEnrichTools(
       'Example: ' + JSON.stringify(LOOKUP_EXAMPLE) + '. ',
     lookupParameters,
     (args) => (Object.values(args).some((block) => isPlain(block) && block.companies !== undefined) ? COMPANY_EXAMPLE : LOOKUP_EXAMPLE),
-    (args, gated) => {
-      if (gated.has('fullenrich')) return undefined;
+    (args, excluded) => {
+      if (excluded.has('fullenrich')) return undefined;
       const has = (kind: Kind) => Object.values(args).some((block) => isPlain(block) && block[kind] !== undefined);
       const fullenrich = compact({ people: has('people') ? [EXAMPLE_PERSON.fullenrich] : undefined, companies: has('companies') ? [{ domain: 'example.com' }] : undefined });
       return compact({ contact_fields: has('people') ? args.contact_fields : undefined, fullenrich });
