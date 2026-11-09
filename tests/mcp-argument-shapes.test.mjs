@@ -312,4 +312,12 @@ test('unknown or misspelled tool arguments are rejected, not silently dropped', 
     });
     assertAccepted(accepted, `${label} correctly spelled argument`);
   }
+
+  // Carried-over context fields are dropped on purpose, not rejected (#680 review).
+  const carried = await full('firecrawl_scrape', {
+    url: 'https://example.com',
+    conversationId: 'previous-call',
+    sessionId: 'previous-call',
+  });
+  assertAccepted(carried, 'carried-over session context is tolerated and dropped');
 });
