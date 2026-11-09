@@ -190,10 +190,10 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_agent@f3221ea5dbb1": {
+  "firecrawl_agent@54c127a663f8": {
     "annotations": {
       "title": "Firecrawl agent",
-      "readOnlyHint": false,
+      "readOnlyHint": true,
       "openWorldHint": true,
       "destructiveHint": false,
       "idempotentHint": false
@@ -9124,10 +9124,10 @@
       "additionalProperties": false
     }
   },
-  "people_company_enrich@c021f960184e": {
+  "people_company_enrich@77996c1772bd": {
     "annotations": {
       "title": "Look up and enrich people or companies",
-      "readOnlyHint": false,
+      "readOnlyHint": true,
       "openWorldHint": true,
       "destructiveHint": false
     },
