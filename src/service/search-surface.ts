@@ -40,9 +40,9 @@ function searchSurfaceScrapeDescription(safeMode: boolean): string {
   return `
 Scrape one URL and return its content, or execute catalogued Alexandria capabilities. URL mode returns markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema, plus page metadata. Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch. A successful response does not by itself confirm the page is still current. ${safeMode ? 'A named browser profile loads saved session data without saving changes to it.' : 'Browser actions can change the live page, and a named browser profile can load saved session data and overwrite its stored state.'}
 
-\`firecrawl_search\` and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching Alexandria provider returns typed records in one call.
+\`firecrawl_search\` and \`capability_search\` can discover providers for the same fields across several pages; a matching Alexandria provider returns typed records in one call.
 
-Alexandria mode: \`alexandria\` selects catalogued capability execution and is mutually exclusive with \`url\`. Alexandria execution is billed per capability (pass includeCosts to firecrawl_find_tools to see prices if you need).
+Alexandria mode: \`alexandria\` selects catalogued capability execution and is mutually exclusive with \`url\`. Alexandria execution is billed per capability (pass includeCosts to capability_search to see prices if you need).
 `;
 }
 
@@ -95,7 +95,7 @@ Returns result groups in \`data\` and an operation \`id\`.
       .refine(searchCategoriesAreCompatible, SEARCH_CATEGORIES_CONFLICT_MESSAGE)
       .refine(
         searchQueryIsValid,
-        'A query is required. Use firecrawl_find_tools to browse the catalogue.'
+        'A query is required. Use capability_search to browse the catalogue.'
       ),
     execute: async (args: unknown, { session, log, client: mcpClient }): Promise<ToolResult> => {
       const {
@@ -208,7 +208,7 @@ export function searchSurfaceTools({
       }) as ToolRegistrar['addTool'],
     };
     registerMarketplaceSearchTool(surface, context);
-    const findTools = context.builtInTool('firecrawl_find_tools');
+    const findTools = context.builtInTool('capability_search');
     const scrape = context.builtInTool('firecrawl_scrape');
     if (findTools) {
       surface.addTool({

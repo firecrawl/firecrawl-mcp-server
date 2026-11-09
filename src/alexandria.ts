@@ -108,7 +108,7 @@ export function withFindToolsNavigation(envelope: any, carry: Record<string, unk
   const page = envelope?.data?.alexandria?.[0]?.data;
   if (!page || !Array.isArray(page.items)) return envelope;
   const link = (next: any) => next?.provider === 'firecrawl' && next?.capability === 'find-tools' && next.options
-    ? { name: 'firecrawl_find_tools', arguments: { ...next.options, ...carry } } : undefined;
+    ? { name: 'capability_search', arguments: { ...next.options, ...carry } } : undefined;
   for (const item of page.items) {
     if (page.level === 'providers' && link(item.next)) {
       const selectors = { ...item.next.options };
@@ -123,7 +123,7 @@ export function withFindToolsNavigation(envelope: any, carry: Record<string, unk
 }
 
 export const ALEXANDRIA_SEARCH_INSTRUCTIONS =
-  'Authenticated search combines web results, semantic tool summaries and domain matches. Use sources: ["alexandria"] for semantic tools only. ' + ALEXANDRIA_SOURCES_ALWAYS_ON + ' Tool matches describe available structured-data capabilities, not executed data. toolDetail: "compact" (default) returns only provider, capability and description; "summary" adds metadata; "full" includes their input and output contracts. firecrawl_scrape with an alexandria body executes a selected capability; firecrawl_find_tools provides catalogue browsing and full contracts.';
+  'Authenticated search combines web results, semantic tool summaries and domain matches. Use sources: ["alexandria"] for semantic tools only. ' + ALEXANDRIA_SOURCES_ALWAYS_ON + ' Tool matches describe available structured-data capabilities, not executed data. toolDetail: "compact" (default) returns only provider, capability and description; "summary" adds metadata; "full" includes their input and output contracts. firecrawl_scrape with an alexandria body executes a selected capability; capability_search provides catalogue browsing and full contracts.';
 
 const TOOL_PRICE_KEYS = ['creditsCost', 'perRecord', 'billing', 'recordsPerUnit', 'zeroDataRetentionCreditsCost'];
 
