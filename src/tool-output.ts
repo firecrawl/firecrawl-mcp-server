@@ -265,8 +265,9 @@ export const interactOutputSchema = z
     stderr: str('Standard error of the executed code.'),
     exitCode: num('Exit status of the executed code.'),
     data: unknown('Payload returned by the interaction.'),
-    sessionUrl: str('URL for viewing the live session.'),
-    liveUrl: str('URL for viewing the live session.'),
+    sessionId: str('Browser session behind this scrape.'),
+    liveViewUrl: str('Read-only live view of the browser session.'),
+    interactiveLiveViewUrl: str('Live view the user can use to control the browser session.'),
   })
   .describe('Result of a browser interaction, with the session identifier to continue or stop it.');
 

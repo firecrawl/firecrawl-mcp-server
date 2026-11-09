@@ -51,6 +51,9 @@ const ranges = (about?: string) => {
   return about ? schema.describe(about) : schema;
 };
 const strings = (about: string) => z.array(z.string().min(1)).min(1).optional().describe(about);
+/** A page size published with its maximum; a larger value runs at the maximum with a note instead of being refused. */
+const capped = (max: number, fallback: number, about: string) => z.number().int().min(1).default(fallback).meta({ maximum: max }).describe(about);
+const PDL_LIMIT = 10;
 const text = (about?: string) => (about ? z.string().optional().describe(about) : z.string().optional());
 
 function provider<S extends z.ZodRawShape>(shape: S, about: string, rule?: { check: (value: any) => boolean; message: string; schema: Record<string, unknown> }) {
@@ -90,8 +93,8 @@ const peopleSearchParameters = z.strictObject({
       person_locations: strings('e.g. ["Seattle, US"].'),
       q_organization_domains_list: strings('Employer domains, e.g. ["clerk.com"].'),
       q_keywords: text('Free text matched across the person and their company.'),
-      per_page: z.number().int().min(1).max(25).default(10),
-      page: z.number().int().min(1).optional(),
+      per_page: capped(25, 10, 'Results per page, max 25. Use page for more.'),
+      page: z.number().int().min(1).optional().describe('Page number, from 1.'),
     },
     'Apollo people/search. Free. No seniority, industry or headcount filter. Surnames come back masked: pass apollo_id to people_company_enrich as apollo.people[].id to reveal.'
   ),
@@ -127,7 +130,7 @@ const peopleSearchParameters = z.strictObject({
       past_position_titles: matches(),
       past_company_names: matches(),
       past_company_domains: matches(),
-      limit: z.number().int().min(1).max(25).default(5).describe('Records to return, 5 credits each.'),
+      limit: capped(25, 5, 'Records to return, max 25, 5 credits each. Use offset for more.'),
       offset: z.number().int().min(0).max(10000).optional(),
     },
     'FullEnrich people/search. 5 credits per record. ' + FE_LISTS
@@ -136,7 +139,7 @@ const peopleSearchParameters = z.strictObject({
     {
       sql: text("SELECT * FROM person WHERE ... Values are lowercase and match exactly, e.g. job_title = 'head of data'."),
       query: z.record(z.string(), z.unknown()).optional().describe('Elasticsearch query over the person schema, instead of sql.'),
-      limit: z.number().int().min(1).max(10).default(2).describe('Records to return, 50 credits each.'),
+      limit: capped(PDL_LIMIT, 2, 'Records to return, max 10, 50 credits each.'),
     },
     'People Data Labs person/search. 50 credits per record. Pass sql or query.',
     sqlOrQuery
@@ -150,8 +153,8 @@ const companySearchParameters = z.strictObject({
       organization_num_employees_ranges: strings('Headcount bands, e.g. ["11,50", "51,200"].'),
       organization_locations: strings('e.g. ["San Francisco, US"].'),
       currently_using_any_of_technology_uids: strings('Apollo technology ids, lowercase with underscores, e.g. ["snowflake", "google_analytics"].'),
-      per_page: z.number().int().min(1).max(25).default(10),
-      page: z.number().int().min(1).optional(),
+      per_page: capped(25, 10, 'Results per page, max 25. Use page for more.'),
+      page: z.number().int().min(1).optional().describe('Page number, from 1.'),
     },
     'Apollo companies/search. 30 credits per page, empty pages included. No industry or founding-year filter.'
   ),
@@ -168,7 +171,7 @@ const companySearchParameters = z.strictObject({
       names: matches(),
       domains: matches(),
       professional_network_urls: matches('LinkedIn company URLs.'),
-      limit: z.number().int().min(1).max(25).default(5).describe('Records to return, 5 credits each.'),
+      limit: capped(25, 5, 'Records to return, max 25, 5 credits each. Use offset for more.'),
       offset: z.number().int().min(0).max(10000).optional(),
     },
     'FullEnrich companies/search. 5 credits per record. ' + FE_LISTS
@@ -177,7 +180,7 @@ const companySearchParameters = z.strictObject({
     {
       sql: text("SELECT * FROM company WHERE ... Values are lowercase, e.g. industry = 'computer software'."),
       query: z.record(z.string(), z.unknown()).optional().describe('Elasticsearch query over the company schema, instead of sql.'),
-      limit: z.number().int().min(1).max(10).default(2).describe('Records to return, 50 credits each.'),
+      limit: capped(PDL_LIMIT, 2, 'Records to return, max 10, 50 credits each.'),
     },
     'People Data Labs company/search. 50 credits per record. Pass sql or query.',
     sqlOrQuery
@@ -190,10 +193,12 @@ const maxCredits = z
   .int()
   .min(0)
   .optional()
-  .describe('Most credits this call may spend, default ' + DEFAULT_MAX_CREDITS + '. A call that could cost more, if every record were found, is refused before any provider runs.');
+  .describe(
+    'Most credits this call may spend. Omit it for ' + DEFAULT_MAX_CREDITS + '. 0 spends nothing, so only free calls run. The estimate checked against it is each provider\'s listed price times its unit (record, input, Apollo company page, or 10 web results), as if every record were found; a call whose estimate is higher is refused before any provider runs.'
+  );
 
 const searchParameters = z.strictObject({
-  entity: z.enum(['person', 'company']).describe('"person" to find people, "company" to find companies. Each provider block then takes that entity\'s filters.'),
+  entity: z.enum(['person', 'company']).describe('Required. Exactly "person" (find people) or "company" (find companies). Each provider block then takes that entity\'s filters.'),
   max_credits: maxCredits,
   apollo: either(peopleSearchParameters.shape.apollo, companySearchParameters.shape.apollo),
   fullenrich: either(peopleSearchParameters.shape.fullenrich, companySearchParameters.shape.fullenrich),
@@ -324,7 +329,7 @@ const lookupParameters = z.strictObject({
     .min(1)
     .optional()
     .describe(
-      'People only: find these contact values instead of profiles. fullenrich: work_email 30 credits, personal_email 100, mobile 300, per value found. datalegion: 100 per matched person, every contact field it has. apollo: 30 per match, work email, plus personal emails when personal_email is listed. people_data_labs has no contact lookup.'
+      'Applies to people only; companies in the same call get firmographics. Finds these contact values instead of profiles. fullenrich: work_email 30 credits, personal_email 100, mobile 300, per value found. datalegion: 100 per matched person, every contact field it has. apollo: 30 per match, work email, plus personal emails when personal_email is listed. people_data_labs has no contact lookup.'
     ),
   fullenrich: provider(
     { people: batch(fullEnrichPersonRef).optional(), companies: batch(fullEnrichCompanyRef).optional() },
@@ -344,17 +349,21 @@ const lookupParameters = z.strictObject({
   ),
 });
 
+const KINDS = ['people', 'companies'] as const;
+type Kind = (typeof KINDS)[number];
+
 const enrichOutputSchema = z.looseObject({
   providers: z
     .array(
       z.looseObject({
         name: z.string().optional(),
         status: z.string().optional(),
+        kind: z.enum(KINDS).optional().describe('people_company_enrich: which input list this entry covers. A block with both people and companies has one entry for each.'),
         returned: z.number().optional(),
         credits: z.number().optional(),
         note: z.string().optional().describe('Why the provider failed or skipped inputs.'),
         retryable: z.boolean().optional().describe('The failure may succeed on a later try.'),
-        results: z.array(z.looseObject({})).optional().describe('This provider\'s records; people_company_enrich records carry input_index into this provider\'s input list.'),
+        results: z.array(z.looseObject({})).optional().describe('This provider\'s records; people_company_enrich records carry input_index into this entry\'s input list (its kind).'),
         unmatched: z.array(z.number()).optional().describe('people_company_enrich: input indexes this provider did not match.'),
         pending: z
           .array(z.looseObject({}))
@@ -404,6 +413,7 @@ interface Company {
 interface ProviderReport {
   name: Provider | 'firecrawl_search';
   status: 'ok' | 'empty' | 'pending' | 'error' | 'skipped' | 'not_requested';
+  kind?: Kind;
   returned: number;
   credits: number;
   attempted?: number;
@@ -676,11 +686,11 @@ const nextToolOf = (entries: Entry[]) => entries.find((e) => e.error?.nextTool)?
 const credits = (entries: Entry[]) =>
   entries.reduce((sum, e) => sum + (typeof e.creditsCost === 'number' ? e.creditsCost : 0), 0);
 
-function noProvider(available: string[]): UserError {
-  return new UserError('No provider given. Add a block for each provider to run, with that provider\'s own parameters: ' + available.join(', ') + '.', {
-    code: 'no_provider',
-    available,
-  });
+function noProvider(available: string[], example: object): UserError {
+  return new UserError(
+    'No provider given. Add a block for each provider to run, with that provider\'s own parameters: ' + available.join(', ') + '. Example: ' + JSON.stringify(example),
+    { code: 'no_provider', available, example }
+  );
 }
 
 function notRequested(name: Provider): ProviderReport {
@@ -1017,10 +1027,30 @@ const SEARCH_EXAMPLE = {
   fullenrich: { current_position_titles: [{ value: 'Head of Data' }], current_company_domains: [{ value: 'example.com', exact_match: true }] },
   apollo: { person_titles: ['Head of Data'], q_organization_domains_list: ['example.com'] },
 };
+const COMPANY_SEARCH_EXAMPLE = {
+  entity: 'company',
+  fullenrich: { industries: [{ value: 'Software Development' }], headcounts: [{ min: 51, max: 200 }] },
+  apollo: { organization_num_employees_ranges: ['51,200'], organization_locations: ['Boston, US'] },
+};
+const searchExample = (args: Record<string, any>) => (args.entity === 'company' ? COMPANY_SEARCH_EXAMPLE : SEARCH_EXAMPLE);
 const LOOKUP_EXAMPLE = {
   contact_fields: ['work_email'],
   fullenrich: { people: [{ person_name: 'Jane Doe', company_domain: 'example.com' }] },
 };
+const COMPANY_EXAMPLE = { fullenrich: { companies: [{ domain: 'example.com' }] } };
+const EXAMPLE_PERSON: Record<Provider, object> = {
+  fullenrich: { person_name: 'Jane Doe', company_domain: 'example.com' },
+  apollo: { name: 'Jane Doe', domain: 'example.com' },
+  people_data_labs: { name: 'Jane Doe', company: 'example.com' },
+  datalegion: { full_name: 'Jane Doe', company: 'example.com' },
+};
+
+/** The calls to send instead, built from the caller's own arguments when they are short enough to quote, else the fallbacks. */
+function examples(calls: object[], fallback: object[]): string {
+  const own = calls.map((call) => JSON.stringify(call));
+  const shown = own.join('').length <= 800 ? own : fallback.map((call) => JSON.stringify(call));
+  return (shown.length > 1 ? 'Example calls: ' : 'Example: ') + shown.join(' then ');
+}
 
 const PER_MATCH: Record<Provider, number> = { fullenrich: 10, apollo: 30, people_data_labs: 50, datalegion: 20 };
 const FE_CONTACT_PRICE: Record<ContactField, number> = { work_email: 30, personal_email: 100, mobile: 300 };
@@ -1126,7 +1156,7 @@ function fieldsAt(schema: unknown, path: PropertyKey[]): string[] {
 function checkArguments(tool: string, schema: z.ZodType, args: unknown, example: object): void {
   const parsed = schema.safeParse(args);
   if (parsed.success) return;
-  const issues = parsed.error.issues.slice(0, 5).map((issue) => {
+  const issues = parsed.error.issues.map((issue) => {
     const path = issue.path.join('.');
     if (issue.code !== 'unrecognized_keys') return { path, message: issue.message };
     const fields = fieldsAt(schema, issue.path);
@@ -1158,7 +1188,7 @@ type Plan = {
   order: Provider[];
   blocks: Record<string, any>;
   estimates: Partial<Record<Provider | 'firecrawl_search', number>>;
-  run: (ctx: Context, p: Provider, block: Record<string, any>) => Promise<ProviderReport>;
+  run: (ctx: Context, p: Provider, block: Record<string, any>) => Promise<ProviderReport | ProviderReport[]>;
   web?: Record<string, any>;
 };
 
@@ -1169,18 +1199,14 @@ interface WebSearch {
 }
 
 const WEB_ABOUT =
-  'Firecrawl web search with the firecrawl_search query parameters, without page fetching: web results such as team pages, profiles and news. 2 credits per 10 results (10 with enterprise zdr), plus 2 per result when the team scans results for threats.';
+  'Firecrawl web search with the firecrawl_search query parameters, without page fetching: web results such as team pages, profiles and news. 2 credits per 10 results (10 with enterprise zdr), which is what max_credits counts. A team that scans results for threats also pays 2 per result, which max_credits does not count.';
 
-/**
- * The most a web search can cost: 2 credits per 10 results, rounded up (10 with enterprise zdr), for each
- * source but the free Alexandria one, plus 2 per result for a team that scans results for threats, which
- * this server cannot see. No sources means web.
- */
+/** The stated web search price: 2 credits per 10 results, rounded up (10 with enterprise zdr), for each source but the free Alexandria one. No sources means web. */
 function webEstimate(args: Record<string, any>): number {
   const sources = Array.isArray(args.sources) && args.sources.length ? args.sources : ['web'];
   const results = (args.limit ?? 10) * sources.filter((s: any) => (typeof s === 'string' ? s : s?.type) !== 'alexandria').length;
   const perTen = Array.isArray(args.enterprise) && args.enterprise.includes('zdr') ? 10 : 2;
-  return perTen * Math.ceil(results / 10) + 2 * results;
+  return perTen * Math.ceil(results / 10);
 }
 
 async function webReport(web: WebSearch, args: unknown, context: ToolExecuteContext<SessionData>): Promise<ProviderReport> {
@@ -1216,6 +1242,7 @@ export function registerEnrichTools(
     annotations: Record<string, unknown>,
     description: string,
     parameters: S,
+    example: (args: Record<string, any>) => object,
     repairAndCheck: (args: Record<string, any>) => void,
     plan: (args: Record<string, any>) => Plan
   ) {
@@ -1237,24 +1264,38 @@ export function registerEnrichTools(
         const { session, client: mcpClient } = context;
         const { order, blocks, estimates, run, web: webArgs } = plan(args as Record<string, any>);
         const on = order.filter((p) => blocks[p] !== undefined);
-        if (!on.length && !webArgs) throw noProvider(name === 'people_company_search' ? [...order, 'firecrawl_search'] : order);
+        if (!on.length && !webArgs) throw noProvider(name === 'people_company_search' ? [...order, 'firecrawl_search'] : order, example(args as Record<string, any>));
         assertCredential(session);
         const charged = [...on, ...(webArgs ? (['firecrawl_search'] as const) : [])];
         const max_credits = (args as { max_credits?: number }).max_credits ?? DEFAULT_MAX_CREDITS;
         const credits_estimate = charged.reduce((sum, p) => sum + (estimates[p] ?? 0), 0);
         if (credits_estimate > max_credits) {
           const parts = charged.filter((p) => estimates[p]).map((p) => p + ' ' + estimates[p]);
+          const retry = { ...(args as object), max_credits: credits_estimate };
+          const shown = JSON.stringify(retry);
           throw new UserError(
-            'This call could cost up to ' + credits_estimate + ' credits (' + parts.join(', ') + '), above max_credits ' + max_credits + '. Nothing ran. Raise max_credits, or send fewer inputs, providers or contact fields.',
-            { code: 'max_credits_exceeded', credits_estimate, max_credits, estimates }
+            'This call could cost up to ' + credits_estimate + ' credits (' + parts.join(', ') + '), above max_credits ' + max_credits + '. Nothing ran. The estimate is records or inputs × price, as if every record were found. ' +
+              'To run it as is, set max_credits to at least ' + credits_estimate + (shown.length <= 800 ? ': ' + shown : '.') + ' Or send fewer inputs, providers, records or contact fields.',
+            { code: 'max_credits_exceeded', credits_estimate, max_credits, estimates, minimum_max_credits: credits_estimate }
           );
         }
         const ctx: Context = { client: getClient(session), origin: requestOrigin(mcpClient as any, session), tool: name };
-        const providers = await Promise.all([
-          ...order.map((p) => (on.includes(p) ? run(ctx, p, blocks[p]) : notRequested(p))),
-          ...(webArgs ? [webReport(web, webArgs, context)] : []),
-        ]);
+        const providers = (
+          await Promise.all([
+            ...order.map((p) => (on.includes(p) ? run(ctx, p, blocks[p]) : notRequested(p))),
+            ...(webArgs ? [webReport(web, webArgs, context)] : []),
+          ])
+        ).flat();
         const data = { providers, credits_total: providers.reduce((sum, r) => sum + r.credits, 0), credits_estimate, max_credits };
+        const ran = providers.filter((r) => r.status !== 'not_requested');
+        if (!ran.some((r) => r.status === 'ok' || r.status === 'empty' || r.status === 'pending')) {
+          const why = ran.map((r) => r.name + (r.kind ? ' ' + r.kind : '') + ' ' + r.status + (r.note ? ': ' + r.note : '')).map((reason) => (/[.!?]$/.test(reason) ? reason : reason + '.'));
+          throw new UserError('No provider ran successfully: ' + why.join(' ') + ' Credits charged: ' + data.credits_total + '. Example of a working call: ' + JSON.stringify(example(args as Record<string, any>)), {
+            code: 'no_provider_ran',
+            ...data,
+            example: example(args as Record<string, any>),
+          });
+        }
         return withStructured(JSON.stringify(data), data);
       },
     });
@@ -1267,18 +1308,39 @@ export function registerEnrichTools(
       'apollo: free for people, 30 credits per page for companies. fullenrich: 5 credits per record. people_data_labs: 50 credits per record, SQL or Elasticsearch query. firecrawl_search: web results, with the firecrawl_search tool\'s query parameters. ' +
       'Example: ' + JSON.stringify(SEARCH_EXAMPLE) + '. ',
     advertisedSearch,
+    searchExample,
     (args) => {
       if (typeof args.entity === 'string') args.entity = ENTITY[args.entity.trim().toLowerCase()] ?? args.entity;
       const entity = searchParameters.shape.entity.safeParse(args.entity);
-      if (!entity.success) checkArguments('people_company_search', searchParameters.pick({ entity: true }), { entity: args.entity }, SEARCH_EXAMPLE);
-      const parameters = searchSchemas[entity.data!];
+      if (!entity.success) {
+        const known = Object.keys(advertisedSearch.shape);
+        const unknown = Object.keys(args).filter((key) => !known.includes(key));
+        const issues = [
+          { path: 'entity', message: 'required, exactly "person" or "company"' + (args.entity === undefined ? '' : ', got ' + JSON.stringify(args.entity)) },
+          ...(unknown.length ? [{ path: '', message: 'unknown field ' + unknown.join(', ') + '; takes ' + known.join(', ') }] : []),
+        ];
+        throw new UserError(
+          'Invalid people_company_search arguments. ' + issues.map((i) => (i.path ? i.path + ': ' : '') + i.message).join('; ') + '. Example: ' + JSON.stringify(SEARCH_EXAMPLE),
+          { code: 'invalid_input', issues, example: SEARCH_EXAMPLE }
+        );
+      }
+      const parameters = searchSchemas[entity.data];
       repairBlocks(args, SEARCH_ORDER, (p) => parameters.shape[p as keyof typeof parameters.shape]);
       repair(parameters, args);
-      checkArguments('people_company_search', parameters, args, SEARCH_EXAMPLE);
+      checkArguments('people_company_search', parameters, args, searchExample(args));
     },
     (args) => {
       const entity = searchParameters.shape.entity.parse(args.entity);
       const blocks = searchSchemas[entity].parse(args) as Record<string, any>;
+      const notes: Partial<Record<Provider, string>> = {};
+      for (const p of SEARCH_ORDER) {
+        const block = blocks[p];
+        const key = p === 'apollo' ? 'per_page' : 'limit';
+        const max = p === 'people_data_labs' ? PDL_LIMIT : 25;
+        if (!block || !(block[key] > max)) continue;
+        notes[p] = key + ' ' + block[key] + ' is above the maximum ' + max + ', so ' + max + ' ran' + (p === 'people_data_labs' ? '.' : '; use ' + (p === 'apollo' ? 'page' : 'offset') + ' for more.');
+        block[key] = max;
+      }
       const runs = (p: 'apollo' | 'fullenrich') => blocks[p] !== undefined && Object.keys(searchFilters(blocks[p])).length > 0;
       const estimates = {
         apollo: entity === 'company' && runs('apollo') ? 30 : 0,
@@ -1286,18 +1348,23 @@ export function registerEnrichTools(
         people_data_labs: 50 * (blocks.people_data_labs?.limit ?? 0),
         firecrawl_search: blocks.firecrawl_search ? webEstimate(blocks.firecrawl_search) : 0,
       };
-      return { order: SEARCH_ORDER, blocks, estimates, web: blocks.firecrawl_search, run: (ctx, p, block) => searchWith(ctx, p, block, SEARCH[entity].spec) };
+      const run = async (ctx: Context, p: Provider, block: Record<string, any>) => {
+        const report = await searchWith(ctx, p, block, SEARCH[entity].spec);
+        return notes[p] ? { ...report, note: [notes[p], report.note].filter(Boolean).join(' ') } : report;
+      };
+      return { order: SEARCH_ORDER, blocks, estimates, web: blocks.firecrawl_search, run };
     }
   );
 
   tool(
     'people_company_enrich',
-    // Not read-only: contact_fields reveals contact details the provider charges for.
-    { title: 'Look up and enrich people or companies', readOnlyHint: false, openWorldHint: true, destructiveHint: false },
-    'Look up and enrich known people or companies: profiles and work history, or firmographics such as industry, headcount, funding and technologies. Each provider takes its own list of 1 to 50 people or companies; results carry input_index into that list. ' +
+    // Read-only: looks records up and returns them; contact_fields costs credits but changes nothing.
+    { title: 'Look up and enrich people or companies', readOnlyHint: true, openWorldHint: true, destructiveHint: false },
+    'Look up and enrich known people or companies: profiles and work history, or firmographics such as industry, headcount, funding and technologies. Each provider block takes people, companies or both, each its own list of 1 to 50. A block with both runs them as two requests and reports two entries, kind "people" and kind "companies"; results carry input_index into their entry\'s list. ' +
       'Add contact_fields to get work email, personal email or mobile for people. Misses are free. ' +
       'Example: ' + JSON.stringify(LOOKUP_EXAMPLE) + '. ',
     lookupParameters,
+    (args) => (Object.values(args).some((block) => isPlain(block) && block.companies !== undefined) ? COMPANY_EXAMPLE : LOOKUP_EXAMPLE),
     (args) => {
       repairBlocks(args, LOOKUP_ORDER, (p) => lookupParameters.shape[p]);
       repair(lookupParameters, args);
@@ -1306,37 +1373,36 @@ export function registerEnrichTools(
     (args) => {
       const a = lookupParameters.parse(args) as Record<string, any>;
       const given = LOOKUP_ORDER.filter((p) => a[p] !== undefined);
-      const both = given.find((p) => !a[p].people === !a[p].companies);
-      if (both) throw new UserError('Give ' + both + ' exactly one of people or companies.', { code: 'invalid_input' });
-      const kinds = new Set(given.map((p) => (a[p].people ? 'people' : 'companies')));
-      if (kinds.size > 1) {
-        const list = given.map((p) => p + ' has ' + (a[p].people ? 'people' : 'companies')).join(', ');
-        throw new UserError('Send people and companies in separate calls: ' + list + '.', { code: 'invalid_input' });
-      }
-      const people = kinds.has('people');
+      const empty = given.find((p) => !a[p].people && !a[p].companies);
+      if (empty) throw new UserError('Give ' + empty + ' people, companies or both. ' + examples([{ [empty]: { people: [EXAMPLE_PERSON[empty]] } }], [LOOKUP_EXAMPLE]), { code: 'invalid_input' });
+      const halves = (p: Provider) => KINDS.filter((kind) => a[p][kind]);
+      const kinds = new Set(given.flatMap(halves));
       const contactFields: ContactField[] | undefined = a.contact_fields;
-      if (contactFields && !people) throw new UserError('contact_fields applies to people only.', { code: 'invalid_input' });
-      const blocks = Object.fromEntries(given.map((p) => [p, nativeLookup(p, a[p], contactFields)]));
-      const count = (p: Provider) => (a[p]?.people ?? a[p]?.companies ?? []).length;
-      const price = (p: Provider) =>
-        !contactFields
-          ? PER_MATCH[p]
-          : p === 'fullenrich'
-            ? contactFields.reduce((sum, f) => sum + FE_CONTACT_PRICE[f], 0)
-            : p === 'apollo' && contactFields.every((f) => f === 'mobile')
-              ? 0
-              : CONTACT_PER_MATCH[p];
-      const estimates = Object.fromEntries(given.map((p) => [p, count(p) * price(p)]));
-      if (!people) return { order: LOOKUP_ORDER, blocks, estimates, run: enrichCompaniesWith };
-      if (!contactFields) return { order: LOOKUP_ORDER, blocks, estimates, run: enrichPeopleWith };
+      if (contactFields && given.length && !kinds.has('people')) {
+        const without = { ...args };
+        delete without.contact_fields;
+        throw new UserError('contact_fields applies to people only, and these are companies. Drop contact_fields to get their firmographics. ' + examples([without], [COMPANY_EXAMPLE]), { code: 'invalid_input' });
+      }
+      const contacts = (kind: Kind) => (kind === 'people' ? contactFields : undefined);
+      const price = (p: Provider, kind: Kind) => {
+        const fields = contacts(kind);
+        if (!fields) return PER_MATCH[p];
+        if (p === 'fullenrich') return fields.reduce((sum, f) => sum + FE_CONTACT_PRICE[f], 0);
+        return p === 'apollo' && fields.every((f) => f === 'mobile') ? 0 : CONTACT_PER_MATCH[p];
+      };
+      const estimates = Object.fromEntries(given.map((p) => [p, halves(p).reduce((sum, kind) => sum + a[p][kind].length * price(p, kind), 0)]));
+      const runHalf = (ctx: Context, p: Provider, kind: Kind, block: Record<string, any>): Promise<ProviderReport> => {
+        const native = nativeLookup(p, { ...block, people: undefined, companies: undefined, [kind]: block[kind] }, contacts(kind));
+        if (kind === 'companies') return enrichCompaniesWith(ctx, p, native);
+        if (!contactFields) return enrichPeopleWith(ctx, p, native);
+        if (p === 'people_data_labs') return Promise.resolve({ name: p, status: 'skipped', returned: 0, credits: 0, note: 'No contact lookup; drop contact_fields to resolve these people.' });
+        return contactsWith(ctx, p, native, contactFields);
+      };
       return {
-        order: CONTACT_ORDER,
-        blocks,
+        order: contactFields ? CONTACT_ORDER : LOOKUP_ORDER,
+        blocks: Object.fromEntries(given.map((p) => [p, a[p]])),
         estimates,
-        run: async (ctx, p, block) =>
-          p === 'people_data_labs'
-            ? { name: p, status: 'skipped', returned: 0, credits: 0, note: 'No contact lookup; drop contact_fields to resolve these people.' }
-            : contactsWith(ctx, p, block, contactFields),
+        run: (ctx, p, block) => Promise.all(halves(p).map(async (kind) => ({ ...(await runHalf(ctx, p, kind, block)), kind }))),
       };
     }
   );
