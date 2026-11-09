@@ -52,11 +52,11 @@ const searchDomainSchema = z
 // scrapeOptions). Defining the field set once keeps the two surfaces from
 // drifting when a source type, category, or filter changes.
 export const searchToolBaseFields = {
-  toolDetail: z.enum(['compact', 'summary', 'full']).optional().describe('Compact by default. Compact returns only provider, capability and description; full includes contracts. Inspect selected compact tools with firecrawl_find_tools providers and capabilities.'),
+  toolDetail: z.enum(['compact', 'summary', 'full']).optional().describe('Compact by default. Compact returns only provider, capability and description; full includes contracts. Inspect selected compact tools with data_library_search providers and capabilities.'),
   query: z
     .string()
     .min(1)
-    .describe('Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Catalogue browsing is available through firecrawl_find_tools.'),
+    .describe('Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Catalogue browsing is available through data_library_search.'),
   domainTools: z
     .boolean()
     .optional()
