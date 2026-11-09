@@ -181,16 +181,69 @@ test('search refuses a provider block written for the other entity', async (t) =
   assert.equal(api.calls.length, 0);
 });
 
-test('enrich refuses people and companies in one call', async (t) => {
+const MIXED = {
+  fullenrich: { companies: [{ domain: 'acme.example' }] },
+  apollo: { people: [{ email: 'grace@acme.example' }], companies: [{ domain: 'globex.example' }] },
+};
+
+test('enrich runs people and companies in one call as separate entries', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { apiUrl: api.url });
+  const result = await client.callTool({ name: 'people_company_enrich', arguments: MIXED });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  const entries = result.structuredContent.providers.map((p) => [p.name, p.kind, p.status, p.returned, p.credits]);
+  assert.deepEqual(entries, [
+    ['fullenrich', 'companies', 'ok', 1, 10],
+    ['apollo', 'people', 'ok', 1, 30],
+    ['apollo', 'companies', 'ok', 1, 30],
+    ['people_data_labs', undefined, 'not_requested', 0, 0],
+    ['datalegion', undefined, 'not_requested', 0, 0],
+  ]);
+  const [, grace, globex] = result.structuredContent.providers;
+  assert.equal(grace.results[0].input_index, 0);
+  assert.equal(globex.results[0].input_index, 0);
+  assert.equal(result.structuredContent.credits_estimate, 70);
+  assert.equal(result.structuredContent.credits_total, 70);
+  assert.deepEqual(api.calls.map((call) => call.provider + ' ' + call.capability).sort(), ['apollo companies/bulk-enrich', 'apollo people/bulk-match', 'fullenrich companies/lookup']);
+});
+
+test('the credit cap covers both halves of a mixed call', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { apiUrl: api.url });
+  const result = await client.callTool({ name: 'people_company_enrich', arguments: { ...MIXED, max_credits: 69 } });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /could cost up to 70 credits \(fullenrich 10, apollo 60\)/);
+  assert.equal(api.calls.length, 0);
+});
+
+test('a failing half of a mixed call is reported on its own entry', async (t) => {
+  const api = await startApi(t, (batch) =>
+    batch[0].capability === 'companies/bulk-enrich'
+      ? { json: { success: true, data: { alexandria: batch.map(() => ({ error: { code: 'provider_error', message: 'Please try again later.' }, creditsCost: 0 })) } } }
+      : undefined
+  );
+  const client = await connect(t, { apiUrl: api.url });
+  const result = await client.callTool({ name: 'people_company_enrich', arguments: { apollo: MIXED.apollo } });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  const [people, companies] = result.structuredContent.providers.filter((p) => p.name === 'apollo');
+  assert.deepEqual([people.kind, people.status, people.returned], ['people', 'ok', 1]);
+  assert.deepEqual([companies.kind, companies.status, companies.retryable], ['companies', 'error', true]);
+  assert.match(companies.note, /Please try again later/);
+  assert.equal(result.structuredContent.credits_total, 30);
+});
+
+test('contact_fields in a mixed call applies to the people only', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { apiUrl: api.url });
   const result = await client.callTool({
     name: 'people_company_enrich',
-    arguments: { fullenrich: { companies: [{ domain: 'acme.example' }] }, apollo: { people: [{ email: 'ada@acme.example' }] } },
+    arguments: { contact_fields: ['work_email'], fullenrich: { people: [{ person_name: 'Ada Lovelace', company_domain: 'acme.example' }], companies: [{ domain: 'acme.example' }] } },
   });
-  assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /separate calls: fullenrich has companies, apollo has people/);
-  assert.equal(api.calls.length, 0);
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  const fullenrich = result.structuredContent.providers.filter((p) => p.name === 'fullenrich');
+  assert.deepEqual(fullenrich.map((p) => [p.kind, p.status]), [['people', 'empty'], ['companies', 'ok']]);
+  assert.deepEqual(api.calls.map((call) => call.capability).sort(), ['companies/lookup', 'contacts/work-email']);
+  assert.equal(result.structuredContent.credits_estimate, 40);
 });
 
 test('contact_fields runs the contact providers on the same people', async (t) => {
@@ -437,7 +490,7 @@ test('Apollo runs a contact lookup only for the fields it has, and keeps only ma
   const client = await connect(t, { apiUrl: api.url });
   const mobile = await client.callTool({ name: 'people_company_enrich', arguments: { contact_fields: ['mobile'], apollo: { people: [{ email: 'ada@acme.example' }] } } });
   assert.equal(mobile.isError, true);
-  assert.match(mobile.content[0].text, /No provider ran successfully: apollo skipped: Apollo has no mobile lookup/);
+  assert.match(mobile.content[0].text, /No provider ran successfully: apollo people skipped: Apollo has no mobile lookup/);
   const apollo = mobile.structuredContent.providers.find((p) => p.name === 'apollo');
   assert.deepEqual([apollo.status, apollo.note], ['skipped', 'Apollo has no mobile lookup.']);
   assert.equal(mobile.structuredContent.credits_estimate, 0);
@@ -542,12 +595,9 @@ test('a company enrichment where no provider ran gets a company example', async 
 test('enrich shape errors carry an example built from the call', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { apiUrl: api.url });
-  const mixed = await client.callTool({
-    name: 'people_company_enrich',
-    arguments: { fullenrich: { people: [{ person_professional_network_url: 'https://www.linkedin.com/in/ada' }] }, apollo: { companies: [{ domain: 'acme.example' }] } },
-  });
-  assert.equal(mixed.isError, true);
-  assert.match(mixed.content[0].text, /separate calls.*Example calls: \{"fullenrich":\{"people".*then \{"apollo":\{"companies"/);
+  const empty = await client.callTool({ name: 'people_company_enrich', arguments: { people_data_labs: { min_likelihood: 5 } } });
+  assert.equal(empty.isError, true);
+  assert.match(empty.content[0].text, /Give people_data_labs people, companies or both\. Example: \{"people_data_labs":\{"people":\[\{"name":"Jane Doe"/);
   const contact = await client.callTool({ name: 'people_company_enrich', arguments: { contact_fields: ['work_email'], fullenrich: { companies: [{ domain: 'acme.example' }] } } });
   assert.equal(contact.isError, true);
   assert.match(contact.content[0].text, /people only.*Example: \{"fullenrich":\{"companies":\[\{"domain":"acme.example"\}\]\}\}/);

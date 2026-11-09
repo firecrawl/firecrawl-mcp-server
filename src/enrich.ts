@@ -329,7 +329,7 @@ const lookupParameters = z.strictObject({
     .min(1)
     .optional()
     .describe(
-      'People only; never send it with companies. Finds these contact values instead of profiles. fullenrich: work_email 30 credits, personal_email 100, mobile 300, per value found. datalegion: 100 per matched person, every contact field it has. apollo: 30 per match, work email, plus personal emails when personal_email is listed. people_data_labs has no contact lookup.'
+      'Applies to people only; companies in the same call get firmographics. Finds these contact values instead of profiles. fullenrich: work_email 30 credits, personal_email 100, mobile 300, per value found. datalegion: 100 per matched person, every contact field it has. apollo: 30 per match, work email, plus personal emails when personal_email is listed. people_data_labs has no contact lookup.'
     ),
   fullenrich: provider(
     { people: batch(fullEnrichPersonRef).optional(), companies: batch(fullEnrichCompanyRef).optional() },
@@ -349,17 +349,21 @@ const lookupParameters = z.strictObject({
   ),
 });
 
+const KINDS = ['people', 'companies'] as const;
+type Kind = (typeof KINDS)[number];
+
 const enrichOutputSchema = z.looseObject({
   providers: z
     .array(
       z.looseObject({
         name: z.string().optional(),
         status: z.string().optional(),
+        kind: z.enum(KINDS).optional().describe('people_company_enrich: which input list this entry covers. A block with both people and companies has one entry for each.'),
         returned: z.number().optional(),
         credits: z.number().optional(),
         note: z.string().optional().describe('Why the provider failed or skipped inputs.'),
         retryable: z.boolean().optional().describe('The failure may succeed on a later try.'),
-        results: z.array(z.looseObject({})).optional().describe('This provider\'s records; people_company_enrich records carry input_index into this provider\'s input list.'),
+        results: z.array(z.looseObject({})).optional().describe('This provider\'s records; people_company_enrich records carry input_index into this entry\'s input list (its kind).'),
         unmatched: z.array(z.number()).optional().describe('people_company_enrich: input indexes this provider did not match.'),
         pending: z
           .array(z.looseObject({}))
@@ -409,6 +413,7 @@ interface Company {
 interface ProviderReport {
   name: Provider | 'firecrawl_search';
   status: 'ok' | 'empty' | 'pending' | 'error' | 'skipped' | 'not_requested';
+  kind?: Kind;
   returned: number;
   credits: number;
   attempted?: number;
@@ -1183,7 +1188,7 @@ type Plan = {
   order: Provider[];
   blocks: Record<string, any>;
   estimates: Partial<Record<Provider | 'firecrawl_search', number>>;
-  run: (ctx: Context, p: Provider, block: Record<string, any>) => Promise<ProviderReport>;
+  run: (ctx: Context, p: Provider, block: Record<string, any>) => Promise<ProviderReport | ProviderReport[]>;
   web?: Record<string, any>;
 };
 
@@ -1275,14 +1280,16 @@ export function registerEnrichTools(
           );
         }
         const ctx: Context = { client: getClient(session), origin: requestOrigin(mcpClient as any, session), tool: name };
-        const providers = await Promise.all([
-          ...order.map((p) => (on.includes(p) ? run(ctx, p, blocks[p]) : notRequested(p))),
-          ...(webArgs ? [webReport(web, webArgs, context)] : []),
-        ]);
+        const providers = (
+          await Promise.all([
+            ...order.map((p) => (on.includes(p) ? run(ctx, p, blocks[p]) : notRequested(p))),
+            ...(webArgs ? [webReport(web, webArgs, context)] : []),
+          ])
+        ).flat();
         const data = { providers, credits_total: providers.reduce((sum, r) => sum + r.credits, 0), credits_estimate, max_credits };
         const ran = providers.filter((r) => r.status !== 'not_requested');
         if (!ran.some((r) => r.status === 'ok' || r.status === 'empty' || r.status === 'pending')) {
-          const why = ran.map((r) => r.name + ' ' + r.status + (r.note ? ': ' + r.note : '')).map((reason) => (/[.!?]$/.test(reason) ? reason : reason + '.'));
+          const why = ran.map((r) => r.name + (r.kind ? ' ' + r.kind : '') + ' ' + r.status + (r.note ? ': ' + r.note : '')).map((reason) => (/[.!?]$/.test(reason) ? reason : reason + '.'));
           throw new UserError('No provider ran successfully: ' + why.join(' ') + ' Credits charged: ' + data.credits_total + '. Example of a working call: ' + JSON.stringify(example(args as Record<string, any>)), {
             code: 'no_provider_ran',
             ...data,
@@ -1353,7 +1360,7 @@ export function registerEnrichTools(
     'people_company_enrich',
     // Read-only: looks records up and returns them; contact_fields costs credits but changes nothing.
     { title: 'Look up and enrich people or companies', readOnlyHint: true, openWorldHint: true, destructiveHint: false },
-    'Look up and enrich known people or companies: profiles and work history, or firmographics such as industry, headcount, funding and technologies. Each provider takes its own list of 1 to 50 people or companies; results carry input_index into that list. ' +
+    'Look up and enrich known people or companies: profiles and work history, or firmographics such as industry, headcount, funding and technologies. Each provider block takes people, companies or both, each its own list of 1 to 50. A block with both runs them as two requests and reports two entries, kind "people" and kind "companies"; results carry input_index into their entry\'s list. ' +
       'Add contact_fields to get work email, personal email or mobile for people. Misses are free. ' +
       'Example: ' + JSON.stringify(LOOKUP_EXAMPLE) + '. ',
     lookupParameters,
@@ -1366,47 +1373,36 @@ export function registerEnrichTools(
     (args) => {
       const a = lookupParameters.parse(args) as Record<string, any>;
       const given = LOOKUP_ORDER.filter((p) => a[p] !== undefined);
-      const both = given.find((p) => !a[p].people === !a[p].companies);
-      if (both) {
-        const split = a[both].people
-          ? [{ [both]: { people: a[both].people } }, { [both]: { companies: a[both].companies } }]
-          : [{ [both]: { people: [EXAMPLE_PERSON[both]] } }];
-        throw new UserError('Give ' + both + ' exactly one of people or companies, one kind per call. ' + examples(split, [LOOKUP_EXAMPLE, COMPANY_EXAMPLE]), { code: 'invalid_input' });
-      }
-      const kinds = new Set(given.map((p) => (a[p].people ? 'people' : 'companies')));
-      if (kinds.size > 1) {
-        const list = given.map((p) => p + ' has ' + (a[p].people ? 'people' : 'companies')).join(', ');
-        const split = ['people', 'companies'].map((kind) => Object.fromEntries(given.filter((p) => a[p][kind]).map((p) => [p, { [kind]: a[p][kind] }])));
-        throw new UserError('Send people and companies in separate calls: ' + list + '. ' + examples(split, [LOOKUP_EXAMPLE, COMPANY_EXAMPLE]), { code: 'invalid_input' });
-      }
-      const people = kinds.has('people');
+      const empty = given.find((p) => !a[p].people && !a[p].companies);
+      if (empty) throw new UserError('Give ' + empty + ' people, companies or both. ' + examples([{ [empty]: { people: [EXAMPLE_PERSON[empty]] } }], [LOOKUP_EXAMPLE]), { code: 'invalid_input' });
+      const halves = (p: Provider) => KINDS.filter((kind) => a[p][kind]);
+      const kinds = new Set(given.flatMap(halves));
       const contactFields: ContactField[] | undefined = a.contact_fields;
-      if (contactFields && given.length && !people) {
+      if (contactFields && given.length && !kinds.has('people')) {
         const without = { ...args };
         delete without.contact_fields;
         throw new UserError('contact_fields applies to people only, and these are companies. Drop contact_fields to get their firmographics. ' + examples([without], [COMPANY_EXAMPLE]), { code: 'invalid_input' });
       }
-      const blocks = Object.fromEntries(given.map((p) => [p, nativeLookup(p, a[p], contactFields)]));
-      const count = (p: Provider) => (a[p]?.people ?? a[p]?.companies ?? []).length;
-      const price = (p: Provider) =>
-        !contactFields
-          ? PER_MATCH[p]
-          : p === 'fullenrich'
-            ? contactFields.reduce((sum, f) => sum + FE_CONTACT_PRICE[f], 0)
-            : p === 'apollo' && contactFields.every((f) => f === 'mobile')
-              ? 0
-              : CONTACT_PER_MATCH[p];
-      const estimates = Object.fromEntries(given.map((p) => [p, count(p) * price(p)]));
-      if (!people) return { order: LOOKUP_ORDER, blocks, estimates, run: enrichCompaniesWith };
-      if (!contactFields) return { order: LOOKUP_ORDER, blocks, estimates, run: enrichPeopleWith };
+      const contacts = (kind: Kind) => (kind === 'people' ? contactFields : undefined);
+      const price = (p: Provider, kind: Kind) => {
+        const fields = contacts(kind);
+        if (!fields) return PER_MATCH[p];
+        if (p === 'fullenrich') return fields.reduce((sum, f) => sum + FE_CONTACT_PRICE[f], 0);
+        return p === 'apollo' && fields.every((f) => f === 'mobile') ? 0 : CONTACT_PER_MATCH[p];
+      };
+      const estimates = Object.fromEntries(given.map((p) => [p, halves(p).reduce((sum, kind) => sum + a[p][kind].length * price(p, kind), 0)]));
+      const runHalf = (ctx: Context, p: Provider, kind: Kind, block: Record<string, any>): Promise<ProviderReport> => {
+        const native = nativeLookup(p, { ...block, people: undefined, companies: undefined, [kind]: block[kind] }, contacts(kind));
+        if (kind === 'companies') return enrichCompaniesWith(ctx, p, native);
+        if (!contactFields) return enrichPeopleWith(ctx, p, native);
+        if (p === 'people_data_labs') return Promise.resolve({ name: p, status: 'skipped', returned: 0, credits: 0, note: 'No contact lookup; drop contact_fields to resolve these people.' });
+        return contactsWith(ctx, p, native, contactFields);
+      };
       return {
-        order: CONTACT_ORDER,
-        blocks,
+        order: contactFields ? CONTACT_ORDER : LOOKUP_ORDER,
+        blocks: Object.fromEntries(given.map((p) => [p, a[p]])),
         estimates,
-        run: async (ctx, p, block) =>
-          p === 'people_data_labs'
-            ? { name: p, status: 'skipped', returned: 0, credits: 0, note: 'No contact lookup; drop contact_fields to resolve these people.' }
-            : contactsWith(ctx, p, block, contactFields),
+        run: (ctx, p, block) => Promise.all(halves(p).map(async (kind) => ({ ...(await runHalf(ctx, p, kind, block)), kind }))),
       };
     }
   );
