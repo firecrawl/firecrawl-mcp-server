@@ -110,6 +110,7 @@ test('a nested scrapeOptions.zeroDataRetention is refused with the supported alt
     });
     assert.match(result.content[0].text, /scrapeOptions\.zeroDataRetention is not supported/);
     assert.match(result.content[0].text, alternative);
+    assert.equal(result.structuredContent?.error?.code, 'invalid_request');
     assert.equal(sent(path).length, 0, `${name} reached the API`);
   }
 });
