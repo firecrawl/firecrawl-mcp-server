@@ -13,8 +13,8 @@
   - A call whose every provider block errors or is skipped fails with `no_provider_ran`, each provider's reason, the credits charged and an example of a working call. It used to return a normal result with only errored or skipped providers. The per-provider report is still in `structuredContent`.
   - The `firecrawl_search` block is estimated at its listed price, 2 credits per 10 results (10 with enterprise zdr), without the 2 credits per result a team that scans results pays. That charge is described, and `max_credits` does not count it.
   - `entity` is described as required, exactly `"person"` or `"company"`. When it is missing and the filter names belong to only one of the two, it is taken from them; otherwise the error names it and every unknown top-level field.
-  - The `max_credits` description says how the estimate is made and that 0 runs only free calls. A `max_credits_exceeded` error includes the same call with `max_credits` raised to the estimate.
-  - `contact_fields` is described as people only. Every argument error names all invalid fields, not the first five, and every enrich shape error (no provider, a block with neither people nor companies, `contact_fields` with companies only) includes an example call, built from the caller's own arguments when they are short.
+  - The `max_credits` description says how the estimate is made and that 0 runs only free calls. A `max_credits_exceeded` error gives the minimum `max_credits`, and the same call raised to it when the call is short enough to quote.
+  - `contact_fields` is described as people only. Every argument error that reaches schema validation names all invalid fields, not the first five, and every enrich shape error (no provider, a block with neither people nor companies, `contact_fields` with companies only) includes an example call, built from the caller's own arguments when they are short.
 
 ### Fixed
 

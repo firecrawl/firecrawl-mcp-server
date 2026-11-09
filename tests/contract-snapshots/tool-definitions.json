@@ -8288,7 +8288,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "people_company_enrich@44197994c38d": {
+  "people_company_enrich@7d262cdd3f72": {
     "annotations": {
       "title": "Look up and enrich people or companies",
       "readOnlyHint": false,
@@ -8302,7 +8302,7 @@
       "type": "object",
       "properties": {
         "max_credits": {
-          "description": "Most credits this call may spend. Omit it for 1000. 0 spends nothing, so only free calls run. The estimate checked against it is records or inputs × each provider's price, as if every record were found; a call whose estimate is higher is refused before any provider runs.",
+          "description": "Most credits this call may spend. Omit it for 1000. 0 spends nothing, so only free calls run. The estimate checked against it is each provider's listed price times its unit (record, input, Apollo company page, or 10 web results), as if every record were found; a call whose estimate is higher is refused before any provider runs.",
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
@@ -9401,7 +9401,7 @@
       "additionalProperties": false
     }
   },
-  "people_company_search@14c3d0d9a7a3": {
+  "people_company_search@aec1e070823b": {
     "annotations": {
       "title": "Find people or companies",
       "readOnlyHint": true,
@@ -9423,7 +9423,7 @@
           ]
         },
         "max_credits": {
-          "description": "Most credits this call may spend. Omit it for 1000. 0 spends nothing, so only free calls run. The estimate checked against it is records or inputs × each provider's price, as if every record were found; a call whose estimate is higher is refused before any provider runs.",
+          "description": "Most credits this call may spend. Omit it for 1000. 0 spends nothing, so only free calls run. The estimate checked against it is each provider's listed price times its unit (record, input, Apollo company page, or 10 web results), as if every record were found; a call whose estimate is higher is refused before any provider runs.",
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
