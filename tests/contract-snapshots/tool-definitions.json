@@ -3891,7 +3891,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_monitor_update@1af896471afb": {
+  "firecrawl_monitor_update@adf5af8dd01e": {
     "annotations": {
       "title": "Update Firecrawl monitor",
       "readOnlyHint": false,
@@ -3900,7 +3900,7 @@
       "idempotentHint": true
     },
     "title": "Update Firecrawl monitor",
-    "description": "\nPatch an existing monitor by ID. The body can change its name, active/paused status, schedule, targets, goal, judging, webhook, notifications, or retention; these changes affect future scheduled checks.\n\nReturns the updated monitor.\n",
+    "description": "\nPatch an existing monitor by ID; changes affect future scheduled checks. Pause or resume it with `status` (\"paused\" or \"active\"). Reschedule it with `scheduleText` (plain language, e.g. \"every 6 hours\") or `cron`, plus `timezone`; a new schedule without `timezone` runs in UTC. For other fields pass `body`, a partial monitor in the create shape (name, targets, goal, judgeEnabled, webhook, notification, retentionDays), e.g. `{\"name\": \"Pricing watch\"}`. The parameters are merged into `body` as `{\"status\": ..., \"schedule\": {\"text\" or \"cron\": ..., \"timezone\": ...}}` and override the same keys there. At least one change is required.\n\nReturns the updated monitor.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3914,11 +3914,26 @@
             "type": "string"
           },
           "additionalProperties": true
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "paused"
+          ]
+        },
+        "scheduleText": {
+          "type": "string"
+        },
+        "cron": {
+          "type": "string"
+        },
+        "timezone": {
+          "type": "string"
         }
       },
       "required": [
-        "id",
-        "body"
+        "id"
       ],
       "additionalProperties": false
     },
