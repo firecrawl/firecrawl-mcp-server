@@ -9124,7 +9124,7 @@
       "additionalProperties": false
     }
   },
-  "people_company_enrich@24e16eb80913": {
+  "people_company_enrich@ac5c21932a6c": {
     "annotations": {
       "title": "Look up and enrich people or companies",
       "readOnlyHint": true,
@@ -9132,7 +9132,7 @@
       "destructiveHint": false
     },
     "title": "Look up and enrich people or companies",
-    "description": "Look up and enrich known people or companies: profiles and work history, or firmographics such as industry, headcount, funding and technologies. Each provider takes its own list of 1 to 50 people or companies; results carry input_index into that list. Add contact_fields to get work email, personal email or mobile for people. Misses are free. Example: {\"contact_fields\":[\"work_email\"],\"fullenrich\":{\"people\":[{\"person_name\":\"Jane Doe\",\"company_domain\":\"example.com\"}]}}. Each provider takes its own native parameters; nothing is shared between providers. Include a block only for each provider you want to run, e.g. \"apollo\": {...}; included providers run in parallel. The response lists every provider with its status, records, credits charged and any error.",
+    "description": "Look up and enrich known people or companies: profiles and work history, or firmographics such as industry, headcount, funding and technologies. Each provider block takes people, companies or both, each its own list of 1 to 50. A block with both runs them as two requests and reports two entries, kind \"people\" and kind \"companies\"; results carry input_index into their entry's list. Add contact_fields to get work email, personal email or mobile for people. Misses are free. Example: {\"contact_fields\":[\"work_email\"],\"fullenrich\":{\"people\":[{\"person_name\":\"Jane Doe\",\"company_domain\":\"example.com\"}]}}. Each provider takes its own native parameters; nothing is shared between providers. Include a block only for each provider you want to run, e.g. \"apollo\": {...}; included providers run in parallel. The response lists every provider with its status, records, credits charged and any error.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -9144,7 +9144,7 @@
           "maximum": 9007199254740991
         },
         "contact_fields": {
-          "description": "People only; never send it with companies. Finds these contact values instead of profiles. fullenrich: work_email 30 credits, personal_email 100, mobile 300, per value found. datalegion: 100 per matched person, every contact field it has. apollo: 30 per match, work email, plus personal emails when personal_email is listed. people_data_labs has no contact lookup.",
+          "description": "Applies to people only; companies in the same call get firmographics. Finds these contact values instead of profiles. fullenrich: work_email 30 credits, personal_email 100, mobile 300, per value found. datalegion: 100 per matched person, every contact field it has. apollo: 30 per match, work email, plus personal emails when personal_email is listed. people_data_labs has no contact lookup.",
           "minItems": 1,
           "type": "array",
           "items": {
@@ -10172,6 +10172,14 @@
               "status": {
                 "type": "string"
               },
+              "kind": {
+                "description": "people_company_enrich: which input list this entry covers. A block with both people and companies has one entry for each.",
+                "type": "string",
+                "enum": [
+                  "people",
+                  "companies"
+                ]
+              },
               "returned": {
                 "type": "number"
               },
@@ -10187,7 +10195,7 @@
                 "type": "boolean"
               },
               "results": {
-                "description": "This provider's records; people_company_enrich records carry input_index into this provider's input list.",
+                "description": "This provider's records; people_company_enrich records carry input_index into this entry's input list (its kind).",
                 "type": "array",
                 "items": {
                   "type": "object",
@@ -10229,7 +10237,7 @@
       "additionalProperties": false
     }
   },
-  "people_company_search@343f1168ef08": {
+  "people_company_search@aec1e070823b": {
     "annotations": {
       "title": "Find people or companies",
       "readOnlyHint": true,
@@ -11443,6 +11451,14 @@
               "status": {
                 "type": "string"
               },
+              "kind": {
+                "description": "people_company_enrich: which input list this entry covers. A block with both people and companies has one entry for each.",
+                "type": "string",
+                "enum": [
+                  "people",
+                  "companies"
+                ]
+              },
               "returned": {
                 "type": "number"
               },
@@ -11458,7 +11474,7 @@
                 "type": "boolean"
               },
               "results": {
-                "description": "This provider's records; people_company_enrich records carry input_index into this provider's input list.",
+                "description": "This provider's records; people_company_enrich records carry input_index into this entry's input list (its kind).",
                 "type": "array",
                 "items": {
                   "type": "object",
