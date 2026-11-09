@@ -57,6 +57,19 @@ function closeObjects(schema: JsonObject): JsonObject {
 }
 
 /**
+ * The advertised input schema says `additionalProperties: false` (closeObjects), so
+ * validation has to reject unknown top-level keys the same way instead of
+ * stripping them: a misspelled option must fail the call, not silently drop
+ * and report success. `firecrawl_gov_search` already behaves this way.
+ */
+function strictParameters(schema: StandardSchemaV1): StandardSchemaV1 {
+  const def = (schema as { _zod?: { def?: { type?: string } } })._zod?.def;
+  if (def?.type !== 'object') return schema;
+  const strict = (schema as unknown as { strict?: () => StandardSchemaV1 }).strict;
+  return typeof strict === 'function' ? strict.call(schema) : schema;
+}
+
+/**
  * An open map's `additionalProperties: {}` is listed as `true`. Both accept any value, but some clients read the
  * empty object as false (it is falsy in Python) and then refuse every key, such as each key of an extraction schema.
  */
@@ -638,7 +651,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
       }
       let args: unknown = undefined;
       if (tool.parameters) {
-        const parsed = await tool.parameters['~standard'].validate(request.params.arguments);
+        const parsed = await strictParameters(tool.parameters)['~standard'].validate(request.params.arguments);
         if (parsed.issues) {
           throw mcpError(
             -32602,

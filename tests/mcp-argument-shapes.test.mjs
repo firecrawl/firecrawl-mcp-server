@@ -291,3 +291,25 @@ test('scheme-less URLs are read as https URLs', async (t) => {
   assert.equal(api.requests.length, before, 'refused URLs never reach the API');
 });
 
+
+test('unknown or misspelled tool arguments are rejected, not silently dropped', async (t) => {
+  const { full, search } = await startHosted(t);
+
+  for (const [label, call] of [['full', full], ['search surface', search]]) {
+    const rejected = await call('firecrawl_scrape', {
+      url: 'https://example.com',
+      maxage: 0,
+    });
+    assert.ok(
+      rejectionText(rejected).includes('maxage'),
+      `${label}: misspelled argument should fail validation: ${rejectionText(rejected)}`
+    );
+    assert.ok(rejected.error || rejected.result?.isError, label);
+
+    const accepted = await call('firecrawl_scrape', {
+      url: 'https://example.com',
+      maxAge: 0,
+    });
+    assertAccepted(accepted, `${label} correctly spelled argument`);
+  }
+});
