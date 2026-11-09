@@ -1357,7 +1357,7 @@ export function registerEnrichTools(
       'Add contact_fields to get work email, personal email or mobile for people. Misses are free. ' +
       'Example: ' + JSON.stringify(LOOKUP_EXAMPLE) + '. ',
     lookupParameters,
-    () => LOOKUP_EXAMPLE,
+    (args) => (Object.values(args).some((block) => isPlain(block) && block.companies !== undefined) ? COMPANY_EXAMPLE : LOOKUP_EXAMPLE),
     (args) => {
       repairBlocks(args, LOOKUP_ORDER, (p) => lookupParameters.shape[p]);
       repair(lookupParameters, args);
