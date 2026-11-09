@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { createFirecrawlMcpServer, UserError } from '../dist/server.js';
 const INVALID_API_KEY_MESSAGE = 'The Firecrawl API key is invalid or revoked.';
 import { getFreePort } from './helpers/exchange-mcp.mjs';
+import { startFakeExchangeApi } from './helpers/exchange-api.mjs';
 
 const SIGNUP_URL = 'https://www.firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp&redirect=%2Fapp%2Fapi-keys';
 const CREDITS_ERROR = 'Insufficient credits to perform this request. For more credits, you can upgrade your plan at https://firecrawl.dev/pricing.';
@@ -62,6 +63,26 @@ async function assertReadableError(t, { apiUrl, session, name, args, includes, r
 
 const keyless = { authType: 'keyless' };
 const apiKey = { authType: 'api-key', firecrawlApiKey: 'fc-test' };
+
+test('keyless removed-format calls fail before any upstream request', async (t) => {
+  const api = await startFakeExchangeApi();
+  t.after(() => api.close());
+  const { client } = await connect(t, { apiUrl: api.url, session: keyless });
+  for (const options of [
+    ...['json', 'query', 'summary', 'branding'].map((type) => ({ formats: [type] })),
+    { jsonOptions: { prompt: 'Describe the style' } },
+    { queryOptions: { prompt: 'Describe the style' } },
+  ]) {
+    const result = await client.callTool({
+      name: 'firecrawl_scrape', arguments: { url: 'https://example.com', ...options },
+    });
+    assert.equal(result.isError, true);
+    assert.deepEqual(result.structuredContent, {
+      success: false, error: { code: 'invalid_request', message: SCRAPE_FORMAT_MESSAGE },
+    });
+  }
+  assert.deepEqual(api.requests, []);
+});
 
 test('a keyless quota refusal reaches an SDK client as its readable message', async (t) => {
   const apiUrl = await startRefusingApi(t, 429, { success: false, reason: 'requests' });
@@ -262,9 +283,20 @@ const JSON_FORMAT_MESSAGE =
   'formats "json" needs jsonOptions with a prompt or a schema. To ask a question about the page, use formats ["query"] with queryOptions.prompt instead.';
 const QUERY_FORMAT_MESSAGE = 'formats "query" needs queryOptions with a non-empty prompt.';
 
+for (const queryOptions of [undefined, { prompt: ' ' }]) {
+  test(`a removed query format returns a readable pre-validation error (${JSON.stringify(queryOptions)})`, async (t) => {
+    const result = await assertReadableError(t, {
+      apiUrl: 'http://127.0.0.1:9', session: apiKey, name: 'firecrawl_scrape',
+      args: { url: 'https://example.com', formats: ['query'], ...(queryOptions ? { queryOptions } : {}) },
+      includes: SCRAPE_FORMAT_MESSAGE,
+    });
+    assert.deepEqual(result.structuredContent, {
+      success: false, error: { code: 'invalid_request', message: SCRAPE_FORMAT_MESSAGE },
+    });
+  });
+}
+
 for (const { name, args, message, code } of [
-  { name: 'firecrawl_scrape', args: { url: 'https://example.com', formats: ['query'] }, message: SCRAPE_FORMAT_MESSAGE, code: 'invalid_request' },
-  { name: 'firecrawl_scrape', args: { url: 'https://example.com', formats: ['query'], queryOptions: { prompt: ' ' } }, message: SCRAPE_FORMAT_MESSAGE, code: 'invalid_request' },
   { name: 'firecrawl_interact', args: { url: 'https://example.com', prompt: 'Read the title', scrapeOptions: { formats: ['json'] } }, message: JSON_FORMAT_MESSAGE, code: 'invalid_request' },
   { name: 'firecrawl_interact', args: { url: 'https://example.com', prompt: 'Read the title', scrapeOptions: { formats: ['query'] } }, message: QUERY_FORMAT_MESSAGE, code: 'invalid_request' },
   { name: 'firecrawl_find_tools', args: { level: 'categories', categories: ['finance'] }, message: 'Category index accepts only level, limit and offset. Select a category to browse providers.', code: 'invalid_input' },
@@ -289,11 +321,6 @@ for (const { name, args, message, code } of [
       onToolResult: (event) => events.push(event),
     });
     assert.equal(result.content[0].text, message);
-    if (name === 'firecrawl_scrape') {
-      assert.equal(result.structuredContent.error.code, code);
-      assert.deepEqual(events, []);
-      return;
-    }
     const error = events.find((event) => event.status === 'error')?.error;
     assert.ok(error instanceof UserError, String(error));
     assert.equal(error.extras.code ?? error.extras.error?.code, code);
