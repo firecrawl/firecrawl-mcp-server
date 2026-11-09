@@ -335,7 +335,7 @@ test('a call where no provider runs is an error with each reason and an example'
   const client = await connect(t, { apiUrl: api.url });
   const result = await client.callTool({ name: 'people_company_search', arguments: { entity: 'company', max_credits: 0, fullenrich: {}, apollo: {} } });
   assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /No provider ran successfully: apollo skipped: No filters given.*fullenrich skipped.*Example of a working call/);
+  assert.match(result.content[0].text, /No provider ran successfully: apollo skipped: No filters given; pass at least one\. fullenrich skipped: No filters given; pass at least one\. Credits charged: 0\. Example of a working call/);
   assert.equal(result.structuredContent.credits_estimate, 0);
   assert.equal(api.calls.length, 0);
 });
@@ -348,6 +348,33 @@ test('a search block above its maximum runs at the maximum with a note', async (
   const apollo = result.structuredContent.providers[0];
   assert.match(apollo.note, /per_page 50 is above the maximum 25, so 25 ran; use page for more/);
   assert.equal(api.calls[0].options.per_page, 25);
+
+  const companies = await client.callTool({
+    name: 'people_company_search',
+    arguments: {
+      entity: 'company',
+      max_credits: 1000,
+      apollo: { q_organization_name: 'Acme', per_page: 40 },
+      fullenrich: { names: [{ value: 'Acme' }], limit: 50 },
+      people_data_labs: { sql: "SELECT * FROM company WHERE name = 'acme'", limit: 20 },
+    },
+  });
+  const notes = Object.fromEntries(companies.structuredContent.providers.map((p) => [p.name, p.note ?? '']));
+  assert.match(notes.apollo, /per_page 40 is above the maximum 25, so 25 ran; use page for more/);
+  assert.match(notes.fullenrich, /limit 50 is above the maximum 25, so 25 ran; use offset for more/);
+  assert.match(notes.people_data_labs, /limit 20 is above the maximum 10, so 10 ran\./);
+  assert.equal(companies.structuredContent.credits_estimate, 30 + 5 * 25 + 50 * 10);
+  const sent = (provider) => api.calls.slice(1).filter((call) => call.provider === provider).map((call) => call.options);
+  assert.equal(sent('apollo')[0].per_page, 25);
+  assert.equal(sent('fullenrich').reduce((sum, options) => sum + options.limit, 0), 25);
+});
+
+test('page-size maximums are advertised in the input schema', async (t) => {
+  const client = await connect(t, {});
+  const { tools } = await client.listTools();
+  const search = tools.find((tool) => tool.name === 'people_company_search').inputSchema;
+  const maximums = JSON.stringify(search).match(/"maximum":\d+/g);
+  assert.ok(maximums.includes('"maximum":25') && maximums.includes('"maximum":10'), JSON.stringify(maximums));
 });
 
 test('a missing entity is inferred from the filter names', async (t) => {

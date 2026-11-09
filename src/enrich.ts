@@ -194,7 +194,7 @@ const maxCredits = z
   .min(0)
   .optional()
   .describe(
-    'Most credits this call may spend. Omit it for ' + DEFAULT_MAX_CREDITS + '. 0 spends nothing, so only free calls run. The estimate checked against it is records or inputs × each provider\'s price, as if every record were found; a call whose estimate is higher is refused before any provider runs.'
+    'Most credits this call may spend. Omit it for ' + DEFAULT_MAX_CREDITS + '. 0 spends nothing, so only free calls run. The estimate checked against it is each provider\'s listed price times its unit (record, input, Apollo company page, or 10 web results), as if every record were found; a call whose estimate is higher is refused before any provider runs.'
   );
 
 const searchParameters = z.strictObject({
