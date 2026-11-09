@@ -8313,7 +8313,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "people_company_enrich@77996c1772bd": {
+  "people_company_enrich@ac5c21932a6c": {
     "annotations": {
       "title": "Look up and enrich people or companies",
       "readOnlyHint": true,
@@ -8321,19 +8321,19 @@
       "destructiveHint": false
     },
     "title": "Look up and enrich people or companies",
-    "description": "Look up and enrich known people or companies: profiles and work history, or firmographics such as industry, headcount, funding and technologies. Each provider takes its own list of 1 to 50 people or companies; results carry input_index into that list. Add contact_fields to get work email, personal email or mobile for people. Misses are free. Example: {\"contact_fields\":[\"work_email\"],\"fullenrich\":{\"people\":[{\"person_name\":\"Jane Doe\",\"company_domain\":\"example.com\"}]}}. Each provider takes its own native parameters; nothing is shared between providers. Include a block only for each provider you want to run, e.g. \"apollo\": {...}; included providers run in parallel. The response lists every provider with its status, records, credits charged and any error.",
+    "description": "Look up and enrich known people or companies: profiles and work history, or firmographics such as industry, headcount, funding and technologies. Each provider block takes people, companies or both, each its own list of 1 to 50. A block with both runs them as two requests and reports two entries, kind \"people\" and kind \"companies\"; results carry input_index into their entry's list. Add contact_fields to get work email, personal email or mobile for people. Misses are free. Example: {\"contact_fields\":[\"work_email\"],\"fullenrich\":{\"people\":[{\"person_name\":\"Jane Doe\",\"company_domain\":\"example.com\"}]}}. Each provider takes its own native parameters; nothing is shared between providers. Include a block only for each provider you want to run, e.g. \"apollo\": {...}; included providers run in parallel. The response lists every provider with its status, records, credits charged and any error.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
         "max_credits": {
-          "description": "Most credits this call may spend, default 1000. A call that could cost more, if every record were found, is refused before any provider runs.",
+          "description": "Most credits this call may spend. Omit it for 1000. 0 spends nothing, so only free calls run. The estimate checked against it is each provider's listed price times its unit (record, input, Apollo company page, or 10 web results), as if every record were found; a call whose estimate is higher is refused before any provider runs.",
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
         },
         "contact_fields": {
-          "description": "People only: find these contact values instead of profiles. fullenrich: work_email 30 credits, personal_email 100, mobile 300, per value found. datalegion: 100 per matched person, every contact field it has. apollo: 30 per match, work email, plus personal emails when personal_email is listed. people_data_labs has no contact lookup.",
+          "description": "Applies to people only; companies in the same call get firmographics. Finds these contact values instead of profiles. fullenrich: work_email 30 credits, personal_email 100, mobile 300, per value found. datalegion: 100 per matched person, every contact field it has. apollo: 30 per match, work email, plus personal emails when personal_email is listed. people_data_labs has no contact lookup.",
           "minItems": 1,
           "type": "array",
           "items": {
@@ -9361,6 +9361,14 @@
               "status": {
                 "type": "string"
               },
+              "kind": {
+                "description": "people_company_enrich: which input list this entry covers. A block with both people and companies has one entry for each.",
+                "type": "string",
+                "enum": [
+                  "people",
+                  "companies"
+                ]
+              },
               "returned": {
                 "type": "number"
               },
@@ -9376,7 +9384,7 @@
                 "type": "boolean"
               },
               "results": {
-                "description": "This provider's records; people_company_enrich records carry input_index into this provider's input list.",
+                "description": "This provider's records; people_company_enrich records carry input_index into this entry's input list (its kind).",
                 "type": "array",
                 "items": {
                   "type": "object",
@@ -9418,7 +9426,7 @@
       "additionalProperties": false
     }
   },
-  "people_company_search@ed8cd4b2250a": {
+  "people_company_search@aec1e070823b": {
     "annotations": {
       "title": "Find people or companies",
       "readOnlyHint": true,
@@ -9432,7 +9440,7 @@
       "type": "object",
       "properties": {
         "entity": {
-          "description": "\"person\" to find people, \"company\" to find companies. Each provider block then takes that entity's filters.",
+          "description": "Required. Exactly \"person\" (find people) or \"company\" (find companies). Each provider block then takes that entity's filters.",
           "type": "string",
           "enum": [
             "person",
@@ -9440,7 +9448,7 @@
           ]
         },
         "max_credits": {
-          "description": "Most credits this call may spend, default 1000. A call that could cost more, if every record were found, is refused before any provider runs.",
+          "description": "Most credits this call may spend. Omit it for 1000. 0 spends nothing, so only free calls run. The estimate checked against it is each provider's listed price times its unit (record, input, Apollo company page, or 10 web results), as if every record were found; a call whose estimate is higher is refused before any provider runs.",
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
@@ -9483,12 +9491,14 @@
                   "type": "string"
                 },
                 "per_page": {
+                  "maximum": 25,
+                  "description": "Results per page, max 25. Use page for more.",
                   "default": 10,
                   "type": "integer",
-                  "minimum": 1,
-                  "maximum": 25
+                  "minimum": 1
                 },
                 "page": {
+                  "description": "Page number, from 1.",
                   "type": "integer",
                   "minimum": 1,
                   "maximum": 9007199254740991
@@ -9532,12 +9542,14 @@
                   }
                 },
                 "per_page": {
+                  "maximum": 25,
+                  "description": "Results per page, max 25. Use page for more.",
                   "default": 10,
                   "type": "integer",
-                  "minimum": 1,
-                  "maximum": 25
+                  "minimum": 1
                 },
                 "page": {
+                  "description": "Page number, from 1.",
                   "type": "integer",
                   "minimum": 1,
                   "maximum": 9007199254740991
@@ -10121,11 +10133,11 @@
                   }
                 },
                 "limit": {
-                  "description": "Records to return, 5 credits each.",
+                  "maximum": 25,
+                  "description": "Records to return, max 25, 5 credits each. Use offset for more.",
                   "default": 5,
                   "type": "integer",
-                  "minimum": 1,
-                  "maximum": 25
+                  "minimum": 1
                 },
                 "offset": {
                   "type": "integer",
@@ -10382,11 +10394,11 @@
                   }
                 },
                 "limit": {
-                  "description": "Records to return, 5 credits each.",
+                  "maximum": 25,
+                  "description": "Records to return, max 25, 5 credits each. Use offset for more.",
                   "default": 5,
                   "type": "integer",
-                  "minimum": 1,
-                  "maximum": 25
+                  "minimum": 1
                 },
                 "offset": {
                   "type": "integer",
@@ -10429,11 +10441,11 @@
                   "additionalProperties": true
                 },
                 "limit": {
-                  "description": "Records to return, 50 credits each.",
+                  "maximum": 10,
+                  "description": "Records to return, max 10, 50 credits each.",
                   "default": 2,
                   "type": "integer",
-                  "minimum": 1,
-                  "maximum": 10
+                  "minimum": 1
                 }
               },
               "additionalProperties": false
@@ -10467,11 +10479,11 @@
                   "additionalProperties": true
                 },
                 "limit": {
-                  "description": "Records to return, 50 credits each.",
+                  "maximum": 10,
+                  "description": "Records to return, max 10, 50 credits each.",
                   "default": 2,
                   "type": "integer",
-                  "minimum": 1,
-                  "maximum": 10
+                  "minimum": 1
                 }
               },
               "additionalProperties": false
@@ -10479,7 +10491,7 @@
           ]
         },
         "firecrawl_search": {
-          "description": "Firecrawl web search with the firecrawl_search query parameters, without page fetching: web results such as team pages, profiles and news. 2 credits per 10 results (10 with enterprise zdr), plus 2 per result when the team scans results for threats.",
+          "description": "Firecrawl web search with the firecrawl_search query parameters, without page fetching: web results such as team pages, profiles and news. 2 credits per 10 results (10 with enterprise zdr), which is what max_credits counts. A team that scans results for threats also pays 2 per result, which max_credits does not count.",
           "type": "object",
           "properties": {
             "toolDetail": {
@@ -10628,6 +10640,14 @@
               "status": {
                 "type": "string"
               },
+              "kind": {
+                "description": "people_company_enrich: which input list this entry covers. A block with both people and companies has one entry for each.",
+                "type": "string",
+                "enum": [
+                  "people",
+                  "companies"
+                ]
+              },
               "returned": {
                 "type": "number"
               },
@@ -10643,7 +10663,7 @@
                 "type": "boolean"
               },
               "results": {
-                "description": "This provider's records; people_company_enrich records carry input_index into this provider's input list.",
+                "description": "This provider's records; people_company_enrich records carry input_index into this entry's input list (its kind).",
                 "type": "array",
                 "items": {
                   "type": "object",

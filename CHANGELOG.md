@@ -2,10 +2,20 @@
 
 ## [Unreleased]
 
+### Added
+
+- `people_company_enrich` accepts `people` and `companies` in the same call, in one provider block or across blocks. Each kind runs as its own request and is reported as its own `providers` entry with `kind: "people"` or `kind: "companies"`, so a provider given both has two entries, each with its own records, `input_index` into that kind's list, credits and errors. One kind failing does not fail the other. `max_credits` is checked against the estimate for both. `contact_fields` applies to the people, and companies in the same call get firmographics. Such calls used to be refused with `Give <provider> exactly one of people or companies` or `Send people and companies in separate calls`. Every `people_company_enrich` entry for a provider that ran now carries `kind`.
+
 ### Changed
 
+- `people_company_search` and `people_company_enrich` state their limits and rules in the tool descriptions and repair or explain more mistakes:
+  - A page size above its maximum (Apollo `per_page` 25, FullEnrich `limit` 25, People Data Labs `limit` 10) runs at the maximum with a `note`, where it used to be refused. The maximum is in each field's description and advertised schema.
+  - A call whose every provider block errors or is skipped fails with `no_provider_ran`, each provider's reason, the credits charged and an example of a working call. It used to return a normal result with only errored or skipped providers. The per-provider report is still in `structuredContent`.
+  - The `firecrawl_search` block is estimated at its listed price, 2 credits per 10 results (10 with enterprise zdr), without the 2 credits per result a team that scans results pays. That charge is described, and `max_credits` does not count it.
+  - `entity` is described as required, exactly `"person"` or `"company"` (plural and `organization` forms are still read as these, as before). A call without it, or with any other value, is refused with an error that names it, every unknown top-level field and an example call.
+  - The `max_credits` description says how the estimate is made and that 0 runs only free calls. A `max_credits_exceeded` error gives the minimum `max_credits`, and the same call raised to it when the call is short enough to quote.
+  - `contact_fields` is described as people only. Every argument error that reaches schema validation names all invalid fields, not the first five, and every enrich shape error (no provider, a block with neither people nor companies, `contact_fields` with companies only) includes an example call, built from the caller's own arguments when they are short.
 - `firecrawl_agent` and `people_company_enrich` are annotated `readOnlyHint: true`. Both read the web or provider data and return it. They spend credits but change nothing on the web or in the account, so clients that confirm non-read-only tools first, such as Hermes with `trust: untrusted`, no longer ask before every research or enrichment call. `max_credits` / `maxCredits` still cap what a call can spend.
-
 - `firecrawl_find_tools` is marked always-load (`_meta["anthropic/alwaysLoad"]`), so clients that defer MCP tools behind a tool search, such as Claude Code, list it with the agent's other tools from the first turn. Its description no longer tells the agent to prefer `firecrawl_search` for data tasks. In agent evals, both changes together made agents look up and run Alexandria providers on data tasks much more often, with no extra lookups on tasks that need only the web.
 - The `firecrawl_find_tools` description now tells agents to use it first when a task needs structured records rather than page text (the same fields across several entities or pages, exact figures, provenance, or many records), and walks through the three steps: describe the data in `query` or pass `urls`, select a capability to read its contract, and execute it through `firecrawl_scrape` with `alexandria`. The full and search surfaces share this one description. The server instructions, the search surface instructions and the `firecrawl_search` description point to `firecrawl_find_tools` the same way.
 
