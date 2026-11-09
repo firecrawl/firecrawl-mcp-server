@@ -2502,7 +2502,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_find_tools@d7e6be2fc683": {
+  "firecrawl_find_tools@c5befe4ba73b": {
     "annotations": {
       "title": "Find Tools",
       "readOnlyHint": true,
@@ -2511,7 +2511,7 @@
       "idempotentHint": true
     },
     "title": "Find Tools",
-    "description": "Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more: typed, sourced records through published contracts. Prefer normal firecrawl_search for a data task; it already returns matching providers. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Use query for semantic discovery or urls to find providers for a website. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.",
+    "description": "Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more: typed, sourced records through published contracts. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Use query for semantic discovery or urls to find providers for a website. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2767,6 +2767,9 @@
         }
       },
       "additionalProperties": false
+    },
+    "_meta": {
+      "anthropic/alwaysLoad": true
     }
   },
   "firecrawl_gov_search@b020bd420f91": {
@@ -2972,7 +2975,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_interact@91e5d3af32e0": {
+  "firecrawl_interact@8040e21dad51": {
     "annotations": {
       "title": "Firecrawl interact",
       "readOnlyHint": false,
@@ -2981,7 +2984,7 @@
       "idempotentHint": false
     },
     "title": "Firecrawl interact",
-    "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either `url` (the scheme may be omitted) or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThe session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped `scrapeOptions.profile` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs.\n",
+    "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either `url` (the scheme may be omitted) or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThe session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped `scrapeOptions.profile` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs. When the page needs the user to act, share `interactiveLiveViewUrl` with the user only, so they can take over the session.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3293,8 +3296,8 @@
         "data": {
           "description": "Payload returned by the interaction."
         },
-        "sessionUrl": {
-          "description": "URL for viewing the live session.",
+        "sessionId": {
+          "description": "Browser session behind this scrape.",
           "anyOf": [
             {
               "type": "string"
@@ -3304,8 +3307,19 @@
             }
           ]
         },
-        "liveUrl": {
-          "description": "URL for viewing the live session.",
+        "liveViewUrl": {
+          "description": "Read-only live view of the browser session.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "interactiveLiveViewUrl": {
+          "description": "Live view the user can use to control the browser session.",
           "anyOf": [
             {
               "type": "string"
@@ -3319,7 +3333,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_interact@c95ca74e3f74": {
+  "firecrawl_interact@daa715f1647d": {
     "annotations": {
       "title": "Firecrawl interact",
       "readOnlyHint": false,
@@ -3328,7 +3342,7 @@
       "idempotentHint": false
     },
     "title": "Firecrawl interact",
-    "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either `url` (the scheme may be omitted) or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThe session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped `scrapeOptions.profile` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs.\n",
+    "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either `url` (the scheme may be omitted) or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThe session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped `scrapeOptions.profile` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs. When the page needs the user to act, share `interactiveLiveViewUrl` with the user only, so they can take over the session.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3690,8 +3704,8 @@
         "data": {
           "description": "Payload returned by the interaction."
         },
-        "sessionUrl": {
-          "description": "URL for viewing the live session.",
+        "sessionId": {
+          "description": "Browser session behind this scrape.",
           "anyOf": [
             {
               "type": "string"
@@ -3701,8 +3715,19 @@
             }
           ]
         },
-        "liveUrl": {
-          "description": "URL for viewing the live session.",
+        "liveViewUrl": {
+          "description": "Read-only live view of the browser session.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "interactiveLiveViewUrl": {
+          "description": "Live view the user can use to control the browser session.",
           "anyOf": [
             {
               "type": "string"
@@ -4287,7 +4312,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_monitor_update@1af896471afb": {
+  "firecrawl_monitor_update@adf5af8dd01e": {
     "annotations": {
       "title": "Update Firecrawl monitor",
       "readOnlyHint": false,
@@ -4296,7 +4321,7 @@
       "idempotentHint": true
     },
     "title": "Update Firecrawl monitor",
-    "description": "\nPatch an existing monitor by ID. The body can change its name, active/paused status, schedule, targets, goal, judging, webhook, notifications, or retention; these changes affect future scheduled checks.\n\nReturns the updated monitor.\n",
+    "description": "\nPatch an existing monitor by ID; changes affect future scheduled checks. Pause or resume it with `status` (\"paused\" or \"active\"). Reschedule it with `scheduleText` (plain language, e.g. \"every 6 hours\") or `cron`, plus `timezone`; a new schedule without `timezone` runs in UTC. For other fields pass `body`, a partial monitor in the create shape (name, targets, goal, judgeEnabled, webhook, notification, retentionDays), e.g. `{\"name\": \"Pricing watch\"}`. The parameters are merged into `body` as `{\"status\": ..., \"schedule\": {\"text\" or \"cron\": ..., \"timezone\": ...}}` and override the same keys there. At least one change is required.\n\nReturns the updated monitor.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -4310,11 +4335,26 @@
             "type": "string"
           },
           "additionalProperties": true
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "paused"
+          ]
+        },
+        "scheduleText": {
+          "type": "string"
+        },
+        "cron": {
+          "type": "string"
+        },
+        "timezone": {
+          "type": "string"
         }
       },
       "required": [
-        "id",
-        "body"
+        "id"
       ],
       "additionalProperties": false
     },
@@ -6341,7 +6381,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_scrape@2dd79a608073": {
+  "firecrawl_scrape@263d7913353e": {
     "annotations": {
       "title": "Firecrawl scrape",
       "readOnlyHint": true,
@@ -6349,7 +6389,7 @@
       "destructiveHint": false
     },
     "title": "Firecrawl scrape",
-    "description": "\nScrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages. `url` may omit the scheme (`example.com/page`); it is read as https.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session, `firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.\n\nWith `alexandria` in place of `url`, the tool runs catalogued provider capabilities instead of fetching a page. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.\n",
+    "description": "\nScrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed. `url` may omit the scheme (`example.com/page`); it is read as https.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it.\n\nOn an authenticated session, `firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.\n\nWith `alexandria` in place of `url`, the tool runs catalogued provider capabilities instead of fetching a page. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6924,7 +6964,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_scrape@df704578ab3d": {
+  "firecrawl_scrape@2dd79a608073": {
     "annotations": {
       "title": "Firecrawl scrape",
       "readOnlyHint": true,
@@ -6932,7 +6972,7 @@
       "destructiveHint": false
     },
     "title": "Firecrawl scrape",
-    "description": "\nScrape one URL and return its content, or execute catalogued Alexandria capabilities. URL mode returns markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema, plus page metadata. Firecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it.\n\n`firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching Alexandria provider returns typed records in one call.\n\nAlexandria mode: `alexandria` selects catalogued capability execution and is mutually exclusive with `url`. Alexandria execution is billed per capability (pass includeCosts to firecrawl_find_tools to see prices if you need).\n",
+    "description": "\nScrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages. `url` may omit the scheme (`example.com/page`); it is read as https.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session, `firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.\n\nWith `alexandria` in place of `url`, the tool runs catalogued provider capabilities instead of fetching a page. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -7809,7 +7849,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_search@7035ea6860de": {
+  "firecrawl_search@4469451531db": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -7817,7 +7857,7 @@
       "destructiveHint": false
     },
     "title": "Firecrawl web search",
-    "description": "\nSearch web and specialized indexes, returning ranked results with query-relevant highlights. Each web result is a title, URL, and description. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. `includeDomains` and `excludeDomains` are mutually exclusive hostname filters; categories limit result types to `research`, `pdf`, `developer`, or `gov`.\n\nFor a programming question, add `categories: [\"developer\"]`. It searches an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and returns the results in `data.web` with `category: \"developer\"`.\n\nFor a legal or regulatory question, `categories: [\"gov\"]` returns results in `data.web` with `category: \"gov\"` and cannot be combined with other categories; `firecrawl_gov_search` is the dedicated tool. Verify gov results' issuer, jurisdiction, status, and version before citing current law.\n\nAuthenticated search combines web results, semantic tool summaries and domain matches. Use sources: [\"alexandria\"] for semantic tools only. Authenticated searches always add alexandria to the sources, so sources: [\"web\"] also returns providers; domainTools: false turns off website-matched tools only. Tool matches describe available structured-data capabilities, not executed data. toolDetail: \"compact\" (default) returns only provider, capability and description; \"summary\" adds metadata; \"full\" includes their input and output contracts. firecrawl_scrape with an alexandria body executes a selected capability; firecrawl_find_tools provides catalogue browsing and full contracts.\n\nReturns result groups in `data` and an operation `id`.\n",
+    "description": "\nUse this when you need current or specific information from the web: recent events, latest releases and versions, prices, people and companies, statistics, or any fact that may have changed since your training data or that you are not sure of. Returns ranked results with query-relevant highlights; each web result is a title, URL, and description. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. `includeDomains` and `excludeDomains` are mutually exclusive hostname filters; categories limit result types to `research`, `pdf`, `developer`, or `gov`.\n\nFor a programming question, add `categories: [\"developer\"]`. It searches an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and returns the results in `data.web` with `category: \"developer\"`.\n\nFor a legal or regulatory question, `categories: [\"gov\"]` returns results in `data.web` with `category: \"gov\"` and cannot be combined with other categories; authenticated sessions also have `firecrawl_gov_search` as the dedicated tool. Verify gov results' issuer, jurisdiction, status, and version before citing current law.\n\nAuthenticated search combines web results, semantic tool summaries and domain matches. Use sources: [\"alexandria\"] for semantic tools only. Authenticated searches always add alexandria to the sources, so sources: [\"web\"] also returns providers; domainTools: false turns off website-matched tools only. On an authenticated session, tool matches describe available structured-data capabilities, not executed data. toolDetail: \"compact\" (default) returns only provider, capability and description; \"summary\" adds metadata; \"full\" includes their input and output contracts. firecrawl_scrape with an alexandria body executes a selected capability; firecrawl_find_tools provides catalogue browsing and full contracts.\n\nReturns result groups in `data` and an operation `id`.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -8017,7 +8057,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_search@c8053ef92701": {
+  "firecrawl_search@6782bb723c84": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -8025,7 +8065,7 @@
       "destructiveHint": false
     },
     "title": "Firecrawl web search",
-    "description": "\nSearch web, news, or image sources and return ranked results with query-relevant highlights. Use it for current information, or to list businesses, people, products, jobs or events with websites, prices or contacts. Each web result is a title, URL, and description; use `firecrawl_scrape` on a result URL when the excerpt is not enough.\n\nAuthenticated search also returns matching Alexandria data providers in data.tools (companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more). Prefer a provider over scraping pages when the task needs the same fields across several entities, exact figures or timestamps, provenance, or many records; use web results when they already answer the question. Authenticated searches always add alexandria to the sources, so sources: [\"web\"] also returns providers; domainTools: false turns off website-matched tools only.\n\nOn an authenticated session, tool matches describe available capabilities; `firecrawl_find_tools` returns their contracts and `firecrawl_scrape` with an `alexandria` body executes a selected capability. Keyless sessions get no Alexandria matches in data.tools.\n\nFor a programming question, add `categories: [\"developer\"]`; its hits return in `data.web` with `category: \"developer\"`. For a legal or regulatory question, `categories: [\"gov\"]` returns hits in `data.web` with `category: \"gov\"` and cannot be combined with other categories; authenticated sessions also have `firecrawl_gov_search` as the dedicated tool. Verify gov results' issuer, jurisdiction, status, and version before citing current law. `categories: [\"research\"]` restricts web results to research-affiliated websites; the `firecrawl_research_*` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Returns source-type result groups and usage metadata. Authenticated responses can include an `id` for optional search feedback.\n",
+    "description": "\nUse this when you need current or specific information from the web: recent events, latest releases and versions, prices, people and companies, statistics, or any fact that may have changed since your training data or that you are not sure of. Returns ranked results with query-relevant highlights; each web result is a title, URL, and description. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. `includeDomains` and `excludeDomains` are mutually exclusive hostname filters; categories limit result types to `research`, `pdf`, `developer`, or `gov`.\n\nFor a programming question, add `categories: [\"developer\"]`. It searches an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and returns the results in `data.web` with `category: \"developer\"`.\n\nFor a legal or regulatory question, `categories: [\"gov\"]` returns results in `data.web` with `category: \"gov\"` and cannot be combined with other categories; authenticated sessions also have `firecrawl_gov_search` as the dedicated tool. Verify gov results' issuer, jurisdiction, status, and version before citing current law.\n\nAuthenticated search combines web results, semantic tool summaries and domain matches. Use sources: [\"alexandria\"] for semantic tools only. Authenticated searches always add alexandria to the sources, so sources: [\"web\"] also returns providers; domainTools: false turns off website-matched tools only. On an authenticated session, tool matches describe available structured-data capabilities, not executed data. toolDetail: \"compact\" (default) returns only provider, capability and description; \"summary\" adds metadata; \"full\" includes their input and output contracts. firecrawl_scrape with an alexandria body executes a selected capability; firecrawl_find_tools provides catalogue browsing and full contracts.\n\nReturns result groups in `data` and an operation `id`.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -8468,7 +8508,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_search@d15e7eb71f0c": {
+  "firecrawl_search@d79864fb5890": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -8476,7 +8516,7 @@
       "destructiveHint": false
     },
     "title": "Firecrawl web search",
-    "description": "\nSearch web, news, or image sources and return ranked results with query-relevant highlights. Use it for current information, or to list businesses, people, products, jobs or events with websites, prices or contacts. Each web result is a title, URL, and description; use `firecrawl_scrape` on a result URL when the excerpt is not enough.\n\nAuthenticated search also returns matching Alexandria data providers in data.tools (companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more). Prefer a provider over scraping pages when the task needs the same fields across several entities, exact figures or timestamps, provenance, or many records; use web results when they already answer the question. Authenticated searches always add alexandria to the sources, so sources: [\"web\"] also returns providers; domainTools: false turns off website-matched tools only.\n\nOn an authenticated session, tool matches describe available capabilities; `firecrawl_find_tools` returns their contracts and `firecrawl_scrape` with an `alexandria` body executes a selected capability. Keyless sessions get no Alexandria matches in data.tools.\n\nFor a programming question, add `categories: [\"developer\"]`; its hits return in `data.web` with `category: \"developer\"`. For a legal or regulatory question, `categories: [\"gov\"]` returns hits in `data.web` with `category: \"gov\"` and cannot be combined with other categories; authenticated sessions also have `firecrawl_gov_search` as the dedicated tool. Verify gov results' issuer, jurisdiction, status, and version before citing current law. `categories: [\"research\"]` restricts web results to research-affiliated websites; the `firecrawl_research_*` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Returns source-type result groups and usage metadata. Authenticated responses can include an `id` for optional search feedback.\n",
+    "description": "\nUse this when you need current or specific information from the web: recent events, latest releases and versions, prices, people and companies, statistics, or any fact that may have changed since your training data or that you are not sure of. Returns ranked results with query-relevant highlights; each web result is a title, URL, and description. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. `includeDomains` and `excludeDomains` are mutually exclusive hostname filters; categories limit result types to `research`, `pdf`, `developer`, or `gov`.\n\nFor a programming question, add `categories: [\"developer\"]`. It searches an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and returns the results in `data.web` with `category: \"developer\"`.\n\nFor a legal or regulatory question, `categories: [\"gov\"]` returns results in `data.web` with `category: \"gov\"` and cannot be combined with other categories; authenticated sessions also have `firecrawl_gov_search` as the dedicated tool. Verify gov results' issuer, jurisdiction, status, and version before citing current law.\n\nAuthenticated search combines web results, semantic tool summaries and domain matches. Use sources: [\"alexandria\"] for semantic tools only. Authenticated searches always add alexandria to the sources, so sources: [\"web\"] also returns providers; domainTools: false turns off website-matched tools only. On an authenticated session, tool matches describe available structured-data capabilities, not executed data. toolDetail: \"compact\" (default) returns only provider, capability and description; \"summary\" adds metadata; \"full\" includes their input and output contracts. firecrawl_scrape with an alexandria body executes a selected capability; firecrawl_find_tools provides catalogue browsing and full contracts.\n\nReturns result groups in `data` and an operation `id`.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
