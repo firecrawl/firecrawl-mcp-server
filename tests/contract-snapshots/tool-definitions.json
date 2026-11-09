@@ -8313,7 +8313,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "people_company_enrich@ac5c21932a6c": {
+  "people_company_enrich@cacb558e5fae": {
     "annotations": {
       "title": "Look up and enrich people or companies",
       "readOnlyHint": true,
@@ -8460,7 +8460,7 @@
           "additionalProperties": false
         },
         "apollo": {
-          "description": "Apollo. people: 30 credits per match, includes a work email when Apollo has one. companies: 30 credits per match; a name alone matches only on an exact name.",
+          "description": "Apollo. people: 30 credits per match, includes a work email when Apollo has one. companies: 30 credits per match; a name alone matches only on an exact name. Runs once an organization admin has accepted Apollo's terms.",
           "type": "object",
           "properties": {
             "people": {
@@ -9426,7 +9426,7 @@
       "additionalProperties": false
     }
   },
-  "people_company_search@aec1e070823b": {
+  "people_company_search@485c9554245c": {
     "annotations": {
       "title": "Find people or companies",
       "readOnlyHint": true,
@@ -9434,7 +9434,7 @@
       "destructiveHint": false
     },
     "title": "Find people or companies",
-    "description": "Find people or companies you don't know yet. Set entity to \"person\" or \"company\", then give each provider its filters for that entity: people by title, employer, location or seniority; companies by industry, headcount, location, technology or founding year. apollo: free for people, 30 credits per page for companies. fullenrich: 5 credits per record. people_data_labs: 50 credits per record, SQL or Elasticsearch query. firecrawl_search: web results, with the firecrawl_search tool's query parameters. Example: {\"entity\":\"person\",\"fullenrich\":{\"current_position_titles\":[{\"value\":\"Head of Data\"}],\"current_company_domains\":[{\"value\":\"example.com\",\"exact_match\":true}]},\"apollo\":{\"person_titles\":[\"Head of Data\"],\"q_organization_domains_list\":[\"example.com\"]}}. Each provider takes its own native parameters; nothing is shared between providers. Include a block only for each provider you want to run, e.g. \"apollo\": {...}; included providers run in parallel. The response lists every provider with its status, records, credits charged and any error.",
+    "description": "Find people or companies you don't know yet. Set entity to \"person\" or \"company\", then give each provider its filters for that entity: people by title, employer, location or seniority; companies by industry, headcount, location, technology or founding year. apollo: free for people, 30 credits per page for companies, once an organization admin has accepted its terms. fullenrich: 5 credits per record. people_data_labs: 50 credits per record, SQL or Elasticsearch query. firecrawl_search: web results, with the firecrawl_search tool's query parameters. Example: {\"entity\":\"person\",\"fullenrich\":{\"current_position_titles\":[{\"value\":\"Head of Data\"}],\"current_company_domains\":[{\"value\":\"example.com\",\"exact_match\":true}]},\"apollo\":{\"person_titles\":[\"Head of Data\"],\"q_organization_domains_list\":[\"example.com\"]}}. Each provider takes its own native parameters; nothing is shared between providers. Include a block only for each provider you want to run, e.g. \"apollo\": {...}; included providers run in parallel. The response lists every provider with its status, records, credits charged and any error.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
