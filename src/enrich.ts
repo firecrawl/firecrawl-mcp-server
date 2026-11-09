@@ -1022,6 +1022,12 @@ const SEARCH_EXAMPLE = {
   fullenrich: { current_position_titles: [{ value: 'Head of Data' }], current_company_domains: [{ value: 'example.com', exact_match: true }] },
   apollo: { person_titles: ['Head of Data'], q_organization_domains_list: ['example.com'] },
 };
+const COMPANY_SEARCH_EXAMPLE = {
+  entity: 'company',
+  fullenrich: { industries: [{ value: 'Software Development' }], headcounts: [{ min: 51, max: 200 }] },
+  apollo: { organization_num_employees_ranges: ['51,200'], organization_locations: ['Boston, US'] },
+};
+const searchExample = (args: Record<string, any>) => (args.entity === 'company' ? COMPANY_SEARCH_EXAMPLE : SEARCH_EXAMPLE);
 const LOOKUP_EXAMPLE = {
   contact_fields: ['work_email'],
   fullenrich: { people: [{ person_name: 'Jane Doe', company_domain: 'example.com' }] },
@@ -1231,7 +1237,7 @@ export function registerEnrichTools(
     annotations: Record<string, unknown>,
     description: string,
     parameters: S,
-    example: object,
+    example: (args: Record<string, any>) => object,
     repairAndCheck: (args: Record<string, any>) => void,
     plan: (args: Record<string, any>) => Plan
   ) {
@@ -1253,7 +1259,7 @@ export function registerEnrichTools(
         const { session, client: mcpClient } = context;
         const { order, blocks, estimates, run, web: webArgs } = plan(args as Record<string, any>);
         const on = order.filter((p) => blocks[p] !== undefined);
-        if (!on.length && !webArgs) throw noProvider(name === 'people_company_search' ? [...order, 'firecrawl_search'] : order, example);
+        if (!on.length && !webArgs) throw noProvider(name === 'people_company_search' ? [...order, 'firecrawl_search'] : order, example(args as Record<string, any>));
         assertCredential(session);
         const charged = [...on, ...(webArgs ? (['firecrawl_search'] as const) : [])];
         const max_credits = (args as { max_credits?: number }).max_credits ?? DEFAULT_MAX_CREDITS;
@@ -1277,10 +1283,10 @@ export function registerEnrichTools(
         const ran = providers.filter((r) => r.status !== 'not_requested');
         if (!ran.some((r) => r.status === 'ok' || r.status === 'empty' || r.status === 'pending')) {
           const why = ran.map((r) => r.name + ' ' + r.status + (r.note ? ': ' + r.note : '')).map((reason) => (/[.!?]$/.test(reason) ? reason : reason + '.'));
-          throw new UserError('No provider ran successfully: ' + why.join(' ') + ' Credits charged: ' + data.credits_total + '. Example of a working call: ' + JSON.stringify(example), {
+          throw new UserError('No provider ran successfully: ' + why.join(' ') + ' Credits charged: ' + data.credits_total + '. Example of a working call: ' + JSON.stringify(example(args as Record<string, any>)), {
             code: 'no_provider_ran',
             ...data,
-            example,
+            example: example(args as Record<string, any>),
           });
         }
         return withStructured(JSON.stringify(data), data);
@@ -1295,7 +1301,7 @@ export function registerEnrichTools(
       'apollo: free for people, 30 credits per page for companies. fullenrich: 5 credits per record. people_data_labs: 50 credits per record, SQL or Elasticsearch query. firecrawl_search: web results, with the firecrawl_search tool\'s query parameters. ' +
       'Example: ' + JSON.stringify(SEARCH_EXAMPLE) + '. ',
     advertisedSearch,
-    SEARCH_EXAMPLE,
+    searchExample,
     (args) => {
       if (typeof args.entity === 'string') args.entity = ENTITY[args.entity.trim().toLowerCase()] ?? args.entity;
       const entity = searchParameters.shape.entity.safeParse(args.entity);
@@ -1314,7 +1320,7 @@ export function registerEnrichTools(
       const parameters = searchSchemas[entity.data];
       repairBlocks(args, SEARCH_ORDER, (p) => parameters.shape[p as keyof typeof parameters.shape]);
       repair(parameters, args);
-      checkArguments('people_company_search', parameters, args, SEARCH_EXAMPLE);
+      checkArguments('people_company_search', parameters, args, searchExample(args));
     },
     (args) => {
       const entity = searchParameters.shape.entity.parse(args.entity);
@@ -1351,7 +1357,7 @@ export function registerEnrichTools(
       'Add contact_fields to get work email, personal email or mobile for people. Misses are free. ' +
       'Example: ' + JSON.stringify(LOOKUP_EXAMPLE) + '. ',
     lookupParameters,
-    LOOKUP_EXAMPLE,
+    () => LOOKUP_EXAMPLE,
     (args) => {
       repairBlocks(args, LOOKUP_ORDER, (p) => lookupParameters.shape[p]);
       repair(lookupParameters, args);
@@ -1375,7 +1381,7 @@ export function registerEnrichTools(
       }
       const people = kinds.has('people');
       const contactFields: ContactField[] | undefined = a.contact_fields;
-      if (contactFields && !people) {
+      if (contactFields && given.length && !people) {
         const without = { ...args };
         delete without.contact_fields;
         throw new UserError('contact_fields applies to people only, and these are companies. Drop contact_fields to get their firmographics. ' + examples([without], [COMPANY_EXAMPLE]), { code: 'invalid_input' });

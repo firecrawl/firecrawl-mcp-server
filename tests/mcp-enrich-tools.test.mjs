@@ -335,7 +335,7 @@ test('a call where no provider runs is an error with each reason and an example'
   const client = await connect(t, { apiUrl: api.url });
   const result = await client.callTool({ name: 'people_company_search', arguments: { entity: 'company', max_credits: 0, fullenrich: {}, apollo: {} } });
   assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /No provider ran successfully: apollo skipped: No filters given; pass at least one\. fullenrich skipped: No filters given; pass at least one\. Credits charged: 0\. Example of a working call/);
+  assert.match(result.content[0].text, /No provider ran successfully: apollo skipped: No filters given; pass at least one\. fullenrich skipped: No filters given; pass at least one\. Credits charged: 0\. Example of a working call: \{"entity":"company"/);
   assert.equal(result.structuredContent.credits_estimate, 0);
   assert.equal(api.calls.length, 0);
 });
@@ -406,7 +406,7 @@ test('provider errors carry the tool name, a hint and retryable', async (t) => {
     arguments: { entity: 'company', apollo: { q_organization_name: 'Acme' }, fullenrich: { industries: [{ value: 'Computer Software' }], limit: 1 } },
   });
   assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /^No provider ran successfully: apollo error: [\s\S]*confirmed\. fullenrich error: provider_error: [\s\S]*retry later\. Credits charged: 0\. Example of a working call: \{"entity":"person"/);
+  assert.match(result.content[0].text, /^No provider ran successfully: apollo error: [\s\S]*confirmed\. fullenrich error: provider_error: [\s\S]*retry later\. Credits charged: 0\. Example of a working call: \{"entity":"company"/);
   const [apollo, fullenrich] = result.structuredContent.providers;
   assert.equal(result.structuredContent.credits_total, 0);
   assert.match(apollo.note, /call people_company_search again/);
@@ -545,6 +545,8 @@ test('enrich shape errors carry an example built from the call', async (t) => {
   assert.match(contact.content[0].text, /people only.*Example: \{"fullenrich":\{"companies":\[\{"domain":"acme.example"\}\]\}\}/);
   const none = await client.callTool({ name: 'people_company_enrich', arguments: {} });
   assert.match(none.content[0].text, /No provider given.*Example: \{/);
+  const fieldsOnly = await client.callTool({ name: 'people_company_enrich', arguments: { contact_fields: ['work_email'] } });
+  assert.match(fieldsOnly.content[0].text, /No provider given/);
   assert.equal(api.calls.length, 0);
 });
 
