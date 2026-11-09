@@ -692,7 +692,7 @@ async function runCalls(ctx: Context, p: Provider, calls: Call[]): Promise<Entry
 
 const isMiss = (entry: Entry) => entry.error?.code === 'not_found';
 
-const RETRYABLE = new Set(['provider_error', 'provider_unavailable', 'provider_rate_limited', 'request_timeout']);
+const RETRYABLE = new Set(['provider_error', 'provider_unavailable', 'provider_rate_limited', 'request_timeout', 'precheck_unavailable', 'billing_unavailable']);
 
 const isPending = (entry: Entry | undefined) => entry?.data?.status === 'job_pending' || entry?.error?.code === 'job_pending';
 
