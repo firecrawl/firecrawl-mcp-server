@@ -215,6 +215,7 @@ export function searchSurfaceTools({
     if (findTools) {
       surface.addTool({
         ...findTools,
+        _meta: undefined,
         description: SEARCH_SURFACE_FIND_TOOLS_DESCRIPTION,
       });
     }
