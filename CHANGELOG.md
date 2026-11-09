@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `people_company_enrich` accepts `people` and `companies` in the same call, in one provider block or across blocks. Each kind runs as its own request and is reported as its own `providers` entry with `kind: "people"` or `kind: "companies"`, so a provider given both has two entries, each with its own records, `input_index` into that kind's list, credits and errors. One kind failing does not fail the other. `max_credits` is checked against the estimate for both. `contact_fields` applies to the people, and companies in the same call get firmographics. Such calls used to be refused with `Give <provider> exactly one of people or companies` or `Send people and companies in separate calls`. Every `people_company_enrich` entry for a provider that ran now carries `kind`.
+
 ### Changed
 
 - `people_company_search` and `people_company_enrich` state their limits and rules in the tool descriptions and repair or explain more mistakes:
@@ -10,7 +14,7 @@
   - The `firecrawl_search` block is estimated at its listed price, 2 credits per 10 results (10 with enterprise zdr), without the 2 credits per result a team that scans results pays. That charge is described, and `max_credits` does not count it.
   - `entity` is described as required, exactly `"person"` or `"company"`. When it is missing and the filter names belong to only one of the two, it is taken from them; otherwise the error names it and every unknown top-level field.
   - The `max_credits` description says how the estimate is made and that 0 runs only free calls. A `max_credits_exceeded` error includes the same call with `max_credits` raised to the estimate.
-  - `contact_fields` is described as people only. Every argument error names all invalid fields, not the first five, and every enrich shape error (no provider, people and companies mixed, `contact_fields` with companies) includes an example call, built from the caller's own arguments when they are short.
+  - `contact_fields` is described as people only. Every argument error names all invalid fields, not the first five, and every enrich shape error (no provider, a block with neither people nor companies, `contact_fields` with companies only) includes an example call, built from the caller's own arguments when they are short.
 
 ### Fixed
 
