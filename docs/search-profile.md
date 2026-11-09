@@ -31,7 +31,7 @@ The search surface exposes exactly these eleven tools and nothing else:
 | `firecrawl_research_inspect_paper` | Canonical metadata for one paper |
 | `firecrawl_research_related_papers` | Citation-graph expansion from anchor papers |
 | `firecrawl_research_read_paper` | Full-text passages from one paper |
-| `firecrawl_find_tools` | Browse the Alexandria catalogue and read provider contracts (free) |
+| `firecrawl_find_tools` | Find Alexandria providers for a task and read their contracts (free) |
 | `firecrawl_scrape` | Execute an Alexandria capability with an `alexandria` body, or retrieve one supplied URL (billed) |
 | `people_company_search` | Find people or companies through Alexandria's B2B data providers, optionally beside web results (billed) |
 | `people_company_enrich` | Look up and enrich known people or companies, including contact details (billed) |
@@ -73,8 +73,9 @@ the behavior. No runtime filter is involved.
 
 `firecrawl_scrape` on this surface is the same tool as on the full surface
 (URL retrieval or Alexandria execution), registered with a description that
-names only tools this surface exposes. `firecrawl_find_tools` is registered the
-same way. Alexandria results on this surface carry no `feedbackTool` pointer,
+names only tools this surface exposes. `firecrawl_find_tools` keeps its
+full-surface description, which names no tool missing here. Both are always
+loaded, like `firecrawl_search`. Alexandria results on this surface carry no `feedbackTool` pointer,
 since `firecrawl_feedback` is not registered here.
 
 `firecrawl_scrape` is read-only here (`readOnlyHint: true`): the surface runs in

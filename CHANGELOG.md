@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- `firecrawl_find_tools` is always loaded (`_meta: { "anthropic/alwaysLoad": true }`) on every surface, like `firecrawl_search` and `firecrawl_scrape`, so clients that defer tool definitions list it from the start. Its description no longer tells agents to prefer `firecrawl_search` for a data task. It now says to use the tool first when a task needs structured records (the same fields across several entities or pages, exact figures, provenance, or many records) and walks through the three steps: describe the data in `query` or pass `urls`, select a capability to read its contract, and execute it through `firecrawl_scrape` with `alexandria`. The full and search surfaces share this one description. The server instructions, the search surface instructions and the `firecrawl_search` description point to `firecrawl_find_tools` the same way.
+
 ### Fixed
 
 - More argument mistakes are refused as tool errors with an error code, like the json format check: a `query` format without `queryOptions.prompt` in `firecrawl_scrape` and in `firecrawl_interact` `scrapeOptions` (`invalid_request`, with the text `formats "query" needs queryOptions with a non-empty prompt.` in place of the SDK's `query format requires a non-empty 'prompt' string`), a `json` format without a prompt or schema in `firecrawl_interact` `scrapeOptions` (`invalid_request`), and the input checks of `firecrawl_find_tools`, `firecrawl_monitor_create` and `firecrawl_credit_usage` (`invalid_input`). The error code reaches `onToolResult` on the thrown `UserError`'s `extras`, and for the `invalid_input` tools only there: their `outputSchema` does not declare `code`, so the code is not in the client's `structuredContent`. The text block no longer carries the `Tool '<name>' execution failed:` prefix for these errors.

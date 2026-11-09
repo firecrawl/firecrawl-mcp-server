@@ -1321,7 +1321,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
 
   const byName = new Map(tools.tools.map((tool) => [tool.name, tool]));
-  for (const name of ['firecrawl_search', 'firecrawl_scrape']) {
+  for (const name of ['firecrawl_search', 'firecrawl_scrape', 'firecrawl_find_tools']) {
     assert.equal(byName.get(name)?._meta?.['anthropic/alwaysLoad'], true, name);
   }
   assert.equal(byName.get('firecrawl_map')?._meta?.['anthropic/alwaysLoad'], undefined);
@@ -1366,7 +1366,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   assert.match(
     init.instructions,
-    /For the same fields across multiple pages, firecrawl_find_tools offers free provider discovery/
+    /For the same fields across multiple pages or entities, start with firecrawl_find_tools: describe the data in query, select a tool to read its full contract/
   );
   assert.match(
     byName.get('firecrawl_scrape').description,

@@ -370,7 +370,7 @@ Use this guide to select the right tool for your task:
 - **If you need multi-source research that returns structured data, do not know the URLs, or the answer spans several sites** (an entity plus its fields, a list, a dataset): use **agent**
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
 - **If you need interactive browser automation** (click, type, navigate): use **interact** with a URL for a fresh page, or **scrape** + **interact** when you already scraped the page or need tighter scrape control
-- **If you need data from a catalogued provider** (Alexandria): search with `sources: ["alexandria"]`, inspect the selected contract with **find_tools**, and execute it with **scrape** `alexandria`
+- **If you need structured records** (the same fields across several entities, exact figures, provenance, or many records): find an Alexandria provider with **find_tools** `query`, read its contract with **find_tools** `providers` and `capabilities`, and execute it with **scrape** `alexandria`
 
 ### Quick Reference Table
 
@@ -382,7 +382,7 @@ Use this guide to select the right tool for your task:
 | crawl     | Multi-page extraction (with limits)            | final crawl status/data after internal polling   |
 | parse     | Files and hosted upload refs                   | markdown, JSON, or document output               |
 | search    | Web search for info                            | results[]                                        |
-| find_tools | Alexandria catalogue browsing and URL lookup | providers, tool contracts and nextTool navigation |
+| find_tools | Finding Alexandria data providers for a task   | providers, tool contracts and nextTool navigation |
 | developer | Programming questions over developer sources   | results[] with passages                          |
 | gov       | US primary law and regulatory material         | results[] with snippets                          |
 | agent     | Multi-source research, unknown or many sites   | JSON (structured data)                           |
@@ -1397,7 +1397,7 @@ MIT License - see LICENSE file for details
 
 ### Structured data and large results
 
-Authenticated search defaults to web results, semantic Alexandria tools, and domain matches. Start with the actual question. Use `firecrawl_find_tools` for direct semantic tool lookup, selected contracts, or progressive browsing: categories → providers → compact tools → selected contract. Execute tools through `firecrawl_scrape`; ordinary URL scraping and search never automatically execute provider tools.
+Authenticated search defaults to web results, semantic Alexandria tools, and domain matches. When a task needs structured records, start with `firecrawl_find_tools`: a `query` describing the data finds matching providers, and selecting a capability returns its contract. With no arguments it browses progressively: categories → providers → compact tools → selected contract. `firecrawl_find_tools` is always loaded (`anthropic/alwaysLoad`), like `firecrawl_search` and `firecrawl_scrape`. Execute tools through `firecrawl_scrape`; ordinary URL scraping and search never automatically execute provider tools.
 
 For selected contracts, prefer `expand: ["options", "response"]` and request examples only if the input shape is unclear. Inspect related capabilities together and reuse the returned contracts.
 

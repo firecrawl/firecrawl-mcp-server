@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import {
-  ALEXANDRIA_CATALOGUE_VERTICALS,
   ALEXANDRIA_SEARCH_INSTRUCTIONS,
   annotateResultPositions,
   assertExchangeCredential,
@@ -31,11 +30,11 @@ import {
   SEARCH_SURFACE_VARIANT_TOOLS,
 } from './profiles.js';
 
-// Search-surface copies of the two Alexandria tools.
-// Same parameters and executor as the full-surface tools; only the
-// descriptions differ, so they name nothing that surface does not register
-// (no crawl, map, interact, monitor, parse or feedback references). Registered
-// on the search surface in place of the module-level tools above.
+// Search-surface copy of firecrawl_scrape.
+// Same parameters and executor as the full-surface tool; only the description
+// differs, so it names nothing that surface does not register (no crawl, map,
+// interact, monitor, parse or feedback references). Registered on the search
+// surface in place of the module-level tool above.
 function searchSurfaceScrapeDescription(safeMode: boolean): string {
   return `
 Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use \`firecrawl_search\` when additional web sources are needed. \`url\` may omit the scheme (\`example.com/page\`); it is read as https.
@@ -47,9 +46,6 @@ On an authenticated session, \`firecrawl_search\` and \`firecrawl_find_tools\` c
 With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capabilities instead of fetching a page. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.
 `;
 }
-
-const SEARCH_SURFACE_FIND_TOOLS_DESCRIPTION =
-  'Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers ' + ALEXANDRIA_CATALOGUE_VERTICALS + ': typed, sourced records through published contracts. Prefer normal firecrawl_search for a data task; it already returns matching providers. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Use query for semantic discovery or urls to find providers for a website. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.';
 
 // Search-surface variant of firecrawl_search. It takes no scrapeOptions and
 // builds the outbound /v2/search body from an explicit set of fields, so the
@@ -191,9 +187,9 @@ export function searchSurfaceToolFilter(name: string): boolean {
 }
 
 /**
- * Registers the search-surface variants: the strict search tool and copies of
- * the two Alexandria tools with surface-scoped descriptions. Only names in the
- * frozen set ever register.
+ * Registers the search-surface variants: the strict search tool, a scrape copy
+ * with a surface-scoped description, and firecrawl_find_tools, always loaded
+ * like search and scrape. Only names in the frozen set ever register.
  */
 export function searchSurfaceTools({
   safeMode,
@@ -213,10 +209,7 @@ export function searchSurfaceTools({
     const findTools = context.builtInTool('firecrawl_find_tools');
     const scrape = context.builtInTool('firecrawl_scrape');
     if (findTools) {
-      surface.addTool({
-        ...findTools,
-        description: SEARCH_SURFACE_FIND_TOOLS_DESCRIPTION,
-      });
+      surface.addTool(findTools);
     }
     if (scrape) {
       surface.addTool({

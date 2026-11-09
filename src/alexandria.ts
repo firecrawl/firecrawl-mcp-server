@@ -84,6 +84,14 @@ export const ALEXANDRIA_SEARCH_LEAD =
   'Authenticated search also returns matching Alexandria data providers in data.tools (' + ALEXANDRIA_CATALOGUE_VERTICALS + '). Prefer a provider over scraping pages when the task needs the same fields across several entities, exact figures or timestamps, provenance, or many records; use web results when they already answer the question. ' + ALEXANDRIA_SOURCES_ALWAYS_ON;
 export const ALEXANDRIA_CONTRACT_GUIDANCE =
   'The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and a key field under response (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination.';
+export const FIND_TOOLS_DESCRIPTION = `Search Alexandria, Firecrawl's catalogue of data providers and workflows for ${ALEXANDRIA_CATALOGUE_VERTICALS}, and read a provider's contract before running it. Use this tool first when the task needs structured records rather than page text: the same fields across several entities or pages, exact figures, prices or timestamps, provenance, or a large set of records. A matching provider returns typed, sourced records in one call where scraping would take many pages. Discovery is free and executes nothing.
+
+How to use it:
+1. Describe the data you need in \`query\` ("quarterly revenue for public companies"), or pass \`urls\` to find providers for a website. With no arguments it lists categories; \`categories\` lists their providers.
+2. Pick a tool from the compact results and pass its \`providers\` and \`capabilities\` values ({"providers": ["apps-apple-com"], "capabilities": ["apps/app"]}) to get its full contract: required inputs, requiresOneOf groups, the response shape and an example.
+3. Execute it with firecrawl_scrape {"alexandria": {"provider": "<provider>", "capability": "<capability>", "options": {...}}}, up to ten capabilities per call, passing only the inputs the contract requires.
+
+Follow \`nextTool\` for the next discovery step or page; \`includeCosts: true\` adds credit prices. firecrawl_search also lists matching providers in data.tools beside web results; when its compact match is the one you need, read the contract here before executing. If no provider fits, use web search and page scraping.`;
 export const ALEXANDRIA_TERMS_GUIDANCE =
   'Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.';
 
@@ -119,7 +127,7 @@ export function withFindToolsNavigation(envelope: any, carry: Record<string, unk
 }
 
 export const ALEXANDRIA_SEARCH_INSTRUCTIONS =
-  'Authenticated search combines web results, semantic tool summaries and domain matches. Use sources: ["alexandria"] for semantic tools only. ' + ALEXANDRIA_SOURCES_ALWAYS_ON + ' On an authenticated session, tool matches describe available structured-data capabilities, not executed data. toolDetail: "compact" (default) returns only provider, capability and description; "summary" adds metadata; "full" includes their input and output contracts. firecrawl_scrape with an alexandria body executes a selected capability; firecrawl_find_tools provides catalogue browsing and full contracts.';
+  'Authenticated search combines web results, semantic tool summaries and domain matches. Use sources: ["alexandria"] for semantic tools only. ' + ALEXANDRIA_SOURCES_ALWAYS_ON + ' On an authenticated session, tool matches describe available structured-data capabilities, not executed data. toolDetail: "compact" (default) returns only provider, capability and description; "summary" adds metadata; "full" includes their input and output contracts. firecrawl_scrape with an alexandria body executes a selected capability; firecrawl_find_tools searches the catalogue directly and returns the full contract to read before executing.';
 
 const TOOL_PRICE_KEYS = ['creditsCost', 'perRecord', 'billing', 'recordsPerUnit', 'zeroDataRetentionCreditsCost'];
 
