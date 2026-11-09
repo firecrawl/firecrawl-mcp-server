@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- `firecrawl_find_tools` is marked always-load (`_meta["anthropic/alwaysLoad"]`), so clients that defer MCP tools behind a tool search, such as Claude Code, list it with the agent's other tools from the first turn. Its description no longer tells the agent to prefer `firecrawl_search` for data tasks. In agent evals, both changes together made agents look up and run Alexandria providers on data tasks much more often, with no extra lookups on tasks that need only the web.
+
 ### Fixed
 
 - More argument mistakes are refused as tool errors with an error code, like the json format check: a `query` format without `queryOptions.prompt` in `firecrawl_scrape` and in `firecrawl_interact` `scrapeOptions` (`invalid_request`, with the text `formats "query" needs queryOptions with a non-empty prompt.` in place of the SDK's `query format requires a non-empty 'prompt' string`), a `json` format without a prompt or schema in `firecrawl_interact` `scrapeOptions` (`invalid_request`), and the input checks of `firecrawl_find_tools`, `firecrawl_monitor_create` and `firecrawl_credit_usage` (`invalid_input`). The error code reaches `onToolResult` on the thrown `UserError`'s `extras`, and for the `invalid_input` tools only there: their `outputSchema` does not declare `code`, so the code is not in the client's `structuredContent`. The text block no longer carries the `Tool '<name>' execution failed:` prefix for these errors.
