@@ -584,6 +584,14 @@ test('the web search estimate is the stated price, with enterprise zdr pricing',
   assert.equal(api.bodies.length, 0);
 });
 
+test('a company enrichment where no provider ran gets a company example', async (t) => {
+  const api = await startApi(t, (batch) => ({ json: { success: true, data: { alexandria: batch.map(() => ({ error: { code: 'provider_error', message: 'Please try again later.' }, creditsCost: 0 })) } } }));
+  const client = await connect(t, { apiUrl: api.url });
+  const result = await client.callTool({ name: 'people_company_enrich', arguments: { apollo: { companies: [{ domain: 'acme.example' }] } } });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /Example of a working call: \{"fullenrich":\{"companies":/);
+});
+
 test('enrich shape errors carry an example built from the call', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { apiUrl: api.url });
