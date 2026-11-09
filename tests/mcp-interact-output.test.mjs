@@ -57,11 +57,20 @@ test('interact structured output keeps the live view URLs the API returns', asyn
   }
   assert.match(interact.description, /`interactiveLiveViewUrl`/);
 
-  for (const args of [
-    { scrapeId: 'job-live', prompt: 'Log in' },
-    { url: 'https://example.com/login', prompt: 'Log in' },
+  for (const { args, scrapedUrls } of [
+    { args: { scrapeId: 'job-live', prompt: 'Log in' }, scrapedUrls: [] },
+    { args: { url: 'https://example.com/login', prompt: 'Log in' }, scrapedUrls: ['https://example.com/login'] },
   ]) {
+    const before = api.requests.length;
     const result = await client.request('tools/call', { name: 'firecrawl_interact', arguments: args });
+    const scrapes = api.requests
+      .slice(before)
+      .filter((request) => request.method === 'POST' && request.url === '/v2/scrape');
+    assert.deepEqual(
+      scrapes.map((request) => request.body?.url),
+      scrapedUrls,
+      'url mode scrapes the given URL once; scrapeId mode does not scrape'
+    );
     assert.notEqual(result.isError, true, JSON.stringify(result));
     const structured = result.structuredContent;
     assert.equal(structured.interactiveLiveViewUrl, INTERACT_RESPONSE.interactiveLiveViewUrl);
