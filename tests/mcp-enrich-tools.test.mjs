@@ -66,12 +66,12 @@ async function startApi(t, respond) {
   return { url: 'http://127.0.0.1:' + server.address().port, calls, bodies };
 }
 
-async function connect(t, options, session = { authType: 'api-key', firecrawlApiKey: 'fc-test' }) {
+async function connect(t, { onToolResult, ...options }, session = { authType: 'api-key', firecrawlApiKey: 'fc-test' }) {
   const port = await getFreePort();
   const instance = createFirecrawlMcpServer({
     transport: 'httpStream',
     ...options,
-    unstable_hooks: { authenticate: async () => session },
+    unstable_hooks: { authenticate: async () => session, onToolResult },
   });
   await instance.start({ transportType: 'httpStream', httpStream: { port, host: '127.0.0.1', endpoint: '/mcp', stateless: true } });
   t.after(() => instance.stop());
@@ -459,13 +459,101 @@ test('provider errors carry the tool name, a hint and retryable', async (t) => {
     arguments: { entity: 'company', apollo: { q_organization_name: 'Acme' }, fullenrich: { industries: [{ value: 'Computer Software' }], limit: 1 } },
   });
   assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /^No provider ran successfully: apollo error: [\s\S]*confirmed\. fullenrich error: provider_error: [\s\S]*retry later\. Credits charged: 0\. Example of a working call: \{"entity":"company"/);
+  assert.match(result.content[0].text, /^No provider ran successfully: apollo error: [\s\S]*retry the same call\. fullenrich error: provider_error: [\s\S]*retry later\. Credits charged: 0\. Example of a working call: \{"entity":"company"/);
   const [apollo, fullenrich] = result.structuredContent.providers;
   assert.equal(result.structuredContent.credits_total, 0);
-  assert.match(apollo.note, /call people_company_search again/);
+  assert.match(apollo.note, /^THIRD_PARTY_DATA_TERMS_REQUIRED: An organization admin must accept the apollo provider's terms \(version 1\) at https:\/\/example\.com\/terms before apollo can run\. [\s\S]*Retry without apollo, or wait until the terms are accepted and retry the same call\.$/);
+  assert.doesNotMatch(apollo.note, /for example with/);
   assert.equal(fullenrich.status, 'error');
   assert.equal(fullenrich.retryable, true);
   assert.match(fullenrich.note, /^provider_error: We couldn’t complete this request\. Please try again later\. FullEnrich answers this way when a filter value/);
+});
+
+const APOLLO_TERMS = { success: false, error: 'Terms required.', code: 'THIRD_PARTY_DATA_TERMS_REQUIRED', requiresAction: { type: 'accept_terms', terms: 'apollo', version: '1', url: 'https://example.com/terms' } };
+
+test('a search refused only for unaccepted terms says so and offers a call without that provider', async (t) => {
+  const api = await startApi(t, () => ({ status: 403, json: APOLLO_TERMS }));
+  const events = [];
+  const client = await connect(t, { apiUrl: api.url, onToolResult: (event) => events.push(event) });
+  const result = await client.callTool({ name: 'people_company_search', arguments: { entity: 'person', apollo: { person_titles: ['CTO'] }, max_credits: 0 } });
+  assert.equal(result.isError, true);
+  const text = result.content[0].text;
+  assert.match(text, /^An organization admin must accept the apollo provider's terms \(version 1\) at https:\/\/example\.com\/terms before apollo can run\. /);
+  assert.match(text, /Credits charged: 0\. Retry without apollo, for example with fullenrich: \{"entity":"person","fullenrich":/);
+  assert.doesNotMatch(text, /credits for this|max_credits of at least|per record/);
+  assert.match(text, /Or wait until the terms are accepted and retry the same call\.$/);
+  assert.doesNotMatch(text, /Do not retry|No provider ran/);
+  const data = events.find((event) => event.status === 'error').error.extras;
+  assert.equal(data.code, 'third_party_data_terms_required');
+  assert.deepEqual(data.terms, [{ provider: 'apollo', version: '1', url: 'https://example.com/terms' }]);
+  assert.equal(data.example.apollo, undefined);
+  assert.equal(data.example.entity, 'person');
+  assert.ok(data.example.fullenrich);
+  assert.ok(data.minimum_max_credits > 0);
+  assert.equal(data.example.max_credits, data.minimum_max_credits);
+  assert.equal(result.structuredContent.providers[0].status, 'error');
+  assert.deepEqual(api.calls.map((call) => call.provider), ['apollo']);
+});
+
+test('a terms refusal beside a skipped provider reports both reasons', async (t) => {
+  const api = await startApi(t, () => ({ status: 403, json: APOLLO_TERMS }));
+  const client = await connect(t, { apiUrl: api.url });
+  const result = await client.callTool({ name: 'people_company_search', arguments: { entity: 'person', apollo: { person_titles: ['CTO'] }, fullenrich: { limit: 1 } } });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /^No provider ran successfully: apollo error: [\s\S]*Retry without apollo[\s\S]* fullenrich skipped: No filters given; pass at least one\./);
+  assert.deepEqual(api.calls.map((call) => call.provider), ['apollo']);
+});
+
+test('an enrich call refused only for unaccepted terms offers fullenrich with its price', async (t) => {
+  const api = await startApi(t, (batch) => ({
+    json: {
+      success: true,
+      data: { alexandria: batch.map(() => ({ error: { code: 'third_party_data_terms_required', message: 'Terms required.' }, requiresAction: APOLLO_TERMS.requiresAction, creditsCost: 0 })) },
+    },
+  }));
+  const events = [];
+  const client = await connect(t, { apiUrl: api.url, onToolResult: (event) => events.push(event) });
+  const result = await client.callTool({ name: 'people_company_enrich', arguments: { apollo: { people: [{ name: 'Ada Lovelace', domain: 'acme.example' }] } } });
+  assert.equal(result.isError, true);
+  const data = events.find((event) => event.status === 'error').error.extras;
+  assert.equal(data.code, 'third_party_data_terms_required');
+  assert.deepEqual(data.example, { fullenrich: { people: [{ person_name: 'Jane Doe', company_domain: 'example.com' }] }, max_credits: 10 });
+  assert.match(result.content[0].text, /Retry without apollo, for example with fullenrich: \{"fullenrich":\{"people":\[\{"person_name":"Jane Doe","company_domain":"example\.com"\}\]\},"max_credits":10\}\. Or wait/);
+  const [apollo] = result.structuredContent.providers.filter((p) => p.name === 'apollo');
+  assert.equal(apollo.kind, 'people');
+  assert.match(apollo.note, /Retry without apollo, for example with fullenrich, or wait until the terms are accepted/);
+  assert.doesNotMatch(apollo.note, /credits/);
+});
+
+test('a terms refusal beside another failure names a provider that did not fail', async (t) => {
+  const api = await startApi(t, (batch) => {
+    if (batch[0].provider === 'apollo') return { status: 403, json: APOLLO_TERMS };
+    return { json: { success: true, data: { alexandria: batch.map(() => ({ error: { code: 'provider_error', message: 'Upstream failed.' }, creditsCost: 0 })) } } };
+  });
+  const client = await connect(t, { apiUrl: api.url });
+  const result = await client.callTool({
+    name: 'people_company_search',
+    arguments: { entity: 'person', apollo: { person_titles: ['CTO'] }, people_data_labs: { sql: "SELECT * FROM person WHERE job_title = 'cto'", limit: 1 } },
+  });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /^No provider ran successfully: apollo error: [\s\S]*Retry without apollo, for example with fullenrich, or wait until the terms are accepted and retry the same call\. people_data_labs error: provider_error: Upstream failed\./);
+  const apollo = result.structuredContent.providers.find((p) => p.name === 'apollo');
+  assert.doesNotMatch(apollo.note, /people_data_labs|credits/);
+});
+
+test('a terms refusal beside a provider that ran keeps the call successful', async (t) => {
+  const api = await startApi(t, (batch) => (batch[0].provider === 'apollo' ? { status: 403, json: APOLLO_TERMS } : undefined));
+  const client = await connect(t, { apiUrl: api.url });
+  const result = await client.callTool({
+    name: 'people_company_enrich',
+    arguments: { apollo: { companies: [{ domain: 'globex.example' }] }, fullenrich: { companies: [{ domain: 'acme.example' }] } },
+  });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  const byName = Object.fromEntries(result.structuredContent.providers.filter((p) => p.status !== 'not_requested').map((p) => [p.name, p]));
+  assert.equal(byName.fullenrich.status, 'ok');
+  assert.equal(byName.apollo.status, 'error');
+  assert.match(byName.apollo.note, /Retry without apollo, for example with fullenrich, or wait until the terms are accepted and retry the same call\.$/);
+  assert.doesNotMatch(byName.apollo.note, /Do not retry|credits/);
 });
 
 test('a contact lookup skips a FullEnrich person it cannot identify and still runs the other providers', async (t) => {
