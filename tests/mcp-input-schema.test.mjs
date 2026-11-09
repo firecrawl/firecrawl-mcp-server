@@ -39,8 +39,8 @@ async function listTools(t) {
 test('extraction schemas are listed as open objects and other objects stay closed', async (t) => {
   const inputs = await listTools(t);
   const freeForm = {
-    'firecrawl_scrape jsonOptions.schema':
-      inputs.firecrawl_scrape.properties.jsonOptions.properties.schema,
+    'firecrawl_parse jsonOptions.schema':
+      inputs.firecrawl_parse.properties.jsonOptions.properties.schema,
     'firecrawl_agent schema': inputs.firecrawl_agent.properties.schema,
     'firecrawl_crawl scrapeOptions.jsonOptions.schema':
       inputs.firecrawl_crawl.properties.scrapeOptions.properties.jsonOptions
@@ -62,7 +62,7 @@ test('extraction schemas are listed as open objects and other objects stay close
 
   assert.equal(inputs.firecrawl_scrape.additionalProperties, false);
   assert.equal(
-    inputs.firecrawl_scrape.properties.jsonOptions.additionalProperties,
+    inputs.firecrawl_parse.properties.jsonOptions.additionalProperties,
     false
   );
   assert.equal(
@@ -88,11 +88,10 @@ function readEmptyAsFalse(value) {
   );
 }
 
-test('a nested extraction schema validates against the listed firecrawl_scrape schema', async (t) => {
+test('a nested extraction schema validates against the listed crawl scrapeOptions schema', async (t) => {
   const inputs = await listTools(t);
   const validator = new AjvJsonSchemaValidator();
   const args = {
-    url: 'https://example.com/products',
     formats: ['json'],
     jsonOptions: {
       prompt: 'List every product with its name and price.',
@@ -117,10 +116,10 @@ test('a nested extraction schema validates against the listed firecrawl_scrape s
     },
   };
   for (const [reading, schema] of [
-    ['as listed', inputs.firecrawl_scrape],
+    ['as listed', inputs.firecrawl_crawl.properties.scrapeOptions],
     [
       'with empty objects read as false',
-      readEmptyAsFalse(inputs.firecrawl_scrape),
+      readEmptyAsFalse(inputs.firecrawl_crawl.properties.scrapeOptions),
     ],
   ]) {
     const result = validator.getValidator(schema)(args);

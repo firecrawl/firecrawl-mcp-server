@@ -5,7 +5,6 @@ import { startStdioWithApi, toolText } from './helpers/exchange-mcp.mjs';
 test('scrape exposes SDK-supported images and preserves design evidence', async (t) => {
   const data = {
     images: ['https://example.com/hero.webp', 'https://example.com/logo.svg'],
-    branding: { colors: { primary: '#123456' } },
     screenshot: 'https://example.com/capture.png',
     markdown: '# Example',
     metadata: { sourceURL: 'https://example.com' },
@@ -23,20 +22,18 @@ test('scrape exposes SDK-supported images and preserves design evidence', async 
       name: 'firecrawl_scrape',
       arguments: {
         url: 'https://example.com',
-        formats: ['branding', 'images', 'screenshot', 'markdown'],
+        formats: ['images', 'screenshot', 'markdown'],
         screenshotOptions: { fullPage: true },
         onlyMainContent: false,
       },
     })
   );
   assert.deepEqual(api.requests.at(-1).body.formats, [
-    'branding',
     'images',
     { type: 'screenshot', fullPage: true },
     'markdown',
   ]);
   assert.equal(api.requests.at(-1).body.onlyMainContent, false);
   assert.deepEqual(result.images, data.images);
-  assert.deepEqual(result.branding, data.branding);
   assert.equal(result.screenshot, data.screenshot);
 });

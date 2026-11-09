@@ -17,6 +17,7 @@ import { getFreePort } from './helpers/exchange-mcp.mjs';
 const SIGNUP_URL = 'https://www.firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp&redirect=%2Fapp%2Fapi-keys';
 const CREDITS_ERROR = 'Insufficient credits to perform this request. For more credits, you can upgrade your plan at https://firecrawl.dev/pricing.';
 const RATE_LIMIT_ERROR = 'Rate limit exceeded. Consumed (req/min): 2, Remaining (req/min): 0. Please retry after 30s.';
+const SCRAPE_FORMAT_MESSAGE = 'firecrawl_scrape no longer supports json, query, summary, branding, jsonOptions, or queryOptions. Request formats: ["markdown"] and read, summarize, or extract the requested fields from the returned content yourself.';
 
 async function startRefusingApi(t, status, body) {
   const server = createServer(async (req, res) => {
@@ -242,8 +243,7 @@ for (const body of ['', { success: false, code: 'NOT_FOUND', error: 'Route not f
 }
 
 test('a json format without a prompt or schema is refused with a structured next step', async (t) => {
-  const message =
-    'formats "json" needs jsonOptions with a prompt or a schema. To ask a question about the page, use formats ["query"] with queryOptions.prompt instead.';
+  const message = SCRAPE_FORMAT_MESSAGE;
   const result = await assertReadableError(t, {
     apiUrl: 'http://127.0.0.1:9',
     session: apiKey,
@@ -263,8 +263,8 @@ const JSON_FORMAT_MESSAGE =
 const QUERY_FORMAT_MESSAGE = 'formats "query" needs queryOptions with a non-empty prompt.';
 
 for (const { name, args, message, code } of [
-  { name: 'firecrawl_scrape', args: { url: 'https://example.com', formats: ['query'] }, message: QUERY_FORMAT_MESSAGE, code: 'invalid_request' },
-  { name: 'firecrawl_scrape', args: { url: 'https://example.com', formats: ['query'], queryOptions: { prompt: ' ' } }, message: QUERY_FORMAT_MESSAGE, code: 'invalid_request' },
+  { name: 'firecrawl_scrape', args: { url: 'https://example.com', formats: ['query'] }, message: SCRAPE_FORMAT_MESSAGE, code: 'invalid_request' },
+  { name: 'firecrawl_scrape', args: { url: 'https://example.com', formats: ['query'], queryOptions: { prompt: ' ' } }, message: SCRAPE_FORMAT_MESSAGE, code: 'invalid_request' },
   { name: 'firecrawl_interact', args: { url: 'https://example.com', prompt: 'Read the title', scrapeOptions: { formats: ['json'] } }, message: JSON_FORMAT_MESSAGE, code: 'invalid_request' },
   { name: 'firecrawl_interact', args: { url: 'https://example.com', prompt: 'Read the title', scrapeOptions: { formats: ['query'] } }, message: QUERY_FORMAT_MESSAGE, code: 'invalid_request' },
   { name: 'firecrawl_find_tools', args: { level: 'categories', categories: ['finance'] }, message: 'Category index accepts only level, limit and offset. Select a category to browse providers.', code: 'invalid_input' },
@@ -289,6 +289,11 @@ for (const { name, args, message, code } of [
       onToolResult: (event) => events.push(event),
     });
     assert.equal(result.content[0].text, message);
+    if (name === 'firecrawl_scrape') {
+      assert.equal(result.structuredContent.error.code, code);
+      assert.deepEqual(events, []);
+      return;
+    }
     const error = events.find((event) => event.status === 'error')?.error;
     assert.ok(error instanceof UserError, String(error));
     assert.equal(error.extras.code ?? error.extras.error?.code, code);

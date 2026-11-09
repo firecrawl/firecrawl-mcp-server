@@ -16,7 +16,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 
 - Search the web, optionally with full page content for each result
 - Search indexes for developer sources (GitHub issues, merged pull requests, READMEs, and docs), US government sources, and scientific papers (PubMed, bioRxiv, medRxiv, arXiv)
-- Scrape any URL into clean Markdown or structured JSON
+- Scrape any URL into clean Markdown for the calling agent to read
 - Parse PDFs and documents
 - Crawl a site for content from many pages, or map it to discover its URLs
 - Interact with pages in a real browser: click, type, fill forms, and navigate dynamic pages
@@ -31,7 +31,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 
 ## When to Use This Server
 
-- Use `firecrawl_scrape` when you have a known URL and want its content as markdown or as JSON matching a schema you supply.
+- Use `firecrawl_scrape` when you have a known URL and want its content as markdown. Read the returned content yourself to summarize it, analyze it, or extract fields.
 - Use `firecrawl_map` when you need to discover URLs on a site without fetching their content.
 - Use `firecrawl_crawl` when you need content from many pages under a site; set `limit`, `includePaths`/`excludePaths`, or `maxDiscoveryDepth` to bound it.
 - Use `firecrawl_search` when you're starting from a query rather than a URL and want ranked web results. Results carry excerpts; fetch full pages with `firecrawl_scrape` on the URLs you need. `scrapeOptions` fetches every result's page in the same call and bills each as a scrape, so keep it for the full text of a few results (the search-only endpoint never fetches content).
@@ -360,7 +360,7 @@ Add this to your `claude_desktop_config.json`:
 
 Use this guide to select the right tool for your task:
 
-- **If you know the exact URL you want:** use **scrape** (with JSON format for structured data)
+- **If you know the exact URL you want:** use **scrape**, then read the returned content yourself
 - **If you have multiple known URLs:** call **scrape** for each URL. If you specifically need one bulk API operation, use the Firecrawl API batch endpoint outside MCP.
 - **If you need to discover URLs on a site:** use **map**
 - **If you want to search the web for info:** use **search**
@@ -376,7 +376,7 @@ Use this guide to select the right tool for your task:
 
 | Tool      | Best for                                       | Returns                                          |
 | --------- | ---------------------------------------------- | ------------------------------------------------ |
-| scrape    | Single page content                            | JSON (preferred) or markdown                     |
+| scrape    | Single page content                            | Markdown by default, or other source formats      |
 | interact  | Interact with a URL or scraped page            | Execution result + scrapeId for URL mode         |
 | map       | Discovering URLs on a site                     | URL[]                                            |
 | crawl     | Multi-page extraction (with limits)            | final crawl status/data after internal polling   |
@@ -393,8 +393,8 @@ Use this guide to select the right tool for your task:
 
 When using `scrape`, choose the right format:
 
-- **JSON format (recommended for most cases):** Use when you need specific data from a page. Define a schema based on what you need to extract. This keeps responses small and avoids context window overflow.
-- **Markdown format (use sparingly):** Only when you genuinely need the full page content, such as reading an entire article for summarization or analyzing page structure.
+- **Markdown (default):** Read the page content, then summarize, analyze, or extract fields yourself. Use `includeTags`, `excludeTags`, and `onlyMainContent` to focus the returned content.
+- **Other source formats:** HTML, raw HTML, links, images, screenshots, change tracking, and audio support tasks that need more than page text.
 
 ## Available Tools
 
@@ -414,44 +414,30 @@ Scrape content from a single URL with advanced options.
 **Common mistakes:**
 
 - Passing a list of URLs to one scrape call. Call scrape once per URL in MCP. If you specifically need one bulk API operation, use the Firecrawl API batch endpoint outside MCP.
-- Using markdown format by default (use JSON format to extract only what you need).
+- Requesting `json`, `query`, `summary`, or `branding`, or supplying `jsonOptions` or `queryOptions`. These delegate interpretation to another model and are no longer supported by this tool. Calls using them fail with `invalid_request` and guidance to request markdown instead, before fetching the page.
 
 **Choosing the right format:**
 
-- **JSON format (preferred):** For most use cases, use JSON format with a schema to extract only the specific data needed. This keeps responses focused and prevents context window overflow.
-- **Markdown format:** Only when the task genuinely requires full page content (e.g., summarizing an entire article, analyzing page structure).
+- **Markdown format:** The default for reading, summarization, analysis, and extracting fields yourself.
+- **Screenshots, images, and HTML:** Use these as source evidence for visual and structural analysis.
 
 **Prompt Example:**
 
 > "Get the product details from https://example.com/product."
 
-**Usage Example (JSON format - preferred):**
+**Usage Example (read product details):**
 
 ```json
 {
   "name": "firecrawl_scrape",
   "arguments": {
     "url": "https://example.com/product",
-    "formats": [
-      {
-        "type": "json",
-        "prompt": "Extract the product information",
-        "schema": {
-          "type": "object",
-          "properties": {
-            "name": { "type": "string" },
-            "price": { "type": "number" },
-            "description": { "type": "string" }
-          },
-          "required": ["name", "price"]
-        }
-      }
-    ]
+    "formats": ["markdown"]
   }
 }
 ```
 
-**Usage Example (markdown format - when full content needed):**
+**Usage Example (main page content):**
 
 ```json
 {
@@ -464,25 +450,26 @@ Scrape content from a single URL with advanced options.
 }
 ```
 
-**Usage Example (branding format - extract brand identity):**
+**Usage Example (source evidence for design analysis):**
 
 ```json
 {
   "name": "firecrawl_scrape",
   "arguments": {
     "url": "https://example.com",
-    "formats": ["branding"]
+    "formats": ["screenshot", "images", "html"],
+    "onlyMainContent": false
   }
 }
 ```
 
-**Branding format:** Extracts comprehensive brand identity (colors, fonts, typography, spacing, logo, UI components) for design analysis or style replication.
+Interpret the screenshot, images, and HTML yourself to analyze the page's design.
 **Privacy:** Set `redactPII: true` to return content with personally identifiable information redacted.
 **With `CLOUD_SERVICE=true`:** scrape is read-only. It takes no browser `actions` and cannot accept provider terms. A named `profile` loads saved browser state without saving changes to it, and the full endpoint's `firecrawl_search` treats `scrapeOptions.profile` the same way. To save browser state to a profile, open the page with `firecrawl_interact` (see below). An organization admin accepts terms in the dashboard.
 
 **Returns:**
 
-- JSON structured data, markdown, branding profile, or other formats as specified.
+- Markdown or other source formats as specified. Existing `scrapeOptions` on other tools and the separate parse tool are unchanged.
 
 ### 2. Map Tool (`firecrawl_map`)
 
@@ -741,28 +728,16 @@ Parse local files or hosted upload references with Firecrawl's `/v2/parse` endpo
 
 **Returns:** Parsed document content or hosted upload instructions with a `nextToolCall`.
 
-### 7. Structured data with Scrape JSON
+### 7. Extracting fields from a known page
 
-For structured data from a known page, call `firecrawl_scrape` once per URL with `formats: ["json"]`. Put the extraction prompt and JSON schema in `jsonOptions`.
+Call `firecrawl_scrape` once per URL with `formats: ["markdown"]`, then extract the requested fields from the returned content yourself.
 
 ```json
 {
   "name": "firecrawl_scrape",
   "arguments": {
     "url": "https://example.com/product",
-    "formats": ["json"],
-    "jsonOptions": {
-      "prompt": "Extract the product name, price, and description.",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "name": { "type": "string" },
-          "price": { "type": "number" },
-          "description": { "type": "string" }
-        },
-        "required": ["name", "price"]
-      }
-    }
+    "formats": ["markdown"]
   }
 }
 ```
@@ -771,7 +746,7 @@ When the URLs are not known or the data spans several sites, use `firecrawl_agen
 
 ### 8. Agent Tool (`firecrawl_agent`)
 
-Autonomous web research agent that returns structured data when you do not know the URLs or the answer spans several sites. Describe the fields you need, optionally pass a JSON schema and seed URLs, and the agent searches, navigates, reads pages, and returns JSON assembled across sources. Use it for an entity plus its fields, for lists and datasets, and for pages that need navigation to reach the data. For one known URL use `firecrawl_scrape` with JSON format instead.
+Autonomous web research agent that returns structured data when you do not know the URLs or the answer spans several sites. Describe the fields you need, optionally pass a JSON schema and seed URLs, and the agent searches, navigates, reads pages, and returns JSON assembled across sources. Use it for an entity plus its fields, for lists and datasets, and for pages that need navigation to reach the data. For one known URL use `firecrawl_scrape` and read the returned content yourself.
 
 **How it works:**
 
@@ -793,7 +768,7 @@ The agent performs web searches, follows links, reads pages, and gathers data au
 
 **Not recommended for:**
 
-- Simple single-page scraping where you know the URL (use scrape with JSON format - faster and cheaper)
+- Simple single-page scraping where you know the URL (use scrape and read the returned content yourself)
 
 **Arguments:**
 
