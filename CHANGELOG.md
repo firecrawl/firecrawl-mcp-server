@@ -4,7 +4,10 @@
 
 ### Changed
 
-- `firecrawl_find_tools` is always loaded (`_meta: { "anthropic/alwaysLoad": true }`) on every surface, like `firecrawl_search` and `firecrawl_scrape`, so clients that defer tool definitions list it from the start. Its description no longer tells agents to prefer `firecrawl_search` for a data task. It now says to use the tool first when a task needs structured records (the same fields across several entities or pages, exact figures, provenance, or many records) and walks through the three steps: describe the data in `query` or pass `urls`, select a capability to read its contract, and execute it through `firecrawl_scrape` with `alexandria`. The full and search surfaces share this one description. The server instructions, the search surface instructions and the `firecrawl_search` description point to `firecrawl_find_tools` the same way.
+- `firecrawl_agent` and `people_company_enrich` are annotated `readOnlyHint: true`. Both read the web or provider data and return it. They spend credits but change nothing on the web or in the account, so clients that confirm non-read-only tools first, such as Hermes with `trust: untrusted`, no longer ask before every research or enrichment call. `max_credits` / `maxCredits` still cap what a call can spend.
+
+- `firecrawl_find_tools` is marked always-load (`_meta["anthropic/alwaysLoad"]`), so clients that defer MCP tools behind a tool search, such as Claude Code, list it with the agent's other tools from the first turn. Its description no longer tells the agent to prefer `firecrawl_search` for data tasks. In agent evals, both changes together made agents look up and run Alexandria providers on data tasks much more often, with no extra lookups on tasks that need only the web.
+- The `firecrawl_find_tools` description now tells agents to use it first when a task needs structured records rather than page text (the same fields across several entities or pages, exact figures, provenance, or many records), and walks through the three steps: describe the data in `query` or pass `urls`, select a capability to read its contract, and execute it through `firecrawl_scrape` with `alexandria`. The full and search surfaces share this one description. The server instructions, the search surface instructions and the `firecrawl_search` description point to `firecrawl_find_tools` the same way.
 
 ### Fixed
 

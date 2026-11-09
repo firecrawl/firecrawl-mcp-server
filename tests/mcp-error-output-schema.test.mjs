@@ -270,6 +270,11 @@ for (const { name, args, message, code } of [
   { name: 'firecrawl_find_tools', args: { level: 'categories', categories: ['finance'] }, message: 'Category index accepts only level, limit and offset. Select a category to browse providers.', code: 'invalid_input' },
   { name: 'firecrawl_monitor_create', args: { goal: 'Track pricing' }, message: 'firecrawl_monitor_create requires either `body`, `page`/`pages`, or `queries`.', code: 'invalid_input' },
   { name: 'firecrawl_monitor_create', args: { page: 'https://example.com' }, message: 'firecrawl_monitor_create shorthand requires `goal`. Use `body` for advanced requests without a goal.', code: 'invalid_input' },
+  { name: 'firecrawl_monitor_update', args: { id: 'mon_001' }, message: 'firecrawl_monitor_update needs at least one change: `status`, `scheduleText`, `cron`, `timezone`, or `body`.', code: 'invalid_input' },
+  { name: 'firecrawl_monitor_update', args: { id: 'mon_001', scheduleText: 'every hour', cron: '0 * * * *' }, message: 'firecrawl_monitor_update takes either `scheduleText` or `cron`, not both.', code: 'invalid_input' },
+  { name: 'firecrawl_monitor_update', args: { id: 'mon_001', timezone: 'Europe/Berlin' }, message: 'firecrawl_monitor_update replaces the whole schedule, so `timezone` needs `scheduleText` or `cron` with it.', code: 'invalid_input' },
+  { name: 'firecrawl_monitor_update', args: { id: 'mon_001', body: { schedule: { text: 'every hour', cron: '0 * * * *' } } }, message: 'firecrawl_monitor_update takes a schedule with either `text` or `cron`, not both.', code: 'invalid_input' },
+  { name: 'firecrawl_monitor_update', args: { id: 'mon_001', timezone: 'UTC', body: { schedule: { text: 'every hour', cron: '0 * * * *' } } }, message: 'firecrawl_monitor_update takes a schedule with either `text` or `cron`, not both.', code: 'invalid_input' },
   { name: 'firecrawl_credit_usage', args: { view: 'current', bin: 'day' }, message: 'bin can only be used with view "historical" or with view omitted.', code: 'invalid_input' },
   { name: 'firecrawl_credit_usage', args: { byApiKey: true, byEndpoint: true }, message: 'byApiKey and byEndpoint cannot be combined.', code: 'invalid_input' },
 ]) {

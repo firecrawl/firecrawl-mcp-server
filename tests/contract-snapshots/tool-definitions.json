@@ -190,10 +190,10 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_agent@f3221ea5dbb1": {
+  "firecrawl_agent@54c127a663f8": {
     "annotations": {
       "title": "Firecrawl agent",
-      "readOnlyHint": false,
+      "readOnlyHint": true,
       "openWorldHint": true,
       "destructiveHint": false,
       "idempotentHint": false
@@ -2579,7 +2579,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_interact@91e5d3af32e0": {
+  "firecrawl_interact@8040e21dad51": {
     "annotations": {
       "title": "Firecrawl interact",
       "readOnlyHint": false,
@@ -2588,7 +2588,7 @@
       "idempotentHint": false
     },
     "title": "Firecrawl interact",
-    "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either `url` (the scheme may be omitted) or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThe session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped `scrapeOptions.profile` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs.\n",
+    "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either `url` (the scheme may be omitted) or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThe session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped `scrapeOptions.profile` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs. When the page needs the user to act, share `interactiveLiveViewUrl` with the user only, so they can take over the session.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2900,8 +2900,8 @@
         "data": {
           "description": "Payload returned by the interaction."
         },
-        "sessionUrl": {
-          "description": "URL for viewing the live session.",
+        "sessionId": {
+          "description": "Browser session behind this scrape.",
           "anyOf": [
             {
               "type": "string"
@@ -2911,8 +2911,19 @@
             }
           ]
         },
-        "liveUrl": {
-          "description": "URL for viewing the live session.",
+        "liveViewUrl": {
+          "description": "Read-only live view of the browser session.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "interactiveLiveViewUrl": {
+          "description": "Live view the user can use to control the browser session.",
           "anyOf": [
             {
               "type": "string"
@@ -2926,7 +2937,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_interact@c95ca74e3f74": {
+  "firecrawl_interact@daa715f1647d": {
     "annotations": {
       "title": "Firecrawl interact",
       "readOnlyHint": false,
@@ -2935,7 +2946,7 @@
       "idempotentHint": false
     },
     "title": "Firecrawl interact",
-    "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either `url` (the scheme may be omitted) or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThe session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped `scrapeOptions.profile` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs.\n",
+    "description": "\nOpen or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either `url` (the scheme may be omitted) or `scrapeId`, and either a natural-language `prompt` or executable `code`; code can run as Bash, Python, or Node with a bounded timeout.\n\nThe session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped `scrapeOptions.profile` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs. When the page needs the user to act, share `interactiveLiveViewUrl` with the user only, so they can take over the session.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3297,8 +3308,8 @@
         "data": {
           "description": "Payload returned by the interaction."
         },
-        "sessionUrl": {
-          "description": "URL for viewing the live session.",
+        "sessionId": {
+          "description": "Browser session behind this scrape.",
           "anyOf": [
             {
               "type": "string"
@@ -3308,8 +3319,19 @@
             }
           ]
         },
-        "liveUrl": {
-          "description": "URL for viewing the live session.",
+        "liveViewUrl": {
+          "description": "Read-only live view of the browser session.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "interactiveLiveViewUrl": {
+          "description": "Live view the user can use to control the browser session.",
           "anyOf": [
             {
               "type": "string"
@@ -3894,7 +3916,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_monitor_update@1af896471afb": {
+  "firecrawl_monitor_update@adf5af8dd01e": {
     "annotations": {
       "title": "Update Firecrawl monitor",
       "readOnlyHint": false,
@@ -3903,7 +3925,7 @@
       "idempotentHint": true
     },
     "title": "Update Firecrawl monitor",
-    "description": "\nPatch an existing monitor by ID. The body can change its name, active/paused status, schedule, targets, goal, judging, webhook, notifications, or retention; these changes affect future scheduled checks.\n\nReturns the updated monitor.\n",
+    "description": "\nPatch an existing monitor by ID; changes affect future scheduled checks. Pause or resume it with `status` (\"paused\" or \"active\"). Reschedule it with `scheduleText` (plain language, e.g. \"every 6 hours\") or `cron`, plus `timezone`; a new schedule without `timezone` runs in UTC. For other fields pass `body`, a partial monitor in the create shape (name, targets, goal, judgeEnabled, webhook, notification, retentionDays), e.g. `{\"name\": \"Pricing watch\"}`. The parameters are merged into `body` as `{\"status\": ..., \"schedule\": {\"text\" or \"cron\": ..., \"timezone\": ...}}` and override the same keys there. At least one change is required.\n\nReturns the updated monitor.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -3917,11 +3939,26 @@
             "type": "string"
           },
           "additionalProperties": true
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "paused"
+          ]
+        },
+        "scheduleText": {
+          "type": "string"
+        },
+        "cron": {
+          "type": "string"
+        },
+        "timezone": {
+          "type": "string"
         }
       },
       "required": [
-        "id",
-        "body"
+        "id"
       ],
       "additionalProperties": false
     },
@@ -8276,10 +8313,10 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "people_company_enrich@c021f960184e": {
+  "people_company_enrich@77996c1772bd": {
     "annotations": {
       "title": "Look up and enrich people or companies",
-      "readOnlyHint": false,
+      "readOnlyHint": true,
       "openWorldHint": true,
       "destructiveHint": false
     },
