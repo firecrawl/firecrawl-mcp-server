@@ -111,7 +111,7 @@ const args: FirecrawlMcpServerStartArgs =
 
 if (
   transport === 'stdio' &&
-  !process.env.FIRECRAWL_API_KEY &&
+  !apiKey &&
   !process.env.FIRECRAWL_API_URL
 ) {
   // No credential and no self-hosted URL: run in keyless mode. scrape and

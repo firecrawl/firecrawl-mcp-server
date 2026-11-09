@@ -1756,6 +1756,28 @@ test('local keyless stdio keeps profile guidance keyless-scoped and omits feedba
   );
 });
 
+test('stdio with FIRECRAWL_OAUTH_TOKEN suppresses keyless notice', async (t) => {
+  let stderr = '';
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: '',
+    FIRECRAWL_API_URL: '',
+    FIRECRAWL_OAUTH_TOKEN: 'fco_test_token',
+  });
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-oauth-stdio', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+
+  assert.doesNotMatch(stderr, /running in keyless mode/i);
+});
+
 test('monitor create gives queries precedence over page targets', async (t) => {
   const fakeApi = await startFakeFirecrawlApi();
   t.after(() => fakeApi.close());
