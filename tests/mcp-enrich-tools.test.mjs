@@ -492,7 +492,16 @@ test('a search refused only for unaccepted terms says so and offers a call witho
   assert.ok(data.minimum_max_credits > 0);
   assert.equal(data.example.max_credits, data.minimum_max_credits);
   assert.equal(result.structuredContent.providers[0].status, 'error');
-  assert.ok(api.calls.every((call) => call.provider === 'apollo'));
+  assert.deepEqual(api.calls.map((call) => call.provider), ['apollo']);
+});
+
+test('a terms refusal beside a skipped provider reports both reasons', async (t) => {
+  const api = await startApi(t, () => ({ status: 403, json: APOLLO_TERMS }));
+  const client = await connect(t, { apiUrl: api.url });
+  const result = await client.callTool({ name: 'people_company_search', arguments: { entity: 'person', apollo: { person_titles: ['CTO'] }, fullenrich: { limit: 1 } } });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /^No provider ran successfully: apollo error: [\s\S]*Retry without apollo[\s\S]* fullenrich skipped: No filters given; pass at least one\./);
+  assert.deepEqual(api.calls.map((call) => call.provider), ['apollo']);
 });
 
 test('an enrich call refused only for unaccepted terms offers fullenrich with its price', async (t) => {

@@ -1314,7 +1314,7 @@ export function registerEnrichTools(
         const data = { providers, credits_total: providers.reduce((sum, r) => sum + r.credits, 0), credits_estimate, max_credits };
         const ran = providers.filter((r) => r.status !== 'not_requested');
         const succeeded = ran.some((r) => r.status === 'ok' || r.status === 'empty' || r.status === 'pending');
-        if (!succeeded && failed.length && failed.every((r) => r.name !== 'firecrawl_search' && ctx.gated.has(r.name))) {
+        if (ran.length && ran.every((r) => r.status === 'error' && r.name !== 'firecrawl_search' && ctx.gated.has(r.name))) {
           const gated = [...new Set(failed.map((r) => r.name as Provider))];
           const terms = gated.map((p) => ({ provider: p, ...ctx.gated.get(p)! }));
           const cost = alt ? Object.values(plan(alt).estimates).reduce((sum: number, n) => sum + (n ?? 0), 0) : 0;
