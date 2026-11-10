@@ -177,9 +177,14 @@ async function startStdioWithApi(t, options = {}) {
     CLOUD_SERVICE: 'false',
     FIRECRAWL_API_KEY: 'fc-exchange-test',
     FIRECRAWL_API_URL: api.url,
+    ...options.env,
   });
   return { api, ...session };
 }
+
+// How the search surface runs Alexandria capabilities: firecrawl_scrape with
+// an alexandria body.
+const LEGACY_ALEXANDRIA_TOOLS = { FIRECRAWL_MCP_ALEXANDRIA_TOOLS: 'legacy' };
 
 // A tool call that fails either at schema validation (JSON-RPC error or an
 // isError result, depending on the FastMCP version) or inside execute.
@@ -214,4 +219,4 @@ async function httpToolCall(port, { id, headers, params }) {
 }
 
 
-export { EXCHANGE_KEY_REQUIRED_MESSAGE, KEYLESS_TOOL_MESSAGE, getFreePort, waitForHealth, parseSseJson, spawnServer, stopChild, startStdio, startStdioWithApi, callExpectingError, toolText, httpToolCall };
+export { LEGACY_ALEXANDRIA_TOOLS, EXCHANGE_KEY_REQUIRED_MESSAGE, KEYLESS_TOOL_MESSAGE, getFreePort, waitForHealth, parseSseJson, spawnServer, stopChild, startStdio, startStdioWithApi, callExpectingError, toolText, httpToolCall };

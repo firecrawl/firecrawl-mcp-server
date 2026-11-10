@@ -29,13 +29,13 @@ async function startRefusingApi(t, status, body) {
   return `http://127.0.0.1:${server.address().port}`;
 }
 
-async function connect(t, { apiUrl, session, registerExtraTools, onToolResult, fileAccess }) {
+async function connect(t, { apiUrl, session, registerExtraTools, onToolResult, fileAccess, alexandriaTools }) {
   const port = await getFreePort();
   const instance = createFirecrawlMcpServer({
     transport: 'httpStream',
     apiUrl,
     fileAccess,
-    unstable_hooks: { authenticate: async () => ({ ...session }), registerExtraTools, onToolResult },
+    unstable_hooks: { authenticate: async () => ({ ...session }), registerExtraTools, onToolResult, alexandriaTools },
   });
   await instance.start({
     transportType: 'httpStream',
@@ -49,8 +49,8 @@ async function connect(t, { apiUrl, session, registerExtraTools, onToolResult, f
   return { client, tools };
 }
 
-async function assertReadableError(t, { apiUrl, session, name, args, includes, registerExtraTools, onToolResult, fileAccess }) {
-  const { client, tools } = await connect(t, { apiUrl, session, registerExtraTools, onToolResult, fileAccess });
+async function assertReadableError(t, { apiUrl, session, name, args, includes, registerExtraTools, onToolResult, fileAccess, alexandriaTools }) {
+  const { client, tools } = await connect(t, { apiUrl, session, registerExtraTools, onToolResult, fileAccess, alexandriaTools });
   assert.ok(tools.find((tool) => tool.name === name)?.outputSchema, `${name} declares an outputSchema`);
   const result = await client.callTool({ name, arguments: args });
   assert.equal(result.isError, true, JSON.stringify(result));
@@ -262,7 +262,7 @@ const JSON_FORMAT_MESSAGE =
   'formats "json" needs jsonOptions with a prompt or a schema. To ask a question about the page, use formats ["query"] with queryOptions.prompt instead.';
 const QUERY_FORMAT_MESSAGE = 'formats "query" needs queryOptions with a non-empty prompt.';
 
-for (const { name, args, message, code } of [
+for (const { name, args, message, code, alexandriaTools } of [
   { name: 'firecrawl_scrape', args: { url: 'https://example.com', formats: ['query'] }, message: QUERY_FORMAT_MESSAGE, code: 'invalid_request' },
   { name: 'firecrawl_scrape', args: { url: 'https://example.com', formats: ['query'], queryOptions: { prompt: ' ' } }, message: QUERY_FORMAT_MESSAGE, code: 'invalid_request' },
   { name: 'firecrawl_interact', args: { url: 'https://example.com', prompt: 'Read the title', scrapeOptions: { formats: ['json'] } }, message: JSON_FORMAT_MESSAGE, code: 'invalid_request' },
@@ -286,6 +286,7 @@ for (const { name, args, message, code } of [
       name,
       args,
       includes: message,
+      alexandriaTools,
       onToolResult: (event) => events.push(event),
     });
     assert.equal(result.content[0].text, message);
@@ -400,4 +401,31 @@ for (const { name, payload, delivered } of [
       }
     });
   }
+}
+
+test('an alexandria body sent to firecrawl_scrape reaches an SDK client as the alexandria_execute call', async (t) => {
+  const call = { provider: 'fred', capability: 'series/observations', options: { series_id: 'CPIAUCSL' } };
+  const result = await assertReadableError(t, {
+    apiUrl: 'http://127.0.0.1:9',
+    session: apiKey,
+    name: 'firecrawl_scrape',
+    args: { alexandria: [call] },
+    includes: 'firecrawl_scrape fetches pages only.',
+  });
+  assert.deepEqual(result.structuredContent, {
+    success: false,
+    message: 'firecrawl_scrape fetches pages only. Run Alexandria capabilities with alexandria_execute: its arguments are one {provider, capability, options}.',
+    nextTool: { name: 'alexandria_execute', arguments: call },
+  });
+});
+
+for (const [name, args] of [
+  ['alexandria_execute', { provider: 'fred', capability: 'series/observations' }],
+]) {
+  test(`a refused Alexandria request reaches an SDK client with its message (${name})`, async (t) => {
+    const apiUrl = await startRefusingApi(t, 403, { success: false, error: 'Exchange is not enabled for this team.', code: 'exchange_disabled' });
+    const result = await assertReadableError(t, { apiUrl, session: apiKey, name, args, includes: 'Exchange is not enabled for this team.' });
+    assert.deepEqual(Object.keys(result.structuredContent).sort(), ['message', 'requestId']);
+    assert.equal(result.structuredContent.message, 'Exchange is not enabled for this team.');
+  });
 }

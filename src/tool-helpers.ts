@@ -1,6 +1,6 @@
 import { UserError } from './mcp/runtime.js';
 import { z } from 'zod';
-import { searchSourceSchema, ALEXANDRIA_SOURCES_ALWAYS_ON } from './alexandria';
+import { searchSourceSchema, ALEXANDRIA_SOURCES_ALWAYS_ON, executeToolCall, type AlexandriaTools } from './alexandria';
 import { MCP_CONNECTION_GUIDE_URL } from './recovery.js';
 
 export function removeEmptyTopLevel<T extends Record<string, any>>(
@@ -88,6 +88,7 @@ export const searchToolBaseFields = {
   enterprise: z.array(z.enum(['default', 'anon', 'zdr'])).optional(),
 };
 
+
 // Both surfaces forbid specifying includeDomains and excludeDomains together.
 export function searchDomainsAreExclusive(args: {
   includeDomains?: string[];
@@ -163,7 +164,17 @@ type ExchangeErrorContext = {
   resend?: boolean;
   /** The caller's whole time budget in milliseconds, when it has one; a resend stays inside it. */
   budgetMs?: number;
+  /** Which tool a follow-up call is addressed to; the legacy names when unset. */
+  alexandriaTools?: AlexandriaTools;
 };
+
+function showTerms(context: ExchangeErrorContext, provider: string) {
+  return executeToolCall(
+    context.alexandriaTools ?? 'legacy',
+    { provider: 'firecrawl', capability: 'terms/show', options: { provider } },
+    true
+  );
+}
 
 export const DATA_SOURCES_SETTINGS_URL =
   'https://www.firecrawl.dev/app/settings?tab=data-sources';
@@ -218,19 +229,14 @@ function termsRequiredError(
   const retryIdentity = requestId ? ` and requestId ${requestId}` : '';
   const message = `Alexandria provider terms required. An organization admin must accept the ${action.terms} provider's terms (version ${action.version}) before this request can run.`;
   return new UserError(
-    `${message}\n\n1. Read the agreement with firecrawl_scrape using alexandria: {provider: "firecrawl", capability: "terms/show", options: {provider: "${action.terms}"}} and present it to the user. Send terms/show separately from provider execution. Terms are accepted in the Firecrawl dashboard, not through this connection: ask an organization admin to accept them at ${action.url}, or ${DATA_SOURCES_SETTINGS_URL} if that page is unavailable. Never infer acceptance from a data request.\n2. After the admin confirms, call ${context.tool} again with the identical payload${retryIdentity}. If the same terms error persists, stop and ask an organization admin to check access at ${DATA_SOURCES_SETTINGS_URL}.\n\nDo not retry until acceptance is confirmed.`,
+    `${message}\n\n1. Read the agreement with ${context.alexandriaTools === 'dedicated' ? 'alexandria_execute using' : 'firecrawl_scrape using alexandria:'} {provider: "firecrawl", capability: "terms/show", options: {provider: "${action.terms}"}} and present it to the user. Send terms/show separately from provider execution. Terms are accepted in the Firecrawl dashboard, not through this connection: ask an organization admin to accept them at ${action.url}, or ${DATA_SOURCES_SETTINGS_URL} if that page is unavailable. Never infer acceptance from a data request.\n2. After the admin confirms, call ${context.tool} again with the identical payload${retryIdentity}. If the same terms error persists, stop and ask an organization admin to check access at ${DATA_SOURCES_SETTINGS_URL}.\n\nDo not retry until acceptance is confirmed.`,
     {
       code: TERMS_REQUIRED_CODE,
       status: 403,
       message,
       ...(requestId ? { requestId } : {}),
       requiresAction: action,
-      nextTool: {
-        name: 'firecrawl_scrape',
-        arguments: {
-          alexandria: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: action.terms } }],
-        },
-      },
+      nextTool: showTerms(context, action.terms),
       next_actions: [
         {
           kind: 'human_action_required',
@@ -344,12 +350,7 @@ function relayed(error: unknown, context: ExchangeErrorContext): unknown {
         code: typeof data?.code === 'string' ? data.code : 'exchange_error',
         status: 403,
         message,
-        nextTool: {
-          name: 'firecrawl_scrape',
-          arguments: {
-            alexandria: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: disabledProvider } }],
-          },
-        },
+        nextTool: showTerms(context, disabledProvider),
       }
     );
   }

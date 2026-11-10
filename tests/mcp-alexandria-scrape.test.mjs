@@ -1,11 +1,15 @@
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { startStdioWithApi, callExpectingError, toolText } from './helpers/exchange-mcp.mjs';
+import { LEGACY_ALEXANDRIA_TOOLS, startStdioWithApi, callExpectingError, toolText } from './helpers/exchange-mcp.mjs';
 import { EXCHANGE_CALL } from './helpers/exchange-api.mjs';
 
+// firecrawl_scrape with an alexandria body, which the search surface serves.
+// tests/mcp-alexandria-tools.test.mjs covers alexandria_execute.
+const LEGACY = { env: LEGACY_ALEXANDRIA_TOOLS };
+
 test('firecrawl_scrape with alexandria posts the v2 batch and returns the envelope untouched', async (t) => {
-  const { api, client } = await startStdioWithApi(t);
+  const { api, client } = await startStdioWithApi(t, LEGACY);
 
   const result = await client.request('tools/call', {
     arguments: {
@@ -59,7 +63,7 @@ test('firecrawl_scrape with alexandria posts the v2 batch and returns the envelo
 });
 
 test('firecrawl_scrape rejects url with alexandria, neither, extra options, and oversized batches without calling the API', async (t) => {
-  const { api, client } = await startStdioWithApi(t);
+  const { api, client } = await startStdioWithApi(t, LEGACY);
 
   const invalid = [
     { url: 'https://example.com/', alexandria: [EXCHANGE_CALL] },
@@ -85,7 +89,7 @@ const largeAlexandria = (text = 'x'.repeat(90_000)) => ({
 });
 
 test('oversized Alexandria results hand off only after retention is confirmed and nextTool works', async (t) => {
-  const { api, client } = await startStdioWithApi(t, { largeResult: largeAlexandria(), bashRecovery: 'available' });
+  const { api, client } = await startStdioWithApi(t, { ...LEGACY,  largeResult: largeAlexandria(), bashRecovery: 'available' });
   const result = toolText(await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { alexandria: EXCHANGE_CALL } }));
   assert.equal(result.delivery, 'retained');
   assert.equal(result.inlineTokenBudget, 20000);
@@ -104,7 +108,7 @@ test('oversized Alexandria results hand off only after retention is confirmed an
 test('unavailable or partially retained responses remain intact', async (t) => {
   for (const bashRecovery of ['missing', 'partial']) {
     const payload = largeAlexandria();
-    const { api, client } = await startStdioWithApi(t, { largeResult: payload, bashRecovery });
+    const { api, client } = await startStdioWithApi(t, { ...LEGACY,  largeResult: payload, bashRecovery });
     const result = toolText(await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { alexandria: EXCHANGE_CALL } }));
     assert.deepEqual(result.data, payload.data);
     assert.equal(result.delivery, undefined);
@@ -119,7 +123,7 @@ test('below-budget results, errors, utility calls and URL scrapes bypass retenti
     [largeAlexandria(), { alexandria: { provider: 'firecrawl', capability: 'bash', options: { workspaceId: 'existing', command: 'cat response.json' } } }],
     [largeAlexandria(), { url: 'https://example.com' }],
   ]) {
-    const { api, client } = await startStdioWithApi(t, { largeResult: payload, bashRecovery: 'available' });
+    const { api, client } = await startStdioWithApi(t, { ...LEGACY,  largeResult: payload, bashRecovery: 'available' });
     const result = toolText(await client.request('tools/call', { name: 'firecrawl_scrape', arguments: args }));
     const expectedData = args.alexandria?.capability === 'bash'
       ? { alexandria: [{ provider: 'firecrawl', capability: 'bash', data: {
@@ -135,7 +139,7 @@ test('below-budget results, errors, utility calls and URL scrapes bypass retenti
 });
 
 test('alexandria execution ignores URL-mode discovery options instead of rejecting the call', async (t) => {
-  const { api, client } = await startStdioWithApi(t);
+  const { api, client } = await startStdioWithApi(t, LEGACY);
   const result = await client.request('tools/call', {
     name: 'firecrawl_scrape',
     arguments: { alexandria: EXCHANGE_CALL, toolDetail: 'full', domainTools: true },

@@ -106,32 +106,36 @@ const alexandriaEnvelope = {
 
 // --- src/index.ts tools -----------------------------------------------------
 
+/** The scraped document, with the formats that were requested. */
+const scrapeDocumentFields = {
+  markdown: str('Page content as markdown.'),
+  html: str('Processed HTML of the page.'),
+  rawHtml: str('Unprocessed HTML of the page.'),
+  summary: str('Summary of the page content.'),
+  links: unknown('Links found on the page.'),
+  screenshot: unknown('Screenshot of the page.'),
+  images: unknown('Images found on the page.'),
+  audio: unknown('Audio extracted from the page.'),
+  video: unknown('Video extracted from the page.'),
+  answer: str('Targeted answer to the question that was asked of the page.'),
+  highlights: unknown('Highlighted passages from the page.'),
+  pages: unknown('Physical PDF pages, when `parsers[].pages` is set.'),
+  blocks: unknown('Typed PDF layout blocks, when `parsers[].blocks` is set.'),
+  product: unknown('Product data extracted from the page.'),
+  menu: unknown('Menu data extracted from the page.'),
+  json: unknown('Structured data matching the requested JSON schema or prompt.'),
+  attributes: unknown('Values collected by the requested attribute selectors.'),
+  actions: unknown('Results of the browser actions that ran during the scrape.'),
+  changeTracking: unknown('Change-tracking comparison against the previous scrape.'),
+  branding: unknown('Branding data extracted from the page.'),
+  metadata: unknown('Page metadata; authenticated responses can include `metadata.scrapeId` for scrape feedback.'),
+  tools: unknown('Domain-matched Alexandria tools for the page, when `domainTools` is set.'),
+  warning,
+};
+
 export const scrapeOutputSchema = z
   .object({
-    // URL mode: the scraped document, with the formats that were requested.
-    markdown: str('Page content as markdown.'),
-    html: str('Processed HTML of the page.'),
-    rawHtml: str('Unprocessed HTML of the page.'),
-    summary: str('Summary of the page content.'),
-    links: unknown('Links found on the page.'),
-    screenshot: unknown('Screenshot of the page.'),
-    images: unknown('Images found on the page.'),
-    audio: unknown('Audio extracted from the page.'),
-    video: unknown('Video extracted from the page.'),
-    answer: str('Targeted answer to the question that was asked of the page.'),
-    highlights: unknown('Highlighted passages from the page.'),
-    pages: unknown('Physical PDF pages, when `parsers[].pages` is set.'),
-    blocks: unknown('Typed PDF layout blocks, when `parsers[].blocks` is set.'),
-    product: unknown('Product data extracted from the page.'),
-    menu: unknown('Menu data extracted from the page.'),
-    json: unknown('Structured data matching the requested JSON schema or prompt.'),
-    attributes: unknown('Values collected by the requested attribute selectors.'),
-    actions: unknown('Results of the browser actions that ran during the scrape.'),
-    changeTracking: unknown('Change-tracking comparison against the previous scrape.'),
-    branding: unknown('Branding data extracted from the page.'),
-    metadata: unknown('Page metadata; authenticated responses can include `metadata.scrapeId` for scrape feedback.'),
-    tools: unknown('Domain-matched Alexandria tools for the page, when `domainTools` is set.'),
-    warning,
+    ...scrapeDocumentFields,
     // Alexandria mode and error envelopes.
     success,
     error,
@@ -139,6 +143,27 @@ export const scrapeOutputSchema = z
     ...alexandriaEnvelope,
   })
   .describe('A scraped document, or the Alexandria execution envelope when `alexandria` was passed.');
+
+/** firecrawl_scrape where Alexandria has its own tools: a document, and the keys an error carries. */
+export const scrapeDocumentOutputSchema = z
+  .object({
+    ...scrapeDocumentFields,
+    success,
+    error,
+    requestId: alexandriaEnvelope.requestId,
+    message: alexandriaEnvelope.message,
+    nextTool: alexandriaEnvelope.nextTool,
+  })
+  .describe('A scraped document.');
+
+export const alexandriaExecuteOutputSchema = z
+  .object({
+    success,
+    error,
+    data: unknown('The result in `data.alexandria[0]`, with `data`, `records`, or an `error` with a code.'),
+    ...alexandriaEnvelope,
+  })
+  .describe('The result of one Alexandria capability, or a pointer to it when it was retained.');
 
 export const mapOutputSchema = z
   .object({
