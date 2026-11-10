@@ -13,12 +13,12 @@
     }
   },
   "tools": [
-    "firecrawl_scrape@109252cfbb4f",
+    "firecrawl_scrape@a5dbbac44269",
     "firecrawl_map@3214f5d6a1a4",
     "firecrawl_search@3b8c404ec287",
     "firecrawl_find_tools@d138e7a0897b",
-    "firecrawl_crawl@fc5a29cc0c6f",
-    "firecrawl_check_crawl_status@9a2d82b57ff4",
+    "firecrawl_crawl@f441c5853816",
+    "firecrawl_check_crawl_status@aeaa0dd65bc1",
     "firecrawl_agent@10301d46e090",
     "firecrawl_agent_status@6c6e5f971f8e",
     "firecrawl_interact@daa715f1647d",

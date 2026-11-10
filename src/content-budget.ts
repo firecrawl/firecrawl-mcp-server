@@ -29,11 +29,11 @@ const OMITTED_URL_CHARS = 2_000;
  * inline, so a caller that raises `maxCharacters` still gets the result rather
  * than a file path.
  */
-export const RESULT_SIZE_META = { 'anthropic/maxResultSizeChars': 200_000 };
+export const RESULT_SIZE_META = { 'anthropic/maxResultSizeChars': MAX_MAX_CHARACTERS };
 
 const RANGE = `default ${DEFAULT_MAX_CHARACTERS}, from ${MIN_MAX_CHARACTERS} to ${MAX_MAX_CHARACTERS}; values outside are clamped`;
 
-export const scrapeMaxCharactersDescription = `Most characters of page content to return (${RANGE}). markdown, html and rawHtml are each cut to this length, or to a shared shorter one when together they would exceed it, and end with a [Truncated: ...] marker; links and images lists are shortened the same way. json, answer, summary and metadata are never cut. A cut result sets truncated, totalLength (the full length of the longest cut field) and a warning. Raise it to read more of a long page, or ask a question with formats ["query"] instead.`;
+export const scrapeMaxCharactersDescription = `Most characters of page content to return (${RANGE}). markdown, html and rawHtml are each cut to this length, and end with a [Truncated: ...] marker; links and images lists are shortened the same way. When the fields together would exceed it, links and images are shortened first, then the text fields to a shared shorter length. json, answer, summary and metadata are never cut. A cut result sets truncated, totalLength (the full length of the longest cut field) and a warning. Raise it to read more of a long page, or ask a question with formats ["query"] instead.`;
 
 export const crawlMaxCharactersDescription = `Most characters of content to return per page and, with room for metadata, in the whole result (${RANGE}). Each page's markdown, html and rawHtml are cut as in firecrawl_scrape; pages past the whole-result budget are not inlined, and the result sets truncated, omittedPages and a warning listing their URLs. Scrape those URLs, or call firecrawl_check_crawl_status with a larger maxCharacters to inline more.`;
 
@@ -69,8 +69,8 @@ function maxCharactersFrom(value: unknown): number {
   return Math.min(MAX_MAX_CHARACTERS, Math.max(MIN_MAX_CHARACTERS, Math.floor(value)));
 }
 
-/** `doc` with each content field longer than `limit` cut to it. */
-function cutDocument(doc: Json, limit: number, hint: string): { doc: Json; cuts: Cut[] } {
+/** `doc` with each text field longer than `limit` and each list longer than `listLimit` cut to it. */
+function cutDocument(doc: Json, limit: number, listLimit: number, hint: string): { doc: Json; cuts: Cut[] } {
   const out: Json = { ...doc };
   const cuts: Cut[] = [];
   for (const field of STRING_FIELDS) {
@@ -83,8 +83,8 @@ function cutDocument(doc: Json, limit: number, hint: string): { doc: Json; cuts:
   for (const field of ARRAY_FIELDS) {
     const value = doc[field];
     const length = Array.isArray(value) ? JSON.stringify(value).length : 0;
-    if (Array.isArray(value) && length > limit) {
-      const kept = cutArray(value, limit);
+    if (Array.isArray(value) && length > listLimit) {
+      const kept = cutArray(value, listLimit);
       out[field] = kept;
       cuts.push({ field, shown: kept.length, total: value.length, unit: 'items', length });
     }
@@ -96,11 +96,13 @@ function cutDocument(doc: Json, limit: number, hint: string): { doc: Json; cuts:
 type Finish = (doc: Json, cuts: Cut[]) => Json;
 
 /**
- * One document with its content cut to `maxCharacters`, and further, to one
- * shared length, when the finished document would still serialize to more
- * than `maxCharacters` plus room for its other fields. When even no content
- * would fit, the fields that cannot be cut are what is large, and the content
- * keeps `maxCharacters`. Returns `doc` itself when nothing is cut.
+ * One document with its content cut to `maxCharacters`, and further when the
+ * finished document would still serialize to more than `maxCharacters` plus
+ * room for its other fields: the `links` and `images` lists are shortened
+ * first, and only when they are empty are the text fields cut to one shared
+ * shorter length. When even no content would fit, the fields that cannot be
+ * cut are what is large, and the content keeps `maxCharacters`. Returns `doc`
+ * itself when nothing is cut.
  */
 function fitDocument(
   doc: Json,
@@ -109,14 +111,22 @@ function fitDocument(
   finish: Finish = (cut) => cut
 ): { doc: Json; cut: boolean } {
   const budget = maxCharacters + RESULT_OVERHEAD;
-  const at = (limit: number) => {
-    const { doc: cut, cuts } = cutDocument(doc, limit, hint);
+  const at = (limit: number, listLimit: number) => {
+    const { doc: cut, cuts } = cutDocument(doc, limit, listLimit, hint);
     return cuts.length ? finish(cut, cuts) : doc;
   };
-  const fits = (limit: number) => size(at(limit)) <= budget;
+  const fits = (limit: number, listLimit: number) => size(at(limit, listLimit)) <= budget;
   let limit = maxCharacters;
-  if (!fits(limit) && fits(0)) limit = largestFitting(0, maxCharacters, fits);
-  const fitted = at(limit);
+  let listLimit = maxCharacters;
+  if (!fits(limit, listLimit)) {
+    if (fits(limit, 0)) {
+      listLimit = largestFitting(0, maxCharacters, (n) => fits(limit, n));
+    } else if (fits(0, 0)) {
+      listLimit = 0;
+      limit = largestFitting(0, maxCharacters, (n) => fits(n, 0));
+    }
+  }
+  const fitted = at(limit, listLimit);
   return { doc: fitted, cut: fitted !== doc };
 }
 

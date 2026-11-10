@@ -21,6 +21,12 @@ const bigPage = {
   metadata: metadata('https://example.com/big'),
 };
 
+const linksPage = {
+  markdown: longText(183_402),
+  links: bigPage.links,
+  metadata: metadata('https://example.com/links'),
+};
+
 const smallPage = {
   markdown: '# Small page\n\nJust a few words.',
   links: ['https://example.com/a'],
@@ -51,7 +57,10 @@ async function startApi(t) {
       res.end(JSON.stringify(payload));
     };
     if (req.method === 'POST' && req.url === '/v2/scrape') {
-      const page = body.url.includes('big') ? bigPage : body.url.includes('both') ? { ...bigPage, html: longText(90_000) } : smallPage;
+      const page = body.url.includes('big') ? bigPage
+        : body.url.includes('both') ? { ...bigPage, html: longText(90_000) }
+        : body.url.includes('links') ? linksPage
+        : smallPage;
       return json({ success: true, data: page });
     }
     if (req.method === 'POST' && req.url === '/v2/crawl') {
@@ -118,6 +127,13 @@ test('firecrawl_scrape cuts long content to maxCharacters and leaves structured 
   assert.equal(whole.truncated, undefined);
   assert.equal(whole.warning, undefined);
 
+  // Lists give way before the page text does.
+  const links = await call('firecrawl_scrape', { url: 'https://example.com/links', formats: ['markdown', 'links'] });
+  assertInline(links);
+  assert.equal(links.structuredContent.markdown.length > 40_000, true);
+  assert.ok(links.structuredContent.markdown.startsWith(linksPage.markdown.slice(0, 40_000)));
+  assert.match(links.structuredContent.warning, /^Content truncated: markdown at 40,000 of 183,402 characters, links at \d+ of 3,000 items\./);
+
   // markdown and html together share the same budget.
   const both = await call('firecrawl_scrape', { url: 'https://example.com/both', formats: ['markdown', 'html'] });
   assertInline(both);
@@ -156,7 +172,7 @@ test('scrape, crawl and crawl status only add maxCharacters to their inputs and 
     assert.deepEqual(Object.keys(tool.inputSchema.properties).sort(), [...properties, 'maxCharacters'].sort(), name);
     assert.equal(tool.inputSchema.properties.maxCharacters.type, 'number', name);
     assert.equal((tool.inputSchema.required ?? []).includes('maxCharacters'), false, name);
-    assert.equal(tool._meta['anthropic/maxResultSizeChars'], 200_000, name);
+    assert.equal(tool._meta['anthropic/maxResultSizeChars'], 500_000, name);
     assert.ok(tool.description.length <= 2_048, name);
   }
   assert.equal(byName.get('firecrawl_scrape')._meta['anthropic/alwaysLoad'], true);
