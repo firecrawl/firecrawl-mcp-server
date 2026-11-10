@@ -1094,7 +1094,7 @@ test('HTTP cloud transport calls Firecrawl API with authenticated session', asyn
     highlights: false,
     limit: 1,
     origin: `mcp-ua-firecrawl-http-smoke@${serverVersion}`,
-    sources: ['web', 'alexandria'],
+    sources: ['web', 'alexandria', 'skills'],
     domainTools: true,
     toolDetail: 'compact',
     query: 'example domain',
@@ -2046,7 +2046,7 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
   assert.deepEqual(fakeApi.requests[0].body, {
     limit: 1,
     origin: `mcp-firecrawl-mcp-tool-e2e@${serverVersion}`,
-    sources: ['web', 'alexandria'],
+    sources: ['web', 'alexandria', 'skills'],
     domainTools: true,
     toolDetail: 'compact',
     query: 'example domain',
