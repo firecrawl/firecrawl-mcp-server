@@ -1138,6 +1138,13 @@ export function createFirecrawlMcpServer(
     return webhook;
   }
 
+  function refuseNestedZeroDataRetention(args: unknown, instead: string): undefined {
+    const scrapeOptions = (args as { scrapeOptions?: Record<string, unknown> } | undefined)?.scrapeOptions;
+    if (scrapeOptions?.zeroDataRetention !== true) return undefined;
+    const message = `scrapeOptions.zeroDataRetention is not supported. ${instead}`;
+    throw new UserError(message, { success: false, error: { code: 'invalid_request', message } });
+  }
+
   function transformScrapeParams(
     args: Record<string, unknown>
   ): Record<string, unknown> {
@@ -1893,7 +1900,7 @@ Returns result groups in \`data\` and an operation \`id\`.
       .object({
         ...searchToolBaseFields,
         scrapeOptions: scrapeParamsSchema
-          .omit({ url: true })
+          .omit({ url: true, zeroDataRetention: true })
           .extend(SAFE_MODE ? { profile: readOnlyProfileSchema } : {})
           .partial()
           .optional()
@@ -1904,6 +1911,11 @@ Returns result groups in \`data\` and an operation \`id\`.
       .refine(
         searchQueryIsValid,
         'A query is required. Use Find Tools for catalogue lookup.'
+      ),
+    beforeValidate: (args: unknown) =>
+      refuseNestedZeroDataRetention(
+        args,
+        'For zero data retention on firecrawl_search, set enterprise: ["zdr"] instead; it requires an account where Zero Data Retention is enabled.'
       ),
     execute: async (args: unknown, { session, log, client: mcpClient }: ToolContext, tool = 'firecrawl_search'): Promise<ContentResult> => {
       const { query, ...opts } = args as Record<string, unknown>;
@@ -2714,7 +2726,7 @@ Returns submission status, feedback ID, and accounting fields.
     description: `
 Start a multi-page crawl at a website URL, poll it to a terminal state, and return the final status and collected data. Scope can be bounded with include/exclude paths, depth, page limit, subdomain/external-link controls, sitemap handling, delay, and scrape options.
 
-Crawl results can be large; use conservative limits when full-site coverage is unnecessary. Webhooks and interactive scrape actions are unavailable in safe mode. Returns the crawl ID, status, and page data.
+Crawl results can be large; use conservative limits when full-site coverage is unnecessary. Webhooks and interactive scrape actions are unavailable in safe mode. \`zeroDataRetention\` runs the crawl with zero data retention and requires an eligible authenticated account. Returns the crawl ID, status, and page data.
 `,
     parameters: z.object({
       url: z.string(),
@@ -2737,9 +2749,18 @@ Crawl results can be large; use conservative limits when full-site coverage is u
           }),
       deduplicateSimilarURLs: z.boolean().optional(),
       ignoreQueryParameters: z.boolean().optional(),
-      scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+      zeroDataRetention: z.boolean().optional(),
+      scrapeOptions: scrapeParamsSchema
+        .omit({ url: true, zeroDataRetention: true })
+        .partial()
+        .optional(),
     }),
     outputSchema: crawlOutputSchema,
+    beforeValidate: (args: unknown) =>
+      refuseNestedZeroDataRetention(
+        args,
+        'Set zeroDataRetention at the top level of firecrawl_crawl instead.'
+      ),
     execute: async (args, { session, log, client: mcpClient, task }): Promise<ContentResult> => {
       const origin = requestOrigin(mcpClient, session);
       const { url, ...options } = args as Record<string, unknown>;
@@ -2968,7 +2989,21 @@ The agent only calls Alexandria providers whose terms the team has accepted. \`e
           '"extract" (default) returns the complete structured result every turn. "chat" lets a follow-up that asks no new data get a short reply in message instead of a re-run; required for exchange.requireApproval. Omitted on a follow-up keeps the previous turn\'s mode.'
         ),
       exchange: agentExchangeSchema.optional(),
+      zeroDataRetention: z
+        .boolean()
+        .optional()
+        .describe(
+          'Run with zero data retention. Requires an eligible authenticated account with Zero Data Retention enabled for both scrape and search. Cannot be combined with threadId.'
+        ),
     })
+    .refine(
+      (data) => !(data.zeroDataRetention && data.threadId),
+      {
+        message:
+          'zeroDataRetention cannot continue a thread: remove threadId to start a new run.',
+        path: ['threadId'],
+      }
+    )
     .refine(
       (data) => !(data.exchange?.approve && data.exchange?.decline),
       {
@@ -3020,6 +3055,7 @@ The agent only calls Alexandria providers whose terms the team has accepted. \`e
         // Forwarded verbatim: the agent service owns the defaults and the
         // per-thread inheritance.
         exchange: a.exchange as Record<string, unknown> | undefined,
+        zeroDataRetention: a.zeroDataRetention as boolean | undefined,
       });
       const res = await (client as any).startAgent({
         ...agentBody,

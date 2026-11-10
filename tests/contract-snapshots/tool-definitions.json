@@ -190,7 +190,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_agent@0058205ae0bf": {
+  "firecrawl_agent@10301d46e090": {
     "annotations": {
       "title": "Firecrawl agent",
       "readOnlyHint": true,
@@ -330,6 +330,10 @@
             }
           },
           "additionalProperties": false
+        },
+        "zeroDataRetention": {
+          "description": "Run with zero data retention. Requires an eligible authenticated account with Zero Data Retention enabled for both scrape and search. Cannot be combined with threadId.",
+          "type": "boolean"
         }
       },
       "required": [
@@ -553,7 +557,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_crawl@edf6dda29b37": {
+  "firecrawl_crawl@7ebcf738dc74": {
     "annotations": {
       "title": "Firecrawl site crawl",
       "readOnlyHint": false,
@@ -562,7 +566,7 @@
       "idempotentHint": false
     },
     "title": "Firecrawl site crawl",
-    "description": "\nStart a multi-page crawl at a website URL, poll it to a terminal state, and return the final status and collected data. Scope can be bounded with include/exclude paths, depth, page limit, subdomain/external-link controls, sitemap handling, delay, and scrape options.\n\nCrawl results can be large; use conservative limits when full-site coverage is unnecessary. Webhooks and interactive scrape actions are unavailable in safe mode. Returns the crawl ID, status, and page data.\n",
+    "description": "\nStart a multi-page crawl at a website URL, poll it to a terminal state, and return the final status and collected data. Scope can be bounded with include/exclude paths, depth, page limit, subdomain/external-link controls, sitemap handling, delay, and scrape options.\n\nCrawl results can be large; use conservative limits when full-site coverage is unnecessary. Webhooks and interactive scrape actions are unavailable in safe mode. `zeroDataRetention` runs the crawl with zero data retention and requires an eligible authenticated account. Returns the crawl ID, status, and page data.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -618,6 +622,9 @@
           "type": "boolean"
         },
         "ignoreQueryParameters": {
+          "type": "boolean"
+        },
+        "zeroDataRetention": {
           "type": "boolean"
         },
         "scrapeOptions": {
@@ -774,9 +781,6 @@
               "additionalProperties": false
             },
             "storeInCache": {
-              "type": "boolean"
-            },
-            "zeroDataRetention": {
               "type": "boolean"
             },
             "maxAge": {
@@ -944,7 +948,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_crawl@f65a92a7a6ca": {
+  "firecrawl_crawl@babc333db1e1": {
     "annotations": {
       "title": "Firecrawl site crawl",
       "readOnlyHint": false,
@@ -953,7 +957,7 @@
       "idempotentHint": false
     },
     "title": "Firecrawl site crawl",
-    "description": "\nStart a multi-page crawl at a website URL, poll it to a terminal state, and return the final status and collected data. Scope can be bounded with include/exclude paths, depth, page limit, subdomain/external-link controls, sitemap handling, delay, and scrape options.\n\nCrawl results can be large; use conservative limits when full-site coverage is unnecessary. Webhooks and interactive scrape actions are unavailable in safe mode. Returns the crawl ID, status, and page data.\n",
+    "description": "\nStart a multi-page crawl at a website URL, poll it to a terminal state, and return the final status and collected data. Scope can be bounded with include/exclude paths, depth, page limit, subdomain/external-link controls, sitemap handling, delay, and scrape options.\n\nCrawl results can be large; use conservative limits when full-site coverage is unnecessary. Webhooks and interactive scrape actions are unavailable in safe mode. `zeroDataRetention` runs the crawl with zero data retention and requires an eligible authenticated account. Returns the crawl ID, status, and page data.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -1021,6 +1025,9 @@
           "type": "boolean"
         },
         "ignoreQueryParameters": {
+          "type": "boolean"
+        },
+        "zeroDataRetention": {
           "type": "boolean"
         },
         "scrapeOptions": {
@@ -1227,9 +1234,6 @@
               "additionalProperties": false
             },
             "storeInCache": {
-              "type": "boolean"
-            },
-            "zeroDataRetention": {
               "type": "boolean"
             },
             "maxAge": {
@@ -7239,7 +7243,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_search@4469451531db": {
+  "firecrawl_search@2cda94cea355": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -7368,6 +7372,194 @@
               "zdr"
             ]
           }
+        },
+        "scrapeOptions": {
+          "description": "Fetches the full page of every web result in the same call, and each fetched result is billed as a scrape. Leave it unset unless the task needs the full text of a few results: highlights usually answer, and firecrawl_scrape can fetch only the URLs you need. These fetches ignore maxAge, so use firecrawl_scrape for a live fetch. scrapeOptions fetches web pages, never Alexandria provider tools.",
+          "type": "object",
+          "properties": {
+            "formats": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "markdown",
+                  "html",
+                  "rawHtml",
+                  "screenshot",
+                  "links",
+                  "images",
+                  "summary",
+                  "changeTracking",
+                  "branding",
+                  "json",
+                  "query",
+                  "audio"
+                ]
+              }
+            },
+            "jsonOptions": {
+              "type": "object",
+              "properties": {
+                "prompt": {
+                  "type": "string"
+                },
+                "schema": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": true
+                }
+              },
+              "additionalProperties": false
+            },
+            "queryOptions": {
+              "type": "object",
+              "properties": {
+                "prompt": {
+                  "type": "string",
+                  "maxLength": 10000
+                },
+                "mode": {
+                  "default": "freeform",
+                  "type": "string",
+                  "enum": [
+                    "directQuote",
+                    "freeform"
+                  ]
+                }
+              },
+              "required": [
+                "prompt"
+              ],
+              "additionalProperties": false
+            },
+            "screenshotOptions": {
+              "type": "object",
+              "properties": {
+                "fullPage": {
+                  "type": "boolean"
+                },
+                "quality": {
+                  "type": "number"
+                },
+                "viewport": {
+                  "type": "object",
+                  "properties": {
+                    "width": {
+                      "type": "number"
+                    },
+                    "height": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "width",
+                    "height"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            },
+            "parsers": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "pdf"
+                ]
+              }
+            },
+            "pdfOptions": {
+              "type": "object",
+              "properties": {
+                "maxPages": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10000
+                }
+              },
+              "additionalProperties": false
+            },
+            "onlyMainContent": {
+              "type": "boolean"
+            },
+            "redactPII": {
+              "type": "boolean"
+            },
+            "includeTags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "excludeTags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "waitFor": {
+              "type": "number"
+            },
+            "mobile": {
+              "type": "boolean"
+            },
+            "skipTlsVerification": {
+              "type": "boolean"
+            },
+            "removeBase64Images": {
+              "type": "boolean"
+            },
+            "location": {
+              "type": "object",
+              "properties": {
+                "country": {
+                  "type": "string"
+                },
+                "languages": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            },
+            "storeInCache": {
+              "type": "boolean"
+            },
+            "maxAge": {
+              "type": "number"
+            },
+            "lockdown": {
+              "type": "boolean"
+            },
+            "proxy": {
+              "type": "string",
+              "enum": [
+                "basic",
+                "stealth",
+                "enhanced",
+                "auto"
+              ]
+            },
+            "profile": {
+              "description": "Loads a saved browser profile without saving changes to it.",
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
         }
       },
       "required": [
@@ -7447,7 +7639,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_search@6782bb723c84": {
+  "firecrawl_search@3b8c404ec287": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -7784,9 +7976,6 @@
             "storeInCache": {
               "type": "boolean"
             },
-            "zeroDataRetention": {
-              "type": "boolean"
-            },
             "maxAge": {
               "type": "number"
             },
@@ -7898,7 +8087,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_search@d79864fb5890": {
+  "firecrawl_search@4469451531db": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -8027,197 +8216,6 @@
               "zdr"
             ]
           }
-        },
-        "scrapeOptions": {
-          "description": "Fetches the full page of every web result in the same call, and each fetched result is billed as a scrape. Leave it unset unless the task needs the full text of a few results: highlights usually answer, and firecrawl_scrape can fetch only the URLs you need. These fetches ignore maxAge, so use firecrawl_scrape for a live fetch. scrapeOptions fetches web pages, never Alexandria provider tools.",
-          "type": "object",
-          "properties": {
-            "formats": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "enum": [
-                  "markdown",
-                  "html",
-                  "rawHtml",
-                  "screenshot",
-                  "links",
-                  "images",
-                  "summary",
-                  "changeTracking",
-                  "branding",
-                  "json",
-                  "query",
-                  "audio"
-                ]
-              }
-            },
-            "jsonOptions": {
-              "type": "object",
-              "properties": {
-                "prompt": {
-                  "type": "string"
-                },
-                "schema": {
-                  "type": "object",
-                  "propertyNames": {
-                    "type": "string"
-                  },
-                  "additionalProperties": true
-                }
-              },
-              "additionalProperties": false
-            },
-            "queryOptions": {
-              "type": "object",
-              "properties": {
-                "prompt": {
-                  "type": "string",
-                  "maxLength": 10000
-                },
-                "mode": {
-                  "default": "freeform",
-                  "type": "string",
-                  "enum": [
-                    "directQuote",
-                    "freeform"
-                  ]
-                }
-              },
-              "required": [
-                "prompt"
-              ],
-              "additionalProperties": false
-            },
-            "screenshotOptions": {
-              "type": "object",
-              "properties": {
-                "fullPage": {
-                  "type": "boolean"
-                },
-                "quality": {
-                  "type": "number"
-                },
-                "viewport": {
-                  "type": "object",
-                  "properties": {
-                    "width": {
-                      "type": "number"
-                    },
-                    "height": {
-                      "type": "number"
-                    }
-                  },
-                  "required": [
-                    "width",
-                    "height"
-                  ],
-                  "additionalProperties": false
-                }
-              },
-              "additionalProperties": false
-            },
-            "parsers": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "enum": [
-                  "pdf"
-                ]
-              }
-            },
-            "pdfOptions": {
-              "type": "object",
-              "properties": {
-                "maxPages": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 10000
-                }
-              },
-              "additionalProperties": false
-            },
-            "onlyMainContent": {
-              "type": "boolean"
-            },
-            "redactPII": {
-              "type": "boolean"
-            },
-            "includeTags": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "excludeTags": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "waitFor": {
-              "type": "number"
-            },
-            "mobile": {
-              "type": "boolean"
-            },
-            "skipTlsVerification": {
-              "type": "boolean"
-            },
-            "removeBase64Images": {
-              "type": "boolean"
-            },
-            "location": {
-              "type": "object",
-              "properties": {
-                "country": {
-                  "type": "string"
-                },
-                "languages": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              },
-              "additionalProperties": false
-            },
-            "storeInCache": {
-              "type": "boolean"
-            },
-            "zeroDataRetention": {
-              "type": "boolean"
-            },
-            "maxAge": {
-              "type": "number"
-            },
-            "lockdown": {
-              "type": "boolean"
-            },
-            "proxy": {
-              "type": "string",
-              "enum": [
-                "basic",
-                "stealth",
-                "enhanced",
-                "auto"
-              ]
-            },
-            "profile": {
-              "description": "Loads a saved browser profile without saving changes to it.",
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "name"
-              ],
-              "additionalProperties": false
-            }
-          },
-          "additionalProperties": false
         }
       },
       "required": [
