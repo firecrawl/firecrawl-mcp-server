@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [3.39.0] - 2026-11-09
 
 ### Added
 
@@ -8,6 +8,7 @@
 
 ### Changed
 
+- `firecrawl_scrape` no longer advertises the `json` format or `jsonOptions`. Cached calls using them keep the existing JSON extraction, validation and results for compatibility. Other formats and tools are unchanged.
 - A `people_company_search` or `people_company_enrich` call that fails only because a provider's terms are not yet accepted for the organization fails with `third_party_data_terms_required` instead of `no_provider_ran`. The error names the provider, its terms version and the dashboard page where an organization admin accepts them. It also gives an example call without that provider, with `max_credits` set high enough for it to run. The provider's `note`, which agents also see when another provider failed or succeeded in the same call, now says to retry without it, names a provider that did not fail in the call, or says to wait for acceptance. It used to say not to retry until the terms were accepted. Both tool descriptions say Apollo runs once an organization admin has accepted its terms.
 - `people_company_search` and `people_company_enrich` state their limits and rules in the tool descriptions and repair or explain more mistakes:
   - A page size above its maximum (Apollo `per_page` 25, FullEnrich `limit` 25, People Data Labs `limit` 10) runs at the maximum with a `note`, where it used to be refused. The maximum is in each field's description and advertised schema.
