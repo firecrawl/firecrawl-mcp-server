@@ -288,3 +288,4 @@ test('scheme-less URLs are read as https URLs', async (t) => {
   }
   assert.equal(api.requests.length, before, 'refused URLs never reach the API');
 });
+

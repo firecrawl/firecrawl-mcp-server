@@ -53,14 +53,12 @@ Local services (stdio, SSE local, HTTP streamable) use the V2 implementation by 
 
 **Key Features:**
 - Modern API parameter names (`ScrapeOptions`, `MapOptions`)
-- JSON extraction with schema support in the REST API and JSON-capable tools, not MCP `firecrawl_scrape`
+- Enhanced JSON extraction with schema support
 - Improved format handling
 - Better caching with `maxAge` defaults
 - Support for multiple search sources (web, images, news)
 
 ## Migration Guide
-
-For current MCP `firecrawl_scrape` calls, request `formats: ["markdown"]` and extract fields in the calling agent. The tool no longer advertises `json` or `jsonOptions`; cached calls using them receive markdown with a notice. JSON extraction in the REST API and other tools is unchanged.
 
 ### From V1 to V2
 
@@ -75,12 +73,13 @@ For current MCP `firecrawl_scrape` calls, request `formats: ["markdown"]` and ex
 
 2. **Tool Changes:**
    - Remove usage of `firecrawl_deep_research` and `firecrawl_generate_llmstxt`
-   - For fields from a known page, request markdown through `firecrawl_scrape` and extract the fields in the calling agent
+   - Update extraction calls to use the new schema format
+   - Leverage enhanced JSON extraction capabilities
 
 3. **Parameter Updates:**
    - `maxAge` now defaults to 172800000ms (48 hours) instead of 0
    - `onlyMainContent` defaults to `true`
-   - MCP scrape formats include query, summary, and branding; JSON extraction remains available through the REST API and other JSON-capable tools
+   - Enhanced format options with JSON extraction support
 
 ## Testing
 
