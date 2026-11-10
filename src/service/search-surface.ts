@@ -222,7 +222,7 @@ export function searchSurfaceTools({
     if (scrape) {
       surface.addTool({
         ...scrape,
-        _meta: { 'anthropic/alwaysLoad': true },
+        _meta: { ...scrape._meta, 'anthropic/alwaysLoad': true },
         description: searchSurfaceScrapeDescription(safeMode),
       });
     }

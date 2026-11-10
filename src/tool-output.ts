@@ -132,6 +132,8 @@ export const scrapeOutputSchema = z
     metadata: unknown('Page metadata; authenticated responses can include `metadata.scrapeId` for scrape feedback.'),
     tools: unknown('Domain-matched Alexandria tools for the page, when `domainTools` is set.'),
     warning,
+    truncated: bool('Set when page content was cut to `maxCharacters`; `warning` says what was cut.'),
+    totalLength: num('Full length of the longest cut content field, when `truncated` is set.'),
     // Alexandria mode and error envelopes.
     success,
     error,
@@ -210,6 +212,8 @@ export const crawlOutputSchema = z
     next: str('URL of the next page of results, when the data is paginated.'),
     url: str('The URL the crawl started from.'),
     data: unknown('Scraped documents collected by the crawl.'),
+    truncated: bool('Set when page content was cut to `maxCharacters` or pages were left out; `warning` says which.'),
+    omittedPages: num('Pages collected by the crawl but not inlined, to keep the result within `maxCharacters`; `warning` lists their URLs.'),
   })
   .describe('Crawl job state and the documents collected so far.');
 

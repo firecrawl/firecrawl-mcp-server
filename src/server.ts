@@ -46,6 +46,13 @@ import {
   withStructured,
 } from './tool-output';
 import {
+  RESULT_SIZE_META,
+  crawlMaxCharactersDescription,
+  fitCrawlResult,
+  fitScrapeDocument,
+  scrapeMaxCharactersDescription,
+} from './content-budget';
+import {
   findToolsSchema,
   findToolsOptions,
   withFindToolsNavigation,
@@ -734,7 +741,7 @@ export function createFirecrawlMcpServer(
           getClient,
           agentResult: agentStatusResult,
           crawlResult: async (client, jobId, origin, body) =>
-            structuredText(await collectCrawlPages(client, jobId, origin, body as never)),
+            structuredText(fitCrawlResult(await collectCrawlPages(client, jobId, origin, body as never))),
           resultSchema: (kind) =>
             kind === 'agent'
               ? (servedTools.get('firecrawl_agent_status')?.outputSchema ?? agentStatusOutputSchema)
@@ -1274,13 +1281,18 @@ export function createFirecrawlMcpServer(
   // firecrawl_scrape accepts either a page URL or an Exchange batch. The base
   // schema stays url-required because search, crawl, and monitor reuse it for
   // nested scrapeOptions, where `alexandria` has no meaning.
-  const ALEXANDRIA_IGNORED_SCRAPE_OPTIONS = new Set(['toolDetail', 'domainTools']);
+  const ALEXANDRIA_IGNORED_SCRAPE_OPTIONS = new Set(['toolDetail', 'domainTools', 'maxCharacters']);
 
   const scrapeToolParamsSchema = scrapeParamsSchema
     .extend({
       ...(SAFE_MODE ? { profile: readOnlyProfileSchema.optional() } : {}),
       url: httpUrl().optional(),
       timeout: z.number().int().positive().optional().describe("Execution timeout in milliseconds."),
+      maxCharacters: z
+        .number()
+        .positive()
+        .optional()
+        .describe(`URL mode only: ${scrapeMaxCharactersDescription} Ignored with alexandria.`),
       requestId: z
         .string()
         .regex(/^[A-Za-z0-9._:-]{1,128}$/)
@@ -1737,7 +1749,7 @@ export function createFirecrawlMcpServer(
     description: `
 Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, or a targeted answer. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use \`firecrawl_search\` when additional web sources are needed; on an authenticated session, \`firecrawl_map\` lists a site's URLs and \`firecrawl_crawl\` collects a set of pages. \`url\` may omit the scheme (\`example.com/page\`); it is read as https.
 
-Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch or a smaller \`maxAge\` to bound staleness. A successful response does not by itself confirm the page is still current. ${SAFE_MODE ? 'A named browser profile loads saved session data without saving changes to it.' : 'Browser actions can change the live page when interactive actions are enabled.'} Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback.
+Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch or a smaller \`maxAge\` to bound staleness. A successful response does not by itself confirm the page is still current. Long content is cut at \`maxCharacters\` (default 40,000) with a \`warning\`; raise it to read more. ${SAFE_MODE ? 'A named browser profile loads saved session data without saving changes to it.' : 'Browser actions can change the live page when interactive actions are enabled.'} Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback.
 
 On an authenticated session, \`firecrawl_search\` and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.
 
@@ -1760,9 +1772,11 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
         url,
         alexandria,
         requestId: suppliedRequestId,
+        maxCharacters,
         ...options
       } = args as {
         requestId?: string;
+        maxCharacters?: number;
         url?: string;
         alexandria?: z.infer<typeof exchangeCallSchema> | z.infer<typeof exchangeCallsSchema>;
       } & Record<string, unknown>;
@@ -1797,7 +1811,9 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
           },
           session
         );
-        return structuredText(withoutDiscoveredToolPrices(json?.data ?? json));
+        return structuredText(
+          fitScrapeDocument(withoutDiscoveredToolPrices(json?.data ?? json), { maxCharacters, ...cleaned })
+        );
       }
       assertFormatOptions(cleaned.formats);
       const client = getClient(session);
@@ -1809,12 +1825,12 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
           } as any),
         { tool: 'firecrawl_scrape' }
       );
-      return structuredText(withoutDiscoveredToolPrices(res));
+      return structuredText(fitScrapeDocument(withoutDiscoveredToolPrices(res), { maxCharacters, ...cleaned }));
     },
   };
   server.addTool({
     ...scrapeTool,
-    _meta: { 'anthropic/alwaysLoad': true },
+    _meta: { 'anthropic/alwaysLoad': true, ...RESULT_SIZE_META },
   });
 
   server.addTool({
@@ -2709,7 +2725,7 @@ Returns submission status, feedback ID, and accounting fields.
     description: `
 Start a multi-page crawl at a website URL, poll it to a terminal state, and return the final status and collected data. Scope can be bounded with include/exclude paths, depth, page limit, subdomain/external-link controls, sitemap handling, delay, and scrape options.
 
-Crawl results can be large; use conservative limits when full-site coverage is unnecessary. Webhooks and interactive scrape actions are unavailable in safe mode. \`zeroDataRetention\` runs the crawl with zero data retention and requires an eligible authenticated account. Returns the crawl ID, status, and page data.
+Crawl results can be large; use conservative limits when full-site coverage is unnecessary. Each page is cut at \`maxCharacters\` (default 40,000), and pages past that budget for the whole result are listed by URL instead of inlined. Webhooks and interactive scrape actions are unavailable in safe mode. \`zeroDataRetention\` runs the crawl with zero data retention and requires an eligible authenticated account. Returns the crawl ID, status, and page data.
 `,
     parameters: z.object({
       url: z.string(),
@@ -2737,8 +2753,10 @@ Crawl results can be large; use conservative limits when full-site coverage is u
         .omit({ url: true, zeroDataRetention: true })
         .partial()
         .optional(),
+      maxCharacters: z.number().positive().optional().describe(crawlMaxCharactersDescription),
     }),
     outputSchema: crawlOutputSchema,
+    _meta: RESULT_SIZE_META,
     beforeValidate: (args: unknown) =>
       refuseNestedZeroDataRetention(
         args,
@@ -2746,7 +2764,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
       ),
     execute: async (args, { session, log, client: mcpClient, task }): Promise<ContentResult> => {
       const origin = requestOrigin(mcpClient, session);
-      const { url, ...options } = args as Record<string, unknown>;
+      const { url, maxCharacters, ...options } = args as Record<string, unknown>;
       const client = getClient(session);
 
       const opts = { ...options } as Record<string, unknown>;
@@ -2793,7 +2811,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
         pollInterval,
         timeout
       );
-      return structuredText(res);
+      return structuredText(fitCrawlResult(res, maxCharacters));
     },
   });
 
@@ -2809,7 +2827,11 @@ Crawl results can be large; use conservative limits when full-site coverage is u
 Retrieve the current status, progress, and available results for an existing crawl ID. This only reads Firecrawl job state and does not start or modify the crawl.
 `,
     outputSchema: crawlOutputSchema,
-    parameters: z.object({ id: z.string() }),
+    _meta: RESULT_SIZE_META,
+    parameters: z.object({
+      id: z.string(),
+      maxCharacters: z.number().positive().optional().describe(crawlMaxCharactersDescription),
+    }),
     execute: async (
       args: unknown,
       {
@@ -2818,13 +2840,13 @@ Retrieve the current status, progress, and available results for an existing cra
       }: { session?: SessionData; client?: McpClient }
     ): Promise<ContentResult> => {
       const client = getClient(session);
-      const id = (args as any).id as string;
+      const { id, maxCharacters } = args as { id: string; maxCharacters?: number };
       const res = await getCrawlStatusWithOrigin(
         client,
         id,
         requestOrigin(mcpClient, session)
       );
-      return structuredText(res);
+      return structuredText(fitCrawlResult(res, maxCharacters));
     },
   });
 
