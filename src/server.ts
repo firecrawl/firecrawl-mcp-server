@@ -2162,7 +2162,7 @@ Returns result groups in \`data\` and an operation \`id\`.
   if (dedicatedAlexandria) {
     server.addTool({
       name: ALEXANDRIA_READ_TOOL,
-      _meta: { 'anthropic/alwaysLoad': true },
+      _meta: { 'anthropic/alwaysLoad': true, ...LARGE_RESULT_META },
       annotations: {
         title: 'Alexandria library read',
         // Provider terms writes are refused before execution; capabilities

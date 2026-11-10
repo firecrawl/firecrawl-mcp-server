@@ -4,7 +4,7 @@
 
 ### Changed
 
-- `firecrawl_scrape`, `firecrawl_search`, `firecrawl_map`, `firecrawl_crawl`, `firecrawl_check_crawl_status`, `firecrawl_parse`, `firecrawl_agent_status`, `firecrawl_developer_search`, `firecrawl_research_search_papers` and `firecrawl_research_related_papers` set `_meta["anthropic/maxResultSizeChars"]` to 150,000 in `tools/list`, including the search-surface copies of scrape and search. Claude Code keeps their results up to 150,000 characters inline; it used to save any result over 50,000 characters to a file and show the model an error-prefixed stub. Input and output schemas are unchanged, and `anthropic/alwaysLoad` stays on scrape and search.
+- `firecrawl_scrape`, `firecrawl_search`, `firecrawl_map`, `firecrawl_crawl`, `firecrawl_check_crawl_status`, `firecrawl_parse`, `firecrawl_agent_status`, `firecrawl_developer_search`, `firecrawl_research_search_papers`, `firecrawl_research_related_papers` and `alexandria_library_read` set `_meta["anthropic/maxResultSizeChars"]` to 150,000 in `tools/list`, including the search-surface copies of scrape and search. Claude Code keeps their results up to 150,000 characters inline; it used to save any result over 50,000 characters to a file and show the model an error-prefixed stub. Input and output schemas are unchanged, and `anthropic/alwaysLoad` stays on scrape, search and `alexandria_library_read`.
 
 ## [3.39.0] - 2026-11-09
 

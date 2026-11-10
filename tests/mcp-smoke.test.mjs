@@ -1349,6 +1349,8 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     'firecrawl_developer_search',
     'firecrawl_research_search_papers',
     'firecrawl_research_related_papers',
+    // Alexandria's inline budget (~80,000 bytes) is above the 50,000 default.
+    'alexandria_library_read',
   ]) {
     assert.ok(byName.has(name), `${name} is listed`);
     assert.equal(byName.get(name)._meta?.['anthropic/maxResultSizeChars'], 150000, name);

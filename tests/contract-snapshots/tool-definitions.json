@@ -1,5 +1,5 @@
 {
-  "alexandria_library_read@37a51a2a7c46": {
+  "alexandria_library_read@3cb9ada309b0": {
     "annotations": {
       "title": "Alexandria library read",
       "readOnlyHint": true,
@@ -240,7 +240,8 @@
       "additionalProperties": false
     },
     "_meta": {
-      "anthropic/alwaysLoad": true
+      "anthropic/alwaysLoad": true,
+      "anthropic/maxResultSizeChars": 150000
     }
   },
   "firecrawl_agent_status@19115ceb5cda": {
