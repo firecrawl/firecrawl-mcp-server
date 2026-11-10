@@ -13,7 +13,7 @@
     }
   },
   "tools": [
-    "firecrawl_scrape@fb90ebc45312",
+    "firecrawl_scrape@cba71e3ae12e",
     "firecrawl_map@3214f5d6a1a4",
     "firecrawl_search@789d6efc1786",
     "firecrawl_find_tools@cb5627e12db4",
@@ -48,19 +48,11 @@
       "content": [
         {
           "type": "text",
-          "text": "firecrawl_scrape fetches pages only. Run Alexandria capabilities with alexandria_execute: its arguments are one {provider, capability, options}. Next call: {\"name\":\"alexandria_execute\",\"arguments\":{\"provider\":\"example\",\"capability\":\"example/lookup\"}}"
+          "text": "Alexandria requires an API key on a team with Alexandria access"
         }
       ],
       "structuredContent": {
-        "success": false,
-        "message": "firecrawl_scrape fetches pages only. Run Alexandria capabilities with alexandria_execute: its arguments are one {provider, capability, options}.",
-        "nextTool": {
-          "name": "alexandria_execute",
-          "arguments": {
-            "provider": "example",
-            "capability": "example/lookup"
-          }
-        }
+        "message": "Alexandria requires an API key on a team with Alexandria access"
       },
       "isError": true
     },

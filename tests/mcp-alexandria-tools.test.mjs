@@ -10,7 +10,7 @@ import { EXCHANGE_CALL, TERMS_REQUIRED_BODY } from './helpers/exchange-api.mjs';
 
 const call = (client, name, args) => client.request('tools/call', { name, arguments: args });
 
-test('the full surface lists alexandria_execute, and firecrawl_scrape takes a page only', async (t) => {
+test('the full surface lists alexandria_execute, and firecrawl_scrape lists a page URL only', async (t) => {
   const { client, init } = await startStdioWithApi(t);
   const { tools } = await client.request('tools/list', {});
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
@@ -23,7 +23,7 @@ test('the full surface lists alexandria_execute, and firecrawl_scrape takes a pa
   assert.equal('requestId' in scrape.inputSchema.properties, false);
   assert.deepEqual(scrape.inputSchema.required, ['url']);
   assert.doesNotMatch(scrape.description, /in place of `url`/);
-  assert.match(scrape.description, /does not run providers/);
+  assert.match(scrape.description, /typed records in one `alexandria_execute` call/);
 
   assert.deepEqual(byName.get('alexandria_execute').inputSchema.required, ['provider', 'capability']);
 
@@ -77,24 +77,27 @@ test('alexandria_execute reads one legacy alexandria body as its arguments and r
   assert.equal(api.requests.length, sent);
 });
 
-test('firecrawl_scrape with an alexandria body names the alexandria_execute call and sends nothing', async (t) => {
+test('firecrawl_scrape still runs an alexandria body it no longer lists', async (t) => {
   const { api, client } = await startStdioWithApi(t);
 
-  const one = await callExpectingError(client, { name: 'firecrawl_scrape', arguments: { alexandria: EXCHANGE_CALL } });
-  assert.deepEqual(one.structuredContent.nextTool, { name: 'alexandria_execute', arguments: EXCHANGE_CALL });
-  assert.match(one.content[0].text, /firecrawl_scrape fetches pages only/);
-  assert.ok(one.content[0].text.includes(JSON.stringify(one.structuredContent.nextTool)));
+  // One call and a batch run as they did before alexandria_execute existed.
+  const one = toolText(await call(client, 'firecrawl_scrape', { alexandria: EXCHANGE_CALL }));
+  assert.equal(one.success, true);
+  assert.deepEqual(api.requests[0].body.alexandria, EXCHANGE_CALL);
 
-  const batch = await callExpectingError(client, { name: 'firecrawl_scrape', arguments: { alexandria: [EXCHANGE_CALL, { provider: 'fred', capability: 'series/search' }] } });
-  assert.match(batch.content[0].text, /held 2 capabilities; send each in its own call/);
-  assert.deepEqual(batch.structuredContent.nextTool.arguments, EXCHANGE_CALL);
+  const batch = [EXCHANGE_CALL, { provider: 'fred', capability: 'series/missing' }];
+  const many = toolText(await call(client, 'firecrawl_scrape', { alexandria: batch, requestId: 'batch-1', toolDetail: 'full' }));
+  assert.equal(many.data.alexandria.length, 2);
+  assert.deepEqual(api.requests[1].body.alexandria, batch);
+  assert.equal(api.requests[1].headers['x-request-id'], 'batch-1');
 
-  const malformed = await callExpectingError(client, { name: 'firecrawl_scrape', arguments: { alexandria: 'fred' } });
-  assert.equal(malformed.structuredContent.nextTool, undefined);
-  assert.equal(api.requests.length, 0);
-
-  // The call it names runs.
-  assert.equal(toolText(await client.request('tools/call', one.structuredContent.nextTool)).success, true);
+  // Its refusals are unchanged too, and a refusal names the tool that was called.
+  for (const args of [{}, { url: 'https://example.com/', alexandria: [EXCHANGE_CALL] }, { alexandria: [] }])
+    await callExpectingError(client, { name: 'firecrawl_scrape', arguments: args });
+  assert.equal(api.requests.length, 2);
+  const blocked = await callExpectingError(client, { name: 'firecrawl_scrape', arguments: { alexandria: [{ provider: 'benzinga', capability: 'news/search' }] } });
+  assert.match(blocked.content[0].text, /call firecrawl_scrape again with the identical payload/);
+  assert.equal(blocked.structuredContent.nextTool.name, 'alexandria_execute');
 });
 
 test('follow-up calls on the full surface are addressed to alexandria_execute', async (t) => {

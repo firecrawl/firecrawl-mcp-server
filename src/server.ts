@@ -39,7 +39,6 @@ import {
   interactStopOutputSchema,
   mapOutputSchema,
   parseOutputSchema,
-  scrapeDocumentOutputSchema,
   scrapeOutputSchema,
   searchOutputSchema,
   structuredCompact,
@@ -254,6 +253,11 @@ export interface ToolDefinition<Result = ToolResult | DeferredResult> {
   icons?: ToolIcon[];
   /** A Standard Schema (for example a zod object) for the arguments. */
   parameters?: unknown;
+  /**
+   * The arguments to advertise in tools/list, when fewer than `parameters`
+   * accepts. Calls are still validated against `parameters`.
+   */
+  listedParameters?: unknown;
   /** JSON Schema of the structured result. */
   outputSchema?: unknown;
   annotations?: {
@@ -425,8 +429,9 @@ export interface FirecrawlMcpServerHooks {
   toolFilter?: (name: string) => boolean;
   /**
    * How Alexandria capabilities are run. `dedicated` (the default) registers
-   * alexandria_execute, and firecrawl_scrape takes a page URL only. `legacy`
-   * keeps firecrawl_scrape with an alexandria body, for a surface whose tool
+   * alexandria_execute, and firecrawl_scrape lists a page URL only while
+   * still accepting an alexandria body. `legacy` lists firecrawl_scrape with
+   * an alexandria body and no alexandria_execute, for a surface whose tool
    * list is fixed.
    */
   alexandriaTools?: AlexandriaTools;
@@ -1303,7 +1308,9 @@ export function createFirecrawlMcpServer(
 
   // firecrawl_scrape accepts either a page URL or an Exchange batch. The base
   // schema stays url-required because search, crawl, and monitor reuse it for
-  // nested scrapeOptions, where `alexandria` has no meaning.
+  // nested scrapeOptions, where `alexandria` has no meaning. Where Alexandria
+  // has its own tool, this is still what a call is validated against, so the
+  // alexandria body keeps working; tools/list shows scrapeUrlParamsSchema.
   const ALEXANDRIA_IGNORED_SCRAPE_OPTIONS = new Set(['toolDetail', 'domainTools']);
 
   const scrapeToolParamsSchema = scrapeParamsSchema
@@ -1336,7 +1343,7 @@ export function createFirecrawlMcpServer(
     })
     .refine(
       (args) => Boolean(args.url) !== Boolean(args.alexandria),
-      'Provide exactly one of url or alexandria'
+      dedicatedAlexandria ? 'Provide a url' : 'Provide exactly one of url or alexandria'
     )
     .refine(
       (args) =>
@@ -1361,7 +1368,7 @@ export function createFirecrawlMcpServer(
       'requestId applies to Alexandria execution only'
     );
 
-  // Where Alexandria has its own tools, firecrawl_scrape takes a page and
+  // What firecrawl_scrape lists where Alexandria has its own tool: a page and
   // nothing else.
   const scrapeUrlParamsSchema = scrapeParamsSchema.extend({
     ...(SAFE_MODE ? { profile: readOnlyProfileSchema.optional() } : {}),
@@ -1379,21 +1386,6 @@ export function createFirecrawlMcpServer(
   function asExchangeCall(value: unknown): z.infer<typeof exchangeCallSchema> | undefined {
     const parsed = exchangeCallSchema.safeParse(value);
     return parsed.success ? parsed.data : undefined;
-  }
-
-  /** The answer to an Alexandria body sent to a tool that no longer takes one. */
-  function alexandriaMoved(alexandria: unknown): ContentResult {
-    const calls = Array.isArray(alexandria) ? alexandria : [alexandria];
-    const first = asExchangeCall(calls[0]);
-    const message =
-      `firecrawl_scrape fetches pages only. Run Alexandria capabilities with ${ALEXANDRIA_EXECUTE_TOOL}: its arguments are one {provider, capability, options}.` +
-      (calls.length > 1 ? ` This request held ${calls.length} capabilities; send each in its own call.` : '');
-    const nextTool = first ? executeToolCall('dedicated', first) : undefined;
-    return {
-      content: [{ type: 'text', text: nextTool ? `${message} Next call: ${JSON.stringify(nextTool)}` : message }],
-      isError: true,
-      structuredContent: { success: false, message, ...(nextTool ? { nextTool } : {}) },
-    };
   }
 
   const parseOptionParamsSchema = z.object({
@@ -1805,23 +1797,16 @@ Scrape one URL and return its content: markdown by default, or HTML, links, scre
 Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch or a smaller \`maxAge\` to bound staleness. A successful response does not by itself confirm the page is still current. ${SAFE_MODE ? 'A named browser profile loads saved session data without saving changes to it.' : 'Browser actions can change the live page when interactive actions are enabled.'} Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback.
 
 ${dedicatedAlexandria
-  ? `On an authenticated session, \`firecrawl_search\` and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching provider returns typed records in one \`${ALEXANDRIA_EXECUTE_TOOL}\` call. This tool fetches pages and does not run providers.`
+  ? `On an authenticated session, \`firecrawl_search\` and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching provider returns typed records in one \`${ALEXANDRIA_EXECUTE_TOOL}\` call.`
   : `On an authenticated session, \`firecrawl_search\` and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.
 
 With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capabilities instead of fetching a page. ${ALEXANDRIA_TERMS_GUIDANCE}`}
 `,
-    outputSchema: dedicatedAlexandria ? scrapeDocumentOutputSchema : scrapeOutputSchema,
-    parameters: dedicatedAlexandria ? scrapeUrlParamsSchema : scrapeToolParamsSchema,
-    // A client that learned the alexandria body is told where it went, before
-    // validation reports only a missing url.
-    ...(dedicatedAlexandria
-      ? {
-          beforeValidate: (args: unknown) => {
-            const alexandria = (args as { alexandria?: unknown } | null | undefined)?.alexandria;
-            return alexandria === undefined ? undefined : alexandriaMoved(alexandria);
-          },
-        }
-      : {}),
+    outputSchema: scrapeOutputSchema,
+    parameters: scrapeToolParamsSchema,
+    // The alexandria body is no longer listed where alexandria_execute exists,
+    // and still runs for clients and prompts that learned it.
+    ...(dedicatedAlexandria ? { listedParameters: scrapeUrlParamsSchema } : {}),
     execute: async (args: unknown, { session, sessionId, log, client: mcpClient }): Promise<ContentResult> => {
       const origin = requestOrigin(mcpClient, session);
       const {
@@ -1843,7 +1828,7 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
           count: Array.isArray(alexandria) ? alexandria.length : 1,
         });
         return structuredJsonText(
-          await executeExchangeCalls(session, alexandria, suppliedRequestId, options.timeout as number | undefined, origin, false, feedbackStoreFor(session, sessionId))
+          await executeExchangeCalls(session, alexandria, suppliedRequestId, options.timeout as number | undefined, origin, false, feedbackStoreFor(session, sessionId), 'firecrawl_scrape')
         );
       }
       const transformed = transformScrapeParams(
@@ -2049,7 +2034,9 @@ Returns result groups in \`data\` and an operation \`id\`.
     timeout?: number,
     origin = requestOrigin(undefined, session),
     includeCosts = false,
-    feedbackStore: FeedbackTokenStore = new FeedbackTokenStore()
+    feedbackStore: FeedbackTokenStore = new FeedbackTokenStore(),
+    // The tool a refusal tells the caller to call again.
+    tool = dedicatedAlexandria ? ALEXANDRIA_EXECUTE_TOOL : 'firecrawl_scrape'
   ): Promise<string> {
     assertExchangeCredential(session);
     const client = getClient(session);
@@ -2074,7 +2061,7 @@ Returns result groups in \`data\` and an operation \`id\`.
           );
         },
         {
-          tool: dedicatedAlexandria ? ALEXANDRIA_EXECUTE_TOOL : 'firecrawl_scrape',
+          tool,
           requestId,
           providers: (Array.isArray(alexandria) ? alexandria : [alexandria]).map(call => call.provider),
           // The API answers a repeat of this request id from its record, so a resend cannot run twice.

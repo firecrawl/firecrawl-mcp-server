@@ -66,8 +66,8 @@ const options: FirecrawlMcpServerOptions = {
   endpointFeedback: !endpointFeedbackDisabled,
   integration: process.env.FIRECRAWL_INTEGRATION,
 };
-// FIRECRAWL_MCP_ALEXANDRIA_TOOLS=legacy keeps firecrawl_scrape with an
-// alexandria body on the full surface, to roll back alexandria_execute
+// FIRECRAWL_MCP_ALEXANDRIA_TOOLS=legacy lists firecrawl_scrape with an
+// alexandria body on the full surface again, to roll back alexandria_execute
 // without a release.
 const alexandriaTools =
   process.env.FIRECRAWL_MCP_ALEXANDRIA_TOOLS === 'legacy' ? 'legacy' : 'dedicated';

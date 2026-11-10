@@ -1183,9 +1183,9 @@ These controls require the matching Alexandria API deployment.
 }
 ```
 
-`firecrawl_scrape` fetches pages only. A call that sends it an `alexandria` body gets an error, before any API request, whose `nextTool` is the `alexandria_execute` call to make.
+**Earlier shape (`firecrawl_scrape` with `alexandria`):** `firecrawl_scrape` lists `url` only, and still accepts `alexandria` in place of `url`, as one `{provider, capability, options}` call or an array of up to ten, with `requestId` and `timeout`. Clients and prompts that learned this shape keep working; new ones should use `alexandria_execute`.
 
-**The search-only endpoint and `FIRECRAWL_MCP_ALEXANDRIA_TOOLS=legacy`** keep the earlier shape: `firecrawl_scrape` takes `alexandria` in place of `url`, as one `{provider, capability, options}` call or an array of up to ten. The search-only endpoint's tool list is fixed by its connector listing. The environment variable rolls the full surface back without a release.
+The search-only endpoint lists and documents the earlier shape, because its tool list is fixed by its connector listing. `FIRECRAWL_MCP_ALEXANDRIA_TOOLS=legacy` does the same on the full surface and removes `alexandria_execute`, as a rollback that needs no release.
 
 **Returns:** `{ success, scrape_id, requestId, data: { alexandria: [...], creditsCost } }`. Each item is either a result (`provider`, `capability`, `data`, `records`, `upstreamStatus`) or an `error` with a `code`; a provider error is reported in its item, not as a failed call, and `data.creditsCost` is the total charged for the request. Alexandria error bodies (403 without Alexandria access, and 402/409 billing statuses) are relayed in-band with their `code`.
 

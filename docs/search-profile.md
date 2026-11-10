@@ -78,7 +78,8 @@ results on this surface carry no `feedbackTool` pointer, since
 `firecrawl_feedback` is not registered here.
 
 The full surface runs Alexandria capabilities through `alexandria_execute`, and
-its `firecrawl_scrape` takes a URL only. This surface keeps execution on
+its `firecrawl_scrape` lists a URL only (it still accepts an `alexandria`
+body). This surface keeps execution on
 `firecrawl_scrape` because the listing declares that tool for it: its hooks set
 `alexandriaTools: 'legacy'` (`src/service/index.ts`), and follow-up calls in
 its results (`nextTool`) are addressed to `firecrawl_scrape`. Moving this
