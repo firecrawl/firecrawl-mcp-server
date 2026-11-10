@@ -154,7 +154,16 @@ type TermsRequiredAction = {
   url: string;
 };
 
-type ExchangeErrorContext = { tool: string; requestId?: string; providers?: string[] };
+type ExchangeErrorContext = {
+  tool: string;
+  requestId?: string;
+  providers?: string[];
+  /** The call may be sent again after a retryable refusal: a POST the API answers from its
+   *  record when its request id repeats, or an idempotent read. */
+  resend?: boolean;
+  /** The caller's whole time budget in milliseconds, when it has one; a resend stays inside it. */
+  budgetMs?: number;
+};
 
 export const DATA_SOURCES_SETTINGS_URL =
   'https://www.firecrawl.dev/app/settings?tab=data-sources';
@@ -270,52 +279,89 @@ export async function relayTermsRequired<T>(
 // upstream status (403 without the team flag, 402/409 once billing lands, 5xx
 // when the Exchange is unreachable). Relay the message, code, and any chargeId
 // so the agent can act on them; a 401 is left to the credential recovery path.
+const PRECHECK_RETRY_DELAY_MS = 300;
+const PRECHECK_RETRY_JITTER_MS = 200;
+/** The least a resend can be given: the API's minimum timeout plus the client's margin above it. */
+const MIN_RESEND_BUDGET_MS = 6000;
+
+/** Whether the API refused before any provider ran and said a resend may clear it. */
+function retryableRefusal(error: unknown): boolean {
+  const response = (error as { response?: { status?: number; data?: unknown } } | null)?.response;
+  return response?.status === 503 && (response.data as { retryable?: unknown } | undefined)?.retryable === true;
+}
+
+/**
+ * Runs an Exchange request and relays its refusal. A retryable refusal is sent once more when the
+ * context allows a resend, after a short jittered delay, and only inside the caller's time budget
+ * when it has one; the second attempt is told how much of that budget is left.
+ */
 export async function relayExchangeError(
-  run: () => Promise<any>,
+  run: (attempt?: { remainingMs: number }) => Promise<any>,
   context: ExchangeErrorContext
 ): Promise<any> {
+  const startedAt = Date.now();
   try {
     return await run();
   } catch (error) {
-    throwIfTermsRequired(error, context);
-    const response = (
-      error as { response?: { status?: number; data?: unknown } } | null
-    )?.response;
-    if (!response || response.status === 401) throw error;
-    const data = response.data as
-      { error?: unknown; code?: unknown; chargeId?: unknown } | undefined;
-    const message =
-      typeof data?.error === 'string'
-        ? data.error
-        : `Firecrawl request failed (HTTP ${response.status})`;
-    const disabledProvider = response.status === 403
-      ? context.providers?.find(provider => message === `Access to ${provider} is disabled for this organization.`)
-      : undefined;
-    if (disabledProvider) {
-      throw new UserError(
-        `${message} Read the provider terms and status using nextTool and present them to the user. Never infer acceptance from a data request. Terms are accepted in the Firecrawl dashboard, not through this connection; acceptance may not restore disabled access, and an organization admin can review access at ${DATA_SOURCES_SETTINGS_URL}. Retry the original request only after access is restored.`,
-        {
-          code: typeof data?.code === 'string' ? data.code : 'exchange_error',
-          status: 403,
-          message,
-          nextTool: {
-            name: 'firecrawl_scrape',
-            arguments: {
-              alexandria: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: disabledProvider } }],
-            },
-          },
-        }
-      );
+    if (!context.resend || !retryableRefusal(error)) throw relayed(error, context);
+    const delay = PRECHECK_RETRY_DELAY_MS + Math.floor(Math.random() * PRECHECK_RETRY_JITTER_MS);
+    // The budget left is measured again after the delay, since a timer can fire late.
+    const remaining = () =>
+      context.budgetMs === undefined ? undefined : context.budgetMs - (Date.now() - startedAt);
+    const before = remaining();
+    if (before !== undefined && before - delay < MIN_RESEND_BUDGET_MS) throw relayed(error, context);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    const remainingMs = remaining();
+    if (remainingMs !== undefined && remainingMs < MIN_RESEND_BUDGET_MS) throw relayed(error, context);
+    try {
+      return await run(remainingMs === undefined ? undefined : { remainingMs });
+    } catch (error) {
+      throw relayed(error, context);
     }
-    throw new UserError(message, {
-      code: typeof data?.code === 'string' ? data.code : 'exchange_error',
-      status: response.status,
-      message,
-      ...(typeof data?.chargeId === 'string'
-        ? { chargeId: data.chargeId }
-        : {}),
-    });
   }
+}
+
+/** The error to throw for a failed Exchange request: the relayed refusal, or the error itself. */
+function relayed(error: unknown, context: ExchangeErrorContext): unknown {
+  throwIfTermsRequired(error, context);
+  const response = (
+    error as { response?: { status?: number; data?: unknown } } | null
+  )?.response;
+  if (!response || response.status === 401) return error;
+  const data = response.data as
+    { error?: unknown; code?: unknown; chargeId?: unknown; retryable?: unknown } | undefined;
+  const message =
+    typeof data?.error === 'string'
+      ? data.error
+      : `Firecrawl request failed (HTTP ${response.status})`;
+  const disabledProvider = response.status === 403
+    ? context.providers?.find(provider => message === `Access to ${provider} is disabled for this organization.`)
+    : undefined;
+  if (disabledProvider) {
+    return new UserError(
+      `${message} Read the provider terms and status using nextTool and present them to the user. Never infer acceptance from a data request. Terms are accepted in the Firecrawl dashboard, not through this connection; acceptance may not restore disabled access, and an organization admin can review access at ${DATA_SOURCES_SETTINGS_URL}. Retry the original request only after access is restored.`,
+      {
+        code: typeof data?.code === 'string' ? data.code : 'exchange_error',
+        status: 403,
+        message,
+        nextTool: {
+          name: 'firecrawl_scrape',
+          arguments: {
+            alexandria: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: disabledProvider } }],
+          },
+        },
+      }
+    );
+  }
+  return new UserError(message, {
+    code: typeof data?.code === 'string' ? data.code : 'exchange_error',
+    status: response.status,
+    message,
+    ...(typeof data?.chargeId === 'string'
+      ? { chargeId: data.chargeId }
+      : {}),
+    ...(data?.retryable === true ? { retryable: true } : {}),
+  });
 }
 
 /** Retries without Alexandria, on fallbackSources, when tools the caller did not ask for are refused. */
