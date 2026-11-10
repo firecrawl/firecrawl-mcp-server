@@ -68,7 +68,6 @@ import {
   ALEXANDRIA_DEDICATED_SEARCH_INSTRUCTIONS,
   ALEXANDRIA_EXECUTE_DESCRIPTION,
   ALEXANDRIA_EXECUTE_TOOL,
-  executeToolCall,
   type AlexandriaTools,
 } from './alexandria';
 import { alexandriaOutput } from './alexandria-output';
