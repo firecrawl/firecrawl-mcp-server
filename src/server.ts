@@ -427,16 +427,6 @@ export interface FirecrawlMcpServerHooks {
   ) => Promise<void>;
   /** Built-in tools whose name fails the filter are not registered. */
   toolFilter?: (name: string) => boolean;
-  /**
-   * The names the Alexandria tools go by. `dedicated` (the default) lists
-   * alexandria_library_search and alexandria_library_read; firecrawl_scrape lists a
-   * page URL only and firecrawl_find_tools is unlisted, and both still answer
-   * the calls they used to. `legacy` lists firecrawl_find_tools and
-   * firecrawl_scrape with an alexandria body, for a surface whose tool list
-   * is fixed. A surface whose `toolFilter` leaves either new tool out is
-   * `legacy` whatever this says.
-   */
-  alexandriaTools?: AlexandriaTools;
   /** Adds HTTP routes. Runs before the built-in routes, so its routes win. */
   configureHttp?: (app: HttpApp) => void;
   /** Serve OAuth protected-resource metadata for this instance. */
@@ -693,13 +683,16 @@ export function createFirecrawlMcpServer(
   };
   const logging = options.logging ?? config.transport === 'httpStream';
 
-  // A surface whose tool filter leaves either new tool out keeps the earlier
-  // shape whatever the hook says: its descriptions and follow-up calls would
-  // otherwise name a tool it does not list.
+  // Which names the Alexandria tools go by. `dedicated`: alexandria_library_search
+  // and alexandria_library_read; firecrawl_scrape lists a page URL only and
+  // firecrawl_find_tools is unlisted, and both still answer the calls they used
+  // to. `legacy`: firecrawl_find_tools and firecrawl_scrape with an alexandria
+  // body, for a surface whose tool filter leaves either new tool out; its
+  // descriptions and follow-up calls would otherwise name a tool it does not list.
   const alexandriaTools: AlexandriaTools = [ALEXANDRIA_READ_TOOL, ALEXANDRIA_LIBRARY_TOOL].every(
     (name) => hooks.toolFilter?.(name) ?? true
   )
-    ? (hooks.alexandriaTools ?? 'dedicated')
+    ? 'dedicated'
     : 'legacy';
   const dedicatedAlexandria = alexandriaTools === 'dedicated';
   const instructionDefaults: InstructionDefaults = {

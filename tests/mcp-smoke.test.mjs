@@ -99,7 +99,6 @@ function spawnServer(env) {
   const child = spawn(process.execPath, ['dist/index.js'], {
     env: {
       ...process.env,
-      FIRECRAWL_MCP_ALEXANDRIA_TOOLS: '',
       FIRECRAWL_API_KEY: '',
       FIRECRAWL_OAUTH_TOKEN: '',
       MCP_DELEGATED_CREDENTIAL_SECRET:

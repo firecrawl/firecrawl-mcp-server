@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  LEGACY_ALEXANDRIA_TOOLS,
+  LEGACY_SURFACE,
   callExpectingError,
   startStdioWithApi,
   toolText,
@@ -209,8 +209,8 @@ test('follow-up calls on the full surface are addressed to alexandria_library_re
   assert.equal(result.nextTool.arguments.calls[0].options.workspaceId, 'retained-workspace');
 });
 
-test('legacy tool names keep firecrawl_find_tools and firecrawl_scrape with an alexandria body', async (t) => {
-  const { api, client, init } = await startStdioWithApi(t, { env: LEGACY_ALEXANDRIA_TOOLS });
+test('a surface whose tool filter leaves the new tools out keeps firecrawl_find_tools and firecrawl_scrape with an alexandria body', async (t) => {
+  const { api, client, init } = await startStdioWithApi(t, LEGACY_SURFACE);
   const { tools } = await client.request('tools/list', {});
   const names = new Set(tools.map((tool) => tool.name));
   assert.equal(names.has('firecrawl_find_tools'), true);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { LEGACY_ALEXANDRIA_TOOLS, startStdio, startStdioWithApi, toolText } from './helpers/exchange-mcp.mjs';
+import { LEGACY_SURFACE, startStdio, startStdioWithApi, toolText } from './helpers/exchange-mcp.mjs';
 import { EXCHANGE_CALL, startFakeExchangeApi } from './helpers/exchange-api.mjs';
 
 const largeAlexandria = () => ({
@@ -52,7 +52,7 @@ test('Alexandria executions and discovery results carry the feedback hint; utili
 });
 
 test('legacy discovery results carry the feedback hint', async (t) => {
-  const { client } = await startStdioWithApi(t, { env: LEGACY_ALEXANDRIA_TOOLS });
+  const { client } = await startStdioWithApi(t, LEGACY_SURFACE);
   const call = (name, args) => client.request('tools/call', { name, arguments: args });
 
   const categories = toolText(await call('firecrawl_find_tools', { limit: 1 }));
@@ -78,7 +78,6 @@ test('no feedback hint is attached when the feedback tool is disabled by environ
     FIRECRAWL_API_KEY: 'fc-exchange-test',
     FIRECRAWL_API_URL: api.url,
     FIRECRAWL_NO_ENDPOINT_FEEDBACK: '1',
-    ...LEGACY_ALEXANDRIA_TOOLS,
   });
   const { tools } = await client.request('tools/list', {});
   assert.equal(tools.some((tool) => tool.name === 'firecrawl_feedback'), false);

@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { LEGACY_ALEXANDRIA_TOOLS, startStdioWithApi, toolText } from './helpers/exchange-mcp.mjs';
+import { LEGACY_SURFACE, startStdioWithApi, toolText } from './helpers/exchange-mcp.mjs';
 
 // The legacy tool names, which the search surface serves: firecrawl_find_tools and
 // firecrawl_scrape with an alexandria body. tests/mcp-alexandria-tools.test.mjs
 // covers alexandria_library_search and alexandria_library_read.
-const LEGACY = { env: LEGACY_ALEXANDRIA_TOOLS };
+const LEGACY = LEGACY_SURFACE;
 
 test('discovery progresses from categories to compact tools and selected contracts', async (t) => {
   const { api, client } = await startStdioWithApi(t, LEGACY);

@@ -101,7 +101,6 @@ function spawnServer(env) {
   const child = spawn(process.execPath, ['dist/index.js'], {
     env: {
       ...process.env,
-      FIRECRAWL_MCP_ALEXANDRIA_TOOLS: '',
       MCP_DELEGATED_CREDENTIAL_SECRET:
         'test-mcp-delegated-credential-secret-32',
       ...env,

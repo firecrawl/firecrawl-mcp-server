@@ -29,13 +29,19 @@ async function startRefusingApi(t, status, body) {
   return `http://127.0.0.1:${server.address().port}`;
 }
 
-async function connect(t, { apiUrl, session, registerExtraTools, onToolResult, fileAccess, alexandriaTools }) {
+async function connect(t, { apiUrl, session, registerExtraTools, onToolResult, fileAccess, legacySurface }) {
   const port = await getFreePort();
   const instance = createFirecrawlMcpServer({
     transport: 'httpStream',
     apiUrl,
     fileAccess,
-    unstable_hooks: { authenticate: async () => ({ ...session }), registerExtraTools, onToolResult, alexandriaTools },
+    unstable_hooks: {
+      authenticate: async () => ({ ...session }),
+      registerExtraTools,
+      onToolResult,
+      // A surface with a fixed tool list keeps firecrawl_find_tools listed.
+      ...(legacySurface ? { toolFilter: (name) => !name.startsWith('alexandria_') } : {}),
+    },
   });
   await instance.start({
     transportType: 'httpStream',
@@ -49,8 +55,8 @@ async function connect(t, { apiUrl, session, registerExtraTools, onToolResult, f
   return { client, tools };
 }
 
-async function assertReadableError(t, { apiUrl, session, name, args, includes, registerExtraTools, onToolResult, fileAccess, alexandriaTools }) {
-  const { client, tools } = await connect(t, { apiUrl, session, registerExtraTools, onToolResult, fileAccess, alexandriaTools });
+async function assertReadableError(t, { apiUrl, session, name, args, includes, registerExtraTools, onToolResult, fileAccess, legacySurface }) {
+  const { client, tools } = await connect(t, { apiUrl, session, registerExtraTools, onToolResult, fileAccess, legacySurface });
   assert.ok(tools.find((tool) => tool.name === name)?.outputSchema, `${name} declares an outputSchema`);
   const result = await client.callTool({ name, arguments: args });
   assert.equal(result.isError, true, JSON.stringify(result));
@@ -262,12 +268,12 @@ const JSON_FORMAT_MESSAGE =
   'formats "json" needs jsonOptions with a prompt or a schema. To ask a question about the page, use formats ["query"] with queryOptions.prompt instead.';
 const QUERY_FORMAT_MESSAGE = 'formats "query" needs queryOptions with a non-empty prompt.';
 
-for (const { name, args, message, code, alexandriaTools } of [
+for (const { name, args, message, code, legacySurface } of [
   { name: 'firecrawl_scrape', args: { url: 'https://example.com', formats: ['query'] }, message: QUERY_FORMAT_MESSAGE, code: 'invalid_request' },
   { name: 'firecrawl_scrape', args: { url: 'https://example.com', formats: ['query'], queryOptions: { prompt: ' ' } }, message: QUERY_FORMAT_MESSAGE, code: 'invalid_request' },
   { name: 'firecrawl_interact', args: { url: 'https://example.com', prompt: 'Read the title', scrapeOptions: { formats: ['json'] } }, message: JSON_FORMAT_MESSAGE, code: 'invalid_request' },
   { name: 'firecrawl_interact', args: { url: 'https://example.com', prompt: 'Read the title', scrapeOptions: { formats: ['query'] } }, message: QUERY_FORMAT_MESSAGE, code: 'invalid_request' },
-  { name: 'firecrawl_find_tools', args: { level: 'categories', categories: ['finance'] }, message: 'Category index accepts only level, limit and offset. Select a category to browse providers.', code: 'invalid_input', alexandriaTools: 'legacy' },
+  { name: 'firecrawl_find_tools', args: { level: 'categories', categories: ['finance'] }, message: 'Category index accepts only level, limit and offset. Select a category to browse providers.', code: 'invalid_input', legacySurface: true },
   { name: 'firecrawl_monitor_create', args: { goal: 'Track pricing' }, message: 'firecrawl_monitor_create requires either `body`, `page`/`pages`, or `queries`.', code: 'invalid_input' },
   { name: 'firecrawl_monitor_create', args: { page: 'https://example.com' }, message: 'firecrawl_monitor_create shorthand requires `goal`. Use `body` for advanced requests without a goal.', code: 'invalid_input' },
   { name: 'firecrawl_monitor_update', args: { id: 'mon_001' }, message: 'firecrawl_monitor_update needs at least one change: `status`, `scheduleText`, `cron`, `timezone`, or `body`.', code: 'invalid_input' },
@@ -286,7 +292,7 @@ for (const { name, args, message, code, alexandriaTools } of [
       name,
       args,
       includes: message,
-      alexandriaTools,
+      legacySurface,
       onToolResult: (event) => events.push(event),
     });
     assert.equal(result.content[0].text, message);
