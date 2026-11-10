@@ -72,6 +72,7 @@ import { registerGovTools } from './gov';
 import { registerEnrichTools } from './enrich';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
+import { LARGE_RESULT_META } from './tool-meta.js';
 import { fitSearchResponse, searchByteBudget } from './search-budget';
 import { registerUsageTools } from './usage';
 import {
@@ -527,6 +528,7 @@ export {
   searchQueryIsValid,
 } from './alexandria.js';
 export { searchOutputSchema } from './tool-output.js';
+export { LARGE_RESULT_META } from './tool-meta.js';
 export {
   assertExchangeCredential,
   postSearchWithFallback,
@@ -1814,11 +1816,12 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
   };
   server.addTool({
     ...scrapeTool,
-    _meta: { 'anthropic/alwaysLoad': true },
+    _meta: { 'anthropic/alwaysLoad': true, ...LARGE_RESULT_META },
   });
 
   server.addTool({
     name: 'firecrawl_map',
+    _meta: LARGE_RESULT_META,
     annotations: {
       title: 'Firecrawl website map',
       readOnlyHint: true, // Discovers and returns indexed URLs; does not modify the target site.
@@ -1860,7 +1863,7 @@ Enumerate URLs indexed under one website through Firecrawl without fetching each
 
   const searchTool = {
     name: 'firecrawl_search',
-    _meta: { 'anthropic/alwaysLoad': true },
+    _meta: { 'anthropic/alwaysLoad': true, ...LARGE_RESULT_META },
     annotations: {
       title: 'Firecrawl web search',
       readOnlyHint: true, // Runs a web search and returns results; does not modify external sites.
@@ -2699,6 +2702,7 @@ Returns submission status, feedback ID, and accounting fields.
 
   server.addTool({
     name: 'firecrawl_crawl',
+    _meta: LARGE_RESULT_META,
     annotations: {
       title: 'Firecrawl site crawl',
       readOnlyHint: false, // Starts a server-side crawl job and polls until the job reaches a terminal state.
@@ -2799,6 +2803,7 @@ Crawl results can be large; use conservative limits when full-site coverage is u
 
   server.addTool({
     name: 'firecrawl_check_crawl_status',
+    _meta: LARGE_RESULT_META,
     annotations: {
       title: 'Firecrawl crawl status',
       readOnlyHint: true, // Retrieves status and results for an existing crawl job by ID; no mutations.
@@ -3050,6 +3055,7 @@ The agent only calls Alexandria providers whose terms the team has accepted. \`e
 
   server.addTool({
     name: 'firecrawl_agent_status',
+    _meta: LARGE_RESULT_META,
     annotations: {
       title: 'Firecrawl agent status',
       readOnlyHint: true, // Polls an existing agent job by ID for progress and results; no mutations.
@@ -3268,6 +3274,7 @@ Stop the live interact session associated with a \`scrapeId\` and release its re
   // caller's filesystem.
   server.addTool({
     name: 'firecrawl_parse',
+    _meta: LARGE_RESULT_META,
     annotations: {
       title: 'Firecrawl file parsing',
       readOnlyHint: true, // Local mode reads a file; hosted mode only returns upload instructions or parses an uploadRef.

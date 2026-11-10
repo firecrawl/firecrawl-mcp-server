@@ -12,6 +12,7 @@
 import { z } from 'zod';
 import { type ContentResult, type McpRuntime, UserError } from './mcp/runtime.js';
 import { originHeaders, requestOrigin } from './origin';
+import { LARGE_RESULT_META } from './tool-meta.js';
 import {
   deprecatedToolOutputSchema,
   researchPaperOutputSchema,
@@ -224,6 +225,7 @@ export function registerResearchTools(
   // --- search_papers ---
   server.addTool({
     name: 'firecrawl_research_search_papers',
+    _meta: LARGE_RESULT_META,
     annotations: {
       title: 'Firecrawl research paper search',
       readOnlyHint: true, // Semantic search over indexed paper metadata; returns ranked results only.
@@ -360,6 +362,7 @@ Retrieve canonical metadata for one paper ID, such as an arXiv, PMC, PMID, or DO
   // --- related_papers ---
   server.addTool({
     name: 'firecrawl_research_related_papers',
+    _meta: LARGE_RESULT_META,
     annotations: {
       title: 'Firecrawl related research papers',
       readOnlyHint: true, // Finds related papers via citation graph expansion; returns candidates only.

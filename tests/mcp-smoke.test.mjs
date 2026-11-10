@@ -1336,6 +1336,26 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     assert.equal(byName.get(name)?._meta?.['anthropic/alwaysLoad'], true, name);
   }
   assert.equal(byName.get('firecrawl_map')?._meta?.['anthropic/alwaysLoad'], undefined);
+  // Claude Code keeps results up to this many characters inline for these tools
+  // instead of saving anything over 50,000 to a file.
+  for (const name of [
+    'firecrawl_scrape',
+    'firecrawl_search',
+    'firecrawl_map',
+    'firecrawl_crawl',
+    'firecrawl_check_crawl_status',
+    'firecrawl_parse',
+    'firecrawl_agent_status',
+    'firecrawl_developer_search',
+    'firecrawl_research_search_papers',
+    'firecrawl_research_related_papers',
+  ]) {
+    assert.ok(byName.has(name), `${name} is listed`);
+    assert.equal(byName.get(name)._meta?.['anthropic/maxResultSizeChars'], 150000, name);
+  }
+  for (const name of ['firecrawl_find_tools', 'firecrawl_credit_usage', 'firecrawl_interact']) {
+    assert.equal(byName.get(name)?._meta?.['anthropic/maxResultSizeChars'], undefined, name);
+  }
   assert.match(
     byName.get('firecrawl_credit_usage').description,
     /remainingCredits.*planCredits.*billingPeriodStart.*billingPeriodEnd.*historical.*creditsUsed.*byApiKey.*API key/is

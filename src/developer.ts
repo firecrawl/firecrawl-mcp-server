@@ -13,6 +13,7 @@
 import { z } from 'zod';
 import type { ContentResult, McpRuntime } from './mcp/runtime.js';
 import { originHeaders, requestOrigin } from './origin';
+import { LARGE_RESULT_META } from './tool-meta.js';
 import { developerSearchOutputSchema, withStructured } from './tool-output';
 
 interface SessionData {
@@ -84,6 +85,7 @@ export function registerDeveloperTools(
   // --- developer search ---
   server.addTool({
     name: 'firecrawl_developer_search',
+    _meta: LARGE_RESULT_META,
     annotations: {
       title: 'Firecrawl developer search',
       readOnlyHint: true, // Semantic search over an indexed developer corpus; returns ranked results only.

@@ -9,6 +9,7 @@ import {
   type ExtraToolsContext,
   type FirecrawlMcpServerHooks,
   hasAlexandria,
+  LARGE_RESULT_META,
   normalizeSearchSources,
   postSearchWithFallback,
   relayExchangeError,
@@ -61,7 +62,7 @@ function registerMarketplaceSearchTool(
 ): void {
   registrar.addTool({
     name: 'firecrawl_search',
-    _meta: { 'anthropic/alwaysLoad': true },
+    _meta: { 'anthropic/alwaysLoad': true, ...LARGE_RESULT_META },
     annotations: {
       title: 'Firecrawl web search',
       readOnlyHint: true,
@@ -222,7 +223,7 @@ export function searchSurfaceTools({
     if (scrape) {
       surface.addTool({
         ...scrape,
-        _meta: { 'anthropic/alwaysLoad': true },
+        _meta: { ...scrape._meta, 'anthropic/alwaysLoad': true },
         description: searchSurfaceScrapeDescription(safeMode),
       });
     }

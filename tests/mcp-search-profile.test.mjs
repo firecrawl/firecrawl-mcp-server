@@ -418,6 +418,14 @@ test('search surface lists exactly the nine contracted tools', async (t) => {
     const tool = tools.find((item) => item.name === name);
     assert.equal(tool?._meta?.['anthropic/alwaysLoad'], true, name);
   }
+  for (const name of ['firecrawl_search', 'firecrawl_scrape']) {
+    const tool = tools.find((item) => item.name === name);
+    assert.equal(tool?._meta?.['anthropic/maxResultSizeChars'], 150000, name);
+  }
+  assert.equal(
+    tools.find((item) => item.name === 'firecrawl_find_tools')?._meta?.['anthropic/maxResultSizeChars'],
+    undefined
+  );
   assert.match(
     search.description,
     /categories: \["developer"\].*data\.web.*category.*developer/is
