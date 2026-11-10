@@ -419,6 +419,7 @@ interface ProviderReport {
   attempted?: number;
   next_tool?: unknown;
   note?: string;
+  code?: string;
   retryable?: boolean;
   pending?: object[];
   results?: object[];
@@ -683,7 +684,8 @@ async function runCalls(ctx: Context, p: Provider, calls: Call[]): Promise<Entry
         if ((error as any)?.response?.status === 401) throw error;
         const message = error instanceof Error ? error.message : String(error);
         const extras = error instanceof UserError ? error.extras : undefined;
-        const code = typeof extras?.code === 'string' ? extras.code : 'request_failed';
+        const relayed = typeof extras?.code === 'string' ? extras.code : 'request_failed';
+        const code = extras?.status === 429 && relayed === 'exchange_error' ? 'rate_limited' : relayed;
         return chunk.map(() => gate(ctx, p, { error: compact({ code, message, nextTool: extras?.nextTool, requiresAction: extras?.requiresAction }) }));
       }
     })
@@ -703,6 +705,18 @@ const nextToolOf = (entries: Entry[]) => entries.find((e) => e.error?.nextTool)?
 
 const credits = (entries: Entry[]) =>
   entries.reduce((sum, e) => sum + (typeof e.creditsCost === 'number' ? e.creditsCost : 0), 0);
+
+/** Failures reported under their own code, not no_provider_ran, when every provider that ran hit the same one. */
+const SHARED_FAILURES: Record<string, { status: number; lead?: string; next?: string; switchable?: boolean }> = {
+  insufficient_credits: {
+    status: 402,
+    lead: 'Insufficient credits: ',
+    next: 'Do not retry the same call; tell the user the team needs more credits. A call with fewer inputs, providers or contact_fields needs fewer.',
+  },
+  rate_limited: { status: 429 },
+  provider_rate_limited: { status: 429, next: 'Wait a minute, then retry the same call', switchable: true },
+  country_not_allowed: { status: 451, switchable: true },
+};
 
 function noProvider(available: string[], example: object): UserError {
   return new UserError(
@@ -725,6 +739,7 @@ function finish(p: Provider, entries: Entry[], records: object[], extra: Partial
     returned: records.length,
     credits: credits(entries),
     note: failure ? [code, [failure.message, code && hints[code]].filter(Boolean).join(' ')].filter(Boolean).join(': ') : undefined,
+    code: failure ? code : undefined,
     retryable: RETRYABLE.has(code ?? '') || undefined,
     next_tool: nextToolOf(entries),
     results: records,
@@ -1306,31 +1321,43 @@ export function registerEnrichTools(
           ])
         ).flat();
         const failed = reports.filter((r) => r.status === 'error');
+        const ran = reports.filter((r) => r.status !== 'not_requested');
+        const succeeded = ran.some((r) => r.status === 'ok' || r.status === 'empty' || r.status === 'pending');
+        const sharedCode = ran.length && ran.every((r) => r.status === 'error' && r.code === ran[0].code) ? ran[0].code : undefined;
+        const shared = sharedCode ? SHARED_FAILURES[sharedCode] : undefined;
         const excluded = new Set([...ctx.gated.keys(), ...failed.flatMap((r) => (r.name === 'firecrawl_search' ? [] : [r.name]))]);
-        const alt = ctx.gated.size ? alternative(args as Record<string, any>, excluded) : undefined;
+        const alt = ctx.gated.size || shared?.switchable ? alternative(args as Record<string, any>, excluded) : undefined;
         const others = alt ? order.filter((p) => alt[p] !== undefined) : [];
+        const cost = alt ? Object.values(plan(alt).estimates).reduce((sum: number, n) => sum + (n ?? 0), 0) : 0;
+        const instead = alt ? { ...alt, max_credits: cost } : undefined;
         const retry = (r: ProviderReport) =>
           'Retry without ' + r.name + (others.length ? ', for example with ' + others.join(' or ') : '') + ', or wait until the terms are accepted and retry the same call.';
         const providers = reports.map((r) => (r.status === 'error' && r.name !== 'firecrawl_search' && ctx.gated.has(r.name) ? { ...r, note: [r.note, retry(r)].filter(Boolean).join(' ') } : r));
         const data = { providers, credits_total: providers.reduce((sum, r) => sum + r.credits, 0), credits_estimate, max_credits };
-        const ran = providers.filter((r) => r.status !== 'not_requested');
-        const succeeded = ran.some((r) => r.status === 'ok' || r.status === 'empty' || r.status === 'pending');
+        const failedNames = [...new Set(failed.map((r) => r.name))];
+        const withExample = instead ? { example: instead, minimum_max_credits: cost } : {};
         if (ran.length && ran.every((r) => r.status === 'error' && r.name !== 'firecrawl_search' && ctx.gated.has(r.name))) {
-          const gated = [...new Set(failed.map((r) => r.name as Provider))];
-          const terms = gated.map((p) => ({ provider: p, ...ctx.gated.get(p)! }));
-          const cost = alt ? Object.values(plan(alt).estimates).reduce((sum: number, n) => sum + (n ?? 0), 0) : 0;
-          const example = alt ? { ...alt, max_credits: cost } : undefined;
+          const terms = failedNames.map((p) => ({ provider: p, ...ctx.gated.get(p as Provider)! }));
           throw new UserError(
             terms.map((t) => 'An organization admin must accept the ' + t.provider + " provider's terms" + (t.version ? ' (version ' + t.version + ')' : '') + ' at ' + t.url + ' before ' + t.provider + ' can run.').join(' ') +
               ' Terms are accepted in the Firecrawl dashboard, not through this connection. Credits charged: ' + data.credits_total + '. ' +
-              (example
-                ? 'Retry without ' + gated.join(' and ') + ', for example with ' + others.join(' and ') + ': ' + JSON.stringify(example) + '. Or wait until the terms are accepted and retry the same call.'
+              (instead
+                ? 'Retry without ' + failedNames.join(' and ') + ', for example with ' + others.join(' and ') + ': ' + JSON.stringify(instead) + '. Or wait until the terms are accepted and retry the same call.'
                 : 'Retry once the terms are accepted.'),
-            { code: TERMS_CODE, ...data, terms, ...(example ? { example, minimum_max_credits: cost } : {}) }
+            { code: TERMS_CODE, ...data, terms, ...withExample }
+          );
+        }
+        if (shared && sharedCode) {
+          const other = instead && 'retry without ' + failedNames.join(' and ') + ', for example with ' + others.join(' and ') + ': ' + JSON.stringify(instead);
+          const next = [shared.next, other].filter(Boolean).join(', or ');
+          const reasons = [...new Set(failed.map((r) => (r.note ?? '').slice(sharedCode.length + 2)))].join(' ');
+          throw new UserError(
+            (shared.lead ?? '') + reasons + ' Credits charged: ' + data.credits_total + '.' + (next ? ' ' + next[0].toUpperCase() + next.slice(1) + (/[.!?]$/.test(next) ? '' : '.') : ''),
+            { code: sharedCode, status: shared.status, ...data, ...(RETRYABLE.has(sharedCode) ? { retryable: true } : {}), ...withExample }
           );
         }
         if (!succeeded) {
-          const why = ran.map((r) => r.name + (r.kind ? ' ' + r.kind : '') + ' ' + r.status + (r.note ? ': ' + r.note : '')).map((reason) => (/[.!?]$/.test(reason) ? reason : reason + '.'));
+          const why = providers.filter((r) => r.status !== 'not_requested').map((r) => r.name + (r.kind ? ' ' + r.kind : '') + ' ' + r.status + (r.note ? ': ' + r.note : '')).map((reason) => (/[.!?]$/.test(reason) ? reason : reason + '.'));
           throw new UserError('No provider ran successfully: ' + why.join(' ') + ' Credits charged: ' + data.credits_total + '. Example of a working call: ' + JSON.stringify(example(args as Record<string, any>)), {
             code: 'no_provider_ran',
             ...data,

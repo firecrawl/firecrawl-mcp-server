@@ -708,3 +708,84 @@ test('a DataLegion person needs an identifier or a full name with context', asyn
   assert.notEqual(ok.isError, true, JSON.stringify(ok));
   assert.deepEqual(api.calls.map((call) => call.options.company), ['Acme']);
 });
+
+test('a credit shortfall on every provider is reported as insufficient_credits, not no_provider_ran', async (t) => {
+  const api = await startApi(t, () => ({ status: 402, json: { success: false, code: 'insufficient_credits', error: 'This request needs up to 30 credits reserved. No provider was executed.' } }));
+  const events = [];
+  const client = await connect(t, { apiUrl: api.url, onToolResult: (event) => events.push(event) });
+  const result = await client.callTool({
+    name: 'people_company_enrich',
+    arguments: { fullenrich: { people: [{ person_name: 'Ada Lovelace', company_domain: 'acme.example' }] }, apollo: { companies: [{ domain: 'globex.example' }] } },
+  });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /^Insufficient credits: This request needs up to 30 credits reserved\. No provider was executed\. Credits charged: 0\. Do not retry the same call; tell the user the team needs more credits\./);
+  const data = events.find((event) => event.status === 'error').error.extras;
+  assert.equal(data.code, 'insufficient_credits');
+  assert.equal(data.status, 402);
+  assert.equal(data.example, undefined);
+  assert.deepEqual(data.providers.filter((p) => p.status === 'error').map((p) => p.code), ['insufficient_credits', 'insufficient_credits']);
+});
+
+test('a data source at capacity on every provider is reported as provider_rate_limited and retryable', async (t) => {
+  const api = await startApi(t, (batch) => ({
+    json: { success: true, data: { alexandria: batch.map(() => ({ error: { code: 'provider_rate_limited', message: 'The data source is at capacity. Retry after the Retry-After interval.' }, creditsCost: 0 })) } },
+  }));
+  const events = [];
+  const client = await connect(t, { apiUrl: api.url, onToolResult: (event) => events.push(event) });
+  const result = await client.callTool({ name: 'people_company_enrich', arguments: { fullenrich: { people: [{ person_name: 'Ada Lovelace', company_domain: 'acme.example' }] } } });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /^The data source is at capacity\. Retry after the Retry-After interval\. Credits charged: 0\. Wait a minute, then retry the same call\.$/);
+  const data = events.find((event) => event.status === 'error').error.extras;
+  assert.equal(data.code, 'provider_rate_limited');
+  assert.equal(data.status, 429);
+  assert.equal(data.retryable, true);
+});
+
+test('a plan rate limit keeps the API message first, so the wait it names stays readable', async (t) => {
+  const message = 'Rate limit exceeded. Consumed (req/min): 10, Remaining (req/min): 0. Upgrade your plan at https://firecrawl.dev/pricing for increased rate limits or please retry after 12s, resets at now';
+  const api = await startApi(t, () => ({ status: 429, json: { success: false, error: message } }));
+  const events = [];
+  const client = await connect(t, { apiUrl: api.url, onToolResult: (event) => events.push(event) });
+  const result = await client.callTool({ name: 'people_company_enrich', arguments: { fullenrich: { companies: [{ domain: 'acme.example' }] } } });
+  assert.equal(result.isError, true);
+  assert.equal(result.content[0].text, message + ' Credits charged: 0.');
+  const data = events.find((event) => event.status === 'error').error.extras;
+  assert.equal(data.code, 'rate_limited');
+  assert.equal(data.status, 429);
+});
+
+test('a provider refused for the caller country names another provider to retry with', async (t) => {
+  const api = await startApi(t, (batch) => ({
+    json: {
+      success: true,
+      data: { alexandria: batch.map(() => ({ error: { code: 'country_not_allowed', message: "people-data-labs/person/bulk is only available when the caller's country is known, and it could not be determined." }, creditsCost: 0 })) },
+    },
+  }));
+  const events = [];
+  const client = await connect(t, { apiUrl: api.url, onToolResult: (event) => events.push(event) });
+  const result = await client.callTool({ name: 'people_company_enrich', arguments: { people_data_labs: { people: [{ name: 'Ada Lovelace', company: 'acme.example' }] } } });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /could not be determined\. Credits charged: 0\. Retry without people_data_labs, for example with fullenrich: \{"fullenrich":\{"people":\[\{"person_name":"Jane Doe","company_domain":"example\.com"\}\]\},"max_credits":10\}\.$/);
+  const data = events.find((event) => event.status === 'error').error.extras;
+  assert.equal(data.code, 'country_not_allowed');
+  assert.equal(data.status, 451);
+  assert.equal(data.minimum_max_credits, 10);
+});
+
+test('different failures on different providers stay no_provider_ran', async (t) => {
+  const api = await startApi(t, (batch) =>
+    batch[0].provider === 'apollo'
+      ? { status: 402, json: { success: false, code: 'insufficient_credits', error: 'This request needs up to 30 credits reserved. No provider was executed.' } }
+      : { json: { success: true, data: { alexandria: batch.map(() => ({ error: { code: 'provider_error', message: 'Upstream failed.' }, creditsCost: 0 })) } } }
+  );
+  const events = [];
+  const client = await connect(t, { apiUrl: api.url, onToolResult: (event) => events.push(event) });
+  const result = await client.callTool({
+    name: 'people_company_enrich',
+    arguments: { fullenrich: { companies: [{ domain: 'acme.example' }] }, apollo: { companies: [{ domain: 'globex.example' }] } },
+  });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /^No provider ran successfully: /);
+  assert.equal(events.find((event) => event.status === 'error').error.extras.code, 'no_provider_ran');
+});
+
