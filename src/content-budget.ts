@@ -24,13 +24,6 @@ const OMITTED_WARNING_RESERVE = 2_500;
 /** Characters of omitted page URLs a crawl warning lists before it counts the rest. */
 const OMITTED_URL_CHARS = 2_000;
 
-/**
- * Tool `_meta` that lets Claude Code keep a result up to this many characters
- * inline, so a caller that raises `maxCharacters` still gets the result rather
- * than a file path.
- */
-export const RESULT_SIZE_META = { 'anthropic/maxResultSizeChars': MAX_MAX_CHARACTERS };
-
 const RANGE = `default ${DEFAULT_MAX_CHARACTERS}, from ${MIN_MAX_CHARACTERS} to ${MAX_MAX_CHARACTERS}; values outside are clamped`;
 
 export const scrapeMaxCharactersDescription = `Most characters of page content to return (${RANGE}). markdown, html and rawHtml are each cut to this length, and end with a [Truncated: ...] marker; links and images lists are shortened the same way. When the fields together would exceed it, links and images are shortened first, then the text fields to a shared shorter length. json, answer, summary and metadata are never cut. A cut result sets truncated, totalLength and a warning, and, when the page can be read on, scrapeId and nextStartIndex: pass them back as scrapeId and startIndex for the next window, or ask a question with formats ["query"] instead.`;

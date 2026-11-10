@@ -187,7 +187,7 @@ test('scrape, crawl and crawl status only add maxCharacters to their inputs and 
     assert.deepEqual(Object.keys(tool.inputSchema.properties).sort(), [...properties, 'maxCharacters'].sort(), name);
     assert.equal(tool.inputSchema.properties.maxCharacters.type, 'number', name);
     assert.equal((tool.inputSchema.required ?? []).includes('maxCharacters'), false, name);
-    assert.equal(tool._meta['anthropic/maxResultSizeChars'], 500_000, name);
+    assert.equal(tool._meta['anthropic/maxResultSizeChars'], 150_000, name);
     assert.ok(tool.description.length <= 2_048, name);
   }
   assert.equal(byName.get('firecrawl_scrape')._meta['anthropic/alwaysLoad'], true);

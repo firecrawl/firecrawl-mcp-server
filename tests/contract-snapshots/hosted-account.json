@@ -14,14 +14,14 @@
       }
     },
     "tools": [
-      "firecrawl_scrape@7fd3d8eb5d54",
+      "firecrawl_scrape@614b1e36d0ee",
       "firecrawl_map@3214f5d6a1a4",
       "firecrawl_search@2cda94cea355",
       "firecrawl_find_tools@d138e7a0897b",
       "firecrawl_search_feedback@6ca0521ad2bd",
       "firecrawl_feedback@771747894435",
-      "firecrawl_crawl@f179b1b88482",
-      "firecrawl_check_crawl_status@c4910f3f8e83",
+      "firecrawl_crawl@4d8a28d95159",
+      "firecrawl_check_crawl_status@17d74d5636bd",
       "firecrawl_agent@10301d46e090",
       "firecrawl_agent_status@6c6e5f971f8e",
       "firecrawl_interact@8040e21dad51",
