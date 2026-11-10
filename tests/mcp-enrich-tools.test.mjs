@@ -54,11 +54,13 @@ function answer(call) {
 async function startApi(t, respond) {
   const calls = [];
   const bodies = [];
+  const headers = [];
   const server = createServer(async (req, res) => {
     let raw = '';
     for await (const chunk of req) raw += chunk;
     const body = raw ? JSON.parse(raw) : {};
     bodies.push(body);
+    headers.push(req.headers);
     if (req.url.startsWith('/v2/search')) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ success: true, creditsUsed: 2, data: { web: [{ url: 'https://acme.example/team', title: 'Acme team' }] } }));
@@ -72,7 +74,7 @@ async function startApi(t, respond) {
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
-  return { url: 'http://127.0.0.1:' + server.address().port, calls, bodies };
+  return { url: 'http://127.0.0.1:' + server.address().port, calls, bodies, headers };
 }
 
 async function connect(t, { onToolResult, ...options }, session = { authType: 'api-key', firecrawlApiKey: 'fc-test' }) {
@@ -413,8 +415,8 @@ test('the web search estimate is the stated price, with enterprise zdr pricing',
 test('enrich sends every record to the waterfall in one call and returns its attributed raw results', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { apiUrl: api.url });
-  const people = [{ name: 'Ada Lovelace', domain: 'acme.example' }];
-  const companies = [{ domain: 'globex.example' }];
+  const people = [{ name: 'Ada Lovelace', domain: 'acme.example' }, { linkedin_url: 'https://www.linkedin.com/in/grace' }, { email: 'alan@acme.example' }];
+  const companies = [{ domain: 'globex.example' }, { name: 'Initech' }];
   const result = await client.callTool({ name: 'people_company_enrich', arguments: { contact_fields: ['work_email'], people, companies } });
   assert.notEqual(result.isError, true, JSON.stringify(result));
   assert.deepEqual(api.calls, [{ provider: 'firecrawl', capability: 'enrich/auto', options: { people, companies, contact_fields: ['work_email'], max_credits: 100 } }]);
@@ -479,4 +481,27 @@ test('a waterfall refusal is relayed with its code and retryable', async (t) => 
   assert.match(result.content[0].text, /Enrichment is unavailable right now\./);
   const extras = events.find((event) => event.status === 'error').error.extras;
   assert.deepEqual([extras.code, extras.retryable], ['provider_unavailable', true]);
+});
+
+test('near-miss shapes are repaired before validation', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { apiUrl: api.url });
+  const result = await client.callTool({ name: 'people_company_enrich', arguments: { people: { email: 'ada@acme.example' }, contact_fields: 'mobile' } });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  assert.deepEqual(api.calls[0].options, { people: [{ email: 'ada@acme.example' }], contact_fields: ['mobile'], max_credits: 100 });
+});
+
+test('a retryable refusal before the waterfall ran is resent once under the same request id', async (t) => {
+  let refused = false;
+  const api = await startApi(t, () => {
+    if (refused) return undefined;
+    refused = true;
+    return { status: 503, json: { success: false, code: 'precheck_unavailable', error: 'Try again.', retryable: true } };
+  });
+  const client = await connect(t, { apiUrl: api.url });
+  const result = await client.callTool({ name: 'people_company_enrich', arguments: { people: [{ email: 'ada@acme.example' }] } });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  assert.equal(api.calls.length, 2);
+  assert.equal(api.headers[0]['x-request-id'], api.headers[1]['x-request-id']);
+  assert.ok(api.bodies[1].timeout < 120000 && api.bodies[1].timeout > 100000, String(api.bodies[1].timeout));
 });

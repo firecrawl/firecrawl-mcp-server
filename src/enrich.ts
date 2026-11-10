@@ -1016,6 +1016,7 @@ export function registerEnrichTools(
     beforeValidate: (args: unknown) => {
       if (isPlain(args)) {
         dropSessionFields(args);
+        repair(enrichParameters, args);
         checkArguments('people_company_enrich', enrichParameters, args, ENRICH_EXAMPLE);
       }
       return undefined;
@@ -1034,14 +1035,17 @@ export function registerEnrichTools(
       const requestId = randomUUID();
       const options = compact({ people: a.people, companies: a.companies, contact_fields: a.contact_fields, max_credits: a.max_credits ?? ENRICH_DEFAULT_MAX_CREDITS });
       const response = await relayExchangeError(
-        () =>
-          client.http.post(
+        (attempt) => {
+          // A resend gets the time left, keeping the 5 s margin above the API's deadline.
+          const timeout = Math.floor(Math.min(ENRICH_TIMEOUT_MS, (attempt?.remainingMs ?? Infinity) - 5000));
+          return client.http.post(
             '/v2/scrape',
-            { alexandria: [{ provider: 'firecrawl', capability: 'enrich/auto', options }], origin: requestOrigin(mcpClient as any, session), timeout: ENRICH_TIMEOUT_MS },
-            { headers: { 'x-request-id': requestId } }
-          ),
+            { alexandria: [{ provider: 'firecrawl', capability: 'enrich/auto', options }], origin: requestOrigin(mcpClient as any, session), timeout },
+            { headers: { 'x-request-id': requestId }, timeoutMs: timeout + 5000 }
+          );
+        },
         // The API answers a repeat of this request id from its record, so a resend cannot run twice.
-        { tool: 'people_company_enrich', requestId, providers: ['firecrawl'], resend: true }
+        { tool: 'people_company_enrich', requestId, providers: ['firecrawl'], resend: true, budgetMs: ENRICH_TIMEOUT_MS + 5000 }
       );
       const entry = response?.data?.data?.alexandria?.[0];
       if (!isPlain(entry)) throw new Error('Unexpected response shape.');
