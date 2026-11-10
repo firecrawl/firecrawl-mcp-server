@@ -60,6 +60,8 @@ Local services (stdio, SSE local, HTTP streamable) use the V2 implementation by 
 
 ## Migration Guide
 
+For current MCP `firecrawl_scrape` calls, request `formats: ["markdown"]` and extract fields in the calling agent. The tool no longer advertises `json` or `jsonOptions`; cached calls using them receive markdown with a notice. JSON extraction in the REST API and other tools is unchanged.
+
 ### From V1 to V2
 
 1. **Update Endpoint URLs:**

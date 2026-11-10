@@ -16,7 +16,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 
 - Search the web, optionally with full page content for each result
 - Search indexes for developer sources (GitHub issues, merged pull requests, READMEs, and docs), US government sources, and scientific papers (PubMed, bioRxiv, medRxiv, arXiv)
-- Scrape any URL into clean Markdown for the calling agent to read
+- Scrape any URL into clean Markdown
 - Parse PDFs and documents
 - Crawl a site for content from many pages, or map it to discover its URLs
 - Interact with pages in a real browser: click, type, fill forms, and navigate dynamic pages
@@ -31,7 +31,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 
 ## When to Use This Server
 
-- Use `firecrawl_scrape` when you have a known URL and want its content as markdown. Read the returned content yourself to summarize it, analyze it, or extract fields.
+- Use `firecrawl_scrape` when you have a known URL and want its content as markdown, then extract the requested fields yourself.
 - Use `firecrawl_map` when you need to discover URLs on a site without fetching their content.
 - Use `firecrawl_crawl` when you need content from many pages under a site; set `limit`, `includePaths`/`excludePaths`, or `maxDiscoveryDepth` to bound it.
 - Use `firecrawl_search` when you're starting from a query rather than a URL and want ranked web results. Results carry excerpts; fetch full pages with `firecrawl_scrape` on the URLs you need. `scrapeOptions` fetches every result's page in the same call and bills each as a scrape, so keep it for the full text of a few results (the search-only endpoint never fetches content).
@@ -360,7 +360,7 @@ Add this to your `claude_desktop_config.json`:
 
 Use this guide to select the right tool for your task:
 
-- **If you know the exact URL you want:** use **scrape**, then read the returned content yourself
+- **If you know the exact URL you want:** use **scrape**, then extract the requested fields from its markdown
 - **If you have multiple known URLs:** call **scrape** for each URL. If you specifically need one bulk API operation, use the Firecrawl API batch endpoint outside MCP.
 - **If you need to discover URLs on a site:** use **map**
 - **If you want to search the web for info:** use **search**
@@ -376,7 +376,7 @@ Use this guide to select the right tool for your task:
 
 | Tool      | Best for                                       | Returns                                          |
 | --------- | ---------------------------------------------- | ------------------------------------------------ |
-| scrape    | Single page content                            | Markdown by default, or other source formats      |
+| scrape    | Single page content                            | Markdown by default                              |
 | interact  | Interact with a URL or scraped page            | Execution result + scrapeId for URL mode         |
 | map       | Discovering URLs on a site                     | URL[]                                            |
 | crawl     | Multi-page extraction (with limits)            | final crawl status/data after internal polling   |
@@ -393,8 +393,7 @@ Use this guide to select the right tool for your task:
 
 When using `scrape`, choose the right format:
 
-- **Markdown (default):** Read the page content, then summarize, analyze, or extract fields yourself. Use `includeTags`, `excludeTags`, and `onlyMainContent` to focus the returned content.
-- **Other source formats:** HTML, raw HTML, links, images, screenshots, change tracking, and audio support tasks that need more than page text.
+- **Markdown format:** Read the page and extract the requested fields yourself.
 
 ## Available Tools
 
@@ -414,12 +413,11 @@ Scrape content from a single URL with advanced options.
 **Common mistakes:**
 
 - Passing a list of URLs to one scrape call. Call scrape once per URL in MCP. If you specifically need one bulk API operation, use the Firecrawl API batch endpoint outside MCP.
-- Requesting `json`, `query`, `summary`, or `branding`, or supplying `jsonOptions` or `queryOptions`. These delegate interpretation to another model and are no longer supported by this tool. Calls using them fail with `invalid_request` and guidance to request markdown instead, before fetching the page. Null option placeholders from cached schemas are treated as absent.
+- Requesting `json` or `jsonOptions` through MCP scrape. Cached calls using them return markdown with a notice instead; no JSON extraction runs. Null option placeholders are treated as absent.
 
 **Choosing the right format:**
 
-- **Markdown format:** The default for reading, summarization, analysis, and extracting fields yourself.
-- **Screenshots, images, and HTML:** Use these as source evidence for visual and structural analysis.
+- **Markdown format:** Read the returned content and extract the fields you need yourself.
 
 **Prompt Example:**
 
@@ -437,7 +435,7 @@ Scrape content from a single URL with advanced options.
 }
 ```
 
-**Usage Example (main page content):**
+**Usage Example (markdown format - when full content needed):**
 
 ```json
 {
@@ -450,26 +448,25 @@ Scrape content from a single URL with advanced options.
 }
 ```
 
-**Usage Example (source evidence for design analysis):**
+**Usage Example (branding format - extract brand identity):**
 
 ```json
 {
   "name": "firecrawl_scrape",
   "arguments": {
     "url": "https://example.com",
-    "formats": ["screenshot", "images", "html"],
-    "onlyMainContent": false
+    "formats": ["branding"]
   }
 }
 ```
 
-Interpret the screenshot, images, and HTML yourself to analyze the page's design.
+**Branding format:** Extracts comprehensive brand identity (colors, fonts, typography, spacing, logo, UI components) for design analysis or style replication.
 **Privacy:** Set `redactPII: true` to return content with personally identifiable information redacted.
 **With `CLOUD_SERVICE=true`:** scrape is read-only. It takes no browser `actions` and cannot accept provider terms. A named `profile` loads saved browser state without saving changes to it, and the full endpoint's `firecrawl_search` treats `scrapeOptions.profile` the same way. To save browser state to a profile, open the page with `firecrawl_interact` (see below). An organization admin accepts terms in the dashboard.
 
 **Returns:**
 
-- Markdown or other source formats as specified. Existing `scrapeOptions` on other tools and the separate parse tool are unchanged.
+- Markdown, branding profile, or other formats as specified.
 
 ### 2. Map Tool (`firecrawl_map`)
 
@@ -728,7 +725,7 @@ Parse local files or hosted upload references with Firecrawl's `/v2/parse` endpo
 
 **Returns:** Parsed document content or hosted upload instructions with a `nextToolCall`.
 
-### 7. Extracting fields from a known page
+### 7. Structured data from a known page
 
 Call `firecrawl_scrape` once per URL with `formats: ["markdown"]`, then extract the requested fields from the returned content yourself.
 
@@ -746,7 +743,7 @@ When the URLs are not known or the data spans several sites, use `firecrawl_agen
 
 ### 8. Agent Tool (`firecrawl_agent`)
 
-Autonomous web research agent that returns structured data when you do not know the URLs or the answer spans several sites. Describe the fields you need, optionally pass a JSON schema and seed URLs, and the agent searches, navigates, reads pages, and returns JSON assembled across sources. Use it for an entity plus its fields, for lists and datasets, and for pages that need navigation to reach the data. For one known URL use `firecrawl_scrape` and read the returned content yourself.
+Autonomous web research agent that returns structured data when you do not know the URLs or the answer spans several sites. Describe the fields you need, optionally pass a JSON schema and seed URLs, and the agent searches, navigates, reads pages, and returns JSON assembled across sources. Use it for an entity plus its fields, for lists and datasets, and for pages that need navigation to reach the data. For one known URL use `firecrawl_scrape` with markdown and extract the requested fields yourself.
 
 **How it works:**
 
@@ -768,7 +765,7 @@ The agent performs web searches, follows links, reads pages, and gathers data au
 
 **Not recommended for:**
 
-- Simple single-page scraping where you know the URL (use scrape and read the returned content yourself)
+- Simple single-page scraping where you know the URL (use scrape with markdown and extract the requested fields yourself)
 
 **Arguments:**
 

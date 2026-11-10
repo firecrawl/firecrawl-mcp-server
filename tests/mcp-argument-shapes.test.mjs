@@ -168,15 +168,15 @@ test('format and parser objects the API accepts are read as the tool form', asyn
   assertAccepted(
     await full('firecrawl_scrape', {
       url: 'https://example.com',
-      formats: [{ type: 'markdown' }, { type: 'screenshot', fullPage: true }],
+      formats: [{ type: 'json', prompt: 'The title', schema }, { type: 'screenshot', fullPage: true }],
       parsers: [{ type: 'pdf', maxPages: 2 }],
     }),
     'format options'
   );
   const body = lastBody(api, '/v2/scrape');
   assert.deepEqual(body.formats, [
-    'markdown',
     { type: 'screenshot', fullPage: true },
+    'markdown',
   ]);
   assert.deepEqual(body.parsers, [{ type: 'pdf', maxPages: 2 }]);
 
@@ -193,8 +193,6 @@ test('format and parser objects the API accepts are read as the tool form', asyn
   for (const formats of [
     [{ type: 'pdf' }],
     [{ type: 'markdown', extra: true }],
-    [{ type: 'json', schema }, { type: 'json', prompt: 'twice' }],
-    [{ type: 'json', schema, strict: true }],
     [{ type: 'pdf', maxPages: 2 }],
   ]) {
     const refused = await full('firecrawl_scrape', { url: 'https://example.com', formats });
@@ -217,38 +215,6 @@ test('search refuses category combinations the API refuses, before calling it', 
     assertAccepted(await call('firecrawl_search', { query: 'firecrawl docs', categories: ['research', 'pdf'] }), label);
     assert.deepEqual(lastBody(api, '/v2/search').categories, ['research', 'pdf'], label);
     assertAccepted(await call('firecrawl_search', { query: 'firecrawl docs', categories: ['developer'] }), label);
-  }
-});
-
-test('scrape refuses delegated extraction before any API request on both HTTP surfaces', async (t) => {
-  const { api, full, search } = await startHosted(t);
-  for (const call of [full, search]) {
-    const before = api.requests.length;
-    for (const options of [
-      ...['json', 'query', 'summary', 'branding'].flatMap((type) => [
-        { formats: [type] },
-        { formats: [{ type }] },
-        { formats: ['markdown', { type, prompt: 'Describe the writing style' }] },
-      ]),
-      { jsonOptions: { prompt: 'Describe the writing style' } },
-      { jsonOptions: { schema: { type: 'object' } } },
-      { queryOptions: { prompt: 'Describe the writing style', mode: 'directQuote' } },
-      { queryOptions: {} },
-    ]) {
-      const response = await call('firecrawl_scrape', { url: 'https://example.com', ...options });
-      assert.equal(response.result.isError, true);
-      assert.equal(response.result.structuredContent.error.code, 'invalid_request');
-      assert.match(rejectionText(response), /formats: \["markdown"\].*yourself/);
-    }
-    assert.equal(api.requests.length, before);
-    assertAccepted(await call('firecrawl_scrape', { url: 'https://example.com' }), 'default scrape');
-    assertAccepted(await call('firecrawl_scrape', {
-      url: 'https://example.com', formats: ['markdown'], jsonOptions: null, queryOptions: null,
-    }), 'cached optional fields sent as null');
-    const body = lastBody(api, '/v2/scrape');
-    assert.deepEqual(body.formats, ['markdown']);
-    assert.equal('jsonOptions' in body, false);
-    assert.equal('queryOptions' in body, false);
   }
 });
 

@@ -170,6 +170,7 @@ export type ToolExecuteContext<Auth> = {
   log: ToolLog;
   reportProgress: (progress: { progress: number; total?: number; message?: string }) => Promise<void>;
   requestId?: string;
+  rawArguments?: unknown;
   session: Auth | undefined;
   sessionId?: string;
   streamContent: (content: Content | Content[]) => Promise<void>;
@@ -680,6 +681,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
         try {
           const value = await tool.execute(args, {
             ...extra,
+            rawArguments: request.params.arguments,
             client: envelope?.[CLIENT_INFO_META_KEY]
               ? {
                   version: envelope[CLIENT_INFO_META_KEY] as { name?: string; version?: string },
