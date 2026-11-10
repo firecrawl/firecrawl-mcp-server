@@ -413,7 +413,7 @@ Scrape content from a single URL with advanced options.
 **Common mistakes:**
 
 - Passing a list of URLs to one scrape call. Call scrape once per URL in MCP. If you specifically need one bulk API operation, use the Firecrawl API batch endpoint outside MCP.
-- Requesting `json` or `jsonOptions` through MCP scrape. Cached calls using them return markdown with a notice instead; no JSON extraction runs. Null option placeholders are treated as absent.
+- Requesting `json` or `jsonOptions` for new MCP scrape calls. These inputs are hidden from discovery but remain accepted for compatibility with cached tool definitions.
 
 **Choosing the right format:**
 

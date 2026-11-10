@@ -247,8 +247,8 @@ test('a json format without a prompt or schema is refused with a structured next
   const result = await assertReadableError(t, {
     apiUrl: 'http://127.0.0.1:9',
     session: apiKey,
-    name: 'firecrawl_interact',
-    args: { url: 'https://example.com', prompt: 'Read the page', scrapeOptions: { formats: ['json'], queryOptions: { prompt: 'How many reviews?' } } },
+    name: 'firecrawl_scrape',
+    args: { url: 'https://example.com', formats: ['json'], queryOptions: { prompt: 'How many reviews?' } },
     includes: message,
   });
   assert.equal(result.content[0].text, message);

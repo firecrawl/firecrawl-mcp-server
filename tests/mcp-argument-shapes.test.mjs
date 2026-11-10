@@ -175,8 +175,8 @@ test('format and parser objects the API accepts are read as the tool form', asyn
   );
   const body = lastBody(api, '/v2/scrape');
   assert.deepEqual(body.formats, [
+    { type: 'json', prompt: 'The title', schema },
     { type: 'screenshot', fullPage: true },
-    'markdown',
   ]);
   assert.deepEqual(body.parsers, [{ type: 'pdf', maxPages: 2 }]);
 
@@ -193,6 +193,8 @@ test('format and parser objects the API accepts are read as the tool form', asyn
   for (const formats of [
     [{ type: 'pdf' }],
     [{ type: 'markdown', extra: true }],
+    [{ type: 'json', schema }, { type: 'json', prompt: 'twice' }],
+    [{ type: 'json', schema, strict: true }],
     [{ type: 'pdf', maxPages: 2 }],
   ]) {
     const refused = await full('firecrawl_scrape', { url: 'https://example.com', formats });

@@ -170,7 +170,6 @@ export type ToolExecuteContext<Auth> = {
   log: ToolLog;
   reportProgress: (progress: { progress: number; total?: number; message?: string }) => Promise<void>;
   requestId?: string;
-  rawArguments?: unknown;
   session: Auth | undefined;
   sessionId?: string;
   streamContent: (content: Content | Content[]) => Promise<void>;
@@ -188,6 +187,7 @@ export interface Tool<Auth> {
   description?: string;
   icons?: ToolIcon[];
   parameters?: StandardSchemaV1;
+  transformInputSchema?: (schema: JsonObject) => JsonObject;
   outputSchema?: StandardSchemaV1;
   annotations?: { title?: string; [key: string]: unknown };
   _meta?: Record<string, unknown>;
@@ -603,7 +603,9 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
           ...(tool.icons && { icons: tool.icons }),
           description: tool.description,
           inputSchema: tool.parameters
-            ? openMaps(closeObjects((await toJsonSchema(tool.parameters as never)) as JsonObject))
+            ? openMaps(closeObjects((tool.transformInputSchema ?? ((schema) => schema))(
+                (await toJsonSchema(tool.parameters as never)) as JsonObject
+              )))
             : { additionalProperties: false, properties: {}, type: 'object' },
           name: tool.name,
           ...(outputSchemaOf(tool) && {
@@ -681,7 +683,6 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
         try {
           const value = await tool.execute(args, {
             ...extra,
-            rawArguments: request.params.arguments,
             client: envelope?.[CLIENT_INFO_META_KEY]
               ? {
                   version: envelope[CLIENT_INFO_META_KEY] as { name?: string; version?: string },

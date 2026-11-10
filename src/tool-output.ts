@@ -124,6 +124,7 @@ export const scrapeOutputSchema = z
     blocks: unknown('Typed PDF layout blocks, when `parsers[].blocks` is set.'),
     product: unknown('Product data extracted from the page.'),
     menu: unknown('Menu data extracted from the page.'),
+    json: unknown('Structured data matching the requested JSON schema or prompt.'),
     attributes: unknown('Values collected by the requested attribute selectors.'),
     actions: unknown('Results of the browser actions that ran during the scrape.'),
     changeTracking: unknown('Change-tracking comparison against the previous scrape.'),

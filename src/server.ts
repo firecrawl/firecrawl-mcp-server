@@ -1277,9 +1277,7 @@ export function createFirecrawlMcpServer(
   const ALEXANDRIA_IGNORED_SCRAPE_OPTIONS = new Set(['toolDetail', 'domainTools']);
 
   const scrapeToolParamsSchema = scrapeParamsSchema
-    .omit({ jsonOptions: true })
     .extend({
-      formats: z.array(scrapeParamsSchema.shape.formats.unwrap().element.exclude(['json'])).optional(),
       ...(SAFE_MODE ? { profile: readOnlyProfileSchema.optional() } : {}),
       url: httpUrl().optional(),
       timeout: z.number().int().positive().optional().describe("Execution timeout in milliseconds."),
@@ -1726,7 +1724,6 @@ export function createFirecrawlMcpServer(
     return asText(parseJson);
   }
 
-  const legacyJsonScrapeCalls = new WeakSet<object>();
   const scrapeTool: RegisteredTool = {
     name: 'firecrawl_scrape',
     annotations: {
@@ -1748,24 +1745,16 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
 `,
     outputSchema: scrapeOutputSchema,
     parameters: scrapeToolParamsSchema,
-    beforeValidate: (args) => {
-      if (!args || typeof args !== 'object' || Array.isArray(args)) return undefined;
-      const input = args as Record<string, unknown>;
-      if (input.alexandria) return undefined;
-      const formats = input.formats;
-      const isJson = (format: unknown) =>
-        format === 'json' || (typeof format === 'object' && format !== null && 'type' in format && format.type === 'json');
-      if (input.jsonOptions != null || (Array.isArray(formats) && formats.some(isJson))) {
-        legacyJsonScrapeCalls.add(input);
-        if (formats == null || Array.isArray(formats)) {
-          const retained = (formats ?? []).filter((format: unknown) => !isJson(format));
-          input.formats = retained.includes('markdown') ? retained : [...retained, 'markdown'];
-        }
-        delete input.jsonOptions;
-      }
-      return undefined;
+    transformInputSchema: (schema) => {
+      const properties = schema.properties as {
+        jsonOptions?: unknown;
+        formats: { items: { enum: string[] } };
+      };
+      delete properties.jsonOptions;
+      properties.formats.items.enum = properties.formats.items.enum.filter((format) => format !== 'json');
+      return schema;
     },
-    execute: async (args: unknown, { session, sessionId, log, client: mcpClient, rawArguments }): Promise<ContentResult> => {
+    execute: async (args: unknown, { session, sessionId, log, client: mcpClient }): Promise<ContentResult> => {
       const origin = requestOrigin(mcpClient, session);
       const {
         url,
@@ -1798,7 +1787,6 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
       } else {
         log.info('Scraping URL', { url: String(url) });
       }
-      let result;
       if (isKeylessMode(session)) {
         const json = await keylessPost(
           '/v2/scrape',
@@ -1809,24 +1797,19 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
           },
           session
         );
-        result = json?.data ?? json;
-      } else {
-        assertFormatOptions(cleaned.formats);
-        const client = getClient(session);
-        result = await relayTermsRequired(
-          () => client.scrape(String(url), { ...cleaned, origin } as any),
-          { tool: 'firecrawl_scrape' }
-        );
+        return structuredText(withoutDiscoveredToolPrices(json?.data ?? json));
       }
-      const data = withoutDiscoveredToolPrices(result);
-      if (rawArguments && typeof rawArguments === 'object' && legacyJsonScrapeCalls.has(rawArguments)) {
-        const notice = 'The json format is no longer available on firecrawl_scrape; markdown was returned instead. Read the markdown and extract the requested fields yourself.';
-        return structuredText({
-          ...data,
-          warning: [data.warning, notice].filter(Boolean).join('\n'),
-        });
-      }
-      return structuredText(data);
+      assertFormatOptions(cleaned.formats);
+      const client = getClient(session);
+      const res = await relayTermsRequired(
+        () =>
+          client.scrape(String(url), {
+            ...cleaned,
+            origin,
+          } as any),
+        { tool: 'firecrawl_scrape' }
+      );
+      return structuredText(withoutDiscoveredToolPrices(res));
     },
   };
   server.addTool({
