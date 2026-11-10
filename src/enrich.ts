@@ -1252,7 +1252,8 @@ async function webReport(web: WebSearch, args: unknown, context: ToolExecuteCont
   } catch (error) {
     const status = (error as any)?.extras?.status ?? (error as any)?.response?.status;
     const retryable = status === 429 || status >= 500 || undefined;
-    return compact({ name, status: 'error' as const, returned: 0, credits: 0, note: error instanceof Error ? error.message : String(error), retryable });
+    const code = status === 402 ? 'insufficient_credits' : status === 429 ? 'rate_limited' : undefined;
+    return compact({ name, status: 'error' as const, returned: 0, credits: 0, note: error instanceof Error ? error.message : String(error), code, retryable });
   }
 }
 
@@ -1324,7 +1325,7 @@ export function registerEnrichTools(
         const ran = reports.filter((r) => r.status !== 'not_requested');
         const succeeded = ran.some((r) => r.status === 'ok' || r.status === 'empty' || r.status === 'pending');
         const sharedCode = ran.length && ran.every((r) => r.status === 'error' && r.code === ran[0].code) ? ran[0].code : undefined;
-        const shared = sharedCode ? SHARED_FAILURES[sharedCode] : undefined;
+        const shared = sharedCode && Object.hasOwn(SHARED_FAILURES, sharedCode) ? SHARED_FAILURES[sharedCode] : undefined;
         const excluded = new Set([...ctx.gated.keys(), ...failed.flatMap((r) => (r.name === 'firecrawl_search' ? [] : [r.name]))]);
         const alt = ctx.gated.size || shared?.switchable ? alternative(args as Record<string, any>, excluded) : undefined;
         const others = alt ? order.filter((p) => alt[p] !== undefined) : [];
@@ -1350,9 +1351,9 @@ export function registerEnrichTools(
         if (shared && sharedCode) {
           const other = instead && 'retry without ' + failedNames.join(' and ') + ', for example with ' + others.join(' and ') + ': ' + JSON.stringify(instead);
           const next = [shared.next, other].filter(Boolean).join(', or ');
-          const reasons = [...new Set(failed.map((r) => (r.note ?? '').slice(sharedCode.length + 2)))].join(' ');
+          const reasons = [...new Set(failed.map((r) => (r.note ?? '').split(sharedCode + ': ').pop()))].join(' ');
           throw new UserError(
-            (shared.lead ?? '') + reasons + ' Credits charged: ' + data.credits_total + '.' + (next ? ' ' + next[0].toUpperCase() + next.slice(1) + (/[.!?]$/.test(next) ? '' : '.') : ''),
+            (shared.lead && !reasons.toLowerCase().startsWith(shared.lead.slice(0, -2).toLowerCase()) ? shared.lead : '') + reasons + ' Credits charged: ' + data.credits_total + '.' + (next ? ' ' + next[0].toUpperCase() + next.slice(1) + (/[.!?]$/.test(next) ? '' : '.') : ''),
             { code: sharedCode, status: shared.status, ...data, ...(RETRYABLE.has(sharedCode) ? { retryable: true } : {}), ...withExample }
           );
         }

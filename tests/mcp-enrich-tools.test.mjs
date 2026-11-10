@@ -42,7 +42,7 @@ function answer(call) {
   return { error: { code: 'not_found', message: 'No match.' } };
 }
 
-async function startApi(t, respond) {
+async function startApi(t, respond, respondSearch) {
   const calls = [];
   const bodies = [];
   const server = createServer(async (req, res) => {
@@ -51,6 +51,12 @@ async function startApi(t, respond) {
     const body = raw ? JSON.parse(raw) : {};
     bodies.push(body);
     if (req.url.startsWith('/v2/search')) {
+      const refused = respondSearch?.(body);
+      if (refused) {
+        res.writeHead(refused.status, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(refused.json));
+        return;
+      }
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ success: true, creditsUsed: 2, data: { web: [{ url: 'https://acme.example/team', title: 'Acme team' }] } }));
       return;
@@ -732,7 +738,10 @@ test('a data source at capacity on every provider is reported as provider_rate_l
   }));
   const events = [];
   const client = await connect(t, { apiUrl: api.url, onToolResult: (event) => events.push(event) });
-  const result = await client.callTool({ name: 'people_company_enrich', arguments: { fullenrich: { people: [{ person_name: 'Ada Lovelace', company_domain: 'acme.example' }] } } });
+  const result = await client.callTool({
+    name: 'people_company_enrich',
+    arguments: { fullenrich: { people: [{ person_name: 'Ada Lovelace', company_domain: 'acme.example' }] }, apollo: { people: [{ name: 'Ada Lovelace', domain: 'acme.example' }] } },
+  });
   assert.equal(result.isError, true);
   assert.match(result.content[0].text, /^The data source is at capacity\. Retry after the Retry-After interval\. Credits charged: 0\. Wait a minute, then retry the same call\.$/);
   const data = events.find((event) => event.status === 'error').error.extras;
@@ -786,6 +795,19 @@ test('different failures on different providers stay no_provider_ran', async (t)
   });
   assert.equal(result.isError, true);
   assert.match(result.content[0].text, /^No provider ran successfully: /);
-  assert.equal(events.find((event) => event.status === 'error').error.extras.code, 'no_provider_ran');
+  const data = events.find((event) => event.status === 'error').error.extras;
+  assert.equal(data.code, 'no_provider_ran');
+  assert.deepEqual(Object.fromEntries(data.providers.filter((p) => p.status === 'error').map((p) => [p.name, p.code])), { fullenrich: 'provider_error', apollo: 'insufficient_credits' });
+});
+
+test('a web search block refused for credits on its own is reported as insufficient_credits', async (t) => {
+  const message = 'Insufficient credits to perform this request: it can use up to 2 credits and your team has 0 left.';
+  const api = await startApi(t, undefined, () => ({ status: 402, json: { success: false, code: 'insufficient_credits', error: message } }));
+  const events = [];
+  const client = await connect(t, { apiUrl: api.url, onToolResult: (event) => events.push(event) });
+  const result = await client.callTool({ name: 'people_company_search', arguments: { entity: 'company', firecrawl_search: { query: 'Acme', limit: 10 } } });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /^Insufficient credits to perform this request: .*your team has 0 left\. Credits charged: 0\. Do not retry the same call/);
+  assert.equal(events.find((event) => event.status === 'error').error.extras.code, 'insufficient_credits');
 });
 
