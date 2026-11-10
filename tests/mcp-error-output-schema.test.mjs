@@ -404,7 +404,7 @@ for (const { name, payload, delivered } of [
 }
 
 for (const [name, args] of [
-  ['alexandria_execute', { provider: 'fred', capability: 'series/observations' }],
+  ['alexandria_execute', { calls: [{ provider: 'fred', capability: 'series/observations' }] }],
   ['alexandria_library_search', { command: 'ls /library' }],
   // The alexandria body firecrawl_scrape no longer lists.
   ['firecrawl_scrape', { alexandria: [{ provider: 'fred', capability: 'series/observations' }] }],

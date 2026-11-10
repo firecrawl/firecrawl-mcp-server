@@ -383,7 +383,7 @@ Use this guide to select the right tool for your task:
 | parse     | Files and hosted upload refs                   | markdown, JSON, or document output               |
 | search    | Web search for info                            | results[]                                        |
 | alexandria_library_search | Exploring the Alexandria library with shell commands | command output: file paths, READMEs, contracts |
-| alexandria_execute | Running one Alexandria capability | typed, sourced records |
+| alexandria_execute | Running Alexandria capabilities, up to ten per call | typed, sourced records |
 | developer | Programming questions over developer sources   | results[] with passages                          |
 | gov       | US primary law and regulatory material         | results[] with snippets                          |
 | agent     | Multi-source research, unknown or many sites   | JSON (structured data)                           |
@@ -1162,18 +1162,21 @@ Commands are `ls`, `tree`, `cat`, `head`, `tail`, `grep`, `find`, `wc`, `sort`, 
 
 This tool requires the Alexandria API deployment that serves `firecrawl/library`.
 
-**Execute (`alexandria_execute`):** one capability per call. `provider` and `capability` come from search results or a library path, and `options` follow the contract. `requestId` and `timeout` may also be supplied.
+**Execute (`alexandria_execute`):** `calls` is an array of one to ten `{provider, capability, options}` entries, which may name different providers. `provider` and `capability` come from search results or a library path, and `options` follow the contract. `requestId` and `timeout` may also be supplied. Results come back in `data.alexandria` in the same order, and one call can fail while the others succeed.
 
 ```json
 {
   "name": "alexandria_execute",
   "arguments": {
-    "provider": "fred",
-    "capability": "series/observations",
-    "options": { "series_id": "CPIAUCSL" }
+    "calls": [
+      { "provider": "fred", "capability": "series/observations", "options": { "series_id": "CPIAUCSL" } },
+      { "provider": "fred", "capability": "series/observations", "options": { "series_id": "MORTGAGE30US" } }
+    ]
   }
 }
 ```
+
+One call sent as the arguments themselves (`{provider, capability, options}`) is read as a `calls` array of one.
 
 **Earlier tools (`firecrawl_find_tools`, and `firecrawl_scrape` with `alexandria`):** this server no longer lists `firecrawl_find_tools`, and `firecrawl_scrape` lists `url` only. Both still answer the calls they used to, so clients and prompts that learned them keep working; new ones should use `alexandria_library_search` and `alexandria_execute`. `firecrawl_find_tools` browses the catalogue (`{}` for categories, then `categories`, `providers` and `capabilities` to narrow to one contract, or `query` and `urls` for lookup), and `firecrawl_scrape` takes `alexandria` in place of `url`, as one `{provider, capability, options}` call or an array of up to ten, with `requestId` and `timeout`.
 
@@ -1207,7 +1210,7 @@ The tool result relays it as an error with `structuredContent` carrying `code`,
 `next_actions` (`human_action_required` then `retry_same_request`). Accepting
 terms is a legal act, so an organization admin accepts them in the Firecrawl dashboard, not
 through MCP. Use the returned `nextTool` call to read the agreement: `alexandria_execute`
-with `{provider: "firecrawl", capability: "terms/show", options: {provider: "<provider>"}}`
+with `calls: [{provider: "firecrawl", capability: "terms/show", options: {provider: "<provider>"}}]`
 (on the search-only endpoint, the same call through `firecrawl_scrape` with `alexandria`),
 sent separately from provider execution, and present it to the user. An organization admin then
 accepts it at `requiresAction.url`, or at https://www.firecrawl.dev/app/settings?tab=data-sources.
@@ -1401,12 +1404,16 @@ For a large retained workflow or regular scrape result, call `alexandria_execute
 
 ```json
 {
-  "provider": "firecrawl",
-  "capability": "bash",
-  "options": {
-    "requestId": "<source-request-or-scrape-id>",
-    "command": "ls -lh"
-  }
+  "calls": [
+    {
+      "provider": "firecrawl",
+      "capability": "bash",
+      "options": {
+        "requestId": "<source-request-or-scrape-id>",
+        "command": "ls -lh"
+      }
+    }
+  ]
 }
 ```
 
@@ -1426,7 +1433,7 @@ The CLI discovery sequence maps to these MCP calls:
 | Providers in a category | `alexandria_library_search` | `{"command":"cat /library/<category-id>/README.md"}` |
 | A provider's capabilities | `alexandria_library_search` | `{"command":"cat /library/*/<provider-id>/README.md"}` |
 | Selected contract | `alexandria_library_search` | `{"command":"cat /library/*/<provider-id>/<capability-id>.md"}` |
-| Execute | `alexandria_execute` | `{"provider":"<provider-id>","capability":"<capability-id>","options":{"<required-field>":"<value>"}}` |
+| Execute | `alexandria_execute` | `{"calls":[{"provider":"<provider-id>","capability":"<capability-id>","options":{"<required-field>":"<value>"}}]}` |
 
 The search surface keeps `firecrawl_find_tools` and `firecrawl_scrape` with `alexandria` for the last five rows. Reuse a complete contract from search when present rather than making another lookup.
 

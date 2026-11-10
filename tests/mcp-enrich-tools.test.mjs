@@ -648,7 +648,7 @@ test('a FullEnrich contact still running upstream is reported as pending, not un
     field: 'work_email',
     job_id: 'j1',
     poll_after_seconds: 60,
-    next_tool: { name: 'alexandria_execute', arguments: { provider: 'firecrawl', capability: 'job-status', options: { id: 'j1' } } },
+    next_tool: { name: 'alexandria_execute', arguments: { calls: [{ provider: 'firecrawl', capability: 'job-status', options: { id: 'j1' } }] } },
   });
   assert.deepEqual(fullenrich.pending[1], { input_index: 1, field: 'work_email', note: 'Upstream job e2 is still running; repeating this call starts another one.' });
   assert.deepEqual(fullenrich.pending[2], {

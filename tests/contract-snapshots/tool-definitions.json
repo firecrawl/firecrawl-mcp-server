@@ -1,5 +1,5 @@
 {
-  "alexandria_execute@c31bd7bb949f": {
+  "alexandria_execute@3daeeedbd345": {
     "annotations": {
       "title": "Alexandria execute",
       "readOnlyHint": true,
@@ -7,34 +7,50 @@
       "destructiveHint": false
     },
     "title": "Alexandria execute",
-    "description": "Run one capability of an Alexandria data provider and return its typed, sourced records. Alexandria is Firecrawl's library of data providers across companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more. `provider` and `capability` come from firecrawl_search results or alexandria_library_search, and `options` follow the capability's contract, which marks required inputs and any requiresOneOf groups (at least one member per group). Where the contract declares pagination, its fields page through results with the same filters. Returns the result in data.alexandria[0] with data, records, or an error with a code; an invalid call returns an error naming the valid options. A result too large to return inline is retained, and nextTool reads it in slices. Billed per executed capability; discovery is free. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.",
+    "description": "Run capabilities of Alexandria data providers and return their typed, sourced records: one, or up to ten in one call when a task needs several lookups. Alexandria is Firecrawl's library of data providers across companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more. Each entry of `calls` is {provider, capability, options}: `provider` and `capability` come from firecrawl_search results or alexandria_library_search, and `options` follow the capability's contract, which marks required inputs and any requiresOneOf groups (at least one member per group). Where the contract declares pagination, its fields page through results with the same filters. Returns one result per call, in the same order, in data.alexandria, each with data, records, or an error with a code; one call can fail while the others succeed, and an invalid call returns an error naming the valid options. A result too large to return inline is retained, and nextTool reads it in slices. Billed per executed capability; discovery is free. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
-        "provider": {
-          "description": "Provider slug, e.g. \"fred\".",
-          "type": "string",
-          "minLength": 1
-        },
-        "capability": {
-          "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
-          "type": "string",
-          "minLength": 1
-        },
-        "version": {
-          "description": "Optional published workflow version. Omit to use the latest version.",
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128
-        },
-        "options": {
-          "description": "Capability options as declared by its contract.",
-          "type": "object",
-          "propertyNames": {
-            "type": "string"
-          },
-          "additionalProperties": true
+        "calls": {
+          "description": "The capabilities to run, 1-10, each {provider, capability, options}. Results come back in the same order.",
+          "minItems": 1,
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "provider": {
+                "description": "Provider slug, e.g. \"fred\".",
+                "type": "string",
+                "minLength": 1
+              },
+              "capability": {
+                "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
+                "type": "string",
+                "minLength": 1
+              },
+              "version": {
+                "description": "Optional published workflow version. Omit to use the latest version.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "options": {
+                "description": "Capability options as declared by its contract.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "provider",
+              "capability"
+            ],
+            "additionalProperties": false
+          }
         },
         "requestId": {
           "description": "Idempotency key bound to one execution payload. Generated when omitted and returned with the result.",
@@ -49,15 +65,14 @@
         }
       },
       "required": [
-        "provider",
-        "capability"
+        "calls"
       ],
       "additionalProperties": false
     },
     "name": "alexandria_execute",
     "outputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "description": "The result of one Alexandria capability, or a pointer to it when it was retained.",
+      "description": "The results of the Alexandria capabilities that ran, or a pointer to them when they were retained.",
       "type": "object",
       "properties": {
         "success": {
@@ -75,7 +90,7 @@
           "description": "Error message or error object when the call did not succeed."
         },
         "data": {
-          "description": "The result in `data.alexandria[0]`, with `data`, `records`, or an `error` with a code."
+          "description": "One result per call, in the same order, in `data.alexandria`, each with `data`, `records`, or an `error` with a code."
         },
         "requestId": {
           "description": "Identifier of this Alexandria execution.",

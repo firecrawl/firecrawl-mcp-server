@@ -124,7 +124,7 @@ export const SEARCH_CATEGORIES_CONFLICT_MESSAGE =
 // Alexandria execution requires authenticated team access.
 const EXCHANGE_KEY_REQUIRED_MESSAGE =
   'Alexandria requires an API key on a team with Alexandria access';
-const EXCHANGE_MAX_CALLS = 10;
+export const EXCHANGE_MAX_CALLS = 10;
 
 export const exchangeCallSchema = z.object({
   provider: z.string().min(1).describe('Provider slug, e.g. "fred".'),
@@ -238,7 +238,7 @@ function termsRequiredError(
   const retryIdentity = requestId ? ` and requestId ${requestId}` : '';
   const message = `Alexandria provider terms required. An organization admin must accept the ${action.terms} provider's terms (version ${action.version}) before this request can run.`;
   return new UserError(
-    `${message}\n\n1. Read the agreement with ${context.alexandriaTools === 'dedicated' ? `${ALEXANDRIA_EXECUTE_TOOL} using` : 'firecrawl_scrape using alexandria:'} {provider: "firecrawl", capability: "terms/show", options: {provider: "${action.terms}"}} and present it to the user. Send terms/show separately from provider execution. Terms are accepted in the Firecrawl dashboard, not through this connection: ask an organization admin to accept them at ${action.url}, or ${DATA_SOURCES_SETTINGS_URL} if that page is unavailable. Never infer acceptance from a data request.\n2. After the admin confirms, call ${context.tool} again with the identical payload${retryIdentity}. If the same terms error persists, stop and ask an organization admin to check access at ${DATA_SOURCES_SETTINGS_URL}.\n\nDo not retry until acceptance is confirmed.`,
+    `${message}\n\n1. Read the agreement with ${context.alexandriaTools === 'dedicated' ? `${ALEXANDRIA_EXECUTE_TOOL} using calls: [{provider: "firecrawl", capability: "terms/show", options: {provider: "${action.terms}"}}]` : `firecrawl_scrape using alexandria: {provider: "firecrawl", capability: "terms/show", options: {provider: "${action.terms}"}}`} and present it to the user. Send terms/show separately from provider execution. Terms are accepted in the Firecrawl dashboard, not through this connection: ask an organization admin to accept them at ${action.url}, or ${DATA_SOURCES_SETTINGS_URL} if that page is unavailable. Never infer acceptance from a data request.\n2. After the admin confirms, call ${context.tool} again with the identical payload${retryIdentity}. If the same terms error persists, stop and ask an organization admin to check access at ${DATA_SOURCES_SETTINGS_URL}.\n\nDo not retry until acceptance is confirmed.`,
     {
       code: TERMS_REQUIRED_CODE,
       status: 403,
