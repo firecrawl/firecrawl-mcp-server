@@ -1747,7 +1747,7 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
       const input = args as Record<string, unknown> | undefined;
       const removedFormats = new Set(['json', 'query', 'summary', 'branding']);
       if (input && typeof input === 'object' && (
-        'jsonOptions' in input || 'queryOptions' in input ||
+        input.jsonOptions != null || input.queryOptions != null ||
         (Array.isArray(input.formats) && input.formats.some((format) =>
           removedFormats.has(typeof format === 'string' ? format : format?.type)
         ))

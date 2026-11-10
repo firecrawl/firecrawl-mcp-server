@@ -414,7 +414,7 @@ Scrape content from a single URL with advanced options.
 **Common mistakes:**
 
 - Passing a list of URLs to one scrape call. Call scrape once per URL in MCP. If you specifically need one bulk API operation, use the Firecrawl API batch endpoint outside MCP.
-- Requesting `json`, `query`, `summary`, or `branding`, or supplying `jsonOptions` or `queryOptions`. These delegate interpretation to another model and are no longer supported by this tool. Calls using them fail with `invalid_request` and guidance to request markdown instead, before fetching the page.
+- Requesting `json`, `query`, `summary`, or `branding`, or supplying `jsonOptions` or `queryOptions`. These delegate interpretation to another model and are no longer supported by this tool. Calls using them fail with `invalid_request` and guidance to request markdown instead, before fetching the page. Null option placeholders from cached schemas are treated as absent.
 
 **Choosing the right format:**
 

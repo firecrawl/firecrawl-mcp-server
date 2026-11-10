@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [3.39.0] - 2026-11-09
 
 ### Added
 

@@ -233,7 +233,6 @@ test('scrape refuses delegated extraction before any API request on both HTTP su
       { jsonOptions: { prompt: 'Describe the writing style' } },
       { jsonOptions: { schema: { type: 'object' } } },
       { queryOptions: { prompt: 'Describe the writing style', mode: 'directQuote' } },
-      { jsonOptions: null },
       { queryOptions: {} },
     ]) {
       const response = await call('firecrawl_scrape', { url: 'https://example.com', ...options });
@@ -243,6 +242,13 @@ test('scrape refuses delegated extraction before any API request on both HTTP su
     }
     assert.equal(api.requests.length, before);
     assertAccepted(await call('firecrawl_scrape', { url: 'https://example.com' }), 'default scrape');
+    assertAccepted(await call('firecrawl_scrape', {
+      url: 'https://example.com', formats: ['markdown'], jsonOptions: null, queryOptions: null,
+    }), 'cached optional fields sent as null');
+    const body = lastBody(api, '/v2/scrape');
+    assert.deepEqual(body.formats, ['markdown']);
+    assert.equal('jsonOptions' in body, false);
+    assert.equal('queryOptions' in body, false);
   }
 });
 

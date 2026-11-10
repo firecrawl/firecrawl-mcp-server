@@ -19,6 +19,9 @@ for (const credential of ['', 'fc-test']) {
     ]);
     assert.equal('jsonOptions' in properties, false);
     assert.equal('queryOptions' in properties, false);
+    for (const field of ['json', 'answer', 'summary', 'branding']) {
+      assert.equal(field in scrape.outputSchema.properties, false);
+    }
     assert.doesNotMatch(scrape.description + init.instructions, /JSON matching a supplied schema|targeted answer|branding data/);
     for (const options of [
       ...['json', 'query', 'summary', 'branding'].map((type) => ({ formats: [type] })),
