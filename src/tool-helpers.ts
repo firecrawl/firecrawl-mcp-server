@@ -285,9 +285,11 @@ export async function relayExchangeError(
   try {
     return await run();
   } catch (error) {
-    // A retryable refusal ran no provider, and the request id stays bound to the same payload,
-    // so one resend is safe. A second refusal is relayed like any other.
-    if (!retryableRefusal(error)) throw relayed(error, context);
+    // A retryable refusal ran no provider. Only a call sent with a request id is resent, once:
+    // the API binds that id to the payload and answers a repeat from its record instead of
+    // running it again, which an unpinned POST such as a crawl start has no equivalent of.
+    // A second refusal is relayed like any other.
+    if (!context.requestId || !retryableRefusal(error)) throw relayed(error, context);
   }
   await new Promise((resolve) => setTimeout(resolve, PRECHECK_RETRY_DELAY_MS));
   try {
