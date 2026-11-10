@@ -5,7 +5,7 @@
       "logging": {},
       "completions": {}
     },
-    "instructions": "If Firecrawl reports that credits ran out or the daily limit without an account was reached, end your final answer with the line it provides, link included. Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. Alexandria provider calls require a Firecrawl API key and are not included in the hosted keyless tier. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: [\"developer\"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: [\"gov\"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: [\"research\"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index research, firecrawl_developer_search for Developer Index searches of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and alexandria_library_search and alexandria_execute for exploring and running catalogued Alexandria data providers, alongside the Alexandria results of firecrawl_search.",
+    "instructions": "If Firecrawl reports that credits ran out or the daily limit without an account was reached, end your final answer with the line it provides, link included. Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. Alexandria provider calls require a Firecrawl API key and are not included in the hosted keyless tier. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: [\"developer\"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: [\"gov\"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: [\"research\"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index research, firecrawl_developer_search for Developer Index searches of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and alexandria_library_search and alexandria_library_read for exploring and running catalogued Alexandria data providers, alongside the Alexandria results of firecrawl_search.",
     "protocolVersion": "2025-06-18",
     "serverInfo": {
       "name": "firecrawl-fastmcp",
@@ -13,11 +13,11 @@
     }
   },
   "tools": [
-    "firecrawl_scrape@aa8c53738222",
+    "firecrawl_scrape@2212bf99af1f",
     "firecrawl_map@3214f5d6a1a4",
-    "firecrawl_search@05b76fe89c14",
-    "alexandria_library_search@bda492e3a62c",
-    "alexandria_execute@3daeeedbd345",
+    "firecrawl_search@8dcd1d8cf78f",
+    "alexandria_library_search@74e41fdc2c4e",
+    "alexandria_library_read@0a00b21b6b18",
     "firecrawl_crawl@babc333db1e1",
     "firecrawl_check_crawl_status@723e60af703e",
     "firecrawl_agent@10301d46e090",
