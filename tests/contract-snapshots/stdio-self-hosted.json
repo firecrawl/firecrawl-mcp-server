@@ -13,7 +13,7 @@
     }
   },
   "tools": [
-    "firecrawl_scrape@52a2c5875741",
+    "firecrawl_scrape@3f1c47877157",
     "firecrawl_map@3214f5d6a1a4",
     "firecrawl_search@05b76fe89c14",
     "alexandria_library_search@33fb413a7826",

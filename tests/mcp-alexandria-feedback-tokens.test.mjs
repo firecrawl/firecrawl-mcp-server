@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { LEGACY_ALEXANDRIA_TOOLS, startStdioWithApi, toolText } from './helpers/exchange-mcp.mjs';
+import { startStdioWithApi, toolText } from './helpers/exchange-mcp.mjs';
 import { callToken, EXCHANGE_CALL } from './helpers/exchange-api.mjs';
 
 const FEEDBACK = {
@@ -106,7 +106,7 @@ test('without tokens the feedback body is unchanged', async (t) => {
 });
 
 test('find-tools tokens are not kept', async (t) => {
-  const { api, client } = await startStdioWithApi(t, { feedbackTokens: true, env: LEGACY_ALEXANDRIA_TOOLS });
+  const { api, client } = await startStdioWithApi(t, { feedbackTokens: true });
   const found = await client.request('tools/call', { name: 'firecrawl_find_tools', arguments: { providers: ['fred'] } });
   assert.doesNotMatch(found.content[0].text, /feedbackToken|fbk\./);
   assert.equal(toolText(found).data.alexandria[0].feedbackRef, undefined);

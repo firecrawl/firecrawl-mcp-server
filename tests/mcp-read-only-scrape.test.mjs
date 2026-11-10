@@ -134,16 +134,9 @@ test('hosted scrape and search are read-only and load profiles without saving', 
   assert.equal(localSearch.annotations.readOnlyHint, true, 'local search annotation remains unchanged');
 });
 
-test('hosted execution refuses terms acceptance on both surfaces and points to the dashboard', async (t) => {
+test('hosted scrape refuses terms acceptance on both surfaces and points to the dashboard', async (t) => {
   const { api, port, searchPort } = await startHosted(t);
   for (const [surfacePort, endpoint] of [[port, '/v2/mcp'], [searchPort, '/v2/mcp-search']]) {
-    // The full surface runs one capability through alexandria_execute; the
-    // search surface keeps firecrawl_scrape with an alexandria body or batch.
-    const dedicated = endpoint === '/v2/mcp';
-    const execution = (alexandria) =>
-      dedicated
-        ? { name: 'alexandria_execute', arguments: [alexandria].flat().at(-1) }
-        : { name: 'firecrawl_scrape', arguments: { alexandria } };
     const acceptance = { provider: 'firecrawl', capability: 'terms/accept', options: { provider: 'benzinga', version: 'v1', digest: 'a'.repeat(64), confirmed: true } };
     for (const alexandria of [
       acceptance,
@@ -155,7 +148,10 @@ test('hosted execution refuses terms acceptance on both surfaces and points to t
       const result = await rpcResult(surfacePort, endpoint, {
         id: 5,
         method: 'tools/call',
-        params: execution(alexandria),
+        params: {
+          name: 'firecrawl_scrape',
+          arguments: { alexandria },
+        },
         headers: { 'x-api-key': 'fc-hosted-test' },
       });
       assert.equal(result.isError, true, endpoint);
@@ -165,7 +161,7 @@ test('hosted execution refuses terms acceptance on both surfaces and points to t
     const shown = await rpcResult(surfacePort, endpoint, {
       id: 6,
       method: 'tools/call',
-      params: execution({ provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } }),
+      params: { name: 'firecrawl_scrape', arguments: { alexandria: { provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } } } },
       headers: { 'x-api-key': 'fc-hosted-test' },
     });
     assert.notEqual(shown.isError, true, JSON.stringify(shown));

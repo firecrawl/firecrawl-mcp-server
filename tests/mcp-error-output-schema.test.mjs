@@ -403,25 +403,11 @@ for (const { name, payload, delivered } of [
   }
 }
 
-test('an alexandria body sent to firecrawl_scrape reaches an SDK client as the alexandria_execute call', async (t) => {
-  const call = { provider: 'fred', capability: 'series/observations', options: { series_id: 'CPIAUCSL' } };
-  const result = await assertReadableError(t, {
-    apiUrl: 'http://127.0.0.1:9',
-    session: apiKey,
-    name: 'firecrawl_scrape',
-    args: { alexandria: [call] },
-    includes: 'firecrawl_scrape fetches pages only.',
-  });
-  assert.deepEqual(result.structuredContent, {
-    success: false,
-    message: 'firecrawl_scrape fetches pages only. Run Alexandria capabilities with alexandria_execute: its arguments are one {provider, capability, options}.',
-    nextTool: { name: 'alexandria_execute', arguments: call },
-  });
-});
-
 for (const [name, args] of [
   ['alexandria_execute', { provider: 'fred', capability: 'series/observations' }],
   ['alexandria_library_search', { command: 'ls /library' }],
+  // The alexandria body firecrawl_scrape no longer lists.
+  ['firecrawl_scrape', { alexandria: [{ provider: 'fred', capability: 'series/observations' }] }],
 ]) {
   test(`a refused Alexandria request reaches an SDK client with its message (${name})`, async (t) => {
     const apiUrl = await startRefusingApi(t, 403, { success: false, error: 'Exchange is not enabled for this team.', code: 'exchange_disabled' });
