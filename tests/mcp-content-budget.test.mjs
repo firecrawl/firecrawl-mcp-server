@@ -11,7 +11,7 @@ const CLAUDE_CODE_INLINE_LIMIT = 50_000;
 // Quotes, newlines and non-ASCII text grow when serialized as JSON.
 const longText = (chars) => `# Long page\n\n${'Row | "quoted" value | é ü 🔥\n'.repeat(Math.ceil(chars / 29))}`.slice(0, chars);
 
-const metadata = (url) => ({ title: 'A page', sourceURL: url, url, statusCode: 200, scrapeId: 'scrape-1' });
+const metadata = (url) => ({ title: 'A page', sourceURL: url, url, statusCode: 200, scrapeId: `scrape-${new URL(url).pathname.split('/').pop()}` });
 
 const bigPage = {
   markdown: longText(183_402),
@@ -63,6 +63,12 @@ async function startApi(t) {
         : smallPage;
       return json({ success: true, data: page });
     }
+    if (req.method === 'GET' && req.url.startsWith('/v2/scrape/')) {
+      const stored = [bigPage, linksPage, smallPage].find((page) => req.url === `/v2/scrape/${page.metadata.scrapeId}`);
+      if (stored) return json({ success: true, data: stored });
+      res.writeHead(404, { 'content-type': 'application/json' });
+      return res.end(JSON.stringify({ success: false, error: 'Job not found.' }));
+    }
     if (req.method === 'POST' && req.url === '/v2/crawl') {
       return json({ success: true, id: new URL(body.url).pathname.slice(1) });
     }
@@ -88,6 +94,11 @@ async function startApi(t) {
   return { client, call, requests };
 }
 
+/** A window's text without its closing [Truncated: ...] or [Characters ...] marker. */
+function withoutMarker(text) {
+  return text.slice(0, text.lastIndexOf('\n\n['));
+}
+
 function assertInline(result) {
   assert.ok(JSON.stringify(result.structuredContent).length < CLAUDE_CODE_INLINE_LIMIT, `structuredContent is ${JSON.stringify(result.structuredContent).length} chars`);
   assert.ok(result.content[0].text.length < CLAUDE_CODE_INLINE_LIMIT, `text is ${result.content[0].text.length} chars`);
@@ -99,7 +110,7 @@ test('firecrawl_scrape cuts long content to maxCharacters and leaves structured 
   const result = await call('firecrawl_scrape', { url: 'https://example.com/big', formats: ['markdown', 'links', 'summary'] });
   const out = result.structuredContent;
   assertInline(result);
-  assert.match(out.markdown, /\n\n\[Truncated: \d+ of 183402 characters shown\. Re-call firecrawl_scrape with a larger maxCharacters for more\.\]$/);
+  assert.match(out.markdown, /\n\n\[Truncated: \d+ of 183402 characters shown\. Call firecrawl_scrape \{"scrapeId":"scrape-big","startIndex":\d+\} for the next part\.\]$/);
   assert.ok(out.markdown.startsWith(bigPage.markdown.slice(0, 10_000)));
   assert.ok(out.links.length < bigPage.links.length);
   assert.deepEqual(out.links, bigPage.links.slice(0, out.links.length));
@@ -108,7 +119,10 @@ test('firecrawl_scrape cuts long content to maxCharacters and leaves structured 
   assert.deepEqual(out.metadata, bigPage.metadata);
   assert.equal(out.truncated, true);
   assert.equal(out.totalLength, 183_402);
-  assert.match(out.warning, /^Content truncated: markdown at [\d,]+ of 183,402 characters, links at [\d,]+ of 3,000 items\. Re-call with a larger maxCharacters/);
+  assert.match(out.warning, /^Content truncated: markdown at [\d,]+ of 183,402 characters, links at [\d,]+ of 3,000 items\. To read on without scraping again, call firecrawl_scrape \{"scrapeId":"scrape-big","startIndex":\d+\}\. Or re-call with a larger maxCharacters/);
+  assert.equal(out.scrapeId, 'scrape-big');
+  assert.equal(out.startIndex, 0);
+  assert.equal(out.nextStartIndex, withoutMarker(out.markdown).length);
   assert.match(out.warning, /formats \["query"\] or \["summary"\]/);
   assert.doesNotMatch(out.warning, /onlyMainContent/);
   assert.equal('maxCharacters' in requests.at(-1).body, false);
@@ -118,6 +132,7 @@ test('firecrawl_scrape cuts long content to maxCharacters and leaves structured 
   assert.ok(larger.markdown.length > 2 * out.markdown.length, String(larger.markdown.length));
   assert.ok(JSON.stringify(larger, null, 2).length <= 125_000);
   assert.match(larger.warning, /or set onlyMainContent: true\.$/);
+  assert.match(larger.warning, /call firecrawl_scrape \{"scrapeId":"scrape-big","startIndex":\d+,"maxCharacters":120000\}\./);
   assert.equal(requests.at(-1).body.onlyMainContent, false);
   assert.equal('maxCharacters' in requests.at(-1).body, false);
 
@@ -163,7 +178,7 @@ test('scrape, crawl and crawl status only add maxCharacters to their inputs and 
   const { tools } = await client.request('tools/list', {});
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
   const previous = {
-    firecrawl_scrape: ['url', 'formats', 'queryOptions', 'screenshotOptions', 'parsers', 'pdfOptions', 'onlyMainContent', 'redactPII', 'includeTags', 'excludeTags', 'waitFor', 'actions', 'mobile', 'skipTlsVerification', 'removeBase64Images', 'location', 'storeInCache', 'zeroDataRetention', 'maxAge', 'lockdown', 'proxy', 'profile', 'timeout', 'requestId', 'alexandria', 'toolDetail', 'domainTools'],
+    firecrawl_scrape: ['url', 'formats', 'queryOptions', 'screenshotOptions', 'parsers', 'pdfOptions', 'onlyMainContent', 'redactPII', 'includeTags', 'excludeTags', 'waitFor', 'actions', 'mobile', 'skipTlsVerification', 'removeBase64Images', 'location', 'storeInCache', 'zeroDataRetention', 'maxAge', 'lockdown', 'proxy', 'profile', 'timeout', 'requestId', 'alexandria', 'toolDetail', 'domainTools', 'scrapeId', 'startIndex'],
     firecrawl_crawl: ['url', 'prompt', 'excludePaths', 'includePaths', 'maxDiscoveryDepth', 'sitemap', 'limit', 'allowExternalLinks', 'allowSubdomains', 'crawlEntireDomain', 'delay', 'maxConcurrency', 'webhook', 'webhookHeaders', 'deduplicateSimilarURLs', 'ignoreQueryParameters', 'zeroDataRetention', 'scrapeOptions'],
     firecrawl_check_crawl_status: ['id'],
   };
@@ -209,7 +224,7 @@ test('firecrawl_crawl inlines pages up to the result budget and lists the rest',
   const huge = await call('firecrawl_check_crawl_status', { id: 'huge' });
   assertInline(huge);
   assert.equal(huge.structuredContent.data.length, 1);
-  assert.match(huge.structuredContent.data[0].markdown, /\[Truncated: \d+ of 120000 characters shown\. Call firecrawl_scrape on https:\/\/example\.com\/docs\/page-0 with a larger maxCharacters for more\.\]$/);
+  assert.match(huge.structuredContent.data[0].markdown, /\[Truncated: \d+ of 120000 characters shown\. Call firecrawl_scrape \{"scrapeId":"scrape-page-0","startIndex":\d+\} for the rest of this page\.\]$/);
   assert.equal(huge.structuredContent.omittedPages, 2);
   assert.match(huge.structuredContent.warning, /2 pages left out: https:\/\/example\.com\/docs\/page-1, https:\/\/example\.com\/docs\/page-2\. .* 1 inlined page had content cut at 40,000 characters or less/);
 });
@@ -220,4 +235,57 @@ test('a small crawl keeps its result shape', async (t) => {
   assert.deepEqual(out, {
     id: 'small', status: 'completed', completed: 2, total: 2, creditsUsed: 2, next: null, data: CRAWLS.small,
   });
+});
+
+test('firecrawl_scrape reads a cut page on by scrapeId and startIndex without scraping again', async (t) => {
+  const { client, call, requests } = await startApi(t);
+  const first = (await call('firecrawl_scrape', { url: 'https://example.com/big', formats: ['markdown', 'links'] })).structuredContent;
+  let text = withoutMarker(first.markdown);
+  let next = first.nextStartIndex;
+  const posts = requests.filter((r) => r.method === 'POST').length;
+  let windows = 0;
+  let last;
+  while (next !== undefined) {
+    assert.equal(next, text.length);
+    const result = await call('firecrawl_scrape', { scrapeId: first.scrapeId, startIndex: next });
+    assertInline(result);
+    last = result.structuredContent;
+    assert.equal(last.startIndex, next);
+    assert.equal(last.scrapeId, 'scrape-big');
+    assert.equal(last.totalLength, 183_402);
+    assert.match(last.markdown, new RegExp(`\\[Characters ${next}-\\d+ of 183402 shown\\. `));
+    assert.equal('links' in last, false);
+    assert.deepEqual(last.json, bigPage.json);
+    assert.equal(last.summary, bigPage.summary);
+    assert.deepEqual(last.metadata, bigPage.metadata);
+    assert.match(last.warning, /^Showing markdown characters [\d,]+-[\d,]+ of 183,402\. links is only in the first window\./);
+    text += withoutMarker(last.markdown);
+    next = last.nextStartIndex;
+    windows += 1;
+  }
+  assert.equal(text, bigPage.markdown);
+  assert.ok(windows >= 2, String(windows));
+  assert.match(last.markdown, /This is the end of the markdown\.\]$/);
+  assert.match(last.warning, /This window ends the markdown\./);
+  assert.doesNotMatch(last.warning, /To read on/);
+  assert.equal(last.truncated, true); // links are left out of later windows
+  assert.equal(requests.filter((r) => r.method === 'POST').length, posts);
+  assert.equal(requests.filter((r) => r.url === '/v2/scrape/scrape-big').length, windows);
+
+  const restart = (await call('firecrawl_scrape', { scrapeId: 'scrape-big' })).structuredContent;
+  assert.equal(restart.startIndex, 0);
+  assert.ok(restart.markdown.startsWith(bigPage.markdown.slice(0, 30_000)));
+  assert.ok(Array.isArray(restart.links));
+
+  const missing = await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { scrapeId: 'scrape-gone', startIndex: 40_000 } });
+  assert.equal(missing.isError, true);
+  assert.match(missing.content[0].text, /Could not read scrape scrape-gone: Job not found\. Stored results are kept for 24 hours/);
+
+  const stray = await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { url: 'https://example.com/big', startIndex: 40_000 } }).catch((error) => ({ isError: true, error }));
+  assert.equal(stray.isError, true);
+
+  const zdr = (await call('firecrawl_scrape', { url: 'https://example.com/big', zeroDataRetention: true })).structuredContent;
+  assert.equal(zdr.scrapeId, undefined);
+  assert.equal(zdr.nextStartIndex, undefined);
+  assert.match(zdr.markdown, /Re-call firecrawl_scrape with a larger maxCharacters for more\.\]$/);
 });

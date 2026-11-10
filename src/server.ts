@@ -50,7 +50,9 @@ import {
   crawlMaxCharactersDescription,
   fitCrawlResult,
   fitScrapeDocument,
+  scrapeIdDescription,
   scrapeMaxCharactersDescription,
+  startIndexDescription,
 } from './content-budget';
 import {
   findToolsSchema,
@@ -1293,6 +1295,8 @@ export function createFirecrawlMcpServer(
         .positive()
         .optional()
         .describe(`URL mode only: ${scrapeMaxCharactersDescription} Ignored with alexandria.`),
+      scrapeId: z.string().min(1).optional().describe(scrapeIdDescription),
+      startIndex: z.number().int().min(0).optional().describe(startIndexDescription),
       requestId: z
         .string()
         .regex(/^[A-Za-z0-9._:-]{1,128}$/)
@@ -1317,8 +1321,12 @@ export function createFirecrawlMcpServer(
         ),
     })
     .refine(
-      (args) => Boolean(args.url) !== Boolean(args.alexandria),
-      'Provide exactly one of url or alexandria'
+      (args) => Boolean(args.url || args.scrapeId) !== Boolean(args.alexandria),
+      'Provide exactly one of url or alexandria (or scrapeId to read on from a cut result)'
+    )
+    .refine(
+      (args) => args.startIndex === undefined || !!args.scrapeId,
+      'startIndex applies with scrapeId only: pass the scrapeId and nextStartIndex a cut result returned'
     )
     .refine(
       (args) =>
@@ -1736,6 +1744,42 @@ export function createFirecrawlMcpServer(
     return asText(parseJson);
   }
 
+  /** The id a scrape result can be read back by, from its metadata. */
+  function storedScrapeId(doc: unknown): string | undefined {
+    const id = (doc as { metadata?: { scrapeId?: unknown } } | undefined)?.metadata?.scrapeId;
+    return typeof id === 'string' && id ? id : undefined;
+  }
+
+  /**
+   * A scrape's stored result, by its id, from GET /v2/scrape/{id}: no new
+   * scrape and no credits. The API keeps results for 24 hours, not for teams
+   * with zero data retention, and serves them only to the team that scraped.
+   */
+  async function readStoredScrape(
+    session: SessionData | undefined,
+    scrapeId: string,
+    origin: string
+  ): Promise<unknown> {
+    if (isKeylessMode(session)) {
+      const message = 'scrapeId needs a Firecrawl API key. Without one, scrape the url again with a larger maxCharacters.';
+      throw new UserError(message, { success: false, error: { code: 'invalid_request', message } });
+    }
+    const client = getClient(session);
+    try {
+      const res = await (client as any).http.get(
+        `/v2/scrape/${encodeURIComponent(scrapeId)}`,
+        originHeaders(origin)
+      );
+      return res?.data?.data ?? {};
+    } catch (error) {
+      const response = (error as { response?: { status?: number; data?: { error?: unknown } } })?.response;
+      if (!response?.status || response.status >= 500) throw error;
+      const reason = typeof response.data?.error === 'string' ? response.data.error : `HTTP ${response.status}.`;
+      const message = `Could not read scrape ${scrapeId}: ${reason} Stored results are kept for 24 hours, are not kept with zero data retention, and are only readable by the team that scraped them. Scrape the url again, with a larger maxCharacters if needed.`;
+      throw new UserError(message, { success: false, error: { code: 'scrape_not_found', status: response.status, message } });
+    }
+  }
+
   const scrapeTool: RegisteredTool = {
     name: 'firecrawl_scrape',
     annotations: {
@@ -1749,7 +1793,7 @@ export function createFirecrawlMcpServer(
     description: `
 Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, or a targeted answer. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use \`firecrawl_search\` when additional web sources are needed; on an authenticated session, \`firecrawl_map\` lists a site's URLs and \`firecrawl_crawl\` collects a set of pages. \`url\` may omit the scheme (\`example.com/page\`); it is read as https.
 
-Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch or a smaller \`maxAge\` to bound staleness. A successful response does not by itself confirm the page is still current. Long content is cut at \`maxCharacters\` (default 40,000) with a \`warning\`; raise it to read more. ${SAFE_MODE ? 'A named browser profile loads saved session data without saving changes to it.' : 'Browser actions can change the live page when interactive actions are enabled.'} Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback.
+Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch or a smaller \`maxAge\` to bound staleness. A successful response does not by itself confirm the page is still current. Long content is cut at \`maxCharacters\` (default 40,000) with a \`warning\`; pass the returned \`scrapeId\` and \`nextStartIndex\` as \`scrapeId\` and \`startIndex\` to read the next part without scraping again. ${SAFE_MODE ? 'A named browser profile loads saved session data without saving changes to it.' : 'Browser actions can change the live page when interactive actions are enabled.'} Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback.
 
 On an authenticated session, \`firecrawl_search\` and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.
 
@@ -1773,10 +1817,14 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
         alexandria,
         requestId: suppliedRequestId,
         maxCharacters,
+        scrapeId,
+        startIndex,
         ...options
       } = args as {
         requestId?: string;
         maxCharacters?: number;
+        scrapeId?: string;
+        startIndex?: number;
         url?: string;
         alexandria?: z.infer<typeof exchangeCallSchema> | z.infer<typeof exchangeCallsSchema>;
       } & Record<string, unknown>;
@@ -1790,6 +1838,13 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
         });
         return structuredJsonText(
           await executeExchangeCalls(session, alexandria, suppliedRequestId, options.timeout as number | undefined, origin, false, feedbackStoreFor(session, sessionId))
+        );
+      }
+      if (scrapeId) {
+        log.info('Reading stored scrape', { scrapeId });
+        const doc = await readStoredScrape(session, scrapeId, origin);
+        return structuredText(
+          fitScrapeDocument(withoutDiscoveredToolPrices(doc), { maxCharacters, startIndex, scrapeId })
         );
       }
       const transformed = transformScrapeParams(
@@ -1825,7 +1880,14 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
           } as any),
         { tool: 'firecrawl_scrape' }
       );
-      return structuredText(fitScrapeDocument(withoutDiscoveredToolPrices(res), { maxCharacters, ...cleaned }));
+      const doc = withoutDiscoveredToolPrices(res);
+      return structuredText(
+        fitScrapeDocument(doc, {
+          maxCharacters,
+          ...cleaned,
+          scrapeId: cleaned.zeroDataRetention === true ? undefined : storedScrapeId(doc),
+        })
+      );
     },
   };
   server.addTool({
@@ -2811,7 +2873,9 @@ Crawl results can be large; use conservative limits when full-site coverage is u
         pollInterval,
         timeout
       );
-      return structuredText(fitCrawlResult(res, maxCharacters));
+      return structuredText(
+        fitCrawlResult(res, maxCharacters, { continuable: cleaned.zeroDataRetention !== true })
+      );
     },
   });
 
@@ -2846,7 +2910,7 @@ Retrieve the current status, progress, and available results for an existing cra
         id,
         requestOrigin(mcpClient, session)
       );
-      return structuredText(fitCrawlResult(res, maxCharacters));
+      return structuredText(fitCrawlResult(res, maxCharacters, { continuable: true }));
     },
   });
 

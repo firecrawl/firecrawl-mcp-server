@@ -33,9 +33,15 @@ export const RESULT_SIZE_META = { 'anthropic/maxResultSizeChars': MAX_MAX_CHARAC
 
 const RANGE = `default ${DEFAULT_MAX_CHARACTERS}, from ${MIN_MAX_CHARACTERS} to ${MAX_MAX_CHARACTERS}; values outside are clamped`;
 
-export const scrapeMaxCharactersDescription = `Most characters of page content to return (${RANGE}). markdown, html and rawHtml are each cut to this length, and end with a [Truncated: ...] marker; links and images lists are shortened the same way. When the fields together would exceed it, links and images are shortened first, then the text fields to a shared shorter length. json, answer, summary and metadata are never cut. A cut result sets truncated, totalLength (the full length of the longest cut field) and a warning. Raise it to read more of a long page, or ask a question with formats ["query"] instead.`;
+export const scrapeMaxCharactersDescription = `Most characters of page content to return (${RANGE}). markdown, html and rawHtml are each cut to this length, and end with a [Truncated: ...] marker; links and images lists are shortened the same way. When the fields together would exceed it, links and images are shortened first, then the text fields to a shared shorter length. json, answer, summary and metadata are never cut. A cut result sets truncated, totalLength and a warning, and, when the page can be read on, scrapeId and nextStartIndex: pass them back as scrapeId and startIndex for the next window, or ask a question with formats ["query"] instead.`;
 
-export const crawlMaxCharactersDescription = `Most characters of content to return per page and, with room for metadata, in the whole result (${RANGE}). Each page's markdown, html and rawHtml are cut as in firecrawl_scrape; pages past the whole-result budget are not inlined, and the result sets truncated, omittedPages and a warning listing their URLs. Scrape those URLs, or call firecrawl_check_crawl_status with a larger maxCharacters to inline more.`;
+export const scrapeIdDescription =
+  'Continue a cut result: the scrapeId it returned (also metadata.scrapeId). Reads the stored result of that scrape, kept for 24 hours, without scraping the page again; url and other scrape options are not needed and are ignored. Needs an API key, and is unavailable for zero data retention scrapes.';
+
+export const startIndexDescription =
+  'With scrapeId: the character in the page text (markdown, else html, else rawHtml) where the returned window starts; pass the nextStartIndex of the previous window. Default 0. Later windows return only the page text and the small fields.';
+
+export const crawlMaxCharactersDescription = `Most characters of content to return per page and, with room for metadata, in the whole result (${RANGE}). Each page's markdown, html and rawHtml are cut as in firecrawl_scrape, and a cut page's marker names the firecrawl_scrape scrapeId and startIndex that read on; pages past the whole-result budget are not inlined, and the result sets truncated, omittedPages and a warning listing their URLs. Scrape those URLs, or call firecrawl_check_crawl_status with a larger maxCharacters to inline more.`;
 
 const STRING_FIELDS = ['markdown', 'html', 'rawHtml'];
 const ARRAY_FIELDS = ['links', 'images'];
@@ -44,11 +50,23 @@ type Json = Record<string, unknown>;
 
 interface Cut {
   field: string;
+  /** Where the returned part starts: characters for text, always 0 for a list. */
+  start: number;
   shown: number;
   total: number;
   unit: 'characters' | 'items';
   /** Characters of the uncut field, as JSON for a list. */
   length: number;
+  /** Set when the field is left out of a later window. */
+  omitted?: boolean;
+}
+
+/** Which part of a document to return, and what a cut field's marker says to do next. */
+interface View {
+  /** Where the page text's window starts; other content fields are left out after 0. */
+  startIndex: number;
+  /** The marker's advice for a field cut at `next`; `primary` is the windowed page text. */
+  hint(field: string, next: number, primary: boolean): string;
 }
 
 function isRecord(value: unknown): value is Json {
@@ -69,24 +87,56 @@ function maxCharactersFrom(value: unknown): number {
   return Math.min(MAX_MAX_CHARACTERS, Math.max(MIN_MAX_CHARACTERS, Math.floor(value)));
 }
 
-/** `doc` with each text field longer than `limit` and each list longer than `listLimit` cut to it. */
-function cutDocument(doc: Json, limit: number, listLimit: number, hint: string): { doc: Json; cuts: Cut[] } {
+/** The page text a window moves through: markdown, else html, else rawHtml. */
+function primaryField(doc: Json): string | undefined {
+  return STRING_FIELDS.find((field) => typeof doc[field] === 'string');
+}
+
+/** `value[start, end)` without splitting a surrogate pair at `end`. */
+function windowEnd(value: string, start: number, limit: number): number {
+  const end = Math.min(value.length, start + limit);
+  return end < value.length && /[\uD800-\uDBFF]/.test(value[end - 1] ?? '') ? end - 1 : end;
+}
+
+/**
+ * `doc` with each text field longer than `limit` and each list longer than
+ * `listLimit` cut to it. Past the first window, the page text is windowed
+ * from `view.startIndex` and the other content fields are left out.
+ */
+function cutDocument(doc: Json, limit: number, listLimit: number, view: View): { doc: Json; cuts: Cut[] } {
   const out: Json = { ...doc };
   const cuts: Cut[] = [];
+  const primary = primaryField(doc);
+  const later = view.startIndex > 0;
   for (const field of STRING_FIELDS) {
     const value = doc[field];
-    if (typeof value === 'string' && value.length > limit) {
-      out[field] = cutString(value, limit, hint);
-      cuts.push({ field, shown: limit, total: value.length, unit: 'characters', length: value.length });
+    if (typeof value !== 'string') continue;
+    const total = value.length;
+    if (later && field !== primary) {
+      delete out[field];
+      cuts.push({ field, start: 0, shown: 0, total, unit: 'characters', length: total, omitted: true });
+      continue;
     }
+    const start = field === primary ? Math.min(view.startIndex, total) : 0;
+    if (start === 0 && total <= limit) continue;
+    const end = windowEnd(value, start, limit);
+    const advice = end < total ? view.hint(field, end, field === primary) : `This is the end of the ${field}.`;
+    out[field] = start === 0
+      ? cutString(value, end, advice)
+      : `${value.slice(start, end)}\n\n[Characters ${start}-${end} of ${total} shown. ${advice}]`;
+    cuts.push({ field, start, shown: end - start, total, unit: 'characters', length: total });
   }
   for (const field of ARRAY_FIELDS) {
     const value = doc[field];
-    const length = Array.isArray(value) ? JSON.stringify(value).length : 0;
-    if (Array.isArray(value) && length > listLimit) {
+    if (!Array.isArray(value)) continue;
+    const length = JSON.stringify(value).length;
+    if (later) {
+      delete out[field];
+      cuts.push({ field, start: 0, shown: 0, total: value.length, unit: 'items', length, omitted: true });
+    } else if (length > listLimit) {
       const kept = cutArray(value, listLimit);
       out[field] = kept;
-      cuts.push({ field, shown: kept.length, total: value.length, unit: 'items', length });
+      cuts.push({ field, start: 0, shown: kept.length, total: value.length, unit: 'items', length });
     }
   }
   return { doc: out, cuts };
@@ -107,12 +157,12 @@ type Finish = (doc: Json, cuts: Cut[]) => Json;
 function fitDocument(
   doc: Json,
   maxCharacters: number,
-  hint: string,
+  view: View,
   finish: Finish = (cut) => cut
 ): { doc: Json; cut: boolean } {
   const budget = maxCharacters + RESULT_OVERHEAD;
   const at = (limit: number, listLimit: number) => {
-    const { doc: cut, cuts } = cutDocument(doc, limit, listLimit, hint);
+    const { doc: cut, cuts } = cutDocument(doc, limit, listLimit, view);
     return cuts.length ? finish(cut, cuts) : doc;
   };
   const fits = (limit: number, listLimit: number) => size(at(limit, listLimit)) <= budget;
@@ -134,25 +184,67 @@ function withWarning(result: Json, note: string): string {
   return typeof result.warning === 'string' && result.warning ? `${result.warning} ${note}` : note;
 }
 
-/** A `firecrawl_scrape` document cut to `maxCharacters`; a document that fits is returned as is. */
+/** The follow-up call that reads the window of `scrapeId` starting at `startIndex`. */
+function continuationCall(scrapeId: string, startIndex: number, maxCharacters?: number): string {
+  const args = { scrapeId, startIndex, ...(maxCharacters !== undefined ? { maxCharacters } : {}) };
+  return `firecrawl_scrape ${JSON.stringify(args)}`;
+}
+
+/**
+ * A `firecrawl_scrape` document cut to `maxCharacters`, or the window of its
+ * page text that starts at `startIndex`; a document that fits is returned as
+ * is. With `scrapeId`, a cut result says how to read the next window of the
+ * stored result by that id instead of scraping again.
+ */
 export function fitScrapeDocument(
   doc: unknown,
-  options: { maxCharacters?: unknown; onlyMainContent?: unknown }
+  options: { maxCharacters?: unknown; onlyMainContent?: unknown; startIndex?: unknown; scrapeId?: string }
 ): unknown {
   if (!isRecord(doc)) return doc;
+  const maxCharacters = maxCharactersFrom(options.maxCharacters);
+  const explicitMax = typeof options.maxCharacters === 'number' ? maxCharacters : undefined;
+  const startIndex =
+    typeof options.startIndex === 'number' && options.startIndex > 0 ? Math.floor(options.startIndex) : 0;
+  const { scrapeId } = options;
+  const primary = primaryField(doc);
+  const view: View = {
+    startIndex,
+    hint: (_field, next, isPrimary) =>
+      isPrimary && scrapeId
+        ? `Call ${continuationCall(scrapeId, next, explicitMax)} for the next part.`
+        : 'Re-call firecrawl_scrape with a larger maxCharacters for more.',
+  };
   const narrow = options.onlyMainContent === false ? ', or set onlyMainContent: true' : '';
   const finish: Finish = (cut, cuts) => {
-    const parts = cuts.map((c) => `${c.field} at ${count(c.shown)} of ${count(c.total)} ${c.unit}`);
-    const totalLength = Math.max(...cuts.map((c) => c.length));
-    const note = `Content truncated: ${parts.join(', ')}. Re-call with a larger maxCharacters (up to ${count(MAX_MAX_CHARACTERS)}), use formats ["query"] or ["summary"] to get an answer instead of the full page${narrow}.`;
-    return { ...cut, truncated: true, totalLength, warning: withWarning(doc, note) };
+    const page = cuts.find((c) => c.field === primary && !c.omitted);
+    const next = page && page.start + page.shown < page.total ? page.start + page.shown : undefined;
+    const parts = cuts
+      .filter((c) => !c.omitted)
+      .map((c) =>
+        c.start > 0
+          ? `${c.field} characters ${count(c.start)}-${count(c.start + c.shown)} of ${count(c.total)}`
+          : `${c.field} at ${count(c.shown)} of ${count(c.total)} ${c.unit}`
+      );
+    const omitted = cuts.filter((c) => c.omitted).map((c) => c.field);
+    const notes = [`${startIndex > 0 ? 'Showing' : 'Content truncated:'} ${parts.join(', ')}.`];
+    if (omitted.length) notes.push(`${omitted.join(', ')} ${omitted.length === 1 ? 'is' : 'are'} only in the first window.`);
+    if (page && next === undefined && page.start > 0) notes.push(`This window ends the ${page.field}.`);
+    if (scrapeId && next !== undefined) {
+      notes.push(`To read on without scraping again, call ${continuationCall(scrapeId, next, explicitMax)}.`);
+    }
+    notes.push(
+      `${scrapeId && next !== undefined ? 'Or re-call' : 'Re-call'} with a larger maxCharacters (up to ${count(MAX_MAX_CHARACTERS)}), or use formats ["query"] or ["summary"] to get an answer instead of the full page${narrow}.`
+    );
+    const more = next !== undefined || cuts.some((c) => c.field !== primary && (c.omitted || c.shown < c.total));
+    return {
+      ...cut,
+      ...(more ? { truncated: true } : {}),
+      totalLength: page ? page.total : Math.max(...cuts.map((c) => c.length)),
+      ...(scrapeId && page ? { scrapeId, startIndex: page.start, ...(next !== undefined ? { nextStartIndex: next } : {}) } : {}),
+      warning: withWarning(doc, notes.join(' ')),
+    };
   };
-  return fitDocument(
-    doc,
-    maxCharactersFrom(options.maxCharacters),
-    'Re-call firecrawl_scrape with a larger maxCharacters for more.',
-    finish
-  ).doc;
+  return fitDocument(doc, maxCharacters, view, finish).doc;
 }
 
 function pageUrl(doc: unknown): string | undefined {
@@ -179,18 +271,27 @@ function keepWithin(docs: unknown[], used: number, budget: number): number {
  * the result. The pages left out are counted, and listed by URL as far as a
  * short list goes, in `warning`. A crawl that fits is returned as is.
  */
-export function fitCrawlResult(result: Json, maxCharactersArg?: unknown): Json {
+export function fitCrawlResult(
+  result: Json,
+  maxCharactersArg?: unknown,
+  { continuable = false }: { continuable?: boolean } = {}
+): Json {
   if (!Array.isArray(result.data) || !result.data.length) return result;
   const maxCharacters = maxCharactersFrom(maxCharactersArg);
   const budget = maxCharacters + RESULT_OVERHEAD;
   const fitted = result.data.map((doc) => {
     if (!isRecord(doc)) return { doc, cut: false };
     const where = pageUrl(doc);
-    return fitDocument(
-      doc,
-      maxCharacters,
-      `Call firecrawl_scrape${where ? ` on ${where}` : ''} with a larger maxCharacters for more.`
-    );
+    const scrapeId = continuable && isRecord(doc.metadata) && typeof doc.metadata.scrapeId === 'string'
+      ? doc.metadata.scrapeId
+      : undefined;
+    return fitDocument(doc, maxCharacters, {
+      startIndex: 0,
+      hint: (_field, next, primary) =>
+        primary && scrapeId
+          ? `Call ${continuationCall(scrapeId, next)} for the rest of this page.`
+          : `Call firecrawl_scrape${where ? ` on ${where}` : ''} with a larger maxCharacters for more.`,
+    });
   });
   const pages = fitted.map((page) => page.doc);
 

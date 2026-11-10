@@ -15,14 +15,14 @@
         }
       },
       "tools": [
-        "firecrawl_scrape@0a1e87e4a9ee",
+        "firecrawl_scrape@7fd3d8eb5d54",
         "firecrawl_map@3214f5d6a1a4",
         "firecrawl_search@2cda94cea355",
         "firecrawl_find_tools@d138e7a0897b",
         "firecrawl_search_feedback@6ca0521ad2bd",
         "firecrawl_feedback@771747894435",
-        "firecrawl_crawl@f04b8d9d0dec",
-        "firecrawl_check_crawl_status@aeaa0dd65bc1",
+        "firecrawl_crawl@f179b1b88482",
+        "firecrawl_check_crawl_status@c4910f3f8e83",
         "firecrawl_agent@10301d46e090",
         "firecrawl_agent_status@6c6e5f971f8e",
         "firecrawl_interact@8040e21dad51",
@@ -62,7 +62,7 @@
         }
       },
       "tools": [
-        "firecrawl_scrape@0a1e87e4a9ee",
+        "firecrawl_scrape@7fd3d8eb5d54",
         "firecrawl_search@2cda94cea355",
         "firecrawl_parse@bd79ed89827b"
       ]
