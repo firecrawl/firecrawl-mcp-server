@@ -350,6 +350,7 @@ test('max_credits refuses a call that could cost more, before any provider runs'
   const refused = await client.callTool({ name: 'people_company_enrich', arguments: { contact_fields: ['work_email'], fullenrich: { people } } });
   assert.equal(refused.isError, true);
   assert.match(refused.content[0].text, /could cost up to 1200 credits \(fullenrich 1200\), above max_credits 1000/);
+  assert.match(refused.content[0].text, /If the user did not ask for this cap, retry it as is: set max_credits to at least 1200\. If they did, ask them before raising it/);
   assert.equal(api.calls.length, 0);
 
   const allowed = await client.callTool({ name: 'people_company_enrich', arguments: { max_credits: 1200, contact_fields: ['work_email'], fullenrich: { people } } });
