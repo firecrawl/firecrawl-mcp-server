@@ -80,8 +80,9 @@ results on this surface carry no `feedbackTool` pointer, since
 The full surface names its Alexandria tools differently: it lists
 `alexandria_library_search` and `alexandria_execute`, its `firecrawl_scrape`
 lists a URL only, and it does not list `firecrawl_find_tools` (both still
-answer the calls they used to). This surface
-keeps the two names above because the listing declares them: its hooks set
+answer the calls they used to). This surface keeps listing
+`firecrawl_find_tools` and `firecrawl_scrape` with `alexandria` because the
+listing declares them: its hooks set
 `alexandriaTools: 'legacy'` (`src/service/index.ts`), and follow-up calls in
 its results (`nextTool`) are addressed to `firecrawl_scrape` and
 `firecrawl_find_tools`. Moving this surface to the new names is a tool-set

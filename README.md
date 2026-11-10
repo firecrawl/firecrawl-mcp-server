@@ -559,7 +559,7 @@ To get the full text of a few results in the same call, add `"scrapeOptions": { 
 
 Set `highlights` to `true` to request query-relevant highlights or `false` to keep the original search snippets. Omit it to use the API's default behavior.
 
-Add `"sources": ["alexandria"]` for semantic tool discovery in `data.tools`, optionally mixed with web/news/images. A query is required. Use `alexandria_library_search` to explore the whole library and read contracts; see [Alexandria Tools](#15-alexandria-tools).
+Add `"sources": ["alexandria"]` for semantic tool discovery in `data.tools`, optionally mixed with web/news/images. A query is required. Use `alexandria_library_search` to explore the whole library and read contracts (`firecrawl_find_tools` on the search-only endpoint); see [Alexandria Tools](#15-alexandria-tools).
 
 For scientific papers, see [Research Tools](#12-research-tools-firecrawl_research_): they search paper abstracts and full text, while `categories: ["research"]` here filters ordinary web results to research-affiliated websites.
 
@@ -1206,11 +1206,12 @@ The tool result relays it as an error with `structuredContent` carrying `code`,
 `status: 403`, `requestId`, the `requiresAction` object unchanged, and
 `next_actions` (`human_action_required` then `retry_same_request`). Accepting
 terms is a legal act, so an organization admin accepts them in the Firecrawl dashboard, not
-through MCP. Use the returned `nextTool` call to read the agreement through `alexandria_execute`
-with `{provider: "firecrawl", capability: "terms/show", options: {provider: "<provider>"}}`,
+through MCP. Use the returned `nextTool` call to read the agreement: `alexandria_execute`
+with `{provider: "firecrawl", capability: "terms/show", options: {provider: "<provider>"}}`
+(on the search-only endpoint, the same call through `firecrawl_scrape` with `alexandria`),
 sent separately from provider execution, and present it to the user. An organization admin then
 accepts it at `requiresAction.url`, or at https://www.firecrawl.dev/app/settings?tab=data-sources.
-`alexandria_execute` refuses every other `terms/*` capability, so it makes no account changes. A request
+Both tools refuse every other `terms/*` capability, so they make no account changes. A request
 for data is not consent, and no automatic acceptance or uncertain retries occur.
 No credits are charged for the blocked retrieval. After the admin confirms acceptance, call the same
 tool again with the identical payload and `requestId`.
@@ -1390,7 +1391,7 @@ MIT License - see LICENSE file for details
 
 ### Structured data and large results
 
-Authenticated search defaults to web results, semantic Alexandria tools, and domain matches. Start with the actual question. Use `alexandria_library_search` to check whether a provider covers the data and to read a selected contract: the library README, a category, a provider, then one capability file. Run capabilities through `alexandria_execute`; URL scraping and search never execute provider tools.
+Authenticated search defaults to web results, semantic Alexandria tools, and domain matches. Start with the actual question. Use `alexandria_library_search` to check whether a provider covers the data and to read a selected contract: the library README, a category, a provider, then one capability file. Run capabilities through `alexandria_execute`; URL scraping and search never execute provider tools. The search-only endpoint has `firecrawl_find_tools` and `firecrawl_scrape` with `alexandria` for these two steps.
 
 Read the recorded example under `/examples` only if the input or output shape is unclear. Inspect related capabilities together, for example `cat` two contracts in one command, and reuse what you read.
 

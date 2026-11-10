@@ -368,6 +368,7 @@ test('Streamable HTTP: a 2.x client probing for 2026-07-28 falls back to 2025-11
 test('stdio: a 2.x client probing for 2026-07-28 falls back to 2025-11-25', { timeout: 60_000 }, async (t) => {
   const env = {
     ...process.env,
+    FIRECRAWL_MCP_ALEXANDRIA_TOOLS: '',
     MCP_DELEGATED_CREDENTIAL_SECRET: 'test-mcp-delegated-credential-secret-32',
     ...STDIO_ENV,
   };

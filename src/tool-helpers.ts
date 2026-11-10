@@ -1,6 +1,6 @@
 import { UserError } from './mcp/runtime.js';
 import { z } from 'zod';
-import { searchSourceSchema, ALEXANDRIA_SOURCES_ALWAYS_ON, executeToolCall, type AlexandriaTools } from './alexandria';
+import { searchSourceSchema, ALEXANDRIA_EXECUTE_TOOL, ALEXANDRIA_LIBRARY_TOOL, ALEXANDRIA_SOURCES_ALWAYS_ON, executeToolCall, type AlexandriaTools } from './alexandria';
 import { MCP_CONNECTION_GUIDE_URL } from './recovery.js';
 
 export function removeEmptyTopLevel<T extends Record<string, any>>(
@@ -91,11 +91,11 @@ export const searchToolBaseFields = {
 /** The same fields where Alexandria has its own tools: the two descriptions that name the catalogue tool. */
 export const dedicatedSearchToolFields = {
   ...searchToolBaseFields,
-  toolDetail: z.enum(['compact', 'summary', 'full']).optional().describe('Compact by default. Compact returns only provider, capability and description; full includes contracts. Read a selected tool\'s contract with alexandria_library_search.'),
+  toolDetail: z.enum(['compact', 'summary', 'full']).optional().describe('Compact by default. Compact returns only provider, capability and description; full includes contracts. Read a selected tool\'s contract with ' + ALEXANDRIA_LIBRARY_TOOL + '.'),
   query: z
     .string()
     .min(1)
-    .describe('Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Browse the whole library with alexandria_library_search.'),
+    .describe('Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Browse the whole library with ' + ALEXANDRIA_LIBRARY_TOOL + '.'),
 };
 
 // Both surfaces forbid specifying includeDomains and excludeDomains together.
@@ -238,7 +238,7 @@ function termsRequiredError(
   const retryIdentity = requestId ? ` and requestId ${requestId}` : '';
   const message = `Alexandria provider terms required. An organization admin must accept the ${action.terms} provider's terms (version ${action.version}) before this request can run.`;
   return new UserError(
-    `${message}\n\n1. Read the agreement with ${context.alexandriaTools === 'dedicated' ? 'alexandria_execute using' : 'firecrawl_scrape using alexandria:'} {provider: "firecrawl", capability: "terms/show", options: {provider: "${action.terms}"}} and present it to the user. Send terms/show separately from provider execution. Terms are accepted in the Firecrawl dashboard, not through this connection: ask an organization admin to accept them at ${action.url}, or ${DATA_SOURCES_SETTINGS_URL} if that page is unavailable. Never infer acceptance from a data request.\n2. After the admin confirms, call ${context.tool} again with the identical payload${retryIdentity}. If the same terms error persists, stop and ask an organization admin to check access at ${DATA_SOURCES_SETTINGS_URL}.\n\nDo not retry until acceptance is confirmed.`,
+    `${message}\n\n1. Read the agreement with ${context.alexandriaTools === 'dedicated' ? `${ALEXANDRIA_EXECUTE_TOOL} using` : 'firecrawl_scrape using alexandria:'} {provider: "firecrawl", capability: "terms/show", options: {provider: "${action.terms}"}} and present it to the user. Send terms/show separately from provider execution. Terms are accepted in the Firecrawl dashboard, not through this connection: ask an organization admin to accept them at ${action.url}, or ${DATA_SOURCES_SETTINGS_URL} if that page is unavailable. Never infer acceptance from a data request.\n2. After the admin confirms, call ${context.tool} again with the identical payload${retryIdentity}. If the same terms error persists, stop and ask an organization admin to check access at ${DATA_SOURCES_SETTINGS_URL}.\n\nDo not retry until acceptance is confirmed.`,
     {
       code: TERMS_REQUIRED_CODE,
       status: 403,

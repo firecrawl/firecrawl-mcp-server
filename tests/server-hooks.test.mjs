@@ -582,7 +582,7 @@ async function startStdioEmbedder(t, hooksSource) {
          .start({ transportType: 'stdio' });`,
     ],
     {
-      env: { ...process.env, FIRECRAWL_API_KEY: '', FIRECRAWL_API_URL: '' },
+      env: { ...process.env, FIRECRAWL_MCP_ALEXANDRIA_TOOLS: '', FIRECRAWL_API_KEY: '', FIRECRAWL_API_URL: '' },
       stdio: ['pipe', 'pipe', 'pipe'],
     }
   );

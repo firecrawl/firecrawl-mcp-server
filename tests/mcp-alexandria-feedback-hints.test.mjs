@@ -47,6 +47,7 @@ test('Alexandria executions and discovery results carry the feedback hint; utili
   assert.equal(bash.feedbackTool, undefined);
 
   const library = await call('alexandria_library_search', { command: 'ls /library' });
+  assert.notEqual(library.isError, true, JSON.stringify(library));
   assert.equal(library.structuredContent.feedbackTool, undefined);
 });
 

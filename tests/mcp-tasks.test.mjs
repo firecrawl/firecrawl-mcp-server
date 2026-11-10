@@ -170,7 +170,7 @@ const STDIO_FIXTURE = fileURLToPath(new URL('./fixtures/modern-stdio.mjs', impor
 
 async function connectStdio(t, api, { tasks = true, legacy = false } = {}) {
   const child = spawn(process.execPath, [STDIO_FIXTURE], {
-    env: { ...process.env, FIRECRAWL_API_URL: api.url },
+    env: { ...process.env, FIRECRAWL_MCP_ALEXANDRIA_TOOLS: '', FIRECRAWL_API_URL: api.url },
     stdio: ['pipe', 'pipe', 'inherit'],
   });
   t.after(() => child.kill());

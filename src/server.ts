@@ -1389,12 +1389,6 @@ export function createFirecrawlMcpServer(
       ),
   });
 
-  /** A capability call an agent can send as it stands, or nothing when the value is not one. */
-  function asExchangeCall(value: unknown): z.infer<typeof exchangeCallSchema> | undefined {
-    const parsed = exchangeCallSchema.safeParse(value);
-    return parsed.success ? parsed.data : undefined;
-  }
-
   const parseOptionParamsSchema = z.object({
     formats: z
       .array(
@@ -2243,8 +2237,8 @@ Returns result groups in \`data\` and an operation \`id\`.
         // is read as this tool's arguments.
         if (input.alexandria === undefined || input.provider !== undefined) return undefined;
         const calls = Array.isArray(input.alexandria) ? input.alexandria : [input.alexandria];
-        const call = calls.length === 1 ? asExchangeCall(calls[0]) : undefined;
-        if (!call) {
+        const call = calls.length === 1 ? calls[0] : undefined;
+        if (typeof call !== 'object' || call === null || Array.isArray(call)) {
           const message = `${ALEXANDRIA_EXECUTE_TOOL} runs one capability per call: send provider, capability and options as its arguments, with no alexandria wrapper.`;
           return {
             content: [{ type: 'text', text: message }],
@@ -2252,6 +2246,8 @@ Returns result groups in \`data\` and an operation \`id\`.
             structuredContent: { success: false, message },
           };
         }
+        // The call is validated as this tool's own arguments, so a key it
+        // does not take is refused by name, not dropped.
         delete input.alexandria;
         Object.assign(input, call);
         return undefined;

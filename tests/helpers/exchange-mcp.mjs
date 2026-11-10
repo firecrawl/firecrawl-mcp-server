@@ -54,6 +54,8 @@ function spawnServer(env) {
       ...process.env,
       MCP_DELEGATED_CREDENTIAL_SECRET:
         'test-mcp-delegated-credential-secret-32',
+      // A value in the developer's shell must not change which tools a test server lists.
+      FIRECRAWL_MCP_ALEXANDRIA_TOOLS: '',
       ...env,
     },
     stdio: ['pipe', 'pipe', 'pipe'],

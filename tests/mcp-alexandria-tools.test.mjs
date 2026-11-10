@@ -73,6 +73,9 @@ test('alexandria_execute reads one legacy alexandria body as its arguments and r
     // Options belong under `options`; a flat option is named, not dropped.
     { provider: 'fred', capability: 'series/observations', series_id: 'CPIAUCSL' },
     { ...EXCHANGE_CALL, url: 'https://example.com' },
+    // The same holds inside a legacy body: an unknown key is refused, not dropped.
+    { alexandria: { ...EXCHANGE_CALL, optionz: { series_id: 'CPIAUCSL' } } },
+    { alexandria: [{ provider: 'fred' }] },
     { provider: 'firecrawl', capability: 'terms/accept', options: { provider: 'benzinga' } },
   ]) {
     await callExpectingError(client, { name: 'alexandria_execute', arguments: args });
