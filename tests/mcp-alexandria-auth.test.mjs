@@ -16,11 +16,13 @@ test('local keyless stdio refuses every Exchange path with the explanatory error
       arguments: { query: 'nvidia', sources: [{ type: 'exchange' }] },
       name: 'firecrawl_search',
     },
+    { arguments: { calls: [EXCHANGE_CALL] }, name: 'alexandria_library_read' },
+    // The body firecrawl_scrape no longer lists is held to the same rule.
     { arguments: { alexandria: [EXCHANGE_CALL] }, name: 'firecrawl_scrape' },
     { arguments: { categories: ['finance'] }, name: 'firecrawl_find_tools' },
     { arguments: {}, name: 'firecrawl_find_tools' },
-    { arguments: { alexandria: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } }] }, name: 'firecrawl_scrape' },
-    { arguments: { alexandria: [{ provider: 'firecrawl', capability: 'terms/accept', options: { provider: 'benzinga', version: 'v1', digest: 'a'.repeat(64), confirmed: true } }] }, name: 'firecrawl_scrape' },
+    { arguments: { calls: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } }] }, name: 'alexandria_library_read' },
+    { arguments: { calls: [{ provider: 'firecrawl', capability: 'terms/accept', options: { provider: 'benzinga', version: 'v1', digest: 'a'.repeat(64), confirmed: true } }] }, name: 'alexandria_library_read' },
   ]) {
     const result = await client.request('tools/call', params);
     assert.equal(result.isError, true, JSON.stringify(result));
@@ -60,8 +62,8 @@ test('a hosted API key header reaches the Exchange', async (t) => {
         id: 4,
         headers: { 'x-api-key': 'fc-exchange-header' },
         params: {
-          arguments: { alexandria: [EXCHANGE_CALL] },
-          name: 'firecrawl_scrape',
+          arguments: { calls: [EXCHANGE_CALL] },
+          name: 'alexandria_library_read',
         },
       })
     ).text()
@@ -87,8 +89,10 @@ test('rejected API keys return in-band errors without leaking credentials on Ale
   for (const params of [
     { name: 'firecrawl_find_tools', arguments: { categories: ['finance'] } },
     { name: 'firecrawl_search', arguments: { query: 'rates', sources: ['alexandria'] } },
+    { name: 'alexandria_library_read', arguments: { calls: [EXCHANGE_CALL] } },
+    // The body firecrawl_scrape no longer lists.
     { name: 'firecrawl_scrape', arguments: { alexandria: [EXCHANGE_CALL] } },
-    { name: 'firecrawl_scrape', arguments: { alexandria: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } }] } },
+    { name: 'alexandria_library_read', arguments: { calls: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } }] } },
   ]) {
     const before = api.requests.length;
     const result = await client.request('tools/call', params);

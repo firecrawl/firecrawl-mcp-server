@@ -71,11 +71,21 @@ no request from this surface can ask the API to fetch third-party page content.
 The schema and body construction enforce this directly, and contract tests guard
 the behavior. No runtime filter is involved.
 
-`firecrawl_scrape` on this surface is the same tool as on the full surface
-(URL retrieval or Alexandria execution), registered with a description that
-names only tools this surface exposes. `firecrawl_find_tools` is registered the
-same way. Alexandria results on this surface carry no `feedbackTool` pointer,
-since `firecrawl_feedback` is not registered here.
+`firecrawl_scrape` on this surface retrieves a URL or executes Alexandria
+capabilities, and is registered with a description that names only tools this
+surface exposes. `firecrawl_find_tools` is registered the same way. Alexandria
+results on this surface carry no `feedbackTool` pointer, since
+`firecrawl_feedback` is not registered here.
+
+The full surface runs Alexandria capabilities through `alexandria_library_read`, and
+its `firecrawl_scrape` lists a URL only (it still accepts an `alexandria`
+body). This surface keeps execution on
+`firecrawl_scrape` because the listing declares that tool for it: its tool
+filter leaves `alexandria_library_read` out, and a surface without that tool
+keeps the earlier shape, so follow-up calls in its results (`nextTool`) are
+addressed to `firecrawl_scrape`. Moving this
+surface to `alexandria_library_read` is a tool-set change, so it needs the listing
+updated first.
 
 `firecrawl_scrape` is read-only here (`readOnlyHint: true`): the surface runs in
 hosted safe mode, so it takes no browser `actions`, and a named `profile` loads
