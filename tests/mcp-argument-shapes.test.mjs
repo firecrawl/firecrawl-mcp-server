@@ -126,7 +126,7 @@ test('optional parameters sent as null are treated as absent', async (t) => {
   assert.deepEqual(lastBody(api, '/v2/search').scrapeOptions, { formats: ['markdown'] });
 
   const missingUrl = await full('firecrawl_scrape', { url: null });
-  assert.match(rejectionText(missingUrl), /url or alexandria/, 'a required field sent as null is still refused');
+  assert.match(rejectionText(missingUrl), /url/, 'a required field sent as null is still refused');
 });
 
 test('numeric strings become numbers within the same bounds', async (t) => {

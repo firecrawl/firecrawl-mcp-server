@@ -29,7 +29,7 @@ const RANGE = `default ${DEFAULT_MAX_CHARACTERS}, from ${MIN_MAX_CHARACTERS} to 
 export const scrapeMaxCharactersDescription = `Most characters of page content to return (${RANGE}). markdown, html and rawHtml are each cut to this length, and end with a [Truncated: ...] marker; links and images lists are shortened the same way. When the fields together would exceed it, links and images are shortened first, then the text fields to a shared shorter length. json, answer, summary and metadata are never cut. A cut result sets truncated, totalLength and a warning, and, when the page can be read on, scrapeId and nextStartIndex: pass them back as scrapeId and startIndex for the next window, or ask a question with formats ["query"] instead.`;
 
 export const scrapeIdDescription =
-  'Continue a cut result: the scrapeId it returned (also metadata.scrapeId). Reads the stored result of that scrape, kept for 24 hours, without scraping the page again; url and other scrape options are not needed and are ignored. Needs an API key, and is unavailable for zero data retention scrapes.';
+  'Continue a cut result: the scrapeId it returned (also metadata.scrapeId). Reads the stored result of that scrape, kept for 24 hours, without scraping the page again; url and the other scrape options are ignored. Needs an API key, and is unavailable for zero data retention scrapes.';
 
 export const startIndexDescription =
   'With scrapeId: the character in the page text (markdown, else html, else rawHtml) where the returned window starts; pass the nextStartIndex of the previous window. Default 0. Later windows return only the page text and the small fields.';
@@ -177,9 +177,13 @@ function withWarning(result: Json, note: string): string {
   return typeof result.warning === 'string' && result.warning ? `${result.warning} ${note}` : note;
 }
 
-/** The follow-up call that reads the window of `scrapeId` starting at `startIndex`. */
-function continuationCall(scrapeId: string, startIndex: number, maxCharacters?: number): string {
-  const args = { scrapeId, startIndex, ...(maxCharacters !== undefined ? { maxCharacters } : {}) };
+/**
+ * The follow-up call that reads the window of `scrapeId` starting at
+ * `startIndex`. It carries the page `url` too, which the call ignores, because
+ * some surfaces list `url` as required.
+ */
+function continuationCall(scrapeId: string, startIndex: number, maxCharacters?: number, url?: string): string {
+  const args = { ...(url ? { url } : {}), scrapeId, startIndex, ...(maxCharacters !== undefined ? { maxCharacters } : {}) };
   return `firecrawl_scrape ${JSON.stringify(args)}`;
 }
 
@@ -191,7 +195,7 @@ function continuationCall(scrapeId: string, startIndex: number, maxCharacters?: 
  */
 export function fitScrapeDocument(
   doc: unknown,
-  options: { maxCharacters?: unknown; onlyMainContent?: unknown; startIndex?: unknown; scrapeId?: string }
+  options: { maxCharacters?: unknown; onlyMainContent?: unknown; startIndex?: unknown; scrapeId?: string; url?: string }
 ): unknown {
   if (!isRecord(doc)) return doc;
   const maxCharacters = maxCharactersFrom(options.maxCharacters);
@@ -199,12 +203,13 @@ export function fitScrapeDocument(
   const startIndex =
     typeof options.startIndex === 'number' && options.startIndex > 0 ? Math.floor(options.startIndex) : 0;
   const { scrapeId } = options;
+  const url = options.url ?? pageUrl(doc);
   const primary = primaryField(doc);
   const view: View = {
     startIndex,
     hint: (_field, next, isPrimary) =>
       isPrimary && scrapeId
-        ? `Call ${continuationCall(scrapeId, next, explicitMax)} for the next part.`
+        ? `Call ${continuationCall(scrapeId, next, explicitMax, url)} for the next part.`
         : 'Re-call firecrawl_scrape with a larger maxCharacters for more.',
   };
   const narrow = options.onlyMainContent === false ? ', or set onlyMainContent: true' : '';
@@ -223,7 +228,7 @@ export function fitScrapeDocument(
     if (omitted.length) notes.push(`${omitted.join(', ')} ${omitted.length === 1 ? 'is' : 'are'} only in the first window.`);
     if (page && next === undefined && page.start > 0) notes.push(`This window ends the ${page.field}.`);
     if (scrapeId && next !== undefined) {
-      notes.push(`To read on without scraping again, call ${continuationCall(scrapeId, next, explicitMax)}.`);
+      notes.push(`To read on without scraping again, call ${continuationCall(scrapeId, next, explicitMax, url)}.`);
     }
     notes.push(
       `${scrapeId && next !== undefined ? 'Or re-call' : 'Re-call'} with a larger maxCharacters (up to ${count(MAX_MAX_CHARACTERS)}), or use formats ["query"] or ["summary"] to get an answer instead of the full page${narrow}.`
@@ -282,7 +287,7 @@ export function fitCrawlResult(
       startIndex: 0,
       hint: (_field, next, primary) =>
         primary && scrapeId
-          ? `Call ${continuationCall(scrapeId, next)} for the rest of this page.`
+          ? `Call ${continuationCall(scrapeId, next, undefined, where)} for the rest of this page.`
           : `Call firecrawl_scrape${where ? ` on ${where}` : ''} with a larger maxCharacters for more.`,
     });
   });

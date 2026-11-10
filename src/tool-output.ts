@@ -145,6 +145,15 @@ export const scrapeOutputSchema = z
   })
   .describe('A scraped document, or the Alexandria execution envelope when `alexandria` was passed.');
 
+export const alexandriaReadOutputSchema = z
+  .object({
+    success,
+    error,
+    data: unknown('One result per call, in the same order, in `data.alexandria`, each with `data`, `records`, or an `error` with a code.'),
+    ...alexandriaEnvelope,
+  })
+  .describe('The results of the Alexandria capabilities that ran, or a pointer to them when they were retained.');
+
 export const mapOutputSchema = z
   .object({
     links: unknown('URLs discovered under the website.'),

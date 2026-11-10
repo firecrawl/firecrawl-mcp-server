@@ -110,7 +110,7 @@ test('firecrawl_scrape cuts long content to maxCharacters and leaves structured 
   const result = await call('firecrawl_scrape', { url: 'https://example.com/big', formats: ['markdown', 'links', 'summary'] });
   const out = result.structuredContent;
   assertInline(result);
-  assert.match(out.markdown, /\n\n\[Truncated: \d+ of 183402 characters shown\. Call firecrawl_scrape \{"scrapeId":"scrape-big","startIndex":\d+\} for the next part\.\]$/);
+  assert.match(out.markdown, /\n\n\[Truncated: \d+ of 183402 characters shown\. Call firecrawl_scrape \{"url":"https:\/\/example\.com\/big","scrapeId":"scrape-big","startIndex":\d+\} for the next part\.\]$/);
   assert.ok(out.markdown.startsWith(bigPage.markdown.slice(0, 10_000)));
   assert.ok(out.links.length < bigPage.links.length);
   assert.deepEqual(out.links, bigPage.links.slice(0, out.links.length));
@@ -119,7 +119,7 @@ test('firecrawl_scrape cuts long content to maxCharacters and leaves structured 
   assert.deepEqual(out.metadata, bigPage.metadata);
   assert.equal(out.truncated, true);
   assert.equal(out.totalLength, 183_402);
-  assert.match(out.warning, /^Content truncated: markdown at [\d,]+ of 183,402 characters, links at [\d,]+ of 3,000 items\. To read on without scraping again, call firecrawl_scrape \{"scrapeId":"scrape-big","startIndex":\d+\}\. Or re-call with a larger maxCharacters/);
+  assert.match(out.warning, /^Content truncated: markdown at [\d,]+ of 183,402 characters, links at [\d,]+ of 3,000 items\. To read on without scraping again, call firecrawl_scrape \{"url":"https:\/\/example\.com\/big","scrapeId":"scrape-big","startIndex":\d+\}\. Or re-call with a larger maxCharacters/);
   assert.equal(out.scrapeId, 'scrape-big');
   assert.equal(out.startIndex, 0);
   assert.equal(out.nextStartIndex, withoutMarker(out.markdown).length);
@@ -132,7 +132,7 @@ test('firecrawl_scrape cuts long content to maxCharacters and leaves structured 
   assert.ok(larger.markdown.length > 2 * out.markdown.length, String(larger.markdown.length));
   assert.ok(JSON.stringify(larger, null, 2).length <= 125_000);
   assert.match(larger.warning, /or set onlyMainContent: true\.$/);
-  assert.match(larger.warning, /call firecrawl_scrape \{"scrapeId":"scrape-big","startIndex":\d+,"maxCharacters":120000\}\./);
+  assert.match(larger.warning, /call firecrawl_scrape \{"url":"https:\/\/example\.com\/big","scrapeId":"scrape-big","startIndex":\d+,"maxCharacters":120000\}\./);
   assert.equal(requests.at(-1).body.onlyMainContent, false);
   assert.equal('maxCharacters' in requests.at(-1).body, false);
 
@@ -178,7 +178,7 @@ test('scrape, crawl and crawl status only add maxCharacters to their inputs and 
   const { tools } = await client.request('tools/list', {});
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
   const previous = {
-    firecrawl_scrape: ['url', 'formats', 'queryOptions', 'screenshotOptions', 'parsers', 'pdfOptions', 'onlyMainContent', 'redactPII', 'includeTags', 'excludeTags', 'waitFor', 'actions', 'mobile', 'skipTlsVerification', 'removeBase64Images', 'location', 'storeInCache', 'zeroDataRetention', 'maxAge', 'lockdown', 'proxy', 'profile', 'timeout', 'requestId', 'alexandria', 'toolDetail', 'domainTools', 'scrapeId', 'startIndex'],
+    firecrawl_scrape: ['url', 'formats', 'queryOptions', 'screenshotOptions', 'parsers', 'pdfOptions', 'onlyMainContent', 'redactPII', 'includeTags', 'excludeTags', 'waitFor', 'actions', 'mobile', 'skipTlsVerification', 'removeBase64Images', 'location', 'storeInCache', 'zeroDataRetention', 'maxAge', 'lockdown', 'proxy', 'profile', 'timeout', 'toolDetail', 'domainTools', 'scrapeId', 'startIndex'],
     firecrawl_crawl: ['url', 'prompt', 'excludePaths', 'includePaths', 'maxDiscoveryDepth', 'sitemap', 'limit', 'allowExternalLinks', 'allowSubdomains', 'crawlEntireDomain', 'delay', 'maxConcurrency', 'webhook', 'webhookHeaders', 'deduplicateSimilarURLs', 'ignoreQueryParameters', 'zeroDataRetention', 'scrapeOptions'],
     firecrawl_check_crawl_status: ['id'],
   };
@@ -186,6 +186,7 @@ test('scrape, crawl and crawl status only add maxCharacters to their inputs and 
     const tool = byName.get(name);
     assert.deepEqual(Object.keys(tool.inputSchema.properties).sort(), [...properties, 'maxCharacters'].sort(), name);
     assert.equal(tool.inputSchema.properties.maxCharacters.type, 'number', name);
+    if (name !== 'firecrawl_check_crawl_status') assert.deepEqual(tool.inputSchema.required ?? [], ['url'], name);
     assert.equal((tool.inputSchema.required ?? []).includes('maxCharacters'), false, name);
     assert.equal(tool._meta['anthropic/maxResultSizeChars'], 150_000, name);
     assert.ok(tool.description.length <= 2_048, name);
@@ -224,7 +225,7 @@ test('firecrawl_crawl inlines pages up to the result budget and lists the rest',
   const huge = await call('firecrawl_check_crawl_status', { id: 'huge' });
   assertInline(huge);
   assert.equal(huge.structuredContent.data.length, 1);
-  assert.match(huge.structuredContent.data[0].markdown, /\[Truncated: \d+ of 120000 characters shown\. Call firecrawl_scrape \{"scrapeId":"scrape-page-0","startIndex":\d+\} for the rest of this page\.\]$/);
+  assert.match(huge.structuredContent.data[0].markdown, /\[Truncated: \d+ of 120000 characters shown\. Call firecrawl_scrape \{"url":"https:\/\/example\.com\/docs\/page-0","scrapeId":"scrape-page-0","startIndex":\d+\} for the rest of this page\.\]$/);
   assert.equal(huge.structuredContent.omittedPages, 2);
   assert.match(huge.structuredContent.warning, /2 pages left out: https:\/\/example\.com\/docs\/page-1, https:\/\/example\.com\/docs\/page-2\. .* 1 inlined page had content cut at 40,000 characters or less/);
 });
@@ -244,10 +245,13 @@ test('firecrawl_scrape reads a cut page on by scrapeId and startIndex without sc
   let next = first.nextStartIndex;
   const posts = requests.filter((r) => r.method === 'POST').length;
   let windows = 0;
-  let last;
+  let last = first;
   while (next !== undefined) {
     assert.equal(next, text.length);
-    const result = await call('firecrawl_scrape', { scrapeId: first.scrapeId, startIndex: next });
+    // The exact follow-up call the warning gives, which carries url for surfaces that require it.
+    const followUp = JSON.parse(last.warning.match(/call firecrawl_scrape (\{[^}]*\})\./)[1]);
+    assert.deepEqual(followUp, { url: 'https://example.com/big', scrapeId: 'scrape-big', startIndex: next });
+    const result = await call('firecrawl_scrape', followUp);
     assertInline(result);
     last = result.structuredContent;
     assert.equal(last.startIndex, next);
