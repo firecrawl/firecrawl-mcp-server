@@ -1214,11 +1214,12 @@ The tool result relays it as an error with `structuredContent` carrying `code`,
 `status: 403`, `requestId`, the `requiresAction` object unchanged, and
 `next_actions` (`human_action_required` then `retry_same_request`). Accepting
 terms is a legal act, so an organization admin accepts them in the Firecrawl dashboard, not
-through MCP. Use the returned `nextTool` call to read the agreement through `alexandria_execute`
-with `{provider: "firecrawl", capability: "terms/show", options: {provider: "<provider>"}}`,
+through MCP. Use the returned `nextTool` call to read the agreement: `alexandria_execute`
+with `{provider: "firecrawl", capability: "terms/show", options: {provider: "<provider>"}}`
+(on the search-only endpoint, the same call through `firecrawl_scrape` with `alexandria`),
 sent separately from provider execution, and present it to the user. An organization admin then
 accepts it at `requiresAction.url`, or at https://www.firecrawl.dev/app/settings?tab=data-sources.
-`alexandria_execute` refuses every other `terms/*` capability, so it makes no account changes. A request
+Both tools refuse every other `terms/*` capability, so they make no account changes. A request
 for data is not consent, and no automatic acceptance or uncertain retries occur.
 No credits are charged for the blocked retrieval. After the admin confirms acceptance, call the same
 tool again with the identical payload and `requestId`.
@@ -1398,7 +1399,7 @@ MIT License - see LICENSE file for details
 
 ### Structured data and large results
 
-Authenticated search defaults to web results, semantic Alexandria tools, and domain matches. Start with the actual question. Use `firecrawl_find_tools` for direct semantic tool lookup, selected contracts, or progressive browsing: categories → providers → compact tools → selected contract. Run tools through `alexandria_execute`; URL scraping and search never execute provider tools.
+Authenticated search defaults to web results, semantic Alexandria tools, and domain matches. Start with the actual question. Use `firecrawl_find_tools` for direct semantic tool lookup, selected contracts, or progressive browsing: categories → providers → compact tools → selected contract. Run tools through `alexandria_execute` (on the search-only endpoint, `firecrawl_scrape` with `alexandria`); URL scraping and search never execute provider tools.
 
 For selected contracts, prefer `expand: ["options", "response"]` and request examples only if the input shape is unclear. Inspect related capabilities together and reuse the returned contracts.
 

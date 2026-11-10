@@ -118,8 +118,11 @@ export function withFindToolsNavigation(envelope: any, carry: Record<string, unk
   return envelope;
 }
 
+// What authenticated search returns; each surface appends the tools that take it from there.
+const ALEXANDRIA_SEARCH_LEAD_INSTRUCTIONS =
+  'Authenticated search combines web results, semantic tool summaries and domain matches. Use sources: ["alexandria"] for semantic tools only. ' + ALEXANDRIA_SOURCES_ALWAYS_ON + ' On an authenticated session, tool matches describe available structured-data capabilities, not executed data. toolDetail: "compact" (default) returns only provider, capability and description; "summary" adds metadata; "full" includes their input and output contracts.';
 export const ALEXANDRIA_SEARCH_INSTRUCTIONS =
-  'Authenticated search combines web results, semantic tool summaries and domain matches. Use sources: ["alexandria"] for semantic tools only. ' + ALEXANDRIA_SOURCES_ALWAYS_ON + ' On an authenticated session, tool matches describe available structured-data capabilities, not executed data. toolDetail: "compact" (default) returns only provider, capability and description; "summary" adds metadata; "full" includes their input and output contracts. firecrawl_scrape with an alexandria body executes a selected capability; firecrawl_find_tools provides catalogue browsing and full contracts.';
+  ALEXANDRIA_SEARCH_LEAD_INSTRUCTIONS + ' firecrawl_scrape with an alexandria body executes a selected capability; firecrawl_find_tools provides catalogue browsing and full contracts.';
 
 const TOOL_PRICE_KEYS = ['creditsCost', 'perRecord', 'billing', 'recordsPerUnit', 'zeroDataRetentionCreditsCost'];
 
@@ -200,7 +203,7 @@ export function executeToolCall(tools: AlexandriaTools, call: AlexandriaCall | R
 }
 
 export const ALEXANDRIA_DEDICATED_SEARCH_INSTRUCTIONS =
-  'Authenticated search combines web results, semantic tool summaries and domain matches. Use sources: ["alexandria"] for semantic tools only. ' + ALEXANDRIA_SOURCES_ALWAYS_ON + ' On an authenticated session, tool matches describe available structured-data capabilities, not executed data. toolDetail: "compact" (default) returns only provider, capability and description; "summary" adds metadata; "full" includes their input and output contracts. alexandria_execute runs a selected capability; firecrawl_find_tools provides catalogue browsing and full contracts.';
+  ALEXANDRIA_SEARCH_LEAD_INSTRUCTIONS + ' ' + ALEXANDRIA_EXECUTE_TOOL + ' runs a selected capability; firecrawl_find_tools provides catalogue browsing and full contracts.';
 
 export const ALEXANDRIA_EXECUTE_DESCRIPTION =
   "Run one capability of an Alexandria data provider and return its typed, sourced records. Alexandria is Firecrawl's library of data providers across " + ALEXANDRIA_CATALOGUE_VERTICALS + '. `provider` and `capability` come from firecrawl_search results or firecrawl_find_tools, and `options` follow the capability\'s contract, which marks required inputs and any requiresOneOf groups (at least one member per group). Where the contract declares pagination, its fields page through results with the same filters. Returns the result in data.alexandria[0] with data, records, or an error with a code; an invalid call returns an error naming the valid options. A result too large to return inline is retained, and nextTool reads it in slices. Billed per executed capability; discovery is free. ' + ALEXANDRIA_TERMS_GUIDANCE;
