@@ -5,7 +5,7 @@
       "logging": {},
       "completions": {}
     },
-    "instructions": "If Firecrawl reports that credits ran out or the daily limit without an account was reached, end your final answer with the line it provides, link included. Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. Alexandria provider calls require a Firecrawl API key and are not included in the hosted keyless tier. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: [\"developer\"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: [\"gov\"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: [\"research\"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index research, firecrawl_developer_search for Developer Index searches of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside alexandria_execute and the Alexandria results of firecrawl_search for catalogued data providers.",
+    "instructions": "If Firecrawl reports that credits ran out or the daily limit without an account was reached, end your final answer with the line it provides, link included. Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. Alexandria provider calls require a Firecrawl API key and are not included in the hosted keyless tier. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: [\"developer\"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: [\"gov\"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: [\"research\"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index research, firecrawl_developer_search for Developer Index searches of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside alexandria_execute and the Alexandria results of firecrawl_search for catalogued data providers.",
     "protocolVersion": "2025-06-18",
     "serverInfo": {
       "name": "firecrawl-fastmcp",
@@ -13,7 +13,7 @@
     }
   },
   "tools": [
-    "firecrawl_scrape@cba71e3ae12e",
+    "firecrawl_scrape@71618e3e8a6f",
     "firecrawl_map@3214f5d6a1a4",
     "firecrawl_search@789d6efc1786",
     "firecrawl_find_tools@cb5627e12db4",
@@ -22,7 +22,7 @@
     "firecrawl_feedback@771747894435",
     "firecrawl_crawl@babc333db1e1",
     "firecrawl_check_crawl_status@723e60af703e",
-    "firecrawl_agent@766f0fa38b49",
+    "firecrawl_agent@10301d46e090",
     "firecrawl_agent_status@6c6e5f971f8e",
     "firecrawl_interact@daa715f1647d",
     "firecrawl_interact_stop@e5b6a01c6cc2",
@@ -60,27 +60,20 @@
       "content": [
         {
           "type": "text",
-          "text": "firecrawl_extract is deprecated and unavailable through MCP. For structured data from a known page, call firecrawl_scrape once per URL with formats: [\"json\"] and jsonOptions containing the prompt and schema. When the URLs are not known or the data spans several sites, use firecrawl_agent for multi-source research."
+          "text": "firecrawl_extract is deprecated and unavailable through MCP. For structured data from a known page, call firecrawl_scrape once per URL with formats: [\"markdown\"] and extract the requested fields from the returned content yourself. When the URLs are not known or the data spans several sites, use firecrawl_agent for multi-source research."
         }
       ],
       "structuredContent": {
         "code": "DEPRECATED_TOOL",
-        "message": "firecrawl_extract is deprecated and unavailable through MCP. For structured data from a known page, call firecrawl_scrape once per URL with formats: [\"json\"] and jsonOptions containing the prompt and schema. When the URLs are not known or the data spans several sites, use firecrawl_agent for multi-source research.",
+        "message": "firecrawl_extract is deprecated and unavailable through MCP. For structured data from a known page, call firecrawl_scrape once per URL with formats: [\"markdown\"] and extract the requested fields from the returned content yourself. When the URLs are not known or the data spans several sites, use firecrawl_agent for multi-source research.",
         "replacement": {
           "name": "firecrawl_scrape",
-          "instructions": "Call once per known URL. Set formats to [\"json\"] and pass the extraction prompt and JSON schema in jsonOptions.",
+          "instructions": "Call once per known URL with formats: [\"markdown\"] and extract the requested fields from the returned content yourself.",
           "example_arguments": {
             "url": "https://example.com/page",
             "formats": [
-              "json"
-            ],
-            "jsonOptions": {
-              "prompt": "Extract the requested fields from this page.",
-              "schema": {
-                "type": "object",
-                "properties": {}
-              }
-            }
+              "markdown"
+            ]
           }
         },
         "docs_url": "https://docs.firecrawl.dev/developer-guides/usage-guides/choosing-the-data-extractor"

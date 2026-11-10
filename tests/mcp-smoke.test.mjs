@@ -1329,7 +1329,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   assert.deepEqual(
     deprecatedExtract.structuredContent.replacement.example_arguments.formats,
-    ['json']
+    ['markdown']
   );
 
   const byName = new Map(tools.tools.map((tool) => [tool.name, tool]));
