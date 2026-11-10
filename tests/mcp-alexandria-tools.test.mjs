@@ -28,6 +28,8 @@ test('the full surface lists alexandria_execute and alexandria_library_search, a
 
   assert.deepEqual(byName.get('alexandria_execute').inputSchema.required, ['provider', 'capability']);
   assert.deepEqual(Object.keys(byName.get('alexandria_library_search').inputSchema.properties), ['command']);
+  // The category folders are named, so a first command can open one directly.
+  assert.match(byName.get('alexandria_library_search').description, /Category folders: companies, developer, .*real-estate, .*sports; `ls \/library` shows any added since/);
 
   const copy = [init.instructions, ...tools.map((tool) => JSON.stringify(tool))].join('\n');
   assert.doesNotMatch(copy, /firecrawl_find_tools|Find Tools|firecrawl_scrape with (an )?alexandria/);
