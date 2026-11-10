@@ -40,7 +40,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Use `firecrawl_credit_usage` to check credits left or what credits were spent on, by month or day, optionally broken down by endpoint or API key.
 - Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control. The session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
 
-This server lists 29 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 11 tools (search, developer, government, and research search, Alexandria catalogue lookup and execution, and people and company search and enrichment).
+This server lists 33 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 11 tools (search, developer, government, and research search, Alexandria catalogue lookup and execution, and people and company search and enrichment).
 
 ## Installation
 
@@ -371,6 +371,7 @@ Use this guide to select the right tool for your task:
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
 - **If you need interactive browser automation** (click, type, navigate): use **interact** with a URL for a fresh page, or **scrape** + **interact** when you already scraped the page or need tighter scrape control
 - **If you need data from a catalogued provider** (Alexandria): search with `sources: ["alexandria"]`, inspect the selected contract with **find_tools**, and execute it with **scrape** `alexandria`
+- **If you need a saved procedure that names those providers:** use **find_skills** and **read_skill**. Set `provider` on **find_skills** to list that provider's skills, and read one with `provider`, `plugin` and `skill`. Save one for your team with **create_skill** or change it with **update_skill**.
 
 ### Quick Reference Table
 
@@ -383,6 +384,10 @@ Use this guide to select the right tool for your task:
 | parse     | Files and hosted upload refs                   | markdown, JSON, or document output               |
 | search    | Web search for info                            | results[]                                        |
 | find_tools | Alexandria catalogue browsing and URL lookup | providers, tool contracts and nextTool navigation |
+| find_skills | Alexandria skill catalogue | skill names and descriptions, with a nextTool that reads one |
+| read_skill | One Alexandria skill file | SKILL.md or another file from that skill |
+| create_skill | Save a team skill | the saved team:<slug> and a nextTool that reads it |
+| update_skill | Change a team skill | the saved skill and a nextTool that reads it |
 | developer | Programming questions over developer sources   | results[] with passages                          |
 | gov       | US primary law and regulatory material         | results[] with snippets                          |
 | agent     | Multi-source research, unknown or many sites   | JSON (structured data)                           |
@@ -564,7 +569,7 @@ For scientific papers, see [Research Tools](#12-research-tools-firecrawl_researc
 
 **Returns:**
 
-- Search results grouped by source (`data.web`, `data.images`, `data.news`), with optional scraped content, plus an `id` field. Every result carries a `source` and a 1-indexed `position`, numbered from 1 within its own group — copy the pair straight into `firecrawl_search_feedback`'s `valuableResults` rather than counting array elements. Pass that `id` to `firecrawl_search_feedback` after you've used the results to refund 1 credit (search costs 2) and improve search quality.
+- Search results grouped by source (`data.web`, `data.images`, `data.news`), with optional scraped content, plus an `id` field. Every result carries a `source` and a 1-indexed `position`, numbered from 1 within its own group — copy the pair straight into `firecrawl_search_feedback`'s `valuableResults` rather than counting array elements. Pass that `id` to `firecrawl_search_feedback` after you've used the results to refund 1 credit (search costs 2) and improve search quality. Omitting `sources` on an authenticated session requests `web`, `alexandria`, and `skills`, except enterprise `zdr` or `anon`, which add neither. Skill cards are free and capped at 3. When the API includes `data.skills`, those short cards (id, name, description, source, optional provider, similarity) are listed after `web` and `tools`. Call `firecrawl_read_skill` with a card's `nextTool` for the full skill. A response without `data.skills` is unchanged. Pass `sources` to include or leave out `skills`. Keyless search stays on `web` only.
 
 **Prompt Example:**
 
@@ -1165,9 +1170,31 @@ Results are in `data.alexandria[0].data`. Follow an item's `nextTool` by calling
 its `name` with its `arguments`; the page's `nextTool` advances pagination.
 Existing `next` objects remain Alexandria discovery calls usable through
 `firecrawl_scrape`. Discovery costs zero credits and never executes the
-provider tools. Read the selected full contract before execution.
+provider tools. Read the selected full contract, including `creditsCost`
+(`includeCosts: true`), before execution. Carbon Arc is 1000 credits a call.
+People Data Labs `person/enrich` and `person/identify` are 60 credits per
+successful call, and `person/search` and `person/bulk` are 50 credits per
+returned or matched record; misses are free. Influencers.club discovery is 45
+credits per creator returned (56 with `return_filter_values`), similar creators
+are 50 per creator, and enrichment calls cost 10 to 330 credits. Read
+`creditsCost` on a Fiber tool before calling it. Government Index and Research
+Index calls are free and count toward a daily plan limit: 1000 a day on Free,
+Hobby and Standard, 2000 on Growth, and unlimited on Scale and Enterprise.
 
 These controls require the matching Alexandria API deployment.
+
+**Skills (`firecrawl_find_skills`, `firecrawl_read_skill`, `firecrawl_create_skill`, `firecrawl_update_skill`):**
+
+These four tools are the whole skills surface. Team and library skills use the same `/v2/scrape` capabilities as the Firecrawl CLI (`find-skills`, `read-skill`, `create-skill`, `update-skill`). Provider-published skills use the same list and read tools: set `provider` on `firecrawl_find_skills`, then read with `provider`, `plugin` and `skill`. They are free, need an API key, and are not on the search-only endpoint.
+
+| Tool | Arguments |
+| --- | --- |
+| `firecrawl_find_skills` | `{}`, `{"query":"firmographics for a target account","limit":5}`, or `{"provider":"acme"}` |
+| `firecrawl_read_skill` | `{"id":"team:weekly-digest"}`, `{"id":"deep-research","path":"references/sources.md"}`, or `{"provider":"acme","plugin":"research","skill":"brief"}` |
+| `firecrawl_create_skill` | `{"from":"deep-research"}` or `{"name":"...","description":"...","body":"..."}` |
+| `firecrawl_update_skill` | `{"id":"team:weekly-digest","baseVersion":2,"enabled":false,"discoverable":false}` |
+
+A library skill cannot be edited; copy it with `firecrawl_create_skill`. There is no delete here. Update can set `enabled` and `discoverable`. `query` is a natural-language goal: official and provider skills are ranked semantically, and team skills still match words. A successful create or update includes `Open it in Firecrawl: https://www.firecrawl.dev/app/alexandria/skills/<slug>` (`<slug>` has no `team:` prefix). Show that line to the user. A provider filter is sent as `provider`, and `query` is sent as `q`; the tool reads later pages until `limit` is filled. Exchange returns `provider` as `{slug, name}` and `plugin` as `{id, displayName}`, with no `skill` field. The read path uses `provider.slug`, `plugin.id`, and the last segment of the skill id. Set `file: true` on read to fetch that skill's file. The Firecrawl API forwards `GET /exchange/provider-skills` and `GET /exchange/provider-skills/:provider/:plugin/:skill` to Exchange `/v1/provider-skills`.
 
 **Execute (`firecrawl_scrape` with `alexandria`):** pass `alexandria` instead of `url` (exactly one of the two; requestId and timeout may also be supplied). A single call or an array of up to ten calls is accepted.
 
