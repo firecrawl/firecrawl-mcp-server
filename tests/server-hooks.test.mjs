@@ -354,6 +354,40 @@ test('toolFilter blocks built-in and module registrations but not extra tools', 
   assert.ok(tools.includes('embed_extra'));
 });
 
+test('a toolFilter that leaves alexandria_library_read out keeps firecrawl_scrape listing an alexandria body', async (t) => {
+  const listed = async (unstable_hooks) => {
+    const port = await startEmbedded(t, { apiUrl: 'http://127.0.0.1:9', apiKey: 'fc-configured', unstable_hooks });
+    const { tools } = await rpc(port, 'tools/list');
+    const { instructions } = await rpc(port, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } });
+    return { instructions, names: tools.map((tool) => tool.name), scrape: tools.find((tool) => tool.name === 'firecrawl_scrape') };
+  };
+
+  // An allowlist written before alexandria_library_read existed.
+  const fixed = await listed({ toolFilter: (name) => name.startsWith('firecrawl_') });
+  assert.equal(fixed.names.includes('alexandria_library_read'), false);
+  assert.ok('alexandria' in fixed.scrape.inputSchema.properties);
+  assert.doesNotMatch([fixed.instructions, fixed.scrape.description].join('\n'), /alexandria_library_read/);
+
+  const open = await listed({});
+  assert.ok(open.names.includes('alexandria_library_read'));
+  assert.equal('alexandria' in open.scrape.inputSchema.properties, false);
+});
+
+test('a field an embedder requires on firecrawl_scrape stays required where the alexandria body is unlisted', async (t) => {
+  const port = await startEmbedded(t, {
+    apiUrl: 'http://127.0.0.1:9',
+    apiKey: 'fc-configured',
+    unstable_hooks: {
+      wrapTool: (tool) =>
+        tool.name === 'firecrawl_scrape' ? { ...tool, parameters: z.object({ ...tool.parameters.shape, purpose: z.string() }) } : tool,
+    },
+  });
+  const { tools } = await rpc(port, 'tools/list');
+  const { inputSchema } = tools.find((tool) => tool.name === 'firecrawl_scrape');
+  assert.deepEqual(inputSchema.required, ['url', 'purpose']);
+  assert.equal('alexandria' in inputSchema.properties, false);
+});
+
 test('outboundRequest credential and headers reach SDK and fetch-based API calls', async (t) => {
   const api = await startFakeApi(t);
   const port = await startEmbedded(t, {

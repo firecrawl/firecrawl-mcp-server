@@ -401,3 +401,16 @@ for (const { name, payload, delivered } of [
     });
   }
 }
+
+for (const [name, args] of [
+  ['alexandria_library_read', { calls: [{ provider: 'fred', capability: 'series/observations' }] }],
+  // The alexandria body firecrawl_scrape no longer lists.
+  ['firecrawl_scrape', { alexandria: [{ provider: 'fred', capability: 'series/observations' }] }],
+]) {
+  test(`a refused Alexandria request reaches an SDK client with its message (${name})`, async (t) => {
+    const apiUrl = await startRefusingApi(t, 403, { success: false, error: 'Exchange is not enabled for this team.', code: 'exchange_disabled' });
+    const result = await assertReadableError(t, { apiUrl, session: apiKey, name, args, includes: 'Exchange is not enabled for this team.' });
+    assert.deepEqual(Object.keys(result.structuredContent).sort(), ['message', 'requestId']);
+    assert.equal(result.structuredContent.message, 'Exchange is not enabled for this team.');
+  });
+}
