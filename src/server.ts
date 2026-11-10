@@ -1792,7 +1792,9 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
       if (dedicatedAlexandria) {
         delete properties.alexandria;
         delete properties.requestId;
-        schema.required = ['url'];
+        // An embedder may have made a field of its own required; keep those.
+        const required = Array.isArray(schema.required) ? (schema.required as string[]) : [];
+        schema.required = ['url', ...required.filter((name) => name !== 'url' && name in properties)];
         for (const key of ALEXANDRIA_IGNORED_SCRAPE_OPTIONS) {
           const field = properties[key] as { description: string };
           const text = field.description.replace(/^URL mode only: /, '').replace(/ Ignored with alexandria\.$/, '');
