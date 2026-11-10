@@ -16,6 +16,8 @@ const IDEMPOTENT = {
   firecrawl_monitor_delete: true,
   firecrawl_monitor_run: false,
 };
+// Starts a billed job but only reads the web and returns data, so clients need not confirm it.
+const READ_ONLY = new Set(['firecrawl_agent']);
 
 test('state-changing tools list idempotentHint to a 2.x SDK client', async (t) => {
   const port = await getFreePort();
@@ -39,7 +41,7 @@ test('state-changing tools list idempotentHint to a 2.x SDK client', async (t) =
   for (const [name, idempotent] of Object.entries(IDEMPOTENT)) {
     assert.ok(annotations[name], `${name} is listed`);
     assert.equal(annotations[name].idempotentHint, idempotent, `${name} idempotentHint`);
-    assert.equal(annotations[name].readOnlyHint, false, `${name} changes state`);
+    assert.equal(annotations[name].readOnlyHint, READ_ONLY.has(name), `${name} readOnlyHint`);
   }
   for (const name of ['firecrawl_feedback', 'firecrawl_search_feedback']) {
     assert.ok(annotations[name], `${name} is listed`);

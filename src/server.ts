@@ -1973,20 +1973,32 @@ Returns result groups in \`data\` and an operation \`id\`.
     const client = getClient(session);
     const requestId = suppliedRequestId ?? randomUUID();
     try {
-      const response = await relayExchangeError(() =>
-        (client as any).http.post(
-          '/v2/scrape',
-          {
-            alexandria,
-            origin,
-            ...(timeout !== undefined ? { timeout } : {}),
-          },
-          {
-            headers: { 'x-request-id': requestId },
-            ...(timeout !== undefined ? { timeoutMs: timeout + 5000 } : {}),
-          }
-        ),
-        { tool: 'firecrawl_scrape', requestId, providers: (Array.isArray(alexandria) ? alexandria : [alexandria]).map(call => call.provider) }
+      const response = await relayExchangeError(
+        (attempt) => {
+          // A resend gets the time the caller has left, keeping the 5 s margin above the API's deadline.
+          const budget =
+            timeout === undefined ? undefined : Math.min(timeout, (attempt?.remainingMs ?? Infinity) - 5000);
+          return (client as any).http.post(
+            '/v2/scrape',
+            {
+              alexandria,
+              origin,
+              ...(budget !== undefined ? { timeout: budget } : {}),
+            },
+            {
+              headers: { 'x-request-id': requestId },
+              ...(budget !== undefined ? { timeoutMs: budget + 5000 } : {}),
+            }
+          );
+        },
+        {
+          tool: 'firecrawl_scrape',
+          requestId,
+          providers: (Array.isArray(alexandria) ? alexandria : [alexandria]).map(call => call.provider),
+          // The API answers a repeat of this request id from its record, so a resend cannot run twice.
+          resend: true,
+          ...(timeout !== undefined ? { budgetMs: timeout + 5000 } : {}),
+        }
       );
       const calls = Array.isArray(alexandria) ? alexandria : [alexandria];
       return alexandriaOutput(
@@ -2044,7 +2056,8 @@ Returns result groups in \`data\` and an operation \`id\`.
         assertExchangeCredential(session);
         const response = await relayExchangeError(
           () => (getClient(session) as any).http.get('/exchange/discover', originHeaders(origin)),
-          { tool: 'firecrawl_find_tools', requestId: session?.requestId }
+          // An idempotent read, so a resend is safe.
+          { tool: 'firecrawl_find_tools', requestId: session?.requestId, resend: true }
         );
         const rows = response?.data?.cohorts;
         if (!Array.isArray(rows) || rows.some((row: any) => typeof row?.cohort !== 'string' || typeof row?.about !== 'string')) {
@@ -2885,7 +2898,7 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
     name: 'firecrawl_agent',
     annotations: {
       title: 'Firecrawl agent',
-      readOnlyHint: false, // Starts an autonomous research agent job on the Firecrawl API.
+      readOnlyHint: true, // Researches and returns data; the job it starts changes nothing on the web or in the account.
       openWorldHint: true, // The agent browses and searches the open web to fulfill the prompt.
       destructiveHint: false, // Gathers information only; does not delete external data or user resources.
       idempotentHint: false, // Each call starts a new research job and is billed again.

@@ -20,11 +20,11 @@
       "firecrawl_research_read_paper@b0cd84d8908a",
       "firecrawl_developer_search@e9810e540216",
       "firecrawl_gov_search@b020bd420f91",
-      "people_company_search@ed8cd4b2250a",
-      "people_company_enrich@c021f960184e",
+      "people_company_search@485c9554245c",
+      "people_company_enrich@cacb558e5fae",
       "firecrawl_search@4469451531db",
-      "firecrawl_find_tools@ab99afba6f1d",
-      "firecrawl_scrape@263d7913353e"
+      "firecrawl_find_tools@09ed419a5f76",
+      "firecrawl_scrape@bc2167d9a65b"
     ]
   },
   "unauthenticated": {
