@@ -17,6 +17,8 @@ test('local keyless stdio refuses every Exchange path with the explanatory error
       name: 'firecrawl_search',
     },
     { arguments: { calls: [EXCHANGE_CALL] }, name: 'alexandria_execute' },
+    // The body firecrawl_scrape no longer lists is held to the same rule.
+    { arguments: { alexandria: [EXCHANGE_CALL] }, name: 'firecrawl_scrape' },
     { arguments: { categories: ['finance'] }, name: 'firecrawl_find_tools' },
     { arguments: {}, name: 'firecrawl_find_tools' },
     { arguments: { calls: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } }] }, name: 'alexandria_execute' },
@@ -88,6 +90,8 @@ test('rejected API keys return in-band errors without leaking credentials on Ale
     { name: 'firecrawl_find_tools', arguments: { categories: ['finance'] } },
     { name: 'firecrawl_search', arguments: { query: 'rates', sources: ['alexandria'] } },
     { name: 'alexandria_execute', arguments: { calls: [EXCHANGE_CALL] } },
+    // The body firecrawl_scrape no longer lists.
+    { name: 'firecrawl_scrape', arguments: { alexandria: [EXCHANGE_CALL] } },
     { name: 'alexandria_execute', arguments: { calls: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } }] } },
   ]) {
     const before = api.requests.length;
