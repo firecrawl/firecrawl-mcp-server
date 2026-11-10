@@ -8,6 +8,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { type ContentResult, type McpRuntime, type ToolExecuteContext, UserError } from './mcp/runtime.js';
+import { executeToolCall, type AlexandriaTools } from './alexandria.js';
 import { requestOrigin } from './origin';
 import { DATA_SOURCES_SETTINGS_URL, relayExchangeError } from './tool-helpers.js';
 import { withStructured } from './tool-output';
@@ -641,6 +642,7 @@ interface Context {
   client: any;
   origin: string;
   tool: string;
+  alexandriaTools: AlexandriaTools;
   gated: Map<Provider, TermsGate>;
 }
 
@@ -674,7 +676,7 @@ async function runCalls(ctx: Context, p: Provider, calls: Call[]): Promise<Entry
               { headers: { 'x-request-id': requestId } }
             ),
           // The API answers a repeat of this request id from its record, so a resend cannot run twice.
-          { tool: ctx.tool, requestId, providers: [SLUG[p]], resend: true }
+          { tool: ctx.tool, requestId, providers: [SLUG[p]], resend: true, alexandriaTools: ctx.alexandriaTools }
         );
         const entries = response?.data?.data?.alexandria;
         if (!Array.isArray(entries)) throw new Error('Unexpected response shape.');
@@ -951,7 +953,7 @@ async function contactsWith(ctx: Context, p: Provider, block: Record<string, any
           field,
           job_id: str(job.jobId),
           poll_after_seconds: num(job.pollAfterSeconds),
-          next_tool: isPlain(job.next) ? { name: 'firecrawl_scrape', arguments: { alexandria: job.next } } : entry.error?.nextTool,
+          next_tool: isPlain(job.next) ? executeToolCall(ctx.alexandriaTools, job.next) : entry.error?.nextTool,
           note: job.next || entry.error?.nextTool ? undefined : entry.error?.message,
         })
       );
@@ -1246,7 +1248,9 @@ export function registerEnrichTools(
   getClient: GetClient,
   assertCredential: AssertCredential,
   canList: (session?: SessionData) => boolean,
-  web: WebSearch
+  web: WebSearch,
+  // Which tool a pending job's next_tool is addressed to.
+  alexandriaTools: AlexandriaTools = 'legacy'
 ): void {
   const webBlock = web.parameters.optional().describe(WEB_ABOUT);
   const advertisedSearch = searchParameters.extend({ firecrawl_search: webBlock });
@@ -1298,7 +1302,7 @@ export function registerEnrichTools(
             { code: 'max_credits_exceeded', credits_estimate, max_credits, estimates, minimum_max_credits: credits_estimate }
           );
         }
-        const ctx: Context = { client: getClient(session), origin: requestOrigin(mcpClient as any, session), tool: name, gated: new Map() };
+        const ctx: Context = { client: getClient(session), origin: requestOrigin(mcpClient as any, session), tool: name, alexandriaTools, gated: new Map() };
         const reports = (
           await Promise.all([
             ...order.map((p) => (on.includes(p) ? run(ctx, p, blocks[p]) : notRequested(p))),

@@ -12,7 +12,7 @@ import { assertAlexandriaMetadata } from './helpers/alexandria-metadata.mjs';
 test('every tool description fits the 2,048-character cap and keeps the routing copy inside it', async (t) => {
   const { client, init } = await startStdioWithApi(t);
   const { tools } = await client.request('tools/list', {});
-  assertAlexandriaMetadata(tools, init.instructions);
+  assertAlexandriaMetadata(tools, init.instructions, { tools: 'dedicated' });
   for (const tool of tools) {
     assert.ok((tool.description ?? '').length <= CAP, `${tool.name} description is ${(tool.description ?? '').length} chars`);
   }
@@ -26,4 +26,6 @@ test('every tool description fits the 2,048-character cap and keeps the routing 
   assert.doesNotMatch(byName.get('firecrawl_find_tools'), /Prefer normal firecrawl_search/);
   assert.match(byName.get('firecrawl_find_tools'), /Reaches data beyond the open web: records from licensed databases and provider APIs, and website data that takes more than a single fetch/);
   assert.match(byName.get('firecrawl_find_tools'), /Takes the question as query and, optionally, urls such as web search results/);
+  // What the tool is for has to survive truncation, so it leads.
+  assert.match(byName.get('alexandria_library_read'), /^Run capabilities of Alexandria data providers/);
 });

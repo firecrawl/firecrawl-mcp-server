@@ -119,8 +119,11 @@ export function withFindToolsNavigation(envelope: any, carry: Record<string, unk
   return envelope;
 }
 
+// What authenticated search returns; each surface appends the tools that take it from there.
+const ALEXANDRIA_SEARCH_LEAD_INSTRUCTIONS =
+  'Authenticated search combines web results, semantic tool summaries and domain matches. Use sources: ["alexandria"] for semantic tools only. ' + ALEXANDRIA_SOURCES_ALWAYS_ON + ' On an authenticated session, tool matches describe available structured-data capabilities, not executed data. toolDetail: "compact" (default) returns only provider, capability and description; "summary" adds metadata; "full" includes their input and output contracts.';
 export const ALEXANDRIA_SEARCH_INSTRUCTIONS =
-  'Authenticated search combines web results, semantic tool summaries and domain matches. Use sources: ["alexandria"] for semantic tools only. ' + ALEXANDRIA_SOURCES_ALWAYS_ON + ' On an authenticated session, tool matches describe available structured-data capabilities, not executed data. toolDetail: "compact" (default) returns only provider, capability and description; "summary" adds metadata; "full" includes their input and output contracts. firecrawl_scrape with an alexandria body executes a selected capability; firecrawl_find_tools provides catalogue browsing and full contracts.';
+  ALEXANDRIA_SEARCH_LEAD_INSTRUCTIONS + ' firecrawl_scrape with an alexandria body executes a selected capability; firecrawl_find_tools provides catalogue browsing and full contracts.';
 
 const TOOL_PRICE_KEYS = ['creditsCost', 'perRecord', 'billing', 'recordsPerUnit', 'zeroDataRetentionCreditsCost'];
 
@@ -180,3 +183,28 @@ export function withoutFindToolsPrices(envelope: any) {
   delete data.creditsCost;
   return { ...stripped, data };
 }
+
+/**
+ * How a surface runs Alexandria capabilities. `dedicated` is alexandria_library_read.
+ * `legacy` is firecrawl_scrape with an alexandria body: the search surface's
+ * tool list is fixed by its connector listing, so it keeps that shape and its
+ * copy.
+ */
+export type AlexandriaTools = 'dedicated' | 'legacy';
+
+export const ALEXANDRIA_READ_TOOL = 'alexandria_library_read';
+
+type AlexandriaCall = { provider: string; capability: string; options?: unknown; version?: string };
+
+/** The tool call that runs one capability on a surface. `list` keeps the legacy body an array where it always was one. */
+export function executeToolCall(tools: AlexandriaTools, call: AlexandriaCall | Record<string, unknown>, list = false) {
+  return tools === 'dedicated'
+    ? { name: ALEXANDRIA_READ_TOOL, arguments: { calls: [call] } }
+    : { name: 'firecrawl_scrape', arguments: { alexandria: list ? [call] : call } };
+}
+
+export const ALEXANDRIA_DEDICATED_SEARCH_INSTRUCTIONS =
+  ALEXANDRIA_SEARCH_LEAD_INSTRUCTIONS + ' ' + ALEXANDRIA_READ_TOOL + ' runs a selected capability; firecrawl_find_tools provides catalogue browsing and full contracts.';
+
+export const ALEXANDRIA_READ_DESCRIPTION =
+  "Run capabilities of Alexandria data providers and return their typed, sourced records: one, or up to ten in one call when a task needs several lookups. Alexandria is Firecrawl's library of data providers across " + ALEXANDRIA_CATALOGUE_VERTICALS + '. Each entry of `calls` is {provider, capability, options}: `provider` and `capability` come from firecrawl_search results or firecrawl_find_tools, and `options` follow the capability\'s contract, which marks required inputs and any requiresOneOf groups (at least one member per group). Where the contract declares pagination, its fields page through results with the same filters. Returns one result per call, in the same order, in data.alexandria, each with data, records, or an error with a code; one call can fail while the others succeed, and an invalid call returns an error naming the valid options. A result too large to return inline is retained, and nextTool reads it in slices. Billed per executed capability; discovery is free. ' + ALEXANDRIA_TERMS_GUIDANCE;
