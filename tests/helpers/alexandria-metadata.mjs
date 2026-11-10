@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 const WORKFLOW_COPY = /terms\/show|terms\/accept|confirmed:true|repeated attempts|reuse it only for a retry|retry the same requestId|call firecrawl_feedback once per website|after the task, report how the catalogue/i;
 
 /**
- * `tools` says how the surface runs Alexandria capabilities: `legacy` is
- * firecrawl_scrape with an alexandria body (the search surface), `dedicated`
- * is alexandria_execute.
+ * `tools` names the Alexandria tools of the surface: `legacy` is
+ * firecrawl_find_tools and firecrawl_scrape with an alexandria body (the
+ * search surface), `dedicated` is alexandria_library_search and
+ * alexandria_execute.
  */
 export function assertAlexandriaMetadata(tools, instructions, { hosted = false, tools: surface = 'legacy' } = {}) {
   assert.ok(instructions, 'Alexandria server instructions are required');
@@ -30,6 +31,7 @@ export function assertAlexandriaMetadata(tools, instructions, { hosted = false, 
     for (const name of ['alexandria', 'url']) assert.equal(name in execute.inputSchema.properties, false, name);
     for (const name of ['alexandria', 'requestId']) assert.equal(name in scrape.inputSchema.properties, false, name);
     assert.equal(execute.annotations.readOnlyHint, true);
+    assert.equal(tools.some((tool) => tool.name === 'firecrawl_find_tools'), false);
     assert.match(contract, /data\.alexandria\[0\]/);
   } else {
     assert.match(contract, /mutually exclusive with url/);
@@ -42,7 +44,7 @@ export function assertAlexandriaMetadata(tools, instructions, { hosted = false, 
 
   const descriptions = [instructions];
   const named = surface === 'dedicated'
-    ? ['firecrawl_search', 'firecrawl_scrape', 'firecrawl_find_tools', 'alexandria_execute']
+    ? ['firecrawl_search', 'firecrawl_scrape', 'alexandria_execute', 'alexandria_library_search']
     : ['firecrawl_search', 'firecrawl_scrape', 'firecrawl_find_tools'];
   for (const name of named) {
     const tool = byName(name);

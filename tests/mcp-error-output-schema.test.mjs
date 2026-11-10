@@ -267,7 +267,7 @@ for (const { name, args, message, code, alexandriaTools } of [
   { name: 'firecrawl_scrape', args: { url: 'https://example.com', formats: ['query'], queryOptions: { prompt: ' ' } }, message: QUERY_FORMAT_MESSAGE, code: 'invalid_request' },
   { name: 'firecrawl_interact', args: { url: 'https://example.com', prompt: 'Read the title', scrapeOptions: { formats: ['json'] } }, message: JSON_FORMAT_MESSAGE, code: 'invalid_request' },
   { name: 'firecrawl_interact', args: { url: 'https://example.com', prompt: 'Read the title', scrapeOptions: { formats: ['query'] } }, message: QUERY_FORMAT_MESSAGE, code: 'invalid_request' },
-  { name: 'firecrawl_find_tools', args: { level: 'categories', categories: ['finance'] }, message: 'Category index accepts only level, limit and offset. Select a category to browse providers.', code: 'invalid_input' },
+  { name: 'firecrawl_find_tools', args: { level: 'categories', categories: ['finance'] }, message: 'Category index accepts only level, limit and offset. Select a category to browse providers.', code: 'invalid_input', alexandriaTools: 'legacy' },
   { name: 'firecrawl_monitor_create', args: { goal: 'Track pricing' }, message: 'firecrawl_monitor_create requires either `body`, `page`/`pages`, or `queries`.', code: 'invalid_input' },
   { name: 'firecrawl_monitor_create', args: { page: 'https://example.com' }, message: 'firecrawl_monitor_create shorthand requires `goal`. Use `body` for advanced requests without a goal.', code: 'invalid_input' },
   { name: 'firecrawl_monitor_update', args: { id: 'mon_001' }, message: 'firecrawl_monitor_update needs at least one change: `status`, `scheduleText`, `cron`, `timezone`, or `body`.', code: 'invalid_input' },
@@ -421,6 +421,7 @@ test('an alexandria body sent to firecrawl_scrape reaches an SDK client as the a
 
 for (const [name, args] of [
   ['alexandria_execute', { provider: 'fred', capability: 'series/observations' }],
+  ['alexandria_library_search', { command: 'ls /library' }],
 ]) {
   test(`a refused Alexandria request reaches an SDK client with its message (${name})`, async (t) => {
     const apiUrl = await startRefusingApi(t, 403, { success: false, error: 'Exchange is not enabled for this team.', code: 'exchange_disabled' });

@@ -10,27 +10,28 @@ import { EXCHANGE_CALL, TERMS_REQUIRED_BODY } from './helpers/exchange-api.mjs';
 
 const call = (client, name, args) => client.request('tools/call', { name, arguments: args });
 
-test('the full surface lists alexandria_execute, and firecrawl_scrape takes a page only', async (t) => {
+test('the full surface lists alexandria_execute and alexandria_library_search, and firecrawl_scrape takes a page only', async (t) => {
   const { client, init } = await startStdioWithApi(t);
   const { tools } = await client.request('tools/list', {});
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
 
-  for (const name of ['alexandria_execute', 'firecrawl_find_tools', 'firecrawl_search', 'firecrawl_scrape'])
+  for (const name of ['alexandria_execute', 'alexandria_library_search', 'firecrawl_search', 'firecrawl_scrape'])
     assert.equal(byName.get(name)?._meta?.['anthropic/alwaysLoad'], true, name);
+  assert.equal(byName.has('firecrawl_find_tools'), false);
 
   const scrape = byName.get('firecrawl_scrape');
   assert.equal('alexandria' in scrape.inputSchema.properties, false);
   assert.equal('requestId' in scrape.inputSchema.properties, false);
   assert.deepEqual(scrape.inputSchema.required, ['url']);
-  assert.doesNotMatch(scrape.description, /in place of `url`/);
+  assert.doesNotMatch(scrape.description, /firecrawl_find_tools|in place of `url`/);
   assert.match(scrape.description, /does not run providers/);
 
   assert.deepEqual(byName.get('alexandria_execute').inputSchema.required, ['provider', 'capability']);
+  assert.deepEqual(Object.keys(byName.get('alexandria_library_search').inputSchema.properties), ['command']);
 
-  // No copy on this surface still sends execution to firecrawl_scrape.
   const copy = [init.instructions, ...tools.map((tool) => JSON.stringify(tool))].join('\n');
-  assert.doesNotMatch(copy, /firecrawl_scrape with (an )?alexandria|execution through firecrawl_scrape/);
-  assert.match(byName.get('firecrawl_find_tools').description, /execution through alexandria_execute/);
+  assert.doesNotMatch(copy, /firecrawl_find_tools|Find Tools|firecrawl_scrape with (an )?alexandria/);
+  assert.match(init.instructions, /alexandria_library_search/);
   assert.match(init.instructions, /alexandria_execute with \{provider, capability, options\}/);
 });
 
@@ -77,6 +78,48 @@ test('alexandria_execute reads one legacy alexandria body as its arguments and r
   assert.equal(api.requests.length, sent);
 });
 
+test('alexandria_library_search runs a command in firecrawl/library and returns its output as text', async (t) => {
+  const { api, client } = await startStdioWithApi(t);
+
+  const result = await call(client, 'alexandria_library_search', { command: ' grep -ril "cpi" /library | head -20 ' });
+  assert.notEqual(result.isError, true);
+  assert.deepEqual(api.requests[0].body.alexandria, {
+    provider: 'firecrawl',
+    capability: 'library',
+    options: { command: 'grep -ril "cpi" /library | head -20' },
+  });
+  assert.equal(result.content[0].text, '/library/finance/fred/series/observations.md');
+  assert.deepEqual(result.structuredContent, {
+    stdout: '/library/finance/fred/series/observations.md\n',
+    stderr: '',
+    exitCode: 0,
+    catalogueVersion: 'v1',
+  });
+
+  for (const args of [{}, { command: '   ' }, { command: 'x'.repeat(4097) }, { command: 'ls', query: 'cpi' }])
+    await callExpectingError(client, { name: 'alexandria_library_search', arguments: args });
+  assert.equal(api.requests.length, 1);
+});
+
+test('alexandria_library_search reports an empty result, stderr, cut output and a failed command', async (t) => {
+  const entry = (data) => ({ library: { provider: 'firecrawl', capability: 'library', creditsCost: 0, data } });
+
+  const empty = await startStdioWithApi(t, entry({ stdout: '', stderr: '', exitCode: 1, catalogueVersion: 'v1' }));
+  const none = await call(empty.client, 'alexandria_library_search', { command: 'grep -ril nothing /library' });
+  assert.notEqual(none.isError, true);
+  assert.equal(none.content[0].text, '[no output; exit code 1]');
+  assert.equal(none.structuredContent.exitCode, 1);
+
+  const cut = await startStdioWithApi(t, entry({ stdout: 'a\nb\n', stderr: 'stdout cut at 30000 of 90000 characters\n', exitCode: 0, truncated: true, catalogueVersion: 'v1' }));
+  const long = await call(cut.client, 'alexandria_library_search', { command: 'cat /library/*/*/*.md' });
+  assert.equal(long.content[0].text, 'a\nb\n[stderr] stdout cut at 30000 of 90000 characters');
+  assert.equal(long.structuredContent.truncated, true);
+
+  const failed = await startStdioWithApi(t, { library: { provider: 'firecrawl', capability: 'library', error: { code: 'library_command_timeout', message: 'The command ran past its deadline.' } } });
+  const timeout = await callExpectingError(failed.client, { name: 'alexandria_library_search', arguments: { command: 'grep -r a /' } });
+  assert.match(timeout.content[0].text, /ran past its deadline/);
+});
+
 test('firecrawl_scrape with an alexandria body names the alexandria_execute call and sends nothing', async (t) => {
   const { api, client } = await startStdioWithApi(t);
 
@@ -95,6 +138,28 @@ test('firecrawl_scrape with an alexandria body names the alexandria_execute call
 
   // The call it names runs.
   assert.equal(toolText(await client.request('tools/call', one.structuredContent.nextTool)).success, true);
+});
+
+test('firecrawl_find_tools stays callable for cached sessions and answers with the library command', async (t) => {
+  const { api, client } = await startStdioWithApi(t);
+
+  for (const [args, command] of [
+    [{}, 'cat /library/README.md'],
+    [{ categories: ['finance'] }, 'cat /library/finance/README.md'],
+    [{ providers: ['fred'] }, 'cat /library/*/fred/README.md'],
+    [{ providers: ['fred'], capabilities: ['series/observations'] }, 'cat /library/*/fred/series/observations.md'],
+    [{ query: 'US 30-year mortgage rates' }, 'grep -rilE "year|mortgage|rates" /library | head -20'],
+    [{ urls: ['https://www.redfin.com/city/1'] }, 'grep -ril "redfin.com" /library | head -20'],
+    [{ urls: ['$(id).example'] }, 'cat /library/README.md'],
+    // A name that would need quoting is never placed in a command.
+    [{ providers: ['fred; rm -rf /'] }, 'cat /library/README.md'],
+    [{ providers: ['../../etc'] }, 'cat /library/README.md'],
+  ]) {
+    const moved = await callExpectingError(client, { name: 'firecrawl_find_tools', arguments: args });
+    assert.deepEqual(moved.structuredContent.nextTool, { name: 'alexandria_library_search', arguments: { command } });
+    assert.match(moved.content[0].text, /replaced by alexandria_library_search/);
+  }
+  assert.equal(api.requests.length, 0);
 });
 
 test('follow-up calls on the full surface are addressed to alexandria_execute', async (t) => {
@@ -119,13 +184,15 @@ test('follow-up calls on the full surface are addressed to alexandria_execute', 
   assert.equal(result.nextTool.arguments.options.workspaceId, 'retained-workspace');
 });
 
-test('legacy mode keeps firecrawl_scrape with an alexandria body', async (t) => {
+test('legacy tool names keep firecrawl_find_tools and firecrawl_scrape with an alexandria body', async (t) => {
   const { api, client, init } = await startStdioWithApi(t, { env: LEGACY_ALEXANDRIA_TOOLS });
   const { tools } = await client.request('tools/list', {});
   const names = new Set(tools.map((tool) => tool.name));
+  assert.equal(names.has('firecrawl_find_tools'), true);
   assert.equal(names.has('alexandria_execute'), false);
+  assert.equal(names.has('alexandria_library_search'), false);
   assert.ok('alexandria' in tools.find((tool) => tool.name === 'firecrawl_scrape').inputSchema.properties);
-  assert.doesNotMatch(init.instructions, /alexandria_execute/);
+  assert.doesNotMatch(init.instructions, /alexandria_execute|alexandria_library_search/);
 
   const payload = toolText(await call(client, 'firecrawl_scrape', { alexandria: [EXCHANGE_CALL] }));
   assert.equal(payload.success, true);

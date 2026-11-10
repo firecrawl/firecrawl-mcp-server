@@ -4,8 +4,9 @@ import test from 'node:test';
 import { LEGACY_ALEXANDRIA_TOOLS, startStdioWithApi, callExpectingError, toolText } from './helpers/exchange-mcp.mjs';
 import { EXCHANGE_CALL } from './helpers/exchange-api.mjs';
 
-// firecrawl_scrape with an alexandria body, which the search surface serves.
-// tests/mcp-alexandria-tools.test.mjs covers alexandria_execute.
+// The legacy tool names, which the search surface serves: firecrawl_find_tools and
+// firecrawl_scrape with an alexandria body. tests/mcp-alexandria-tools.test.mjs
+// covers alexandria_library_search and alexandria_execute.
 const LEGACY = { env: LEGACY_ALEXANDRIA_TOOLS };
 
 test('firecrawl_scrape with alexandria posts the v2 batch and returns the envelope untouched', async (t) => {

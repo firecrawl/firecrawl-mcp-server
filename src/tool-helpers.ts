@@ -88,6 +88,15 @@ export const searchToolBaseFields = {
   enterprise: z.array(z.enum(['default', 'anon', 'zdr'])).optional(),
 };
 
+/** The same fields where Alexandria has its own tools: the two descriptions that name the catalogue tool. */
+export const dedicatedSearchToolFields = {
+  ...searchToolBaseFields,
+  toolDetail: z.enum(['compact', 'summary', 'full']).optional().describe('Compact by default. Compact returns only provider, capability and description; full includes contracts. Read a selected tool\'s contract with alexandria_library_search.'),
+  query: z
+    .string()
+    .min(1)
+    .describe('Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Browse the whole library with alexandria_library_search.'),
+};
 
 // Both surfaces forbid specifying includeDomains and excludeDomains together.
 export function searchDomainsAreExclusive(args: {

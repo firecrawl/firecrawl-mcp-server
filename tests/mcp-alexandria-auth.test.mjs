@@ -17,8 +17,7 @@ test('local keyless stdio refuses every Exchange path with the explanatory error
       name: 'firecrawl_search',
     },
     { arguments: EXCHANGE_CALL, name: 'alexandria_execute' },
-    { arguments: { categories: ['finance'] }, name: 'firecrawl_find_tools' },
-    { arguments: {}, name: 'firecrawl_find_tools' },
+    { arguments: { command: 'cat /library/finance/README.md' }, name: 'alexandria_library_search' },
     { arguments: { provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } }, name: 'alexandria_execute' },
     { arguments: { provider: 'firecrawl', capability: 'terms/accept', options: { provider: 'benzinga', version: 'v1', digest: 'a'.repeat(64), confirmed: true } }, name: 'alexandria_execute' },
   ]) {
@@ -85,7 +84,7 @@ test('a hosted API key header reaches the Exchange', async (t) => {
 test('rejected API keys return in-band errors without leaking credentials on Alexandria paths', async (t) => {
   const { api, client, getStderr } = await startStdioWithApi(t, { apiStatus: 401 });
   for (const params of [
-    { name: 'firecrawl_find_tools', arguments: { categories: ['finance'] } },
+    { name: 'alexandria_library_search', arguments: { command: 'cat /library/finance/README.md' } },
     { name: 'firecrawl_search', arguments: { query: 'rates', sources: ['alexandria'] } },
     { name: 'alexandria_execute', arguments: EXCHANGE_CALL },
     { name: 'alexandria_execute', arguments: { provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } } },

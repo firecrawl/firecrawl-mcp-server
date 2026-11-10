@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { startStdio, startStdioWithApi, toolText } from './helpers/exchange-mcp.mjs';
+import { LEGACY_ALEXANDRIA_TOOLS, startStdio, startStdioWithApi, toolText } from './helpers/exchange-mcp.mjs';
 import { EXCHANGE_CALL, startFakeExchangeApi } from './helpers/exchange-api.mjs';
 
 const largeAlexandria = () => ({
@@ -28,7 +28,7 @@ test('Alexandria selection metadata omits feedback workflow', async (t) => {
   );
   assert.doesNotMatch(byName.get('firecrawl_feedback').description, /no credit refund|no job-age deadline/i);
   assert.match(byName.get('firecrawl_feedback').description, /within 20 minutes of the team's latest Alexandria/i);
-  for (const name of ['firecrawl_scrape', 'alexandria_execute', 'firecrawl_find_tools', 'firecrawl_search']) {
+  for (const name of ['firecrawl_scrape', 'alexandria_execute', 'alexandria_library_search', 'firecrawl_search']) {
     assert.doesNotMatch(byName.get(name).description, /firecrawl_feedback|feedbackTool|Alexandria quality feedback/i, name);
   }
 });
@@ -41,17 +41,25 @@ test('Alexandria executions and discovery results carry the feedback hint; utili
   assertFeedbackHint(executed);
   assert.equal(executed.success, true);
 
+  const bash = toolText(
+    await call('alexandria_execute', { provider: 'firecrawl', capability: 'bash', options: { workspaceId: 'existing', command: 'cat response.json' } })
+  );
+  assert.equal(bash.feedbackTool, undefined);
+
+  const library = await call('alexandria_library_search', { command: 'ls /library' });
+  assert.equal(library.structuredContent.feedbackTool, undefined);
+});
+
+test('legacy discovery results carry the feedback hint', async (t) => {
+  const { client } = await startStdioWithApi(t, { env: LEGACY_ALEXANDRIA_TOOLS });
+  const call = (name, args) => client.request('tools/call', { name, arguments: args });
+
   const categories = toolText(await call('firecrawl_find_tools', { limit: 1 }));
   assertFeedbackHint(categories);
   assert.equal(categories.data.alexandria[0].data.level, 'categories');
 
   const tools = toolText(await call('firecrawl_find_tools', { providers: ['particle'] }));
   assertFeedbackHint(tools);
-
-  const bash = toolText(
-    await call('alexandria_execute', { provider: 'firecrawl', capability: 'bash', options: { workspaceId: 'existing', command: 'cat response.json' } })
-  );
-  assert.equal(bash.feedbackTool, undefined);
 });
 
 test('retained Alexandria results keep the feedback hint next to nextTool', async (t) => {
@@ -69,10 +77,11 @@ test('no feedback hint is attached when the feedback tool is disabled by environ
     FIRECRAWL_API_KEY: 'fc-exchange-test',
     FIRECRAWL_API_URL: api.url,
     FIRECRAWL_NO_ENDPOINT_FEEDBACK: '1',
+    ...LEGACY_ALEXANDRIA_TOOLS,
   });
   const { tools } = await client.request('tools/list', {});
   assert.equal(tools.some((tool) => tool.name === 'firecrawl_feedback'), false);
-  const executed = toolText(await client.request('tools/call', { name: 'alexandria_execute', arguments: EXCHANGE_CALL }));
+  const executed = toolText(await client.request('tools/call', { name: 'firecrawl_scrape', arguments: { alexandria: EXCHANGE_CALL } }));
   assert.equal(executed.feedbackTool, undefined);
   const categories = toolText(await client.request('tools/call', { name: 'firecrawl_find_tools', arguments: { limit: 1 } }));
   assert.equal(categories.feedbackTool, undefined);

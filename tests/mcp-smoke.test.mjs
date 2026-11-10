@@ -1365,7 +1365,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   const instructionsHead = init.instructions.slice(0, CLAUDE_CODE_TEXT_CAP);
   assert.match(instructionsHead, OUT_OF_CREDITS_LEAD);
   assert.match(instructionsHead, /Alexandria is Firecrawl's catalogue of data providers/);
-  assert.match(instructionsHead, /For the same fields across multiple pages/);
+  assert.match(instructionsHead, /Before scraping the same fields from several pages, alexandria_library_search checks for free whether a provider covers them/);
   assert.match(instructionsHead, /Authenticated searches always add alexandria to the sources/);
   assert.match(
     init.instructions,
@@ -1377,9 +1377,9 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   assert.match(
     init.instructions,
-    /For the same fields across multiple pages, firecrawl_find_tools offers free provider discovery/
+    /alexandria_library_search holds each contract at \/library\/<category>\/<provider>\/<capability>\.md/
   );
-  assert.doesNotMatch(init.instructions, /firecrawl_scrape with alexandria/);
+  assert.doesNotMatch(init.instructions, /firecrawl_find_tools|firecrawl_scrape with alexandria/);
   assert.match(
     byName.get('firecrawl_scrape').description,
     /request identifies a page and needs its content or defined fields/i

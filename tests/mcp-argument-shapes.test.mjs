@@ -263,17 +263,18 @@ test('domain filters read a URL naming only a host as that host', async (t) => {
 });
 
 test('scheme-less URLs are read as https URLs', async (t) => {
-  const { api, full } = await startHosted(t);
+  const { api, full, search } = await startHosted(t);
   const calls = [
     ['firecrawl_scrape', { url: 'example.com/page' }],
     ['firecrawl_map', { url: 'example.com/page' }],
     ['firecrawl_interact', { url: 'example.com/page', prompt: 'read the title' }],
     ['firecrawl_agent', { prompt: 'find the title', urls: ['example.com/page'] }],
-    ['firecrawl_find_tools', { urls: ['example.com/page'] }],
+    // Only the search surface lists firecrawl_find_tools.
+    ['firecrawl_find_tools', { urls: ['example.com/page'] }, search],
   ];
-  for (const [name, args] of calls) {
+  for (const [name, args, call = full] of calls) {
     const before = api.requests.length;
-    const message = await full(name, args);
+    const message = await call(name, args);
     assert.doesNotMatch(rejectionText(message), /Invalid|validation/i, name);
     const sent = JSON.stringify(api.requests.slice(before));
     assert.match(decodeURIComponent(sent), /https:\/\/example\.com\/page/, `${name} sends an https URL`);

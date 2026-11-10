@@ -182,8 +182,8 @@ async function startStdioWithApi(t, options = {}) {
   return { api, ...session };
 }
 
-// How the search surface runs Alexandria capabilities: firecrawl_scrape with
-// an alexandria body.
+// The tool names the search surface keeps: firecrawl_find_tools and
+// firecrawl_scrape with an alexandria body.
 const LEGACY_ALEXANDRIA_TOOLS = { FIRECRAWL_MCP_ALEXANDRIA_TOOLS: 'legacy' };
 
 // A tool call that fails either at schema validation (JSON-RPC error or an
