@@ -4,7 +4,7 @@ import { LEGACY_ALEXANDRIA_TOOLS, startStdioWithApi, toolText } from './helpers/
 
 // The legacy tool names, which the search surface serves: firecrawl_find_tools and
 // firecrawl_scrape with an alexandria body. tests/mcp-alexandria-tools.test.mjs
-// covers alexandria_library_search and alexandria_execute.
+// covers alexandria_library_search and alexandria_library_read.
 const LEGACY = { env: LEGACY_ALEXANDRIA_TOOLS };
 
 test('discovery progresses from categories to compact tools and selected contracts', async (t) => {

@@ -40,7 +40,7 @@ export type ServiceSettings = {
   apiUrl?: string;
   /**
    * Which set of Alexandria tools the full surface lists: `dedicated`
-   * (alexandria_library_search and alexandria_execute) when unset, or
+   * (alexandria_library_search and alexandria_library_read) when unset, or
    * `legacy` (firecrawl_find_tools and firecrawl_scrape with alexandria).
    * The search surface is always `legacy`: its connector listing declares
    * those two tools.

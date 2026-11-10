@@ -78,7 +78,7 @@ results on this surface carry no `feedbackTool` pointer, since
 `firecrawl_feedback` is not registered here.
 
 The full surface names its Alexandria tools differently: it lists
-`alexandria_library_search` and `alexandria_execute`, its `firecrawl_scrape`
+`alexandria_library_search` and `alexandria_library_read`, its `firecrawl_scrape`
 lists a URL only, and it does not list `firecrawl_find_tools` (both still
 answer the calls they used to). This surface keeps listing
 `firecrawl_find_tools` and `firecrawl_scrape` with `alexandria` because the

@@ -6,12 +6,12 @@ import { createFirecrawlMcpServer } from '../dist/server.js';
 import { startFakeExchangeApi, TERMS_REQUIRED_BODY } from './helpers/exchange-api.mjs';
 import { getFreePort, startStdioWithApi, callExpectingError, toolText } from './helpers/exchange-mcp.mjs';
 
-test('terms are read through alexandria_execute and accepted by an organization admin in the dashboard', async (t) => {
+test('terms are read through alexandria_library_read and accepted by an organization admin in the dashboard', async (t) => {
   const { api, client } = await startStdioWithApi(t);
   const listing = await client.request('tools/list', {});
   assert.ok(!listing.tools.some(tool => /terms/.test(tool.name)), 'no tool accepts terms');
 
-  const blocked = await callExpectingError(client, { name: 'alexandria_execute', arguments: { calls: [{ provider: 'benzinga', capability: 'news/search' }] } });
+  const blocked = await callExpectingError(client, { name: 'alexandria_library_read', arguments: { calls: [{ provider: 'benzinga', capability: 'news/search' }] } });
   assert.equal(api.requests.length, 1, 'blocked requests never auto-accept');
   const { requiresAction } = TERMS_REQUIRED_BODY;
   const { requestId } = blocked.structuredContent;
@@ -26,7 +26,7 @@ test('terms are read through alexandria_execute and accepted by an organization 
   assert.doesNotMatch(JSON.stringify(blocked), /fc-exchange-test/);
 
   const next = blocked.structuredContent.nextTool;
-  assert.equal(next.name, 'alexandria_execute');
+  assert.equal(next.name, 'alexandria_library_read');
   assert.equal(next.arguments.calls[0].capability, 'terms/show');
   const read = toolText(await client.request('tools/call', next)).data.alexandria[0].data;
   assert.equal(read.terms.document, 'Review this agreement.');
@@ -38,18 +38,18 @@ test('terms are read through alexandria_execute and accepted by an organization 
     { provider: ' Firecrawl ', capability: 'Terms/Accept', options },
     { provider: 'firecrawl', capability: 'terms/revoke', options: { provider: 'benzinga' } },
   ]) {
-    const refused = await callExpectingError(client, { name: 'alexandria_execute', arguments: { calls: [call] } });
+    const refused = await callExpectingError(client, { name: 'alexandria_library_read', arguments: { calls: [call] } });
     assert.match(refused.content[0].text, /Provider terms are accepted in the Firecrawl dashboard, not through this connection/, call.capability);
   }
   assert.equal(api.requests.length, 2, 'no terms command other than terms/show is forwarded');
 });
 
-test('alexandria_execute relays a reserved 409 billing error with its code and chargeId', async (t) => {
+test('alexandria_library_read relays a reserved 409 billing error with its code and chargeId', async (t) => {
   const { api, client } = await startStdioWithApi(t);
 
   const result = await callExpectingError(client, {
     arguments: { calls: [{ provider: 'inflight', capability: 'finance/x' }] },
-    name: 'alexandria_execute',
+    name: 'alexandria_library_read',
   });
   assert.equal(api.requests.length, 1);
   assert.equal(result.transportError, undefined, 'a 409 must surface in-band');
@@ -71,7 +71,7 @@ test('disabled provider offers read-only terms recovery without treating other r
     ['Access to another-provider is disabled for this organization.', false],
   ]) {
     const { api, client } = await startStdioWithApi(t, { providerRefusal: message });
-    const blocked = await callExpectingError(client, { name: 'alexandria_execute', arguments: { calls: [{ provider: 'benzinga', capability: 'news/search' }] } });
+    const blocked = await callExpectingError(client, { name: 'alexandria_library_read', arguments: { calls: [{ provider: 'benzinga', capability: 'news/search' }] } });
     assert.equal(api.requests.length, 1);
     assert.equal(Boolean(blocked.structuredContent.nextTool), expected, message);
     if (expected) {
@@ -109,7 +109,7 @@ test('the terms refusal keeps its full recovery contract for hooks while the cli
   await client.listTools();
 
   const result = await client.callTool({
-    name: 'alexandria_execute',
+    name: 'alexandria_library_read',
     arguments: { calls: [{ provider: 'benzinga', capability: 'news/search' }] },
   });
   assert.equal(result.isError, true);
@@ -123,6 +123,6 @@ test('the terms refusal keeps its full recovery contract for hooks while the cli
   assert.deepEqual(next_actions, [
     { kind: 'human_action_required', action: 'accept_terms', who: 'organization_admin',
       url: requiresAction.url, provider: requiresAction.terms, version: requiresAction.version },
-    { kind: 'retry_same_request', tool: 'alexandria_execute', requestId, after: 'human_action_required' },
+    { kind: 'retry_same_request', tool: 'alexandria_library_read', requestId, after: 'human_action_required' },
   ]);
 });

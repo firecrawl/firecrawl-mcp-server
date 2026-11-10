@@ -140,7 +140,7 @@ export const scrapeOutputSchema = z
   })
   .describe('A scraped document, or the Alexandria execution envelope when `alexandria` was passed.');
 
-export const alexandriaExecuteOutputSchema = z
+export const alexandriaReadOutputSchema = z
   .object({
     success,
     error,

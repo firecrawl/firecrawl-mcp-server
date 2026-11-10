@@ -28,7 +28,7 @@ test('Alexandria selection metadata omits feedback workflow', async (t) => {
   );
   assert.doesNotMatch(byName.get('firecrawl_feedback').description, /no credit refund|no job-age deadline/i);
   assert.match(byName.get('firecrawl_feedback').description, /within 20 minutes of the team's latest Alexandria/i);
-  for (const name of ['firecrawl_scrape', 'alexandria_execute', 'alexandria_library_search', 'firecrawl_search']) {
+  for (const name of ['firecrawl_scrape', 'alexandria_library_read', 'alexandria_library_search', 'firecrawl_search']) {
     assert.doesNotMatch(byName.get(name).description, /firecrawl_feedback|feedbackTool|Alexandria quality feedback/i, name);
   }
 });
@@ -37,12 +37,12 @@ test('Alexandria executions and discovery results carry the feedback hint; utili
   const { client } = await startStdioWithApi(t);
   const call = (name, args) => client.request('tools/call', { name, arguments: args });
 
-  const executed = toolText(await call('alexandria_execute', { calls: [EXCHANGE_CALL] }));
+  const executed = toolText(await call('alexandria_library_read', { calls: [EXCHANGE_CALL] }));
   assertFeedbackHint(executed);
   assert.equal(executed.success, true);
 
   const bash = toolText(
-    await call('alexandria_execute', { calls: [{ provider: 'firecrawl', capability: 'bash', options: { workspaceId: 'existing', command: 'cat response.json' } }] })
+    await call('alexandria_library_read', { calls: [{ provider: 'firecrawl', capability: 'bash', options: { workspaceId: 'existing', command: 'cat response.json' } }] })
   );
   assert.equal(bash.feedbackTool, undefined);
 
@@ -65,9 +65,9 @@ test('legacy discovery results carry the feedback hint', async (t) => {
 
 test('retained Alexandria results keep the feedback hint next to nextTool', async (t) => {
   const { client } = await startStdioWithApi(t, { largeResult: largeAlexandria(), bashRecovery: 'available' });
-  const result = toolText(await client.request('tools/call', { name: 'alexandria_execute', arguments: { calls: [EXCHANGE_CALL] } }));
+  const result = toolText(await client.request('tools/call', { name: 'alexandria_library_read', arguments: { calls: [EXCHANGE_CALL] } }));
   assert.equal(result.delivery, 'retained');
-  assert.equal(result.nextTool.name, 'alexandria_execute');
+  assert.equal(result.nextTool.name, 'alexandria_library_read');
   assertFeedbackHint(result);
 });
 

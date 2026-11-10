@@ -26,5 +26,5 @@ test('every tool description fits the 2,048-character cap and keeps the routing 
   // What each Alexandria tool is for has to survive truncation, so it leads.
   assert.match(byName.get('alexandria_library_search'), /^Explore the Alexandria library: Firecrawl's catalogue of data providers/);
   assert.match(byName.get('alexandria_library_search').slice(0, 700), /read-only filesystem, using shell commands/);
-  assert.match(byName.get('alexandria_execute'), /^Run capabilities of Alexandria data providers/);
+  assert.match(byName.get('alexandria_library_read'), /^Run capabilities of Alexandria data providers/);
 });
