@@ -1,7 +1,7 @@
 {
   "alexandria_execute@3daeeedbd345": {
     "annotations": {
-      "title": "Alexandria execute",
+      "title": "Alexandria library read",
       "readOnlyHint": true,
       "openWorldHint": true,
       "destructiveHint": false
@@ -69,7 +69,7 @@
       ],
       "additionalProperties": false
     },
-    "name": "alexandria_execute",
+    "name": "alexandria_library_read",
     "outputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "description": "The results of the Alexandria capabilities that ran, or a pointer to them when they were retained.",
