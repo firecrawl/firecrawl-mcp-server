@@ -305,10 +305,14 @@ export async function relayExchangeError(
   } catch (error) {
     if (!context.resend || !retryableRefusal(error)) throw relayed(error, context);
     const delay = PRECHECK_RETRY_DELAY_MS + Math.floor(Math.random() * PRECHECK_RETRY_JITTER_MS);
-    const remainingMs =
-      context.budgetMs === undefined ? undefined : context.budgetMs - (Date.now() - startedAt) - delay;
-    if (remainingMs !== undefined && remainingMs < MIN_RESEND_BUDGET_MS) throw relayed(error, context);
+    // The budget left is measured again after the delay, since a timer can fire late.
+    const remaining = () =>
+      context.budgetMs === undefined ? undefined : context.budgetMs - (Date.now() - startedAt);
+    const before = remaining();
+    if (before !== undefined && before - delay < MIN_RESEND_BUDGET_MS) throw relayed(error, context);
     await new Promise((resolve) => setTimeout(resolve, delay));
+    const remainingMs = remaining();
+    if (remainingMs !== undefined && remainingMs < MIN_RESEND_BUDGET_MS) throw relayed(error, context);
     try {
       return await run(remainingMs === undefined ? undefined : { remainingMs });
     } catch (error) {
