@@ -1196,41 +1196,45 @@ tool again with the identical payload and `requestId`.
 
 ### 15b. Enrich Tools
 
-People and company search and enrichment over Alexandria's B2B data providers (Apollo, FullEnrich, People Data Labs and Data Legion). Both tools are listed wherever the server has a credential: they are not listed in local keyless mode or to keyless sessions. The [search-only endpoint](#search-only-endpoint) includes them too. They need a Firecrawl credential (an API key or OAuth access) on a team with Alexandria access.
+People and company search and enrichment over Alexandria's B2B data providers. Both tools are listed wherever the server has a credential: they are not listed in local keyless mode or to keyless sessions. The [search-only endpoint](#search-only-endpoint) includes them too. They need a Firecrawl credential (an API key or OAuth access) on a team with Alexandria access.
 
 | Tool | Use it for | Providers |
 | --- | --- | --- |
-| `people_company_search` | Finding people (`entity: "person"`) by title, employer, location and more, or companies (`entity: "company"`) by industry, headcount, location, technology or founding year | apollo, fullenrich, people_data_labs |
-| `people_company_enrich` | Resolving known people to profiles and work history, or known companies to firmographics. With `contact_fields`, finding work email, personal email or mobile for known people | fullenrich, apollo, people_data_labs, datalegion |
+| `people_company_search` | Finding people (`entity: "person"`) by title, employer, location and more, or companies (`entity: "company"`) by industry, headcount, location, technology or founding year | apollo, fullenrich, people_data_labs, chosen by the caller |
+| `people_company_enrich` | Resolving known people to profiles, or known companies to firmographics. With `contact_fields`, finding work email, personal email or mobile for known people | chosen by Firecrawl's enrichment waterfall |
 
-No parameter is shared between providers. Each provider block takes that provider's own parameters under its own names (Apollo's `person_titles`, FullEnrich's `current_position_titles`, a People Data Labs `sql` query or Elasticsearch `query`), so a filter a provider lacks is simply absent from its block. A provider runs only when the call includes its block; a call with no provider block (and, for `people_company_search`, no `firecrawl_search` block) fails with `no_provider` and the blocks the tool takes. A call whose every provider block errors or is skipped fails with `no_provider_ran`, each provider's reason, the credits charged and an example of a working call, and still carries the per-provider report in `structuredContent`.
+#### people_company_search
 
-`people_company_search` takes `entity`, and each provider block then takes that provider's search filters for people or for companies. `entity` is required; a call without it, or with another value, fails with `invalid_input`, the unknown top-level fields and an example call. A page size above its maximum (Apollo `per_page` 25, FullEnrich `limit` 25, People Data Labs `limit` 10) runs at the maximum, with a `note` on that provider's entry. An optional `firecrawl_search` block runs a Firecrawl web search beside the providers, with `firecrawl_search`'s query parameters but no page fetching, and reports its results in its own `providers` entry. `people_company_enrich` takes, in each provider block, `people`, `companies` or both: that provider's own lists of inputs, 1 to 50 each per call. A call with both kinds runs each kind as its own request and reports it as its own `providers` entry, with `kind: "people"` or `kind: "companies"`; `max_credits` covers both, and each entry has its own status and errors. Adding `contact_fields` (`work_email`, `personal_email`, `mobile`) runs the contact providers on the people instead of the profile lookup, while companies in the same call get their firmographics (`contact_fields` with only companies fails with `invalid_input`); People Data Labs has no contact lookup and reports `skipped`.
+No parameter is shared between providers. Each provider block takes that provider's own parameters under its own names (Apollo's `person_titles`, FullEnrich's `current_position_titles`, a People Data Labs `sql` query or Elasticsearch `query`), so a filter a provider lacks is simply absent from its block. A provider runs only when the call includes its block; a call with no provider block and no `firecrawl_search` block fails with `no_provider` and the blocks the tool takes. A call whose every provider block errors or is skipped fails with `no_provider_ran`, each provider's reason, the credits charged and an example of a working call, and still carries the per-provider report in `structuredContent`.
 
-```json
-{
-  "name": "people_company_enrich",
-  "arguments": {
-    "fullenrich": { "companies": [{ "domain": "example.com" }] },
-    "datalegion": { "companies": [{ "domain": "example.com" }, { "name": "Example Labs" }] }
-  }
-}
-```
+`entity` is required; a call without it, or with another value, fails with `invalid_input`, the unknown top-level fields and an example call. A page size above its maximum (Apollo `per_page` 25, FullEnrich `limit` 25, People Data Labs `limit` 10) runs at the maximum, with a `note` on that provider's entry. An optional `firecrawl_search` block runs a Firecrawl web search beside the providers, with `firecrawl_search`'s query parameters but no page fetching, and reports its results in its own `providers` entry.
+
+Enabled providers run in parallel, and nothing is merged. The response has one `providers` entry per provider with its `status`, records `returned`, `credits` and its own `results`. A failed provider has a `note`, and `retryable: true` when the provider may succeed on a later try. `credits_total` sums the charges. The tool description lists each provider's credit price.
+
+`max_credits` defaults to 1000; 0 runs only free calls. Before any provider runs, the call's most possible cost is estimated from those prices as if every record were found; a call whose estimate is higher fails with `max_credits_exceeded`, the estimate per provider and the minimum `max_credits` (with the same call raised to it when the call is short enough to quote), and a call that runs reports `credits_estimate` and `max_credits`. The `firecrawl_search` block is estimated at its listed price, 2 credits per 10 results (10 with enterprise zdr). The tool repairs common near-miss shapes before validating: a single item where a list is expected, plain strings for FullEnrich `{"value"}` filters, `"51-200"` for FullEnrich ranges, and a provider block sent as a one-item list or under an extra key. An argument that still fails schema validation names every invalid field, the fields its block takes, and an example call; a missing or invalid `entity` is reported with the unknown top-level fields before the provider blocks are checked.
+
+#### people_company_enrich
+
+`people_company_enrich` takes records, not provider blocks, and runs Firecrawl's enrichment waterfall on them. `people` takes `name`, `first_name`, `last_name`, `company`, `domain`, `linkedin_url`, `email` and `phone`; each person needs a `linkedin_url`, `email` or `phone`, or a name with a `company` or `domain`. `companies` takes `domain`, `name` and a company `linkedin_url`, and each needs one of them. A call takes at most 10 records, people and companies together.
+
+Without `contact_fields` each person gets a profile and each company gets firmographics. `contact_fields` (`work_email`, `personal_email`, `mobile`) asks for those values for each person instead; companies in the same call still get firmographics, and `contact_fields` with only companies fails with `invalid_input`.
+
+For each requested field, Firecrawl tries the providers that can use the record's inputs one at a time, ordered by listed price and past success rate, and stops at the first one that finds the field. A provider that has no match, errors or is rate limited is skipped for the next one, without retries. A person known only by an email or phone is first resolved to a profile, and the contact providers then use what it revealed.
 
 ```json
 {
   "name": "people_company_enrich",
   "arguments": {
     "contact_fields": ["work_email"],
-    "fullenrich": { "people": [{ "person_name": "Jane Doe", "company_domain": "example.com" }] },
-    "apollo": { "people": [{ "name": "Jane Doe", "domain": "example.com" }] }
+    "people": [{ "name": "Jane Doe", "domain": "example.com" }, { "linkedin_url": "https://www.linkedin.com/in/janedoe" }],
+    "companies": [{ "domain": "example.com" }]
   }
 }
 ```
 
-Enabled providers run in parallel, and nothing is merged. The response has one `providers` entry per provider with its `status`, records `returned`, `credits` and its own `results`; `people_company_enrich` results carry `input_index` into that entry's input list, and `unmatched` lists the inputs it missed. A failed provider has a `note`, and `retryable: true` when the provider may succeed on a later try. With `contact_fields`, an Apollo or Data Legion match (charged per match) that lacks a requested field lists it in `missing`; FullEnrich charges and returns only the values it finds, and a FullEnrich contact still running upstream is listed under `pending` (with a `next_tool` to read it later when one is available) instead of under `unmatched`. `credits_total` sums the charges. Tool descriptions list each provider's credit price.
+The response has `people` and `companies` lists with one entry per input, each with `input_index` and `results`: one `{ "provider", "data" }` entry per provider that found a requested field, where `data` is that provider's own response, unchanged. A record nothing was found for has empty `results`. `credits_used` is what the call charged: each provider that found something is charged its listed price, and misses are free. `max_credits` (default 100, at most 10,000) caps the call: a provider is tried only while its listed price still fits. `stopped: "team_quota"` means the team ran out of credits during the call. To call one specific provider, use `firecrawl_scrape` with an `alexandria` body.
 
-Both tools take `max_credits` (default 1000; 0 runs only free calls). Before any provider runs, the call's most possible cost is estimated from those prices as if every record were found; a call whose estimate is higher fails with `max_credits_exceeded`, the estimate per provider and the minimum `max_credits` (with the same call raised to it when the call is short enough to quote), and a call that runs reports `credits_estimate` and `max_credits`. The `firecrawl_search` block is estimated at its listed price, 2 credits per 10 results (10 with enterprise zdr). Both tools also accept, and drop, the `conversationId` and `objective` fields agents carry between Firecrawl tools, and repair common near-miss shapes before validating: a single item where a list is expected, plain strings for FullEnrich `{"value"}` filters, `"51-200"` for FullEnrich ranges, and a provider block sent as a one-item list or under an extra key. An argument that still fails schema validation names every invalid field, the fields its block takes, and an example call. For `people_company_search`, a missing or invalid `entity` is reported with the unknown top-level fields before the provider blocks are checked.
+Both tools also accept, and drop, the `conversationId` and `objective` fields agents carry between Firecrawl tools.
 
 ### 16. Credit Usage Tool
 
