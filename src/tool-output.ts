@@ -144,10 +144,10 @@ export const alexandriaExecuteOutputSchema = z
   .object({
     success,
     error,
-    data: unknown('The result in `data.alexandria[0]`, with `data`, `records`, or an `error` with a code.'),
+    data: unknown('One result per call, in the same order, in `data.alexandria`, each with `data`, `records`, or an `error` with a code.'),
     ...alexandriaEnvelope,
   })
-  .describe('The result of one Alexandria capability, or a pointer to it when it was retained.');
+  .describe('The results of the Alexandria capabilities that ran, or a pointer to them when they were retained.');
 
 export const mapOutputSchema = z
   .object({

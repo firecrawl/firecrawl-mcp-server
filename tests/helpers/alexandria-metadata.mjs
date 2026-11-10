@@ -30,7 +30,8 @@ export function assertAlexandriaMetadata(tools, instructions, { hosted = false, 
     for (const name of ['alexandria', 'url']) assert.equal(name in execute.inputSchema.properties, false, name);
     for (const name of ['alexandria', 'requestId']) assert.equal(name in scrape.inputSchema.properties, false, name);
     assert.equal(execute.annotations.readOnlyHint, true);
-    assert.match(contract, /data\.alexandria\[0\]/);
+    assert.ok(execute.inputSchema.properties.calls?.description, 'alexandria_execute.calls needs a description');
+    assert.match(contract, /one result per call, in the same order, in data\.alexandria/i);
   } else {
     assert.match(contract, /mutually exclusive with url/);
     assert.match(contract, /array of 1-10/);

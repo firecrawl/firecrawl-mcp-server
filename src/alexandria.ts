@@ -198,7 +198,7 @@ type AlexandriaCall = { provider: string; capability: string; options?: unknown;
 /** The tool call that runs one capability on a surface. `list` keeps the legacy body an array where it always was one. */
 export function executeToolCall(tools: AlexandriaTools, call: AlexandriaCall | Record<string, unknown>, list = false) {
   return tools === 'dedicated'
-    ? { name: ALEXANDRIA_EXECUTE_TOOL, arguments: call }
+    ? { name: ALEXANDRIA_EXECUTE_TOOL, arguments: { calls: [call] } }
     : { name: 'firecrawl_scrape', arguments: { alexandria: list ? [call] : call } };
 }
 
@@ -206,4 +206,4 @@ export const ALEXANDRIA_DEDICATED_SEARCH_INSTRUCTIONS =
   ALEXANDRIA_SEARCH_LEAD_INSTRUCTIONS + ' ' + ALEXANDRIA_EXECUTE_TOOL + ' runs a selected capability; firecrawl_find_tools provides catalogue browsing and full contracts.';
 
 export const ALEXANDRIA_EXECUTE_DESCRIPTION =
-  "Run one capability of an Alexandria data provider and return its typed, sourced records. Alexandria is Firecrawl's library of data providers across " + ALEXANDRIA_CATALOGUE_VERTICALS + '. `provider` and `capability` come from firecrawl_search results or firecrawl_find_tools, and `options` follow the capability\'s contract, which marks required inputs and any requiresOneOf groups (at least one member per group). Where the contract declares pagination, its fields page through results with the same filters. Returns the result in data.alexandria[0] with data, records, or an error with a code; an invalid call returns an error naming the valid options. A result too large to return inline is retained, and nextTool reads it in slices. Billed per executed capability; discovery is free. ' + ALEXANDRIA_TERMS_GUIDANCE;
+  "Run capabilities of Alexandria data providers and return their typed, sourced records: one, or up to ten in one call when a task needs several lookups. Alexandria is Firecrawl's library of data providers across " + ALEXANDRIA_CATALOGUE_VERTICALS + '. Each entry of `calls` is {provider, capability, options}: `provider` and `capability` come from firecrawl_search results or firecrawl_find_tools, and `options` follow the capability\'s contract, which marks required inputs and any requiresOneOf groups (at least one member per group). Where the contract declares pagination, its fields page through results with the same filters. Returns one result per call, in the same order, in data.alexandria, each with data, records, or an error with a code; one call can fail while the others succeed, and an invalid call returns an error naming the valid options. A result too large to return inline is retained, and nextTool reads it in slices. Billed per executed capability; discovery is free. ' + ALEXANDRIA_TERMS_GUIDANCE;

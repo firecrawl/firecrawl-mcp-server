@@ -37,7 +37,7 @@ test('Alexandria executions and discovery results carry the feedback hint; utili
   const { client } = await startStdioWithApi(t);
   const call = (name, args) => client.request('tools/call', { name, arguments: args });
 
-  const executed = toolText(await call('alexandria_execute', EXCHANGE_CALL));
+  const executed = toolText(await call('alexandria_execute', { calls: [EXCHANGE_CALL] }));
   assertFeedbackHint(executed);
   assert.equal(executed.success, true);
 
@@ -49,14 +49,14 @@ test('Alexandria executions and discovery results carry the feedback hint; utili
   assertFeedbackHint(tools);
 
   const bash = toolText(
-    await call('alexandria_execute', { provider: 'firecrawl', capability: 'bash', options: { workspaceId: 'existing', command: 'cat response.json' } })
+    await call('alexandria_execute', { calls: [{ provider: 'firecrawl', capability: 'bash', options: { workspaceId: 'existing', command: 'cat response.json' } }] })
   );
   assert.equal(bash.feedbackTool, undefined);
 });
 
 test('retained Alexandria results keep the feedback hint next to nextTool', async (t) => {
   const { client } = await startStdioWithApi(t, { largeResult: largeAlexandria(), bashRecovery: 'available' });
-  const result = toolText(await client.request('tools/call', { name: 'alexandria_execute', arguments: EXCHANGE_CALL }));
+  const result = toolText(await client.request('tools/call', { name: 'alexandria_execute', arguments: { calls: [EXCHANGE_CALL] } }));
   assert.equal(result.delivery, 'retained');
   assert.equal(result.nextTool.name, 'alexandria_execute');
   assertFeedbackHint(result);
@@ -72,7 +72,7 @@ test('no feedback hint is attached when the feedback tool is disabled by environ
   });
   const { tools } = await client.request('tools/list', {});
   assert.equal(tools.some((tool) => tool.name === 'firecrawl_feedback'), false);
-  const executed = toolText(await client.request('tools/call', { name: 'alexandria_execute', arguments: EXCHANGE_CALL }));
+  const executed = toolText(await client.request('tools/call', { name: 'alexandria_execute', arguments: { calls: [EXCHANGE_CALL] } }));
   assert.equal(executed.feedbackTool, undefined);
   const categories = toolText(await client.request('tools/call', { name: 'firecrawl_find_tools', arguments: { limit: 1 } }));
   assert.equal(categories.feedbackTool, undefined);

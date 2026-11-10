@@ -16,11 +16,11 @@ test('local keyless stdio refuses every Exchange path with the explanatory error
       arguments: { query: 'nvidia', sources: [{ type: 'exchange' }] },
       name: 'firecrawl_search',
     },
-    { arguments: EXCHANGE_CALL, name: 'alexandria_execute' },
+    { arguments: { calls: [EXCHANGE_CALL] }, name: 'alexandria_execute' },
     { arguments: { categories: ['finance'] }, name: 'firecrawl_find_tools' },
     { arguments: {}, name: 'firecrawl_find_tools' },
-    { arguments: { provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } }, name: 'alexandria_execute' },
-    { arguments: { provider: 'firecrawl', capability: 'terms/accept', options: { provider: 'benzinga', version: 'v1', digest: 'a'.repeat(64), confirmed: true } }, name: 'alexandria_execute' },
+    { arguments: { calls: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } }] }, name: 'alexandria_execute' },
+    { arguments: { calls: [{ provider: 'firecrawl', capability: 'terms/accept', options: { provider: 'benzinga', version: 'v1', digest: 'a'.repeat(64), confirmed: true } }] }, name: 'alexandria_execute' },
   ]) {
     const result = await client.request('tools/call', params);
     assert.equal(result.isError, true, JSON.stringify(result));
@@ -60,7 +60,7 @@ test('a hosted API key header reaches the Exchange', async (t) => {
         id: 4,
         headers: { 'x-api-key': 'fc-exchange-header' },
         params: {
-          arguments: EXCHANGE_CALL,
+          arguments: { calls: [EXCHANGE_CALL] },
           name: 'alexandria_execute',
         },
       })
@@ -77,7 +77,7 @@ test('a hosted API key header reaches the Exchange', async (t) => {
     'Bearer fc-exchange-header'
   );
   assert.deepEqual(scrapeCalls[0].body, {
-    alexandria: EXCHANGE_CALL,
+    alexandria: [EXCHANGE_CALL],
     origin: `mcp-ua-node@${JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version}`,
   });
 });
@@ -87,8 +87,8 @@ test('rejected API keys return in-band errors without leaking credentials on Ale
   for (const params of [
     { name: 'firecrawl_find_tools', arguments: { categories: ['finance'] } },
     { name: 'firecrawl_search', arguments: { query: 'rates', sources: ['alexandria'] } },
-    { name: 'alexandria_execute', arguments: EXCHANGE_CALL },
-    { name: 'alexandria_execute', arguments: { provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } } },
+    { name: 'alexandria_execute', arguments: { calls: [EXCHANGE_CALL] } },
+    { name: 'alexandria_execute', arguments: { calls: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } }] } },
   ]) {
     const before = api.requests.length;
     const result = await client.request('tools/call', params);

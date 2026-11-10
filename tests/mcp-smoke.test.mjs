@@ -1370,7 +1370,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.match(instructionsHead, /Authenticated searches always add alexandria to the sources/);
   assert.match(
     init.instructions,
-    /Alexandria is Firecrawl's catalogue of data providers and workflows.*alexandria_execute with \{provider, capability, options\} runs one capability/is
+    /Alexandria is Firecrawl's catalogue of data providers and workflows.*alexandria_execute with calls: \[\{provider, capability, options\}\] runs up to ten capabilities/is
   );
   assert.match(
     init.instructions,

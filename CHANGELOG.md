@@ -5,14 +5,14 @@
 ### Added
 
 - A tool can list fewer arguments than it accepts: `listedParameters` on a tool definition is what `tools/list` advertises, and calls are still validated against `parameters`.
-- `alexandria_execute` runs one Alexandria capability: its arguments are `provider`, `capability`, `options`, and optionally `version`, `requestId` and `timeout`. The result envelope is the one `firecrawl_scrape` with `alexandria` returned, with the result in `data.alexandria[0]`.
+- `alexandria_execute` runs Alexandria capabilities: `calls` is an array of one to ten `{provider, capability, options}` entries (each optionally with `version`), which may name different providers, with optional `requestId` and `timeout`. The result envelope is the one `firecrawl_scrape` with `alexandria` returned, with one result per call, in the same order, in `data.alexandria`.
 - `people_company_enrich` accepts `people` and `companies` in the same call, in one provider block or across blocks. Each kind runs as its own request and is reported as its own `providers` entry with `kind: "people"` or `kind: "companies"`, so a provider given both has two entries, each with its own records, `input_index` into that kind's list, credits and errors. One kind failing does not fail the other. `max_credits` is checked against the estimate for both. `contact_fields` applies to the people, and companies in the same call get firmographics. Such calls used to be refused with `Give <provider> exactly one of people or companies` or `Send people and companies in separate calls`. Every `people_company_enrich` entry for a provider that ran now carries `kind`.
 
 ### Changed
 
 - On the full surface (stdio, `/v2/mcp`, `/v2/mcp-oauth`), Alexandria capabilities are run through `alexandria_execute`, and `firecrawl_scrape` lists a page URL only:
   - `firecrawl_scrape` no longer lists `alexandria` and `requestId` in its input schema or describes them. It still accepts them and runs the call or batch exactly as before, so clients and prompts that learned that shape keep working.
-  - `alexandria_execute` runs one capability per call. It reads a single `alexandria: {...}` or `alexandria: [{...}]` body as its arguments.
+  - `alexandria_execute` lists `calls` only. It also reads an `alexandria` body (one call or an array) and one call sent as the arguments themselves (`{provider, capability, options}`) as `calls`.
   - Follow-up calls in results (`nextTool` for provider terms, for a retained result, and `next_tool` for a pending enrichment job) are addressed to `alexandria_execute`.
   - Server instructions and the `firecrawl_search`, `firecrawl_scrape` and `firecrawl_find_tools` descriptions name `alexandria_execute`.
   - `FIRECRAWL_MCP_ALEXANDRIA_TOOLS=legacy` lists `firecrawl_scrape` with `alexandria` again, with the earlier copy, and removes `alexandria_execute`, to roll back without a release. Embedders set the `alexandriaTools: 'legacy'` hook.

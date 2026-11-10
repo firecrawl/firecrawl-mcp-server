@@ -11,7 +11,7 @@ test('terms are read through alexandria_execute and accepted by an organization 
   const listing = await client.request('tools/list', {});
   assert.ok(!listing.tools.some(tool => /terms/.test(tool.name)), 'no tool accepts terms');
 
-  const blocked = await callExpectingError(client, { name: 'alexandria_execute', arguments: { provider: 'benzinga', capability: 'news/search' } });
+  const blocked = await callExpectingError(client, { name: 'alexandria_execute', arguments: { calls: [{ provider: 'benzinga', capability: 'news/search' }] } });
   assert.equal(api.requests.length, 1, 'blocked requests never auto-accept');
   const { requiresAction } = TERMS_REQUIRED_BODY;
   const { requestId } = blocked.structuredContent;
@@ -27,7 +27,7 @@ test('terms are read through alexandria_execute and accepted by an organization 
 
   const next = blocked.structuredContent.nextTool;
   assert.equal(next.name, 'alexandria_execute');
-  assert.equal(next.arguments.capability, 'terms/show');
+  assert.equal(next.arguments.calls[0].capability, 'terms/show');
   const read = toolText(await client.request('tools/call', next)).data.alexandria[0].data;
   assert.equal(read.terms.document, 'Review this agreement.');
   assert.equal(api.requests.length, 2);
@@ -38,7 +38,7 @@ test('terms are read through alexandria_execute and accepted by an organization 
     { provider: ' Firecrawl ', capability: 'Terms/Accept', options },
     { provider: 'firecrawl', capability: 'terms/revoke', options: { provider: 'benzinga' } },
   ]) {
-    const refused = await callExpectingError(client, { name: 'alexandria_execute', arguments: call });
+    const refused = await callExpectingError(client, { name: 'alexandria_execute', arguments: { calls: [call] } });
     assert.match(refused.content[0].text, /Provider terms are accepted in the Firecrawl dashboard, not through this connection/, call.capability);
   }
   assert.equal(api.requests.length, 2, 'no terms command other than terms/show is forwarded');
@@ -48,7 +48,7 @@ test('alexandria_execute relays a reserved 409 billing error with its code and c
   const { api, client } = await startStdioWithApi(t);
 
   const result = await callExpectingError(client, {
-    arguments: { provider: 'inflight', capability: 'finance/x' },
+    arguments: { calls: [{ provider: 'inflight', capability: 'finance/x' }] },
     name: 'alexandria_execute',
   });
   assert.equal(api.requests.length, 1);
@@ -71,7 +71,7 @@ test('disabled provider offers read-only terms recovery without treating other r
     ['Access to another-provider is disabled for this organization.', false],
   ]) {
     const { api, client } = await startStdioWithApi(t, { providerRefusal: message });
-    const blocked = await callExpectingError(client, { name: 'alexandria_execute', arguments: { provider: 'benzinga', capability: 'news/search' } });
+    const blocked = await callExpectingError(client, { name: 'alexandria_execute', arguments: { calls: [{ provider: 'benzinga', capability: 'news/search' }] } });
     assert.equal(api.requests.length, 1);
     assert.equal(Boolean(blocked.structuredContent.nextTool), expected, message);
     if (expected) {
@@ -80,7 +80,7 @@ test('disabled provider offers read-only terms recovery without treating other r
       const shown = toolText(await client.request('tools/call', blocked.structuredContent.nextTool));
       assert.equal(shown.data.alexandria[0].data.status.accepted, false);
       assert.equal(api.requests.length, 2);
-      assert.equal(api.requests[1].body.alexandria.capability, 'terms/show');
+      assert.equal(api.requests[1].body.alexandria[0].capability, 'terms/show');
     }
   }
 });
@@ -110,7 +110,7 @@ test('the terms refusal keeps its full recovery contract for hooks while the cli
 
   const result = await client.callTool({
     name: 'alexandria_execute',
-    arguments: { provider: 'benzinga', capability: 'news/search' },
+    arguments: { calls: [{ provider: 'benzinga', capability: 'news/search' }] },
   });
   assert.equal(result.isError, true);
   assert.deepEqual(Object.keys(result.structuredContent).sort(), ['message', 'nextTool', 'requestId']);
