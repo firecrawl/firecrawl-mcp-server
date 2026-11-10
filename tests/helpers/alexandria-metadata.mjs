@@ -5,7 +5,7 @@ const WORKFLOW_COPY = /terms\/show|terms\/accept|confirmed:true|repeated attempt
 /**
  * `tools` says how the surface runs Alexandria capabilities: `legacy` is
  * firecrawl_scrape with an alexandria body (the search surface), `dedicated`
- * is alexandria_execute.
+ * is alexandria_library_read.
  */
 export function assertAlexandriaMetadata(tools, instructions, { hosted = false, tools: surface = 'legacy' } = {}) {
   assert.ok(instructions, 'Alexandria server instructions are required');
@@ -17,7 +17,7 @@ export function assertAlexandriaMetadata(tools, instructions, { hosted = false, 
   const scrape = byName('firecrawl_scrape');
   assert.equal(scrape.annotations.readOnlyHint, hosted);
 
-  const execute = surface === 'dedicated' ? byName('alexandria_execute') : scrape;
+  const execute = surface === 'dedicated' ? byName('alexandria_library_read') : scrape;
   const { requestId, alexandria } = execute.inputSchema?.properties ?? {};
   assert.ok(requestId?.description, `${execute.name}.requestId needs a description`);
   assert.match(requestId.description, /idempotency key.*payload/i);
@@ -30,7 +30,7 @@ export function assertAlexandriaMetadata(tools, instructions, { hosted = false, 
     for (const name of ['alexandria', 'url']) assert.equal(name in execute.inputSchema.properties, false, name);
     for (const name of ['alexandria', 'requestId']) assert.equal(name in scrape.inputSchema.properties, false, name);
     assert.equal(execute.annotations.readOnlyHint, true);
-    assert.ok(execute.inputSchema.properties.calls?.description, 'alexandria_execute.calls needs a description');
+    assert.ok(execute.inputSchema.properties.calls?.description, 'alexandria_library_read.calls needs a description');
     assert.match(contract, /one result per call, in the same order, in data\.alexandria/i);
   } else {
     assert.match(contract, /mutually exclusive with url/);
@@ -43,7 +43,7 @@ export function assertAlexandriaMetadata(tools, instructions, { hosted = false, 
 
   const descriptions = [instructions];
   const named = surface === 'dedicated'
-    ? ['firecrawl_search', 'firecrawl_scrape', 'firecrawl_find_tools', 'alexandria_execute']
+    ? ['firecrawl_search', 'firecrawl_scrape', 'firecrawl_find_tools', 'alexandria_library_read']
     : ['firecrawl_search', 'firecrawl_scrape', 'firecrawl_find_tools'];
   for (const name of named) {
     const tool = byName(name);

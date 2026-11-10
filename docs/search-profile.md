@@ -77,13 +77,13 @@ surface exposes. `firecrawl_find_tools` is registered the same way. Alexandria
 results on this surface carry no `feedbackTool` pointer, since
 `firecrawl_feedback` is not registered here.
 
-The full surface runs Alexandria capabilities through `alexandria_execute`, and
+The full surface runs Alexandria capabilities through `alexandria_library_read`, and
 its `firecrawl_scrape` lists a URL only (it still accepts an `alexandria`
 body). This surface keeps execution on
 `firecrawl_scrape` because the listing declares that tool for it: its hooks set
 `alexandriaTools: 'legacy'` (`src/service/index.ts`), and follow-up calls in
 its results (`nextTool`) are addressed to `firecrawl_scrape`. Moving this
-surface to `alexandria_execute` is a tool-set change, so it needs the listing
+surface to `alexandria_library_read` is a tool-set change, so it needs the listing
 updated first.
 
 `firecrawl_scrape` is read-only here (`readOnlyHint: true`): the surface runs in

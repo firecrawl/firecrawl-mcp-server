@@ -354,7 +354,7 @@ test('toolFilter blocks built-in and module registrations but not extra tools', 
   assert.ok(tools.includes('embed_extra'));
 });
 
-test('a toolFilter that leaves alexandria_execute out keeps firecrawl_scrape listing an alexandria body', async (t) => {
+test('a toolFilter that leaves alexandria_library_read out keeps firecrawl_scrape listing an alexandria body', async (t) => {
   const listed = async (unstable_hooks) => {
     const port = await startEmbedded(t, { apiUrl: 'http://127.0.0.1:9', apiKey: 'fc-configured', unstable_hooks });
     const { tools } = await rpc(port, 'tools/list');
@@ -362,17 +362,17 @@ test('a toolFilter that leaves alexandria_execute out keeps firecrawl_scrape lis
     return { instructions, names: tools.map((tool) => tool.name), scrape: tools.find((tool) => tool.name === 'firecrawl_scrape') };
   };
 
-  // An allowlist written before alexandria_execute existed.
+  // An allowlist written before alexandria_library_read existed.
   const fixed = await listed({ toolFilter: (name) => name.startsWith('firecrawl_') });
-  assert.equal(fixed.names.includes('alexandria_execute'), false);
+  assert.equal(fixed.names.includes('alexandria_library_read'), false);
   assert.ok('alexandria' in fixed.scrape.inputSchema.properties);
-  assert.doesNotMatch([fixed.instructions, fixed.scrape.description].join('\n'), /alexandria_execute/);
+  assert.doesNotMatch([fixed.instructions, fixed.scrape.description].join('\n'), /alexandria_library_read/);
   // Asking for the dedicated tools does not override the filter.
   const asked = await listed({ toolFilter: (name) => name.startsWith('firecrawl_'), alexandriaTools: 'dedicated' });
   assert.ok('alexandria' in asked.scrape.inputSchema.properties);
 
   const open = await listed({});
-  assert.ok(open.names.includes('alexandria_execute'));
+  assert.ok(open.names.includes('alexandria_library_read'));
   assert.equal('alexandria' in open.scrape.inputSchema.properties, false);
 });
 
