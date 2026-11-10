@@ -87,6 +87,7 @@ const warning = str('Non-fatal warning about the result.');
 /** Keys every Alexandria-capable response can carry (see `alexandriaOutput`). */
 const alexandriaEnvelope = {
   requestId: str('Identifier of this Alexandria execution.'),
+  retryable: bool('Whether resending the same request can succeed; set when the API refused before any provider ran.'),
   scrape_id: str('Identifier of the underlying scrape.'),
   receipt: unknown('Billing receipt for the execution.'),
   creditsCost: num('Credits this call consumed.'),

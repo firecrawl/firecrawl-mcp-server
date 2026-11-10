@@ -673,7 +673,8 @@ async function runCalls(ctx: Context, p: Provider, calls: Call[]): Promise<Entry
               { alexandria: chunk.map((c) => ({ provider: SLUG[p], ...c })), origin: ctx.origin },
               { headers: { 'x-request-id': requestId } }
             ),
-          { tool: ctx.tool, requestId, providers: [SLUG[p]] }
+          // The API answers a repeat of this request id from its record, so a resend cannot run twice.
+          { tool: ctx.tool, requestId, providers: [SLUG[p]], resend: true }
         );
         const entries = response?.data?.data?.alexandria;
         if (!Array.isArray(entries)) throw new Error('Unexpected response shape.');
@@ -692,7 +693,7 @@ async function runCalls(ctx: Context, p: Provider, calls: Call[]): Promise<Entry
 
 const isMiss = (entry: Entry) => entry.error?.code === 'not_found';
 
-const RETRYABLE = new Set(['provider_error', 'provider_unavailable', 'provider_rate_limited', 'request_timeout']);
+const RETRYABLE = new Set(['provider_error', 'provider_unavailable', 'provider_rate_limited', 'request_timeout', 'precheck_unavailable', 'billing_unavailable']);
 
 const isPending = (entry: Entry | undefined) => entry?.data?.status === 'job_pending' || entry?.error?.code === 'job_pending';
 
