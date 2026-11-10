@@ -4,6 +4,7 @@
 
 ### Added
 
+- A keyed `firecrawl_scrape` of a URL names an Alexandria provider for the page's site in `agent_hints`, when one covers it, with the `firecrawl_find_tools` call that lists its tools. The lookup runs beside the scrape, sends only the host to `/exchange/skills/resolve`, is cached per host for 10 minutes, and is dropped when it is not back within 500 ms of the scrape. `domainTools`, `lockdown` and `zeroDataRetention` skip it. The stdio and local HTTP server turn it on against the Firecrawl cloud; embedders opt in with the `scrapeProviderHints` option. The scrape output schema now declares `agent_hints`.
 - `people_company_enrich` accepts `people` and `companies` in the same call, in one provider block or across blocks. Each kind runs as its own request and is reported as its own `providers` entry with `kind: "people"` or `kind: "companies"`, so a provider given both has two entries, each with its own records, `input_index` into that kind's list, credits and errors. One kind failing does not fail the other. `max_credits` is checked against the estimate for both. `contact_fields` applies to the people, and companies in the same call get firmographics. Such calls used to be refused with `Give <provider> exactly one of people or companies` or `Send people and companies in separate calls`. Every `people_company_enrich` entry for a provider that ran now carries `kind`.
 
 ### Changed

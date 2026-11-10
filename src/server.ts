@@ -66,6 +66,7 @@ import {
   ALEXANDRIA_SOURCES_ALWAYS_ON,
 } from './alexandria';
 import { alexandriaOutput } from './alexandria-output';
+import { lookupSiteProviders, siteProviderHint } from './site-providers.js';
 import { FeedbackTokenRegistry, FeedbackTokenStore, withFeedbackRefs } from './alexandria-feedback-tokens.js';
 import { registerDeveloperTools } from './developer';
 import { registerGovTools } from './gov';
@@ -451,6 +452,11 @@ export interface FirecrawlMcpServerOptions {
    * before. Defaults to false.
    */
   modernProtocol?: boolean;
+  /**
+   * A keyed URL scrape looks up Alexandria providers for the page's host and
+   * names one in `agent_hints`. Defaults to false.
+   */
+  scrapeProviderHints?: boolean;
   /** Extension hooks. Unstable: may change in any release. */
   unstable_hooks?: FirecrawlMcpServerHooks;
 }
@@ -667,6 +673,7 @@ export function createFirecrawlMcpServer(
     searchFeedback: options.searchFeedback ?? true,
     endpointFeedback: options.endpointFeedback ?? true,
     integration: integrationFrom(options.integration),
+    scrapeProviderHints: options.scrapeProviderHints ?? false,
   };
   const logging = options.logging ?? config.transport === 'httpStream';
 
@@ -1799,6 +1806,18 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
       }
       assertFormatOptions(cleaned.formats);
       const client = getClient(session);
+      const siteProviders =
+        config.scrapeProviderHints &&
+        !cleaned.lockdown &&
+        cleaned.domainTools !== true &&
+        cleaned.zeroDataRetention !== true
+          ? lookupSiteProviders(String(url), (body, timeoutMs) =>
+              (client as any).http.post('/exchange/skills/resolve', body, {
+                headers: originHeaders(origin),
+                timeoutMs,
+              })
+            )
+          : undefined;
       const res = await relayTermsRequired(
         () =>
           client.scrape(String(url), {
@@ -1807,7 +1826,9 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
           } as any),
         { tool: 'firecrawl_scrape' }
       );
-      return structuredText(withoutDiscoveredToolPrices(res));
+      const hint = siteProviders && (await siteProviderHint(siteProviders, 500));
+      const document = withoutDiscoveredToolPrices(res);
+      return structuredText(hint ? { ...document, agent_hints: [hint] } : document);
     },
   };
   server.addTool({

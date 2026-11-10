@@ -131,6 +131,7 @@ export const scrapeOutputSchema = z
     branding: unknown('Branding data extracted from the page.'),
     metadata: unknown('Page metadata; authenticated responses can include `metadata.scrapeId` for scrape feedback.'),
     tools: unknown('Domain-matched Alexandria tools for the page, when `domainTools` is set.'),
+    agent_hints: unknown('Response guidance for the agent, separate from page content.'),
     warning,
     // Alexandria mode and error envelopes.
     success,
