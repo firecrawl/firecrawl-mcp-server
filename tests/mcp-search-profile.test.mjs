@@ -1250,7 +1250,7 @@ test('account (mcp-oauth) full-surface instructions satisfy the same metadata po
     assert.equal(tool?._meta?.['anthropic/alwaysLoad'], true, name);
   }
 
-  assertAlexandriaMetadata(tools, initialize.instructions, { hosted: true });
+  assertAlexandriaMetadata(tools, initialize.instructions, { hosted: true, tools: 'dedicated' });
   assertAgentMetadataPolicy(
     [initialize.instructions, ...tools.map((tool) => tool.description ?? '')],
     assert

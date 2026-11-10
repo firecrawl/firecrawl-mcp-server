@@ -114,7 +114,7 @@ async function startFakeExchangeApi(options = {}) {
         return json(200, { success: true, data: { alexandria: [{ provider: 'firecrawl', capability: termsCall.capability, creditsCost: 0, data }] } });
       }
 
-      if (options.bashRecovery && parsedBody.alexandria?.capability === 'bash') {
+      if (options.bashRecovery && termsCall?.capability === 'bash') {
         if (options.bashRecovery === 'missing') return json(200, { success: true, data: { alexandria: [{ error: { code: 'result_unavailable' } }] } });
         const identities = options.bashRecovery === 'partial' ? [] : options.largeResult.data.alexandria.map(item => [item.provider, item.capability]);
         return json(200, { success: true, data: { alexandria: [{ provider: 'firecrawl', capability: 'bash', data: { workspaceId: 'retained-workspace', exitCode: 0, stdout: JSON.stringify(identities), idleTtlSeconds: 300 } }] } });
@@ -122,16 +122,16 @@ async function startFakeExchangeApi(options = {}) {
       if (options.largeResult) return json(200, options.largeResult);
       if (parsedBody.alexandria?.provider === 'firecrawl') return json(200, {success:true, data:{creditsCost:0, alexandria:[{provider:'firecrawl',capability:'find-tools',creditsCost:0,...(options.feedbackTokens ? {feedbackToken: callToken(0, 0)} : {}),data:{level:'tools',items:[PRICED_TOOL],relatedTools:[{group:'alternative',label:'Alternative sources',tools:[{tool:{...PRICED_TOOL,id:'bls/series'},reason:'r'}]}],total:4,next:{provider:'firecrawl',capability:'find-tools',options:{...parsedBody.alexandria.options, offset:4}}}}]}});
 
-      if (parsedBody?.alexandria?.[0]?.provider === 'locked') {
+      if (termsCall?.provider === 'locked') {
         return json(403, {
           success: false,
           error: 'Exchange is not enabled for this team.',
         });
       }
-      if (parsedBody?.alexandria?.[0]?.provider === 'benzinga') {
+      if (termsCall?.provider === 'benzinga') {
         return json(403, options.providerRefusal ? { success: false, error: options.providerRefusal } : TERMS_REQUIRED_BODY);
       }
-      if (parsedBody?.alexandria?.[0]?.provider === 'inflight') {
+      if (termsCall?.provider === 'inflight') {
         return json(409, {
           success: false,
           code: 'request_in_flight',

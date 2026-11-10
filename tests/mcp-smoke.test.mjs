@@ -1389,7 +1389,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.match(instructionsHead, /Authenticated searches always add alexandria to the sources/);
   assert.match(
     init.instructions,
-    /Alexandria is Firecrawl's catalogue of data providers and workflows.*firecrawl_scrape with alexandria.*executes up to ten capabilities/is
+    /Alexandria is Firecrawl's catalogue of data providers and workflows.*alexandria_library_read with calls: \[\{provider, capability, options\}\] runs up to ten capabilities/is
   );
   assert.match(
     init.instructions,
@@ -1399,6 +1399,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
     init.instructions,
     /For the same fields across multiple pages, firecrawl_find_tools offers free provider discovery/
   );
+  assert.doesNotMatch(init.instructions, /firecrawl_scrape with alexandria/);
   assert.match(
     byName.get('firecrawl_scrape').description,
     /request identifies a page and needs its content or defined fields/i
