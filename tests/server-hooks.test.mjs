@@ -367,9 +367,6 @@ test('a toolFilter that leaves alexandria_library_read out keeps firecrawl_scrap
   assert.equal(fixed.names.includes('alexandria_library_read'), false);
   assert.ok('alexandria' in fixed.scrape.inputSchema.properties);
   assert.doesNotMatch([fixed.instructions, fixed.scrape.description].join('\n'), /alexandria_library_read/);
-  // Asking for the dedicated tools does not override the filter.
-  const asked = await listed({ toolFilter: (name) => name.startsWith('firecrawl_'), alexandriaTools: 'dedicated' });
-  assert.ok('alexandria' in asked.scrape.inputSchema.properties);
 
   const open = await listed({});
   assert.ok(open.names.includes('alexandria_library_read'));
@@ -619,7 +616,7 @@ async function startStdioEmbedder(t, hooksSource) {
          .start({ transportType: 'stdio' });`,
     ],
     {
-      env: { ...process.env, FIRECRAWL_MCP_ALEXANDRIA_TOOLS: '', FIRECRAWL_API_KEY: '', FIRECRAWL_API_URL: '' },
+      env: { ...process.env, FIRECRAWL_API_KEY: '', FIRECRAWL_API_URL: '' },
       stdio: ['pipe', 'pipe', 'pipe'],
     }
   );

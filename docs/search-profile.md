@@ -80,9 +80,10 @@ results on this surface carry no `feedbackTool` pointer, since
 The full surface runs Alexandria capabilities through `alexandria_library_read`, and
 its `firecrawl_scrape` lists a URL only (it still accepts an `alexandria`
 body). This surface keeps execution on
-`firecrawl_scrape` because the listing declares that tool for it: its hooks set
-`alexandriaTools: 'legacy'` (`src/service/index.ts`), and follow-up calls in
-its results (`nextTool`) are addressed to `firecrawl_scrape`. Moving this
+`firecrawl_scrape` because the listing declares that tool for it: its tool
+filter leaves `alexandria_library_read` out, and a surface without that tool
+keeps the earlier shape, so follow-up calls in its results (`nextTool`) are
+addressed to `firecrawl_scrape`. Moving this
 surface to `alexandria_library_read` is a tool-set change, so it needs the listing
 updated first.
 

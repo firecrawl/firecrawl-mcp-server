@@ -48,14 +48,12 @@ function parseSseJson(body) {
   return JSON.parse(dataLine.slice('data: '.length));
 }
 
-function spawnServer(env) {
-  const child = spawn(process.execPath, ['dist/index.js'], {
+function spawnServer(env, entry = 'dist/index.js') {
+  const child = spawn(process.execPath, [entry], {
     env: {
       ...process.env,
       MCP_DELEGATED_CREDENTIAL_SECRET:
         'test-mcp-delegated-credential-secret-32',
-      // A value in the developer's shell must not change which tools a test server lists.
-      FIRECRAWL_MCP_ALEXANDRIA_TOOLS: '',
       ...env,
     },
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -155,8 +153,8 @@ class StdioMcpClient {
   }
 }
 
-async function startStdio(t, env) {
-  const child = spawnServer(env);
+async function startStdio(t, env, entry) {
+  const child = spawnServer(env, entry);
   let stderr = '';
   child.stderr.on('data', (chunk) => {
     stderr += chunk;
@@ -180,13 +178,13 @@ async function startStdioWithApi(t, options = {}) {
     FIRECRAWL_API_KEY: 'fc-exchange-test',
     FIRECRAWL_API_URL: api.url,
     ...options.env,
-  });
+  }, options.entry);
   return { api, ...session };
 }
 
-// How the search surface runs Alexandria capabilities: firecrawl_scrape with
-// an alexandria body.
-const LEGACY_ALEXANDRIA_TOOLS = { FIRECRAWL_MCP_ALEXANDRIA_TOOLS: 'legacy' };
+// A surface with a fixed tool list, such as the search surface: it keeps
+// firecrawl_find_tools and firecrawl_scrape with an alexandria body.
+const LEGACY_SURFACE = { entry: 'tests/helpers/filtered-stdio.mjs' };
 
 // A tool call that fails either at schema validation (JSON-RPC error or an
 // isError result, depending on the FastMCP version) or inside execute.
@@ -221,4 +219,4 @@ async function httpToolCall(port, { id, headers, params }) {
 }
 
 
-export { LEGACY_ALEXANDRIA_TOOLS, EXCHANGE_KEY_REQUIRED_MESSAGE, KEYLESS_TOOL_MESSAGE, getFreePort, waitForHealth, parseSseJson, spawnServer, stopChild, startStdio, startStdioWithApi, callExpectingError, toolText, httpToolCall };
+export { LEGACY_SURFACE, EXCHANGE_KEY_REQUIRED_MESSAGE, KEYLESS_TOOL_MESSAGE, getFreePort, waitForHealth, parseSseJson, spawnServer, stopChild, startStdio, startStdioWithApi, callExpectingError, toolText, httpToolCall };

@@ -29,13 +29,13 @@ async function startRefusingApi(t, status, body) {
   return `http://127.0.0.1:${server.address().port}`;
 }
 
-async function connect(t, { apiUrl, session, registerExtraTools, onToolResult, fileAccess, alexandriaTools }) {
+async function connect(t, { apiUrl, session, registerExtraTools, onToolResult, fileAccess }) {
   const port = await getFreePort();
   const instance = createFirecrawlMcpServer({
     transport: 'httpStream',
     apiUrl,
     fileAccess,
-    unstable_hooks: { authenticate: async () => ({ ...session }), registerExtraTools, onToolResult, alexandriaTools },
+    unstable_hooks: { authenticate: async () => ({ ...session }), registerExtraTools, onToolResult },
   });
   await instance.start({
     transportType: 'httpStream',
@@ -49,8 +49,8 @@ async function connect(t, { apiUrl, session, registerExtraTools, onToolResult, f
   return { client, tools };
 }
 
-async function assertReadableError(t, { apiUrl, session, name, args, includes, registerExtraTools, onToolResult, fileAccess, alexandriaTools }) {
-  const { client, tools } = await connect(t, { apiUrl, session, registerExtraTools, onToolResult, fileAccess, alexandriaTools });
+async function assertReadableError(t, { apiUrl, session, name, args, includes, registerExtraTools, onToolResult, fileAccess }) {
+  const { client, tools } = await connect(t, { apiUrl, session, registerExtraTools, onToolResult, fileAccess });
   assert.ok(tools.find((tool) => tool.name === name)?.outputSchema, `${name} declares an outputSchema`);
   const result = await client.callTool({ name, arguments: args });
   assert.equal(result.isError, true, JSON.stringify(result));
@@ -262,7 +262,7 @@ const JSON_FORMAT_MESSAGE =
   'formats "json" needs jsonOptions with a prompt or a schema. To ask a question about the page, use formats ["query"] with queryOptions.prompt instead.';
 const QUERY_FORMAT_MESSAGE = 'formats "query" needs queryOptions with a non-empty prompt.';
 
-for (const { name, args, message, code, alexandriaTools } of [
+for (const { name, args, message, code } of [
   { name: 'firecrawl_scrape', args: { url: 'https://example.com', formats: ['query'] }, message: QUERY_FORMAT_MESSAGE, code: 'invalid_request' },
   { name: 'firecrawl_scrape', args: { url: 'https://example.com', formats: ['query'], queryOptions: { prompt: ' ' } }, message: QUERY_FORMAT_MESSAGE, code: 'invalid_request' },
   { name: 'firecrawl_interact', args: { url: 'https://example.com', prompt: 'Read the title', scrapeOptions: { formats: ['json'] } }, message: JSON_FORMAT_MESSAGE, code: 'invalid_request' },
@@ -286,7 +286,6 @@ for (const { name, args, message, code, alexandriaTools } of [
       name,
       args,
       includes: message,
-      alexandriaTools,
       onToolResult: (event) => events.push(event),
     });
     assert.equal(result.content[0].text, message);

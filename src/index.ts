@@ -66,12 +66,7 @@ const options: FirecrawlMcpServerOptions = {
   endpointFeedback: !endpointFeedbackDisabled,
   integration: process.env.FIRECRAWL_INTEGRATION,
 };
-// FIRECRAWL_MCP_ALEXANDRIA_TOOLS=legacy lists firecrawl_scrape with an
-// alexandria body on the full surface again, to roll back alexandria_library_read
-// without a release.
-const alexandriaTools =
-  process.env.FIRECRAWL_MCP_ALEXANDRIA_TOOLS === 'legacy' ? 'legacy' : 'dedicated';
-const serviceSettings = { hosted, transport, apiKey, apiUrl, alexandriaTools } as const;
+const serviceSettings = { hosted, transport, apiKey, apiUrl } as const;
 
 const primaryHooks = createServiceHooks(primaryProfile, serviceSettings);
 const { start } = createFirecrawlMcpServer({

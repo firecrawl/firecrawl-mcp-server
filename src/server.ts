@@ -422,15 +422,6 @@ export interface FirecrawlMcpServerHooks {
   ) => Promise<void>;
   /** Built-in tools whose name fails the filter are not registered. */
   toolFilter?: (name: string) => boolean;
-  /**
-   * How Alexandria capabilities are run. `dedicated` (the default) registers
-   * alexandria_library_read, and firecrawl_scrape lists a page URL only while
-   * still accepting an alexandria body. `legacy` lists firecrawl_scrape with
-   * an alexandria body and no alexandria_library_read, for a surface whose tool
-   * list is fixed. A surface whose `toolFilter` leaves alexandria_library_read out
-   * is `legacy` whatever this says.
-   */
-  alexandriaTools?: AlexandriaTools;
   /** Adds HTTP routes. Runs before the built-in routes, so its routes win. */
   configureHttp?: (app: HttpApp) => void;
   /** Serve OAuth protected-resource metadata for this instance. */
@@ -685,11 +676,12 @@ export function createFirecrawlMcpServer(
   };
   const logging = options.logging ?? config.transport === 'httpStream';
 
-  // A surface whose tool filter leaves alexandria_library_read out keeps the
-  // earlier shape whatever the hook says: its descriptions and follow-up
-  // calls would otherwise name a tool it does not list.
-  const alexandriaTools: AlexandriaTools =
-    (hooks.toolFilter?.(ALEXANDRIA_READ_TOOL) ?? true) ? (hooks.alexandriaTools ?? 'dedicated') : 'legacy';
+  // Which tools run Alexandria capabilities. `dedicated`: alexandria_library_read,
+  // with firecrawl_scrape listing a page URL only while still accepting an
+  // alexandria body. `legacy`: firecrawl_scrape with an alexandria body, for a
+  // surface whose tool filter leaves alexandria_library_read out; its
+  // descriptions and follow-up calls would otherwise name a tool it does not list.
+  const alexandriaTools: AlexandriaTools = (hooks.toolFilter?.(ALEXANDRIA_READ_TOOL) ?? true) ? 'dedicated' : 'legacy';
   const dedicatedAlexandria = alexandriaTools === 'dedicated';
   const instructionDefaults: InstructionDefaults = {
     authenticated: fullProfileInstructions(alexandriaTools),

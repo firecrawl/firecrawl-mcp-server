@@ -4,7 +4,6 @@
  * nothing in the core depends on it.
  */
 import type {
-  AlexandriaTools,
   FirecrawlMcpServerHooks,
 } from '../server.js';
 import { createServiceAuthenticate } from './auth.js';
@@ -38,12 +37,6 @@ export type ServiceSettings = {
   transport: 'stdio' | 'httpStream';
   apiKey?: string;
   apiUrl?: string;
-  /**
-   * How the full surface runs Alexandria capabilities; `dedicated` when
-   * unset. The search surface is always `legacy`: its connector listing
-   * declares firecrawl_scrape as the tool that executes them.
-   */
-  alexandriaTools?: AlexandriaTools;
 };
 
 /** Hooks that give one server instance the behaviour of a service profile. */
@@ -53,7 +46,6 @@ export function createServiceHooks(
 ): FirecrawlMcpServerHooks {
   const searchSurface = profile.id === 'search';
   const hooks: FirecrawlMcpServerHooks = {
-    alexandriaTools: searchSurface ? 'legacy' : settings.alexandriaTools,
     instructions: (defaults) =>
       searchSurface
         ? SEARCH_PROFILE_INSTRUCTIONS
