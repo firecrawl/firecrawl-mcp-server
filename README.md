@@ -416,7 +416,7 @@ Scrape content from a single URL with advanced options.
 - Passing a list of URLs to one scrape call. Call scrape once per URL in MCP. If you specifically need one bulk API operation, use the Firecrawl API batch endpoint outside MCP.
 - Using markdown format by default (use JSON format to extract only what you need).
 
-**Alexandria hint:** with an API key against the Firecrawl cloud, a URL scrape also checks whether an Alexandria provider covers the page's site, sending only the host. When one does, the result carries `agent_hints` naming the provider and the `firecrawl_find_tools` call for its tools. `domainTools`, `lockdown` and `zeroDataRetention` skip the check, and so does a self-hosted `FIRECRAWL_API_URL`.
+**Alexandria hint:** on the stdio and local HTTP servers with an API key against the Firecrawl cloud, a URL scrape also checks whether an Alexandria provider covers the page's site, sending only the host. When one does, the result carries `agent_hints` naming the provider and the `firecrawl_find_tools` call for its tools. `domainTools`, `lockdown` and `zeroDataRetention` skip the check, and so do a self-hosted `FIRECRAWL_API_URL` and `CLOUD_SERVICE=true`. Embedders turn it on with the `scrapeProviderHints` option, which defaults to off.
 
 **Choosing the right format:**
 

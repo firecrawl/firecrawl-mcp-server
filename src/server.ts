@@ -66,7 +66,7 @@ import {
   ALEXANDRIA_SOURCES_ALWAYS_ON,
 } from './alexandria';
 import { alexandriaOutput } from './alexandria-output';
-import { lookupSiteProviders, siteProviderHint } from './site-providers.js';
+import { createSiteProviderLookup, siteProviderHint } from './site-providers.js';
 import { FeedbackTokenRegistry, FeedbackTokenStore, withFeedbackRefs } from './alexandria-feedback-tokens.js';
 import { registerDeveloperTools } from './developer';
 import { registerGovTools } from './gov';
@@ -676,6 +676,7 @@ export function createFirecrawlMcpServer(
     scrapeProviderHints: options.scrapeProviderHints ?? false,
   };
   const logging = options.logging ?? config.transport === 'httpStream';
+  const lookupSiteProviders = createSiteProviderLookup();
 
   const instructionDefaults: InstructionDefaults = {
     authenticated: FULL_PROFILE_INSTRUCTIONS,
@@ -1806,12 +1807,16 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
       }
       assertFormatOptions(cleaned.formats);
       const client = getClient(session);
+      const hintDeadline = Date.now() + 500;
       const siteProviders =
         config.scrapeProviderHints &&
         !cleaned.lockdown &&
         cleaned.domainTools !== true &&
         cleaned.zeroDataRetention !== true
-          ? lookupSiteProviders(String(url), (body, timeoutMs) =>
+          ? lookupSiteProviders(
+              String(url),
+              hooks.outboundRequest?.(session)?.credential ?? session?.firecrawlApiKey,
+              (body, timeoutMs) =>
               (client as any).http.post('/exchange/skills/resolve', body, {
                 headers: originHeaders(origin),
                 timeoutMs,
@@ -1826,7 +1831,7 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
           } as any),
         { tool: 'firecrawl_scrape' }
       );
-      const hint = siteProviders && (await siteProviderHint(siteProviders, 500));
+      const hint = siteProviders && (await siteProviderHint(siteProviders, hintDeadline));
       const document = withoutDiscoveredToolPrices(res);
       return structuredText(hint ? { ...document, agent_hints: [hint] } : document);
     },

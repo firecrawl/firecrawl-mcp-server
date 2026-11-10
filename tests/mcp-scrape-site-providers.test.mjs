@@ -109,16 +109,52 @@ test('a URL scrape names the provider covering the page host, sending only the h
   assert.deepEqual(result.structuredContent.agent_hints, text.agent_hints);
 });
 
-test('a host with no provider gets no hint and is looked up once', async (t) => {
+test('a host with no provider gets no hint and is looked up once, concurrently or later', async (t) => {
   const api = await startFakeApi(t);
   const port = await startServer(t, api);
 
-  const first = await scrape(port, { url: 'https://unmatched.example/a' });
-  const second = await scrape(port, { url: 'https://unmatched.example/b' });
+  const [first, second] = await Promise.all([
+    scrape(port, { url: 'https://unmatched.example/a' }),
+    scrape(port, { url: 'https://unmatched.example/b' }),
+  ]);
+  const third = await scrape(port, { url: 'https://unmatched.example/c' });
 
-  assert.equal('agent_hints' in first.text, false);
-  assert.equal('agent_hints' in second.text, false);
+  for (const { text } of [first, second, third])
+    assert.equal('agent_hints' in text, false);
   assert.equal(resolveCalls(api).length, 1);
+});
+
+test('lookups are cached per credential', async (t) => {
+  const api = await startFakeApi(t, {
+    providers: { 'fred.stlouisfed.org': ['fred'] },
+  });
+  const port = await startServer(t, api, { apiKey: undefined });
+
+  for (const key of ['fc-team-a', 'fc-team-b', 'fc-team-a']) {
+    const response = await fetch(`http://127.0.0.1:${port}${ENDPOINT}`, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json, text/event-stream',
+        'content-type': 'application/json',
+        authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        id: 1,
+        jsonrpc: '2.0',
+        method: 'tools/call',
+        params: {
+          name: 'firecrawl_scrape',
+          arguments: { url: 'https://fred.stlouisfed.org/' },
+        },
+      }),
+    });
+    assert.equal(response.status, 200);
+  }
+
+  assert.deepEqual(
+    resolveCalls(api).map((call) => call.headers.authorization),
+    ['Bearer fc-team-a', 'Bearer fc-team-b']
+  );
 });
 
 test('domainTools, lockdown, zeroDataRetention and the default option skip the lookup', async (t) => {
