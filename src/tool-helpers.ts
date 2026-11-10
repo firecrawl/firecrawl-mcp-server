@@ -154,7 +154,16 @@ type TermsRequiredAction = {
   url: string;
 };
 
-type ExchangeErrorContext = { tool: string; requestId?: string; providers?: string[] };
+type ExchangeErrorContext = {
+  tool: string;
+  requestId?: string;
+  providers?: string[];
+  /** The call may be sent again after a retryable refusal: a POST the API answers from its
+   *  record when its request id repeats, or an idempotent read. */
+  resend?: boolean;
+  /** The caller's whole time budget in milliseconds, when it has one; a resend stays inside it. */
+  budgetMs?: number;
+};
 
 export const DATA_SOURCES_SETTINGS_URL =
   'https://www.firecrawl.dev/app/settings?tab=data-sources';
@@ -271,6 +280,9 @@ export async function relayTermsRequired<T>(
 // when the Exchange is unreachable). Relay the message, code, and any chargeId
 // so the agent can act on them; a 401 is left to the credential recovery path.
 const PRECHECK_RETRY_DELAY_MS = 300;
+const PRECHECK_RETRY_JITTER_MS = 200;
+/** The least a resend can be given: the API's minimum timeout plus the client's margin above it. */
+const MIN_RESEND_BUDGET_MS = 6000;
 
 /** Whether the API refused before any provider ran and said a resend may clear it. */
 function retryableRefusal(error: unknown): boolean {
@@ -278,24 +290,30 @@ function retryableRefusal(error: unknown): boolean {
   return response?.status === 503 && (response.data as { retryable?: unknown } | undefined)?.retryable === true;
 }
 
+/**
+ * Runs an Exchange request and relays its refusal. A retryable refusal is sent once more when the
+ * context allows a resend, after a short jittered delay, and only inside the caller's time budget
+ * when it has one; the second attempt is told how much of that budget is left.
+ */
 export async function relayExchangeError(
-  run: () => Promise<any>,
+  run: (attempt?: { remainingMs: number }) => Promise<any>,
   context: ExchangeErrorContext
 ): Promise<any> {
+  const startedAt = Date.now();
   try {
     return await run();
   } catch (error) {
-    // A retryable refusal ran no provider. Only a call sent with a request id is resent, once:
-    // the API binds that id to the payload and answers a repeat from its record instead of
-    // running it again, which an unpinned POST such as a crawl start has no equivalent of.
-    // A second refusal is relayed like any other.
-    if (!context.requestId || !retryableRefusal(error)) throw relayed(error, context);
-  }
-  await new Promise((resolve) => setTimeout(resolve, PRECHECK_RETRY_DELAY_MS));
-  try {
-    return await run();
-  } catch (error) {
-    throw relayed(error, context);
+    if (!context.resend || !retryableRefusal(error)) throw relayed(error, context);
+    const delay = PRECHECK_RETRY_DELAY_MS + Math.floor(Math.random() * PRECHECK_RETRY_JITTER_MS);
+    const remainingMs =
+      context.budgetMs === undefined ? undefined : context.budgetMs - (Date.now() - startedAt) - delay;
+    if (remainingMs !== undefined && remainingMs < MIN_RESEND_BUDGET_MS) throw relayed(error, context);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    try {
+      return await run(remainingMs === undefined ? undefined : { remainingMs });
+    } catch (error) {
+      throw relayed(error, context);
+    }
   }
 }
 
