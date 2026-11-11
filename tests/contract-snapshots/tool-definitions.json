@@ -244,7 +244,7 @@
       "anthropic/maxResultSizeChars": 150000
     }
   },
-  "alexandria_library_search@6756500c6c74": {
+  "alexandria_library_search@feb3df06972f": {
     "annotations": {
       "title": "Alexandria library search",
       "readOnlyHint": true,
@@ -371,7 +371,8 @@
       "additionalProperties": false
     },
     "_meta": {
-      "anthropic/alwaysLoad": true
+      "anthropic/alwaysLoad": true,
+      "anthropic/maxResultSizeChars": 150000
     }
   },
   "firecrawl_agent_status@19115ceb5cda": {

@@ -2188,7 +2188,8 @@ Returns result groups in \`data\` and an operation \`id\`.
   if (dedicatedAlexandria) {
     server.addTool({
       name: ALEXANDRIA_LIBRARY_TOOL,
-      _meta: { 'anthropic/alwaysLoad': true },
+      // stdout is returned as text and again in structuredContent.
+      _meta: { 'anthropic/alwaysLoad': true, ...LARGE_RESULT_META },
       annotations: {
         title: 'Alexandria library search',
         readOnlyHint: true, // Reads the catalogue; the filesystem cannot be written.
