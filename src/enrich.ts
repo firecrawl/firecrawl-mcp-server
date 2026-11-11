@@ -322,6 +322,8 @@ export function registerEnrichTools(
         dropSessionFields(args);
         if (typeof args.entity === 'string') args.entity = ENTITY[args.entity.trim().toLowerCase()] ?? args.entity;
         repair(searchParameters, args);
+        if (!Object.keys(args).length)
+          throw new UserError('people_company_search finds people or companies by filters. For one named person or company, use people_company_enrich. Otherwise set entity and filters. Example: ' + JSON.stringify(SEARCH_EXAMPLE), { code: 'invalid_input', example: SEARCH_EXAMPLE });
         checkArguments('people_company_search', searchParameters, args, SEARCH_EXAMPLE);
       }
       return undefined;
