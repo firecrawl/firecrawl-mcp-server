@@ -131,7 +131,7 @@ export const scrapeOutputSchema = z
     branding: unknown('Branding data extracted from the page.'),
     metadata: unknown('Page metadata; authenticated responses can include `metadata.scrapeId` for scrape feedback.'),
     tools: unknown('Domain-matched Alexandria tools for the page, when `domainTools` is set.'),
-    agent_hints: unknown('Response guidance for the agent, separate from page content, such as the Alexandria provider that covers the page host and the `firecrawl_find_tools` call for its tools.'),
+    agent_hints: unknown('Response guidance for the agent, separate from page content, such as the Alexandria provider that covers the page host and the call that lists its capabilities.'),
     warning,
     // Alexandria mode and error envelopes.
     success,
@@ -140,6 +140,29 @@ export const scrapeOutputSchema = z
     ...alexandriaEnvelope,
   })
   .describe('A scraped document, or the Alexandria execution envelope when `alexandria` was passed.');
+
+export const alexandriaReadOutputSchema = z
+  .object({
+    success,
+    error,
+    data: unknown('One result per call, in the same order, in `data.alexandria`, each with `data`, `records`, or an `error` with a code.'),
+    ...alexandriaEnvelope,
+  })
+  .describe('The results of the Alexandria capabilities that ran, or a pointer to them when they were retained.');
+
+export const libraryOutputSchema = z
+  .object({
+    stdout: str("The command's standard output, cut at the output limit."),
+    stderr: str("The command's standard error, including a notice when stdout was cut."),
+    exitCode: num("The command's exit code; grep exits 1 when nothing matched."),
+    truncated: bool('True when stdout was cut; narrow the command.'),
+    catalogueVersion: str('Opaque fingerprint of the library files; compare for equality to detect changes.'),
+    success,
+    error,
+    requestId: alexandriaEnvelope.requestId,
+    message: alexandriaEnvelope.message,
+  })
+  .describe('The output of one shell command over the Alexandria library.');
 
 export const mapOutputSchema = z
   .object({

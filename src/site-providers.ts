@@ -5,6 +5,11 @@
  */
 
 import { createHash } from 'node:crypto';
+import {
+  ALEXANDRIA_LIBRARY_TOOL,
+  ALEXANDRIA_READ_TOOL,
+  type AlexandriaTools,
+} from './alexandria.js';
 
 const MATCH_TTL_MS = 10 * 60_000;
 const ERROR_TTL_MS = 30_000;
@@ -97,12 +102,14 @@ export function createSiteProviderLookup() {
 }
 
 /**
- * The scrape hint for the first provider, or undefined when the lookup failed,
- * matched none, or was not back by `deadline` (epoch ms).
+ * The scrape hint for the first provider, naming the Alexandria tools the
+ * surface lists, or undefined when the lookup failed, matched none, or was not
+ * back by `deadline` (epoch ms).
  */
 export async function siteProviderHint(
   lookup: Promise<Providers>,
-  deadline: number
+  deadline: number,
+  alexandriaTools: AlexandriaTools
 ): Promise<string | undefined> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const late = new Promise<undefined>((resolve) => {
@@ -114,5 +121,7 @@ export async function siteProviderHint(
   const provider = (await Promise.race([lookup, late]))?.[0];
   clearTimeout(timer);
   if (!provider) return undefined;
+  if (alexandriaTools === 'dedicated')
+    return `This site has a structured-data provider (${provider}). To get typed records instead of page text, list its capabilities with ${ALEXANDRIA_LIBRARY_TOOL} {"command":"cat /library/*/${provider}/README.md"}, then call ${ALEXANDRIA_READ_TOOL} {"calls":[{"provider":"${provider}","capability":"<capability>","options":{...}}]}.`;
   return `This site has a structured-data provider (${provider}). To get typed records instead of page text, list its tools with firecrawl_find_tools {"providers":["${provider}"]}, then call firecrawl_scrape {"alexandria":{"provider":"${provider}","capability":"<capability>","options":{...}}}.`;
 }

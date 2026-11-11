@@ -350,6 +350,7 @@ test('max_credits refuses a call that could cost more, before any provider runs'
   const refused = await client.callTool({ name: 'people_company_enrich', arguments: { contact_fields: ['work_email'], fullenrich: { people } } });
   assert.equal(refused.isError, true);
   assert.match(refused.content[0].text, /could cost up to 1200 credits \(fullenrich 1200\), above max_credits 1000/);
+  assert.match(refused.content[0].text, /If the user did not ask for this cap, retry it as is: set max_credits to at least 1200\. If they did, ask them before raising it/);
   assert.equal(api.calls.length, 0);
 
   const allowed = await client.callTool({ name: 'people_company_enrich', arguments: { max_credits: 1200, contact_fields: ['work_email'], fullenrich: { people } } });
@@ -648,7 +649,7 @@ test('a FullEnrich contact still running upstream is reported as pending, not un
     field: 'work_email',
     job_id: 'j1',
     poll_after_seconds: 60,
-    next_tool: { name: 'firecrawl_scrape', arguments: { alexandria: { provider: 'firecrawl', capability: 'job-status', options: { id: 'j1' } } } },
+    next_tool: { name: 'alexandria_library_read', arguments: { calls: [{ provider: 'firecrawl', capability: 'job-status', options: { id: 'j1' } }] } },
   });
   assert.deepEqual(fullenrich.pending[1], { input_index: 1, field: 'work_email', note: 'Upstream job e2 is still running; repeating this call starts another one.' });
   assert.deepEqual(fullenrich.pending[2], {

@@ -354,6 +354,49 @@ test('toolFilter blocks built-in and module registrations but not extra tools', 
   assert.ok(tools.includes('embed_extra'));
 });
 
+test('a toolFilter that leaves alexandria_library_read out keeps firecrawl_scrape listing an alexandria body', async (t) => {
+  const listed = async (unstable_hooks) => {
+    const port = await startEmbedded(t, { apiUrl: 'http://127.0.0.1:9', apiKey: 'fc-configured', unstable_hooks });
+    const { tools } = await rpc(port, 'tools/list');
+    const { instructions } = await rpc(port, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } });
+    return { instructions, names: tools.map((tool) => tool.name), scrape: tools.find((tool) => tool.name === 'firecrawl_scrape') };
+  };
+
+  // An allowlist written before alexandria_library_read existed.
+  const fixed = await listed({ toolFilter: (name) => name.startsWith('firecrawl_') });
+  assert.equal(fixed.names.includes('alexandria_library_read'), false);
+  assert.ok('alexandria' in fixed.scrape.inputSchema.properties);
+  assert.doesNotMatch([fixed.instructions, fixed.scrape.description].join('\n'), /alexandria_library_read/);
+
+  // Admitting one of the two new tools is not enough: the surface keeps the earlier names and copy.
+  const half = await listed({ toolFilter: (name) => name !== 'alexandria_library_search' });
+  assert.equal(half.names.includes('alexandria_library_read'), false);
+  assert.ok(half.names.includes('firecrawl_find_tools'));
+  assert.ok(fixed.names.includes('firecrawl_find_tools'));
+
+  const open = await listed({});
+  assert.ok(open.names.includes('alexandria_library_read'));
+  assert.ok(open.names.includes('alexandria_library_search'));
+  assert.ok(open.names.includes('firecrawl_find_tools'));
+  // The alexandria body stays listed beside the library tools, with the same definition.
+  assert.deepEqual(open.scrape, fixed.scrape);
+});
+
+test('a field an embedder requires on firecrawl_scrape is its only required field, beside url and alexandria', async (t) => {
+  const port = await startEmbedded(t, {
+    apiUrl: 'http://127.0.0.1:9',
+    apiKey: 'fc-configured',
+    unstable_hooks: {
+      wrapTool: (tool) =>
+        tool.name === 'firecrawl_scrape' ? { ...tool, parameters: z.object({ ...tool.parameters.shape, purpose: z.string() }) } : tool,
+    },
+  });
+  const { tools } = await rpc(port, 'tools/list');
+  const { inputSchema } = tools.find((tool) => tool.name === 'firecrawl_scrape');
+  assert.deepEqual(inputSchema.required, ['purpose']);
+  assert.ok('url' in inputSchema.properties && 'alexandria' in inputSchema.properties);
+});
+
 test('outboundRequest credential and headers reach SDK and fetch-based API calls', async (t) => {
   const api = await startFakeApi(t);
   const port = await startEmbedded(t, {

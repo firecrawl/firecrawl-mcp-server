@@ -187,6 +187,7 @@ export interface Tool<Auth> {
   description?: string;
   icons?: ToolIcon[];
   parameters?: StandardSchemaV1;
+  transformInputSchema?: (schema: JsonObject) => JsonObject;
   outputSchema?: StandardSchemaV1;
   annotations?: { title?: string; [key: string]: unknown };
   _meta?: Record<string, unknown>;
@@ -602,7 +603,9 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
           ...(tool.icons && { icons: tool.icons }),
           description: tool.description,
           inputSchema: tool.parameters
-            ? openMaps(closeObjects((await toJsonSchema(tool.parameters as never)) as JsonObject))
+            ? openMaps(closeObjects((tool.transformInputSchema ?? ((schema) => schema))(
+                (await toJsonSchema(tool.parameters as never)) as JsonObject
+              )))
             : { additionalProperties: false, properties: {}, type: 'object' },
           name: tool.name,
           ...(outputSchemaOf(tool) && {

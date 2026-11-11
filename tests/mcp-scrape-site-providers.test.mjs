@@ -104,9 +104,36 @@ test('a URL scrape names the provider covering the page host, sending only the h
   );
   assert.match(
     text.agent_hints[0],
-    /firecrawl_find_tools \{"providers":\["fred"\]\}/
+    /alexandria_library_search \{"command":"cat \/library\/\*\/fred\/README\.md"\}/
+  );
+  assert.match(
+    text.agent_hints[0],
+    /alexandria_library_read \{"calls":\[\{"provider":"fred",/
   );
   assert.deepEqual(result.structuredContent.agent_hints, text.agent_hints);
+});
+
+test('a surface without the library tools names firecrawl_find_tools and firecrawl_scrape', async (t) => {
+  const api = await startFakeApi(t, {
+    providers: { 'fred.stlouisfed.org': ['fred'] },
+  });
+  const port = await startServer(t, api, {
+    unstable_hooks: { toolFilter: (name) => !name.startsWith('alexandria_') },
+  });
+
+  const { text } = await scrape(port, {
+    url: 'https://fred.stlouisfed.org/series/CPIAUCSL',
+  });
+
+  assert.match(
+    text.agent_hints[0],
+    /firecrawl_find_tools \{"providers":\["fred"\]\}/
+  );
+  assert.match(
+    text.agent_hints[0],
+    /firecrawl_scrape \{"alexandria":\{"provider":"fred",/
+  );
+  assert.doesNotMatch(text.agent_hints[0], /alexandria_library/);
 });
 
 test('a host with no provider gets no hint and is looked up once, concurrently or later', async (t) => {
