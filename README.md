@@ -370,7 +370,7 @@ Use this guide to select the right tool for your task:
 - **If you need multi-source research that returns structured data, do not know the URLs, or the answer spans several sites** (an entity plus its fields, a list, a dataset): use **agent**
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
 - **If you need interactive browser automation** (click, type, navigate): use **interact** with a URL for a fresh page, or **scrape** + **interact** when you already scraped the page or need tighter scrape control
-- **If you need data from a catalogued provider** (Alexandria): search with `sources: ["alexandria"]`, inspect the selected contract with **find_tools**, and run it with **alexandria_library_read**
+- **If you need data from a catalogued provider** (Alexandria): search with `sources: ["alexandria"]`, explore the library and read the contract with **alexandria_library_search**, and run it with **alexandria_library_read**
 
 ### Quick Reference Table
 
@@ -382,7 +382,7 @@ Use this guide to select the right tool for your task:
 | crawl     | Multi-page extraction (with limits)            | final crawl status/data after internal polling   |
 | parse     | Files and hosted upload refs                   | markdown, JSON, or document output               |
 | search    | Web search for info                            | results[]                                        |
-| find_tools | Alexandria catalogue browsing and URL lookup | providers, tool contracts and nextTool navigation |
+| alexandria_library_search | Exploring the Alexandria library with shell commands | command output: file paths, READMEs, contracts |
 | alexandria_library_read | Running Alexandria capabilities, up to ten per call | typed, sourced records |
 | developer | Programming questions over developer sources   | results[] with passages                          |
 | gov       | US primary law and regulatory material         | results[] with snippets                          |
@@ -543,7 +543,7 @@ To get the full text of a few results in the same call, add `"scrapeOptions": { 
 
 Set `highlights` to `true` to request query-relevant highlights or `false` to keep the original search snippets. Omit it to use the API's default behavior.
 
-Add `"sources": ["alexandria"]` for semantic tool discovery in `data.tools`, optionally mixed with web/news/images. A query is required. Use `firecrawl_find_tools` for contextual lookup and progressive disclosure; see [Alexandria Tools](#15-alexandria-tools).
+Add `"sources": ["alexandria"]` for semantic tool discovery in `data.tools`, optionally mixed with web/news/images. A query is required. Use `alexandria_library_search` to explore the whole library and read contracts (`firecrawl_find_tools` on the search-only endpoint); see [Alexandria Tools](#15-alexandria-tools).
 
 For scientific papers, see [Research Tools](#12-research-tools-firecrawl_research_): they search paper abstracts and full text, while `categories: ["research"]` here filters ordinary web results to research-affiliated websites.
 
@@ -1103,46 +1103,38 @@ query mentions and result URLs in that same array. Check `warning` for unavailab
 discovery. Search requires a query and does not accept catalogue traversal filters.
 This discovery works on both the full and search-only MCP surfaces.
 
-**Progressive disclosure (`firecrawl_find_tools`):**
+**Explore the library (`alexandria_library_search`):** the catalogue is a read-only filesystem, and the tool runs one shell command over it.
 
 ```json
 {
-  "name": "firecrawl_find_tools",
-  "arguments": {
-    "providers": ["particle"],
-    "capabilities": ["podcasts/episodes/search"],
-    "expand": ["options", "response", "examples"],
-    "limit": 2
-  }
+  "name": "alexandria_library_search",
+  "arguments": { "command": "grep -ril \"podcast\" /library | head -20" }
 }
 ```
 
-Start with no arguments for categories, then progressively narrow the catalogue:
-
-| Arguments | Result |
+| Path | Holds |
 | --- | --- |
-| `{}` | Categories and short descriptions |
-| `{"categories":["podcasts"]}` | Providers in that category |
-| `{"categories":["podcasts"],"providers":["particle"]}` | Compact tool names and descriptions |
-| `{"providers":["particle"],"capabilities":["podcasts/episodes/search"]}` | Complete selected inputs, constraints, response, and examples |
+| `/library/README.md` | Counts, the layout and every category |
+| `/library/<category>/README.md` | The category's providers |
+| `/library/<category>/<provider>/README.md` | The provider's capabilities |
+| `/library/<category>/<provider>/<capability>.md` | One contract: when to use it, inputs, outputs and the call that runs it |
+| `/examples/<provider>/<capability>.json` | A recorded response |
 
-No group hop is required. Explicit `level` supports `categories`, `providers`,
-`groups`, or `tools`; explicit `expand` selects contract sections. `expand: []`
-keeps results compact even when selecting a capability. For broad full contracts,
-explicitly request `level: "tools"` and `expand: ["options", "response", "examples"]`.
-URLs provide contextual discovery without fetching the page. Tool results omit
-per-capability credit prices unless `includeCosts: true` is set; follow-up
-`nextTool` arguments keep it.
+A file path is the execute address: `/library/finance/fred/series/observations.md` is provider `fred`, capability `series/observations`. Typical commands:
 
-Results are in `data.alexandria[0].data`. Follow an item's `nextTool` by calling
-its `name` with its `arguments`; the page's `nextTool` advances pagination.
-Existing `next` objects remain Alexandria discovery calls usable through
-`alexandria_library_read`. Discovery costs zero credits and never executes the
-provider tools. Read the selected full contract before execution.
+| Intent | Command |
+| --- | --- |
+| What is in the library | `cat /library/README.md` |
+| Which providers cover a topic | `grep -ril "mortgage" /library \| head -20` |
+| What a provider offers | `cat /library/finance/fred/README.md` |
+| One contract | `cat /library/finance/fred/series/observations.md` |
+| What a response looks like | `head -c 2000 /examples/fred/series/observations.json` |
 
-These controls require the matching Alexandria API deployment.
+Commands are `ls`, `tree`, `cat`, `head`, `tail`, `grep`, `find`, `wc`, `sort`, `uniq`, `cut`, `tr`, `sed`, `jq` and `xargs`, with pipes. There is no network and the library cannot be written. The result is the command's output as text; `structuredContent` carries `stdout`, `stderr`, `exitCode`, and `truncated` when output was cut at 30,000 characters. A command that finds nothing is not an error: `grep` exits 1 and the text is `[no output; exit code 1]`. Library lookups cost zero credits and never run a provider. The files hold what the same account would see in discovery, without prices.
 
-**Execute (`alexandria_library_read`):** `calls` is an array of one to ten `{provider, capability, options}` entries, which may name different providers. `provider` and `capability` come from search results or `firecrawl_find_tools`, and `options` follow the contract. `requestId` and `timeout` may also be supplied. Results come back in `data.alexandria` in the same order, and one call can fail while the others succeed.
+This tool requires the Alexandria API deployment that serves `firecrawl/library`.
+
+**Execute (`alexandria_library_read`):** `calls` is an array of one to ten `{provider, capability, options}` entries, which may name different providers. `provider` and `capability` come from search results or a library path, and `options` follow the contract. `requestId` and `timeout` may also be supplied. Results come back in `data.alexandria` in the same order, and one call can fail while the others succeed.
 
 ```json
 {
@@ -1158,9 +1150,9 @@ These controls require the matching Alexandria API deployment.
 
 One call sent as the arguments themselves (`{provider, capability, options}`) is read as a `calls` array of one.
 
-**Earlier shape (`firecrawl_scrape` with `alexandria`):** `firecrawl_scrape` lists `url` only, and still accepts `alexandria` in place of `url`, as one `{provider, capability, options}` call or an array of up to ten, with `requestId` and `timeout`. Clients and prompts that learned this shape keep working; new ones should use `alexandria_library_read`.
+**Earlier tools (`firecrawl_find_tools`, and `firecrawl_scrape` with `alexandria`):** this server no longer lists `firecrawl_find_tools`, and `firecrawl_scrape` lists `url` only. Both still answer the calls they used to, so clients and prompts that learned them keep working; new ones should use `alexandria_library_search` and `alexandria_library_read`. `firecrawl_find_tools` browses the catalogue (`{}` for categories, then `categories`, `providers` and `capabilities` to narrow to one contract, or `query` and `urls` for lookup), and `firecrawl_scrape` takes `alexandria` in place of `url`, as one `{provider, capability, options}` call or an array of up to ten, with `requestId` and `timeout`.
 
-The search-only endpoint lists and documents the earlier shape, because its tool list is fixed by its connector listing. An embedder whose `toolFilter` leaves `alexandria_library_read` out gets the earlier shape too.
+The search-only endpoint lists and documents the earlier tools, because its tool list is fixed by its connector listing. An embedder whose `toolFilter` leaves either new tool out gets the earlier tools too.
 
 **Returns:** `{ success, scrape_id, requestId, data: { alexandria: [...], creditsCost } }`. Each item is either a result (`provider`, `capability`, `data`, `records`, `upstreamStatus`) or an `error` with a `code`; a provider error is reported in its item, not as a failed call, and `data.creditsCost` is the total charged for the request. Alexandria error bodies (403 without Alexandria access, and 402/409 billing statuses) are relayed in-band with their `code`.
 
@@ -1374,9 +1366,9 @@ MIT License - see LICENSE file for details
 
 ### Structured data and large results
 
-Authenticated search defaults to web results, semantic Alexandria tools, and domain matches. Start with the actual question. Use `firecrawl_find_tools` for direct semantic tool lookup, selected contracts, or progressive browsing: categories → providers → compact tools → selected contract. Run tools through `alexandria_library_read` (on the search-only endpoint, `firecrawl_scrape` with `alexandria`); URL scraping and search never execute provider tools.
+Authenticated search defaults to web results, semantic Alexandria tools, and domain matches. Start with the actual question. Use `alexandria_library_search` to check whether a provider covers the data and to read a selected contract: the library README, a category, a provider, then one capability file. Run capabilities through `alexandria_library_read`; URL scraping and search never execute provider tools. The search-only endpoint has `firecrawl_find_tools` and `firecrawl_scrape` with `alexandria` for these two steps.
 
-For selected contracts, prefer `expand: ["options", "response"]` and request examples only if the input shape is unclear. Inspect related capabilities together and reuse the returned contracts.
+Read the recorded example under `/examples` only if the input or output shape is unclear. Inspect related capabilities together, for example `cat` two contracts in one command, and reuse what you read.
 
 For a potentially large workflow result, supply and preserve a top-level `requestId` before execution. That ID remains available even if the client rejects the response. Regular URL scrapes use the returned scrape ID instead.
 
@@ -1409,13 +1401,13 @@ The CLI discovery sequence maps to these MCP calls:
 | --- | --- | --- |
 | Web + semantic + domain tools | `firecrawl_search` | `{"query":"<user question>"}` |
 | Semantic tools only | `firecrawl_search` | `{"query":"<user question>","sources":["alexandria"]}` |
-| Categories | `firecrawl_find_tools` | `{}` |
-| Providers in a category | `firecrawl_find_tools` | `{"categories":["<category-id>"]}` |
-| Compact provider tools | `firecrawl_find_tools` | `{"providers":["<provider-id>"]}` |
-| Selected contract | `firecrawl_find_tools` | `{"providers":["<provider-id>"],"capabilities":["<capability-id>"]}` |
+| Categories | `alexandria_library_search` | `{"command":"cat /library/README.md"}` |
+| Providers in a category | `alexandria_library_search` | `{"command":"cat /library/<category-id>/README.md"}` |
+| A provider's capabilities | `alexandria_library_search` | `{"command":"cat /library/*/<provider-id>/README.md"}` |
+| Selected contract | `alexandria_library_search` | `{"command":"cat /library/*/<provider-id>/<capability-id>.md"}` |
 | Execute | `alexandria_library_read` | `{"calls":[{"provider":"<provider-id>","capability":"<capability-id>","options":{"<required-field>":"<value>"}}]}` |
 
-Find Tools is available on both the full surface and the search surface; the search surface executes through `firecrawl_scrape` with `alexandria`. Reuse a complete contract from search when present rather than making another discovery call. Follow returned `nextTool` navigation only when more results are needed.
+The search surface keeps `firecrawl_find_tools` and `firecrawl_scrape` with `alexandria` for the last five rows. Reuse a complete contract from search when present rather than making another lookup.
 
 ### Alexandria session feedback
 
