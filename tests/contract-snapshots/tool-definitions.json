@@ -1,5 +1,5 @@
 {
-  "alexandria_library_read@fc9ddd89579d": {
+  "alexandria_library_read@ab47363c41e2": {
     "annotations": {
       "title": "Alexandria library read",
       "readOnlyHint": true,
@@ -7,7 +7,7 @@
       "destructiveHint": false
     },
     "title": "Alexandria library read",
-    "description": "Run capabilities of Alexandria data providers and return their typed, sourced records: one, or up to ten in one call when a task needs several lookups. Alexandria is Firecrawl's library of data providers across companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more. For people and company enrichment or search, use people_company_enrich or people_company_search instead; call a provider here only when the user asks for that provider. Each entry of `calls` is {provider, capability, options}: `provider` and `capability` come from firecrawl_search results or alexandria_library_search, and `options` follow the capability's contract, which marks required inputs and any requiresOneOf groups (at least one member per group). Where the contract declares pagination, its fields page through results with the same filters. Returns one result per call, in the same order, in data.alexandria, each with data, records, or an error with a code; one call can fail while the others succeed, and an invalid call returns an error naming the valid options. A result too large to return inline is retained, and nextTool reads it in slices. Billed per executed capability; discovery is free. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.",
+    "description": "Run capabilities of Alexandria data providers and return their typed, sourced records: one, or up to ten in one call when a task needs several lookups. Alexandria is Firecrawl's library of data providers across companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more. For people and company enrichment or search, use people_company_enrich or people_company_search when they are listed; call a provider here directly only when the user asks for that provider. Each entry of `calls` is {provider, capability, options}: `provider` and `capability` come from firecrawl_search results or alexandria_library_search, and `options` follow the capability's contract, which marks required inputs and any requiresOneOf groups (at least one member per group). Where the contract declares pagination, its fields page through results with the same filters. Returns one result per call, in the same order, in data.alexandria, each with data, records, or an error with a code; one call can fail while the others succeed, and an invalid call returns an error naming the valid options. A result too large to return inline is retained, and nextTool reads it in slices. Billed per executed capability; discovery is free. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -7626,7 +7626,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_search@20acd5124b47": {
+  "firecrawl_search@74db515821a1": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -7819,7 +7819,7 @@
           ]
         },
         "tools": {
-          "description": "Domain-matched Alexandria tools for the results. For people and company enrichment or search, use people_company_enrich or people_company_search instead of these, unless the user asks for a provider listed here."
+          "description": "Domain-matched Alexandria tools for the results. For people and company enrichment or search, use people_company_enrich or people_company_search when they are listed; call a provider here directly only when the user asks for that provider."
         },
         "nextTool": {
           "description": "A follow-up tool call that continues this search."
@@ -7834,7 +7834,403 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_search@ac064cccce5e": {
+  "firecrawl_search@989662ebb4df": {
+    "annotations": {
+      "title": "Firecrawl web search",
+      "readOnlyHint": true,
+      "openWorldHint": true,
+      "destructiveHint": false
+    },
+    "title": "Firecrawl web search",
+    "description": "\nUse this when you need current or specific information from the web: recent events, latest releases and versions, prices, people and companies, statistics, or any fact that may have changed since your training data or that you are not sure of. Returns ranked results with query-relevant highlights; each web result is a title, URL, and description. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. `includeDomains` and `excludeDomains` are mutually exclusive hostname filters; categories limit result types to `research`, `pdf`, `developer`, or `gov`.\n\nFor a programming question, add `categories: [\"developer\"]`. It searches an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and returns the results in `data.web` with `category: \"developer\"`.\n\nFor a legal or regulatory question, `categories: [\"gov\"]` returns results in `data.web` with `category: \"gov\"` and cannot be combined with other categories; authenticated sessions also have `firecrawl_gov_search` as the dedicated tool. Verify gov results' issuer, jurisdiction, status, and version before citing current law.\n\nAuthenticated search combines web results, semantic tool summaries and domain matches. Use sources: [\"alexandria\"] for semantic tools only. Authenticated searches always add alexandria to the sources, so sources: [\"web\"] also returns providers; domainTools: false turns off website-matched tools only. On an authenticated session, tool matches describe available structured-data capabilities, not executed data. toolDetail: \"compact\" (default) returns only provider, capability and description; \"summary\" adds metadata; \"full\" includes their input and output contracts. alexandria_library_read runs a selected capability; alexandria_library_search explores the whole library and reads full contracts.\n\nReturns result groups in `data` and an operation `id`.\n",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "toolDetail": {
+          "description": "Compact by default. Compact returns only provider, capability and description; full includes contracts. Read a selected tool's contract with alexandria_library_search.",
+          "type": "string",
+          "enum": [
+            "compact",
+            "summary",
+            "full"
+          ]
+        },
+        "query": {
+          "description": "Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Browse the whole library with alexandria_library_search.",
+          "type": "string",
+          "minLength": 1
+        },
+        "domainTools": {
+          "description": "Include domain-matched tools for result URLs. Defaults to true when Alexandria is combined with web, news or images; semantic-only search leaves domain matching off.",
+          "type": "boolean"
+        },
+        "highlights": {
+          "description": "Return query-relevant page excerpts for web and news results when available (default). Highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned. Set to false to keep the original search snippets.",
+          "type": "boolean"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "tbs": {
+          "type": "string"
+        },
+        "filter": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "includeDomains": {
+          "description": "Hostnames to restrict results to. Mutually exclusive with excludeDomains.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 253,
+            "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
+          }
+        },
+        "excludeDomains": {
+          "description": "Hostnames to leave out of results. Mutually exclusive with includeDomains.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 253,
+            "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
+          }
+        },
+        "sources": {
+          "description": "Search sources; authenticated sessions default to web + alexandria, keyless sessions to web only. Authenticated searches always add alexandria to the sources, so sources: [\"web\"] also returns providers; domainTools: false turns off website-matched tools only. enterprise zdr or anon searches do not add it. Use [\"alexandria\"] alone for provider discovery without web results.",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "web",
+                  "images",
+                  "news",
+                  "alexandria",
+                  "exchange"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "web",
+                      "images",
+                      "news",
+                      "alexandria",
+                      "exchange"
+                    ]
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "categories": {
+          "description": "Limit results to specific source types. `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation; `gov` searches the Government Index of US federal, state, and local legal and regulatory sources, the index behind firecrawl_gov_search, and cannot be combined with other categories; gov hits can include historical versions, bill text, agency guidance, and third-party reproductions, so verify the issuer, jurisdiction, enacted/effective status, and version before citing current governing law, clarify a missing jurisdiction or ambiguous as-of date, and use general search for non-US questions or missing coverage (no hits does not establish that no applicable law exists). `developer` and `gov` return hits in `data.web` with `category` set to their name; the other categories also filter `data.web`.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "research",
+              "pdf",
+              "developer",
+              "gov"
+            ]
+          }
+        },
+        "enterprise": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "default",
+              "anon",
+              "zdr"
+            ]
+          }
+        },
+        "scrapeOptions": {
+          "description": "Fetches the full page of every web result in the same call, and each fetched result is billed as a scrape. Leave it unset unless the task needs the full text of a few results: highlights usually answer, and firecrawl_scrape can fetch only the URLs you need. These fetches ignore maxAge, so use firecrawl_scrape for a live fetch. scrapeOptions fetches web pages, never Alexandria provider tools.",
+          "type": "object",
+          "properties": {
+            "formats": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "markdown",
+                  "html",
+                  "rawHtml",
+                  "screenshot",
+                  "links",
+                  "images",
+                  "summary",
+                  "changeTracking",
+                  "branding",
+                  "json",
+                  "query",
+                  "audio"
+                ]
+              }
+            },
+            "jsonOptions": {
+              "type": "object",
+              "properties": {
+                "prompt": {
+                  "type": "string"
+                },
+                "schema": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": true
+                }
+              },
+              "additionalProperties": false
+            },
+            "queryOptions": {
+              "type": "object",
+              "properties": {
+                "prompt": {
+                  "type": "string",
+                  "maxLength": 10000
+                },
+                "mode": {
+                  "default": "freeform",
+                  "type": "string",
+                  "enum": [
+                    "directQuote",
+                    "freeform"
+                  ]
+                }
+              },
+              "required": [
+                "prompt"
+              ],
+              "additionalProperties": false
+            },
+            "screenshotOptions": {
+              "type": "object",
+              "properties": {
+                "fullPage": {
+                  "type": "boolean"
+                },
+                "quality": {
+                  "type": "number"
+                },
+                "viewport": {
+                  "type": "object",
+                  "properties": {
+                    "width": {
+                      "type": "number"
+                    },
+                    "height": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "width",
+                    "height"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            },
+            "parsers": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "pdf"
+                ]
+              }
+            },
+            "pdfOptions": {
+              "type": "object",
+              "properties": {
+                "maxPages": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10000
+                }
+              },
+              "additionalProperties": false
+            },
+            "onlyMainContent": {
+              "type": "boolean"
+            },
+            "redactPII": {
+              "type": "boolean"
+            },
+            "includeTags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "excludeTags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "waitFor": {
+              "type": "number"
+            },
+            "mobile": {
+              "type": "boolean"
+            },
+            "skipTlsVerification": {
+              "type": "boolean"
+            },
+            "removeBase64Images": {
+              "type": "boolean"
+            },
+            "location": {
+              "type": "object",
+              "properties": {
+                "country": {
+                  "type": "string"
+                },
+                "languages": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            },
+            "storeInCache": {
+              "type": "boolean"
+            },
+            "maxAge": {
+              "type": "number"
+            },
+            "lockdown": {
+              "type": "boolean"
+            },
+            "proxy": {
+              "type": "string",
+              "enum": [
+                "basic",
+                "stealth",
+                "enhanced",
+                "auto"
+              ]
+            },
+            "profile": {
+              "description": "Loads a saved browser profile without saving changes to it.",
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false
+    },
+    "name": "firecrawl_search",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "Ranked search results grouped by source.",
+      "type": "object",
+      "properties": {
+        "success": {
+          "description": "Whether the API call succeeded.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "data": {
+          "description": "Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`. Each result carries its `source` and a 1-indexed `position` within that group; pass those pairs to `firecrawl_search_feedback`."
+        },
+        "error": {
+          "description": "Error message or error object when the call did not succeed."
+        },
+        "warning": {
+          "description": "Non-fatal warning about the result.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "description": "Search identifier, for optional `firecrawl_search_feedback`.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "creditsUsed": {
+          "description": "Credits this search consumed.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tools": {
+          "description": "Domain-matched Alexandria tools for the results. For people and company enrichment or search, use people_company_enrich or people_company_search when they are listed; call a provider here directly only when the user asks for that provider."
+        },
+        "nextTool": {
+          "description": "A follow-up tool call that continues this search."
+        },
+        "feedbackTool": {
+          "description": "Pointer to the feedback tool for this search."
+        }
+      },
+      "additionalProperties": false
+    },
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    }
+  },
+  "firecrawl_search@9fcb6599839f": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -8267,403 +8663,7 @@
           ]
         },
         "tools": {
-          "description": "Domain-matched Alexandria tools for the results. For people and company enrichment or search, use people_company_enrich or people_company_search instead of these, unless the user asks for a provider listed here."
-        },
-        "nextTool": {
-          "description": "A follow-up tool call that continues this search."
-        },
-        "feedbackTool": {
-          "description": "Pointer to the feedback tool for this search."
-        }
-      },
-      "additionalProperties": false
-    },
-    "_meta": {
-      "anthropic/alwaysLoad": true
-    }
-  },
-  "firecrawl_search@ce8356bfc712": {
-    "annotations": {
-      "title": "Firecrawl web search",
-      "readOnlyHint": true,
-      "openWorldHint": true,
-      "destructiveHint": false
-    },
-    "title": "Firecrawl web search",
-    "description": "\nUse this when you need current or specific information from the web: recent events, latest releases and versions, prices, people and companies, statistics, or any fact that may have changed since your training data or that you are not sure of. Returns ranked results with query-relevant highlights; each web result is a title, URL, and description. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. `includeDomains` and `excludeDomains` are mutually exclusive hostname filters; categories limit result types to `research`, `pdf`, `developer`, or `gov`.\n\nFor a programming question, add `categories: [\"developer\"]`. It searches an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and returns the results in `data.web` with `category: \"developer\"`.\n\nFor a legal or regulatory question, `categories: [\"gov\"]` returns results in `data.web` with `category: \"gov\"` and cannot be combined with other categories; authenticated sessions also have `firecrawl_gov_search` as the dedicated tool. Verify gov results' issuer, jurisdiction, status, and version before citing current law.\n\nAuthenticated search combines web results, semantic tool summaries and domain matches. Use sources: [\"alexandria\"] for semantic tools only. Authenticated searches always add alexandria to the sources, so sources: [\"web\"] also returns providers; domainTools: false turns off website-matched tools only. On an authenticated session, tool matches describe available structured-data capabilities, not executed data. toolDetail: \"compact\" (default) returns only provider, capability and description; \"summary\" adds metadata; \"full\" includes their input and output contracts. alexandria_library_read runs a selected capability; alexandria_library_search explores the whole library and reads full contracts.\n\nReturns result groups in `data` and an operation `id`.\n",
-    "inputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "type": "object",
-      "properties": {
-        "toolDetail": {
-          "description": "Compact by default. Compact returns only provider, capability and description; full includes contracts. Read a selected tool's contract with alexandria_library_search.",
-          "type": "string",
-          "enum": [
-            "compact",
-            "summary",
-            "full"
-          ]
-        },
-        "query": {
-          "description": "Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Browse the whole library with alexandria_library_search.",
-          "type": "string",
-          "minLength": 1
-        },
-        "domainTools": {
-          "description": "Include domain-matched tools for result URLs. Defaults to true when Alexandria is combined with web, news or images; semantic-only search leaves domain matching off.",
-          "type": "boolean"
-        },
-        "highlights": {
-          "description": "Return query-relevant page excerpts for web and news results when available (default). Highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned. Set to false to keep the original search snippets.",
-          "type": "boolean"
-        },
-        "limit": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100
-        },
-        "tbs": {
-          "type": "string"
-        },
-        "filter": {
-          "type": "string"
-        },
-        "location": {
-          "type": "string"
-        },
-        "includeDomains": {
-          "description": "Hostnames to restrict results to. Mutually exclusive with excludeDomains.",
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 253,
-            "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
-          }
-        },
-        "excludeDomains": {
-          "description": "Hostnames to leave out of results. Mutually exclusive with includeDomains.",
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 253,
-            "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
-          }
-        },
-        "sources": {
-          "description": "Search sources; authenticated sessions default to web + alexandria, keyless sessions to web only. Authenticated searches always add alexandria to the sources, so sources: [\"web\"] also returns providers; domainTools: false turns off website-matched tools only. enterprise zdr or anon searches do not add it. Use [\"alexandria\"] alone for provider discovery without web results.",
-          "type": "array",
-          "items": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "web",
-                  "images",
-                  "news",
-                  "alexandria",
-                  "exchange"
-                ]
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "web",
-                      "images",
-                      "news",
-                      "alexandria",
-                      "exchange"
-                    ]
-                  }
-                },
-                "required": [
-                  "type"
-                ],
-                "additionalProperties": false
-              }
-            ]
-          }
-        },
-        "categories": {
-          "description": "Limit results to specific source types. `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation; `gov` searches the Government Index of US federal, state, and local legal and regulatory sources, the index behind firecrawl_gov_search, and cannot be combined with other categories; gov hits can include historical versions, bill text, agency guidance, and third-party reproductions, so verify the issuer, jurisdiction, enacted/effective status, and version before citing current governing law, clarify a missing jurisdiction or ambiguous as-of date, and use general search for non-US questions or missing coverage (no hits does not establish that no applicable law exists). `developer` and `gov` return hits in `data.web` with `category` set to their name; the other categories also filter `data.web`.",
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "research",
-              "pdf",
-              "developer",
-              "gov"
-            ]
-          }
-        },
-        "enterprise": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "default",
-              "anon",
-              "zdr"
-            ]
-          }
-        },
-        "scrapeOptions": {
-          "description": "Fetches the full page of every web result in the same call, and each fetched result is billed as a scrape. Leave it unset unless the task needs the full text of a few results: highlights usually answer, and firecrawl_scrape can fetch only the URLs you need. These fetches ignore maxAge, so use firecrawl_scrape for a live fetch. scrapeOptions fetches web pages, never Alexandria provider tools.",
-          "type": "object",
-          "properties": {
-            "formats": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "enum": [
-                  "markdown",
-                  "html",
-                  "rawHtml",
-                  "screenshot",
-                  "links",
-                  "images",
-                  "summary",
-                  "changeTracking",
-                  "branding",
-                  "json",
-                  "query",
-                  "audio"
-                ]
-              }
-            },
-            "jsonOptions": {
-              "type": "object",
-              "properties": {
-                "prompt": {
-                  "type": "string"
-                },
-                "schema": {
-                  "type": "object",
-                  "propertyNames": {
-                    "type": "string"
-                  },
-                  "additionalProperties": true
-                }
-              },
-              "additionalProperties": false
-            },
-            "queryOptions": {
-              "type": "object",
-              "properties": {
-                "prompt": {
-                  "type": "string",
-                  "maxLength": 10000
-                },
-                "mode": {
-                  "default": "freeform",
-                  "type": "string",
-                  "enum": [
-                    "directQuote",
-                    "freeform"
-                  ]
-                }
-              },
-              "required": [
-                "prompt"
-              ],
-              "additionalProperties": false
-            },
-            "screenshotOptions": {
-              "type": "object",
-              "properties": {
-                "fullPage": {
-                  "type": "boolean"
-                },
-                "quality": {
-                  "type": "number"
-                },
-                "viewport": {
-                  "type": "object",
-                  "properties": {
-                    "width": {
-                      "type": "number"
-                    },
-                    "height": {
-                      "type": "number"
-                    }
-                  },
-                  "required": [
-                    "width",
-                    "height"
-                  ],
-                  "additionalProperties": false
-                }
-              },
-              "additionalProperties": false
-            },
-            "parsers": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "enum": [
-                  "pdf"
-                ]
-              }
-            },
-            "pdfOptions": {
-              "type": "object",
-              "properties": {
-                "maxPages": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 10000
-                }
-              },
-              "additionalProperties": false
-            },
-            "onlyMainContent": {
-              "type": "boolean"
-            },
-            "redactPII": {
-              "type": "boolean"
-            },
-            "includeTags": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "excludeTags": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "waitFor": {
-              "type": "number"
-            },
-            "mobile": {
-              "type": "boolean"
-            },
-            "skipTlsVerification": {
-              "type": "boolean"
-            },
-            "removeBase64Images": {
-              "type": "boolean"
-            },
-            "location": {
-              "type": "object",
-              "properties": {
-                "country": {
-                  "type": "string"
-                },
-                "languages": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              },
-              "additionalProperties": false
-            },
-            "storeInCache": {
-              "type": "boolean"
-            },
-            "maxAge": {
-              "type": "number"
-            },
-            "lockdown": {
-              "type": "boolean"
-            },
-            "proxy": {
-              "type": "string",
-              "enum": [
-                "basic",
-                "stealth",
-                "enhanced",
-                "auto"
-              ]
-            },
-            "profile": {
-              "description": "Loads a saved browser profile without saving changes to it.",
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "name"
-              ],
-              "additionalProperties": false
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "query"
-      ],
-      "additionalProperties": false
-    },
-    "name": "firecrawl_search",
-    "outputSchema": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "description": "Ranked search results grouped by source.",
-      "type": "object",
-      "properties": {
-        "success": {
-          "description": "Whether the API call succeeded.",
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "data": {
-          "description": "Ranked results grouped by source, such as `web`, `news`, `images`, and `alexandria`. Each result carries its `source` and a 1-indexed `position` within that group; pass those pairs to `firecrawl_search_feedback`."
-        },
-        "error": {
-          "description": "Error message or error object when the call did not succeed."
-        },
-        "warning": {
-          "description": "Non-fatal warning about the result.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "id": {
-          "description": "Search identifier, for optional `firecrawl_search_feedback`.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "creditsUsed": {
-          "description": "Credits this search consumed.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "tools": {
-          "description": "Domain-matched Alexandria tools for the results. For people and company enrichment or search, use people_company_enrich or people_company_search instead of these, unless the user asks for a provider listed here."
+          "description": "Domain-matched Alexandria tools for the results. For people and company enrichment or search, use people_company_enrich or people_company_search when they are listed; call a provider here directly only when the user asks for that provider."
         },
         "nextTool": {
           "description": "A follow-up tool call that continues this search."

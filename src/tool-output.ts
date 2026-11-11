@@ -27,6 +27,7 @@
 
 import { z } from 'zod';
 import type { ContentResult } from './mcp/runtime.js';
+import { ALEXANDRIA_ENRICH_ROUTING } from './alexandria.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -181,7 +182,7 @@ export const searchOutputSchema = z
     warning,
     id: str('Search identifier, for optional `firecrawl_search_feedback`.'),
     creditsUsed: num('Credits this search consumed.'),
-    tools: unknown('Domain-matched Alexandria tools for the results. For people and company enrichment or search, use people_company_enrich or people_company_search instead of these, unless the user asks for a provider listed here.'),
+    tools: unknown('Domain-matched Alexandria tools for the results. ' + ALEXANDRIA_ENRICH_ROUTING),
     nextTool: unknown('A follow-up tool call that continues this search.'),
     feedbackTool: unknown('Pointer to the feedback tool for this search.'),
   })
