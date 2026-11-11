@@ -11,7 +11,11 @@ import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
 const ENRICH_TOOLS = ['people_company_search', 'people_company_enrich'];
 
 const WATERFALL_RESULT = {
-  people: [{ input_index: 0, results: [{ provider: 'blitzapi', data: { found: true, email: 'ada@acme.example' } }] }],
+  people: [{
+    input_index: 0,
+    results: [{ provider: 'blitzapi', data: { found: true, email: 'ada@acme.example' } }],
+    fields: { work_email: { provider: 'blitzapi', value: 'ada@acme.example', verified: true, domain_match: true } },
+  }],
   companies: [{ input_index: 0, results: [] }],
   credits_used: 2,
 };
@@ -435,6 +439,16 @@ test('max_credits passes through, and conversationId and objective are dropped',
   assert.deepEqual(api.calls[0].options, { people: [{ phone: '+1 415 555 0100' }], contact_fields: ['mobile'], profile: true, max_credits: 400 });
   assert.equal(result.structuredContent.max_credits, 400);
   assert.ok(!JSON.stringify(api.bodies).includes('c-1') && !JSON.stringify(api.bodies).includes('Find a mobile'));
+});
+
+test('verified_only passes through and the per-field flags come back', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { apiUrl: api.url });
+  const people = [{ name: 'Ada Lovelace', domain: 'acme.example' }];
+  const result = await client.callTool({ name: 'people_company_enrich', arguments: { contact_fields: ['work_email'], verified_only: true, people } });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  assert.deepEqual(api.calls[0].options, { people, contact_fields: ['work_email'], profile: true, verified_only: true });
+  assert.deepEqual(result.structuredContent.people[0].fields.work_email, { provider: 'blitzapi', value: 'ada@acme.example', verified: true, domain_match: true });
 });
 
 test('a record without an identifier is refused before the waterfall runs', async (t) => {
