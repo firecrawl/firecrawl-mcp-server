@@ -3563,14 +3563,7 @@ Set \`redactPII\` to request redaction of personally identifiable information in
   registerDeveloperTools(server, getClient);
   registerGovTools(server, getClient);
   if (!isLocalKeylessStartup()) {
-    registerEnrichTools(server, getClient, assertExchangeCredential, hasCredential, {
-      parameters: z
-        .object({ ...searchFields })
-        .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE)
-        .refine(searchCategoriesAreCompatible, SEARCH_CATEGORIES_CONFLICT_MESSAGE)
-        .refine(searchQueryIsValid, 'A query is required.'),
-      run: (args, context) => searchTool.execute(args, context, 'people_company_search'),
-    }, alexandriaTools);
+    registerEnrichTools(server, getClient, assertExchangeCredential, hasCredential, alexandriaTools);
   }
   registerUsageTools(server, getClient);
 

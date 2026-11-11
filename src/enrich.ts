@@ -1,17 +1,16 @@
 /**
  * People and company search and enrichment over Alexandria's B2B data providers.
- * people_company_search takes a block per provider (Apollo, FullEnrich, People Data
- * Labs) with that provider's own parameters; providers given a block run in parallel
- * and each reports its own records, charge and errors. people_company_enrich runs
- * Alexandria's enrichment waterfall, which picks the providers itself.
+ * people_company_search runs Alexandria's search waterfall (firecrawl/search/auto)
+ * and people_company_enrich runs its enrichment waterfall; each picks the providers
+ * itself.
  */
 
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { type ContentResult, type McpRuntime, type ToolExecuteContext, UserError } from './mcp/runtime.js';
-import { executeToolCall, type AlexandriaTools } from './alexandria.js';
+import { type AlexandriaTools } from './alexandria.js';
 import { requestOrigin } from './origin';
-import { DATA_SOURCES_SETTINGS_URL, relayExchangeError } from './tool-helpers.js';
+import { relayExchangeError } from './tool-helpers.js';
 import { withStructured } from './tool-output';
 
 interface SessionData {
@@ -23,45 +22,9 @@ interface SessionData {
 type GetClient = (session?: SessionData) => unknown;
 type AssertCredential = (session?: SessionData) => void;
 
-type Provider = 'apollo' | 'fullenrich' | 'people_data_labs' | 'datalegion';
-
-const SLUG: Record<Provider, string> = {
-  apollo: 'apollo',
-  fullenrich: 'fullenrich',
-  people_data_labs: 'people-data-labs',
-  datalegion: 'datalegion',
-};
-
 // ---------- Input schemas ----------
 
-const match = z.strictObject({
-  value: z.string(),
-  exclude: z.boolean().optional(),
-  exact_match: z.boolean().optional(),
-});
-const range = z.strictObject({
-  min: z.number().optional(),
-  max: z.number().optional(),
-  exclude: z.boolean().optional(),
-});
-const matches = (about?: string) => {
-  const schema = z.array(match).min(1).optional();
-  return about ? schema.describe(about) : schema;
-};
-const ranges = (about?: string) => {
-  const schema = z.array(range).min(1).optional();
-  return about ? schema.describe(about) : schema;
-};
-const strings = (about: string) => z.array(z.string().min(1)).min(1).optional().describe(about);
-/** A page size published with its maximum; a larger value runs at the maximum with a note instead of being refused. */
-const capped = (max: number, fallback: number, about: string) => z.number().int().min(1).default(fallback).meta({ maximum: max }).describe(about);
-const PDL_LIMIT = 10;
 const text = (about?: string) => (about ? z.string().optional().describe(about) : z.string().optional());
-
-function provider<S extends z.ZodRawShape>(shape: S, about: string, rule?: { check: (value: any) => boolean; message: string; schema: Record<string, unknown> }) {
-  const block = z.strictObject(shape);
-  return (rule ? block.refine(rule.check, { message: rule.message }).meta(rule.schema) : block).optional().describe(about);
-}
 
 /** An input that needs every field of at least one set, checked at runtime and published as the same rule in its JSON Schema. */
 function needsOneOf<S extends z.ZodRawShape>(shape: S, sets: string[][], message: string) {
@@ -73,242 +36,14 @@ function needsOneOf<S extends z.ZodRawShape>(shape: S, sets: string[][], message
 
 const has = (value: unknown) => typeof value === 'string' && value.trim() !== '';
 
-const PROVIDER_BLOCKS =
-  'Each provider takes its own native parameters; nothing is shared between providers. Include a block only for each provider you want to run, e.g. "apollo": {...}; included providers run in parallel. ';
-const REPORT = 'The response lists every provider with its status, records, credits charged and any error.';
-const FE_LISTS = 'List filters take [{"value": "...", "exclude"?: true, "exact_match"?: true}]; range filters take [{"min"?: n, "max"?: n}]. ';
-
-const SENIORITY_LEVELS = 'One of Owner, Founder, C-Level, Partner, VP, Head, Director, Manager or Senior';
-const SENIORITY = new Set(['owner', 'founder', 'c-level', 'partner', 'vp', 'head', 'director', 'manager', 'senior']);
-const INDUSTRIES = "LinkedIn's current industry names, e.g. Software Development or Computer and Network Security, not Computer Software.";
-
-const sqlOrQuery = {
-  check: (v: any) => has(v.sql) !== (v.query !== undefined),
-  message: 'people_data_labs needs exactly one of sql or query',
-  schema: { oneOf: [{ required: ['sql'] }, { required: ['query'] }] },
-};
-
-const peopleSearchParameters = z.strictObject({
-  apollo: provider(
-    {
-      person_titles: strings('Job titles, e.g. ["Head of Data"]. Similar titles also match; adding titles can broaden results.'),
-      person_locations: strings('e.g. ["Seattle, US"].'),
-      q_organization_domains_list: strings('Employer domains, e.g. ["clerk.com"].'),
-      q_keywords: text('Free text matched across the person and their company.'),
-      per_page: capped(25, 10, 'Results per page, max 25. Use page for more.'),
-      page: z.number().int().min(1).optional().describe('Page number, from 1.'),
-    },
-    'Apollo people/search. Free. No seniority, industry or headcount filter. Surnames come back masked: pass apollo_id as id to the apollo people/match capability through firecrawl_scrape to reveal.'
-  ),
-  fullenrich: provider(
-    {
-      current_position_titles: matches('e.g. [{"value":"Head of Data"}].'),
-      current_position_seniority_level: z
-        .array(match.refine((m) => SENIORITY.has(m.value.trim().toLowerCase()), { message: SENIORITY_LEVELS }))
-        .min(1)
-        .optional()
-        .describe(SENIORITY_LEVELS + '.'),
-      current_position_job_functions: matches(),
-      current_position_sub_functions: matches(),
-      current_position_years_in: ranges(),
-      current_company_names: matches(),
-      current_company_domains: matches('Exact match recommended.'),
-      current_company_professional_network_urls: matches('Employer LinkedIn URLs.'),
-      current_company_industries: matches(INDUSTRIES),
-      current_company_specialties: matches(),
-      current_company_technologies: matches(),
-      current_company_types: matches('e.g. Privately Held, Public Company.'),
-      current_company_headquarters: matches(),
-      current_company_headcounts: ranges('e.g. [{"min":50,"max":500}].'),
-      current_company_founded_years: ranges(),
-      current_company_years_at: ranges(),
-      current_company_days_since_last_job_change: ranges('Recent movers, e.g. [{"max":90}].'),
-      person_names: matches(),
-      person_professional_network_urls: matches('LinkedIn profile URLs.'),
-      person_locations: matches('Cities, regions or countries.'),
-      person_languages: matches(),
-      person_skills: matches(),
-      person_universities: matches(),
-      past_position_titles: matches(),
-      past_company_names: matches(),
-      past_company_domains: matches(),
-      limit: capped(25, 5, 'Records to return, max 25, 5 credits each. Use offset for more.'),
-      offset: z.number().int().min(0).max(10000).optional(),
-    },
-    'FullEnrich people/search. 5 credits per record. ' + FE_LISTS
-  ),
-  people_data_labs: provider(
-    {
-      sql: text("SELECT * FROM person WHERE ... Values are lowercase and match exactly, e.g. job_title = 'head of data'."),
-      query: z.record(z.string(), z.unknown()).optional().describe('Elasticsearch query over the person schema, instead of sql.'),
-      limit: capped(PDL_LIMIT, 2, 'Records to return, max 10, 50 credits each.'),
-    },
-    'People Data Labs person/search. 50 credits per record. Pass sql or query.',
-    sqlOrQuery
-  ),
-});
-
-const companySearchParameters = z.strictObject({
-  apollo: provider(
-    {
-      q_organization_name: text('Matched against company names and descriptions.'),
-      organization_num_employees_ranges: strings('Headcount bands, e.g. ["11,50", "51,200"].'),
-      organization_locations: strings('e.g. ["San Francisco, US"].'),
-      currently_using_any_of_technology_uids: strings('Apollo technology ids, lowercase with underscores, e.g. ["snowflake", "google_analytics"].'),
-      per_page: capped(25, 10, 'Results per page, max 25. Use page for more.'),
-      page: z.number().int().min(1).optional().describe('Page number, from 1.'),
-    },
-    'Apollo companies/search. 30 credits per page, empty pages included. No industry or founding-year filter.'
-  ),
-  fullenrich: provider(
-    {
-      keywords: matches('Words in the company description.'),
-      industries: matches(INDUSTRIES),
-      specialties: matches(),
-      technologies: matches(),
-      types: matches('e.g. Privately Held, Public Company.'),
-      headquarters_locations: matches('Cities, regions or countries.'),
-      headcounts: ranges('e.g. [{"min":50,"max":500}].'),
-      founded_years: ranges(),
-      names: matches(),
-      domains: matches(),
-      professional_network_urls: matches('LinkedIn company URLs.'),
-      limit: capped(25, 5, 'Records to return, max 25, 5 credits each. Use offset for more.'),
-      offset: z.number().int().min(0).max(10000).optional(),
-    },
-    'FullEnrich companies/search. 5 credits per record. ' + FE_LISTS
-  ),
-  people_data_labs: provider(
-    {
-      sql: text("SELECT * FROM company WHERE ... Values are lowercase, e.g. industry = 'computer software'."),
-      query: z.record(z.string(), z.unknown()).optional().describe('Elasticsearch query over the company schema, instead of sql.'),
-      limit: capped(PDL_LIMIT, 2, 'Records to return, max 10, 50 credits each.'),
-    },
-    'People Data Labs company/search. 50 credits per record. Pass sql or query.',
-    sqlOrQuery
-  ),
-});
-
 const DEFAULT_MAX_CREDITS = 1000;
-const maxCredits = z
-  .number()
-  .int()
-  .min(0)
-  .optional()
-  .describe(
-    'Most credits this call may spend. Set it only to a budget the user gave; left out, it is ' + DEFAULT_MAX_CREDITS + '. The estimate checked against it is each provider\'s listed price times its unit (record, input, Apollo company page, or 10 web results), as if every record were found; a call whose estimate is higher is refused before any provider runs.'
-  );
-
-const searchParameters = z.strictObject({
-  entity: z.enum(['person', 'company']).describe('Required. Exactly "person" (find people) or "company" (find companies). Each provider block then takes that entity\'s filters.'),
-  max_credits: maxCredits,
-  apollo: either(peopleSearchParameters.shape.apollo, companySearchParameters.shape.apollo),
-  fullenrich: either(peopleSearchParameters.shape.fullenrich, companySearchParameters.shape.fullenrich),
-  people_data_labs: either(peopleSearchParameters.shape.people_data_labs, companySearchParameters.shape.people_data_labs),
-});
-
-function either(person: z.ZodOptional<z.ZodType>, company: z.ZodOptional<z.ZodType>) {
-  return z
-    .union([person.unwrap().describe('entity person: ' + person.description), company.unwrap().describe('entity company: ' + company.description)])
-    .optional();
-}
 
 const NAME_SETS = (names: string[][], others: string[]) => names.flatMap((name) => others.map((other) => [...name, other]));
 
 const CONTACT_FIELDS = ['work_email', 'personal_email', 'mobile'] as const;
 
-const enrichOutputSchema = z.looseObject({
-  providers: z
-    .array(
-      z.looseObject({
-        name: z.string().optional(),
-        status: z.string().optional(),
-        returned: z.number().optional(),
-        credits: z.number().optional(),
-        note: z.string().optional().describe('Why the provider failed or skipped inputs.'),
-        retryable: z.boolean().optional().describe('The failure may succeed on a later try.'),
-        results: z.array(z.looseObject({})).optional().describe('This provider\'s records.'),
-      })
-    )
-    .optional()
-    .describe('What each provider did, with its own records.'),
-  credits_total: z.number().optional(),
-  credits_estimate: z.number().optional().describe('The most this call could have cost, checked against max_credits before it ran.'),
-  max_credits: z.number().optional(),
-});
-
-// ---------- Normalized records ----------
-
-interface Person {
-  name?: string;
-  title?: string;
-  company?: string;
-  company_domain?: string;
-  location?: string;
-  linkedin_url?: string;
-  since?: string;
-  previous?: string[];
-  work_email?: string;
-  email_status?: string;
-  personal_email?: string;
-  mobile?: string;
-  apollo_id?: string;
-}
-
-interface Company {
-  name?: string;
-  domain?: string;
-  linkedin_url?: string;
-  industry?: string;
-  employees?: number;
-  employees_range?: string;
-  hq?: string;
-  founded?: number;
-  funding_total_usd?: number;
-  technologies?: string[];
-  description?: string;
-}
-
-interface ProviderReport {
-  name: Provider | 'firecrawl_search';
-  status: 'ok' | 'empty' | 'pending' | 'error' | 'skipped' | 'not_requested';
-  returned: number;
-  credits: number;
-  attempted?: number;
-  next_tool?: unknown;
-  note?: string;
-  retryable?: boolean;
-  results?: object[];
-}
-
 const str = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim() ? value.trim() : undefined;
-const num = (value: unknown): number | undefined =>
-  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
-const joinPlace = (...parts: unknown[]) =>
-  [...new Set(parts.map(str).filter(Boolean))].join(', ') || undefined;
-const list = (values: (string | undefined)[] | undefined) => {
-  const kept = (values ?? []).filter((v): v is string => Boolean(v));
-  return kept.length ? kept.slice(0, 3) : undefined;
-};
-
-function linkedIn(value: unknown): string | undefined {
-  const url = str(value)
-    ?.toLowerCase()
-    .replace(/^https?:\/\//, '')
-    .replace(/^[a-z]{2,3}\./, '')
-    .replace(/[?#].*$/, '')
-    .replace(/\/+$/, '');
-  return url?.startsWith('linkedin.com/') ? 'https://www.' + url : undefined;
-}
-
-function domainOf(value: unknown): string | undefined {
-  return str(value)
-    ?.toLowerCase()
-    .replace(/^https?:\/\//, '')
-    .replace(/^www\./, '')
-    .replace(/[/?#].*$/, '') || undefined;
-}
 
 function compact<T extends object>(record: T): T {
   return Object.fromEntries(
@@ -316,324 +51,7 @@ function compact<T extends object>(record: T): T {
   ) as T;
 }
 
-function emailFrom(...candidates: unknown[]): string | undefined {
-  for (const c of candidates) {
-    const first = Array.isArray(c) ? c[0] : c;
-    const value = str(first) ?? str((first as any)?.address) ?? str((first as any)?.email);
-    if (value?.includes('@') && !value.startsWith('email_not_unlocked')) return value;
-  }
-  return undefined;
-}
-
-function fullEnrichPerson(r: any): Person {
-  const current = r?.employment?.current;
-  const place = r?.location ?? {};
-  return compact({
-    name: str(r?.full_name),
-    title: str(current?.title),
-    company: str(current?.company?.name),
-    company_domain: domainOf(current?.company?.domain),
-    location: joinPlace(place.city, place.region, place.country),
-    linkedin_url: linkedIn(r?.social_profiles?.professional_network?.url),
-    since: str(current?.start_at)?.slice(0, 7),
-    previous: list(
-      (Array.isArray(r?.employment?.all) ? r.employment.all : [])
-        .filter((e: any) => !e?.is_current)
-        .map((e: any) => (str(e?.title) && str(e?.company?.name) ? e.title + ' at ' + e.company.name : undefined))
-    ),
-  });
-}
-
-function apolloPreview(r: any): Person {
-  return compact({
-    name: joinPlace(r?.first_name, r?.last_name_obfuscated ?? r?.last_name)?.replace(', ', ' '),
-    title: str(r?.title),
-    company: str(r?.organization?.name),
-    apollo_id: str(r?.id),
-  });
-}
-
-function pdlPerson(r: any): Person {
-  const experience = Array.isArray(r?.experience) ? r.experience : [];
-  return compact({
-    name: str(r?.full_name),
-    title: str(r?.job_title),
-    company: str(r?.job_company_name),
-    company_domain: domainOf(r?.job_company_website),
-    location: str(r?.location_name),
-    linkedin_url: linkedIn(str(r?.linkedin_url) ? 'https://' + r.linkedin_url : undefined),
-    since: str(r?.job_start_date)?.slice(0, 7),
-    previous: list(
-      experience
-        .filter((e: any) => str(e?.end_date))
-        .map((e: any) => (str(e?.title?.name) && str(e?.company?.name) ? e.title.name + ' at ' + e.company.name : undefined))
-    ),
-    work_email: emailFrom(r?.work_email),
-    personal_email: emailFrom(r?.recommended_personal_email, r?.personal_emails),
-    mobile: str(r?.mobile_phone),
-  });
-}
-
-function fullEnrichCompany(c: any): Company {
-  const hq = c?.locations?.headquarters ?? {};
-  return compact({
-    name: str(c?.name),
-    domain: domainOf(c?.domain ?? c?.website),
-    linkedin_url: linkedIn(c?.social_profiles?.professional_network?.url),
-    industry: str(c?.industry?.main_industry),
-    employees: num(c?.headcount),
-    employees_range: str(c?.headcount_range),
-    hq: joinPlace(hq.city, hq.region, hq.country),
-    founded: num(c?.year_founded),
-    technologies: (Array.isArray(c?.technologies) ? c.technologies : [])
-      .map((t: any) => str(t?.name ?? t))
-      .filter(Boolean)
-      .slice(0, 25),
-    description: str(c?.description)?.slice(0, 300),
-  });
-}
-
-function apolloCompany(o: any): Company {
-  return compact({
-    name: str(o?.name),
-    domain: domainOf(o?.primary_domain ?? o?.website_url),
-    linkedin_url: linkedIn(o?.linkedin_url),
-    industry: str(o?.industry),
-    employees: num(o?.estimated_num_employees),
-    hq: joinPlace(o?.city, o?.state, o?.country),
-    founded: num(o?.founded_year),
-    funding_total_usd: num(o?.total_funding),
-    technologies: (Array.isArray(o?.technology_names) ? o.technology_names : []).map(str).filter(Boolean).slice(0, 25),
-    description: str(o?.short_description)?.slice(0, 300),
-  });
-}
-
-function pdlCompany(c: any): Company {
-  return compact({
-    name: str(c?.display_name) ?? str(c?.name),
-    domain: domainOf(c?.website),
-    linkedin_url: linkedIn(str(c?.linkedin_url) ? 'https://' + c.linkedin_url : undefined),
-    industry: str(c?.industry),
-    employees: num(c?.employee_count),
-    employees_range: str(c?.size),
-    hq: str(c?.location?.name),
-    founded: num(c?.founded),
-    funding_total_usd: num(c?.total_funding_raised),
-    description: (str(c?.headline) ?? str(c?.summary))?.slice(0, 300),
-  });
-}
-
-// ---------- Alexandria execution ----------
-
-type Call = { capability: string; options: Record<string, unknown> };
-type Entry = { data?: any; error?: { code?: string; message?: string; nextTool?: unknown; requiresAction?: unknown }; requiresAction?: unknown; creditsCost?: number };
-
-type TermsGate = { version?: string; url: string };
-
-interface Context {
-  client: any;
-  origin: string;
-  tool: string;
-  alexandriaTools: AlexandriaTools;
-  gated: Map<Provider, TermsGate>;
-}
-
-const TERMS_CODE = 'third_party_data_terms_required';
-
-/** Records a provider whose terms the organization has not accepted and says where an admin accepts them; the tool adds what to retry with. */
-function gate(ctx: Context, p: Provider, entry: Entry): Entry {
-  if (entry.error?.code?.toLowerCase() !== TERMS_CODE) return entry;
-  const action = (isPlain(entry.error.requiresAction) ? entry.error.requiresAction : isPlain(entry.requiresAction) ? entry.requiresAction : {}) as Record<string, unknown>;
-  const terms = { version: str(action.version), url: str(action.url) ?? DATA_SOURCES_SETTINGS_URL };
-  ctx.gated.set(p, terms);
-  const message =
-    'An organization admin must accept the ' + p + " provider's terms" + (terms.version ? ' (version ' + terms.version + ')' : '') + ' at ' + terms.url + ' before ' + p + ' can run. ' +
-    'Terms are accepted in the Firecrawl dashboard, not through this connection.';
-  return { ...entry, error: { ...entry.error, message } };
-}
-
-/** Runs one provider's calls, ten per request, and returns one entry per call in order. */
-async function runCalls(ctx: Context, p: Provider, calls: Call[]): Promise<Entry[]> {
-  const chunks: Call[][] = [];
-  for (let i = 0; i < calls.length; i += 10) chunks.push(calls.slice(i, i + 10));
-  const results = await Promise.all(
-    chunks.map(async (chunk): Promise<Entry[]> => {
-      const requestId = randomUUID();
-      try {
-        const response = await relayExchangeError(
-          () =>
-            ctx.client.http.post(
-              '/v2/scrape',
-              { alexandria: chunk.map((c) => ({ provider: SLUG[p], ...c })), origin: ctx.origin },
-              { headers: { 'x-request-id': requestId } }
-            ),
-          // The API answers a repeat of this request id from its record, so a resend cannot run twice.
-          { tool: ctx.tool, requestId, providers: [SLUG[p]], resend: true, alexandriaTools: ctx.alexandriaTools }
-        );
-        const entries = response?.data?.data?.alexandria;
-        if (!Array.isArray(entries)) throw new Error('Unexpected response shape.');
-        return chunk.map((_, i) => gate(ctx, p, entries[i] ?? { error: { message: 'No result returned.' } }));
-      } catch (error) {
-        if ((error as any)?.response?.status === 401) throw error;
-        const message = error instanceof Error ? error.message : String(error);
-        const extras = error instanceof UserError ? error.extras : undefined;
-        const code = typeof extras?.code === 'string' ? extras.code : 'request_failed';
-        return chunk.map(() => gate(ctx, p, { error: compact({ code, message, nextTool: extras?.nextTool, requiresAction: extras?.requiresAction }) }));
-      }
-    })
-  );
-  return results.flat();
-}
-
-const isMiss = (entry: Entry) => entry.error?.code === 'not_found';
-
 const RETRYABLE = new Set(['provider_error', 'provider_unavailable', 'provider_rate_limited', 'request_timeout', 'precheck_unavailable', 'billing_unavailable']);
-
-const isPending = (entry: Entry | undefined) => entry?.data?.status === 'job_pending' || entry?.error?.code === 'job_pending';
-
-const failureOf = (entries: Entry[]) => entries.find((e) => e.error && !isMiss(e) && !isPending(e))?.error;
-
-const nextToolOf = (entries: Entry[]) => entries.find((e) => e.error?.nextTool)?.error?.nextTool;
-
-const credits = (entries: Entry[]) =>
-  entries.reduce((sum, e) => sum + (typeof e.creditsCost === 'number' ? e.creditsCost : 0), 0);
-
-function noProvider(available: string[], example: object): UserError {
-  return new UserError(
-    'No provider given. Add a block for each provider to run, with that provider\'s own parameters: ' + available.join(', ') + '. Example: ' + JSON.stringify(example),
-    { code: 'no_provider', available, example }
-  );
-}
-
-function notRequested(name: Provider): ProviderReport {
-  return { name, status: 'not_requested', returned: 0, credits: 0 };
-}
-
-/** hints adds what to change to a provider error whose own message does not say. */
-function finish(p: Provider, entries: Entry[], records: object[], extra: Partial<ProviderReport> = {}, hints: Record<string, string> = {}): ProviderReport {
-  const failure = failureOf(entries);
-  const code = failure?.code;
-  return compact({
-    name: p,
-    status: records.length ? 'ok' : failure ? 'error' : 'empty',
-    returned: records.length,
-    credits: credits(entries),
-    note: failure ? [code, [failure.message, code && hints[code]].filter(Boolean).join(' ')].filter(Boolean).join(': ') : undefined,
-    retryable: RETRYABLE.has(code ?? '') || undefined,
-    next_tool: nextToolOf(entries),
-    results: records,
-    ...extra,
-  });
-}
-
-const chunks = <T>(items: T[], size: number): T[][] => {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
-  return out;
-};
-
-// ---------- Search: people_company_search ----------
-
-interface SearchSpec {
-  capability: Record<'apollo' | 'fullenrich' | 'people_data_labs', string>;
-  read: Record<'apollo' | 'fullenrich', (data: any) => unknown>;
-  map: Record<'apollo' | 'fullenrich' | 'people_data_labs', (r: any) => object>;
-}
-
-const PEOPLE_SEARCH: SearchSpec = {
-  capability: { apollo: 'people/search', fullenrich: 'people/search', people_data_labs: 'person/search' },
-  read: { apollo: (d) => d?.people, fullenrich: (d) => d?.people },
-  map: { apollo: apolloPreview, fullenrich: fullEnrichPerson, people_data_labs: pdlPerson },
-};
-
-const COMPANY_SEARCH: SearchSpec = {
-  capability: { apollo: 'companies/search', fullenrich: 'companies/search', people_data_labs: 'company/search' },
-  read: { apollo: (d) => d?.organizations, fullenrich: (d) => d?.companies },
-  map: { apollo: apolloCompany, fullenrich: fullEnrichCompany, people_data_labs: pdlCompany },
-};
-
-async function pdlSearch(ctx: Context, capability: string, query: Record<string, unknown>, limit: number, map: (r: any) => object) {
-  const entries: Entry[] = [];
-  const records: object[] = [];
-  let scroll: string | undefined;
-  while (records.length < limit) {
-    const size = Math.min(2, limit - records.length);
-    const [entry] = await runCalls(ctx, 'people_data_labs', [
-      { capability, options: { ...query, size, titlecase: true, ...(scroll ? { scroll_token: scroll } : {}) } },
-    ]);
-    entries.push(entry);
-    const page = Array.isArray(entry.data?.data) ? entry.data.data : [];
-    records.push(...page.map(map));
-    scroll = str(entry.data?.scroll_token);
-    if (entry.error || page.length < size || !scroll) break;
-  }
-  return { entries, records };
-}
-
-const SEARCH_HINTS: Partial<Record<Provider, Record<string, string>>> = {
-  people_data_labs: {
-    invalid_option:
-      'Every field in the query must exist in its schema (https://docs.peopledatalabs.com/docs/fields) and be a subfield, e.g. experience.company.name rather than experience; values are lowercase; LIKE takes at most 20 % wildcards.',
-  },
-  fullenrich: {
-    provider_error:
-      "FullEnrich answers this way when a filter value is not one it knows, often an industry: use LinkedIn's current industry names, e.g. Software Development. If every value is valid, retry later.",
-  },
-};
-
-/** The filters an apollo or fullenrich search block sets, without its paging fields. */
-function searchFilters(block: Record<string, any>): Record<string, unknown> {
-  return compact(Object.fromEntries(Object.entries(block).filter(([key]) => !['per_page', 'page', 'limit', 'offset'].includes(key))));
-}
-
-async function searchWith(ctx: Context, p: Provider, block: Record<string, any>, spec: SearchSpec): Promise<ProviderReport> {
-  if (p === 'datalegion') throw new Error('datalegion has no search capability.');
-  const { per_page, page, limit, offset = 0, sql, query } = block;
-  const filters = searchFilters(block);
-  if (p === 'people_data_labs') {
-    const { entries, records } = await pdlSearch(ctx, spec.capability[p], has(sql) ? { sql } : { query }, limit, spec.map[p]);
-    return finish(p, entries, records, {}, SEARCH_HINTS[p]);
-  }
-  if (!Object.keys(filters).length) {
-    return { name: p, status: 'skipped', returned: 0, credits: 0, note: 'No filters given; pass at least one.' };
-  }
-  const calls: Call[] =
-    p === 'apollo'
-      ? [{ capability: spec.capability[p], options: compact({ ...filters, per_page, page }) }]
-      : chunks([...Array(limit).keys()], 6).map((slice) => ({
-          capability: spec.capability.fullenrich,
-          options: { ...filters, limit: slice.length, ...(offset + slice[0] ? { offset: offset + slice[0] } : {}) },
-        }));
-  const entries = await runCalls(ctx, p, calls);
-  const read = spec.read[p];
-  const map = spec.map[p];
-  const records = entries.flatMap((e) => {
-    const rows = read(e.data);
-    return Array.isArray(rows) ? rows.map(map) : [];
-  });
-  return finish(p, entries, records, {}, SEARCH_HINTS[p]);
-}
-
-// ---------- Registration ----------
-
-const SEARCH_ORDER: Provider[] = ['apollo', 'fullenrich', 'people_data_labs'];
-
-const SEARCH = {
-  person: { parameters: peopleSearchParameters.extend({ entity: searchParameters.shape.entity, max_credits: maxCredits }), spec: PEOPLE_SEARCH },
-  company: { parameters: companySearchParameters.extend({ entity: searchParameters.shape.entity, max_credits: maxCredits }), spec: COMPANY_SEARCH },
-};
-
-const SEARCH_EXAMPLE = {
-  entity: 'person',
-  fullenrich: { current_position_titles: [{ value: 'Head of Data' }], current_company_domains: [{ value: 'example.com', exact_match: true }] },
-  apollo: { person_titles: ['Head of Data'], q_organization_domains_list: ['example.com'] },
-};
-const COMPANY_SEARCH_EXAMPLE = {
-  entity: 'company',
-  fullenrich: { industries: [{ value: 'Software Development' }], headcounts: [{ min: 51, max: 200 }] },
-  apollo: { organization_num_employees_ranges: ['51,200'], organization_locations: ['Boston, US'] },
-};
-const searchExample = (args: Record<string, any>) => (args.entity === 'company' ? COMPANY_SEARCH_EXAMPLE : SEARCH_EXAMPLE);
 
 // ---------- Argument repair ----------
 
@@ -676,31 +94,6 @@ function repair(schema: unknown, value: unknown): unknown {
   return value;
 }
 
-/** Moves each provider block to its own key: hyphenated or differently cased names, a [{provider, options}] list, a one-item list, or one extra wrapping key. */
-function repairBlocks(args: Record<string, any>, order: Provider[], blockSchema: (p: Provider) => unknown): void {
-  const providerOf = (name: string) => order.find((p) => p.replace(/_/g, '') === name.toLowerCase().replace(/[-_\s]/g, ''));
-  if (Array.isArray(args.providers) && args.providers.every((call: unknown) => isPlain(call) && providerOf(String(call.provider)))) {
-    for (const { provider, options, ...rest } of args.providers) args[providerOf(provider)!] ??= options ?? rest;
-    delete args.providers;
-  }
-  for (const key of Object.keys(args)) {
-    const p = providerOf(key);
-    if (p && p !== key && args[p] === undefined) {
-      args[p] = args[key];
-      delete args[key];
-    }
-  }
-  for (const p of order) {
-    const shape = shapeOf(blockSchema(p)) ?? {};
-    const fits = (value: unknown) => isPlain(value) && Object.keys(value).some((key) => key in shape);
-    for (let depth = 0; depth < 2; depth++) {
-      const block = args[p];
-      if (Array.isArray(block) && block.length === 1) args[p] = block[0];
-      else if (isPlain(block) && !fits(block) && Object.keys(block).length === 1 && isPlain(Object.values(block)[0])) args[p] = Object.values(block)[0];
-    }
-  }
-}
-
 function fieldsAt(schema: unknown, path: PropertyKey[]): string[] {
   let current = schema;
   for (const segment of path) {
@@ -741,44 +134,84 @@ const ENTITY: Record<string, 'person' | 'company'> = {
   organizations: 'company',
 };
 
-type Plan = {
-  order: Provider[];
-  blocks: Record<string, any>;
-  estimates: Partial<Record<Provider | 'firecrawl_search', number>>;
-  run: (ctx: Context, p: Provider, block: Record<string, any>) => Promise<ProviderReport | ProviderReport[]>;
-  web?: Record<string, any>;
-};
+// ---------- people_company_search: the search waterfall ----------
 
-/** The server's own web search, run for the firecrawl_search block of people_company_search. */
-interface WebSearch {
-  parameters: z.ZodType;
-  run: (args: unknown, context: ToolExecuteContext<SessionData>) => Promise<ContentResult>;
-}
+const SEARCH_TIMEOUT_MS = 120_000;
+const SEARCH_MAX_LIMIT = 100;
+const SENIORITIES = ['owner', 'founder', 'c_suite', 'partner', 'vp', 'head', 'director', 'manager', 'senior', 'entry', 'intern'] as const;
+const FUNCTIONS = [
+  'engineering', 'sales', 'marketing', 'finance', 'human_resources', 'operations', 'product', 'design',
+  'legal', 'information_technology', 'customer_success', 'data', 'research', 'education', 'healthcare', 'consulting',
+] as const;
 
-const WEB_ABOUT =
-  'Firecrawl web search with the firecrawl_search query parameters, without page fetching: web results such as team pages, profiles and news. 2 credits per 10 results (10 with enterprise zdr), which is what max_credits counts. A team that scans results for threats also pays 2 per result, which max_credits does not count.';
+const values = (about: string) => z.array(z.string().min(1)).min(1).max(25).optional().describe(about);
+const span = (about: string) =>
+  z
+    .strictObject({ min: z.number().int().min(0).optional(), max: z.number().int().min(0).optional() })
+    .refine((r) => r.min !== undefined || r.max !== undefined, { message: 'give min, max or both' })
+    .optional()
+    .describe(about);
 
-/** The stated web search price: 2 credits per 10 results, rounded up (10 with enterprise zdr), for each source but the free Alexandria one. No sources means web. */
-function webEstimate(args: Record<string, any>): number {
-  const sources = Array.isArray(args.sources) && args.sources.length ? args.sources : ['web'];
-  const results = (args.limit ?? 10) * sources.filter((s: any) => (typeof s === 'string' ? s : s?.type) !== 'alexandria').length;
-  const perTen = Array.isArray(args.enterprise) && args.enterprise.includes('zdr') ? 10 : 2;
-  return perTen * Math.ceil(results / 10);
-}
+const searchFilters = z.strictObject({
+  titles: values('People only. Current job titles, e.g. ["Head of Data"]; rows whose title does not match, or is held in the past, are dropped.'),
+  seniority: z.array(z.enum(SENIORITIES)).min(1).optional().describe('People only. Rows whose title names another level are dropped; SVP, EVP and AVP meet vp.'),
+  functions: z.array(z.enum(FUNCTIONS)).min(1).optional().describe('People only. Job functions; rows whose title names another function are dropped.'),
+  company_domains: values('Companies by domain, e.g. ["example.com"]. For people, their employer; with it the search stops at the first provider that finds anyone.'),
+  locations: values('Countries ("Germany", "US") or cities ("Berlin"). Country names are applied by the most providers.'),
+  industries: values("LinkedIn's current industry names, e.g. Software Development."),
+  headcount: span('Employee count, e.g. {"min": 51, "max": 200}.'),
+  founded_year: span('e.g. {"min": 2018}.'),
+  technologies: values('Technologies the company uses, e.g. ["Snowflake"].'),
+  keywords: values('Words describing the company, e.g. ["web scraping"].'),
+});
 
-async function webReport(web: WebSearch, args: unknown, context: ToolExecuteContext<SessionData>): Promise<ProviderReport> {
-  const name = 'firecrawl_search';
-  try {
-    const result = await web.run(args, context);
-    const response = (result.structuredContent ?? {}) as Record<string, any>;
-    const results = ['web', 'news', 'images'].flatMap((key) => (Array.isArray(response.data?.[key]) ? response.data[key] : []));
-    return compact({ name, status: results.length ? 'ok' : 'empty', returned: results.length, credits: num(response.creditsUsed) ?? 0, results });
-  } catch (error) {
-    const status = (error as any)?.extras?.status ?? (error as any)?.response?.status;
-    const retryable = status === 429 || status >= 500 || undefined;
-    return compact({ name, status: 'error' as const, returned: 0, credits: 0, note: error instanceof Error ? error.message : String(error), retryable });
-  }
-}
+const searchParameters = z.strictObject({
+  entity: z.enum(['person', 'company']).describe('Required. Exactly "person" (find people) or "company" (find companies).'),
+  query: z.string().max(500).optional().describe('Free text, applied only by providers that take it. Prefer filters.'),
+  filters: searchFilters.optional().describe('For people, company filters describe the employer. Every filter given is applied: a provider that cannot apply one never runs.'),
+  limit: z.number().int().min(1).max(SEARCH_MAX_LIMIT).optional().describe('Rows wanted, 1 to ' + SEARCH_MAX_LIMIT + ', default 10.'),
+  cursor: z.string().optional().describe('next_cursor from an earlier call with the same entity, filters and query, for more rows.'),
+  count_only: z.boolean().optional().describe('Return only how many records match, without rows.'),
+  max_credits: z
+    .number()
+    .int()
+    .min(0)
+    .max(10_000)
+    .optional()
+    .describe('Most credits the call may spend. Set it only to a budget the user gave; left out, it is ' + DEFAULT_MAX_CREDITS + '. A provider that could pass it is not started.'),
+  provider: z.string().optional().describe('Ask only this provider, e.g. "prospeo". Leave it out to let the waterfall choose.'),
+  options: z.record(z.string(), z.unknown()).optional().describe("With provider: that provider's own search options, sent as given instead of filters."),
+});
+
+const SEARCH_EXAMPLE = { entity: 'person', filters: { titles: ['Head of Data'], company_domains: ['example.com'] }, limit: 10 };
+
+const searchRow = z.looseObject({
+  name: z.string().optional(),
+  title: z.string().optional(),
+  title_match: z.enum(['current', 'past']).optional(),
+  company: z.string().optional(),
+  company_domain: z.string().optional(),
+  domain: z.string().optional(),
+  linkedin_url: z.string().optional(),
+  industry: z.string().optional(),
+  headcount: z.union([z.number(), z.string()]).optional(),
+  location: z.string().optional(),
+  founded_year: z.number().optional(),
+  source: z.string().describe('The provider that returned the row.'),
+});
+
+const searchResultSchema = z.looseObject({
+  results: z.array(searchRow).optional().describe('People or companies, deduplicated, with no emails or phones.'),
+  count: z.number().optional().describe('Rows returned; with count_only, how many records match.'),
+  next_cursor: z.string().optional().describe('Pass as cursor, with the same filters, for more rows.'),
+  providers: z
+    .array(z.looseObject({ name: z.string(), capability: z.string(), leg: z.string().optional(), status: z.string(), returned: z.number(), dropped: z.number().optional(), unverified: z.number().optional(), credits: z.number(), ms: z.number().optional(), error: z.string().optional() }))
+    .optional()
+    .describe('Each provider call in order. leg is company or people when a company search fed a people search.'),
+  chain: z.looseObject({}).optional().describe('When set, the filters the company search and the people search each applied.'),
+  credits: z.number().optional().describe('Credits charged by the provider calls.'),
+  stopped: z.string().optional().describe('max_credits when a provider was not started for the cap, team_quota when the team ran out of credits.'),
+});
 
 // ---------- people_company_enrich: the waterfall ----------
 
@@ -867,164 +300,64 @@ export function registerEnrichTools(
   getClient: GetClient,
   assertCredential: AssertCredential,
   canList: (session?: SessionData) => boolean,
-  web: WebSearch,
   // Which tool a pending job's next_tool is addressed to.
   alexandriaTools: AlexandriaTools = 'legacy'
 ): void {
-  const webBlock = web.parameters.optional().describe(WEB_ABOUT);
-  const advertisedSearch = searchParameters.extend({ firecrawl_search: webBlock });
-  const searchSchemas = {
-    person: SEARCH.person.parameters.extend({ firecrawl_search: webBlock }),
-    company: SEARCH.company.parameters.extend({ firecrawl_search: webBlock }),
-  };
 
-  function tool<S extends z.ZodObject>(
-    name: string,
-    annotations: Record<string, unknown>,
-    description: string,
-    parameters: S,
-    example: (args: Record<string, any>) => object,
-    alternative: (args: Record<string, any>, excluded: ReadonlySet<Provider>) => Record<string, any> | undefined,
-    repairAndCheck: (args: Record<string, any>) => void,
-    plan: (args: Record<string, any>) => Plan
-  ) {
-    server.addTool({
-      name,
-      annotations,
-      canList,
-      description: description + PROVIDER_BLOCKS + REPORT,
-      outputSchema: enrichOutputSchema,
-      parameters,
-      beforeValidate: (args: unknown) => {
-        if (isPlain(args)) {
-          dropSessionFields(args);
-          repairAndCheck(args);
-        }
-        return undefined;
-      },
-      execute: async (args: unknown, context: ToolExecuteContext<SessionData>): Promise<ContentResult> => {
-        const { session, client: mcpClient } = context;
-        const { order, blocks, estimates, run, web: webArgs } = plan(args as Record<string, any>);
-        const on = order.filter((p) => blocks[p] !== undefined);
-        if (!on.length && !webArgs) throw noProvider(name === 'people_company_search' ? [...order, 'firecrawl_search'] : order, example(args as Record<string, any>));
-        assertCredential(session);
-        const charged = [...on, ...(webArgs ? (['firecrawl_search'] as const) : [])];
-        const max_credits = (args as { max_credits?: number }).max_credits ?? DEFAULT_MAX_CREDITS;
-        const credits_estimate = charged.reduce((sum, p) => sum + (estimates[p] ?? 0), 0);
-        if (credits_estimate > max_credits) {
-          const parts = charged.filter((p) => estimates[p]).map((p) => p + ' ' + estimates[p]);
-          const retry = { ...(args as object), max_credits: credits_estimate };
-          const shown = JSON.stringify(retry);
-          throw new UserError(
-            'This call could cost up to ' + credits_estimate + ' credits (' + parts.join(', ') + '), above max_credits ' + max_credits + '. Nothing ran. The estimate is records or inputs × price, as if every record were found. ' +
-              'If the user did not ask for this cap, retry it as is: set max_credits to at least ' + credits_estimate + (shown.length <= 800 ? ': ' + shown : '.') + ' If they did, ask them before raising it, or send fewer inputs, providers, records or contact fields.',
-            { code: 'max_credits_exceeded', credits_estimate, max_credits, estimates, minimum_max_credits: credits_estimate }
-          );
-        }
-        const ctx: Context = { client: getClient(session), origin: requestOrigin(mcpClient as any, session), tool: name, alexandriaTools, gated: new Map() };
-        const reports = (
-          await Promise.all([
-            ...order.map((p) => (on.includes(p) ? run(ctx, p, blocks[p]) : notRequested(p))),
-            ...(webArgs ? [webReport(web, webArgs, context)] : []),
-          ])
-        ).flat();
-        const failed = reports.filter((r) => r.status === 'error');
-        const excluded = new Set([...ctx.gated.keys(), ...failed.flatMap((r) => (r.name === 'firecrawl_search' ? [] : [r.name]))]);
-        const alt = ctx.gated.size ? alternative(args as Record<string, any>, excluded) : undefined;
-        const others = alt ? order.filter((p) => alt[p] !== undefined) : [];
-        const retry = (r: ProviderReport) =>
-          'Retry without ' + r.name + (others.length ? ', for example with ' + others.join(' or ') : '') + ', or wait until the terms are accepted and retry the same call.';
-        const providers = reports.map((r) => (r.status === 'error' && r.name !== 'firecrawl_search' && ctx.gated.has(r.name) ? { ...r, note: [r.note, retry(r)].filter(Boolean).join(' ') } : r));
-        const data = { providers, credits_total: providers.reduce((sum, r) => sum + r.credits, 0), credits_estimate, max_credits };
-        const ran = providers.filter((r) => r.status !== 'not_requested');
-        const succeeded = ran.some((r) => r.status === 'ok' || r.status === 'empty' || r.status === 'pending');
-        if (ran.length && ran.every((r) => r.status === 'error' && r.name !== 'firecrawl_search' && ctx.gated.has(r.name))) {
-          const gated = [...new Set(failed.map((r) => r.name as Provider))];
-          const terms = gated.map((p) => ({ provider: p, ...ctx.gated.get(p)! }));
-          const cost = alt ? Object.values(plan(alt).estimates).reduce((sum: number, n) => sum + (n ?? 0), 0) : 0;
-          const example = alt ? { ...alt, max_credits: cost } : undefined;
-          throw new UserError(
-            terms.map((t) => 'An organization admin must accept the ' + t.provider + " provider's terms" + (t.version ? ' (version ' + t.version + ')' : '') + ' at ' + t.url + ' before ' + t.provider + ' can run.').join(' ') +
-              ' Terms are accepted in the Firecrawl dashboard, not through this connection. Credits charged: ' + data.credits_total + '. ' +
-              (example
-                ? 'Retry without ' + gated.join(' and ') + ', for example with ' + others.join(' and ') + ': ' + JSON.stringify(example) + '. Or wait until the terms are accepted and retry the same call.'
-                : 'Retry once the terms are accepted.'),
-            { code: TERMS_CODE, ...data, terms, ...(example ? { example, minimum_max_credits: cost } : {}) }
-          );
-        }
-        if (!succeeded) {
-          const why = ran.map((r) => r.name + ' ' + r.status + (r.note ? ': ' + r.note : '')).map((reason) => (/[.!?]$/.test(reason) ? reason : reason + '.'));
-          throw new UserError('No provider ran successfully: ' + why.join(' ') + ' Credits charged: ' + data.credits_total + '. Example of a working call: ' + JSON.stringify(example(args as Record<string, any>)), {
-            code: 'no_provider_ran',
-            ...data,
-            example: example(args as Record<string, any>),
-          });
-        }
-        return withStructured(JSON.stringify(data), data);
-      },
-    });
-  }
-
-  tool(
-    'people_company_search',
-    { title: 'Find people or companies', readOnlyHint: true, openWorldHint: true, destructiveHint: false },
-    "Find people or companies you don't know yet, by filters. Not for someone you can already name: for a named person (with their company or domain, a LinkedIn URL or an email) or a named company, call people_company_enrich instead, including to find their email or phone. " +
-      'Every call needs entity and at least one provider block with filters; a call without them fails. ' +
-      'Set entity to "person" or "company", then give each provider its filters for that entity: people by title, employer, location or seniority; companies by industry, headcount, location, technology or founding year. ' +
-      'apollo: free for people, 30 credits per page for companies, once an organization admin has accepted its terms. fullenrich: 5 credits per record. people_data_labs: 50 credits per record, SQL or Elasticsearch query. firecrawl_search: web results, with the firecrawl_search tool\'s query parameters. ' +
-      'Example: ' + JSON.stringify(SEARCH_EXAMPLE) + '. ',
-    advertisedSearch,
-    searchExample,
-    (args, excluded) => {
-      const alt = Object.fromEntries(Object.entries(searchExample(args)).filter(([key]) => !excluded.has(key as Provider)));
-      return SEARCH_ORDER.some((p) => alt[p] !== undefined) ? alt : undefined;
-    },
-    (args) => {
-      if (typeof args.entity === 'string') args.entity = ENTITY[args.entity.trim().toLowerCase()] ?? args.entity;
-      const entity = searchParameters.shape.entity.safeParse(args.entity);
-      if (!entity.success) {
-        const known = Object.keys(advertisedSearch.shape);
-        const unknown = Object.keys(args).filter((key) => !known.includes(key));
-        const issues = [
-          { path: 'entity', message: 'required, exactly "person" or "company"' + (args.entity === undefined ? '' : ', got ' + JSON.stringify(args.entity)) },
-          ...(unknown.length ? [{ path: '', message: 'unknown field ' + unknown.join(', ') + '; takes ' + known.join(', ') }] : []),
-        ];
-        throw new UserError(
-          'Invalid people_company_search arguments. ' + issues.map((i) => (i.path ? i.path + ': ' : '') + i.message).join('; ') + '. Example: ' + JSON.stringify(SEARCH_EXAMPLE),
-          { code: 'invalid_input', issues, example: SEARCH_EXAMPLE }
-        );
+  server.addTool({
+    name: 'people_company_search',
+    annotations: { title: 'Find people or companies', readOnlyHint: true, openWorldHint: true, destructiveHint: false },
+    canList,
+    description:
+      "Find people or companies you don't know yet, by filters. Not for someone you can already name: for a named person (with their company or domain, a LinkedIn URL or an email) or a named company, call people_company_enrich instead; a request naming one person is refused and pointed there. " +
+      'Set entity to "person" or "company" and give filters: people by title, seniority, function, employer and location; companies by industry, headcount, location, technology, keywords or founding year. ' +
+      'Firecrawl asks its search providers one at a time, cheapest first, and only those that apply every filter given. When none does, it searches companies first and then people at those companies; a request no provider or chain covers is refused naming the filter to drop. ' +
+      'With company_domains the search stops at the first provider that finds anyone; otherwise it fills limit across up to three providers. Rows carry name, title, company, location and LinkedIn URL, never emails or phones: use people_company_enrich for contact details. ' +
+      'Each provider call is charged its listed price; max_credits caps the call. ' +
+      'Example: ' + JSON.stringify(SEARCH_EXAMPLE) + '.',
+    outputSchema: searchResultSchema,
+    parameters: searchParameters,
+    beforeValidate: (args: unknown) => {
+      if (isPlain(args)) {
+        dropSessionFields(args);
+        if (typeof args.entity === 'string') args.entity = ENTITY[args.entity.trim().toLowerCase()] ?? args.entity;
+        repair(searchParameters, args);
+        checkArguments('people_company_search', searchParameters, args, SEARCH_EXAMPLE);
       }
-      const parameters = searchSchemas[entity.data];
-      repairBlocks(args, SEARCH_ORDER, (p) => parameters.shape[p as keyof typeof parameters.shape]);
-      repair(parameters, args);
-      checkArguments('people_company_search', parameters, args, searchExample(args));
+      return undefined;
     },
-    (args) => {
-      const entity = searchParameters.shape.entity.parse(args.entity);
-      const blocks = searchSchemas[entity].parse(args) as Record<string, any>;
-      const notes: Partial<Record<Provider, string>> = {};
-      for (const p of SEARCH_ORDER) {
-        const block = blocks[p];
-        const key = p === 'apollo' ? 'per_page' : 'limit';
-        const max = p === 'people_data_labs' ? PDL_LIMIT : 25;
-        if (!block || !(block[key] > max)) continue;
-        notes[p] = key + ' ' + block[key] + ' is above the maximum ' + max + ', so ' + max + ' ran' + (p === 'people_data_labs' ? '.' : '; use ' + (p === 'apollo' ? 'page' : 'offset') + ' for more.');
-        block[key] = max;
+    execute: async (args: unknown, context: ToolExecuteContext<SessionData>): Promise<ContentResult> => {
+      const { session, client: mcpClient } = context;
+      const a = searchParameters.parse(args);
+      if (a.options && !a.provider)
+        throw new UserError('options needs provider: name the provider whose own options these are, or send filters instead. Example: ' + JSON.stringify(SEARCH_EXAMPLE), { code: 'invalid_input', example: SEARCH_EXAMPLE });
+      if (a.options && (a.filters || a.query))
+        throw new UserError("options replaces filters and query: send the provider's own options or the normalized filters, not both.", { code: 'invalid_input', example: SEARCH_EXAMPLE });
+      assertCredential(session);
+      const client = getClient(session) as any;
+      const requestId = randomUUID();
+      const response = await relayExchangeError(
+        (attempt) => {
+          // A resend gets the time left, keeping the 5 s margin above the API's deadline.
+          const timeout = Math.floor(Math.min(SEARCH_TIMEOUT_MS, (attempt?.remainingMs ?? Infinity) - 5000));
+          return client.http.post(
+            '/v2/scrape',
+            { alexandria: [{ provider: 'firecrawl', capability: 'search/auto', options: compact(a) }], origin: requestOrigin(mcpClient as any, session), timeout },
+            { headers: { 'x-request-id': requestId }, timeoutMs: timeout + 5000 }
+          );
+        },
+        // The API answers a repeat of this request id from its record, so a resend cannot run twice.
+        { tool: 'people_company_search', requestId, providers: ['firecrawl'], resend: true, budgetMs: SEARCH_TIMEOUT_MS + 5000 }
+      );
+      const entry = response?.data?.data?.alexandria?.[0];
+      if (!isPlain(entry)) throw new Error('Unexpected response shape.');
+      if (isPlain(entry.error)) {
+        const code = str(entry.error.code);
+        throw new UserError(str(entry.error.message) ?? 'Search failed.', compact({ code, retryable: RETRYABLE.has(code ?? '') || undefined }));
       }
-      const runs = (p: 'apollo' | 'fullenrich') => blocks[p] !== undefined && Object.keys(searchFilters(blocks[p])).length > 0;
-      const estimates = {
-        apollo: entity === 'company' && runs('apollo') ? 30 : 0,
-        fullenrich: runs('fullenrich') ? 5 * blocks.fullenrich.limit : 0,
-        people_data_labs: 50 * (blocks.people_data_labs?.limit ?? 0),
-        firecrawl_search: blocks.firecrawl_search ? webEstimate(blocks.firecrawl_search) : 0,
-      };
-      const run = async (ctx: Context, p: Provider, block: Record<string, any>) => {
-        const report = await searchWith(ctx, p, block, SEARCH[entity].spec);
-        return notes[p] ? { ...report, note: [notes[p], report.note].filter(Boolean).join(' ') } : report;
-      };
-      return { order: SEARCH_ORDER, blocks, estimates, web: blocks.firecrawl_search, run };
-    }
-  );
+      return withStructured(JSON.stringify(entry.data), entry.data);
+    },
+  });
 
   server.addTool({
     name: 'people_company_enrich',
