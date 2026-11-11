@@ -105,13 +105,14 @@
         "checked_at": "2026-11-12T10:00:00.000Z",
         "title": "Head of Measurement",
         "company": "acme",
-        "location": "New York, NY",
+        "location": "New York, NY, Boston, MA",
         "remote": false,
         "employment_type": "Permanent",
         "posted_at": "2026-11-10T21:00:00.000Z",
         "url": "https://jobs.lever.co/acme/01b41b49-7d43-4933-9ba7-06ebe0a2a749",
         "apply_url": "https://jobs.lever.co/acme/01b41b49-7d43-4933-9ba7-06ebe0a2a749/apply",
-        "source": "firecrawl",
+        "salary": "USD 150,000 - 180,000 per year",
+        "source": "lever-co",
         "source_type": "employer_board",
         "board": "lever/acme"
       },
@@ -181,8 +182,8 @@
         "ms": 0
       },
       {
-        "name": "firecrawl",
-        "capability": "scrape",
+        "name": "lever-co",
+        "capability": "jobs/posting",
         "status": "rows",
         "returned": 1,
         "credits": 1,

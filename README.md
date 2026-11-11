@@ -1244,7 +1244,7 @@ Both tools also accept, and drop, the `conversationId` and `objective` fields ag
 | `company` (a name or domain) | Lists the company's open roles from its own job board; add `query` for one role there |
 | `query` (a title or keywords) | Searches postings by role, with `location`, `remote` and `posted_within_days`; `group_by: "employer"` groups them by employer, and `boards_only` searches employers' own boards only |
 
-At least one of `query`, `company`, `url` or `urls` is required. `limit` (1 to 100, default 10), `cursor`, `max_credits` (default 200), `provider` and `include_description` apply to every mode.
+At least one of `query`, `company`, `url` or `urls` is required. `max_credits` (default 200) and `include_description` apply to every mode. `limit` (1 to 100, default 10) applies to a search by `query` or `company`, and `cursor`, `provider`, `group_by` and `boards_only` to a search by `query` alone; a read by `url` or `urls` takes none of them.
 
 ```json
 {

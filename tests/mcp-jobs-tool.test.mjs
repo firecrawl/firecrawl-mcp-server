@@ -166,6 +166,9 @@ test('a posting read sends the urls alone: no limit or other default the route r
   const malformed = await client.callTool({ name: 'jobs_search', arguments: { urls: ['not a url'] } });
   assert.equal(malformed.isError, true);
   assert.equal(api.calls.length, 3);
+  // limit with a url is the route's to refuse: the tool sends what the caller gave.
+  await client.callTool({ name: 'jobs_search', arguments: { url, limit: 5 } });
+  assert.deepEqual(api.calls[3].options, { url, limit: 5 });
 });
 
 test('a call with nothing to look for gets a pointer with examples and reaches no API', async (t) => {
