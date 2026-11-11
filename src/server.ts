@@ -685,8 +685,8 @@ export function createFirecrawlMcpServer(
 
   // Which names the Alexandria tools go by. `dedicated`: alexandria_library_search
   // and alexandria_library_read; firecrawl_scrape lists a page URL only and
-  // firecrawl_find_tools is unlisted, and both still answer the calls they used
-  // to. `legacy`: firecrawl_find_tools and firecrawl_scrape with an alexandria
+  // still runs an alexandria body, and firecrawl_find_tools stays listed beside
+  // them. `legacy`: firecrawl_find_tools and firecrawl_scrape with an alexandria
   // body, for a surface whose tool filter leaves either new tool out; its
   // descriptions and follow-up calls would otherwise name a tool it does not list.
   const alexandriaTools: AlexandriaTools = [ALEXANDRIA_READ_TOOL, ALEXANDRIA_LIBRARY_TOOL].every(
@@ -2155,9 +2155,9 @@ Returns result groups in \`data\` and an operation \`id\`.
     },
   };
 
-  // Where alexandria_library_search exists, firecrawl_find_tools is no longer
-  // listed and still answers, for sessions and prompts that learned it.
-  server.addTool(dedicatedAlexandria ? { ...findToolsTool, _meta: undefined, canList: () => false } : findToolsTool);
+  // Listed beside alexandria_library_search for clients that take up a new tool
+  // only after their own review; not always-load there, so the library tools lead.
+  server.addTool(dedicatedAlexandria ? { ...findToolsTool, _meta: undefined } : findToolsTool);
 
   const alexandriaReadSchema = z
     .object({

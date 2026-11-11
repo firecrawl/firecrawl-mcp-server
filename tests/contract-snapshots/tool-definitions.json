@@ -2765,6 +2765,284 @@
       "anthropic/alwaysLoad": true
     }
   },
+  "firecrawl_find_tools@f07d1f7b5ae1": {
+    "annotations": {
+      "title": "Find Tools",
+      "readOnlyHint": true,
+      "openWorldHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true
+    },
+    "title": "Find Tools",
+    "description": "Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more: typed, sourced records through published contracts. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Use query for semantic discovery or urls to find providers for a website. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "query": {
+          "description": "Semantic lookup of tools for the data you need. Selectors constrain the search.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "urls": {
+          "minItems": 1,
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "providers": {
+          "description": "Values from each listed tool's `provider` field (e.g. \"apps-apple-com\"). Alone, lists that provider's compact tools; with capabilities, scopes them.",
+          "minItems": 1,
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "categories": {
+          "description": "Category IDs returned by an empty call. Lists providers by default.",
+          "minItems": 1,
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "groups": {
+          "description": "Optional group IDs for explicit group browsing.",
+          "minItems": 1,
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "capabilities": {
+          "description": "Values from each listed tool's `capability` field (e.g. \"apps/app\"). Put the provider in `providers`: {\"providers\": [\"apps-apple-com\"], \"capabilities\": [\"apps/app\"]}. A selected capability expands its complete contract by default.",
+          "minItems": 1,
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "level": {
+          "description": "Usually omit: it follows the arguments (tools for query, urls, providers, capabilities or groups; providers for categories; categories with none). Set providers or groups to list those within a category or url scope instead of tools. query, or a non-empty expand with any other argument, returns tools.",
+          "type": "string",
+          "enum": [
+            "categories",
+            "providers",
+            "groups",
+            "tools"
+          ]
+        },
+        "expand": {
+          "description": "Use [\"options\", \"response\"] for inputs and output shape without example payloads; [] keeps results compact. Omit for full contracts on selected capabilities.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "options",
+              "response",
+              "examples"
+            ]
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "includeCosts": {
+          "description": "Include per-capability credit prices (creditsCost, perRecord) in tool results.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "name": "firecrawl_find_tools",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "One page of the Alexandria catalogue: categories, providers, tools, or one contract.",
+      "type": "object",
+      "properties": {
+        "success": {
+          "description": "Whether the API call succeeded.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "data": {
+          "description": "Discovery page in `data.alexandria[0].data`, with `level`, `items`, `total`, and an optional `nextTool`."
+        },
+        "error": {
+          "description": "Error message or error object when the call did not succeed."
+        },
+        "requestId": {
+          "description": "Identifier of this Alexandria execution.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retryable": {
+          "description": "Whether resending the same request can succeed; set when the API refused before any provider ran.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scrape_id": {
+          "description": "Identifier of the underlying scrape.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "receipt": {
+          "description": "Billing receipt for the execution."
+        },
+        "creditsCost": {
+          "description": "Credits this call consumed.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "delivery": {
+          "description": "`retained` when the full result stayed server-side instead of being inlined.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "responseBytes": {
+          "description": "Size of the full result in bytes.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "estimatedTokens": {
+          "description": "Estimated token cost of the full result.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tokenEstimateMethod": {
+          "description": "How `estimatedTokens` was derived.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inlineTokenBudget": {
+          "description": "Token budget above which a result is retained rather than inlined.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "workspaceId": {
+          "description": "Workspace holding a retained result, for inspection through virtual Bash.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "idleTtlSeconds": {
+          "description": "Seconds a retained workspace stays available while idle.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "description": "Guidance that accompanies the result.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nextTool": {
+          "description": "A follow-up tool call (`{name, arguments}`) that continues or inspects this result."
+        },
+        "feedbackTool": {
+          "description": "Pointer to the feedback tool for reporting how this result served the task."
+        },
+        "feedbackRefs": {
+          "description": "Retained results only: `[{provider, capability, feedbackRef}]` per call; pass a ref in `callRatings` of the feedback tool to rate that call."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
   "firecrawl_gov_search@b020bd420f91": {
     "annotations": {
       "title": "Firecrawl Government Index search",
