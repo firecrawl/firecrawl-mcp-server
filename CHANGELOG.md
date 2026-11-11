@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- `people_company_search` declares `credits_pending` (top level and on each provider) in its output schema. A search where a provider timed out now returns its result instead of failing the client's output-schema check.
+
 ### Changed
 
 - Tool wording: `people_company_enrich` opens with when to use it (a named person or company) and that one call runs the provider waterfall; its argument refusals show a company example beside the people one. `alexandria_library_read` and the `tools` field of `firecrawl_search` results point people and company enrichment or search to `people_company_enrich` and `people_company_search`, naming a provider only when the user asks for it.

@@ -205,11 +205,12 @@ const searchResultSchema = z.looseObject({
   count: z.number().optional().describe('Rows returned; with count_only, how many records match.'),
   next_cursor: z.string().optional().describe('Pass as cursor, with the same filters, for more rows.'),
   providers: z
-    .array(z.looseObject({ name: z.string(), capability: z.string(), leg: z.string().optional(), status: z.string(), returned: z.number(), dropped: z.number().optional(), unverified: z.number().optional(), credits: z.number(), ms: z.number().optional(), error: z.string().optional() }))
+    .array(z.looseObject({ name: z.string(), capability: z.string(), leg: z.string().optional(), status: z.string(), returned: z.number(), dropped: z.number().optional(), unverified: z.number().optional(), credits: z.number(), credits_pending: z.number().optional(), ms: z.number().optional(), error: z.string().optional() }))
     .optional()
     .describe('Each provider call in order. leg is company or people when a company search fed a people search.'),
   chain: z.looseObject({}).optional().describe('When set, the filters the company search and the people search each applied.'),
   credits: z.number().optional().describe('Credits charged by the provider calls.'),
+  credits_pending: z.number().optional().describe('The most that calls whose charge was not confirmed, such as a timeout, can still bill.'),
   stopped: z.string().optional().describe('max_credits when a provider was not started for the cap, team_quota when the team ran out of credits.'),
 });
 
