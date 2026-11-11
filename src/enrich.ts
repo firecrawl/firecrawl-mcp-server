@@ -196,7 +196,7 @@ const maxCredits = z
   .min(0)
   .optional()
   .describe(
-    'Most credits this call may spend. Omit it for ' + DEFAULT_MAX_CREDITS + '. 0 spends nothing, so only free calls run. The estimate checked against it is each provider\'s listed price times its unit (record, input, Apollo company page, or 10 web results), as if every record were found; a call whose estimate is higher is refused before any provider runs.'
+    'Most credits this call may spend. Set it only to a budget the user gave; left out, it is ' + DEFAULT_MAX_CREDITS + '. The estimate checked against it is each provider\'s listed price times its unit (record, input, Apollo company page, or 10 web results), as if every record were found; a call whose estimate is higher is refused before any provider runs.'
   );
 
 const searchParameters = z.strictObject({
@@ -828,7 +828,7 @@ const enrichParameters = z.strictObject({
     .min(0)
     .max(10_000)
     .optional()
-    .describe('Most credits the whole call may spend; omit it for no cap. A provider is tried only while its listed price still fits, so 0 runs nothing paid.'),
+    .describe('Most credits the whole call may spend. Set it only to a budget the user gave; left out, the call has no cap. A provider is tried only while its listed price still fits, so 0 runs nothing paid.'),
 });
 
 const ENRICH_EXAMPLE = { contact_fields: ['work_email'], people: [{ name: 'Jane Doe', domain: 'example.com' }] };
@@ -917,7 +917,7 @@ export function registerEnrichTools(
           const shown = JSON.stringify(retry);
           throw new UserError(
             'This call could cost up to ' + credits_estimate + ' credits (' + parts.join(', ') + '), above max_credits ' + max_credits + '. Nothing ran. The estimate is records or inputs × price, as if every record were found. ' +
-              'To run it as is, set max_credits to at least ' + credits_estimate + (shown.length <= 800 ? ': ' + shown : '.') + ' Or send fewer inputs, providers, records or contact fields.',
+              'If the user did not ask for this cap, retry it as is: set max_credits to at least ' + credits_estimate + (shown.length <= 800 ? ': ' + shown : '.') + ' If they did, ask them before raising it, or send fewer inputs, providers, records or contact fields.',
             { code: 'max_credits_exceeded', credits_estimate, max_credits, estimates, minimum_max_credits: credits_estimate }
           );
         }
