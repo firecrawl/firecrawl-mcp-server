@@ -1217,7 +1217,7 @@ Enabled providers run in parallel, and nothing is merged. The response has one `
 
 `people_company_enrich` takes records, not provider blocks, and runs Firecrawl's enrichment waterfall on them. `people` takes `name`, `first_name`, `last_name`, `company`, `domain`, `linkedin_url`, `email` and `phone`; each person needs a `linkedin_url`, `email` or `phone`, or a name with a `company` or `domain`. `companies` takes `domain`, `name` and a company `linkedin_url`, and each needs one of them. A call takes at most 10 records, people and companies together.
 
-Without `contact_fields` each person gets a profile and each company gets firmographics. `contact_fields` (`work_email`, `personal_email`, `mobile`) asks for those values for each person instead; companies in the same call still get firmographics, and `contact_fields` with only companies fails with `invalid_input`.
+Without `contact_fields` each person gets a profile and each company gets firmographics. `contact_fields` (`work_email`, `personal_email`, `mobile`) asks for those values for each person, together with the person's profile, found first so the contact lookups can use it (`profile: false` skips it); companies in the same call still get firmographics, and `contact_fields` with only companies fails with `invalid_input`.
 
 For each requested field, Firecrawl tries the providers that can use the record's inputs one at a time, ordered by listed price and past success rate, and stops at the first one that finds the field. A provider that has no match, errors or is rate limited is skipped for the next one, without retries. A person known only by an email or phone is first resolved to a profile, and the contact providers then use what it revealed.
 
@@ -1232,7 +1232,7 @@ For each requested field, Firecrawl tries the providers that can use the record'
 }
 ```
 
-The response has `people` and `companies` lists with one entry per input, each with `input_index` and `results`: one `{ "provider", "data" }` entry per provider that found a requested field, where `data` is that provider's own response, unchanged. A record nothing was found for has empty `results`. `credits_used` is what the call charged: each provider that found something is charged its listed price, and misses are free. `max_credits` (default 100, at most 10,000) caps the call: a provider is tried only while its listed price still fits. `stopped: "team_quota"` means the team ran out of credits during the call. To call one specific provider, use `firecrawl_scrape` with an `alexandria` body.
+The response has `people` and `companies` lists with one entry per input, each with `input_index` and `results`: one `{ "provider", "data" }` entry per provider that found a requested field, where `data` is that provider's own response, unchanged. A record nothing was found for has empty `results`. `credits_used` is what the call charged: each provider that found something is charged its listed price, and misses are free. `max_credits` (at most 10,000) caps the call: a provider is tried only while its listed price still fits. Without it the call is uncapped. `stopped: "team_quota"` means the team ran out of credits during the call. To call one specific provider, use `firecrawl_scrape` with an `alexandria` body.
 
 Both tools also accept, and drop, the `conversationId` and `objective` fields agents carry between Firecrawl tools.
 

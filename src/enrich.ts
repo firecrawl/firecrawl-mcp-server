@@ -781,7 +781,6 @@ async function webReport(web: WebSearch, args: unknown, context: ToolExecuteCont
 // ---------- people_company_enrich: the waterfall ----------
 
 const ENRICH_MAX_RECORDS = 10;
-const ENRICH_DEFAULT_MAX_CREDITS = 100;
 const ENRICH_TIMEOUT_MS = 120_000;
 
 const waterfallPerson = needsOneOf(
@@ -823,7 +822,7 @@ const enrichParameters = z.strictObject({
     .min(0)
     .max(10_000)
     .optional()
-    .describe('Most credits the whole call may spend. Omit it for ' + ENRICH_DEFAULT_MAX_CREDITS + '. A provider is tried only while its listed price still fits, so 0 runs nothing paid.'),
+    .describe('Most credits the whole call may spend; omit it for no cap. A provider is tried only while its listed price still fits, so 0 runs nothing paid.'),
 });
 
 const ENRICH_EXAMPLE = { contact_fields: ['work_email'], people: [{ name: 'Jane Doe', domain: 'example.com' }] };
@@ -833,17 +832,13 @@ const enrichRecord = z.looseObject({
   results: z
     .array(z.looseObject({ provider: z.string(), data: z.unknown().describe("The provider's own response, unchanged.") }))
     .describe('One entry per provider that found a requested field; empty when none did.'),
-  needs_max_credits: z
-    .record(z.string(), z.number())
-    .optional()
-    .describe('Fields left empty because a provider that could fill them did not fit max_credits, each with the max_credits a retry needs to reach it.'),
 });
 
 const enrichResultSchema = z.looseObject({
   people: z.array(enrichRecord).optional(),
   companies: z.array(enrichRecord).optional(),
   credits_used: z.number().optional().describe('Credits charged: the listed price of each provider that found something.'),
-  max_credits: z.number().optional(),
+  max_credits: z.number().optional().describe('The cap set for the call; absent when uncapped.'),
   stopped: z.string().optional().describe('Set when the run stopped early, e.g. team_quota when the team ran out of credits.'),
 });
 
@@ -1015,8 +1010,8 @@ export function registerEnrichTools(
     description:
       'Enrich known people or companies. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to ' + ENRICH_MAX_RECORDS + ' records per call. ' +
       'Each requested field runs a waterfall by default: Firecrawl tries the providers that can use your inputs one at a time, ordered by listed price and past success rate, and stops as soon as the field is found. ' +
-      'Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and the profile, in one call. ' +
-      "Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call (default " + ENRICH_DEFAULT_MAX_CREDITS + '). ' +
+      'Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and, unless profile is false, the profile in the same call. ' +
+      "Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call; without it the call is uncapped. " +
       'To call one specific provider, use firecrawl_scrape with an alexandria body instead. ' +
       'Example: ' + JSON.stringify(ENRICH_EXAMPLE) + '.',
     outputSchema: enrichResultSchema,
@@ -1041,7 +1036,7 @@ export function registerEnrichTools(
       assertCredential(session);
       const client = getClient(session) as any;
       const requestId = randomUUID();
-      const options = compact({ people: a.people, companies: a.companies, contact_fields: a.contact_fields, profile: a.contact_fields ? a.profile ?? true : undefined, max_credits: a.max_credits ?? ENRICH_DEFAULT_MAX_CREDITS });
+      const options = compact({ people: a.people, companies: a.companies, contact_fields: a.contact_fields, profile: a.contact_fields ? a.profile ?? true : undefined, max_credits: a.max_credits });
       const response = await relayExchangeError(
         (attempt) => {
           // A resend gets the time left, keeping the 5 s margin above the API's deadline.

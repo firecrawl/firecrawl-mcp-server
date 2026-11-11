@@ -8304,7 +8304,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "people_company_enrich@1c9379e79152": {
+  "people_company_enrich@2da1cd6b2615": {
     "annotations": {
       "title": "Look up and enrich people or companies",
       "readOnlyHint": true,
@@ -8312,7 +8312,7 @@
       "destructiveHint": false
     },
     "title": "Look up and enrich people or companies",
-    "description": "Enrich known people or companies. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to 10 records per call. Each requested field runs a waterfall by default: Firecrawl tries the providers that can use your inputs one at a time, ordered by listed price and past success rate, and stops as soon as the field is found. Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and the profile, in one call. Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call (default 100). To call one specific provider, use firecrawl_scrape with an alexandria body instead. Example: {\"contact_fields\":[\"work_email\"],\"people\":[{\"name\":\"Jane Doe\",\"domain\":\"example.com\"}]}.",
+    "description": "Enrich known people or companies. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to 10 records per call. Each requested field runs a waterfall by default: Firecrawl tries the providers that can use your inputs one at a time, ordered by listed price and past success rate, and stops as soon as the field is found. Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and, unless profile is false, the profile in the same call. Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call; without it the call is uncapped. To call one specific provider, use firecrawl_scrape with an alexandria body instead. Example: {\"contact_fields\":[\"work_email\"],\"people\":[{\"name\":\"Jane Doe\",\"domain\":\"example.com\"}]}.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -8529,7 +8529,7 @@
           "type": "boolean"
         },
         "max_credits": {
-          "description": "Most credits the whole call may spend. Omit it for 100. A provider is tried only while its listed price still fits, so 0 runs nothing paid.",
+          "description": "Most credits the whole call may spend; omit it for no cap. A provider is tried only while its listed price still fits, so 0 runs nothing paid.",
           "type": "integer",
           "minimum": 0,
           "maximum": 10000
@@ -8570,16 +8570,6 @@
                   ],
                   "additionalProperties": {}
                 }
-              },
-              "needs_max_credits": {
-                "description": "Fields left empty because a provider that could fill them did not fit max_credits, each with the max_credits a retry needs to reach it.",
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                },
-                "additionalProperties": {
-                  "type": "number"
-                }
               }
             },
             "required": [
@@ -8617,16 +8607,6 @@
                   ],
                   "additionalProperties": {}
                 }
-              },
-              "needs_max_credits": {
-                "description": "Fields left empty because a provider that could fill them did not fit max_credits, each with the max_credits a retry needs to reach it.",
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                },
-                "additionalProperties": {
-                  "type": "number"
-                }
               }
             },
             "required": [
@@ -8641,6 +8621,7 @@
           "type": "number"
         },
         "max_credits": {
+          "description": "The cap set for the call; absent when uncapped.",
           "type": "number"
         },
         "stopped": {

@@ -419,9 +419,9 @@ test('enrich sends every record to the waterfall in one call and returns its att
   const companies = [{ domain: 'globex.example' }, { name: 'Initech' }];
   const result = await client.callTool({ name: 'people_company_enrich', arguments: { contact_fields: ['work_email'], people, companies } });
   assert.notEqual(result.isError, true, JSON.stringify(result));
-  assert.deepEqual(api.calls, [{ provider: 'firecrawl', capability: 'enrich/auto', options: { people, companies, contact_fields: ['work_email'], profile: true, max_credits: 100 } }]);
+  assert.deepEqual(api.calls, [{ provider: 'firecrawl', capability: 'enrich/auto', options: { people, companies, contact_fields: ['work_email'], profile: true } }]);
   assert.equal(api.bodies[0].timeout, 120000);
-  assert.deepEqual(result.structuredContent, { ...WATERFALL_RESULT, max_credits: 100 });
+  assert.deepEqual(result.structuredContent, WATERFALL_RESULT);
 });
 
 test('max_credits passes through, and conversationId and objective are dropped', async (t) => {
@@ -488,7 +488,7 @@ test('near-miss shapes are repaired before validation', async (t) => {
   const client = await connect(t, { apiUrl: api.url });
   const result = await client.callTool({ name: 'people_company_enrich', arguments: { people: { email: 'ada@acme.example' }, contact_fields: 'mobile' } });
   assert.notEqual(result.isError, true, JSON.stringify(result));
-  assert.deepEqual(api.calls[0].options, { people: [{ email: 'ada@acme.example' }], contact_fields: ['mobile'], profile: true, max_credits: 100 });
+  assert.deepEqual(api.calls[0].options, { people: [{ email: 'ada@acme.example' }], contact_fields: ['mobile'], profile: true });
 });
 
 test('a retryable refusal before the waterfall ran is resent once under the same request id', async (t) => {
