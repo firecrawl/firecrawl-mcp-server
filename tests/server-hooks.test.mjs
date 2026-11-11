@@ -368,7 +368,7 @@ test('a toolFilter that leaves alexandria_library_read out keeps firecrawl_scrap
   assert.ok('alexandria' in fixed.scrape.inputSchema.properties);
   assert.doesNotMatch([fixed.instructions, fixed.scrape.description].join('\n'), /alexandria_library_read/);
 
-  // Admitting one of the two new tools is not enough: find_tools would be unlisted with nothing in its place.
+  // Admitting one of the two new tools is not enough: the surface keeps the earlier names and copy.
   const half = await listed({ toolFilter: (name) => name !== 'alexandria_library_search' });
   assert.equal(half.names.includes('alexandria_library_read'), false);
   assert.ok(half.names.includes('firecrawl_find_tools'));
@@ -377,7 +377,7 @@ test('a toolFilter that leaves alexandria_library_read out keeps firecrawl_scrap
   const open = await listed({});
   assert.ok(open.names.includes('alexandria_library_read'));
   assert.ok(open.names.includes('alexandria_library_search'));
-  assert.equal(open.names.includes('firecrawl_find_tools'), false);
+  assert.ok(open.names.includes('firecrawl_find_tools'));
   assert.equal('alexandria' in open.scrape.inputSchema.properties, false);
 });
 

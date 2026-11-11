@@ -31,7 +31,7 @@ export function assertAlexandriaMetadata(tools, instructions, { hosted = false, 
     for (const name of ['alexandria', 'url']) assert.equal(name in execute.inputSchema.properties, false, name);
     for (const name of ['alexandria', 'requestId']) assert.equal(name in scrape.inputSchema.properties, false, name);
     assert.equal(execute.annotations.readOnlyHint, true);
-    assert.equal(tools.some((tool) => tool.name === 'firecrawl_find_tools'), false);
+    assert.match(byName('firecrawl_find_tools').description, /execution through firecrawl_scrape/);
     assert.ok(execute.inputSchema.properties.calls?.description, 'alexandria_library_read.calls needs a description');
     assert.match(contract, /one result per call, in the same order, in data\.alexandria/i);
   } else {
