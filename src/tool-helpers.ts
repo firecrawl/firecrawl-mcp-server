@@ -1,6 +1,6 @@
 import { UserError } from './mcp/runtime.js';
 import { z } from 'zod';
-import { searchSourceSchema, ALEXANDRIA_READ_TOOL, ALEXANDRIA_SOURCES_ALWAYS_ON, executeToolCall, type AlexandriaTools } from './alexandria';
+import { searchSourceSchema, ALEXANDRIA_READ_TOOL, ALEXANDRIA_LIBRARY_TOOL, ALEXANDRIA_SOURCES_ALWAYS_ON, executeToolCall, type AlexandriaTools } from './alexandria';
 import { MCP_CONNECTION_GUIDE_URL } from './recovery.js';
 
 export function removeEmptyTopLevel<T extends Record<string, any>>(
@@ -88,6 +88,15 @@ export const searchToolBaseFields = {
   enterprise: z.array(z.enum(['default', 'anon', 'zdr'])).optional(),
 };
 
+/** The same fields where Alexandria has its own tools: the two descriptions that name the catalogue tool. */
+export const dedicatedSearchToolFields = {
+  ...searchToolBaseFields,
+  toolDetail: z.enum(['compact', 'summary', 'full']).optional().describe('Compact by default. Compact returns only provider, capability and description; full includes contracts. Read a selected tool\'s contract with ' + ALEXANDRIA_LIBRARY_TOOL + '.'),
+  query: z
+    .string()
+    .min(1)
+    .describe('Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Browse the whole library with ' + ALEXANDRIA_LIBRARY_TOOL + '.'),
+};
 
 // Both surfaces forbid specifying includeDomains and excludeDomains together.
 export function searchDomainsAreExclusive(args: {
