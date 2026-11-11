@@ -78,11 +78,10 @@ results on this surface carry no `feedbackTool` pointer, since
 `firecrawl_feedback` is not registered here.
 
 The full surface names its Alexandria tools differently: it lists
-`alexandria_library_search` and `alexandria_library_read`, its `firecrawl_scrape`
-lists a URL only, and it does not list `firecrawl_find_tools` (both still
-answer the calls they used to). This surface keeps listing
-`firecrawl_find_tools` and `firecrawl_scrape` with `alexandria` because the
-listing declares them: its tool filter leaves the two new tools out, and a
+`alexandria_library_search` and `alexandria_library_read`, and keeps
+`firecrawl_find_tools` and `firecrawl_scrape` with `alexandria` listed beside
+them. This surface lists only `firecrawl_find_tools` and `firecrawl_scrape`
+with `alexandria` because the listing declares them: its tool filter leaves the two new tools out, and a
 surface without them keeps the earlier tools, so follow-up calls in
 its results (`nextTool`) are addressed to `firecrawl_scrape` and
 `firecrawl_find_tools`. Moving this surface to the new names is a tool-set
