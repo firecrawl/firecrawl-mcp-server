@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { startStdioWithApi, toolText } from './helpers/exchange-mcp.mjs';
+import { LEGACY_SURFACE, startStdioWithApi, toolText } from './helpers/exchange-mcp.mjs';
+
+// The legacy tool names, which the search surface serves: firecrawl_find_tools and
+// firecrawl_scrape with an alexandria body. tests/mcp-alexandria-tools.test.mjs
+// covers alexandria_library_search and alexandria_library_read.
+const LEGACY = LEGACY_SURFACE;
 
 test('discovery progresses from categories to compact tools and selected contracts', async (t) => {
-  const { api, client } = await startStdioWithApi(t);
+  const { api, client } = await startStdioWithApi(t, LEGACY);
   const call = arguments_ => client.request('tools/call', { name: 'firecrawl_find_tools', arguments: arguments_ });
   const { tools } = await client.request('tools/list', {});
   assert(tools.some(tool => tool.name === 'firecrawl_find_tools'));
@@ -24,7 +29,7 @@ test('discovery progresses from categories to compact tools and selected contrac
 });
 
 test('discovery sends a level the catalogue accepts for the other arguments', async (t) => {
-  const { api, client } = await startStdioWithApi(t);
+  const { api, client } = await startStdioWithApi(t, LEGACY);
   const sent = async arguments_ => {
     const before = api.requests.length;
     const result = await client.request('tools/call', { name: 'firecrawl_find_tools', arguments: arguments_ });
@@ -50,7 +55,7 @@ test('discovery sends a level the catalogue accepts for the other arguments', as
 });
 
 test('discovery output never carries per-capability prices', async (t) => {
-  const { client } = await startStdioWithApi(t);
+  const { client } = await startStdioWithApi(t, LEGACY);
   const call = arguments_ => client.request('tools/call', { name: 'firecrawl_find_tools', arguments: arguments_ });
   const priceKeys = ['creditsCost', 'perRecord', 'billing', 'recordsPerUnit', 'zeroDataRetentionCreditsCost'];
   const tools = toolText(await call({ providers: ['fred'] }));
@@ -67,7 +72,7 @@ test('discovery output never carries per-capability prices', async (t) => {
 });
 
 test('includeCosts returns per-capability prices and carries through navigation', async (t) => {
-  const { api, client } = await startStdioWithApi(t);
+  const { api, client } = await startStdioWithApi(t, LEGACY);
   const call = arguments_ => client.request('tools/call', { name: 'firecrawl_find_tools', arguments: arguments_ });
   const page = toolText(await call({ providers: ['fred'], includeCosts: true })).data.alexandria[0].data;
   assert.equal('includeCosts' in api.requests.at(-1).body.alexandria.options, false);
