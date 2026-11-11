@@ -317,7 +317,7 @@ export function registerEnrichTools(
       'Example: ' + JSON.stringify(SEARCH_EXAMPLE) + '.',
     outputSchema: searchResultSchema,
     parameters: searchParameters,
-    beforeValidate: (args: unknown) => {
+    beforeValidate: (args: unknown = {}) => {
       if (isPlain(args)) {
         dropSessionFields(args);
         if (typeof args.entity === 'string') args.entity = ENTITY[args.entity.trim().toLowerCase()] ?? args.entity;
