@@ -5541,7 +5541,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_save_skill@be6977a5c60d": {
+  "firecrawl_save_skill@434befd26d6b": {
     "annotations": {
       "title": "Save Skill",
       "readOnlyHint": false,
@@ -5589,7 +5589,8 @@
           "description": "The instructions in full, in Markdown; required to create without from. Reference capabilities as @provider/capability.",
           "type": "string",
           "minLength": 1,
-          "maxLength": 200000
+          "maxLength": 200000,
+          "pattern": "\\S"
         },
         "slug": {
           "description": "Create: lowercase words joined by hyphens; defaults to one made from the name.",

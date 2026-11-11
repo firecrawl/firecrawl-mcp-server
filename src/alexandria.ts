@@ -79,7 +79,7 @@ export const saveSkillSchema = z
     from: z.string().trim().min(1).max(100).optional().describe('Create: the skill to copy, by id: <id> for /skills/library/<id>, team:<slug> for /skills/team/<slug>. Fields you also give override the copy.'),
     name: z.string().trim().min(1).max(1000).optional().describe('Skill name; required to create without from.'),
     description: z.string().trim().min(1).max(5000).optional().describe('When to use the skill; required to create without from.'),
-    body: z.string().min(1).max(200_000).optional().describe('The instructions in full, in Markdown; required to create without from. Reference capabilities as @provider/capability.'),
+    body: z.string().min(1).max(200_000).regex(/\S/, 'body must not be blank').optional().describe('The instructions in full, in Markdown; required to create without from. Reference capabilities as @provider/capability.'),
     slug: z.string().trim().max(64).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'slug is lowercase letters and digits in words joined by single hyphens').optional().describe('Create: lowercase words joined by hyphens; defaults to one made from the name.'),
     enabled: z.boolean().optional().describe('Update: turn the skill on or off.'),
     discoverable: z.boolean().optional().describe('Update: whether /skills/INDEX lists it.'),

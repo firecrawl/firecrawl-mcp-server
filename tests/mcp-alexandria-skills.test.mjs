@@ -74,6 +74,8 @@ test('firecrawl_save_skill refuses invalid combinations before calling Exchange'
   for (const arguments_ of [
     {},
     { name: 'Digest', description: 'Summarise.' },
+    { name: 'Digest', description: 'Summarise.', body: ' \n\t ' },
+    { id: 'team:weekly-digest', baseVersion: 1, body: '   ' },
     { from: 'deep-research', extra: 1 },
     { from: 'deep-research', slug: 'Our Research' },
     { from: 'deep-research', baseVersion: 1 },
