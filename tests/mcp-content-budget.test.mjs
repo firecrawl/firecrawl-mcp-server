@@ -178,7 +178,7 @@ test('scrape, crawl and crawl status only add maxCharacters to their inputs', as
   const { tools } = await client.request('tools/list', {});
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
   const previous = {
-    firecrawl_scrape: ['url', 'formats', 'queryOptions', 'screenshotOptions', 'parsers', 'pdfOptions', 'onlyMainContent', 'redactPII', 'includeTags', 'excludeTags', 'waitFor', 'actions', 'mobile', 'skipTlsVerification', 'removeBase64Images', 'location', 'storeInCache', 'zeroDataRetention', 'maxAge', 'lockdown', 'proxy', 'profile', 'timeout', 'toolDetail', 'domainTools', 'scrapeId', 'startIndex'],
+    firecrawl_scrape: ['url', 'formats', 'queryOptions', 'screenshotOptions', 'parsers', 'pdfOptions', 'onlyMainContent', 'redactPII', 'includeTags', 'excludeTags', 'waitFor', 'actions', 'mobile', 'skipTlsVerification', 'removeBase64Images', 'location', 'storeInCache', 'zeroDataRetention', 'maxAge', 'lockdown', 'proxy', 'profile', 'timeout', 'requestId', 'alexandria', 'toolDetail', 'domainTools', 'scrapeId', 'startIndex'],
     firecrawl_crawl: ['url', 'prompt', 'excludePaths', 'includePaths', 'maxDiscoveryDepth', 'sitemap', 'limit', 'allowExternalLinks', 'allowSubdomains', 'crawlEntireDomain', 'delay', 'maxConcurrency', 'webhook', 'webhookHeaders', 'deduplicateSimilarURLs', 'ignoreQueryParameters', 'zeroDataRetention', 'scrapeOptions'],
     firecrawl_check_crawl_status: ['id'],
   };
@@ -186,7 +186,7 @@ test('scrape, crawl and crawl status only add maxCharacters to their inputs', as
     const tool = byName.get(name);
     assert.deepEqual(Object.keys(tool.inputSchema.properties).sort(), [...properties, 'maxCharacters'].sort(), name);
     assert.equal(tool.inputSchema.properties.maxCharacters.type, 'number', name);
-    if (name !== 'firecrawl_check_crawl_status') assert.deepEqual(tool.inputSchema.required ?? [], ['url'], name);
+    assert.deepEqual(tool.inputSchema.required ?? [], { firecrawl_scrape: [], firecrawl_crawl: ['url'], firecrawl_check_crawl_status: ['id'] }[name], name);
     assert.equal((tool.inputSchema.required ?? []).includes('maxCharacters'), false, name);
     assert.equal(tool._meta?.['anthropic/maxResultSizeChars'], undefined, name);
     assert.ok(tool.description.length <= 2_048, name);

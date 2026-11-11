@@ -10,21 +10,23 @@ import { EXCHANGE_CALL, TERMS_REQUIRED_BODY } from './helpers/exchange-api.mjs';
 
 const call = (client, name, args) => client.request('tools/call', { name, arguments: args });
 
-test('the full surface lists alexandria_library_read and alexandria_library_search, and firecrawl_scrape lists a page URL only', async (t) => {
+test('the full surface lists alexandria_library_read and alexandria_library_search beside firecrawl_find_tools and firecrawl_scrape with its alexandria body', async (t) => {
   const { client, init } = await startStdioWithApi(t);
   const { tools } = await client.request('tools/list', {});
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
 
-  // firecrawl_find_tools is still listed, unchanged, for clients that have not taken up the library tools.
+  // firecrawl_find_tools and firecrawl_scrape are still listed, unchanged, for clients that have not taken up the library tools.
   for (const name of ['alexandria_library_read', 'alexandria_library_search', 'firecrawl_find_tools', 'firecrawl_search', 'firecrawl_scrape'])
     assert.equal(byName.get(name)?._meta?.['anthropic/alwaysLoad'], true, name);
 
+  // firecrawl_scrape has the definition it has where the library tools are not listed.
   const scrape = byName.get('firecrawl_scrape');
-  assert.equal('alexandria' in scrape.inputSchema.properties, false);
-  assert.equal('requestId' in scrape.inputSchema.properties, false);
-  assert.deepEqual(scrape.inputSchema.required, ['url']);
-  assert.doesNotMatch(scrape.description, /firecrawl_find_tools|in place of `url`/);
-  assert.match(scrape.description, /typed records in one `alexandria_library_read` call/);
+  const earlier = await startStdioWithApi(t, LEGACY_SURFACE);
+  const before = (await earlier.client.request('tools/list', {})).tools.find((tool) => tool.name === 'firecrawl_scrape');
+  assert.deepEqual(scrape, before);
+  assert.ok(scrape.inputSchema.properties.alexandria.description);
+  assert.ok(scrape.inputSchema.properties.requestId.description);
+  assert.match(scrape.description, /With `alexandria` in place of `url`, the tool runs catalogued provider capabilities/);
 
   const execute = byName.get('alexandria_library_read').inputSchema;
   assert.deepEqual(execute.required, ['calls']);
@@ -35,7 +37,7 @@ test('the full surface lists alexandria_library_read and alexandria_library_sear
   // The category folders are named, so a first command can open one directly.
   assert.match(byName.get('alexandria_library_search').description, /Category folders: agriculture, ai-models, .*companies, .*real-estate, .*sports, travel; `ls \/library` shows any added since/);
 
-  const copy = [init.instructions, ...tools.filter((tool) => tool.name !== 'firecrawl_find_tools').map((tool) => JSON.stringify(tool))].join('\n');
+  const copy = [init.instructions, ...tools.filter((tool) => !['firecrawl_find_tools', 'firecrawl_scrape'].includes(tool.name)).map((tool) => JSON.stringify(tool))].join('\n');
   assert.doesNotMatch(copy, /firecrawl_find_tools|Find Tools|firecrawl_scrape with (an )?alexandria/);
   assert.match(init.instructions, /alexandria_library_search/);
   assert.match(init.instructions, /alexandria_library_read with calls: \[\{provider, capability, options\}\] runs up to ten capabilities/);
@@ -155,7 +157,7 @@ test('a refused library command reaches the agent with the message that says wha
   }
 });
 
-test('firecrawl_scrape still runs an alexandria body it no longer lists', async (t) => {
+test('firecrawl_scrape runs the alexandria body it lists beside alexandria_library_read', async (t) => {
   const { api, client } = await startStdioWithApi(t);
 
   // One call and a batch run as they did before alexandria_library_read existed.
