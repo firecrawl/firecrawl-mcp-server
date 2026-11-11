@@ -72,25 +72,24 @@ export const findToolsSchema = z
 
 export const skillsSchema = z
   .object({
-    query: z.string().trim().min(1).max(2000).optional().describe('List skills whose id, name or description holds all these words.'),
-    limit: z.number().int().min(1).max(50).optional().describe('With query: most skills to list; defaults to 20.'),
+    query: z.string().trim().min(1).max(2000).optional().describe('List skills whose id, name or description holds all these words. Omit it and id to list every skill.'),
+    limit: z.number().int().min(1).max(50).optional().describe('Most skills to list; defaults to 20.'),
     id: z.string().trim().min(1).max(200).optional().describe('Read this skill: an id from a listing; team:<slug> for a team skill.'),
     path: z.string().trim().min(1).max(500).optional().describe('With id: a file from the skill\'s files list; defaults to SKILL.md.'),
     version: z.number().int().min(1).optional().describe('With a team skill id: an earlier kept version; defaults to the current one.'),
   })
   .strict();
 
-/** The Exchange request a firecrawl_skills call makes: a listing with query, a read with id. */
+/** The Exchange request a firecrawl_skills call makes: a read with id, otherwise a listing. */
 export function skillsRequest(args: z.infer<typeof skillsSchema>) {
   const { query, limit, id, path, version } = args;
   if (query !== undefined && id !== undefined) throw new Error('Give query to list skills or id to read one, not both.');
   if (id !== undefined) {
-    if (limit !== undefined) throw new Error('limit applies to a listing with query; a read with id returns one skill.');
+    if (limit !== undefined) throw new Error('limit applies to a listing; a read with id returns one skill.');
     return { capability: 'read-skill', options: { id, ...(path === undefined ? {} : { path }), ...(version === undefined ? {} : { version }) } };
   }
-  if (query === undefined) throw new Error('Give query to list skills or id to read one.');
-  if (path !== undefined || version !== undefined) throw new Error('path and version apply to a read with id, not a listing with query.');
-  return { capability: 'find-skills', options: { query, ...(limit === undefined ? {} : { limit }) } };
+  if (path !== undefined || version !== undefined) throw new Error('path and version apply to a read with id, not a listing.');
+  return { capability: 'find-skills', options: { ...(query === undefined ? {} : { query }), ...(limit === undefined ? {} : { limit }) } };
 }
 
 const SKILL_CHANGES = ['name', 'description', 'body', 'enabled', 'discoverable'] as const;

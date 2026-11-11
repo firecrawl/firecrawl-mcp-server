@@ -27,6 +27,17 @@ test('firecrawl_skills lists skills through find-skills and links each to readin
   ]);
 });
 
+test('firecrawl_skills with neither query nor id lists every skill', async (t) => {
+  const { api, client } = await startStdioWithApi(t);
+  const call = arguments_ => client.request('tools/call', { name: 'firecrawl_skills', arguments: arguments_ });
+  const page = data(await call({}));
+  assert.deepEqual(api.requests.at(-1).body.alexandria, { provider: 'firecrawl', capability: 'find-skills', options: {} });
+  assert.equal(page.total, 2);
+  assert.deepEqual(page.skills[0].nextTool, { name: 'firecrawl_skills', arguments: { id: 'team:weekly-digest' } });
+  await call({ limit: 5 });
+  assert.deepEqual(api.requests.at(-1).body.alexandria, { provider: 'firecrawl', capability: 'find-skills', options: { limit: 5 } });
+});
+
 test('firecrawl_skills with id reads one skill file through read-skill', async (t) => {
   const { api, client } = await startStdioWithApi(t);
   const skill = data(await client.request('tools/call', { name: 'firecrawl_skills', arguments: { id: 'deep-research', path: 'references/sources.md' } }));
@@ -52,7 +63,7 @@ test('firecrawl_skills returns a team skill with its tools, current or pinned', 
 test('firecrawl_skills refuses ambiguous or invalid arguments before calling Exchange', async (t) => {
   const { api, client } = await startStdioWithApi(t);
   const before = api.requests.length;
-  for (const arguments_ of [{}, { limit: 5 }, { query: 'digest', id: 'deep-research' }, { id: 'deep-research', limit: 5 }, { query: 'digest', path: 'SKILL.md' }, { query: 'digest', version: 1 }]) {
+  for (const arguments_ of [{ query: 'digest', id: 'deep-research' }, { id: 'deep-research', limit: 5 }, { query: 'digest', path: 'SKILL.md' }, { query: 'digest', version: 1 }, { path: 'SKILL.md' }, { version: 1 }]) {
     const result = await callExpectingError(client, { name: 'firecrawl_skills', arguments: arguments_ });
     assert.equal(result.structuredContent?.error?.code, 'invalid_request', JSON.stringify(arguments_));
   }
