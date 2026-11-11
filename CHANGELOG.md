@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- `people_company_enrich` runs Firecrawl's enrichment waterfall instead of taking a block per provider. It takes `people` (`name`, `first_name`, `last_name`, `company`, `domain`, `linkedin_url`, `email`, `phone`) and `companies` (`domain`, `name`, `linkedin_url`), at most 10 records per call, plus `contact_fields` and `max_credits`. For each requested field Firecrawl tries the providers that can use the inputs, one at a time, ordered by listed price and past success rate, and stops at the first one that finds it. Each record's `results` carry the raw response of each provider that found something, tagged with the provider. A hit is charged its listed price, a miss is free, and the call is uncapped unless `max_credits` is set. Mobile is opt-in: phone providers run and bill only when `contact_fields` lists `mobile`. With `contact_fields` each person also gets the profile in the same call (`profile: false` skips it). Each record has per-field `fields` flags (provider, and for emails the address, `verified` and `domain_match`), and `verified_only: true` returns only verified emails. The `apollo`, `fullenrich`, `people_data_labs` and `datalegion` blocks are removed; to call one specific provider, use `alexandria_library_read` (or `firecrawl_scrape` with an alexandria body on surfaces without the dedicated Alexandria tools). A phone number is now accepted as a person's identifier.
+
 ## [3.39.0] - 2026-11-09
 
 ### Added
@@ -10,12 +16,11 @@
 
 ### Changed
 
-- On the full surface (stdio, `/v2/mcp`, `/v2/mcp-oauth`), Alexandria has its own tools, `alexandria_library_search` and `alexandria_library_read`. The earlier paths are no longer listed and keep working:
-  - `firecrawl_scrape` no longer lists `alexandria` and `requestId` in its input schema or describes them. It still accepts them and runs the call or batch exactly as before, so clients and prompts that learned that shape keep working.
-  - `firecrawl_find_tools` is not listed. It stays callable and answers as before, for sessions that listed tools earlier and prompts that name it.
+- On the full surface (stdio, `/v2/mcp`, `/v2/mcp-oauth`), Alexandria has its own tools, `alexandria_library_search` and `alexandria_library_read`. The earlier paths keep working:
+  - `firecrawl_scrape` and `firecrawl_find_tools` stay listed beside the new tools, with the definitions they had before them: `firecrawl_scrape` lists and describes `alexandria` and `requestId` and runs the call or batch exactly as before, and `firecrawl_find_tools` answers as before. A client that takes up a new or changed tool only after its own review keeps catalogue discovery and provider execution in the meantime, and clients and prompts that learned these shapes keep working.
   - `alexandria_library_read` lists `calls` only. It also reads an `alexandria` body (one call or an array) and one call sent as the arguments themselves (`{provider, capability, options}`) as `calls`.
   - Follow-up calls in results (`nextTool` for provider terms, for a retained result, and `next_tool` for a pending enrichment job) are addressed to `alexandria_library_read`.
-  - Server instructions, the `firecrawl_search` and `firecrawl_scrape` descriptions and the `toolDetail` and `query` parameters name the new tools.
+  - Server instructions, the `firecrawl_search` description and its `toolDetail` and `query` parameters name the new tools.
   - An embedder whose `toolFilter` leaves either new tool out keeps `firecrawl_find_tools` and `firecrawl_scrape` with `alexandria` listed, with the earlier copy.
   - The search-only endpoint is unchanged: it keeps listing `firecrawl_find_tools` and `firecrawl_scrape` with `alexandria`, because its tool list is fixed by its connector listing.
 - `firecrawl_scrape` no longer advertises the `json` format or `jsonOptions`. Cached calls using them keep the existing JSON extraction, validation and results for compatibility. Other formats and tools are unchanged.
@@ -29,7 +34,7 @@
   - The `max_credits` description says how the estimate is made. A `max_credits_exceeded` error gives the minimum `max_credits`, and the same call raised to it when the call is short enough to quote.
   - `contact_fields` is described as people only. Every argument error that reaches schema validation names all invalid fields, not the first five, and every enrich shape error (no provider, a block with neither people nor companies, `contact_fields` with companies only) includes an example call, built from the caller's own arguments when they are short.
 - `firecrawl_agent` and `people_company_enrich` are annotated `readOnlyHint: true`. Both read the web or provider data and return it. They spend credits but change nothing on the web or in the account, so clients that confirm non-read-only tools first, such as Hermes with `trust: untrusted`, no longer ask before every research or enrichment call. `max_credits` / `maxCredits` still cap what a call can spend.
-- Where it is listed (the search-only endpoint, and the full surface in `legacy` mode), `firecrawl_find_tools` is marked always-load (`_meta["anthropic/alwaysLoad"]`), so clients that defer MCP tools behind a tool search, such as Claude Code, list it with the agent's other tools from the first turn. Its description no longer tells the agent to prefer `firecrawl_search` for data tasks. In agent evals, both changes together made agents look up and run Alexandria providers on data tasks much more often, with no extra lookups on tasks that need only the web.
+- `firecrawl_find_tools` is marked always-load (`_meta["anthropic/alwaysLoad"]`), so clients that defer MCP tools behind a tool search, such as Claude Code, list it with the agent's other tools from the first turn. Its description no longer tells the agent to prefer `firecrawl_search` for data tasks. In agent evals, both changes together made agents look up and run Alexandria providers on data tasks much more often, with no extra lookups on tasks that need only the web.
 
 ### Fixed
 

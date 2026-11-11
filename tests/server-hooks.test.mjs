@@ -368,7 +368,7 @@ test('a toolFilter that leaves alexandria_library_read out keeps firecrawl_scrap
   assert.ok('alexandria' in fixed.scrape.inputSchema.properties);
   assert.doesNotMatch([fixed.instructions, fixed.scrape.description].join('\n'), /alexandria_library_read/);
 
-  // Admitting one of the two new tools is not enough: find_tools would be unlisted with nothing in its place.
+  // Admitting one of the two new tools is not enough: the surface keeps the earlier names and copy.
   const half = await listed({ toolFilter: (name) => name !== 'alexandria_library_search' });
   assert.equal(half.names.includes('alexandria_library_read'), false);
   assert.ok(half.names.includes('firecrawl_find_tools'));
@@ -377,11 +377,12 @@ test('a toolFilter that leaves alexandria_library_read out keeps firecrawl_scrap
   const open = await listed({});
   assert.ok(open.names.includes('alexandria_library_read'));
   assert.ok(open.names.includes('alexandria_library_search'));
-  assert.equal(open.names.includes('firecrawl_find_tools'), false);
-  assert.equal('alexandria' in open.scrape.inputSchema.properties, false);
+  assert.ok(open.names.includes('firecrawl_find_tools'));
+  // The alexandria body stays listed beside the library tools, with the same definition.
+  assert.deepEqual(open.scrape, fixed.scrape);
 });
 
-test('a field an embedder requires on firecrawl_scrape stays required where the alexandria body is unlisted', async (t) => {
+test('a field an embedder requires on firecrawl_scrape is its only required field, beside url and alexandria', async (t) => {
   const port = await startEmbedded(t, {
     apiUrl: 'http://127.0.0.1:9',
     apiKey: 'fc-configured',
@@ -392,8 +393,8 @@ test('a field an embedder requires on firecrawl_scrape stays required where the 
   });
   const { tools } = await rpc(port, 'tools/list');
   const { inputSchema } = tools.find((tool) => tool.name === 'firecrawl_scrape');
-  assert.deepEqual(inputSchema.required, ['url', 'purpose']);
-  assert.equal('alexandria' in inputSchema.properties, false);
+  assert.deepEqual(inputSchema.required, ['purpose']);
+  assert.ok('url' in inputSchema.properties && 'alexandria' in inputSchema.properties);
 });
 
 test('outboundRequest credential and headers reach SDK and fetch-based API calls', async (t) => {

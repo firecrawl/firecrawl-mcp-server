@@ -13,9 +13,10 @@
     }
   },
   "tools": [
-    "firecrawl_scrape@2212bf99af1f",
+    "firecrawl_scrape@e9331feb0fb2",
     "firecrawl_map@3214f5d6a1a4",
     "firecrawl_search@8dcd1d8cf78f",
+    "firecrawl_find_tools@d138e7a0897b",
     "alexandria_library_search@6756500c6c74",
     "alexandria_library_read@0a00b21b6b18",
     "firecrawl_find_skills@d34d601e2f2d",

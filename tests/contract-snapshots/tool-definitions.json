@@ -6168,15 +6168,15 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_scrape@2212bf99af1f": {
+  "firecrawl_scrape@0f86098ecdc5": {
     "annotations": {
       "title": "Firecrawl scrape",
-      "readOnlyHint": false,
+      "readOnlyHint": true,
       "openWorldHint": true,
       "destructiveHint": false
     },
     "title": "Firecrawl scrape",
-    "description": "\nScrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, or a targeted answer. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages. `url` may omit the scheme (`example.com/page`); it is read as https.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. Browser actions can change the live page when interactive actions are enabled. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session, `firecrawl_search` and `alexandria_library_search` can discover Alexandria providers for the same fields across several pages; a matching provider returns typed records in one `alexandria_library_read` call.\n",
+    "description": "\nScrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, or a targeted answer. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages. `url` may omit the scheme (`example.com/page`); it is read as https.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session, `firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.\n\nWith `alexandria` in place of `url`, the tool runs catalogued provider capabilities instead of fetching a page. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6293,56 +6293,6 @@
         "waitFor": {
           "type": "number"
         },
-        "actions": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": [
-                  "wait",
-                  "screenshot",
-                  "scroll",
-                  "scrape",
-                  "click",
-                  "write",
-                  "press",
-                  "executeJavascript",
-                  "generatePDF"
-                ]
-              },
-              "selector": {
-                "type": "string"
-              },
-              "milliseconds": {
-                "type": "number"
-              },
-              "text": {
-                "type": "string"
-              },
-              "key": {
-                "type": "string"
-              },
-              "direction": {
-                "type": "string",
-                "enum": [
-                  "up",
-                  "down"
-                ]
-              },
-              "script": {
-                "type": "string"
-              },
-              "fullPage": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "type"
-            ]
-          }
-        },
         "mobile": {
           "type": "boolean"
         },
@@ -6389,13 +6339,11 @@
           ]
         },
         "profile": {
+          "description": "Loads a saved browser profile without saving changes to it.",
           "type": "object",
           "properties": {
             "name": {
               "type": "string"
-            },
-            "saveChanges": {
-              "type": "boolean"
             }
           },
           "required": [
@@ -6409,8 +6357,89 @@
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
         },
+        "requestId": {
+          "description": "Idempotency key bound to one Alexandria execution payload. Generated when omitted and returned with the result.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+        },
+        "alexandria": {
+          "description": "Catalogued Alexandria capability invocation, mutually exclusive with url. One {provider, capability, options} object or an array of 1-10, with contracts available through firecrawl_search or firecrawl_find_tools. Each call may include version to pin a published workflow; omitting it uses latest. Only requestId and timeout are supported alongside alexandria. The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and a key field under response (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination. Returns per-capability results in data.alexandria with data, records, or an error with a code; individual capabilities can fail even when the outer response succeeds. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "description": "Provider slug, e.g. \"fred\".",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "capability": {
+                  "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "description": "Optional published workflow version. Omit to use the latest version.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "options": {
+                  "description": "Capability options as declared by its contract.",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": true
+                }
+              },
+              "required": [
+                "provider",
+                "capability"
+              ]
+            },
+            {
+              "minItems": 1,
+              "maxItems": 10,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "description": "Provider slug, e.g. \"fred\".",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "capability": {
+                    "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "version": {
+                    "description": "Optional published workflow version. Omit to use the latest version.",
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "options": {
+                    "description": "Capability options as declared by its contract.",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "provider",
+                  "capability"
+                ]
+              }
+            }
+          ]
+        },
         "toolDetail": {
-          "description": "Domain discovery detail, summary by default; compact returns provider/capability/description, full includes contracts.",
+          "description": "URL mode only: domain discovery detail, summary by default; compact returns provider/capability/description, full includes contracts. Ignored with alexandria.",
           "type": "string",
           "enum": [
             "compact",
@@ -6419,13 +6448,10 @@
           ]
         },
         "domainTools": {
-          "description": "Include domain-matched Alexandria tools for the page in tools on the returned document.",
+          "description": "URL mode only: include domain-matched Alexandria tools for the page in tools on the returned document. Ignored with alexandria.",
           "type": "boolean"
         }
       },
-      "required": [
-        "url"
-      ],
       "additionalProperties": false
     },
     "name": "firecrawl_scrape",
@@ -7296,15 +7322,15 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_scrape@e6d031331e9d": {
+  "firecrawl_scrape@e9331feb0fb2": {
     "annotations": {
       "title": "Firecrawl scrape",
-      "readOnlyHint": true,
+      "readOnlyHint": false,
       "openWorldHint": true,
       "destructiveHint": false
     },
     "title": "Firecrawl scrape",
-    "description": "\nScrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, or a targeted answer. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages. `url` may omit the scheme (`example.com/page`); it is read as https.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session, `firecrawl_search` and `alexandria_library_search` can discover Alexandria providers for the same fields across several pages; a matching provider returns typed records in one `alexandria_library_read` call.\n",
+    "description": "\nScrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, or a targeted answer. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages. `url` may omit the scheme (`example.com/page`); it is read as https.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. Browser actions can change the live page when interactive actions are enabled. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session, `firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.\n\nWith `alexandria` in place of `url`, the tool runs catalogued provider capabilities instead of fetching a page. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -7421,6 +7447,56 @@
         "waitFor": {
           "type": "number"
         },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "wait",
+                  "screenshot",
+                  "scroll",
+                  "scrape",
+                  "click",
+                  "write",
+                  "press",
+                  "executeJavascript",
+                  "generatePDF"
+                ]
+              },
+              "selector": {
+                "type": "string"
+              },
+              "milliseconds": {
+                "type": "number"
+              },
+              "text": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "up",
+                  "down"
+                ]
+              },
+              "script": {
+                "type": "string"
+              },
+              "fullPage": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        },
         "mobile": {
           "type": "boolean"
         },
@@ -7467,11 +7543,13 @@
           ]
         },
         "profile": {
-          "description": "Loads a saved browser profile without saving changes to it.",
           "type": "object",
           "properties": {
             "name": {
               "type": "string"
+            },
+            "saveChanges": {
+              "type": "boolean"
             }
           },
           "required": [
@@ -7485,8 +7563,89 @@
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
         },
+        "requestId": {
+          "description": "Idempotency key bound to one Alexandria execution payload. Generated when omitted and returned with the result.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+        },
+        "alexandria": {
+          "description": "Catalogued Alexandria capability invocation, mutually exclusive with url. One {provider, capability, options} object or an array of 1-10, with contracts available through firecrawl_search or firecrawl_find_tools. Each call may include version to pin a published workflow; omitting it uses latest. Only requestId and timeout are supported alongside alexandria. The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and a key field under response (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination. Returns per-capability results in data.alexandria with data, records, or an error with a code; individual capabilities can fail even when the outer response succeeds. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "description": "Provider slug, e.g. \"fred\".",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "capability": {
+                  "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "description": "Optional published workflow version. Omit to use the latest version.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "options": {
+                  "description": "Capability options as declared by its contract.",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": true
+                }
+              },
+              "required": [
+                "provider",
+                "capability"
+              ]
+            },
+            {
+              "minItems": 1,
+              "maxItems": 10,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "description": "Provider slug, e.g. \"fred\".",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "capability": {
+                    "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "version": {
+                    "description": "Optional published workflow version. Omit to use the latest version.",
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "options": {
+                    "description": "Capability options as declared by its contract.",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "provider",
+                  "capability"
+                ]
+              }
+            }
+          ]
+        },
         "toolDetail": {
-          "description": "Domain discovery detail, summary by default; compact returns provider/capability/description, full includes contracts.",
+          "description": "URL mode only: domain discovery detail, summary by default; compact returns provider/capability/description, full includes contracts. Ignored with alexandria.",
           "type": "string",
           "enum": [
             "compact",
@@ -7495,13 +7654,10 @@
           ]
         },
         "domainTools": {
-          "description": "Include domain-matched Alexandria tools for the page in tools on the returned document.",
+          "description": "URL mode only: include domain-matched Alexandria tools for the page in tools on the returned document. Ignored with alexandria.",
           "type": "boolean"
         }
       },
-      "required": [
-        "url"
-      ],
       "additionalProperties": false
     },
     "name": "firecrawl_scrape",
@@ -9377,7 +9533,7 @@
       "additionalProperties": false
     }
   },
-  "people_company_enrich@98423185237c": {
+  "people_company_enrich@10d98984dbfd": {
     "annotations": {
       "title": "Look up and enrich people or companies",
       "readOnlyHint": true,
@@ -9385,19 +9541,207 @@
       "destructiveHint": false
     },
     "title": "Look up and enrich people or companies",
-    "description": "Look up and enrich known people or companies: profiles and work history, or firmographics such as industry, headcount, funding and technologies. Each provider block takes people, companies or both, each its own list of 1 to 50. A block with both runs them as two requests and reports two entries, kind \"people\" and kind \"companies\"; results carry input_index into their entry's list. Add contact_fields to get work email, personal email or mobile for people. Misses are free. Example: {\"contact_fields\":[\"work_email\"],\"fullenrich\":{\"people\":[{\"person_name\":\"Jane Doe\",\"company_domain\":\"example.com\"}]}}. Each provider takes its own native parameters; nothing is shared between providers. Include a block only for each provider you want to run, e.g. \"apollo\": {...}; included providers run in parallel. The response lists every provider with its status, records, credits charged and any error.",
+    "description": "Enrich known people or companies: the tool for any person or company you can name, such as finding the email, phone or profile of a founder or employee at a given company. Use it, not people_company_search, whenever you have a name with a company or domain, a LinkedIn URL or an email. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to 10 records per call. Each requested field runs a waterfall by default: Firecrawl tries the providers that can use your inputs one at a time, ordered by listed price, and stops as soon as the field is found. Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and, unless profile is false, the profile in the same call. Ask for mobile only when the task needs a phone number; it is the costliest field and nothing is spent on it otherwise. A work email is on the company domain when one is known and never on a known free-mail domain or a known role mailbox; fields says for each answer which provider gave it, whether the email was verified and whether its domain matched. Set verified_only to get only verified emails. Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call; without it the call is uncapped. To call one specific provider, use firecrawl_scrape with an alexandria body instead. Example: {\"contact_fields\":[\"work_email\"],\"people\":[{\"name\":\"Jane Doe\",\"domain\":\"example.com\"}]}.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
-        "max_credits": {
-          "description": "Most credits this call may spend. Set it only to a budget the user gave; left out, it is 1000. The estimate checked against it is each provider's listed price times its unit (record, input, Apollo company page, or 10 web results), as if every record were found; a call whose estimate is higher is refused before any provider runs.",
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991
+        "people": {
+          "description": "People to enrich. People and companies together are at most 10 per call.",
+          "minItems": 1,
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "required": [
+                  "linkedin_url"
+                ],
+                "properties": {
+                  "linkedin_url": {
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "phone"
+                ],
+                "properties": {
+                  "phone": {
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "name",
+                  "company"
+                ],
+                "properties": {
+                  "name": {
+                    "pattern": "\\S"
+                  },
+                  "company": {
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "name",
+                  "domain"
+                ],
+                "properties": {
+                  "name": {
+                    "pattern": "\\S"
+                  },
+                  "domain": {
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "first_name",
+                  "last_name",
+                  "company"
+                ],
+                "properties": {
+                  "first_name": {
+                    "pattern": "\\S"
+                  },
+                  "last_name": {
+                    "pattern": "\\S"
+                  },
+                  "company": {
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "first_name",
+                  "last_name",
+                  "domain"
+                ],
+                "properties": {
+                  "first_name": {
+                    "pattern": "\\S"
+                  },
+                  "last_name": {
+                    "pattern": "\\S"
+                  },
+                  "domain": {
+                    "pattern": "\\S"
+                  }
+                }
+              }
+            ],
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "Full name.",
+                "type": "string"
+              },
+              "first_name": {
+                "type": "string"
+              },
+              "last_name": {
+                "type": "string"
+              },
+              "company": {
+                "description": "Employer name or domain.",
+                "type": "string"
+              },
+              "domain": {
+                "description": "Employer domain, e.g. example.com.",
+                "type": "string"
+              },
+              "linkedin_url": {
+                "description": "LinkedIn profile URL.",
+                "type": "string"
+              },
+              "email": {
+                "description": "Any email known for the person.",
+                "type": "string"
+              },
+              "phone": {
+                "description": "Any phone number known for the person.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "companies": {
+          "description": "Companies to enrich, for firmographics.",
+          "minItems": 1,
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "required": [
+                  "domain"
+                ],
+                "properties": {
+                  "domain": {
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "linkedin_url"
+                ],
+                "properties": {
+                  "linkedin_url": {
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "pattern": "\\S"
+                  }
+                }
+              }
+            ],
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "Company name.",
+                "type": "string"
+              },
+              "domain": {
+                "description": "e.g. example.com.",
+                "type": "string"
+              },
+              "linkedin_url": {
+                "description": "LinkedIn company URL.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
         },
         "contact_fields": {
-          "description": "Applies to people only; companies in the same call get firmographics. Finds these contact values instead of profiles. fullenrich: work_email 30 credits, personal_email 100, mobile 300, per value found. datalegion: 100 per matched person, every contact field it has. apollo: 30 per match, work email, plus personal emails when personal_email is listed. people_data_labs has no contact lookup.",
+          "description": "People only. Find these contact values for each person; companies in the same call still get firmographics. Include mobile only when a phone number is needed: phone lookups are the costliest and run, and bill, only when mobile is listed.",
           "minItems": 1,
           "type": "array",
           "items": {
@@ -9409,1001 +9753,19 @@
             ]
           }
         },
-        "fullenrich": {
-          "description": "FullEnrich. people: 10 credits per match, no email. companies: 10 credits per match, includes technologies.",
-          "type": "object",
-          "properties": {
-            "people": {
-              "minItems": 1,
-              "maxItems": 50,
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "required": [
-                      "person_professional_network_url"
-                    ],
-                    "properties": {
-                      "person_professional_network_url": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "person_name",
-                      "company_domain"
-                    ],
-                    "properties": {
-                      "person_name": {
-                        "pattern": "\\S"
-                      },
-                      "company_domain": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "person_name",
-                      "company_professional_network_url"
-                    ],
-                    "properties": {
-                      "person_name": {
-                        "pattern": "\\S"
-                      },
-                      "company_professional_network_url": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  }
-                ],
-                "type": "object",
-                "properties": {
-                  "person_professional_network_url": {
-                    "description": "LinkedIn profile URL. Enough on its own.",
-                    "type": "string"
-                  },
-                  "person_name": {
-                    "description": "Full name, with a company identifier.",
-                    "type": "string"
-                  },
-                  "company_domain": {
-                    "type": "string"
-                  },
-                  "company_professional_network_url": {
-                    "description": "Employer LinkedIn URL.",
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": false
-              }
-            },
-            "companies": {
-              "minItems": 1,
-              "maxItems": 50,
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "required": [
-                      "domain"
-                    ],
-                    "properties": {
-                      "domain": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "professional_network_url"
-                    ],
-                    "properties": {
-                      "professional_network_url": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  }
-                ],
-                "type": "object",
-                "properties": {
-                  "domain": {
-                    "description": "e.g. stripe.com.",
-                    "type": "string"
-                  },
-                  "professional_network_url": {
-                    "description": "LinkedIn company URL.",
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          },
-          "additionalProperties": false
+        "profile": {
+          "description": "With contact_fields, also return each person's profile in the same call, looked up first so the contact lookups can use it. Default true; false skips it.",
+          "type": "boolean"
         },
-        "apollo": {
-          "description": "Apollo. people: 30 credits per match, includes a work email when Apollo has one. companies: 30 credits per match; a name alone matches only on an exact name. Runs once an organization admin has accepted Apollo's terms.",
-          "type": "object",
-          "properties": {
-            "people": {
-              "minItems": 1,
-              "maxItems": 50,
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "required": [
-                      "id"
-                    ],
-                    "properties": {
-                      "id": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "email"
-                    ],
-                    "properties": {
-                      "email": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "linkedin_url"
-                    ],
-                    "properties": {
-                      "linkedin_url": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "name",
-                      "domain"
-                    ],
-                    "properties": {
-                      "name": {
-                        "pattern": "\\S"
-                      },
-                      "domain": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "name",
-                      "organization_name"
-                    ],
-                    "properties": {
-                      "name": {
-                        "pattern": "\\S"
-                      },
-                      "organization_name": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "domain"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "domain": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "organization_name"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "organization_name": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  }
-                ],
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "description": "apollo_id from people_company_search.",
-                    "type": "string"
-                  },
-                  "email": {
-                    "type": "string"
-                  },
-                  "linkedin_url": {
-                    "type": "string"
-                  },
-                  "name": {
-                    "description": "Full name, with domain or organization_name.",
-                    "type": "string"
-                  },
-                  "first_name": {
-                    "type": "string"
-                  },
-                  "last_name": {
-                    "type": "string"
-                  },
-                  "domain": {
-                    "description": "Employer domain.",
-                    "type": "string"
-                  },
-                  "organization_name": {
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": false
-              }
-            },
-            "companies": {
-              "minItems": 1,
-              "maxItems": 50,
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "required": [
-                      "domain"
-                    ],
-                    "properties": {
-                      "domain": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "linkedin_url"
-                    ],
-                    "properties": {
-                      "linkedin_url": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "name"
-                    ],
-                    "properties": {
-                      "name": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "website"
-                    ],
-                    "properties": {
-                      "website": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  }
-                ],
-                "type": "object",
-                "properties": {
-                  "domain": {
-                    "type": "string"
-                  },
-                  "linkedin_url": {
-                    "type": "string"
-                  },
-                  "name": {
-                    "type": "string"
-                  },
-                  "website": {
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          },
-          "additionalProperties": false
+        "verified_only": {
+          "description": "Email fields: return only an address the provider verified as deliverable. Default false returns the best address found, with fields.<field>.verified saying whether it was verified.",
+          "type": "boolean"
         },
-        "people_data_labs": {
-          "description": "People Data Labs. people: 50 credits per match, with work history. companies: 50 credits per match, with funding history.",
-          "type": "object",
-          "properties": {
-            "people": {
-              "minItems": 1,
-              "maxItems": 50,
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "required": [
-                      "profile"
-                    ],
-                    "properties": {
-                      "profile": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "email"
-                    ],
-                    "properties": {
-                      "email": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "phone"
-                    ],
-                    "properties": {
-                      "phone": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "pdl_id"
-                    ],
-                    "properties": {
-                      "pdl_id": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "name",
-                      "company"
-                    ],
-                    "properties": {
-                      "name": {
-                        "pattern": "\\S"
-                      },
-                      "company": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "name",
-                      "school"
-                    ],
-                    "properties": {
-                      "name": {
-                        "pattern": "\\S"
-                      },
-                      "school": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "name",
-                      "location"
-                    ],
-                    "properties": {
-                      "name": {
-                        "pattern": "\\S"
-                      },
-                      "location": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "company"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "company": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "school"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "school": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "location"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "location": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  }
-                ],
-                "type": "object",
-                "properties": {
-                  "profile": {
-                    "description": "LinkedIn or other social profile URL.",
-                    "type": "string"
-                  },
-                  "email": {
-                    "type": "string"
-                  },
-                  "phone": {
-                    "type": "string"
-                  },
-                  "pdl_id": {
-                    "type": "string"
-                  },
-                  "name": {
-                    "type": "string"
-                  },
-                  "first_name": {
-                    "type": "string"
-                  },
-                  "last_name": {
-                    "type": "string"
-                  },
-                  "company": {
-                    "description": "Employer name or domain.",
-                    "type": "string"
-                  },
-                  "school": {
-                    "type": "string"
-                  },
-                  "location": {
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": false
-              }
-            },
-            "companies": {
-              "minItems": 1,
-              "maxItems": 50,
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "required": [
-                      "website"
-                    ],
-                    "properties": {
-                      "website": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "profile"
-                    ],
-                    "properties": {
-                      "profile": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "ticker"
-                    ],
-                    "properties": {
-                      "ticker": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "pdl_id"
-                    ],
-                    "properties": {
-                      "pdl_id": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "name"
-                    ],
-                    "properties": {
-                      "name": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  }
-                ],
-                "type": "object",
-                "properties": {
-                  "website": {
-                    "description": "Company website or domain.",
-                    "type": "string"
-                  },
-                  "profile": {
-                    "description": "LinkedIn company URL.",
-                    "type": "string"
-                  },
-                  "ticker": {
-                    "type": "string"
-                  },
-                  "pdl_id": {
-                    "type": "string"
-                  },
-                  "name": {
-                    "description": "Company name. A name several companies share may not match.",
-                    "type": "string"
-                  },
-                  "location": {
-                    "description": "Helps a name match; never enough alone.",
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": false
-              }
-            },
-            "min_likelihood": {
-              "description": "Minimum match confidence, 1 to 10 (default 6).",
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 10
-            }
-          },
-          "additionalProperties": false
-        },
-        "datalegion": {
-          "description": "Data Legion. 20 credits per matched person or company.",
-          "type": "object",
-          "properties": {
-            "people": {
-              "minItems": 1,
-              "maxItems": 50,
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "required": [
-                      "social_url"
-                    ],
-                    "properties": {
-                      "social_url": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "email"
-                    ],
-                    "properties": {
-                      "email": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "linkedin_id"
-                    ],
-                    "properties": {
-                      "linkedin_id": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "legion_id"
-                    ],
-                    "properties": {
-                      "legion_id": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "full_name",
-                      "company"
-                    ],
-                    "properties": {
-                      "full_name": {
-                        "pattern": "\\S"
-                      },
-                      "company": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "full_name",
-                      "job_title"
-                    ],
-                    "properties": {
-                      "full_name": {
-                        "pattern": "\\S"
-                      },
-                      "job_title": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "full_name",
-                      "city"
-                    ],
-                    "properties": {
-                      "full_name": {
-                        "pattern": "\\S"
-                      },
-                      "city": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "full_name",
-                      "state"
-                    ],
-                    "properties": {
-                      "full_name": {
-                        "pattern": "\\S"
-                      },
-                      "state": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "full_name",
-                      "country"
-                    ],
-                    "properties": {
-                      "full_name": {
-                        "pattern": "\\S"
-                      },
-                      "country": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "full_name",
-                      "school"
-                    ],
-                    "properties": {
-                      "full_name": {
-                        "pattern": "\\S"
-                      },
-                      "school": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "company"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "company": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "job_title"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "job_title": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "city"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "city": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "state"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "state": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "country"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "country": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "first_name",
-                      "last_name",
-                      "school"
-                    ],
-                    "properties": {
-                      "first_name": {
-                        "pattern": "\\S"
-                      },
-                      "last_name": {
-                        "pattern": "\\S"
-                      },
-                      "school": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  }
-                ],
-                "type": "object",
-                "properties": {
-                  "social_url": {
-                    "description": "LinkedIn or other social profile URL.",
-                    "type": "string"
-                  },
-                  "email": {
-                    "type": "string"
-                  },
-                  "linkedin_id": {
-                    "type": "string"
-                  },
-                  "legion_id": {
-                    "type": "string"
-                  },
-                  "full_name": {
-                    "type": "string"
-                  },
-                  "first_name": {
-                    "type": "string"
-                  },
-                  "last_name": {
-                    "type": "string"
-                  },
-                  "company": {
-                    "description": "Company name, website or social URL.",
-                    "type": "string"
-                  },
-                  "job_title": {
-                    "type": "string"
-                  },
-                  "city": {
-                    "type": "string"
-                  },
-                  "state": {
-                    "type": "string"
-                  },
-                  "country": {
-                    "type": "string"
-                  },
-                  "school": {
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": false
-              }
-            },
-            "companies": {
-              "minItems": 1,
-              "maxItems": 50,
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "required": [
-                      "domain"
-                    ],
-                    "properties": {
-                      "domain": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "social_url"
-                    ],
-                    "properties": {
-                      "social_url": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "name"
-                    ],
-                    "properties": {
-                      "name": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "linkedin_id"
-                    ],
-                    "properties": {
-                      "linkedin_id": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "ticker_symbol"
-                    ],
-                    "properties": {
-                      "ticker_symbol": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  },
-                  {
-                    "required": [
-                      "legion_id"
-                    ],
-                    "properties": {
-                      "legion_id": {
-                        "pattern": "\\S"
-                      }
-                    }
-                  }
-                ],
-                "type": "object",
-                "properties": {
-                  "domain": {
-                    "type": "string"
-                  },
-                  "social_url": {
-                    "description": "LinkedIn company URL.",
-                    "type": "string"
-                  },
-                  "name": {
-                    "description": "Fuzzy match; add industry or domain for ambiguous names.",
-                    "type": "string"
-                  },
-                  "linkedin_id": {
-                    "type": "string"
-                  },
-                  "ticker_symbol": {
-                    "type": "string"
-                  },
-                  "legion_id": {
-                    "type": "string"
-                  },
-                  "industry": {
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": false
-              }
-            },
-            "min_confidence": {
-              "type": "string",
-              "enum": [
-                "high",
-                "moderate",
-                "low"
-              ]
-            }
-          },
-          "additionalProperties": false
+        "max_credits": {
+          "description": "Most credits the whole call may spend. Set it only to a budget the user gave; left out, the call has no cap. A provider is tried only while its listed price still fits, so 0 runs nothing paid.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
         }
       },
       "additionalProperties": false
@@ -10413,1363 +9775,585 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
-        "providers": {
-          "description": "What each provider did, with its own records.",
+        "people": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "name": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string"
-              },
-              "kind": {
-                "description": "people_company_enrich: which input list this entry covers. A block with both people and companies has one entry for each.",
-                "type": "string",
-                "enum": [
-                  "people",
-                  "companies"
-                ]
-              },
-              "returned": {
+              "input_index": {
+                "description": "Index into the people or companies list.",
                 "type": "number"
-              },
-              "credits": {
-                "type": "number"
-              },
-              "note": {
-                "description": "Why the provider failed or skipped inputs.",
-                "type": "string"
-              },
-              "retryable": {
-                "description": "The failure may succeed on a later try.",
-                "type": "boolean"
               },
               "results": {
-                "description": "This provider's records; people_company_enrich records carry input_index into this entry's input list (its kind).",
+                "description": "One entry per provider that found a requested field; empty when none did.",
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "properties": {},
+                  "properties": {
+                    "provider": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "description": "The provider's own response, unchanged."
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "data"
+                  ],
                   "additionalProperties": {}
                 }
               },
-              "unmatched": {
-                "description": "people_company_enrich: input indexes this provider did not match.",
-                "type": "array",
-                "items": {
-                  "type": "number"
-                }
-              },
-              "pending": {
-                "description": "people_company_enrich: inputs still running upstream, each with input_index and, when it can be read later, next_tool.",
-                "type": "array",
-                "items": {
+              "fields": {
+                "description": "Per filled field (work_email, personal_email, mobile, profile, firmographics), what backs the answer.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
                   "type": "object",
-                  "properties": {},
+                  "properties": {
+                    "provider": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "The email address chosen from that provider's response.",
+                      "type": "string"
+                    },
+                    "verified": {
+                      "description": "Email: the provider marked the address deliverable.",
+                      "type": "boolean"
+                    },
+                    "domain_match": {
+                      "description": "Work email: the address is on the company's domain.",
+                      "type": "boolean"
+                    },
+                    "complete": {
+                      "description": "Profile or firmographics: false when no provider gave the whole answer and this is the best partial one.",
+                      "type": "boolean"
+                    },
+                    "linkedin_confirmed": {
+                      "description": "Firmographics: the company LinkedIn page matches the company's domain or name.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "provider"
+                  ],
                   "additionalProperties": {}
                 }
               }
             },
+            "required": [
+              "input_index",
+              "results"
+            ],
             "additionalProperties": {}
           }
         },
-        "credits_total": {
-          "type": "number"
+        "companies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "input_index": {
+                "description": "Index into the people or companies list.",
+                "type": "number"
+              },
+              "results": {
+                "description": "One entry per provider that found a requested field; empty when none did.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "description": "The provider's own response, unchanged."
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "data"
+                  ],
+                  "additionalProperties": {}
+                }
+              },
+              "fields": {
+                "description": "Per filled field (work_email, personal_email, mobile, profile, firmographics), what backs the answer.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "The email address chosen from that provider's response.",
+                      "type": "string"
+                    },
+                    "verified": {
+                      "description": "Email: the provider marked the address deliverable.",
+                      "type": "boolean"
+                    },
+                    "domain_match": {
+                      "description": "Work email: the address is on the company's domain.",
+                      "type": "boolean"
+                    },
+                    "complete": {
+                      "description": "Profile or firmographics: false when no provider gave the whole answer and this is the best partial one.",
+                      "type": "boolean"
+                    },
+                    "linkedin_confirmed": {
+                      "description": "Firmographics: the company LinkedIn page matches the company's domain or name.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "provider"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            },
+            "required": [
+              "input_index",
+              "results"
+            ],
+            "additionalProperties": {}
+          }
         },
-        "credits_estimate": {
-          "description": "The most this call could have cost, checked against max_credits before it ran.",
+        "credits_used": {
+          "description": "Credits charged: the listed price of each provider that found something.",
           "type": "number"
         },
         "max_credits": {
+          "description": "The cap set for the call; absent when uncapped.",
           "type": "number"
+        },
+        "stopped": {
+          "description": "Set when the run stopped early, e.g. team_quota when the team ran out of credits.",
+          "type": "string"
         }
       },
       "additionalProperties": false
     }
   },
-  "people_company_search@09ca8317e7de": {
+  "people_company_enrich@bb840c5172d2": {
     "annotations": {
-      "title": "Find people or companies",
+      "title": "Look up and enrich people or companies",
       "readOnlyHint": true,
       "openWorldHint": true,
       "destructiveHint": false
     },
-    "title": "Find people or companies",
-    "description": "Find people or companies you don't know yet. Set entity to \"person\" or \"company\", then give each provider its filters for that entity: people by title, employer, location or seniority; companies by industry, headcount, location, technology or founding year. apollo: free for people, 30 credits per page for companies, once an organization admin has accepted its terms. fullenrich: 5 credits per record. people_data_labs: 50 credits per record, SQL or Elasticsearch query. firecrawl_search: web results, with the firecrawl_search tool's query parameters. Example: {\"entity\":\"person\",\"fullenrich\":{\"current_position_titles\":[{\"value\":\"Head of Data\"}],\"current_company_domains\":[{\"value\":\"example.com\",\"exact_match\":true}]},\"apollo\":{\"person_titles\":[\"Head of Data\"],\"q_organization_domains_list\":[\"example.com\"]}}. Each provider takes its own native parameters; nothing is shared between providers. Include a block only for each provider you want to run, e.g. \"apollo\": {...}; included providers run in parallel. The response lists every provider with its status, records, credits charged and any error.",
+    "title": "Look up and enrich people or companies",
+    "description": "Enrich known people or companies: the tool for any person or company you can name, such as finding the email, phone or profile of a founder or employee at a given company. Use it, not people_company_search, whenever you have a name with a company or domain, a LinkedIn URL or an email. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to 10 records per call. Each requested field runs a waterfall by default: Firecrawl tries the providers that can use your inputs one at a time, ordered by listed price, and stops as soon as the field is found. Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and, unless profile is false, the profile in the same call. Ask for mobile only when the task needs a phone number; it is the costliest field and nothing is spent on it otherwise. A work email is on the company domain when one is known and never on a known free-mail domain or a known role mailbox; fields says for each answer which provider gave it, whether the email was verified and whether its domain matched. Set verified_only to get only verified emails. Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call; without it the call is uncapped. To call one specific provider, use alexandria_library_read instead. Example: {\"contact_fields\":[\"work_email\"],\"people\":[{\"name\":\"Jane Doe\",\"domain\":\"example.com\"}]}.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
-        "entity": {
-          "description": "Required. Exactly \"person\" (find people) or \"company\" (find companies). Each provider block then takes that entity's filters.",
-          "type": "string",
-          "enum": [
-            "person",
-            "company"
-          ]
+        "people": {
+          "description": "People to enrich. People and companies together are at most 10 per call.",
+          "minItems": 1,
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "required": [
+                  "linkedin_url"
+                ],
+                "properties": {
+                  "linkedin_url": {
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "phone"
+                ],
+                "properties": {
+                  "phone": {
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "name",
+                  "company"
+                ],
+                "properties": {
+                  "name": {
+                    "pattern": "\\S"
+                  },
+                  "company": {
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "name",
+                  "domain"
+                ],
+                "properties": {
+                  "name": {
+                    "pattern": "\\S"
+                  },
+                  "domain": {
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "first_name",
+                  "last_name",
+                  "company"
+                ],
+                "properties": {
+                  "first_name": {
+                    "pattern": "\\S"
+                  },
+                  "last_name": {
+                    "pattern": "\\S"
+                  },
+                  "company": {
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "first_name",
+                  "last_name",
+                  "domain"
+                ],
+                "properties": {
+                  "first_name": {
+                    "pattern": "\\S"
+                  },
+                  "last_name": {
+                    "pattern": "\\S"
+                  },
+                  "domain": {
+                    "pattern": "\\S"
+                  }
+                }
+              }
+            ],
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "Full name.",
+                "type": "string"
+              },
+              "first_name": {
+                "type": "string"
+              },
+              "last_name": {
+                "type": "string"
+              },
+              "company": {
+                "description": "Employer name or domain.",
+                "type": "string"
+              },
+              "domain": {
+                "description": "Employer domain, e.g. example.com.",
+                "type": "string"
+              },
+              "linkedin_url": {
+                "description": "LinkedIn profile URL.",
+                "type": "string"
+              },
+              "email": {
+                "description": "Any email known for the person.",
+                "type": "string"
+              },
+              "phone": {
+                "description": "Any phone number known for the person.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "companies": {
+          "description": "Companies to enrich, for firmographics.",
+          "minItems": 1,
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "required": [
+                  "domain"
+                ],
+                "properties": {
+                  "domain": {
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "linkedin_url"
+                ],
+                "properties": {
+                  "linkedin_url": {
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "pattern": "\\S"
+                  }
+                }
+              }
+            ],
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "Company name.",
+                "type": "string"
+              },
+              "domain": {
+                "description": "e.g. example.com.",
+                "type": "string"
+              },
+              "linkedin_url": {
+                "description": "LinkedIn company URL.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "contact_fields": {
+          "description": "People only. Find these contact values for each person; companies in the same call still get firmographics. Include mobile only when a phone number is needed: phone lookups are the costliest and run, and bill, only when mobile is listed.",
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "work_email",
+              "personal_email",
+              "mobile"
+            ]
+          }
+        },
+        "profile": {
+          "description": "With contact_fields, also return each person's profile in the same call, looked up first so the contact lookups can use it. Default true; false skips it.",
+          "type": "boolean"
+        },
+        "verified_only": {
+          "description": "Email fields: return only an address the provider verified as deliverable. Default false returns the best address found, with fields.<field>.verified saying whether it was verified.",
+          "type": "boolean"
         },
         "max_credits": {
-          "description": "Most credits this call may spend. Set it only to a budget the user gave; left out, it is 1000. The estimate checked against it is each provider's listed price times its unit (record, input, Apollo company page, or 10 web results), as if every record were found; a call whose estimate is higher is refused before any provider runs.",
+          "description": "Most credits the whole call may spend. Set it only to a budget the user gave; left out, the call has no cap. A provider is tried only while its listed price still fits, so 0 runs nothing paid.",
           "type": "integer",
           "minimum": 0,
-          "maximum": 9007199254740991
-        },
-        "apollo": {
-          "anyOf": [
-            {
-              "description": "entity person: Apollo people/search. Free. No seniority, industry or headcount filter. Surnames come back masked: pass apollo_id to people_company_enrich as apollo.people[].id to reveal.",
-              "type": "object",
-              "properties": {
-                "person_titles": {
-                  "description": "Job titles, e.g. [\"Head of Data\"]. Similar titles also match; adding titles can broaden results.",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                },
-                "person_locations": {
-                  "description": "e.g. [\"Seattle, US\"].",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                },
-                "q_organization_domains_list": {
-                  "description": "Employer domains, e.g. [\"clerk.com\"].",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                },
-                "q_keywords": {
-                  "description": "Free text matched across the person and their company.",
-                  "type": "string"
-                },
-                "per_page": {
-                  "maximum": 25,
-                  "description": "Results per page, max 25. Use page for more.",
-                  "default": 10,
-                  "type": "integer",
-                  "minimum": 1
-                },
-                "page": {
-                  "description": "Page number, from 1.",
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 9007199254740991
-                }
-              },
-              "additionalProperties": false
-            },
-            {
-              "description": "entity company: Apollo companies/search. 30 credits per page, empty pages included. No industry or founding-year filter.",
-              "type": "object",
-              "properties": {
-                "q_organization_name": {
-                  "description": "Matched against company names and descriptions.",
-                  "type": "string"
-                },
-                "organization_num_employees_ranges": {
-                  "description": "Headcount bands, e.g. [\"11,50\", \"51,200\"].",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                },
-                "organization_locations": {
-                  "description": "e.g. [\"San Francisco, US\"].",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                },
-                "currently_using_any_of_technology_uids": {
-                  "description": "Apollo technology ids, lowercase with underscores, e.g. [\"snowflake\", \"google_analytics\"].",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                },
-                "per_page": {
-                  "maximum": 25,
-                  "description": "Results per page, max 25. Use page for more.",
-                  "default": 10,
-                  "type": "integer",
-                  "minimum": 1
-                },
-                "page": {
-                  "description": "Page number, from 1.",
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 9007199254740991
-                }
-              },
-              "additionalProperties": false
-            }
-          ]
-        },
-        "fullenrich": {
-          "anyOf": [
-            {
-              "description": "entity person: FullEnrich people/search. 5 credits per record. List filters take [{\"value\": \"...\", \"exclude\"?: true, \"exact_match\"?: true}]; range filters take [{\"min\"?: n, \"max\"?: n}]. ",
-              "type": "object",
-              "properties": {
-                "current_position_titles": {
-                  "description": "e.g. [{\"value\":\"Head of Data\"}].",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "current_position_seniority_level": {
-                  "description": "One of Owner, Founder, C-Level, Partner, VP, Head, Director, Manager or Senior.",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "current_position_job_functions": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "current_position_sub_functions": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "current_position_years_in": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "min": {
-                        "type": "number"
-                      },
-                      "max": {
-                        "type": "number"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      }
-                    },
-                    "additionalProperties": false
-                  }
-                },
-                "current_company_names": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "current_company_domains": {
-                  "description": "Exact match recommended.",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "current_company_professional_network_urls": {
-                  "description": "Employer LinkedIn URLs.",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "current_company_industries": {
-                  "description": "LinkedIn's current industry names, e.g. Software Development or Computer and Network Security, not Computer Software.",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "current_company_specialties": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "current_company_technologies": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "current_company_types": {
-                  "description": "e.g. Privately Held, Public Company.",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "current_company_headquarters": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "current_company_headcounts": {
-                  "description": "e.g. [{\"min\":50,\"max\":500}].",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "min": {
-                        "type": "number"
-                      },
-                      "max": {
-                        "type": "number"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      }
-                    },
-                    "additionalProperties": false
-                  }
-                },
-                "current_company_founded_years": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "min": {
-                        "type": "number"
-                      },
-                      "max": {
-                        "type": "number"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      }
-                    },
-                    "additionalProperties": false
-                  }
-                },
-                "current_company_years_at": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "min": {
-                        "type": "number"
-                      },
-                      "max": {
-                        "type": "number"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      }
-                    },
-                    "additionalProperties": false
-                  }
-                },
-                "current_company_days_since_last_job_change": {
-                  "description": "Recent movers, e.g. [{\"max\":90}].",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "min": {
-                        "type": "number"
-                      },
-                      "max": {
-                        "type": "number"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      }
-                    },
-                    "additionalProperties": false
-                  }
-                },
-                "person_names": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "person_professional_network_urls": {
-                  "description": "LinkedIn profile URLs.",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "person_locations": {
-                  "description": "Cities, regions or countries.",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "person_languages": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "person_skills": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "person_universities": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "past_position_titles": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "past_company_names": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "past_company_domains": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "limit": {
-                  "maximum": 25,
-                  "description": "Records to return, max 25, 5 credits each. Use offset for more.",
-                  "default": 5,
-                  "type": "integer",
-                  "minimum": 1
-                },
-                "offset": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 10000
-                }
-              },
-              "additionalProperties": false
-            },
-            {
-              "description": "entity company: FullEnrich companies/search. 5 credits per record. List filters take [{\"value\": \"...\", \"exclude\"?: true, \"exact_match\"?: true}]; range filters take [{\"min\"?: n, \"max\"?: n}]. ",
-              "type": "object",
-              "properties": {
-                "keywords": {
-                  "description": "Words in the company description.",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "industries": {
-                  "description": "LinkedIn's current industry names, e.g. Software Development or Computer and Network Security, not Computer Software.",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "specialties": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "technologies": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "types": {
-                  "description": "e.g. Privately Held, Public Company.",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "headquarters_locations": {
-                  "description": "Cities, regions or countries.",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "headcounts": {
-                  "description": "e.g. [{\"min\":50,\"max\":500}].",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "min": {
-                        "type": "number"
-                      },
-                      "max": {
-                        "type": "number"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      }
-                    },
-                    "additionalProperties": false
-                  }
-                },
-                "founded_years": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "min": {
-                        "type": "number"
-                      },
-                      "max": {
-                        "type": "number"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      }
-                    },
-                    "additionalProperties": false
-                  }
-                },
-                "names": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "domains": {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "professional_network_urls": {
-                  "description": "LinkedIn company URLs.",
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      },
-                      "exclude": {
-                        "type": "boolean"
-                      },
-                      "exact_match": {
-                        "type": "boolean"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ],
-                    "additionalProperties": false
-                  }
-                },
-                "limit": {
-                  "maximum": 25,
-                  "description": "Records to return, max 25, 5 credits each. Use offset for more.",
-                  "default": 5,
-                  "type": "integer",
-                  "minimum": 1
-                },
-                "offset": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 10000
-                }
-              },
-              "additionalProperties": false
-            }
-          ]
-        },
-        "people_data_labs": {
-          "anyOf": [
-            {
-              "oneOf": [
-                {
-                  "required": [
-                    "sql"
-                  ]
-                },
-                {
-                  "required": [
-                    "query"
-                  ]
-                }
-              ],
-              "description": "entity person: People Data Labs person/search. 50 credits per record. Pass sql or query.",
-              "type": "object",
-              "properties": {
-                "sql": {
-                  "description": "SELECT * FROM person WHERE ... Values are lowercase and match exactly, e.g. job_title = 'head of data'.",
-                  "type": "string"
-                },
-                "query": {
-                  "description": "Elasticsearch query over the person schema, instead of sql.",
-                  "type": "object",
-                  "propertyNames": {
-                    "type": "string"
-                  },
-                  "additionalProperties": true
-                },
-                "limit": {
-                  "maximum": 10,
-                  "description": "Records to return, max 10, 50 credits each.",
-                  "default": 2,
-                  "type": "integer",
-                  "minimum": 1
-                }
-              },
-              "additionalProperties": false
-            },
-            {
-              "oneOf": [
-                {
-                  "required": [
-                    "sql"
-                  ]
-                },
-                {
-                  "required": [
-                    "query"
-                  ]
-                }
-              ],
-              "description": "entity company: People Data Labs company/search. 50 credits per record. Pass sql or query.",
-              "type": "object",
-              "properties": {
-                "sql": {
-                  "description": "SELECT * FROM company WHERE ... Values are lowercase, e.g. industry = 'computer software'.",
-                  "type": "string"
-                },
-                "query": {
-                  "description": "Elasticsearch query over the company schema, instead of sql.",
-                  "type": "object",
-                  "propertyNames": {
-                    "type": "string"
-                  },
-                  "additionalProperties": true
-                },
-                "limit": {
-                  "maximum": 10,
-                  "description": "Records to return, max 10, 50 credits each.",
-                  "default": 2,
-                  "type": "integer",
-                  "minimum": 1
-                }
-              },
-              "additionalProperties": false
-            }
-          ]
-        },
-        "firecrawl_search": {
-          "description": "Firecrawl web search with the firecrawl_search query parameters, without page fetching: web results such as team pages, profiles and news. 2 credits per 10 results (10 with enterprise zdr), which is what max_credits counts. A team that scans results for threats also pays 2 per result, which max_credits does not count.",
-          "type": "object",
-          "properties": {
-            "toolDetail": {
-              "description": "Compact by default. Compact returns only provider, capability and description; full includes contracts. Read a selected tool's contract with alexandria_library_search.",
-              "type": "string",
-              "enum": [
-                "compact",
-                "summary",
-                "full"
-              ]
-            },
-            "query": {
-              "description": "Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Browse the whole library with alexandria_library_search.",
-              "type": "string",
-              "minLength": 1
-            },
-            "domainTools": {
-              "description": "Include domain-matched tools for result URLs. Defaults to true when Alexandria is combined with web, news or images; semantic-only search leaves domain matching off.",
-              "type": "boolean"
-            },
-            "highlights": {
-              "description": "Return query-relevant page excerpts for web and news results when available (default). Highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned. Set to false to keep the original search snippets.",
-              "type": "boolean"
-            },
-            "limit": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100
-            },
-            "tbs": {
-              "type": "string"
-            },
-            "filter": {
-              "type": "string"
-            },
-            "location": {
-              "type": "string"
-            },
-            "includeDomains": {
-              "description": "Hostnames to restrict results to. Mutually exclusive with excludeDomains.",
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 253,
-                "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
-              }
-            },
-            "excludeDomains": {
-              "description": "Hostnames to leave out of results. Mutually exclusive with includeDomains.",
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 253,
-                "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
-              }
-            },
-            "sources": {
-              "description": "Search sources; authenticated sessions default to web + alexandria, keyless sessions to web only. Authenticated searches always add alexandria to the sources, so sources: [\"web\"] also returns providers; domainTools: false turns off website-matched tools only. enterprise zdr or anon searches do not add it. Use [\"alexandria\"] alone for provider discovery without web results.",
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "enum": [
-                      "web",
-                      "images",
-                      "news",
-                      "alexandria",
-                      "exchange"
-                    ]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "type": {
-                        "type": "string",
-                        "enum": [
-                          "web",
-                          "images",
-                          "news",
-                          "alexandria",
-                          "exchange"
-                        ]
-                      }
-                    },
-                    "required": [
-                      "type"
-                    ],
-                    "additionalProperties": false
-                  }
-                ]
-              }
-            },
-            "categories": {
-              "description": "Limit results to specific source types. `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation; `gov` searches the Government Index of US federal, state, and local legal and regulatory sources, the index behind firecrawl_gov_search, and cannot be combined with other categories; gov hits can include historical versions, bill text, agency guidance, and third-party reproductions, so verify the issuer, jurisdiction, enacted/effective status, and version before citing current governing law, clarify a missing jurisdiction or ambiguous as-of date, and use general search for non-US questions or missing coverage (no hits does not establish that no applicable law exists). `developer` and `gov` return hits in `data.web` with `category` set to their name; the other categories also filter `data.web`.",
-              "type": "array",
-              "items": {
-                "type": "string",
-                "enum": [
-                  "research",
-                  "pdf",
-                  "developer",
-                  "gov"
-                ]
-              }
-            },
-            "enterprise": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "enum": [
-                  "default",
-                  "anon",
-                  "zdr"
-                ]
-              }
-            }
-          },
-          "required": [
-            "query"
-          ],
-          "additionalProperties": false
+          "maximum": 10000
         }
       },
-      "required": [
-        "entity"
-      ],
       "additionalProperties": false
     },
-    "name": "people_company_search",
+    "name": "people_company_enrich",
     "outputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
       "properties": {
-        "providers": {
-          "description": "What each provider did, with its own records.",
+        "people": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "name": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string"
-              },
-              "kind": {
-                "description": "people_company_enrich: which input list this entry covers. A block with both people and companies has one entry for each.",
-                "type": "string",
-                "enum": [
-                  "people",
-                  "companies"
-                ]
-              },
-              "returned": {
+              "input_index": {
+                "description": "Index into the people or companies list.",
                 "type": "number"
-              },
-              "credits": {
-                "type": "number"
-              },
-              "note": {
-                "description": "Why the provider failed or skipped inputs.",
-                "type": "string"
-              },
-              "retryable": {
-                "description": "The failure may succeed on a later try.",
-                "type": "boolean"
               },
               "results": {
-                "description": "This provider's records; people_company_enrich records carry input_index into this entry's input list (its kind).",
+                "description": "One entry per provider that found a requested field; empty when none did.",
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "properties": {},
+                  "properties": {
+                    "provider": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "description": "The provider's own response, unchanged."
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "data"
+                  ],
                   "additionalProperties": {}
                 }
               },
-              "unmatched": {
-                "description": "people_company_enrich: input indexes this provider did not match.",
-                "type": "array",
-                "items": {
-                  "type": "number"
-                }
-              },
-              "pending": {
-                "description": "people_company_enrich: inputs still running upstream, each with input_index and, when it can be read later, next_tool.",
-                "type": "array",
-                "items": {
+              "fields": {
+                "description": "Per filled field (work_email, personal_email, mobile, profile, firmographics), what backs the answer.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
                   "type": "object",
-                  "properties": {},
+                  "properties": {
+                    "provider": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "The email address chosen from that provider's response.",
+                      "type": "string"
+                    },
+                    "verified": {
+                      "description": "Email: the provider marked the address deliverable.",
+                      "type": "boolean"
+                    },
+                    "domain_match": {
+                      "description": "Work email: the address is on the company's domain.",
+                      "type": "boolean"
+                    },
+                    "complete": {
+                      "description": "Profile or firmographics: false when no provider gave the whole answer and this is the best partial one.",
+                      "type": "boolean"
+                    },
+                    "linkedin_confirmed": {
+                      "description": "Firmographics: the company LinkedIn page matches the company's domain or name.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "provider"
+                  ],
                   "additionalProperties": {}
                 }
               }
             },
+            "required": [
+              "input_index",
+              "results"
+            ],
             "additionalProperties": {}
           }
         },
-        "credits_total": {
-          "type": "number"
+        "companies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "input_index": {
+                "description": "Index into the people or companies list.",
+                "type": "number"
+              },
+              "results": {
+                "description": "One entry per provider that found a requested field; empty when none did.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "description": "The provider's own response, unchanged."
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "data"
+                  ],
+                  "additionalProperties": {}
+                }
+              },
+              "fields": {
+                "description": "Per filled field (work_email, personal_email, mobile, profile, firmographics), what backs the answer.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "description": "The email address chosen from that provider's response.",
+                      "type": "string"
+                    },
+                    "verified": {
+                      "description": "Email: the provider marked the address deliverable.",
+                      "type": "boolean"
+                    },
+                    "domain_match": {
+                      "description": "Work email: the address is on the company's domain.",
+                      "type": "boolean"
+                    },
+                    "complete": {
+                      "description": "Profile or firmographics: false when no provider gave the whole answer and this is the best partial one.",
+                      "type": "boolean"
+                    },
+                    "linkedin_confirmed": {
+                      "description": "Firmographics: the company LinkedIn page matches the company's domain or name.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "provider"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            },
+            "required": [
+              "input_index",
+              "results"
+            ],
+            "additionalProperties": {}
+          }
         },
-        "credits_estimate": {
-          "description": "The most this call could have cost, checked against max_credits before it ran.",
+        "credits_used": {
+          "description": "Credits charged: the listed price of each provider that found something.",
           "type": "number"
         },
         "max_credits": {
+          "description": "The cap set for the call; absent when uncapped.",
           "type": "number"
+        },
+        "stopped": {
+          "description": "Set when the run stopped early, e.g. team_quota when the team ran out of credits.",
+          "type": "string"
         }
       },
       "additionalProperties": false
     }
   },
-  "people_company_search@ddc36a476c1c": {
+  "people_company_search@7b68fb08e95d": {
     "annotations": {
       "title": "Find people or companies",
       "readOnlyHint": true,
@@ -11777,7 +10361,7 @@
       "destructiveHint": false
     },
     "title": "Find people or companies",
-    "description": "Find people or companies you don't know yet. Set entity to \"person\" or \"company\", then give each provider its filters for that entity: people by title, employer, location or seniority; companies by industry, headcount, location, technology or founding year. apollo: free for people, 30 credits per page for companies, once an organization admin has accepted its terms. fullenrich: 5 credits per record. people_data_labs: 50 credits per record, SQL or Elasticsearch query. firecrawl_search: web results, with the firecrawl_search tool's query parameters. Example: {\"entity\":\"person\",\"fullenrich\":{\"current_position_titles\":[{\"value\":\"Head of Data\"}],\"current_company_domains\":[{\"value\":\"example.com\",\"exact_match\":true}]},\"apollo\":{\"person_titles\":[\"Head of Data\"],\"q_organization_domains_list\":[\"example.com\"]}}. Each provider takes its own native parameters; nothing is shared between providers. Include a block only for each provider you want to run, e.g. \"apollo\": {...}; included providers run in parallel. The response lists every provider with its status, records, credits charged and any error.",
+    "description": "Find people or companies you don't know yet, by filters. Not for someone you can already name: for a named person (with their company or domain, a LinkedIn URL or an email) or a named company, call people_company_enrich instead, including to find their email or phone. Every call needs entity and at least one provider block with filters; a call without them fails. Set entity to \"person\" or \"company\", then give each provider its filters for that entity: people by title, employer, location or seniority; companies by industry, headcount, location, technology or founding year. apollo: free for people, 30 credits per page for companies, once an organization admin has accepted its terms. fullenrich: 5 credits per record. people_data_labs: 50 credits per record, SQL or Elasticsearch query. firecrawl_search: web results, with the firecrawl_search tool's query parameters. Example: {\"entity\":\"person\",\"fullenrich\":{\"current_position_titles\":[{\"value\":\"Head of Data\"}],\"current_company_domains\":[{\"value\":\"example.com\",\"exact_match\":true}]},\"apollo\":{\"person_titles\":[\"Head of Data\"],\"q_organization_domains_list\":[\"example.com\"]}}. Each provider takes its own native parameters; nothing is shared between providers. Include a block only for each provider you want to run, e.g. \"apollo\": {...}; included providers run in parallel. The response lists every provider with its status, records, credits charged and any error.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -11799,7 +10383,7 @@
         "apollo": {
           "anyOf": [
             {
-              "description": "entity person: Apollo people/search. Free. No seniority, industry or headcount filter. Surnames come back masked: pass apollo_id to people_company_enrich as apollo.people[].id to reveal.",
+              "description": "entity person: Apollo people/search. Free. No seniority, industry or headcount filter. Surnames come back masked: pass apollo_id as id to the apollo people/match capability through firecrawl_scrape to reveal.",
               "type": "object",
               "properties": {
                 "person_titles": {
@@ -12983,13 +11567,1260 @@
               "status": {
                 "type": "string"
               },
-              "kind": {
-                "description": "people_company_enrich: which input list this entry covers. A block with both people and companies has one entry for each.",
+              "returned": {
+                "type": "number"
+              },
+              "credits": {
+                "type": "number"
+              },
+              "note": {
+                "description": "Why the provider failed or skipped inputs.",
+                "type": "string"
+              },
+              "retryable": {
+                "description": "The failure may succeed on a later try.",
+                "type": "boolean"
+              },
+              "results": {
+                "description": "This provider's records.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": {}
+                }
+              }
+            },
+            "additionalProperties": {}
+          }
+        },
+        "credits_total": {
+          "type": "number"
+        },
+        "credits_estimate": {
+          "description": "The most this call could have cost, checked against max_credits before it ran.",
+          "type": "number"
+        },
+        "max_credits": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "people_company_search@dd7c1052c081": {
+    "annotations": {
+      "title": "Find people or companies",
+      "readOnlyHint": true,
+      "openWorldHint": true,
+      "destructiveHint": false
+    },
+    "title": "Find people or companies",
+    "description": "Find people or companies you don't know yet, by filters. Not for someone you can already name: for a named person (with their company or domain, a LinkedIn URL or an email) or a named company, call people_company_enrich instead, including to find their email or phone. Every call needs entity and at least one provider block with filters; a call without them fails. Set entity to \"person\" or \"company\", then give each provider its filters for that entity: people by title, employer, location or seniority; companies by industry, headcount, location, technology or founding year. apollo: free for people, 30 credits per page for companies, once an organization admin has accepted its terms. fullenrich: 5 credits per record. people_data_labs: 50 credits per record, SQL or Elasticsearch query. firecrawl_search: web results, with the firecrawl_search tool's query parameters. Example: {\"entity\":\"person\",\"fullenrich\":{\"current_position_titles\":[{\"value\":\"Head of Data\"}],\"current_company_domains\":[{\"value\":\"example.com\",\"exact_match\":true}]},\"apollo\":{\"person_titles\":[\"Head of Data\"],\"q_organization_domains_list\":[\"example.com\"]}}. Each provider takes its own native parameters; nothing is shared between providers. Include a block only for each provider you want to run, e.g. \"apollo\": {...}; included providers run in parallel. The response lists every provider with its status, records, credits charged and any error.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "entity": {
+          "description": "Required. Exactly \"person\" (find people) or \"company\" (find companies). Each provider block then takes that entity's filters.",
+          "type": "string",
+          "enum": [
+            "person",
+            "company"
+          ]
+        },
+        "max_credits": {
+          "description": "Most credits this call may spend. Set it only to a budget the user gave; left out, it is 1000. The estimate checked against it is each provider's listed price times its unit (record, input, Apollo company page, or 10 web results), as if every record were found; a call whose estimate is higher is refused before any provider runs.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "apollo": {
+          "anyOf": [
+            {
+              "description": "entity person: Apollo people/search. Free. No seniority, industry or headcount filter. Surnames come back masked: pass apollo_id as id to the apollo people/match capability through firecrawl_scrape to reveal.",
+              "type": "object",
+              "properties": {
+                "person_titles": {
+                  "description": "Job titles, e.g. [\"Head of Data\"]. Similar titles also match; adding titles can broaden results.",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "person_locations": {
+                  "description": "e.g. [\"Seattle, US\"].",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "q_organization_domains_list": {
+                  "description": "Employer domains, e.g. [\"clerk.com\"].",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "q_keywords": {
+                  "description": "Free text matched across the person and their company.",
+                  "type": "string"
+                },
+                "per_page": {
+                  "maximum": 25,
+                  "description": "Results per page, max 25. Use page for more.",
+                  "default": 10,
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "page": {
+                  "description": "Page number, from 1.",
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "description": "entity company: Apollo companies/search. 30 credits per page, empty pages included. No industry or founding-year filter.",
+              "type": "object",
+              "properties": {
+                "q_organization_name": {
+                  "description": "Matched against company names and descriptions.",
+                  "type": "string"
+                },
+                "organization_num_employees_ranges": {
+                  "description": "Headcount bands, e.g. [\"11,50\", \"51,200\"].",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "organization_locations": {
+                  "description": "e.g. [\"San Francisco, US\"].",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "currently_using_any_of_technology_uids": {
+                  "description": "Apollo technology ids, lowercase with underscores, e.g. [\"snowflake\", \"google_analytics\"].",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "per_page": {
+                  "maximum": 25,
+                  "description": "Results per page, max 25. Use page for more.",
+                  "default": 10,
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "page": {
+                  "description": "Page number, from 1.",
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "fullenrich": {
+          "anyOf": [
+            {
+              "description": "entity person: FullEnrich people/search. 5 credits per record. List filters take [{\"value\": \"...\", \"exclude\"?: true, \"exact_match\"?: true}]; range filters take [{\"min\"?: n, \"max\"?: n}]. ",
+              "type": "object",
+              "properties": {
+                "current_position_titles": {
+                  "description": "e.g. [{\"value\":\"Head of Data\"}].",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "current_position_seniority_level": {
+                  "description": "One of Owner, Founder, C-Level, Partner, VP, Head, Director, Manager or Senior.",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "current_position_job_functions": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "current_position_sub_functions": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "current_position_years_in": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "min": {
+                        "type": "number"
+                      },
+                      "max": {
+                        "type": "number"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "current_company_names": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "current_company_domains": {
+                  "description": "Exact match recommended.",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "current_company_professional_network_urls": {
+                  "description": "Employer LinkedIn URLs.",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "current_company_industries": {
+                  "description": "LinkedIn's current industry names, e.g. Software Development or Computer and Network Security, not Computer Software.",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "current_company_specialties": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "current_company_technologies": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "current_company_types": {
+                  "description": "e.g. Privately Held, Public Company.",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "current_company_headquarters": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "current_company_headcounts": {
+                  "description": "e.g. [{\"min\":50,\"max\":500}].",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "min": {
+                        "type": "number"
+                      },
+                      "max": {
+                        "type": "number"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "current_company_founded_years": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "min": {
+                        "type": "number"
+                      },
+                      "max": {
+                        "type": "number"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "current_company_years_at": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "min": {
+                        "type": "number"
+                      },
+                      "max": {
+                        "type": "number"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "current_company_days_since_last_job_change": {
+                  "description": "Recent movers, e.g. [{\"max\":90}].",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "min": {
+                        "type": "number"
+                      },
+                      "max": {
+                        "type": "number"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "person_names": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "person_professional_network_urls": {
+                  "description": "LinkedIn profile URLs.",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "person_locations": {
+                  "description": "Cities, regions or countries.",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "person_languages": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "person_skills": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "person_universities": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "past_position_titles": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "past_company_names": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "past_company_domains": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "limit": {
+                  "maximum": 25,
+                  "description": "Records to return, max 25, 5 credits each. Use offset for more.",
+                  "default": 5,
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "offset": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "description": "entity company: FullEnrich companies/search. 5 credits per record. List filters take [{\"value\": \"...\", \"exclude\"?: true, \"exact_match\"?: true}]; range filters take [{\"min\"?: n, \"max\"?: n}]. ",
+              "type": "object",
+              "properties": {
+                "keywords": {
+                  "description": "Words in the company description.",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "industries": {
+                  "description": "LinkedIn's current industry names, e.g. Software Development or Computer and Network Security, not Computer Software.",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "specialties": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "technologies": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "types": {
+                  "description": "e.g. Privately Held, Public Company.",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "headquarters_locations": {
+                  "description": "Cities, regions or countries.",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "headcounts": {
+                  "description": "e.g. [{\"min\":50,\"max\":500}].",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "min": {
+                        "type": "number"
+                      },
+                      "max": {
+                        "type": "number"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "founded_years": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "min": {
+                        "type": "number"
+                      },
+                      "max": {
+                        "type": "number"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "names": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "domains": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "professional_network_urls": {
+                  "description": "LinkedIn company URLs.",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "exclude": {
+                        "type": "boolean"
+                      },
+                      "exact_match": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "limit": {
+                  "maximum": 25,
+                  "description": "Records to return, max 25, 5 credits each. Use offset for more.",
+                  "default": 5,
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "offset": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "people_data_labs": {
+          "anyOf": [
+            {
+              "oneOf": [
+                {
+                  "required": [
+                    "sql"
+                  ]
+                },
+                {
+                  "required": [
+                    "query"
+                  ]
+                }
+              ],
+              "description": "entity person: People Data Labs person/search. 50 credits per record. Pass sql or query.",
+              "type": "object",
+              "properties": {
+                "sql": {
+                  "description": "SELECT * FROM person WHERE ... Values are lowercase and match exactly, e.g. job_title = 'head of data'.",
+                  "type": "string"
+                },
+                "query": {
+                  "description": "Elasticsearch query over the person schema, instead of sql.",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": true
+                },
+                "limit": {
+                  "maximum": 10,
+                  "description": "Records to return, max 10, 50 credits each.",
+                  "default": 2,
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "oneOf": [
+                {
+                  "required": [
+                    "sql"
+                  ]
+                },
+                {
+                  "required": [
+                    "query"
+                  ]
+                }
+              ],
+              "description": "entity company: People Data Labs company/search. 50 credits per record. Pass sql or query.",
+              "type": "object",
+              "properties": {
+                "sql": {
+                  "description": "SELECT * FROM company WHERE ... Values are lowercase, e.g. industry = 'computer software'.",
+                  "type": "string"
+                },
+                "query": {
+                  "description": "Elasticsearch query over the company schema, instead of sql.",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": true
+                },
+                "limit": {
+                  "maximum": 10,
+                  "description": "Records to return, max 10, 50 credits each.",
+                  "default": 2,
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "firecrawl_search": {
+          "description": "Firecrawl web search with the firecrawl_search query parameters, without page fetching: web results such as team pages, profiles and news. 2 credits per 10 results (10 with enterprise zdr), which is what max_credits counts. A team that scans results for threats also pays 2 per result, which max_credits does not count.",
+          "type": "object",
+          "properties": {
+            "toolDetail": {
+              "description": "Compact by default. Compact returns only provider, capability and description; full includes contracts. Read a selected tool's contract with alexandria_library_search.",
+              "type": "string",
+              "enum": [
+                "compact",
+                "summary",
+                "full"
+              ]
+            },
+            "query": {
+              "description": "Query for web and semantic tool discovery. Operators include quoted phrases, `-term`, `site:host`, `inurl:term`, `intitle:term`, and `related:host`; the set is non-exhaustive. Browse the whole library with alexandria_library_search.",
+              "type": "string",
+              "minLength": 1
+            },
+            "domainTools": {
+              "description": "Include domain-matched tools for result URLs. Defaults to true when Alexandria is combined with web, news or images; semantic-only search leaves domain matching off.",
+              "type": "boolean"
+            },
+            "highlights": {
+              "description": "Return query-relevant page excerpts for web and news results when available (default). Highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned. Set to false to keep the original search snippets.",
+              "type": "boolean"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "tbs": {
+              "type": "string"
+            },
+            "filter": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "includeDomains": {
+              "description": "Hostnames to restrict results to. Mutually exclusive with excludeDomains.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 253,
+                "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
+              }
+            },
+            "excludeDomains": {
+              "description": "Hostnames to leave out of results. Mutually exclusive with includeDomains.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 253,
+                "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$"
+              }
+            },
+            "sources": {
+              "description": "Search sources; authenticated sessions default to web + alexandria, keyless sessions to web only. Authenticated searches always add alexandria to the sources, so sources: [\"web\"] also returns providers; domainTools: false turns off website-matched tools only. enterprise zdr or anon searches do not add it. Use [\"alexandria\"] alone for provider discovery without web results.",
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "web",
+                      "images",
+                      "news",
+                      "alexandria",
+                      "exchange"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "web",
+                          "images",
+                          "news",
+                          "alexandria",
+                          "exchange"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            },
+            "categories": {
+              "description": "Limit results to specific source types. `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation; `gov` searches the Government Index of US federal, state, and local legal and regulatory sources, the index behind firecrawl_gov_search, and cannot be combined with other categories; gov hits can include historical versions, bill text, agency guidance, and third-party reproductions, so verify the issuer, jurisdiction, enacted/effective status, and version before citing current governing law, clarify a missing jurisdiction or ambiguous as-of date, and use general search for non-US questions or missing coverage (no hits does not establish that no applicable law exists). `developer` and `gov` return hits in `data.web` with `category` set to their name; the other categories also filter `data.web`.",
+              "type": "array",
+              "items": {
                 "type": "string",
                 "enum": [
-                  "people",
-                  "companies"
+                  "research",
+                  "pdf",
+                  "developer",
+                  "gov"
                 ]
+              }
+            },
+            "enterprise": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "default",
+                  "anon",
+                  "zdr"
+                ]
+              }
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "entity"
+      ],
+      "additionalProperties": false
+    },
+    "name": "people_company_search",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "providers": {
+          "description": "What each provider did, with its own records.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
               },
               "returned": {
                 "type": "number"
@@ -13006,23 +12837,7 @@
                 "type": "boolean"
               },
               "results": {
-                "description": "This provider's records; people_company_enrich records carry input_index into this entry's input list (its kind).",
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {},
-                  "additionalProperties": {}
-                }
-              },
-              "unmatched": {
-                "description": "people_company_enrich: input indexes this provider did not match.",
-                "type": "array",
-                "items": {
-                  "type": "number"
-                }
-              },
-              "pending": {
-                "description": "people_company_enrich: inputs still running upstream, each with input_index and, when it can be read later, next_tool.",
+                "description": "This provider's records.",
                 "type": "array",
                 "items": {
                   "type": "object",
