@@ -243,7 +243,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "alexandria_library_search@74e41fdc2c4e": {
+  "alexandria_library_search@2c4c11d3afb1": {
     "annotations": {
       "title": "Alexandria library search",
       "readOnlyHint": true,
@@ -252,7 +252,7 @@
       "idempotentHint": true
     },
     "title": "Alexandria library search",
-    "description": "Explore the Alexandria library: Firecrawl's catalogue of data providers that return typed, sourced records (companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more) as a read-only filesystem, using shell commands. Use this to find out whether a provider covers the data a task needs, and to read its contract before alexandria_library_read. Layout: /library/<category>/<provider>/<capability>.md, one file per capability holding its contract (when to use it, inputs, outputs, and the call to send); /library, each category folder and each provider folder has a README.md describing what is inside. Category folders: companies, developer, digital-intelligence, finance, government, health, jobs, knowledge, life-sciences, marketing, news, people, places, podcasts, real-estate, research, restaurants, shopping, social, software, sports; `ls /library` shows any added since. Available commands: ls, tree, cat, head, tail, grep, find, wc, sort, uniq, cut, sed, awk, jq, xargs, with pipes. Typical starts: `ls /library`, `cat /library/README.md`, or `grep -ril \"mortgage\" /library`. A file path is the execute address: /library/finance/fred/series/observations.md is provider \"fred\", capability \"series/observations\". Recorded example responses are under /examples/<provider>/<capability>.json. Free; does not run providers.",
+    "description": "Explore the Alexandria library: Firecrawl's catalogue of data providers that return typed, sourced records (companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more) as a read-only filesystem, using shell commands. Use this to find out whether a provider covers the data a task needs, and to read its contract before alexandria_library_read. Layout: /library/<category>/<provider>/<capability>.md, one file per capability holding its contract (when to use it, inputs, outputs, and the call to send); /library, each category folder and each provider folder has a README.md describing what is inside. Category folders: companies, developer, digital-intelligence, finance, government, health, jobs, knowledge, life-sciences, marketing, news, people, places, podcasts, real-estate, research, restaurants, shopping, social, software, sports; `ls /library` shows any added since. Available commands: ls, tree, cat, head, tail, grep, find, wc, sort, uniq, cut, tr, sed, jq, xargs, with pipes. Typical starts: `ls /library`, `cat /library/README.md`, or `grep -ril \"mortgage\" /library`. A file path is the execute address: /library/finance/fred/series/observations.md is provider \"fred\", capability \"series/observations\". Recorded example responses are under /examples/<provider>/<capability>.json. Free; does not run providers.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",

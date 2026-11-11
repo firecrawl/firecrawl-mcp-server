@@ -1130,7 +1130,7 @@ A file path is the execute address: `/library/finance/fred/series/observations.m
 | One contract | `cat /library/finance/fred/series/observations.md` |
 | What a response looks like | `head -c 2000 /examples/fred/series/observations.json` |
 
-Commands are `ls`, `tree`, `cat`, `head`, `tail`, `grep`, `find`, `wc`, `sort`, `uniq`, `cut`, `sed`, `awk`, `jq` and `xargs`, with pipes. There is no network and the library cannot be written. The result is the command's output as text; `structuredContent` carries `stdout`, `stderr`, `exitCode`, and `truncated` when output was cut at 30,000 characters. A command that finds nothing is not an error: `grep` exits 1 and the text is `[no output; exit code 1]`. Library lookups cost zero credits and never run a provider. The files hold what the same account would see in discovery, without prices.
+Commands are `ls`, `tree`, `cat`, `head`, `tail`, `grep`, `find`, `wc`, `sort`, `uniq`, `cut`, `tr`, `sed`, `jq` and `xargs`, with pipes. There is no network and the library cannot be written. The result is the command's output as text; `structuredContent` carries `stdout`, `stderr`, `exitCode`, and `truncated` when output was cut at 30,000 characters. A command that finds nothing is not an error: `grep` exits 1 and the text is `[no output; exit code 1]`. Library lookups cost zero credits and never run a provider. The files hold what the same account would see in discovery, without prices.
 
 This tool requires the Alexandria API deployment that serves `firecrawl/library`.
 
