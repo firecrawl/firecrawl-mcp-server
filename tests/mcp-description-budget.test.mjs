@@ -22,7 +22,8 @@ test('every tool description fits the 2,048-character cap and keeps the routing 
   assert.match(search, /Authenticated searches always add alexandria to the sources, so sources: \["web"\] also returns providers/);
   const scrape = byName.get('firecrawl_scrape');
   assert.match(scrape, /^Scrape one URL and return its content/);
-  assert.match(scrape, /`firecrawl_search` and `alexandria_library_search` can discover Alexandria providers for the same fields across several pages/);
+  // firecrawl_scrape keeps the routing copy it had before the library tools.
+  assert.match(scrape, /`firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages/);
   // What each Alexandria tool is for leads its description.
   assert.match(byName.get('alexandria_library_search'), /^Explore the Alexandria library: Firecrawl's catalogue of data providers/);
   assert.match(byName.get('alexandria_library_search'), /read-only filesystem, using shell commands/);
