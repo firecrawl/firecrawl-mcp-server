@@ -394,7 +394,7 @@ test('the published schema carries the identifier rules', async (t) => {
     nonBlank('first_name', 'last_name', 'domain'),
   ]);
   assert.deepEqual(enrich.inputSchema.properties.companies.items.anyOf, [nonBlank('domain'), nonBlank('linkedin_url'), nonBlank('name')]);
-  assert.deepEqual(Object.keys(enrich.inputSchema.properties).sort(), ['companies', 'contact_fields', 'max_credits', 'people', 'profile']);
+  assert.deepEqual(Object.keys(enrich.inputSchema.properties).sort(), ['companies', 'contact_fields', 'max_credits', 'people', 'profile', 'verified_only']);
   const search = tools.find((tool) => tool.name === 'people_company_search');
   const pdl = search.inputSchema.properties.people_data_labs.anyOf;
   for (const branch of pdl) assert.deepEqual(branch.oneOf, [{ required: ['sql'] }, { required: ['query'] }]);
@@ -465,7 +465,7 @@ test('enrich shape errors are refused before the waterfall runs', async (t) => {
   assert.match(contact.content[0].text, /contact_fields applies to people only/);
   const block = await client.callTool({ name: 'people_company_enrich', arguments: { fullenrich: { people: [{ person_name: 'Ada', company_domain: 'acme.example' }] } } });
   assert.equal(block.isError, true);
-  assert.match(block.content[0].text, /unknown field fullenrich; takes people, companies, contact_fields, profile, max_credits/);
+  assert.match(block.content[0].text, /unknown field fullenrich; takes people, companies, contact_fields, profile, verified_only, max_credits/);
   for (const result of [none, fieldsOnly, many, contact]) assert.equal(result.isError, true);
   assert.equal(api.calls.length, 0);
 });

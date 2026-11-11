@@ -816,6 +816,10 @@ const enrichParameters = z.strictObject({
     .boolean()
     .optional()
     .describe('With contact_fields, also return each person\'s profile in the same call, looked up first so the contact lookups can use it. Default true; false skips it.'),
+  verified_only: z
+    .boolean()
+    .optional()
+    .describe('Email fields: return only an address the provider verified as deliverable. Default false returns the best address found, with fields.<field>.verified saying whether it was verified.'),
   max_credits: z
     .number()
     .int()
@@ -832,6 +836,20 @@ const enrichRecord = z.looseObject({
   results: z
     .array(z.looseObject({ provider: z.string(), data: z.unknown().describe("The provider's own response, unchanged.") }))
     .describe('One entry per provider that found a requested field; empty when none did.'),
+  fields: z
+    .record(
+      z.string(),
+      z.looseObject({
+        provider: z.string(),
+        value: z.string().optional().describe('The email address chosen from that provider\'s response.'),
+        verified: z.boolean().optional().describe('Email: the provider marked the address deliverable.'),
+        domain_match: z.boolean().optional().describe('Work email: the address is on the company\'s domain.'),
+        complete: z.boolean().optional().describe('Profile or firmographics: false when no provider gave the whole answer and this is the best partial one.'),
+        linkedin_confirmed: z.boolean().optional().describe('Firmographics: the company LinkedIn page matches the company\'s domain or name.'),
+      })
+    )
+    .optional()
+    .describe('Per filled field (work_email, personal_email, mobile, profile, firmographics), what backs the answer.'),
 });
 
 const enrichResultSchema = z.looseObject({
@@ -1011,6 +1029,7 @@ export function registerEnrichTools(
       'Enrich known people or companies. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to ' + ENRICH_MAX_RECORDS + ' records per call. ' +
       'Each requested field runs a waterfall by default: Firecrawl tries the providers that can use your inputs one at a time, ordered by listed price and past success rate, and stops as soon as the field is found. ' +
       'Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and, unless profile is false, the profile in the same call. ' +
+      'A work email is on the company domain when one is known and never free mail or a role mailbox; fields says for each answer which provider gave it, whether the email was verified and whether its domain matched. Set verified_only to get only verified emails. ' +
       "Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call; without it the call is uncapped. " +
       'To call one specific provider, use firecrawl_scrape with an alexandria body instead. ' +
       'Example: ' + JSON.stringify(ENRICH_EXAMPLE) + '.',
@@ -1036,7 +1055,7 @@ export function registerEnrichTools(
       assertCredential(session);
       const client = getClient(session) as any;
       const requestId = randomUUID();
-      const options = compact({ people: a.people, companies: a.companies, contact_fields: a.contact_fields, profile: a.contact_fields ? a.profile ?? true : undefined, max_credits: a.max_credits });
+      const options = compact({ people: a.people, companies: a.companies, contact_fields: a.contact_fields, profile: a.contact_fields ? a.profile ?? true : undefined, verified_only: a.verified_only, max_credits: a.max_credits });
       const response = await relayExchangeError(
         (attempt) => {
           // A resend gets the time left, keeping the 5 s margin above the API's deadline.
