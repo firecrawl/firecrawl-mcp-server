@@ -173,7 +173,7 @@ test('firecrawl_scrape returns a small page unchanged, including cached json ext
   assert.deepEqual(requests.at(-1).body.formats, [{ type: 'json', prompt: 'Read the title' }]);
 });
 
-test('scrape, crawl and crawl status only add maxCharacters to their inputs and raise the inline result size', async (t) => {
+test('scrape, crawl and crawl status only add maxCharacters to their inputs', async (t) => {
   const { client } = await startApi(t);
   const { tools } = await client.request('tools/list', {});
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
@@ -188,7 +188,7 @@ test('scrape, crawl and crawl status only add maxCharacters to their inputs and 
     assert.equal(tool.inputSchema.properties.maxCharacters.type, 'number', name);
     if (name !== 'firecrawl_check_crawl_status') assert.deepEqual(tool.inputSchema.required ?? [], ['url'], name);
     assert.equal((tool.inputSchema.required ?? []).includes('maxCharacters'), false, name);
-    assert.equal(tool._meta['anthropic/maxResultSizeChars'], 150_000, name);
+    assert.equal(tool._meta?.['anthropic/maxResultSizeChars'], undefined, name);
     assert.ok(tool.description.length <= 2_048, name);
   }
   assert.equal(byName.get('firecrawl_scrape')._meta['anthropic/alwaysLoad'], true);

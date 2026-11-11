@@ -89,7 +89,6 @@ import { registerGovTools } from './gov';
 import { registerEnrichTools } from './enrich';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
-import { LARGE_RESULT_META } from './tool-meta.js';
 import { fitSearchResponse, searchByteBudget } from './search-budget';
 import { registerUsageTools } from './usage';
 import {
@@ -1953,7 +1952,7 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
   };
   server.addTool({
     ...scrapeTool,
-    _meta: { 'anthropic/alwaysLoad': true, ...LARGE_RESULT_META },
+    _meta: { 'anthropic/alwaysLoad': true },
   });
 
   server.addTool({
@@ -2984,7 +2983,6 @@ Returns submission status, feedback ID, and accounting fields.
 
   server.addTool({
     name: 'firecrawl_crawl',
-    _meta: LARGE_RESULT_META,
     annotations: {
       title: 'Firecrawl site crawl',
       readOnlyHint: false, // Starts a server-side crawl job and polls until the job reaches a terminal state.
@@ -3088,7 +3086,6 @@ Crawl results can be large; use conservative limits when full-site coverage is u
 
   server.addTool({
     name: 'firecrawl_check_crawl_status',
-    _meta: LARGE_RESULT_META,
     annotations: {
       title: 'Firecrawl crawl status',
       readOnlyHint: true, // Retrieves status and results for an existing crawl job by ID; no mutations.
