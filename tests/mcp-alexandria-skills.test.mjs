@@ -16,6 +16,7 @@ test('skills are read through alexandria_library_search; firecrawl_save_skill wr
   assert.deepEqual(tools.find(tool => tool.name === 'firecrawl_save_skill')?.annotations, { title: 'Save Skill', readOnlyHint: false, openWorldHint: false, destructiveHint: true, idempotentHint: false });
   const library = tools.find(tool => tool.name === 'alexandria_library_search');
   assert.match(library.description, /under \/skills: `grep -i "<word>" \/skills\/INDEX` lists them/);
+  assert.match(library.description, /`cat \/skills\/search\/<a-few-words-from-the-task>`/);
 });
 
 test('keyless sessions do not list firecrawl_save_skill', async (t) => {
