@@ -16,10 +16,10 @@
     "tools": [
       "firecrawl_scrape@0f86098ecdc5",
       "firecrawl_map@3214f5d6a1a4",
-      "firecrawl_search@57a25792e6df",
+      "firecrawl_search@ce8356bfc712",
       "firecrawl_find_tools@d138e7a0897b",
       "alexandria_library_search@6756500c6c74",
-      "alexandria_library_read@0a00b21b6b18",
+      "alexandria_library_read@fc9ddd89579d",
       "firecrawl_search_feedback@6ca0521ad2bd",
       "firecrawl_feedback@771747894435",
       "firecrawl_crawl@7ebcf738dc74",
@@ -44,7 +44,7 @@
       "firecrawl_developer_search@e9810e540216",
       "firecrawl_gov_search@b020bd420f91",
       "people_company_search@dd7c1052c081",
-      "people_company_enrich@bb840c5172d2",
+      "people_company_enrich@dc2d9db0d055",
       "firecrawl_credit_usage@5b79f64c3f82"
     ]
   },

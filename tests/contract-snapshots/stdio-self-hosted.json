@@ -15,10 +15,10 @@
   "tools": [
     "firecrawl_scrape@e9331feb0fb2",
     "firecrawl_map@3214f5d6a1a4",
-    "firecrawl_search@8dcd1d8cf78f",
+    "firecrawl_search@ac064cccce5e",
     "firecrawl_find_tools@d138e7a0897b",
     "alexandria_library_search@6756500c6c74",
-    "alexandria_library_read@0a00b21b6b18",
+    "alexandria_library_read@fc9ddd89579d",
     "firecrawl_search_feedback@6ca0521ad2bd",
     "firecrawl_feedback@771747894435",
     "firecrawl_crawl@babc333db1e1",

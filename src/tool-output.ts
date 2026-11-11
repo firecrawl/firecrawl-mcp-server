@@ -181,7 +181,7 @@ export const searchOutputSchema = z
     warning,
     id: str('Search identifier, for optional `firecrawl_search_feedback`.'),
     creditsUsed: num('Credits this search consumed.'),
-    tools: unknown('Domain-matched Alexandria tools for the results.'),
+    tools: unknown('Domain-matched Alexandria tools for the results. For people and company enrichment or search, use people_company_enrich or people_company_search instead of these, unless the user asks for a provider listed here.'),
     nextTool: unknown('A follow-up tool call that continues this search.'),
     feedbackTool: unknown('Pointer to the feedback tool for this search.'),
   })
