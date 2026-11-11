@@ -20,6 +20,7 @@ import {
   str,
 } from './enrich.js';
 import { requestOrigin } from './origin';
+import { httpUrl } from './tool-arguments.js';
 import { relayExchangeError } from './tool-helpers.js';
 import { withStructured } from './tool-output';
 
@@ -34,9 +35,9 @@ const jobsParameters = z.strictObject({
   remote: z.boolean().optional().describe('true returns remote roles only.'),
   posted_within_days: z.number().int().min(1).max(365).optional().describe('Only postings the board dates within this many days, 1 to 365.'),
   company: z.string().optional().describe("Company name or domain, e.g. \"example.com\". Lists that company's open roles from its own job board."),
-  url: z.string().optional().describe('One posting URL to read in full and check: whether it is still open, with its description.'),
-  urls: z.array(z.string().min(1)).min(1).max(JOBS_MAX_URLS).optional().describe('Up to ' + JOBS_MAX_URLS + ' posting URLs to check in one call; each comes back with its status.'),
-  limit: z.number().int().min(1).max(JOBS_MAX_LIMIT).optional().describe('Rows wanted, 1 to ' + JOBS_MAX_LIMIT + ', default 10.'),
+  url: httpUrl().optional().describe('One posting URL to read in full and check: whether it is still open, with its description.'),
+  urls: z.array(httpUrl()).min(1).max(JOBS_MAX_URLS).optional().describe('Up to ' + JOBS_MAX_URLS + ' posting URLs to check in one call; each comes back with its status.'),
+  limit: z.number().int().min(1).max(JOBS_MAX_LIMIT).optional().describe('Rows wanted from a search by query or company, 1 to ' + JOBS_MAX_LIMIT + ', default 10. Leave it out with url or urls.'),
   cursor: z.string().optional().describe('next_cursor from an earlier call with the same input, for more rows.'),
   max_credits: z
     .number()

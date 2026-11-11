@@ -8678,7 +8678,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "jobs_search@c19c0b473dc9": {
+  "jobs_search@206a7e3f525b": {
     "annotations": {
       "title": "Search job postings",
       "readOnlyHint": true,
@@ -8724,12 +8724,11 @@
           "maxItems": 10,
           "type": "array",
           "items": {
-            "type": "string",
-            "minLength": 1
+            "type": "string"
           }
         },
         "limit": {
-          "description": "Rows wanted, 1 to 100, default 10.",
+          "description": "Rows wanted from a search by query or company, 1 to 100, default 10. Leave it out with url or urls.",
           "type": "integer",
           "minimum": 1,
           "maximum": 100

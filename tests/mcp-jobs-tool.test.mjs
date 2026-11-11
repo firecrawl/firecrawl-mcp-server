@@ -20,10 +20,12 @@ const UNKNOWN_CAPABILITY = { status: 404, json: { success: false, error: 'Unknow
 async function startApi(t, respond) {
   const calls = [];
   const bodies = [];
+  const requests = [];
   const server = createServer(async (req, res) => {
     let raw = '';
     for await (const chunk of req) raw += chunk;
     const body = raw ? JSON.parse(raw) : {};
+    requests.push(req.method + ' ' + req.url);
     bodies.push(body);
     calls.push(...body.alexandria);
     const { status = 200, json } = respond?.(body.alexandria) ?? {};
@@ -32,7 +34,7 @@ async function startApi(t, respond) {
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
-  return { url: 'http://127.0.0.1:' + server.address().port, calls, bodies };
+  return { url: 'http://127.0.0.1:' + server.address().port, calls, bodies, requests };
 }
 
 const answerWith = (entry) => () => ({ json: { success: true, data: { alexandria: [{ provider: 'firecrawl', capability: 'jobs/auto', creditsCost: 0, ...entry }] } } });
@@ -124,13 +126,15 @@ test('the input goes to firecrawl/jobs/auto as one call, in every mode', async (
     { query: 'data engineer', location: 'Berlin', remote: true, posted_within_days: 14, limit: 20, max_credits: 50, group_by: 'employer', boards_only: true, include_description: true },
     { url: 'https://boards.greenhouse.io/example/jobs/1234567' },
     { urls: ['https://boards.greenhouse.io/example/jobs/1234567', 'https://jobs.ashbyhq.com/example/9a8b'] },
-    { company: 'example.com', query: 'account executive', cursor: 'abc', provider: 'greenhouse' },
+    { company: 'example.com', query: 'account executive' },
+    { query: 'data engineer', cursor: 'abc', provider: 'indeed' },
   ];
   for (const input of inputs) {
     const result = await client.callTool({ name: 'jobs_search', arguments: input });
     assert.notEqual(result.isError, true, JSON.stringify(result));
   }
   assert.deepEqual(api.calls, inputs.map((options) => ({ provider: 'firecrawl', capability: 'jobs/auto', options })));
+  assert.deepEqual(api.requests, inputs.map(() => 'POST /v2/scrape'));
   assert.equal(api.bodies[0].timeout, 120000);
 });
 
@@ -139,11 +143,29 @@ test('conversationId and objective are accepted and not sent, and near-miss shap
   const client = await connect(t, { apiUrl: api.url });
   const result = await client.callTool({
     name: 'jobs_search',
-    arguments: { conversationId: 'c-1', objective: 'Check these postings', urls: 'https://boards.greenhouse.io/example/jobs/1234567', limit: '5' },
+    arguments: { conversationId: 'c-1', objective: 'Check these postings', urls: 'https://boards.greenhouse.io/example/jobs/1234567' },
   });
   assert.notEqual(result.isError, true, JSON.stringify(result));
-  assert.deepEqual(api.calls[0].options, { urls: ['https://boards.greenhouse.io/example/jobs/1234567'], limit: 5 });
+  assert.deepEqual(api.calls[0].options, { urls: ['https://boards.greenhouse.io/example/jobs/1234567'] });
+  await client.callTool({ name: 'jobs_search', arguments: { query: 'data engineer', limit: '5' } });
+  assert.deepEqual(api.calls[1].options, { query: 'data engineer', limit: 5 });
   assert.ok(!JSON.stringify(api.bodies).includes('c-1') && !JSON.stringify(api.bodies).includes('Check these postings'));
+});
+
+test('a posting read sends the urls alone: no limit or other default the route refuses with url', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { apiUrl: api.url });
+  const tool = (await client.listTools()).tools.find((entry) => entry.name === 'jobs_search');
+  assert.match(tool.inputSchema.properties.limit.description, /search by query or company.*Leave it out with url or urls/);
+  for (const key of Object.keys(tool.inputSchema.properties)) assert.ok(!('default' in tool.inputSchema.properties[key]), key);
+  const url = 'https://boards.greenhouse.io/example/jobs/1234567';
+  await client.callTool({ name: 'jobs_search', arguments: { url } });
+  await client.callTool({ name: 'jobs_search', arguments: { urls: [url] } });
+  await client.callTool({ name: 'jobs_search', arguments: { url: 'boards.greenhouse.io/example/jobs/1234567' } });
+  assert.deepEqual(api.calls.map((call) => call.options), [{ url }, { urls: [url] }, { url }]);
+  const malformed = await client.callTool({ name: 'jobs_search', arguments: { urls: ['not a url'] } });
+  assert.equal(malformed.isError, true);
+  assert.equal(api.calls.length, 3);
 });
 
 test('a call with nothing to look for gets a pointer with examples and reaches no API', async (t) => {
