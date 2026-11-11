@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Alexandria skills, as two tools split by side effect. `firecrawl_skills` is read-only: with `query` (and optional `limit`) it lists Firecrawl's skills and the team's own (`team:<slug>`, first) as metadata through `firecrawl/find-skills`, each with a `nextTool` that reads it; with `id` (and optional `path` and `version`) it returns one skill file in full through `firecrawl/read-skill`. A call that gives both, or neither, is refused with `invalid_request` before Exchange is called. `firecrawl_save_skill` writes: without `id` it creates a team skill through `firecrawl/create-skill`, written out or copied `from` a listed skill (library results carry a `createTool` that does this); with `id` and `baseVersion` it changes one through `firecrawl/update-skill`, and a stale `baseVersion` is a conflict. Its schema refuses an update without `baseVersion` or a create with update-only fields before Exchange is called, and it is marked destructive because an update can overwrite or turn off a skill. There is no delete. Both are free, need an API key, are hidden from keyless sessions, and are on the full surface only (the search profile's tool set is unchanged).
+
 ### Fixed
 
 - `people_company_search` declares `credits_pending` (top level and on each provider) in its output schema. A search where a provider timed out now returns its result instead of failing the client's output-schema check.
