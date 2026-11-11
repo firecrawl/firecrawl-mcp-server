@@ -29,7 +29,7 @@ const JOBS_MAX_URLS = 10;
 const DEFAULT_MAX_CREDITS = 200;
 
 const jobsParameters = z.strictObject({
-  query: z.string().max(500).optional().describe('Job title or keywords, e.g. "data engineer". With company, the role to look for there.'),
+  query: z.string().max(300).optional().describe('Job title or keywords, e.g. "data engineer". With company, the role to look for there.'),
   location: z.string().optional().describe('City, region or country, e.g. "Berlin" or "Canada".'),
   remote: z.boolean().optional().describe('true returns remote roles only.'),
   posted_within_days: z.number().int().min(1).max(365).optional().describe('Only postings the board dates within this many days, 1 to 365.'),
@@ -80,7 +80,7 @@ const jobRow = z.object({
   description: text('For a single url, or with include_description.'),
   salary: text(),
   requirements: text('For a posting read by url, when the board lists them separately.'),
-  reason: text('Why the status is error.'),
+  reason: text('Why a posting is closed, not_found, error or unverified.'),
 });
 
 const jobsResultSchema = z.object({
@@ -97,6 +97,7 @@ const jobsResultSchema = z.object({
       z.object({
         vendor: text(),
         handle: text(),
+        name: text(),
         url: text(),
         covers: text('What part of the company this board lists.'),
         postings: count('Open postings on the board.'),
@@ -110,7 +111,8 @@ const jobsResultSchema = z.object({
   resolution: z
     .object({
       status: text('resolved, cached, unresolved (no board found) or own_site (the company lists jobs on its own site).'),
-      steps: z.array(z.object({ step: text(), outcome: text(), detail: text() })).optional().describe('Each step tried to find the board, with its outcome.'),
+      domain: text("The company's domain."),
+      steps: z.array(z.object({ step: text(), outcome: text(), ms: count(), credits: count() })).optional().describe('Each step tried to find the board, with its outcome.'),
       careers_url: text(),
       fallback: text('market when the rows come from a search of job sites instead of a board.'),
     })

@@ -1,193 +1,184 @@
 {
-  "posting: one open URL with its description": {
+  "posting_one_url": {
     "mode": "posting",
-    "count": 1,
-    "credits": 5,
     "results": [
       {
         "status": "open",
-        "title": "Senior Data Engineer",
-        "company": "Example",
-        "company_domain": "example.com",
+        "checked_at": "2026-11-12T10:00:00.000Z",
+        "title": "Data Engineer",
+        "company": "Acme",
         "location": "Berlin, Germany",
-        "remote": false,
-        "employment_type": "Full-time",
-        "posted_at": "2026-11-03",
-        "url": "https://boards.greenhouse.io/example/jobs/1234567",
-        "apply_url": "https://boards.greenhouse.io/example/jobs/1234567#app",
-        "source": "greenhouse",
+        "posted_at": "2026-11-10T09:00:00-05:00",
+        "url": "https://job-boards.greenhouse.io/acme/jobs/1",
+        "apply_url": "https://job-boards.greenhouse.io/acme/jobs/1",
+        "description": "Build pipelines. Requirements: SQL and Python.",
+        "salary": "EUR 70,000 - 90,000",
+        "source": "greenhouse-io",
         "source_type": "employer_board",
-        "board": "greenhouse/example",
-        "checked_at": "2026-11-12T09:30:00.000Z",
-        "description": "We are hiring a Senior Data Engineer to build our pipelines.",
-        "salary": "EUR 90,000 - 110,000",
-        "requirements": "5+ years with SQL and Python."
+        "board": "greenhouse/acme"
       }
     ],
+    "count": 1,
     "providers": [
       {
-        "name": "greenhouse",
-        "capability": "jobs/get",
+        "name": "greenhouse-io",
+        "capability": "jobs/job",
         "status": "rows",
         "returned": 1,
         "credits": 5,
-        "ms": 640
-      }
-    ]
-  },
-  "posting: a closed posting": {
-    "mode": "posting",
-    "count": 1,
-    "credits": 0,
-    "results": [
-      {
-        "status": "closed",
-        "url": "https://boards.greenhouse.io/example/jobs/7654321",
-        "company": "Example",
-        "source": "greenhouse",
-        "source_type": "employer_board",
-        "board": "greenhouse/example",
-        "checked_at": "2026-11-12T09:30:00.000Z"
+        "ms": 0
       }
     ],
-    "providers": [
-      {
-        "name": "greenhouse",
-        "capability": "jobs/get",
-        "status": "empty",
-        "returned": 0,
-        "credits": 0,
-        "ms": 640
-      },
-      {
-        "name": "greenhouse",
-        "capability": "jobs/list",
-        "status": "rows",
-        "returned": 0,
-        "credits": 0,
-        "ms": 640
-      }
-    ],
-    "notes": [
-      "The board greenhouse/example answered and no longer lists this posting."
-    ]
+    "credits": 5
   },
-  "posting: a board that does not exist": {
+  "posting_one_url_no_provider": {
     "mode": "posting",
-    "count": 1,
-    "credits": 0,
-    "results": [
-      {
-        "status": "not_found",
-        "url": "https://jobs.ashbyhq.com/no-such-board/0f0f0f0f",
-        "source": "ashby",
-        "source_type": "employer_board",
-        "board": "ashby/no-such-board",
-        "checked_at": "2026-11-12T09:30:00.000Z"
-      }
-    ],
-    "providers": [
-      {
-        "name": "ashby",
-        "capability": "jobs/get",
-        "status": "empty",
-        "returned": 0,
-        "credits": 0,
-        "ms": 640
-      }
-    ]
-  },
-  "posting: a URL that could not be read": {
-    "mode": "posting",
-    "count": 1,
-    "credits": 0,
-    "credits_pending": 5,
-    "results": [
-      {
-        "status": "error",
-        "reason": "line_timeout",
-        "url": "https://example.wd1.myworkdayjobs.com/careers/job/Berlin/Engineer_R1",
-        "source": "workday",
-        "source_type": "employer_board",
-        "checked_at": "2026-11-12T09:30:00.000Z"
-      }
-    ],
-    "providers": [
-      {
-        "name": "workday",
-        "capability": "jobs/get",
-        "status": "error",
-        "returned": 0,
-        "credits": 0,
-        "ms": 15002,
-        "credits_pending": 5,
-        "error": "line_timeout"
-      }
-    ]
-  },
-  "posting: several URLs, compact rows": {
-    "mode": "posting",
-    "count": 4,
-    "credits": 6,
     "results": [
       {
         "status": "open",
-        "title": "Senior Data Engineer",
-        "company": "Example",
-        "company_domain": "example.com",
-        "location": "Berlin, Germany",
+        "checked_at": "2026-11-12T10:00:00.000Z",
+        "title": "Head of Measurement",
+        "company": "acme",
+        "location": "New York, NY",
         "remote": false,
-        "employment_type": "Full-time",
-        "posted_at": "2026-11-03",
-        "url": "https://boards.greenhouse.io/example/jobs/1234567",
-        "apply_url": "https://boards.greenhouse.io/example/jobs/1234567#app",
-        "source": "greenhouse",
+        "employment_type": "Permanent",
+        "posted_at": "2026-11-10T21:00:00.000Z",
+        "url": "https://jobs.lever.co/acme/01b41b49-7d43-4933-9ba7-06ebe0a2a749",
+        "apply_url": "https://jobs.lever.co/acme/01b41b49-7d43-4933-9ba7-06ebe0a2a749/apply",
+        "description": "Lead measurement.\n\nWhat you'll do\n- Measure\n\nWho you are\n- Curious",
+        "requirements": "What you'll do\n- Measure\n\nWho you are\n- Curious",
+        "source": "firecrawl",
         "source_type": "employer_board",
-        "board": "greenhouse/example",
-        "checked_at": "2026-11-12T09:30:00.000Z"
+        "board": "lever/acme"
+      }
+    ],
+    "count": 1,
+    "providers": [
+      {
+        "name": "firecrawl",
+        "capability": "scrape",
+        "status": "rows",
+        "returned": 1,
+        "credits": 1,
+        "ms": 0
+      }
+    ],
+    "credits": 1
+  },
+  "posting_several_urls": {
+    "mode": "posting",
+    "results": [
+      {
+        "status": "open",
+        "checked_at": "2026-11-12T10:00:00.000Z",
+        "title": "Data Engineer",
+        "company": "Acme",
+        "location": "Berlin, Germany",
+        "posted_at": "2026-11-10T09:00:00-05:00",
+        "url": "https://job-boards.greenhouse.io/acme/jobs/1",
+        "apply_url": "https://job-boards.greenhouse.io/acme/jobs/1",
+        "salary": "EUR 70,000 - 90,000",
+        "source": "greenhouse-io",
+        "source_type": "employer_board",
+        "board": "greenhouse/acme"
       },
       {
         "status": "closed",
-        "url": "https://boards.greenhouse.io/example/jobs/7654321",
-        "company": "Example",
-        "source": "greenhouse",
+        "checked_at": "2026-11-12T10:00:00.000Z",
+        "reason": "The board no longer lists this posting.",
+        "url": "https://job-boards.greenhouse.io/acme/jobs/2",
+        "source": "greenhouse-io",
         "source_type": "employer_board",
-        "board": "greenhouse/example",
-        "checked_at": "2026-11-12T09:30:00.000Z"
+        "board": "greenhouse/acme"
+      },
+      {
+        "status": "not_found",
+        "checked_at": "2026-11-12T10:00:00.000Z",
+        "reason": "No job board exists at this address.",
+        "url": "https://job-boards.greenhouse.io/nowhere/jobs/3",
+        "source": "greenhouse-io",
+        "source_type": "employer_board",
+        "board": "greenhouse/nowhere"
+      },
+      {
+        "status": "open",
+        "checked_at": "2026-11-12T10:00:00.000Z",
+        "title": "Head of Measurement",
+        "company": "acme",
+        "location": "New York, NY",
+        "remote": false,
+        "employment_type": "Permanent",
+        "posted_at": "2026-11-10T21:00:00.000Z",
+        "url": "https://jobs.lever.co/acme/01b41b49-7d43-4933-9ba7-06ebe0a2a749",
+        "apply_url": "https://jobs.lever.co/acme/01b41b49-7d43-4933-9ba7-06ebe0a2a749/apply",
+        "source": "firecrawl",
+        "source_type": "employer_board",
+        "board": "lever/acme"
+      },
+      {
+        "status": "open",
+        "checked_at": "2026-11-12T10:00:00.000Z",
+        "title": "Staff Engineer",
+        "company": "Acme",
+        "company_domain": "acme.example",
+        "location": "Lisbon, PT",
+        "employment_type": "FULL_TIME",
+        "posted_at": "2026-11-01",
+        "url": "https://careers.acme.example/jobs/9",
+        "source": "firecrawl",
+        "source_type": "employer_site"
       },
       {
         "status": "unverified",
-        "title": "Platform Engineer",
-        "company": "Globex",
-        "url": "https://globex.example/careers/platform-engineer",
+        "checked_at": "2026-11-12T10:00:00.000Z",
         "source": "firecrawl",
         "source_type": "employer_site",
-        "checked_at": "2026-11-12T09:30:00.000Z"
+        "reason": "The page carries no job posting data, so it could not be confirmed as an open posting.",
+        "title": "Staff Engineer",
+        "url": "https://careers.acme.example/jobs/10"
+      },
+      {
+        "status": "closed",
+        "checked_at": "2026-11-12T10:00:00.000Z",
+        "reason": "The page answers 404: the posting was removed or never existed.",
+        "url": "https://careers.acme.example/jobs/11",
+        "source": "firecrawl",
+        "source_type": "employer_site"
       },
       {
         "status": "not_found",
-        "url": "https://jobs.lever.co/gone/1",
+        "checked_at": "2026-11-12T10:00:00.000Z",
+        "reason": "The host does not exist.",
+        "url": "https://down.acme.example/jobs/1",
         "source": "firecrawl",
-        "source_type": "employer_board",
-        "checked_at": "2026-11-12T09:30:00.000Z"
+        "source_type": "employer_site"
       }
     ],
+    "count": 8,
     "providers": [
       {
-        "name": "greenhouse",
-        "capability": "jobs/get",
+        "name": "greenhouse-io",
+        "capability": "jobs/job",
         "status": "rows",
         "returned": 1,
         "credits": 5,
-        "ms": 640
+        "ms": 0
       },
       {
-        "name": "greenhouse",
-        "capability": "jobs/get",
+        "name": "greenhouse-io",
+        "capability": "jobs/job",
         "status": "empty",
         "returned": 0,
         "credits": 0,
-        "ms": 640
+        "ms": 0
+      },
+      {
+        "name": "greenhouse-io",
+        "capability": "jobs/job",
+        "status": "empty",
+        "returned": 0,
+        "credits": 0,
+        "ms": 0
       },
       {
         "name": "firecrawl",
@@ -195,680 +186,646 @@
         "status": "rows",
         "returned": 1,
         "credits": 1,
-        "ms": 640
+        "ms": 0
       },
       {
         "name": "firecrawl",
         "capability": "scrape",
+        "status": "rows",
+        "returned": 1,
+        "credits": 1,
+        "ms": 0
+      },
+      {
+        "name": "firecrawl",
+        "capability": "scrape",
+        "status": "rows",
+        "returned": 1,
+        "credits": 1,
+        "ms": 0
+      },
+      {
+        "name": "greenhouse-io",
+        "capability": "jobs/jobs",
+        "status": "rows",
+        "returned": 1,
+        "credits": 5,
+        "ms": 0
+      },
+      {
+        "name": "greenhouse-io",
+        "capability": "jobs/jobs",
         "status": "empty",
         "returned": 0,
         "credits": 0,
-        "ms": 640
-      }
-    ]
-  },
-  "market: rows from job sites": {
-    "mode": "market",
-    "count": 2,
-    "credits": 3,
-    "next_cursor": "eyJsaW5lIjoiaW5kZWVkIiwicGFnZSI6Mn0",
-    "results": [
-      {
-        "status": "unverified",
-        "title": "Data Engineer",
-        "company": "Initech",
-        "company_domain": "initech.example",
-        "location": "Berlin, Germany",
-        "remote": false,
-        "employment_type": "Full-time",
-        "posted_at": "3 days ago",
-        "url": "https://de.indeed.com/viewjob?jk=abc123",
-        "apply_url": "https://initech.example/careers/data-engineer",
-        "source": "indeed",
-        "source_type": "aggregator",
-        "checked_at": "2026-11-12T09:30:00.000Z",
-        "salary": "EUR 70,000 - 85,000 a year"
+        "ms": 0
       },
       {
-        "status": "unverified",
-        "title": "Senior Data Engineer",
-        "company": "Globex",
-        "company_domain": null,
-        "location": "Berlin, Germany",
-        "remote": true,
-        "employment_type": "Full-time",
-        "posted_at": "3 days ago",
-        "url": "https://www.jobleads.com/job/xyz",
-        "apply_url": null,
-        "source": "jobleads",
-        "source_type": "aggregator",
-        "checked_at": "2026-11-12T09:30:00.000Z",
-        "salary": null
+        "name": "firecrawl",
+        "capability": "scrape",
+        "status": "rows",
+        "returned": 1,
+        "credits": 1,
+        "ms": 0
+      },
+      {
+        "name": "firecrawl",
+        "capability": "scrape",
+        "status": "error",
+        "returned": 0,
+        "credits": 0,
+        "ms": 0,
+        "error": "SCRAPE_DNS_RESOLUTION_ERROR"
       }
     ],
-    "providers": [
-      {
-        "name": "indeed",
-        "capability": "jobs/search",
-        "status": "rows",
-        "returned": 1,
-        "credits": 2,
-        "ms": 640,
-        "dropped": 2
-      },
-      {
-        "name": "jobleads",
-        "capability": "jobs/search",
-        "status": "rows",
-        "returned": 1,
-        "credits": 1,
-        "ms": 640
-      }
-    ]
+    "credits": 14
   },
-  "market: a row confirmed on the employer's board, with descriptions": {
-    "mode": "market",
-    "count": 2,
-    "credits": 8,
+  "posting_stopped": {
+    "mode": "posting",
     "results": [
       {
         "status": "open",
-        "title": "Senior Data Engineer",
-        "company": "Example",
-        "company_domain": "example.com",
+        "checked_at": "2026-11-12T10:00:00.000Z",
+        "title": "Data Engineer",
+        "company": "Acme",
         "location": "Berlin, Germany",
-        "remote": false,
-        "employment_type": "Full-time",
-        "posted_at": "2026-11-03",
-        "url": "https://boards.greenhouse.io/example/jobs/1234567",
-        "apply_url": "https://boards.greenhouse.io/example/jobs/1234567#app",
-        "source": "greenhouse",
+        "posted_at": "2026-11-10T09:00:00-05:00",
+        "url": "https://job-boards.greenhouse.io/acme/jobs/1",
+        "apply_url": "https://job-boards.greenhouse.io/acme/jobs/1",
+        "description": "Build pipelines. Requirements: SQL and Python.",
+        "salary": "EUR 70,000 - 90,000",
+        "source": "greenhouse-io",
         "source_type": "employer_board",
-        "board": "greenhouse/example",
-        "checked_at": "2026-11-12T09:30:00.000Z",
-        "description": "We are hiring a Senior Data Engineer."
+        "board": "greenhouse/acme"
       },
       {
-        "status": "unverified",
-        "title": "Data Engineer",
-        "company": "Initech",
-        "company_domain": "initech.example",
-        "location": "Berlin, Germany",
-        "remote": false,
-        "employment_type": "Full-time",
-        "posted_at": "3 days ago",
-        "url": "https://de.indeed.com/viewjob?jk=abc123",
-        "apply_url": "https://initech.example/careers/data-engineer",
-        "source": "indeed",
-        "source_type": "aggregator",
-        "checked_at": "2026-11-12T09:30:00.000Z",
-        "salary": "EUR 70,000 - 85,000 a year",
-        "description": "Initech is looking for a Data Engineer."
+        "status": "error",
+        "checked_at": "2026-11-12T10:00:00.000Z",
+        "reason": "max_credits",
+        "url": "https://job-boards.greenhouse.io/acme/jobs/2",
+        "source": "greenhouse-io",
+        "source_type": "employer_board",
+        "board": "greenhouse/acme"
       }
     ],
+    "count": 2,
     "providers": [
       {
-        "name": "indeed",
-        "capability": "jobs/search",
-        "status": "rows",
-        "returned": 2,
-        "credits": 3,
-        "ms": 640
-      },
-      {
-        "name": "greenhouse",
-        "capability": "jobs/get",
+        "name": "greenhouse-io",
+        "capability": "jobs/job",
         "status": "rows",
         "returned": 1,
         "credits": 5,
-        "ms": 640
+        "ms": 0
+      },
+      {
+        "name": "greenhouse-io",
+        "capability": "jobs/job",
+        "status": "skipped",
+        "returned": 0,
+        "credits": 0,
+        "error": "max_credits"
       }
+    ],
+    "credits": 5,
+    "stopped": "max_credits",
+    "notes": [
+      "Stopped at max_credits (5) before every call was made; raise it for a fuller answer."
     ]
   },
-  "market: grouped by employer": {
+  "market": {
     "mode": "market",
-    "count": 3,
-    "credits": 3,
     "results": [
       {
-        "status": "unverified",
+        "status": "open",
+        "checked_at": "2026-11-12T10:00:00.000Z",
         "title": "Data Engineer",
-        "company": "Initech",
-        "company_domain": "initech.example",
+        "company": "Acme",
         "location": "Berlin, Germany",
-        "remote": false,
         "employment_type": "Full-time",
-        "posted_at": "3 days ago",
-        "url": "https://de.indeed.com/viewjob?jk=abc123",
-        "apply_url": "https://initech.example/careers/data-engineer",
-        "source": "indeed",
-        "source_type": "aggregator",
-        "checked_at": "2026-11-12T09:30:00.000Z",
-        "salary": "EUR 70,000 - 85,000 a year"
+        "posted_at": "2026-11-10T09:00:00-05:00",
+        "url": "https://job-boards.greenhouse.io/acme/jobs/1",
+        "apply_url": "https://job-boards.greenhouse.io/acme/jobs/1",
+        "source": "greenhouse-io",
+        "source_type": "employer_board",
+        "description": "Build pipelines. Requirements: SQL and Python.",
+        "salary": "EUR 70,000 - 90,000",
+        "board": "greenhouse/acme"
       },
       {
         "status": "unverified",
-        "title": "Analytics Engineer",
-        "company": "Initech",
-        "company_domain": "initech.example",
-        "location": "Berlin, Germany",
-        "remote": false,
+        "checked_at": "2026-11-12T10:00:00.000Z",
+        "title": "Data Engineer",
+        "company": "Co1",
+        "location": "Berlin",
         "employment_type": "Full-time",
-        "posted_at": "3 days ago",
-        "url": "https://de.indeed.com/viewjob?jk=abc123",
-        "apply_url": "https://initech.example/careers/data-engineer",
-        "source": "indeed",
-        "source_type": "aggregator",
-        "checked_at": "2026-11-12T09:30:00.000Z",
-        "salary": "EUR 70,000 - 85,000 a year"
+        "posted_at": "2026-11-10T06:00:00Z",
+        "url": "https://www.indeed.com/viewjob?jk=0000000000000002",
+        "apply_url": "https://careers.acme.example/apply",
+        "source": "indeed-com",
+        "source_type": "aggregator"
       },
       {
         "status": "unverified",
+        "checked_at": "2026-11-12T10:00:00.000Z",
         "title": "Data Engineer",
-        "company": "Globex",
-        "company_domain": "globex.example",
-        "location": "Berlin, Germany",
-        "remote": false,
+        "company": "Co2",
+        "location": "Berlin",
         "employment_type": "Full-time",
-        "posted_at": "3 days ago",
-        "url": "https://de.indeed.com/viewjob?jk=abc123",
-        "apply_url": "https://initech.example/careers/data-engineer",
-        "source": "indeed",
-        "source_type": "aggregator",
-        "checked_at": "2026-11-12T09:30:00.000Z",
-        "salary": "EUR 70,000 - 85,000 a year"
+        "posted_at": "2026-11-10T06:00:00Z",
+        "url": "https://www.indeed.com/viewjob?jk=0000000000000003",
+        "apply_url": "https://careers.acme.example/apply",
+        "source": "indeed-com",
+        "source_type": "aggregator"
       }
     ],
-    "employers": [
-      {
-        "company": "Initech",
-        "company_domain": "initech.example",
-        "count": 2,
-        "postings": [
-          {
-            "status": "unverified",
-            "title": "Data Engineer",
-            "company": "Initech",
-            "company_domain": "initech.example",
-            "location": "Berlin, Germany",
-            "remote": false,
-            "employment_type": "Full-time",
-            "posted_at": "3 days ago",
-            "url": "https://de.indeed.com/viewjob?jk=abc123",
-            "apply_url": "https://initech.example/careers/data-engineer",
-            "source": "indeed",
-            "source_type": "aggregator",
-            "checked_at": "2026-11-12T09:30:00.000Z",
-            "salary": "EUR 70,000 - 85,000 a year"
-          },
-          {
-            "status": "unverified",
-            "title": "Analytics Engineer",
-            "company": "Initech",
-            "company_domain": "initech.example",
-            "location": "Berlin, Germany",
-            "remote": false,
-            "employment_type": "Full-time",
-            "posted_at": "3 days ago",
-            "url": "https://de.indeed.com/viewjob?jk=abc123",
-            "apply_url": "https://initech.example/careers/data-engineer",
-            "source": "indeed",
-            "source_type": "aggregator",
-            "checked_at": "2026-11-12T09:30:00.000Z",
-            "salary": "EUR 70,000 - 85,000 a year"
-          }
-        ]
-      },
-      {
-        "company": "Globex",
-        "company_domain": "globex.example",
-        "count": 1,
-        "postings": [
-          {
-            "status": "unverified",
-            "title": "Data Engineer",
-            "company": "Globex",
-            "company_domain": "globex.example",
-            "location": "Berlin, Germany",
-            "remote": false,
-            "employment_type": "Full-time",
-            "posted_at": "3 days ago",
-            "url": "https://de.indeed.com/viewjob?jk=abc123",
-            "apply_url": "https://initech.example/careers/data-engineer",
-            "source": "indeed",
-            "source_type": "aggregator",
-            "checked_at": "2026-11-12T09:30:00.000Z",
-            "salary": "EUR 70,000 - 85,000 a year"
-          }
-        ]
-      }
-    ],
+    "count": 3,
+    "next_cursor": "eyJwIjoiaW5kZWVkLWNvbSIsImMiOiJuZXh0IiwiayI6IjAzZDgxMDRmOGQwNzI3YjUifQ",
     "providers": [
       {
-        "name": "indeed",
+        "name": "workable",
+        "capability": "jobs/search",
+        "status": "error",
+        "returned": 0,
+        "credits": 0,
+        "ms": 0,
+        "credits_pending": 2,
+        "error": "request_failed"
+      },
+      {
+        "name": "indeed-com",
         "capability": "jobs/search",
         "status": "rows",
         "returned": 3,
-        "credits": 3,
-        "ms": 640
+        "credits": 5,
+        "ms": 0
+      },
+      {
+        "name": "greenhouse-io",
+        "capability": "jobs/job",
+        "status": "rows",
+        "returned": 1,
+        "credits": 5,
+        "ms": 0
       }
+    ],
+    "credits": 10,
+    "credits_pending": 2,
+    "notes": [
+      "2 of 3 rows come from aggregators or indexes and were not confirmed against the employer's own board."
     ]
   },
-  "market: boards_only": {
+  "market_empty": {
     "mode": "market",
-    "count": 1,
-    "credits": 7,
+    "results": [],
+    "count": 0,
+    "providers": [
+      {
+        "name": "workable",
+        "capability": "jobs/search",
+        "status": "empty",
+        "returned": 0,
+        "credits": 0,
+        "ms": 0
+      },
+      {
+        "name": "indeed-com",
+        "capability": "jobs/search",
+        "status": "empty",
+        "returned": 0,
+        "credits": 0,
+        "ms": 0
+      },
+      {
+        "name": "glassdoor-com",
+        "capability": "jobs/search_jobs",
+        "status": "empty",
+        "returned": 0,
+        "credits": 0,
+        "ms": 0
+      },
+      {
+        "name": "firecrawl",
+        "capability": "search",
+        "status": "empty",
+        "returned": 0,
+        "credits": 2,
+        "ms": 0,
+        "dropped": 0
+      }
+    ],
+    "credits": 2
+  },
+  "market_group_by_employer": {
+    "mode": "market",
+    "results": [],
+    "count": 3,
+    "employers": [
+      {
+        "company": "Acme",
+        "company_domain": "acme.example",
+        "count": 2,
+        "postings": [
+          {
+            "status": "open",
+            "checked_at": "2026-11-12T10:00:00.000Z",
+            "title": "Data Engineer",
+            "company": "Acme",
+            "company_domain": "acme.example",
+            "location": "Berlin, Berlin, Germany",
+            "posted_at": "2026-11-11T08:00:00.000Z",
+            "url": "https://jobs.workable.com/view/w0/job",
+            "apply_url": "https://jobs.workable.com/view/w0/job",
+            "source": "workable",
+            "source_type": "employer_board"
+          },
+          {
+            "status": "open",
+            "checked_at": "2026-11-12T10:00:00.000Z",
+            "title": "Senior Data Engineer",
+            "company": "Acme",
+            "company_domain": "acme.example",
+            "location": "Berlin, Berlin, Germany",
+            "posted_at": "2026-11-11T08:00:00.000Z",
+            "url": "https://jobs.workable.com/view/w1/job",
+            "apply_url": "https://jobs.workable.com/view/w1/job",
+            "source": "workable",
+            "source_type": "employer_board"
+          }
+        ]
+      },
+      {
+        "company": "Beta",
+        "company_domain": "beta.example",
+        "count": 1,
+        "postings": [
+          {
+            "status": "open",
+            "checked_at": "2026-11-12T10:00:00.000Z",
+            "title": "Data Engineer",
+            "company": "Beta",
+            "company_domain": "beta.example",
+            "location": "Berlin, Berlin, Germany",
+            "posted_at": "2026-11-11T08:00:00.000Z",
+            "url": "https://jobs.workable.com/view/w2/job",
+            "apply_url": "https://jobs.workable.com/view/w2/job",
+            "source": "workable",
+            "source_type": "employer_board"
+          }
+        ]
+      }
+    ],
+    "providers": [
+      {
+        "name": "workable",
+        "capability": "jobs/search",
+        "status": "rows",
+        "returned": 3,
+        "credits": 2,
+        "ms": 0
+      }
+    ],
+    "credits": 2
+  },
+  "market_boards_only": {
+    "mode": "market",
     "results": [
       {
         "status": "open",
-        "title": "Senior Data Engineer",
-        "company": "Example",
-        "company_domain": "example.com",
+        "checked_at": "2026-11-12T10:00:00.000Z",
+        "title": "Data Engineer",
+        "company": "Acme",
         "location": "Berlin, Germany",
-        "remote": false,
-        "employment_type": "Full-time",
-        "posted_at": "2026-11-03",
-        "url": "https://boards.greenhouse.io/example/jobs/1234567",
-        "apply_url": "https://boards.greenhouse.io/example/jobs/1234567#app",
-        "source": "greenhouse",
+        "posted_at": "2026-11-10T09:00:00-05:00",
+        "url": "https://job-boards.greenhouse.io/acme/jobs/1",
+        "apply_url": "https://job-boards.greenhouse.io/acme/jobs/1",
+        "salary": "EUR 70,000 - 90,000",
+        "source": "greenhouse-io",
         "source_type": "employer_board",
-        "board": "greenhouse/example",
-        "checked_at": "2026-11-12T09:30:00.000Z"
+        "board": "greenhouse/acme"
       }
     ],
+    "count": 1,
     "providers": [
       {
         "name": "firecrawl",
         "capability": "search",
         "status": "rows",
-        "returned": 3,
+        "returned": 1,
         "credits": 2,
-        "ms": 640,
-        "dropped": 2
+        "ms": 0,
+        "dropped": 0
       },
       {
-        "name": "greenhouse",
-        "capability": "jobs/get",
+        "name": "greenhouse-io",
+        "capability": "jobs/job",
         "status": "rows",
         "returned": 1,
         "credits": 5,
-        "ms": 640
+        "ms": 0
       }
-    ]
+    ],
+    "credits": 7
   },
-  "market: a walk with a pending charge, stopped at the cap": {
-    "mode": "market",
+  "company_resolved": {
+    "mode": "company",
+    "results": [
+      {
+        "status": "open",
+        "checked_at": "2026-11-12T10:00:00.000Z",
+        "title": "Data Engineer",
+        "company": "Acme",
+        "location": "Berlin, Germany",
+        "posted_at": "2026-11-10T09:00:00-05:00",
+        "url": "https://job-boards.greenhouse.io/acme/jobs/1",
+        "apply_url": "https://job-boards.greenhouse.io/acme/jobs/1",
+        "source": "greenhouse-io",
+        "source_type": "employer_board",
+        "board": "greenhouse/acme"
+      },
+      {
+        "status": "open",
+        "checked_at": "2026-11-12T10:00:00.000Z",
+        "title": "Data Engineer",
+        "location": "Remote - Germany",
+        "remote": true,
+        "employment_type": "FullTime",
+        "posted_at": "2026-11-09T12:00:00.000+00:00",
+        "url": "https://jobs.ashbyhq.com/acme/7458d4e9-da2e-47bd-98cb-adfda43d42b3",
+        "apply_url": "https://jobs.ashbyhq.com/acme/7458d4e9-da2e-47bd-98cb-adfda43d42b3/application",
+        "company": "acme",
+        "source": "ashbyhq-com",
+        "source_type": "employer_board",
+        "board": "ashby/acme"
+      },
+      {
+        "status": "open",
+        "checked_at": "2026-11-12T10:00:00.000Z",
+        "title": "Senior Data Engineer",
+        "company": "Acme",
+        "location": "Berlin, Germany",
+        "posted_at": "2026-11-11T09:00:00-05:00",
+        "url": "https://job-boards.greenhouse.io/acme/jobs/3",
+        "apply_url": "https://job-boards.greenhouse.io/acme/jobs/3",
+        "source": "greenhouse-io",
+        "source_type": "employer_board",
+        "board": "greenhouse/acme"
+      }
+    ],
+    "count": 3,
+    "boards": [
+      {
+        "vendor": "greenhouse",
+        "handle": "acme",
+        "url": "https://job-boards.greenhouse.io/acme",
+        "name": "Acme",
+        "covers": "Engineering",
+        "found_by": "careers_page",
+        "primary": true,
+        "postings": 3,
+        "newest_posted_at": "2026-11-11T09:00:00-05:00"
+      },
+      {
+        "vendor": "ashby",
+        "handle": "acme",
+        "url": "https://jobs.ashbyhq.com/acme",
+        "found_by": "probe",
+        "primary": false,
+        "postings": 2,
+        "newest_posted_at": "2026-11-09T12:00:00.000+00:00"
+      }
+    ],
+    "resolution": {
+      "status": "resolved",
+      "domain": "acme.example",
+      "steps": [
+        {
+          "step": "careers_page",
+          "outcome": "found 2 boards",
+          "ms": 0,
+          "credits": 1
+        }
+      ],
+      "careers_url": "https://acme.example/careers"
+    },
+    "providers": [
+      {
+        "name": "resolver",
+        "capability": "jobs/resolve",
+        "status": "rows",
+        "returned": 2,
+        "credits": 1,
+        "ms": 0
+      },
+      {
+        "name": "greenhouse-io",
+        "capability": "jobs/jobs",
+        "status": "rows",
+        "returned": 3,
+        "credits": 5,
+        "ms": 0
+      },
+      {
+        "name": "ashbyhq-com",
+        "capability": "jobs/jobs",
+        "status": "rows",
+        "returned": 2,
+        "credits": 5,
+        "ms": 0
+      }
+    ],
+    "credits": 11
+  },
+  "company_cached": {
+    "mode": "company",
+    "results": [
+      {
+        "status": "open",
+        "checked_at": "2026-11-12T10:00:00.000Z",
+        "title": "Senior Data Engineer",
+        "company": "Acme",
+        "location": "Berlin, Germany",
+        "posted_at": "2026-11-11T09:00:00-05:00",
+        "url": "https://job-boards.greenhouse.io/acme/jobs/3",
+        "apply_url": "https://job-boards.greenhouse.io/acme/jobs/3",
+        "source": "greenhouse-io",
+        "source_type": "employer_board",
+        "board": "greenhouse/acme"
+      }
+    ],
     "count": 1,
-    "credits": 2,
-    "credits_pending": 4,
-    "stopped": "max_credits",
+    "boards": [
+      {
+        "vendor": "greenhouse",
+        "handle": "acme",
+        "url": "https://job-boards.greenhouse.io/acme",
+        "name": "Acme",
+        "covers": "Engineering",
+        "found_by": "careers_page",
+        "primary": true,
+        "postings": 3,
+        "newest_posted_at": "2026-11-11T09:00:00-05:00"
+      },
+      {
+        "vendor": "ashby",
+        "handle": "acme",
+        "url": "https://jobs.ashbyhq.com/acme",
+        "found_by": "probe",
+        "primary": false,
+        "postings": 2,
+        "newest_posted_at": "2026-11-09T12:00:00.000+00:00"
+      }
+    ],
+    "resolution": {
+      "status": "cached",
+      "domain": "acme.example",
+      "steps": [
+        {
+          "step": "cache",
+          "outcome": "hit",
+          "ms": 0,
+          "credits": 0
+        }
+      ],
+      "careers_url": "https://acme.example/careers"
+    },
+    "providers": [
+      {
+        "name": "greenhouse-io",
+        "capability": "jobs/jobs",
+        "status": "rows",
+        "returned": 3,
+        "credits": 5,
+        "ms": 0
+      },
+      {
+        "name": "ashbyhq-com",
+        "capability": "jobs/jobs",
+        "status": "rows",
+        "returned": 2,
+        "credits": 5,
+        "ms": 0
+      }
+    ],
+    "credits": 10
+  },
+  "company_unresolved": {
+    "mode": "company",
     "results": [
       {
         "status": "unverified",
+        "checked_at": "2026-11-12T10:00:00.000Z",
         "title": "Data Engineer",
-        "company": "Initech",
-        "company_domain": "initech.example",
-        "location": "Berlin, Germany",
-        "remote": false,
+        "company": "Acme",
+        "location": "Berlin",
         "employment_type": "Full-time",
-        "posted_at": "3 days ago",
-        "url": "https://de.indeed.com/viewjob?jk=abc123",
-        "apply_url": "https://initech.example/careers/data-engineer",
-        "source": "indeed",
-        "source_type": "aggregator",
-        "checked_at": "2026-11-12T09:30:00.000Z",
-        "salary": "EUR 70,000 - 85,000 a year"
+        "posted_at": "2026-11-10T06:00:00Z",
+        "url": "https://www.indeed.com/viewjob?jk=0000000000000001",
+        "apply_url": "https://careers.acme.example/apply",
+        "source": "indeed-com",
+        "source_type": "aggregator"
       }
     ],
+    "count": 1,
+    "resolution": {
+      "status": "unresolved",
+      "steps": [
+        {
+          "step": "probe",
+          "outcome": "resolver not installed",
+          "ms": 0,
+          "credits": 0
+        }
+      ],
+      "fallback": "market"
+    },
     "providers": [
       {
-        "name": "indeed",
+        "name": "resolver",
+        "capability": "jobs/resolve",
+        "status": "empty",
+        "returned": 0,
+        "credits": 0,
+        "ms": 0
+      },
+      {
+        "name": "indeed-com",
         "capability": "jobs/search",
         "status": "rows",
         "returned": 1,
-        "credits": 2,
-        "ms": 640
+        "credits": 5,
+        "ms": 0
       },
       {
-        "name": "glassdoor",
+        "name": "theirstack",
         "capability": "jobs/search",
-        "status": "error",
+        "status": "empty",
         "returned": 0,
         "credits": 0,
-        "ms": 15001,
-        "credits_pending": 4,
-        "error": "line_timeout"
+        "ms": 0
+      }
+    ],
+    "credits": 5,
+    "notes": [
+      "No job board resolved for Acme; these rows come from aggregators and may be incomplete.",
+      "1 of 1 rows come from aggregators or indexes and were not confirmed against the employer's own board."
+    ]
+  },
+  "company_own_site": {
+    "mode": "company",
+    "results": [],
+    "count": 0,
+    "resolution": {
+      "status": "own_site",
+      "domain": "acme.example",
+      "steps": [
+        {
+          "step": "name_to_domain",
+          "outcome": "acme.example",
+          "ms": 0,
+          "credits": 1
+        },
+        {
+          "step": "careers_page",
+          "outcome": "own listing",
+          "ms": 0,
+          "credits": 1
+        }
+      ],
+      "careers_url": "https://acme.example/careers",
+      "fallback": "market"
+    },
+    "providers": [
+      {
+        "name": "resolver",
+        "capability": "jobs/resolve",
+        "status": "empty",
+        "returned": 0,
+        "credits": 2,
+        "ms": 0
+      },
+      {
+        "name": "indeed-com",
+        "capability": "jobs/search",
+        "status": "empty",
+        "returned": 0,
+        "credits": 0,
+        "ms": 0
       },
       {
         "name": "theirstack",
         "capability": "jobs/search",
         "status": "skipped",
-        "returned": null,
-        "credits": null,
-        "ms": null,
+        "returned": 0,
+        "credits": 0,
         "error": "max_credits"
       }
     ],
-    "notes": [
-      "Stopped before theirstack: its price would pass max_credits."
-    ]
-  },
-  "market: nothing found": {
-    "mode": "market",
-    "count": 0,
-    "credits": 0,
-    "results": [],
-    "providers": [
-      {
-        "name": "indeed",
-        "capability": "jobs/search",
-        "status": "empty",
-        "returned": 0,
-        "credits": 0,
-        "ms": 640
-      },
-      {
-        "name": "jobleads",
-        "capability": "jobs/search",
-        "status": "empty",
-        "returned": 0,
-        "credits": 0,
-        "ms": 640
-      },
-      {
-        "name": "glassdoor",
-        "capability": "jobs/search",
-        "status": "empty",
-        "returned": 0,
-        "credits": 0,
-        "ms": 640
-      }
-    ]
-  },
-  "company: resolved, several boards": {
-    "mode": "company",
-    "count": 2,
-    "credits": 10,
-    "next_cursor": "eyJib2FyZCI6ImdyZWVuaG91c2UvZXhhbXBsZSIsIm9mZnNldCI6Mn0",
-    "results": [
-      {
-        "status": "open",
-        "title": "Senior Data Engineer",
-        "company": "Example",
-        "company_domain": "example.com",
-        "location": "Berlin, Germany",
-        "remote": false,
-        "employment_type": "Full-time",
-        "posted_at": "2026-11-03",
-        "url": "https://boards.greenhouse.io/example/jobs/1234567",
-        "apply_url": "https://boards.greenhouse.io/example/jobs/1234567#app",
-        "source": "greenhouse",
-        "source_type": "employer_board",
-        "board": "greenhouse/example",
-        "checked_at": "2026-11-12T09:30:00.000Z"
-      },
-      {
-        "status": "open",
-        "title": "Account Executive",
-        "company": "Example",
-        "company_domain": "example.com",
-        "location": "New York, NY",
-        "remote": false,
-        "employment_type": "Full-time",
-        "posted_at": "2026-11-03",
-        "url": "https://jobs.ashbyhq.com/example-sales/9a8b",
-        "apply_url": "https://jobs.ashbyhq.com/example-sales/9a8b/application",
-        "source": "ashby",
-        "source_type": "employer_board",
-        "board": "ashby/example-sales",
-        "checked_at": "2026-11-12T09:30:00.000Z"
-      }
-    ],
-    "boards": [
-      {
-        "vendor": "greenhouse",
-        "handle": "example",
-        "url": "https://boards.greenhouse.io/example",
-        "covers": "Engineering and product",
-        "postings": 41,
-        "newest_posted_at": "2026-11-10",
-        "found_by": "careers_page",
-        "primary": true
-      },
-      {
-        "vendor": "ashby",
-        "handle": "example-sales",
-        "url": "https://jobs.ashbyhq.com/example-sales",
-        "covers": "Sales",
-        "postings": 7,
-        "newest_posted_at": "2026-11-01",
-        "found_by": "slug_probe",
-        "primary": false
-      }
-    ],
-    "resolution": {
-      "status": "resolved",
-      "careers_url": "https://example.com/careers",
-      "steps": [
-        {
-          "step": "cache",
-          "outcome": "miss"
-        },
-        {
-          "step": "careers_page",
-          "outcome": "found",
-          "detail": "greenhouse/example linked from https://example.com/careers"
-        },
-        {
-          "step": "slug_probe",
-          "outcome": "found",
-          "detail": "ashby/example-sales declares example.com"
-        }
-      ]
-    },
-    "providers": [
-      {
-        "name": "firecrawl",
-        "capability": "scrape",
-        "status": "rows",
-        "returned": 1,
-        "credits": 1,
-        "ms": 640
-      },
-      {
-        "name": "greenhouse",
-        "capability": "jobs/list",
-        "status": "rows",
-        "returned": 41,
-        "credits": 5,
-        "ms": 640,
-        "dropped": 40
-      },
-      {
-        "name": "ashby",
-        "capability": "jobs/list",
-        "status": "rows",
-        "returned": 7,
-        "credits": 4,
-        "ms": 640,
-        "dropped": 6
-      }
-    ]
-  },
-  "company: boards from the cache": {
-    "mode": "company",
-    "count": 1,
-    "credits": 5,
-    "results": [
-      {
-        "status": "open",
-        "title": "Senior Data Engineer",
-        "company": "Example",
-        "company_domain": "example.com",
-        "location": "Berlin, Germany",
-        "remote": false,
-        "employment_type": "Full-time",
-        "posted_at": "2026-11-03",
-        "url": "https://boards.greenhouse.io/example/jobs/1234567",
-        "apply_url": "https://boards.greenhouse.io/example/jobs/1234567#app",
-        "source": "greenhouse",
-        "source_type": "employer_board",
-        "board": "greenhouse/example",
-        "checked_at": "2026-11-12T09:30:00.000Z"
-      }
-    ],
-    "boards": [
-      {
-        "vendor": "greenhouse",
-        "handle": "example",
-        "url": "https://boards.greenhouse.io/example",
-        "covers": null,
-        "postings": 41,
-        "newest_posted_at": "2026-11-10",
-        "found_by": "careers_page",
-        "primary": true
-      }
-    ],
-    "resolution": {
-      "status": "cached",
-      "steps": [
-        {
-          "step": "cache",
-          "outcome": "hit"
-        }
-      ]
-    },
-    "providers": [
-      {
-        "name": "greenhouse",
-        "capability": "jobs/list",
-        "status": "rows",
-        "returned": 41,
-        "credits": 5,
-        "ms": 640,
-        "dropped": 40
-      }
-    ]
-  },
-  "company: unresolved, rows from the market fallback": {
-    "mode": "company",
-    "count": 1,
-    "credits": 4,
-    "results": [
-      {
-        "status": "unverified",
-        "title": "Data Engineer",
-        "company": "Acme",
-        "company_domain": "acme.example",
-        "location": "Berlin, Germany",
-        "remote": false,
-        "employment_type": "Full-time",
-        "posted_at": "3 days ago",
-        "url": "https://de.indeed.com/viewjob?jk=abc123",
-        "apply_url": "https://initech.example/careers/data-engineer",
-        "source": "indeed",
-        "source_type": "aggregator",
-        "checked_at": "2026-11-12T09:30:00.000Z",
-        "salary": "EUR 70,000 - 85,000 a year"
-      }
-    ],
-    "resolution": {
-      "status": "unresolved",
-      "fallback": "market",
-      "steps": [
-        {
-          "step": "cache",
-          "outcome": "miss"
-        },
-        {
-          "step": "careers_page",
-          "outcome": "no_board"
-        },
-        {
-          "step": "slug_probe",
-          "outcome": "refused",
-          "detail": "greenhouse/acme does not declare acme.example"
-        },
-        {
-          "step": "web_search",
-          "outcome": "no_board"
-        }
-      ]
-    },
-    "providers": [
-      {
-        "name": "firecrawl",
-        "capability": "scrape",
-        "status": "empty",
-        "returned": 0,
-        "credits": 1,
-        "ms": 640
-      },
-      {
-        "name": "firecrawl",
-        "capability": "search",
-        "status": "empty",
-        "returned": 0,
-        "credits": 2,
-        "ms": 640
-      },
-      {
-        "name": "indeed",
-        "capability": "jobs/search",
-        "status": "rows",
-        "returned": 1,
-        "credits": 1,
-        "ms": 640,
-        "dropped": 4
-      }
-    ],
-    "notes": [
-      "No job board resolved for acme.example; these rows come from aggregators and may be incomplete."
-    ]
-  },
-  "company: jobs listed on the company's own site": {
-    "mode": "company",
-    "count": 1,
     "credits": 2,
-    "results": [
-      {
-        "status": "open",
-        "title": "Field Technician",
-        "company": "Hooli",
-        "company_domain": "hooli.example",
-        "location": "Austin, TX",
-        "url": "https://hooli.example/careers/field-technician",
-        "source": "firecrawl",
-        "source_type": "employer_site",
-        "checked_at": "2026-11-12T09:30:00.000Z"
-      }
-    ],
-    "resolution": {
-      "status": "own_site",
-      "careers_url": "https://hooli.example/careers",
-      "steps": [
-        {
-          "step": "cache",
-          "outcome": "miss"
-        },
-        {
-          "step": "careers_page",
-          "outcome": "own_site"
-        }
-      ]
-    },
-    "providers": [
-      {
-        "name": "firecrawl",
-        "capability": "scrape",
-        "status": "rows",
-        "returned": 1,
-        "credits": 2,
-        "ms": 640
-      }
-    ],
+    "stopped": "max_credits",
     "notes": [
-      "hooli.example lists its jobs on its own site; rows were read from https://hooli.example/careers."
+      "acme.example runs its own careers site (https://acme.example/careers), which lists every opening; these rows come from aggregators and may be incomplete.",
+      "Stopped at max_credits (200) before every call was made; raise it for a fuller answer."
     ]
   }
 }
