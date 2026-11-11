@@ -5129,6 +5129,620 @@
       "additionalProperties": false
     }
   },
+  "firecrawl_research_lookup_protein@6ee4f6018586": {
+    "annotations": {
+      "title": "Firecrawl protein lookup",
+      "readOnlyHint": true,
+      "openWorldHint": true,
+      "destructiveHint": false
+    },
+    "title": "Firecrawl protein lookup",
+    "description": "\nLook up one protein in UniProtKB/Swiss-Prot, the reviewed section of UniProt, and return what its curators state: subcellular location, function, and GO cellular-component terms. Use this when the question is where a named protein is located in the cell, what it does, or which compartment terms it has, and you have a UniProt accession (P05771), an entry name (KPCB_HUMAN), a gene symbol (PRKCB), or the exact protein name. One protein per call; `organism` defaults to human.\n\nEach location and function statement carries an evidence label and, where UniProt cites one, a `pmid:` paper ID. Among these statements, only those whose label starts with \"Experimental\" are measurements. Every other label, such as \"Inferred from a related protein\", \"Curator inference\", \"Predicted from sequence\", or \"No evidence tag\", is not, so report the label with the statement. The GO cellular-component terms carry no such label. Every GO term listed has experimental evidence, shown by its GO code (IDA and the like) and the group that assigned it. When a location statement and a GO term name the same compartment with different evidence, say which one the compartment rests on, for example \"curated location has no evidence tag; GO term mitochondrion is experimental, IDA, HPA\". Open a cited paper with firecrawl_research_inspect_paper or firecrawl_research_read_paper.\n\nNot for free-text questions, topics, diseases, or lists of proteins (use firecrawl_research_search_papers), and not for structures, compounds, interactions, or unreviewed entries. If a symbol names several proteins, the result lists candidates; call again with one accession.\n",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "protein": {
+          "description": "One protein identifier: a UniProt accession (`P05771`; an isoform ID such as `P05771-2` resolves to its entry), an entry name (`KPCB_HUMAN`), a gene symbol (`PRKCB`), or the exact protein name (`Protein kinase C beta type`). Not a question or a sentence.",
+          "type": "string",
+          "minLength": 1
+        },
+        "organism": {
+          "description": "Organism that scopes a gene symbol or protein name: an NCBI taxon ID (`10090`), a scientific name (`Mus musculus`), or a UniProt common name (`Mouse`). Defaults to human (`9606`). Accessions and entry names ignore it.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "protein"
+      ],
+      "additionalProperties": false
+    },
+    "name": "firecrawl_research_lookup_protein",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "The curated UniProtKB/Swiss-Prot annotation of one protein, the candidates for an ambiguous name, or no match.",
+      "type": "object",
+      "properties": {
+        "success": {
+          "description": "Whether the API call succeeded.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "release": {
+          "description": "UniProt release the answer was read from, such as `2026_04`.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "match": {
+          "description": "`found`, `ambiguous`, or `not_found`.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "protein": {
+          "description": "The entry, when `match` is `found`.",
+          "type": "object",
+          "properties": {
+            "accession": {
+              "description": "Primary UniProt accession.",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "entryName": {
+              "description": "UniProt entry name, such as `KPCB_HUMAN`.",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "gene": {
+              "description": "Primary gene name, when UniProt gives one.",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "name": {
+              "description": "Recommended full protein name.",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "organism": {
+              "description": "`{taxonId, scientificName, commonName}` of the source organism."
+            },
+            "matchedBy": {
+              "description": "What the input matched: `accession`, `secondary_accession`, `entry_name`, `gene`, `synonym`, or `name`.",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "synonyms": {
+              "description": "Gene synonyms.",
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "url": {
+              "description": "UniProt entry page.",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "subcellularLocation": {
+              "description": "Curated subcellular location statements.",
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "text": {
+                        "description": "The statement as UniProt writes it: a location term, a note, or a function description.",
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "note": {
+                        "description": "True for the free-text note of a location comment.",
+                        "anyOf": [
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "molecule": {
+                        "description": "The isoform or chain the statement applies to, when UniProt names one.",
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "topology": {
+                        "description": "Membrane topology, on location statements.",
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "orientation": {
+                        "description": "Membrane orientation, on location statements.",
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "evidence": {
+                        "description": "What supports the statement, in UniProt order.",
+                        "anyOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "description": "`experimental`, `large_scale_experimental`, `author_statement`, `curator_inference`, `by_similarity`, `sequence_analysis`, `imported`, or `untagged`. Only the two experimental kinds are measurements.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "eco": {
+                                  "description": "Evidence and Conclusion Ontology code, such as `ECO:0000269`.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "paperId": {
+                                  "description": "Cited paper, such as `pmid:27974379`; accepted by the inspect and read paper tools.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "fromProtein": {
+                                  "description": "Accession of the related entry a `by_similarity` statement was inferred from.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "additionalProperties": {}
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "additionalProperties": {}
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "function": {
+              "description": "Curated function statements.",
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "text": {
+                        "description": "The statement as UniProt writes it: a location term, a note, or a function description.",
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "note": {
+                        "description": "True for the free-text note of a location comment.",
+                        "anyOf": [
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "molecule": {
+                        "description": "The isoform or chain the statement applies to, when UniProt names one.",
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "topology": {
+                        "description": "Membrane topology, on location statements.",
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "orientation": {
+                        "description": "Membrane orientation, on location statements.",
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "evidence": {
+                        "description": "What supports the statement, in UniProt order.",
+                        "anyOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "description": "`experimental`, `large_scale_experimental`, `author_statement`, `curator_inference`, `by_similarity`, `sequence_analysis`, `imported`, or `untagged`. Only the two experimental kinds are measurements.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "eco": {
+                                  "description": "Evidence and Conclusion Ontology code, such as `ECO:0000269`.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "paperId": {
+                                  "description": "Cited paper, such as `pmid:27974379`; accepted by the inspect and read paper tools.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "fromProtein": {
+                                  "description": "Accession of the related entry a `by_similarity` statement was inferred from.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "additionalProperties": {}
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "additionalProperties": {}
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "goCellularComponent": {
+              "description": "GO cellular-component terms with experimental evidence codes.",
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "description": "GO term ID, such as `GO:0005759`.",
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "term": {
+                        "description": "GO term name.",
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "code": {
+                        "description": "GO evidence code, such as `IDA`.",
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "assignedBy": {
+                        "description": "Database that assigned the term.",
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "paperIds": {
+                        "description": "Papers cited for the term.",
+                        "anyOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "additionalProperties": {}
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "paperIds": {
+              "description": "Every paper ID cited above, deduplicated.",
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "candidates": {
+          "description": "Up to ten entries the input could name, when `match` is `ambiguous`; look one up by its accession.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "accession": {
+                    "description": "Primary UniProt accession.",
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "entryName": {
+                    "description": "UniProt entry name, such as `KPCB_HUMAN`.",
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "gene": {
+                    "description": "Primary gene name, when UniProt gives one.",
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "name": {
+                    "description": "Recommended full protein name.",
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "organism": {
+                    "description": "`{taxonId, scientificName, commonName}` of the source organism."
+                  },
+                  "matchedBy": {
+                    "description": "What the input matched: `accession`, `secondary_accession`, `entry_name`, `gene`, `synonym`, or `name`.",
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "additionalProperties": {}
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "candidateCount": {
+          "description": "Total number of candidate entries, when `match` is `ambiguous`.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "notice": {
+          "description": "Attribution and license of the UniProt data.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
   "firecrawl_research_read_paper@b0cd84d8908a": {
     "annotations": {
       "title": "Firecrawl read research paper",

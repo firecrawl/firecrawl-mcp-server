@@ -16,6 +16,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 
 - Search the web, optionally with full page content for each result
 - Search indexes for developer sources (GitHub issues, merged pull requests, READMEs, and docs), US government sources, and scientific papers (PubMed, bioRxiv, medRxiv, arXiv)
+- Look up a protein's curated subcellular location and function in UniProtKB/Swiss-Prot, with the evidence and papers behind each statement
 - Scrape any URL into clean Markdown
 - Parse PDFs and documents
 - Crawl a site for content from many pages, or map it to discover its URLs
@@ -40,7 +41,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Use `firecrawl_credit_usage` to check credits left or what credits were spent on, by month or day, optionally broken down by endpoint or API key.
 - Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control. The session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
 
-This server lists 31 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 11 tools (search, developer, government, and research search, Alexandria catalogue lookup and execution, and people and company search and enrichment).
+This server lists 33 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 11 tools (search, developer, government, and research search, Alexandria catalogue lookup and execution, and people and company search and enrichment).
 
 ## Installation
 
@@ -88,7 +89,7 @@ A fixed-scope search surface is also hosted at:
 https://mcp.firecrawl.dev/v2/mcp-search
 ```
 
-It exposes a fixed set of eleven tools: `firecrawl_search`, `firecrawl_developer_search`, `firecrawl_gov_search`, the four `firecrawl_research_*` tools, the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`, and the [enrich tools](#15b-enrich-tools) `people_company_search` and `people_company_enrich`. Its `firecrawl_search` fetches no page content.
+It exposes a fixed set of eleven tools: `firecrawl_search`, `firecrawl_developer_search`, `firecrawl_gov_search`, the four `firecrawl_research_*` paper tools, the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`, and the [enrich tools](#15b-enrich-tools) `people_company_search` and `people_company_enrich`. Its `firecrawl_search` fetches no page content.
 
 ### Running with npx
 
@@ -368,6 +369,7 @@ Use this guide to select the right tool for your task:
 - **If you have a programming question** (a library, an API contract, an error message, a known bug): use **developer search**
 - **If you have a legal or regulatory question** (a statute, regulation, code, court opinion, or other US government publication): use the **Firecrawl Government Index**
 - **If you need scientific papers** (biomedical, life-science, clinical, or arXiv literature): use **research tools**, which search paper abstracts and full text. `search` with `categories: ["research"]` is a different thing: a website filter over ordinary web results.
+- **If you need what is known about one protein** (where it is located in the cell, what it does): use the **protein lookup**, which returns UniProt's curated statements with the evidence and papers behind each
 - **If you need multi-source research that returns structured data, do not know the URLs, or the answer spans several sites** (an entity plus its fields, a list, a dataset): use **agent**
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
 - **If you need interactive browser automation** (click, type, navigate): use **interact** with a URL for a fresh page, or **scrape** + **interact** when you already scraped the page or need tighter scrape control
@@ -390,6 +392,7 @@ Use this guide to select the right tool for your task:
 | agent     | Multi-source research, unknown or many sites   | JSON (structured data)                           |
 | monitor   | Recurring page checks                          | monitor/check metadata and diffs                 |
 | research  | Paper research (developer for repositories)    | research results                                 |
+| protein lookup | One protein's curated UniProt annotation  | location, function, and GO terms with evidence   |
 
 ### Format Selection Guide
 
@@ -944,10 +947,56 @@ Search and inspect papers through the research MCP tools. For GitHub repositorie
 - `firecrawl_research_inspect_paper`: retrieve canonical metadata for one paper ID (arXiv, PMC, PMID, or DOI).
 - `firecrawl_research_related_papers`: expand from one or more anchor papers through the citation graph.
 - `firecrawl_research_read_paper`: read full-text passages from a specific paper.
+- `firecrawl_research_lookup_protein`: look up one protein in UniProtKB/Swiss-Prot and return its curated subcellular location, function, and GO cellular-component terms, each with its evidence and cited papers.
 
 **Best for:** Literature review, paper lookup, and repository discovery workflows where the agent needs a focused research surface instead of general web search.
 
-`firecrawl_search` with `categories: ["research"]` is a different surface: it filters ordinary web results to research-affiliated websites and returns page snippets, not paper records. Use these tools when the question is about the literature itself, and pass several distinct framings of the same question, since they surface different papers than a single query does.
+`firecrawl_search` with `categories: ["research"]` is a different surface: it filters ordinary web results to research-affiliated websites and returns page snippets, not paper records. Use the paper tools when the question is about the literature itself, and pass several distinct framings of the same question, since they surface different papers than a single query does.
+
+#### Protein lookup (`firecrawl_research_lookup_protein`)
+
+Look up one protein in UniProtKB/Swiss-Prot, the reviewed section of UniProt, and get what its curators state about it.
+
+**Best for:** A question about one named protein: where it is located in the cell, what it does, or which cellular-component terms it has. For a free-text question, a topic, or a list of proteins, use `firecrawl_research_search_papers`.
+
+**Arguments:**
+
+```json
+{
+  "name": "firecrawl_research_lookup_protein",
+  "arguments": {
+    "protein": "RPUSD3",
+    "organism": "9606"
+  }
+}
+```
+
+- `protein` (required): one identifier: a UniProt accession (`Q6P087`), an entry name (`RUSD3_HUMAN`), a gene symbol (`RPUSD3`), or the exact protein name.
+- `organism`: an NCBI taxon ID (`9606`), a scientific name (`Homo sapiens`), or a UniProt common name (`Human`). It scopes gene symbols and protein names, and the default is human. Accessions and entry names ignore it.
+
+**Returns:** The entry's subcellular location, GO cellular-component terms that have experimental evidence, and function. The response body is in `structuredContent`. An abridged result:
+
+```text
+# RPUSD3 (Q6P087, RUSD3_HUMAN), Homo sapiens
+Mitochondrial mRNA pseudouridine synthase RPUSD3. Matched by gene symbol.
+
+Subcellular location
+- Mitochondrion matrix. Experimental [pmid:27974379]
+GO cellular component (experimental)
+- mitochondrial matrix (GO:0005759), IDA, FlyBase [pmid:27974379]
+Function
+- Catalyzes uridine to pseudouridine isomerization (pseudouridylation) of specific mitochondrial mRNAs (mt-mRNAs) [...]. Experimental [pmid:27667664, pmid:27974379]
+Open a cited paper with firecrawl_research_inspect_paper or firecrawl_research_read_paper.
+Source: UniProtKB/Swiss-Prot 2026_04, https://www.uniprot.org/uniprotkb/Q6P087/entry. CC BY 4.0.
+```
+
+Every location and function statement carries an evidence label. Among these statements, only those whose label starts with `Experimental` (`Experimental` and `Experimental, large-scale`) are measurements. `Inferred from a related protein`, `Curator inference`, `Predicted from sequence`, `Author statement`, `Imported from another database`, and `No evidence tag` are not. A statement inferred from a related protein names that entry's accession when UniProt gives one, and the `pmid:` IDs open with `firecrawl_research_inspect_paper` and `firecrawl_research_read_paper`.
+
+The GO cellular-component terms carry no such label. Every GO term listed has experimental evidence, shown by its GO code (`IDA` and the like) and the group that assigned it. A location statement and a GO term can name the same compartment with different evidence, for example a location with no evidence tag beside a GO term with `IDA`, so an answer should say which of the two the compartment rests on.
+
+A gene symbol or name that matches several entries returns the candidates, each with its accession, entry name, gene, name, and organism. Call the tool again with one accession. An input that matches no reviewed entry returns a message that says what to pass.
+
+This tool is on the full tool set only, not on the search-only endpoint. Protein data is from UniProtKB/Swiss-Prot, copyright UniProt Consortium, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 ### 13. Monitor Tools (`firecrawl_monitor_*`)
 

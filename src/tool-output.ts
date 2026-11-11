@@ -446,6 +446,77 @@ export const researchReadOutputSchema = z
   })
   .describe('Full-text passages from one paper.');
 
+const proteinStatementSchema = z.looseObject({
+  text: str('The statement as UniProt writes it: a location term, a note, or a function description.'),
+  note: bool('True for the free-text note of a location comment.'),
+  molecule: str('The isoform or chain the statement applies to, when UniProt names one.'),
+  topology: str('Membrane topology, on location statements.'),
+  orientation: str('Membrane orientation, on location statements.'),
+  evidence: z
+    .array(
+      z.looseObject({
+        kind: str('`experimental`, `large_scale_experimental`, `author_statement`, `curator_inference`, `by_similarity`, `sequence_analysis`, `imported`, or `untagged`. Only the two experimental kinds are measurements.'),
+        eco: str('Evidence and Conclusion Ontology code, such as `ECO:0000269`.'),
+        paperId: str('Cited paper, such as `pmid:27974379`; accepted by the inspect and read paper tools.'),
+        fromProtein: str('Accession of the related entry a `by_similarity` statement was inferred from.'),
+      })
+    )
+    .nullable()
+    .optional()
+    .describe('What supports the statement, in UniProt order.'),
+});
+
+const proteinCandidateFields = {
+  accession: str('Primary UniProt accession.'),
+  entryName: str('UniProt entry name, such as `KPCB_HUMAN`.'),
+  gene: str('Primary gene name, when UniProt gives one.'),
+  name: str('Recommended full protein name.'),
+  organism: unknown('`{taxonId, scientificName, commonName}` of the source organism.'),
+  matchedBy: str('What the input matched: `accession`, `secondary_accession`, `entry_name`, `gene`, `synonym`, or `name`.'),
+};
+
+export const researchProteinOutputSchema = z
+  .object({
+    success,
+    release: str('UniProt release the answer was read from, such as `2026_04`.'),
+    match: str('`found`, `ambiguous`, or `not_found`.'),
+    // Advertised closed like every direct object property, so it is parsed
+    // closed too: a field the API adds later is dropped here instead of
+    // failing a client that validates against the advertised schema.
+    protein: z
+      .object({
+        ...proteinCandidateFields,
+        synonyms: z.array(z.string()).nullable().optional().describe('Gene synonyms.'),
+        url: str('UniProt entry page.'),
+        subcellularLocation: z.array(proteinStatementSchema).nullable().optional().describe('Curated subcellular location statements.'),
+        function: z.array(proteinStatementSchema).nullable().optional().describe('Curated function statements.'),
+        goCellularComponent: z
+          .array(
+            z.looseObject({
+              id: str('GO term ID, such as `GO:0005759`.'),
+              term: str('GO term name.'),
+              code: str('GO evidence code, such as `IDA`.'),
+              assignedBy: str('Database that assigned the term.'),
+              paperIds: z.array(z.string()).nullable().optional().describe('Papers cited for the term.'),
+            })
+          )
+          .nullable()
+          .optional()
+          .describe('GO cellular-component terms with experimental evidence codes.'),
+        paperIds: z.array(z.string()).nullable().optional().describe('Every paper ID cited above, deduplicated.'),
+      })
+      .optional()
+      .describe('The entry, when `match` is `found`.'),
+    candidates: z
+      .array(z.looseObject(proteinCandidateFields))
+      .nullable()
+      .optional()
+      .describe('Up to ten entries the input could name, when `match` is `ambiguous`; look one up by its accession.'),
+    candidateCount: num('Total number of candidate entries, when `match` is `ambiguous`.'),
+    notice: str('Attribution and license of the UniProt data.'),
+  })
+  .describe('The curated UniProtKB/Swiss-Prot annotation of one protein, the candidates for an ambiguous name, or no match.');
+
 export const developerSearchOutputSchema = z
   .object({
     results: z

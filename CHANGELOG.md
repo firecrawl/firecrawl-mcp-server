@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `firecrawl_research_lookup_protein` looks up one protein in UniProtKB/Swiss-Prot, the reviewed section of UniProt, and returns what its curators state: subcellular location, function, and GO cellular-component terms that have experimental evidence. `protein` takes a UniProt accession, an entry name, a gene symbol or the exact protein name. The optional `organism` (an NCBI taxon ID, a scientific name or a UniProt common name, human when left out) scopes gene symbols and protein names. Each statement prints its evidence label, such as `Experimental`, `Inferred from a related protein`, `Curator inference` or `Predicted from sequence`, and the `pmid:` IDs UniProt cites, which `firecrawl_research_inspect_paper` and `firecrawl_research_read_paper` open. A name that matches several entries returns the candidates, and the agent calls again with one accession. An input that matches no entry says what to pass. The text ends with the UniProt release, the entry URL and the CC BY 4.0 license, and `structuredContent` carries the API response. The tool is on the full surface only, and the search-only endpoint's tool list is unchanged. The server instructions for authenticated sessions name it after the paper tools. It needs a Firecrawl API that serves `GET /v2/search/research/proteins`.
+
 ### Changed
 
 - `firecrawl_gov_search` asks `/v2/search/gov` for `sources=gov` and returns the `gov` results. Each row in `structuredContent.results` keeps `url`, `title`, `description` and `position`, and also carries the index's labels when it has them: `jurisdiction`, `court`, `courtType`, `cites`, `citedAs`, `lang` and `updatedAt`. The text block, the tool description and the input schema are unchanged. An API that does not accept `sources` yet refuses it with a 400; the tool then repeats the call without it and returns the `web` results as before.

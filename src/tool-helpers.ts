@@ -290,6 +290,20 @@ export async function relayTermsRequired<T>(
   }
 }
 
+/** The API's 400 text names the argument to fix, so it reaches the agent as written. */
+export function relayBadRequest(error: unknown): never {
+  const response = (
+    error as
+      | { response?: { status?: number; data?: { error?: unknown } } }
+      | undefined
+  )?.response;
+  const message = response?.data?.error;
+  if (response?.status !== 400 || typeof message !== 'string') {
+    throw error;
+  }
+  throw new UserError(message, { status: 400, error: message });
+}
+
 // Exchange errors arrive as {success:false, error, code?, chargeId?} with the
 // upstream status (403 without the team flag, 402/409 once billing lands, 5xx
 // when the Exchange is unreachable). Relay the message, code, and any chargeId
