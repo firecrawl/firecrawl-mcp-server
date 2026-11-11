@@ -50,7 +50,7 @@ test('Alexandria executions carry the feedback hint; utility calls and library c
   assert.notEqual(library.isError, true, JSON.stringify(library));
   assert.equal(library.structuredContent.feedbackTool, undefined);
 
-  // firecrawl_find_tools is unlisted here and still answers, hint included.
+  // firecrawl_find_tools answers here as before, hint included.
   const categories = toolText(await call('firecrawl_find_tools', { limit: 1 }));
   assertFeedbackHint(categories);
 });
