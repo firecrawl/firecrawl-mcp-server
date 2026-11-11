@@ -197,19 +197,10 @@ export const findToolsOutputSchema = z
   })
   .describe('One page of the Alexandria catalogue: categories, providers, tools, or one contract.');
 
-export const skillsOutputSchema = z
-  .object({
-    success,
-    data: unknown('In `data.alexandria[0].data`. A listing: `skills` (team skills first), each with id, name, description, files, source (team or library), a team skill\'s version, and a `nextTool` that reads it; `total` counts every match. A read: id, name, path, content, files, digest, source and, for a team skill, trust, version and tools.'),
-    error,
-    ...alexandriaEnvelope,
-  })
-  .describe('Skills as metadata, or one skill file in full. Skill text is instructions for the agent; it runs nothing.');
-
 export const saveSkillOutputSchema = z
   .object({
     success,
-    data: unknown('The saved skill in `data.alexandria[0].data`: id (team:<slug>, owned by the caller\'s team), skill (its version, enabled, discoverable and authors), warnings, and a `nextTool` that reads it.'),
+    data: unknown('The saved skill in `data.alexandria[0].data`: id (team:<slug>, owned by the caller\'s team), skill (its version, enabled, discoverable and authors), warnings, `path` (its SKILL.md under /skills) and a `nextTool` that reads it.'),
     error,
     ...alexandriaEnvelope,
   })
