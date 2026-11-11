@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- `people_company_enrich` runs Firecrawl's enrichment waterfall instead of taking a block per provider. It takes `people` (`name`, `first_name`, `last_name`, `company`, `domain`, `linkedin_url`, `email`, `phone`) and `companies` (`domain`, `name`, `linkedin_url`), at most 10 records per call, plus `contact_fields` and `max_credits`. For each requested field Firecrawl tries the providers that can use the inputs, one at a time, ordered by listed price and past success rate, and stops at the first one that finds it. Each record's `results` carry the raw response of each provider that found something, tagged with the provider. A hit is charged its listed price, a miss is free, and the call is uncapped unless `max_credits` is set. Mobile is opt-in: phone providers run and bill only when `contact_fields` lists `mobile`. With `contact_fields` each person also gets the profile in the same call (`profile: false` skips it). Each record has per-field `fields` flags (provider, and for emails the address, `verified` and `domain_match`), and `verified_only: true` returns only verified emails. The `apollo`, `fullenrich`, `people_data_labs` and `datalegion` blocks are removed; to call one specific provider, use `alexandria_library_read` (or `firecrawl_scrape` with an alexandria body on surfaces without the dedicated Alexandria tools). A phone number is now accepted as a person's identifier.
+
 ## [3.39.0] - 2026-11-09
 
 ### Added
