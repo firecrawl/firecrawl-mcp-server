@@ -209,10 +209,13 @@ export const ALEXANDRIA_DEDICATED_SEARCH_INSTRUCTIONS =
 // The category folders of /library, so an agent can open one without listing
 // first. They come from the Exchange catalogue; a category added there is
 // missing here until this list is updated, and `ls /library` always has it.
+// The category folders of the deployed library (`ls /library`, 2026-11-10).
 export const ALEXANDRIA_LIBRARY_CATEGORIES = [
-  'companies', 'developer', 'digital-intelligence', 'finance', 'government', 'health', 'jobs',
-  'knowledge', 'life-sciences', 'marketing', 'news', 'people', 'places', 'podcasts', 'real-estate',
-  'research', 'restaurants', 'shopping', 'social', 'software', 'sports',
+  'agriculture', 'ai-models', 'apps', 'automotive', 'community', 'companies', 'developer',
+  'digital-intelligence', 'education', 'energy', 'entertainment', 'finance', 'game-development',
+  'government', 'health', 'healthcare', 'jobs', 'knowledge', 'life-sciences', 'marketing', 'music',
+  'news', 'people', 'places', 'podcasts', 'political-science', 'real-estate', 'research',
+  'restaurants', 'shopping', 'skills', 'social', 'software', 'sports', 'travel',
 ];
 
 export const ALEXANDRIA_LIBRARY_DESCRIPTION =
