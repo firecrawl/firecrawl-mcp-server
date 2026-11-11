@@ -42,8 +42,8 @@
     "firecrawl_research_read_paper@b0cd84d8908a",
     "firecrawl_developer_search@e9810e540216",
     "firecrawl_gov_search@b020bd420f91",
-    "people_company_search@09ca8317e7de",
-    "people_company_enrich@98423185237c",
+    "people_company_search@dd7c1052c081",
+    "people_company_enrich@bb840c5172d2",
     "firecrawl_credit_usage@5b79f64c3f82"
   ],
   "calls": {
