@@ -33,7 +33,7 @@ The search surface exposes exactly these eleven tools and nothing else:
 | `firecrawl_research_read_paper` | Full-text passages from one paper |
 | `firecrawl_find_tools` | Browse the Alexandria catalogue and read provider contracts (free) |
 | `firecrawl_scrape` | Execute an Alexandria capability with an `alexandria` body, or retrieve one supplied URL (billed) |
-| `people_company_search` | Find people or companies through Alexandria's B2B data providers, optionally beside web results (billed) |
+| `people_company_search` | Find people or companies through Alexandria's search waterfall over its B2B data providers (billed) |
 | `people_company_enrich` | Look up and enrich known people or companies, including contact details (billed) |
 
 Registration on this instance is filtered against that allowlist, so any tool
