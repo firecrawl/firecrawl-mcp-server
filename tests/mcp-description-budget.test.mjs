@@ -12,7 +12,7 @@ import { assertAlexandriaMetadata } from './helpers/alexandria-metadata.mjs';
 test('every tool description fits the 2,048-character cap and keeps the routing copy inside it', async (t) => {
   const { client, init } = await startStdioWithApi(t);
   const { tools } = await client.request('tools/list', {});
-  assertAlexandriaMetadata(tools, init.instructions);
+  assertAlexandriaMetadata(tools, init.instructions, { tools: 'dedicated' });
   for (const tool of tools) {
     assert.ok((tool.description ?? '').length <= CAP, `${tool.name} description is ${(tool.description ?? '').length} chars`);
   }
@@ -22,6 +22,9 @@ test('every tool description fits the 2,048-character cap and keeps the routing 
   assert.match(search, /Authenticated searches always add alexandria to the sources, so sources: \["web"\] also returns providers/);
   const scrape = byName.get('firecrawl_scrape');
   assert.match(scrape, /^Scrape one URL and return its content/);
-  assert.match(scrape, /`firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages/);
-  assert.doesNotMatch(byName.get('firecrawl_find_tools'), /Prefer normal firecrawl_search/);
+  assert.match(scrape, /`firecrawl_search` and `alexandria_library_search` can discover Alexandria providers for the same fields across several pages/);
+  // What each Alexandria tool is for leads its description.
+  assert.match(byName.get('alexandria_library_search'), /^Explore the Alexandria library: Firecrawl's catalogue of data providers/);
+  assert.match(byName.get('alexandria_library_search'), /read-only filesystem, using shell commands/);
+  assert.match(byName.get('alexandria_library_read'), /^Run capabilities of Alexandria data providers/);
 });

@@ -9,6 +9,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { type ContentResult, type McpRuntime, type ToolExecuteContext, UserError } from './mcp/runtime.js';
+import { executeToolCall, type AlexandriaTools } from './alexandria.js';
 import { requestOrigin } from './origin';
 import { DATA_SOURCES_SETTINGS_URL, relayExchangeError } from './tool-helpers.js';
 import { withStructured } from './tool-output';
@@ -433,6 +434,7 @@ interface Context {
   client: any;
   origin: string;
   tool: string;
+  alexandriaTools: AlexandriaTools;
   gated: Map<Provider, TermsGate>;
 }
 
@@ -466,7 +468,7 @@ async function runCalls(ctx: Context, p: Provider, calls: Call[]): Promise<Entry
               { headers: { 'x-request-id': requestId } }
             ),
           // The API answers a repeat of this request id from its record, so a resend cannot run twice.
-          { tool: ctx.tool, requestId, providers: [SLUG[p]], resend: true }
+          { tool: ctx.tool, requestId, providers: [SLUG[p]], resend: true, alexandriaTools: ctx.alexandriaTools }
         );
         const entries = response?.data?.data?.alexandria;
         if (!Array.isArray(entries)) throw new Error('Unexpected response shape.');
@@ -865,7 +867,9 @@ export function registerEnrichTools(
   getClient: GetClient,
   assertCredential: AssertCredential,
   canList: (session?: SessionData) => boolean,
-  web: WebSearch
+  web: WebSearch,
+  // Which tool a pending job's next_tool is addressed to.
+  alexandriaTools: AlexandriaTools = 'legacy'
 ): void {
   const webBlock = web.parameters.optional().describe(WEB_ABOUT);
   const advertisedSearch = searchParameters.extend({ firecrawl_search: webBlock });
@@ -917,7 +921,7 @@ export function registerEnrichTools(
             { code: 'max_credits_exceeded', credits_estimate, max_credits, estimates, minimum_max_credits: credits_estimate }
           );
         }
-        const ctx: Context = { client: getClient(session), origin: requestOrigin(mcpClient as any, session), tool: name, gated: new Map() };
+        const ctx: Context = { client: getClient(session), origin: requestOrigin(mcpClient as any, session), tool: name, alexandriaTools, gated: new Map() };
         const reports = (
           await Promise.all([
             ...order.map((p) => (on.includes(p) ? run(ctx, p, blocks[p]) : notRequested(p))),
@@ -1029,9 +1033,9 @@ export function registerEnrichTools(
       'Enrich known people or companies. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to ' + ENRICH_MAX_RECORDS + ' records per call. ' +
       'Each requested field runs a waterfall by default: Firecrawl tries the providers that can use your inputs one at a time, ordered by listed price and past success rate, and stops as soon as the field is found. ' +
       'Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and, unless profile is false, the profile in the same call. ' +
-      'A work email is on the company domain when one is known and never free mail or a role mailbox; fields says for each answer which provider gave it, whether the email was verified and whether its domain matched. Set verified_only to get only verified emails. ' +
+      'A work email is on the company domain when one is known and never on a known free-mail domain or a known role mailbox; fields says for each answer which provider gave it, whether the email was verified and whether its domain matched. Set verified_only to get only verified emails. ' +
       "Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call; without it the call is uncapped. " +
-      'To call one specific provider, use firecrawl_scrape with an alexandria body instead. ' +
+      'To call one specific provider, use ' + (alexandriaTools === 'dedicated' ? 'alexandria_library_read' : 'firecrawl_scrape with an alexandria body') + ' instead. ' +
       'Example: ' + JSON.stringify(ENRICH_EXAMPLE) + '.',
     outputSchema: enrichResultSchema,
     parameters: enrichParameters,
