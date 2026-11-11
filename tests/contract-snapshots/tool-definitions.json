@@ -1,5 +1,5 @@
 {
-  "alexandria_library_read@0a00b21b6b18": {
+  "alexandria_library_read@ab47363c41e2": {
     "annotations": {
       "title": "Alexandria library read",
       "readOnlyHint": true,
@@ -7,7 +7,7 @@
       "destructiveHint": false
     },
     "title": "Alexandria library read",
-    "description": "Run capabilities of Alexandria data providers and return their typed, sourced records: one, or up to ten in one call when a task needs several lookups. Alexandria is Firecrawl's library of data providers across companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more. Each entry of `calls` is {provider, capability, options}: `provider` and `capability` come from firecrawl_search results or alexandria_library_search, and `options` follow the capability's contract, which marks required inputs and any requiresOneOf groups (at least one member per group). Where the contract declares pagination, its fields page through results with the same filters. Returns one result per call, in the same order, in data.alexandria, each with data, records, or an error with a code; one call can fail while the others succeed, and an invalid call returns an error naming the valid options. A result too large to return inline is retained, and nextTool reads it in slices. Billed per executed capability; discovery is free. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.",
+    "description": "Run capabilities of Alexandria data providers and return their typed, sourced records: one, or up to ten in one call when a task needs several lookups. Alexandria is Firecrawl's library of data providers across companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more. For people and company enrichment or search, use people_company_enrich or people_company_search when they are listed; call a provider here directly only when the user asks for that provider. Each entry of `calls` is {provider, capability, options}: `provider` and `capability` come from firecrawl_search results or alexandria_library_search, and `options` follow the capability's contract, which marks required inputs and any requiresOneOf groups (at least one member per group). Where the contract declares pagination, its fields page through results with the same filters. Returns one result per call, in the same order, in data.alexandria, each with data, records, or an error with a code; one call can fail while the others succeed, and an invalid call returns an error naming the valid options. A result too large to return inline is retained, and nextTool reads it in slices. Billed per executed capability; discovery is free. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -7920,7 +7920,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_search@4469451531db": {
+  "firecrawl_search@74db515821a1": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -8113,7 +8113,7 @@
           ]
         },
         "tools": {
-          "description": "Domain-matched Alexandria tools for the results."
+          "description": "Domain-matched Alexandria tools for the results. For people and company enrichment or search, use people_company_enrich or people_company_search when they are listed; call a provider here directly only when the user asks for that provider."
         },
         "nextTool": {
           "description": "A follow-up tool call that continues this search."
@@ -8128,7 +8128,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_search@57a25792e6df": {
+  "firecrawl_search@989662ebb4df": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -8509,7 +8509,7 @@
           ]
         },
         "tools": {
-          "description": "Domain-matched Alexandria tools for the results."
+          "description": "Domain-matched Alexandria tools for the results. For people and company enrichment or search, use people_company_enrich or people_company_search when they are listed; call a provider here directly only when the user asks for that provider."
         },
         "nextTool": {
           "description": "A follow-up tool call that continues this search."
@@ -8524,7 +8524,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_search@8dcd1d8cf78f": {
+  "firecrawl_search@9fcb6599839f": {
     "annotations": {
       "title": "Firecrawl web search",
       "readOnlyHint": true,
@@ -8957,7 +8957,7 @@
           ]
         },
         "tools": {
-          "description": "Domain-matched Alexandria tools for the results."
+          "description": "Domain-matched Alexandria tools for the results. For people and company enrichment or search, use people_company_enrich or people_company_search when they are listed; call a provider here directly only when the user asks for that provider."
         },
         "nextTool": {
           "description": "A follow-up tool call that continues this search."
@@ -8972,7 +8972,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "people_company_enrich@10d98984dbfd": {
+  "people_company_enrich@d72635ff6928": {
     "annotations": {
       "title": "Look up and enrich people or companies",
       "readOnlyHint": true,
@@ -8980,7 +8980,7 @@
       "destructiveHint": false
     },
     "title": "Look up and enrich people or companies",
-    "description": "Enrich known people or companies: the tool for any person or company you can name, such as finding the email, phone or profile of a founder or employee at a given company. Use it, not people_company_search, whenever you have a name with a company or domain, a LinkedIn URL or an email. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to 10 records per call. Each requested field runs a waterfall by default: Firecrawl tries the providers that can use your inputs one at a time, ordered by listed price, and stops as soon as the field is found. Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and, unless profile is false, the profile in the same call. Ask for mobile only when the task needs a phone number; it is the costliest field and nothing is spent on it otherwise. A work email is on the company domain when one is known and never on a known free-mail domain or a known role mailbox; fields says for each answer which provider gave it, whether the email was verified and whether its domain matched. Set verified_only to get only verified emails. Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call; without it the call is uncapped. To call one specific provider, use firecrawl_scrape with an alexandria body instead. Example: {\"contact_fields\":[\"work_email\"],\"people\":[{\"name\":\"Jane Doe\",\"domain\":\"example.com\"}]}.",
+    "description": "Use this first when the user names a person (a name with a company or domain, a LinkedIn URL or an email) or a company and wants contact details, a profile or firmographics, such as the email of a founder at a given company. One call runs the provider waterfall. Use it, not people_company_search, whenever you have a name with a company or domain, a LinkedIn URL or an email. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to 10 records per call. Each requested field runs a waterfall by default: Firecrawl tries the providers that can use your inputs one at a time, ordered by listed price, and stops as soon as the field is found. Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and, unless profile is false, the profile in the same call. Ask for mobile only when the task needs a phone number; it is the costliest field and nothing is spent on it otherwise. A work email is on the company domain when one is known and never on a known free-mail domain or a known role mailbox; fields says for each answer which provider gave it, whether the email was verified and whether its domain matched. Set verified_only to get only verified emails. Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call; without it the call is uncapped. To call one specific provider, use firecrawl_scrape with an alexandria body instead. Example: {\"contact_fields\":[\"work_email\"],\"people\":[{\"name\":\"Jane Doe\",\"domain\":\"example.com\"}]}.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -9382,7 +9382,7 @@
       "additionalProperties": false
     }
   },
-  "people_company_enrich@bb840c5172d2": {
+  "people_company_enrich@dc2d9db0d055": {
     "annotations": {
       "title": "Look up and enrich people or companies",
       "readOnlyHint": true,
@@ -9390,7 +9390,7 @@
       "destructiveHint": false
     },
     "title": "Look up and enrich people or companies",
-    "description": "Enrich known people or companies: the tool for any person or company you can name, such as finding the email, phone or profile of a founder or employee at a given company. Use it, not people_company_search, whenever you have a name with a company or domain, a LinkedIn URL or an email. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to 10 records per call. Each requested field runs a waterfall by default: Firecrawl tries the providers that can use your inputs one at a time, ordered by listed price, and stops as soon as the field is found. Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and, unless profile is false, the profile in the same call. Ask for mobile only when the task needs a phone number; it is the costliest field and nothing is spent on it otherwise. A work email is on the company domain when one is known and never on a known free-mail domain or a known role mailbox; fields says for each answer which provider gave it, whether the email was verified and whether its domain matched. Set verified_only to get only verified emails. Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call; without it the call is uncapped. To call one specific provider, use alexandria_library_read instead. Example: {\"contact_fields\":[\"work_email\"],\"people\":[{\"name\":\"Jane Doe\",\"domain\":\"example.com\"}]}.",
+    "description": "Use this first when the user names a person (a name with a company or domain, a LinkedIn URL or an email) or a company and wants contact details, a profile or firmographics, such as the email of a founder at a given company. One call runs the provider waterfall. Use it, not people_company_search, whenever you have a name with a company or domain, a LinkedIn URL or an email. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to 10 records per call. Each requested field runs a waterfall by default: Firecrawl tries the providers that can use your inputs one at a time, ordered by listed price, and stops as soon as the field is found. Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and, unless profile is false, the profile in the same call. Ask for mobile only when the task needs a phone number; it is the costliest field and nothing is spent on it otherwise. A work email is on the company domain when one is known and never on a known free-mail domain or a known role mailbox; fields says for each answer which provider gave it, whether the email was verified and whether its domain matched. Set verified_only to get only verified emails. Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call; without it the call is uncapped. To call one specific provider, use alexandria_library_read instead. Example: {\"contact_fields\":[\"work_email\"],\"people\":[{\"name\":\"Jane Doe\",\"domain\":\"example.com\"}]}.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",

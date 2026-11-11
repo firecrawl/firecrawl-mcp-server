@@ -832,6 +832,7 @@ const enrichParameters = z.strictObject({
 });
 
 const ENRICH_EXAMPLE = { contact_fields: ['work_email'], people: [{ name: 'Jane Doe', domain: 'example.com' }] };
+const ENRICH_REFUSAL_EXAMPLE = { people: [{ name: 'Jane Doe', domain: 'example.com' }], companies: [{ domain: 'example.com' }] };
 
 const enrichRecord = z.looseObject({
   input_index: z.number().describe('Index into the people or companies list.'),
@@ -1032,7 +1033,7 @@ export function registerEnrichTools(
     annotations: { title: 'Look up and enrich people or companies', readOnlyHint: true, openWorldHint: true, destructiveHint: false },
     canList,
     description:
-      'Enrich known people or companies: the tool for any person or company you can name, such as finding the email, phone or profile of a founder or employee at a given company. Use it, not people_company_search, whenever you have a name with a company or domain, a LinkedIn URL or an email. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to ' + ENRICH_MAX_RECORDS + ' records per call. ' +
+      'Use this first when the user names a person (a name with a company or domain, a LinkedIn URL or an email) or a company and wants contact details, a profile or firmographics, such as the email of a founder at a given company. One call runs the provider waterfall. Use it, not people_company_search, whenever you have a name with a company or domain, a LinkedIn URL or an email. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to ' + ENRICH_MAX_RECORDS + ' records per call. ' +
       'Each requested field runs a waterfall by default: Firecrawl tries the providers that can use your inputs one at a time, ordered by listed price, and stops as soon as the field is found. ' +
       'Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and, unless profile is false, the profile in the same call. Ask for mobile only when the task needs a phone number; it is the costliest field and nothing is spent on it otherwise. ' +
       'A work email is on the company domain when one is known and never on a known free-mail domain or a known role mailbox; fields says for each answer which provider gave it, whether the email was verified and whether its domain matched. Set verified_only to get only verified emails. ' +
@@ -1045,7 +1046,7 @@ export function registerEnrichTools(
       if (isPlain(args)) {
         dropSessionFields(args);
         repair(enrichParameters, args);
-        checkArguments('people_company_enrich', enrichParameters, args, ENRICH_EXAMPLE);
+        checkArguments('people_company_enrich', enrichParameters, args, ENRICH_REFUSAL_EXAMPLE);
       }
       return undefined;
     },
@@ -1053,7 +1054,7 @@ export function registerEnrichTools(
       const { session, client: mcpClient } = context;
       const a = enrichParameters.parse(args);
       const count = (a.people?.length ?? 0) + (a.companies?.length ?? 0);
-      if (!count) throw new UserError('Give people, companies or both. Example: ' + JSON.stringify(ENRICH_EXAMPLE), { code: 'invalid_input', example: ENRICH_EXAMPLE });
+      if (!count) throw new UserError('Give people, companies or both. Example: ' + JSON.stringify(ENRICH_REFUSAL_EXAMPLE), { code: 'invalid_input', example: ENRICH_REFUSAL_EXAMPLE });
       if (count > ENRICH_MAX_RECORDS)
         throw new UserError('At most ' + ENRICH_MAX_RECORDS + ' people and companies per call, got ' + count + '. Split them across calls.', { code: 'invalid_input' });
       if (a.contact_fields && !a.people)
