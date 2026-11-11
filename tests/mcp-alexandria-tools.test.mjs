@@ -15,11 +15,9 @@ test('the full surface lists alexandria_library_read and alexandria_library_sear
   const { tools } = await client.request('tools/list', {});
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
 
-  for (const name of ['alexandria_library_read', 'alexandria_library_search', 'firecrawl_search', 'firecrawl_scrape'])
+  // firecrawl_find_tools is still listed, unchanged, for clients that have not taken up the library tools.
+  for (const name of ['alexandria_library_read', 'alexandria_library_search', 'firecrawl_find_tools', 'firecrawl_search', 'firecrawl_scrape'])
     assert.equal(byName.get(name)?._meta?.['anthropic/alwaysLoad'], true, name);
-  // Still listed for clients that have not taken up the library tools, and not always-load.
-  assert.equal(byName.has('firecrawl_find_tools'), true);
-  assert.equal(byName.get('firecrawl_find_tools')._meta?.['anthropic/alwaysLoad'], undefined);
 
   const scrape = byName.get('firecrawl_scrape');
   assert.equal('alexandria' in scrape.inputSchema.properties, false);

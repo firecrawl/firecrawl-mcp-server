@@ -2155,9 +2155,11 @@ Returns result groups in \`data\` and an operation \`id\`.
     },
   };
 
-  // Listed beside alexandria_library_search for clients that take up a new tool
-  // only after their own review; not always-load there, so the library tools lead.
-  server.addTool(dedicatedAlexandria ? { ...findToolsTool, _meta: undefined } : findToolsTool);
+  // Listed beside alexandria_library_search with the definition it had before
+  // the library tools. A client that takes up a new or changed tool only after
+  // its own review still holds the earlier firecrawl_scrape definition, so this
+  // one keeps naming firecrawl_scrape, which still runs an alexandria body.
+  server.addTool(findToolsTool);
 
   const alexandriaReadSchema = z
     .object({
