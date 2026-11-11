@@ -17,7 +17,8 @@ test('local keyless stdio refuses every Exchange path with the explanatory error
       name: 'firecrawl_search',
     },
     { arguments: { calls: [EXCHANGE_CALL] }, name: 'alexandria_library_read' },
-    // The body firecrawl_scrape no longer lists is held to the same rule.
+    { arguments: { command: 'cat /library/finance/README.md' }, name: 'alexandria_library_search' },
+    // Unlisted, and still refused the same way when called.
     { arguments: { alexandria: [EXCHANGE_CALL] }, name: 'firecrawl_scrape' },
     { arguments: { categories: ['finance'] }, name: 'firecrawl_find_tools' },
     { arguments: {}, name: 'firecrawl_find_tools' },
@@ -87,6 +88,7 @@ test('a hosted API key header reaches the Exchange', async (t) => {
 test('rejected API keys return in-band errors without leaking credentials on Alexandria paths', async (t) => {
   const { api, client, getStderr } = await startStdioWithApi(t, { apiStatus: 401 });
   for (const params of [
+    { name: 'alexandria_library_search', arguments: { command: 'cat /library/finance/README.md' } },
     { name: 'firecrawl_find_tools', arguments: { categories: ['finance'] } },
     { name: 'firecrawl_search', arguments: { query: 'rates', sources: ['alexandria'] } },
     { name: 'alexandria_library_read', arguments: { calls: [EXCHANGE_CALL] } },

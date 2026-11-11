@@ -154,6 +154,20 @@ export const alexandriaReadOutputSchema = z
   })
   .describe('The results of the Alexandria capabilities that ran, or a pointer to them when they were retained.');
 
+export const libraryOutputSchema = z
+  .object({
+    stdout: str("The command's standard output, cut at the output limit."),
+    stderr: str("The command's standard error, including a notice when stdout was cut."),
+    exitCode: num("The command's exit code; grep exits 1 when nothing matched."),
+    truncated: bool('True when stdout was cut; narrow the command.'),
+    catalogueVersion: str('Opaque fingerprint of the library files; compare for equality to detect changes.'),
+    success,
+    error,
+    requestId: alexandriaEnvelope.requestId,
+    message: alexandriaEnvelope.message,
+  })
+  .describe('The output of one shell command over the Alexandria library.');
+
 export const mapOutputSchema = z
   .object({
     links: unknown('URLs discovered under the website.'),
