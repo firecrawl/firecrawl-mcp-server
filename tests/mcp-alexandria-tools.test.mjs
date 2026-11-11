@@ -15,9 +15,9 @@ test('the full surface lists alexandria_library_read and alexandria_library_sear
   const { tools } = await client.request('tools/list', {});
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
 
-  for (const name of ['alexandria_library_read', 'alexandria_library_search', 'firecrawl_search', 'firecrawl_scrape'])
+  // firecrawl_find_tools is still listed, unchanged, for clients that have not taken up the library tools.
+  for (const name of ['alexandria_library_read', 'alexandria_library_search', 'firecrawl_find_tools', 'firecrawl_search', 'firecrawl_scrape'])
     assert.equal(byName.get(name)?._meta?.['anthropic/alwaysLoad'], true, name);
-  assert.equal(byName.has('firecrawl_find_tools'), false);
 
   const scrape = byName.get('firecrawl_scrape');
   assert.equal('alexandria' in scrape.inputSchema.properties, false);
@@ -35,7 +35,7 @@ test('the full surface lists alexandria_library_read and alexandria_library_sear
   // The category folders are named, so a first command can open one directly.
   assert.match(byName.get('alexandria_library_search').description, /Category folders: agriculture, ai-models, .*companies, .*real-estate, .*sports, travel; `ls \/library` shows any added since/);
 
-  const copy = [init.instructions, ...tools.map((tool) => JSON.stringify(tool))].join('\n');
+  const copy = [init.instructions, ...tools.filter((tool) => tool.name !== 'firecrawl_find_tools').map((tool) => JSON.stringify(tool))].join('\n');
   assert.doesNotMatch(copy, /firecrawl_find_tools|Find Tools|firecrawl_scrape with (an )?alexandria/);
   assert.match(init.instructions, /alexandria_library_search/);
   assert.match(init.instructions, /alexandria_library_read with calls: \[\{provider, capability, options\}\] runs up to ten capabilities/);
@@ -178,12 +178,11 @@ test('firecrawl_scrape still runs an alexandria body it no longer lists', async 
   assert.equal(blocked.structuredContent.nextTool.name, 'alexandria_library_read');
 });
 
-test('firecrawl_find_tools is unlisted and still answers', async (t) => {
+test('firecrawl_find_tools stays listed beside the library tools and answers as before', async (t) => {
   const { api, client } = await startStdioWithApi(t);
   const { tools } = await client.request('tools/list', {});
-  assert.equal(tools.some((tool) => tool.name === 'firecrawl_find_tools'), false);
+  assert.equal(tools.some((tool) => tool.name === 'firecrawl_find_tools'), true);
 
-  // A session that listed tools before the change, or a prompt that names the tool, gets what it got.
   const categories = toolText(await call(client, 'firecrawl_find_tools', {}));
   assert.equal(categories.data.alexandria[0].data.level, 'categories');
   assert.equal(api.requests.at(-1).url, '/exchange/discover');

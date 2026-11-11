@@ -8828,7 +8828,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "people_company_enrich@cacb558e5fae": {
+  "people_company_enrich@98423185237c": {
     "annotations": {
       "title": "Look up and enrich people or companies",
       "readOnlyHint": true,
@@ -8842,7 +8842,7 @@
       "type": "object",
       "properties": {
         "max_credits": {
-          "description": "Most credits this call may spend. Omit it for 1000. 0 spends nothing, so only free calls run. The estimate checked against it is each provider's listed price times its unit (record, input, Apollo company page, or 10 web results), as if every record were found; a call whose estimate is higher is refused before any provider runs.",
+          "description": "Most credits this call may spend. Set it only to a budget the user gave; left out, it is 1000. The estimate checked against it is each provider's listed price times its unit (record, input, Apollo company page, or 10 web results), as if every record were found; a call whose estimate is higher is refused before any provider runs.",
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
@@ -9941,7 +9941,7 @@
       "additionalProperties": false
     }
   },
-  "people_company_search@2cb297a8f4e2": {
+  "people_company_search@09ca8317e7de": {
     "annotations": {
       "title": "Find people or companies",
       "readOnlyHint": true,
@@ -9963,7 +9963,7 @@
           ]
         },
         "max_credits": {
-          "description": "Most credits this call may spend. Omit it for 1000. 0 spends nothing, so only free calls run. The estimate checked against it is each provider's listed price times its unit (record, input, Apollo company page, or 10 web results), as if every record were found; a call whose estimate is higher is refused before any provider runs.",
+          "description": "Most credits this call may spend. Set it only to a budget the user gave; left out, it is 1000. The estimate checked against it is each provider's listed price times its unit (record, input, Apollo company page, or 10 web results), as if every record were found; a call whose estimate is higher is refused before any provider runs.",
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
@@ -11220,7 +11220,7 @@
       "additionalProperties": false
     }
   },
-  "people_company_search@485c9554245c": {
+  "people_company_search@ddc36a476c1c": {
     "annotations": {
       "title": "Find people or companies",
       "readOnlyHint": true,
@@ -11242,7 +11242,7 @@
           ]
         },
         "max_credits": {
-          "description": "Most credits this call may spend. Omit it for 1000. 0 spends nothing, so only free calls run. The estimate checked against it is each provider's listed price times its unit (record, input, Apollo company page, or 10 web results), as if every record were found; a call whose estimate is higher is refused before any provider runs.",
+          "description": "Most credits this call may spend. Set it only to a budget the user gave; left out, it is 1000. The estimate checked against it is each provider's listed price times its unit (record, input, Apollo company page, or 10 web results), as if every record were found; a call whose estimate is higher is refused before any provider runs.",
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
