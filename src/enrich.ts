@@ -813,7 +813,7 @@ const enrichParameters = z.strictObject({
     .array(z.enum(CONTACT_FIELDS))
     .min(1)
     .optional()
-    .describe('People only. Find these contact values for each person; companies in the same call still get firmographics.'),
+    .describe('People only. Find these contact values for each person; companies in the same call still get firmographics. Include mobile only when a phone number is needed: phone lookups are the costliest and run, and bill, only when mobile is listed.'),
   profile: z
     .boolean()
     .optional()
@@ -1032,7 +1032,7 @@ export function registerEnrichTools(
     description:
       'Enrich known people or companies. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to ' + ENRICH_MAX_RECORDS + ' records per call. ' +
       'Each requested field runs a waterfall by default: Firecrawl tries the providers that can use your inputs one at a time, ordered by listed price and past success rate, and stops as soon as the field is found. ' +
-      'Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and, unless profile is false, the profile in the same call. ' +
+      'Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and, unless profile is false, the profile in the same call. Ask for mobile only when the task needs a phone number; it is the costliest field and nothing is spent on it otherwise. ' +
       'A work email is on the company domain when one is known and never on a known free-mail domain or a known role mailbox; fields says for each answer which provider gave it, whether the email was verified and whether its domain matched. Set verified_only to get only verified emails. ' +
       "Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call; without it the call is uncapped. " +
       'To call one specific provider, use ' + (alexandriaTools === 'dedicated' ? 'alexandria_library_read' : 'firecrawl_scrape with an alexandria body') + ' instead. ' +
