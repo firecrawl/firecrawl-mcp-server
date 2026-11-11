@@ -394,7 +394,7 @@ test('the published schema carries the identifier rules', async (t) => {
     nonBlank('first_name', 'last_name', 'domain'),
   ]);
   assert.deepEqual(enrich.inputSchema.properties.companies.items.anyOf, [nonBlank('domain'), nonBlank('linkedin_url'), nonBlank('name')]);
-  assert.deepEqual(Object.keys(enrich.inputSchema.properties).sort(), ['companies', 'contact_fields', 'max_credits', 'people']);
+  assert.deepEqual(Object.keys(enrich.inputSchema.properties).sort(), ['companies', 'contact_fields', 'max_credits', 'people', 'profile']);
   const search = tools.find((tool) => tool.name === 'people_company_search');
   const pdl = search.inputSchema.properties.people_data_labs.anyOf;
   for (const branch of pdl) assert.deepEqual(branch.oneOf, [{ required: ['sql'] }, { required: ['query'] }]);
@@ -419,7 +419,7 @@ test('enrich sends every record to the waterfall in one call and returns its att
   const companies = [{ domain: 'globex.example' }, { name: 'Initech' }];
   const result = await client.callTool({ name: 'people_company_enrich', arguments: { contact_fields: ['work_email'], people, companies } });
   assert.notEqual(result.isError, true, JSON.stringify(result));
-  assert.deepEqual(api.calls, [{ provider: 'firecrawl', capability: 'enrich/auto', options: { people, companies, contact_fields: ['work_email'], max_credits: 100 } }]);
+  assert.deepEqual(api.calls, [{ provider: 'firecrawl', capability: 'enrich/auto', options: { people, companies, contact_fields: ['work_email'], profile: true, max_credits: 100 } }]);
   assert.equal(api.bodies[0].timeout, 120000);
   assert.deepEqual(result.structuredContent, { ...WATERFALL_RESULT, max_credits: 100 });
 });
@@ -432,7 +432,7 @@ test('max_credits passes through, and conversationId and objective are dropped',
     arguments: { conversationId: 'c-1', objective: 'Find a mobile', max_credits: 400, contact_fields: ['mobile'], people: [{ phone: '+1 415 555 0100' }] },
   });
   assert.notEqual(result.isError, true, JSON.stringify(result));
-  assert.deepEqual(api.calls[0].options, { people: [{ phone: '+1 415 555 0100' }], contact_fields: ['mobile'], max_credits: 400 });
+  assert.deepEqual(api.calls[0].options, { people: [{ phone: '+1 415 555 0100' }], contact_fields: ['mobile'], profile: true, max_credits: 400 });
   assert.equal(result.structuredContent.max_credits, 400);
   assert.ok(!JSON.stringify(api.bodies).includes('c-1') && !JSON.stringify(api.bodies).includes('Find a mobile'));
 });
@@ -465,7 +465,7 @@ test('enrich shape errors are refused before the waterfall runs', async (t) => {
   assert.match(contact.content[0].text, /contact_fields applies to people only/);
   const block = await client.callTool({ name: 'people_company_enrich', arguments: { fullenrich: { people: [{ person_name: 'Ada', company_domain: 'acme.example' }] } } });
   assert.equal(block.isError, true);
-  assert.match(block.content[0].text, /unknown field fullenrich; takes people, companies, contact_fields, max_credits/);
+  assert.match(block.content[0].text, /unknown field fullenrich; takes people, companies, contact_fields, profile, max_credits/);
   for (const result of [none, fieldsOnly, many, contact]) assert.equal(result.isError, true);
   assert.equal(api.calls.length, 0);
 });
@@ -488,7 +488,7 @@ test('near-miss shapes are repaired before validation', async (t) => {
   const client = await connect(t, { apiUrl: api.url });
   const result = await client.callTool({ name: 'people_company_enrich', arguments: { people: { email: 'ada@acme.example' }, contact_fields: 'mobile' } });
   assert.notEqual(result.isError, true, JSON.stringify(result));
-  assert.deepEqual(api.calls[0].options, { people: [{ email: 'ada@acme.example' }], contact_fields: ['mobile'], max_credits: 100 });
+  assert.deepEqual(api.calls[0].options, { people: [{ email: 'ada@acme.example' }], contact_fields: ['mobile'], profile: true, max_credits: 100 });
 });
 
 test('a retryable refusal before the waterfall ran is resent once under the same request id', async (t) => {

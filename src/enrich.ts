@@ -812,7 +812,11 @@ const enrichParameters = z.strictObject({
     .array(z.enum(CONTACT_FIELDS))
     .min(1)
     .optional()
-    .describe('People only. Find these contact values for each person instead of a profile; companies in the same call still get firmographics.'),
+    .describe('People only. Find these contact values for each person; companies in the same call still get firmographics.'),
+  profile: z
+    .boolean()
+    .optional()
+    .describe('With contact_fields, also return each person\'s profile in the same call, looked up first so the contact lookups can use it. Default true; false skips it.'),
   max_credits: z
     .number()
     .int()
@@ -829,6 +833,10 @@ const enrichRecord = z.looseObject({
   results: z
     .array(z.looseObject({ provider: z.string(), data: z.unknown().describe("The provider's own response, unchanged.") }))
     .describe('One entry per provider that found a requested field; empty when none did.'),
+  needs_max_credits: z
+    .record(z.string(), z.number())
+    .optional()
+    .describe('Fields left empty because a provider that could fill them did not fit max_credits, each with the max_credits a retry needs to reach it.'),
 });
 
 const enrichResultSchema = z.looseObject({
@@ -1007,7 +1015,7 @@ export function registerEnrichTools(
     description:
       'Enrich known people or companies. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to ' + ENRICH_MAX_RECORDS + ' records per call. ' +
       'Each requested field runs a waterfall by default: Firecrawl tries the providers that can use your inputs one at a time, ordered by listed price and past success rate, and stops as soon as the field is found. ' +
-      'Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values. ' +
+      'Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and the profile, in one call. ' +
       "Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call (default " + ENRICH_DEFAULT_MAX_CREDITS + '). ' +
       'To call one specific provider, use firecrawl_scrape with an alexandria body instead. ' +
       'Example: ' + JSON.stringify(ENRICH_EXAMPLE) + '.',
@@ -1033,7 +1041,7 @@ export function registerEnrichTools(
       assertCredential(session);
       const client = getClient(session) as any;
       const requestId = randomUUID();
-      const options = compact({ people: a.people, companies: a.companies, contact_fields: a.contact_fields, max_credits: a.max_credits ?? ENRICH_DEFAULT_MAX_CREDITS });
+      const options = compact({ people: a.people, companies: a.companies, contact_fields: a.contact_fields, profile: a.contact_fields ? a.profile ?? true : undefined, max_credits: a.max_credits ?? ENRICH_DEFAULT_MAX_CREDITS });
       const response = await relayExchangeError(
         (attempt) => {
           // A resend gets the time left, keeping the 5 s margin above the API's deadline.

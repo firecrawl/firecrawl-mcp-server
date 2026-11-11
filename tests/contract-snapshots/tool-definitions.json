@@ -8304,7 +8304,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "people_company_enrich@ac7383c82449": {
+  "people_company_enrich@1c9379e79152": {
     "annotations": {
       "title": "Look up and enrich people or companies",
       "readOnlyHint": true,
@@ -8312,7 +8312,7 @@
       "destructiveHint": false
     },
     "title": "Look up and enrich people or companies",
-    "description": "Enrich known people or companies. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to 10 records per call. Each requested field runs a waterfall by default: Firecrawl tries the providers that can use your inputs one at a time, ordered by listed price and past success rate, and stops as soon as the field is found. Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values. Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call (default 100). To call one specific provider, use firecrawl_scrape with an alexandria body instead. Example: {\"contact_fields\":[\"work_email\"],\"people\":[{\"name\":\"Jane Doe\",\"domain\":\"example.com\"}]}.",
+    "description": "Enrich known people or companies. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to 10 records per call. Each requested field runs a waterfall by default: Firecrawl tries the providers that can use your inputs one at a time, ordered by listed price and past success rate, and stops as soon as the field is found. Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and the profile, in one call. Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call (default 100). To call one specific provider, use firecrawl_scrape with an alexandria body instead. Example: {\"contact_fields\":[\"work_email\"],\"people\":[{\"name\":\"Jane Doe\",\"domain\":\"example.com\"}]}.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -8512,7 +8512,7 @@
           }
         },
         "contact_fields": {
-          "description": "People only. Find these contact values for each person instead of a profile; companies in the same call still get firmographics.",
+          "description": "People only. Find these contact values for each person; companies in the same call still get firmographics.",
           "minItems": 1,
           "type": "array",
           "items": {
@@ -8523,6 +8523,10 @@
               "mobile"
             ]
           }
+        },
+        "profile": {
+          "description": "With contact_fields, also return each person's profile in the same call, looked up first so the contact lookups can use it. Default true; false skips it.",
+          "type": "boolean"
         },
         "max_credits": {
           "description": "Most credits the whole call may spend. Omit it for 100. A provider is tried only while its listed price still fits, so 0 runs nothing paid.",
@@ -8566,6 +8570,16 @@
                   ],
                   "additionalProperties": {}
                 }
+              },
+              "needs_max_credits": {
+                "description": "Fields left empty because a provider that could fill them did not fit max_credits, each with the max_credits a retry needs to reach it.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "number"
+                }
               }
             },
             "required": [
@@ -8602,6 +8616,16 @@
                     "data"
                   ],
                   "additionalProperties": {}
+                }
+              },
+              "needs_max_credits": {
+                "description": "Fields left empty because a provider that could fill them did not fit max_credits, each with the max_credits a retry needs to reach it.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "number"
                 }
               }
             },
