@@ -86,6 +86,7 @@ export function skillsRequest(args: z.infer<typeof skillsSchema>) {
   if (query !== undefined && id !== undefined) throw new Error('Give query to list skills or id to read one, not both.');
   if (id !== undefined) {
     if (limit !== undefined) throw new Error('limit applies to a listing; a read with id returns one skill.');
+    if (version !== undefined && !id.startsWith('team:')) throw new Error('version applies to team skills (team:<slug>) only.');
     return { capability: 'read-skill', options: { id, ...(path === undefined ? {} : { path }), ...(version === undefined ? {} : { version }) } };
   }
   if (path !== undefined || version !== undefined) throw new Error('path and version apply to a read with id, not a listing.');

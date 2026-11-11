@@ -63,7 +63,7 @@ test('firecrawl_skills returns a team skill with its tools, current or pinned', 
 test('firecrawl_skills refuses ambiguous or invalid arguments before calling Exchange', async (t) => {
   const { api, client } = await startStdioWithApi(t);
   const before = api.requests.length;
-  for (const arguments_ of [{ query: 'digest', id: 'deep-research' }, { id: 'deep-research', limit: 5 }, { query: 'digest', path: 'SKILL.md' }, { query: 'digest', version: 1 }, { path: 'SKILL.md' }, { version: 1 }]) {
+  for (const arguments_ of [{ query: 'digest', id: 'deep-research' }, { id: 'deep-research', limit: 5 }, { query: 'digest', path: 'SKILL.md' }, { query: 'digest', version: 1 }, { path: 'SKILL.md' }, { version: 1 }, { id: 'deep-research', version: 1 }]) {
     const result = await callExpectingError(client, { name: 'firecrawl_skills', arguments: arguments_ });
     assert.equal(result.structuredContent?.error?.code, 'invalid_request', JSON.stringify(arguments_));
   }
@@ -119,3 +119,12 @@ test('firecrawl_save_skill refuses invalid combinations before calling Exchange'
   ]) await callExpectingError(client, { name: 'firecrawl_save_skill', arguments: arguments_ });
   assert.equal(api.requests.length, before);
 });
+
+test('a refused skill write names no request ID to resend, since the skills tools take none', async (t) => {
+  const { client } = await startStdioWithApi(t, { apiStatus: 409, apiError: 'conflict: team:weekly-digest is at version 3' });
+  const result = await client.request('tools/call', { name: 'firecrawl_save_skill', arguments: { id: 'team:weekly-digest', baseVersion: 2, enabled: false } });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /^conflict: team:weekly-digest is at version 3 Request ID: /);
+  assert.doesNotMatch(result.content[0].text, /Reuse this ID/);
+});
+

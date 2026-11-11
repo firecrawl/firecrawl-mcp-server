@@ -2032,9 +2032,9 @@ Returns result groups in \`data\` and an operation \`id\`.
     assertExchangeCredential(session);
     const client = getClient(session);
     const requestId = suppliedRequestId ?? randomUUID();
-    // The library tool takes a command and nothing else, so a refusal cannot ask for the
-    // request ID to be sent again.
-    const resendsRequestId = tool !== ALEXANDRIA_LIBRARY_TOOL;
+    // The library and skills tools take no request ID, so a refusal cannot ask for it to be
+    // sent again.
+    const resendsRequestId = ![ALEXANDRIA_LIBRARY_TOOL, 'firecrawl_skills', 'firecrawl_save_skill'].includes(tool);
     try {
       const response = await relayExchangeError(
         (attempt) => {
@@ -2302,7 +2302,7 @@ Returns result groups in \`data\` and an operation \`id\`.
         throw new UserError(message, { success: false, error: { code: 'invalid_request', message } });
       }
       const origin = requestOrigin(mcpClient, session);
-      const result = await executeExchangeCalls(session, { provider: 'firecrawl', ...request }, undefined, undefined, origin);
+      const result = await executeExchangeCalls(session, { provider: 'firecrawl', ...request }, undefined, undefined, origin, false, undefined, 'firecrawl_skills');
       return structuredCompact(withSkillNavigation(JSON.parse(result)));
     },
   };
@@ -2326,7 +2326,7 @@ Returns result groups in \`data\` and an operation \`id\`.
     execute: async (args, { session, client: mcpClient }) => {
       const origin = requestOrigin(mcpClient, session);
       const capability = (args as z.infer<typeof saveSkillSchema>).id === undefined ? 'create-skill' : 'update-skill';
-      const result = await executeExchangeCalls(session, { provider: 'firecrawl', capability, options: args as Record<string, unknown> }, undefined, undefined, origin);
+      const result = await executeExchangeCalls(session, { provider: 'firecrawl', capability, options: args as Record<string, unknown> }, undefined, undefined, origin, false, undefined, 'firecrawl_save_skill');
       return structuredCompact(withSkillNavigation(JSON.parse(result)));
     },
   };
