@@ -1234,6 +1234,29 @@ The response has `people` and `companies` lists with one entry per input, each w
 
 Both tools also accept, and drop, the `conversationId` and `objective` fields agents carry between Firecrawl tools.
 
+### 15c. Jobs Tool (`jobs_search`)
+
+`jobs_search` finds job postings and tells whether a posting is still open. It is listed wherever the enrich tools are, except on the [search-only endpoint](#search-only-endpoint), and needs the same credential. It sends its input as a single request to Alexandria's jobs route, `firecrawl/jobs/auto`, which picks the mode and the providers:
+
+| Input | What it does |
+| --- | --- |
+| `url`, or `urls` (up to 10) | Reads each posting and returns its status. One `url` also returns the description |
+| `company` (a name or domain) | Lists the company's open roles from its own job board; add `query` for one role there |
+| `query` (a title or keywords) | Searches postings by role, with `location`, `remote` and `posted_within_days`; `group_by: "employer"` groups them by employer, and `boards_only` searches employers' own boards only |
+
+At least one of `query`, `company`, `url` or `urls` is required. `limit` (1 to 100, default 10), `cursor`, `max_credits` (default 200), `provider` and `include_description` apply to every mode.
+
+```json
+{
+  "name": "jobs_search",
+  "arguments": { "query": "data engineer", "location": "Berlin", "posted_within_days": 14 }
+}
+```
+
+Every row has the same fields: `title`, `company`, `company_domain`, `location`, `remote`, `employment_type`, `posted_at` (as the board states it), `url`, `apply_url`, `source`, `source_type` (`employer_board`, `employer_site`, `aggregator` or `index`), `board`, `status` and `checked_at`, plus `description`, `salary` and `requirements` where they apply. `status` is `open` when the posting was read from the employer's board or live posting page in this call, and `unverified` when it comes from a job site and was not confirmed on the employer's board; a posting checked by URL can also be `closed`, `not_found` or `error`.
+
+The response also carries `mode`, `count`, `next_cursor`, `providers` (each provider call with its status, rows and credits), `credits`, `credits_pending`, `stopped` and `notes`; `employers` with `group_by`; and, for a company, `boards` (the boards read and what each covers) and `resolution` (how the board was found). When no board is found for a company, the rows come from job sites and `notes` says so. Against a Firecrawl API that does not serve the route yet, the tool fails with `jobs_search_unavailable`.
+
 ### 16. Credit Usage Tool
 
 The tool requires an authenticated Firecrawl account and is read-only.

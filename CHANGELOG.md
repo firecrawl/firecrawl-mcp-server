@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `jobs_search`: one tool for job postings over Alexandria's jobs route, `firecrawl/jobs/auto`, listed wherever the enrich tools are except on the search-only endpoint. `query` with `location`, `remote` and `posted_within_days` searches postings by role and place; `url` reads one posting and tells whether it is still open; `urls` checks up to 10 postings in one call; `company` lists a company's open roles from its own job board; `group_by: "employer"` shows who is hiring for a role. Rows are normalized and carry `source`, `posted_at`, a `status` (`open` or `unverified`, and for a posting checked by URL `closed`, `not_found` or `error`) and `checked_at`. Against a Firecrawl API that does not serve the route yet, the tool fails with `jobs_search_unavailable`. `alexandria_library_read` and the `tools` field of `firecrawl_search` results point job postings to `jobs_search`.
+
 ### Fixed
 
 - `people_company_search` declares `credits_pending` (top level and on each provider) in its output schema. A search where a provider timed out now returns its result instead of failing the client's output-schema check.
