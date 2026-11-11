@@ -33,7 +33,7 @@ test('Alexandria selection metadata omits feedback workflow', async (t) => {
   }
 });
 
-test('Alexandria executions and discovery results carry the feedback hint; utility calls do not', async (t) => {
+test('Alexandria executions carry the feedback hint; utility calls and library commands do not', async (t) => {
   const { client } = await startStdioWithApi(t);
   const call = (name, args) => client.request('tools/call', { name, arguments: args });
 
@@ -49,6 +49,10 @@ test('Alexandria executions and discovery results carry the feedback hint; utili
   const library = await call('alexandria_library_search', { command: 'ls /library' });
   assert.notEqual(library.isError, true, JSON.stringify(library));
   assert.equal(library.structuredContent.feedbackTool, undefined);
+
+  // firecrawl_find_tools is unlisted here and still answers, hint included.
+  const categories = toolText(await call('firecrawl_find_tools', { limit: 1 }));
+  assertFeedbackHint(categories);
 });
 
 test('legacy discovery results carry the feedback hint', async (t) => {

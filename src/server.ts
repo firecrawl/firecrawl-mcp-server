@@ -2201,7 +2201,11 @@ Returns result groups in \`data\` and an operation \`id\`.
             { provider: 'firecrawl', capability: 'library', options: { command } },
             undefined,
             undefined,
-            requestOrigin(mcpClient, session)
+            requestOrigin(mcpClient, session),
+            false,
+            undefined,
+            // A refusal names this tool as the one to call again.
+            ALEXANDRIA_LIBRARY_TOOL
           )
         );
         const entry = envelope?.data?.alexandria?.[0];

@@ -143,6 +143,17 @@ test('alexandria_library_search reports an empty result, stderr, cut output and 
   assert.match(timeout.content[0].text, /ran past its deadline/);
 });
 
+test('a refused library command reaches the agent with the message that says what to do', async (t) => {
+  const message = 'The command used too much memory. Narrow it to one category or provider folder, or search with grep -r instead of piping every file through cat.';
+  for (const status of [422, 503]) {
+    const { client } = await startStdioWithApi(t, { apiStatus: status, apiError: message });
+    const refused = await callExpectingError(client, { name: 'alexandria_library_search', arguments: { command: 'cat $(find /library -type f) | wc -c' } });
+    assert.match(refused.content[0].text, /too much memory.*grep -r/, String(status));
+    // Nothing in the refusal sends the agent to another tool.
+    assert.doesNotMatch(refused.content[0].text, /alexandria_library_read|firecrawl_scrape/, String(status));
+  }
+});
+
 test('firecrawl_scrape still runs an alexandria body it no longer lists', async (t) => {
   const { api, client } = await startStdioWithApi(t);
 

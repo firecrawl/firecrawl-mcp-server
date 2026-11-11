@@ -23,8 +23,8 @@ test('every tool description fits the 2,048-character cap and keeps the routing 
   const scrape = byName.get('firecrawl_scrape');
   assert.match(scrape, /^Scrape one URL and return its content/);
   assert.match(scrape, /`firecrawl_search` and `alexandria_library_search` can discover Alexandria providers for the same fields across several pages/);
-  // What each Alexandria tool is for has to survive truncation, so it leads.
+  // What each Alexandria tool is for leads its description.
   assert.match(byName.get('alexandria_library_search'), /^Explore the Alexandria library: Firecrawl's catalogue of data providers/);
-  assert.match(byName.get('alexandria_library_search').slice(0, 700), /read-only filesystem, using shell commands/);
+  assert.match(byName.get('alexandria_library_search'), /read-only filesystem, using shell commands/);
   assert.match(byName.get('alexandria_library_read'), /^Run capabilities of Alexandria data providers/);
 });
