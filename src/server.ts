@@ -2044,6 +2044,9 @@ Returns result groups in \`data\` and an operation \`id\`.
     assertExchangeCredential(session);
     const client = getClient(session);
     const requestId = suppliedRequestId ?? randomUUID();
+    // The library tool takes a command and nothing else, so a refusal cannot ask for the
+    // request ID to be sent again.
+    const resendsRequestId = tool !== ALEXANDRIA_LIBRARY_TOOL;
     try {
       const response = await relayExchangeError(
         (attempt) => {
@@ -2065,7 +2068,7 @@ Returns result groups in \`data\` and an operation \`id\`.
         },
         {
           tool,
-          requestId,
+          ...(resendsRequestId ? { requestId } : {}),
           providers: (Array.isArray(alexandria) ? alexandria : [alexandria]).map(call => call.provider),
           // The API answers a repeat of this request id from its record, so a resend cannot run twice.
           resend: true,
@@ -2100,7 +2103,7 @@ Returns result groups in \`data\` and an operation \`id\`.
     } catch (error) {
       if ((error as any)?.response?.status === 401) throw error;
       throw new UserError(
-        `${error instanceof Error ? error.message : String(error)} Request ID: ${requestId}. Reuse this ID only with the identical payload.`,
+        `${error instanceof Error ? error.message : String(error)} Request ID: ${requestId}.${resendsRequestId ? ' Reuse this ID only with the identical payload.' : ''}`,
         { ...(error instanceof UserError ? error.extras : {}), requestId }
       );
     }
