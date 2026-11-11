@@ -35,6 +35,8 @@ const SEARCH_TOOLS = [
   // Alexandria people and company search and enrichment.
   'people_company_search',
   'people_company_enrich',
+  // Job postings over Alexandria's jobs route.
+  'jobs_search',
 ];
 
 // A representative sample of the full-surface tools that must NOT leak here.

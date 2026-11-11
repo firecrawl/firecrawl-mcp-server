@@ -88,7 +88,7 @@ A fixed-scope search surface is also hosted at:
 https://mcp.firecrawl.dev/v2/mcp-search
 ```
 
-It exposes a fixed set of eleven tools: `firecrawl_search`, `firecrawl_developer_search`, `firecrawl_gov_search`, the four `firecrawl_research_*` tools, the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`, and the [enrich tools](#15b-enrich-tools) `people_company_search` and `people_company_enrich`. Its `firecrawl_search` fetches no page content.
+It exposes a fixed set of twelve tools: `firecrawl_search`, `firecrawl_developer_search`, `firecrawl_gov_search`, the four `firecrawl_research_*` tools, the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`, and the [enrich tools](#15b-enrich-tools) `people_company_search` and `people_company_enrich`, and the [jobs tool](#15c-jobs-tool-jobs_search) `jobs_search`. Its `firecrawl_search` fetches no page content.
 
 ### Running with npx
 
@@ -1236,7 +1236,7 @@ Both tools also accept, and drop, the `conversationId` and `objective` fields ag
 
 ### 15c. Jobs Tool (`jobs_search`)
 
-`jobs_search` finds job postings and tells whether a posting is still open. It is listed wherever the enrich tools are, except on the [search-only endpoint](#search-only-endpoint), and needs the same credential. It sends its input as a single request to Alexandria's jobs route, `firecrawl/jobs/auto`, which picks the mode and the providers:
+`jobs_search` finds job postings and tells whether a posting is still open. It is listed wherever the enrich tools are, the [search-only endpoint](#search-only-endpoint) included, and needs the same credential. It sends its input as a single request to Alexandria's jobs route, `firecrawl/jobs/auto`, which picks the mode and the providers:
 
 | Input | What it does |
 | --- | --- |
