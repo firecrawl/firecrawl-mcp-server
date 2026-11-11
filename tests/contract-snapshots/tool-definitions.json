@@ -5541,15 +5541,15 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_scrape@2212bf99af1f": {
+  "firecrawl_scrape@0f86098ecdc5": {
     "annotations": {
       "title": "Firecrawl scrape",
-      "readOnlyHint": false,
+      "readOnlyHint": true,
       "openWorldHint": true,
       "destructiveHint": false
     },
     "title": "Firecrawl scrape",
-    "description": "\nScrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, or a targeted answer. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages. `url` may omit the scheme (`example.com/page`); it is read as https.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. Browser actions can change the live page when interactive actions are enabled. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session, `firecrawl_search` and `alexandria_library_search` can discover Alexandria providers for the same fields across several pages; a matching provider returns typed records in one `alexandria_library_read` call.\n",
+    "description": "\nScrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, or a targeted answer. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages. `url` may omit the scheme (`example.com/page`); it is read as https.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session, `firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.\n\nWith `alexandria` in place of `url`, the tool runs catalogued provider capabilities instead of fetching a page. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5666,56 +5666,6 @@
         "waitFor": {
           "type": "number"
         },
-        "actions": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": [
-                  "wait",
-                  "screenshot",
-                  "scroll",
-                  "scrape",
-                  "click",
-                  "write",
-                  "press",
-                  "executeJavascript",
-                  "generatePDF"
-                ]
-              },
-              "selector": {
-                "type": "string"
-              },
-              "milliseconds": {
-                "type": "number"
-              },
-              "text": {
-                "type": "string"
-              },
-              "key": {
-                "type": "string"
-              },
-              "direction": {
-                "type": "string",
-                "enum": [
-                  "up",
-                  "down"
-                ]
-              },
-              "script": {
-                "type": "string"
-              },
-              "fullPage": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "type"
-            ]
-          }
-        },
         "mobile": {
           "type": "boolean"
         },
@@ -5762,13 +5712,11 @@
           ]
         },
         "profile": {
+          "description": "Loads a saved browser profile without saving changes to it.",
           "type": "object",
           "properties": {
             "name": {
               "type": "string"
-            },
-            "saveChanges": {
-              "type": "boolean"
             }
           },
           "required": [
@@ -5782,8 +5730,89 @@
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
         },
+        "requestId": {
+          "description": "Idempotency key bound to one Alexandria execution payload. Generated when omitted and returned with the result.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+        },
+        "alexandria": {
+          "description": "Catalogued Alexandria capability invocation, mutually exclusive with url. One {provider, capability, options} object or an array of 1-10, with contracts available through firecrawl_search or firecrawl_find_tools. Each call may include version to pin a published workflow; omitting it uses latest. Only requestId and timeout are supported alongside alexandria. The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and a key field under response (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination. Returns per-capability results in data.alexandria with data, records, or an error with a code; individual capabilities can fail even when the outer response succeeds. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "description": "Provider slug, e.g. \"fred\".",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "capability": {
+                  "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "description": "Optional published workflow version. Omit to use the latest version.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "options": {
+                  "description": "Capability options as declared by its contract.",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": true
+                }
+              },
+              "required": [
+                "provider",
+                "capability"
+              ]
+            },
+            {
+              "minItems": 1,
+              "maxItems": 10,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "description": "Provider slug, e.g. \"fred\".",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "capability": {
+                    "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "version": {
+                    "description": "Optional published workflow version. Omit to use the latest version.",
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "options": {
+                    "description": "Capability options as declared by its contract.",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "provider",
+                  "capability"
+                ]
+              }
+            }
+          ]
+        },
         "toolDetail": {
-          "description": "Domain discovery detail, summary by default; compact returns provider/capability/description, full includes contracts.",
+          "description": "URL mode only: domain discovery detail, summary by default; compact returns provider/capability/description, full includes contracts. Ignored with alexandria.",
           "type": "string",
           "enum": [
             "compact",
@@ -5792,13 +5821,10 @@
           ]
         },
         "domainTools": {
-          "description": "Include domain-matched Alexandria tools for the page in tools on the returned document.",
+          "description": "URL mode only: include domain-matched Alexandria tools for the page in tools on the returned document. Ignored with alexandria.",
           "type": "boolean"
         }
       },
-      "required": [
-        "url"
-      ],
       "additionalProperties": false
     },
     "name": "firecrawl_scrape",
@@ -6669,15 +6695,15 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_scrape@e6d031331e9d": {
+  "firecrawl_scrape@e9331feb0fb2": {
     "annotations": {
       "title": "Firecrawl scrape",
-      "readOnlyHint": true,
+      "readOnlyHint": false,
       "openWorldHint": true,
       "destructiveHint": false
     },
     "title": "Firecrawl scrape",
-    "description": "\nScrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, or a targeted answer. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages. `url` may omit the scheme (`example.com/page`); it is read as https.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session, `firecrawl_search` and `alexandria_library_search` can discover Alexandria providers for the same fields across several pages; a matching provider returns typed records in one `alexandria_library_read` call.\n",
+    "description": "\nScrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, or a targeted answer. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages. `url` may omit the scheme (`example.com/page`); it is read as https.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. Browser actions can change the live page when interactive actions are enabled. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session, `firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.\n\nWith `alexandria` in place of `url`, the tool runs catalogued provider capabilities instead of fetching a page. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.\n",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6794,6 +6820,56 @@
         "waitFor": {
           "type": "number"
         },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "wait",
+                  "screenshot",
+                  "scroll",
+                  "scrape",
+                  "click",
+                  "write",
+                  "press",
+                  "executeJavascript",
+                  "generatePDF"
+                ]
+              },
+              "selector": {
+                "type": "string"
+              },
+              "milliseconds": {
+                "type": "number"
+              },
+              "text": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "up",
+                  "down"
+                ]
+              },
+              "script": {
+                "type": "string"
+              },
+              "fullPage": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        },
         "mobile": {
           "type": "boolean"
         },
@@ -6840,11 +6916,13 @@
           ]
         },
         "profile": {
-          "description": "Loads a saved browser profile without saving changes to it.",
           "type": "object",
           "properties": {
             "name": {
               "type": "string"
+            },
+            "saveChanges": {
+              "type": "boolean"
             }
           },
           "required": [
@@ -6858,8 +6936,89 @@
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
         },
+        "requestId": {
+          "description": "Idempotency key bound to one Alexandria execution payload. Generated when omitted and returned with the result.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+        },
+        "alexandria": {
+          "description": "Catalogued Alexandria capability invocation, mutually exclusive with url. One {provider, capability, options} object or an array of 1-10, with contracts available through firecrawl_search or firecrawl_find_tools. Each call may include version to pin a published workflow; omitting it uses latest. Only requestId and timeout are supported alongside alexandria. The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and a key field under response (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination. Returns per-capability results in data.alexandria with data, records, or an error with a code; individual capabilities can fail even when the outer response succeeds. Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "description": "Provider slug, e.g. \"fred\".",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "capability": {
+                  "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "description": "Optional published workflow version. Omit to use the latest version.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "options": {
+                  "description": "Capability options as declared by its contract.",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": true
+                }
+              },
+              "required": [
+                "provider",
+                "capability"
+              ]
+            },
+            {
+              "minItems": 1,
+              "maxItems": 10,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "description": "Provider slug, e.g. \"fred\".",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "capability": {
+                    "description": "Capability address as returned by search or discover, e.g. \"series/observations\".",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "version": {
+                    "description": "Optional published workflow version. Omit to use the latest version.",
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "options": {
+                    "description": "Capability options as declared by its contract.",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "provider",
+                  "capability"
+                ]
+              }
+            }
+          ]
+        },
         "toolDetail": {
-          "description": "Domain discovery detail, summary by default; compact returns provider/capability/description, full includes contracts.",
+          "description": "URL mode only: domain discovery detail, summary by default; compact returns provider/capability/description, full includes contracts. Ignored with alexandria.",
           "type": "string",
           "enum": [
             "compact",
@@ -6868,13 +7027,10 @@
           ]
         },
         "domainTools": {
-          "description": "Include domain-matched Alexandria tools for the page in tools on the returned document.",
+          "description": "URL mode only: include domain-matched Alexandria tools for the page in tools on the returned document. Ignored with alexandria.",
           "type": "boolean"
         }
       },
-      "required": [
-        "url"
-      ],
       "additionalProperties": false
     },
     "name": "firecrawl_scrape",

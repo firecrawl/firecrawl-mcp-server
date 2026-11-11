@@ -412,7 +412,7 @@ for (const { name, payload, delivered } of [
 for (const [name, args] of [
   ['alexandria_library_read', { calls: [{ provider: 'fred', capability: 'series/observations' }] }],
   ['alexandria_library_search', { command: 'ls /library' }],
-  // The alexandria body firecrawl_scrape no longer lists.
+  // The alexandria body of firecrawl_scrape, listed beside alexandria_library_read.
   ['firecrawl_scrape', { alexandria: [{ provider: 'fred', capability: 'series/observations' }] }],
 ]) {
   test(`a refused Alexandria request reaches an SDK client with its message (${name})`, async (t) => {

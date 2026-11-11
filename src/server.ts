@@ -684,11 +684,11 @@ export function createFirecrawlMcpServer(
   const logging = options.logging ?? config.transport === 'httpStream';
 
   // Which names the Alexandria tools go by. `dedicated`: alexandria_library_search
-  // and alexandria_library_read; firecrawl_scrape lists a page URL only and
-  // still runs an alexandria body, and firecrawl_find_tools stays listed beside
-  // them. `legacy`: firecrawl_find_tools and firecrawl_scrape with an alexandria
-  // body, for a surface whose tool filter leaves either new tool out; its
-  // descriptions and follow-up calls would otherwise name a tool it does not list.
+  // and alexandria_library_read, with firecrawl_find_tools and firecrawl_scrape's
+  // alexandria body still listed beside them as they were before. `legacy`:
+  // firecrawl_find_tools and firecrawl_scrape with an alexandria body only, for
+  // a surface whose tool filter leaves either new tool out; its descriptions and
+  // follow-up calls would otherwise name a tool it does not list.
   const alexandriaTools: AlexandriaTools = [ALEXANDRIA_READ_TOOL, ALEXANDRIA_LIBRARY_TOOL].every(
     (name) => hooks.toolFilter?.(name) ?? true
   )
@@ -1305,9 +1305,7 @@ export function createFirecrawlMcpServer(
 
   // firecrawl_scrape accepts either a page URL or an Exchange batch. The base
   // schema stays url-required because search, crawl, and monitor reuse it for
-  // nested scrapeOptions, where `alexandria` has no meaning. Where Alexandria
-  // has its own tool, this is still what a call is validated against, so the
-  // alexandria body keeps working; transformInputSchema keeps it out of tools/list.
+  // nested scrapeOptions, where `alexandria` has no meaning.
   const ALEXANDRIA_IGNORED_SCRAPE_OPTIONS = new Set(['toolDetail', 'domainTools']);
 
   const scrapeToolParamsSchema = scrapeParamsSchema
@@ -1340,7 +1338,7 @@ export function createFirecrawlMcpServer(
     })
     .refine(
       (args) => Boolean(args.url) !== Boolean(args.alexandria),
-      dedicatedAlexandria ? 'Provide a url' : 'Provide exactly one of url or alexandria'
+      'Provide exactly one of url or alexandria'
     )
     .refine(
       (args) =>
@@ -1773,38 +1771,22 @@ Scrape one URL and return its content: markdown by default, or HTML, links, scre
 
 Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch or a smaller \`maxAge\` to bound staleness. A successful response does not by itself confirm the page is still current. ${SAFE_MODE ? 'A named browser profile loads saved session data without saving changes to it.' : 'Browser actions can change the live page when interactive actions are enabled.'} Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback.
 
-${dedicatedAlexandria
-  ? `On an authenticated session, \`firecrawl_search\` and \`${ALEXANDRIA_LIBRARY_TOOL}\` can discover Alexandria providers for the same fields across several pages; a matching provider returns typed records in one \`${ALEXANDRIA_READ_TOOL}\` call.`
-  : `On an authenticated session, \`firecrawl_search\` and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.
+On an authenticated session, \`firecrawl_search\` and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.
 
-With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capabilities instead of fetching a page. ${ALEXANDRIA_TERMS_GUIDANCE}`}
+With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capabilities instead of fetching a page. ${ALEXANDRIA_TERMS_GUIDANCE}
 `,
     outputSchema: scrapeOutputSchema,
     parameters: scrapeToolParamsSchema,
+    // Listed with the definition it had before the library tools, alexandria
+    // body included, as firecrawl_find_tools is: a client that takes up a new or
+    // changed tool only after its own review keeps a listed way to run a provider.
     transformInputSchema: (schema) => {
       const properties = schema.properties as {
         jsonOptions?: unknown;
-        alexandria?: unknown;
-        requestId?: unknown;
         formats: { items: { enum: string[] } };
-        [key: string]: unknown;
       };
       delete properties.jsonOptions;
       properties.formats.items.enum = properties.formats.items.enum.filter((format) => format !== 'json');
-      // The alexandria body is no longer listed where alexandria_library_read
-      // exists, and still runs for clients and prompts that learned it.
-      if (dedicatedAlexandria) {
-        delete properties.alexandria;
-        delete properties.requestId;
-        // An embedder may have made a field of its own required; keep those.
-        const required = Array.isArray(schema.required) ? (schema.required as string[]) : [];
-        schema.required = ['url', ...required.filter((name) => name !== 'url' && name in properties)];
-        for (const key of ALEXANDRIA_IGNORED_SCRAPE_OPTIONS) {
-          const field = properties[key] as { description: string };
-          const text = field.description.replace(/^URL mode only: /, '').replace(/ Ignored with alexandria\.$/, '');
-          field.description = text[0].toUpperCase() + text.slice(1);
-        }
-      }
       return schema;
     },
     execute: async (args: unknown, { session, sessionId, log, client: mcpClient }): Promise<ContentResult> => {

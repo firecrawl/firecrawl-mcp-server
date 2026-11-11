@@ -11,11 +11,10 @@
 ### Changed
 
 - On the full surface (stdio, `/v2/mcp`, `/v2/mcp-oauth`), Alexandria has its own tools, `alexandria_library_search` and `alexandria_library_read`. The earlier paths keep working:
-  - `firecrawl_scrape` no longer lists `alexandria` and `requestId` in its input schema or describes them. It still accepts them and runs the call or batch exactly as before, so clients and prompts that learned that shape keep working.
-  - `firecrawl_find_tools` stays listed beside the new tools, with the definition it had before them, and answers as before, so a client that takes up a new or changed tool only after its own review keeps catalogue discovery in the meantime.
+  - `firecrawl_scrape` and `firecrawl_find_tools` stay listed beside the new tools, with the definitions they had before them: `firecrawl_scrape` lists and describes `alexandria` and `requestId` and runs the call or batch exactly as before, and `firecrawl_find_tools` answers as before. A client that takes up a new or changed tool only after its own review keeps catalogue discovery and provider execution in the meantime, and clients and prompts that learned these shapes keep working.
   - `alexandria_library_read` lists `calls` only. It also reads an `alexandria` body (one call or an array) and one call sent as the arguments themselves (`{provider, capability, options}`) as `calls`.
   - Follow-up calls in results (`nextTool` for provider terms, for a retained result, and `next_tool` for a pending enrichment job) are addressed to `alexandria_library_read`.
-  - Server instructions, the `firecrawl_search` and `firecrawl_scrape` descriptions and the `toolDetail` and `query` parameters name the new tools.
+  - Server instructions, the `firecrawl_search` description and its `toolDetail` and `query` parameters name the new tools.
   - An embedder whose `toolFilter` leaves either new tool out keeps `firecrawl_find_tools` and `firecrawl_scrape` with `alexandria` listed, with the earlier copy.
   - The search-only endpoint is unchanged: it keeps listing `firecrawl_find_tools` and `firecrawl_scrape` with `alexandria`, because its tool list is fixed by its connector listing.
 - `firecrawl_scrape` no longer advertises the `json` format or `jsonOptions`. Cached calls using them keep the existing JSON extraction, validation and results for compatibility. Other formats and tools are unchanged.
