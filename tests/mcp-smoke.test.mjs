@@ -487,6 +487,17 @@ async function startFakeFirecrawlApi({ searchResponse } = {}) {
       return;
     }
 
+    if (req.method === 'PATCH' && req.url?.startsWith('/v2/monitor/')) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: { id: req.url.slice('/v2/monitor/'.length) },
+          success: true,
+        })
+      );
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/v2/monitor') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
@@ -1317,7 +1328,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   assert.deepEqual(
     deprecatedExtract.structuredContent.replacement.example_arguments.formats,
-    ['json']
+    ['markdown']
   );
 
   const byName = new Map(tools.tools.map((tool) => [tool.name, tool]));
@@ -1354,11 +1365,11 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   const instructionsHead = init.instructions.slice(0, CLAUDE_CODE_TEXT_CAP);
   assert.match(instructionsHead, OUT_OF_CREDITS_LEAD);
   assert.match(instructionsHead, /Alexandria is Firecrawl's catalogue of data providers/);
-  assert.match(instructionsHead, /For the same fields across multiple pages/);
+  assert.match(instructionsHead, /Before scraping the same fields from several pages, alexandria_library_search checks for free whether a provider covers them/);
   assert.match(instructionsHead, /Authenticated searches always add alexandria to the sources/);
   assert.match(
     init.instructions,
-    /Alexandria is Firecrawl's catalogue of data providers and workflows.*firecrawl_scrape with alexandria.*executes up to ten capabilities/is
+    /Alexandria is Firecrawl's catalogue of data providers and workflows.*alexandria_library_read with calls: \[\{provider, capability, options\}\] runs up to ten capabilities/is
   );
   assert.match(
     init.instructions,
@@ -1366,8 +1377,9 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   assert.match(
     init.instructions,
-    /For the same fields across multiple pages, firecrawl_find_tools offers free provider discovery/
+    /alexandria_library_search holds each contract at \/library\/<category>\/<provider>\/<capability>\.md/
   );
+  assert.doesNotMatch(init.instructions, /firecrawl_find_tools|firecrawl_scrape with alexandria/);
   assert.match(
     byName.get('firecrawl_scrape').description,
     /request identifies a page and needs its content or defined fields/i
@@ -1405,11 +1417,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.doesNotMatch(byName.get('firecrawl_search').description, /not the page/i);
   assert.match(
     byName.get('firecrawl_search').description,
-    /use `firecrawl_scrape` on a result URL when the excerpt is not enough/i
-  );
-  assert.match(
-    byName.get('firecrawl_search').description,
-    /ranked results with query-relevant highlights\./i
+    /ranked results with query-relevant highlights[.;]/i
   );
   assert.match(
     searchParams.highlights.description,
@@ -1417,7 +1425,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   assert.match(
     byName.get('firecrawl_search').description,
-    /authenticated responses can include an `id` for optional search feedback/i
+    /result groups in `data` and an operation `id`/i
   );
   assert.match(
     byName.get('firecrawl_parse').description,
@@ -1467,8 +1475,8 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   // The two surfaces that both answer to "research" must stay distinguishable.
   assert.match(
-    byName.get('firecrawl_search').description,
-    /categories: \["research"\].*research-affiliated websites.*`firecrawl_research_\*` tools are a separate surface.*PubMed, bioRxiv, medRxiv.*arXiv/is
+    byName.get('firecrawl_search').inputSchema.properties.categories.description,
+    /`research` restricts ordinary web results to research-affiliated websites.*separate from the `firecrawl_research_\*` tools.*PubMed, bioRxiv, medRxiv.*arXiv/is
   );
   assert.match(
     byName.get('firecrawl_search').description,
@@ -1745,7 +1753,7 @@ test('local keyless stdio keeps profile guidance keyless-scoped and omits feedba
   assert.ok(search);
   assert.match(
     search.description,
-    /authenticated responses can include an `id` for optional search feedback/i
+    /result groups in `data` and an operation `id`/i
   );
 });
 
@@ -1798,6 +1806,80 @@ test('monitor create gives queries precedence over page targets', async (t) => {
   assert.deepEqual(monitorRequests[1].body.targets, [
     { type: 'scrape', urls: ['https://example.com/retained'] },
   ]);
+});
+
+test('monitor update pauses and reschedules from top-level parameters', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+  });
+  t.after(() => stopChild(child));
+
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-monitor-update', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const { tools } = await client.request('tools/list');
+  const update = tools.find((tool) => tool.name === 'firecrawl_monitor_update');
+  assert.deepEqual(update.inputSchema.required, ['id']);
+  for (const key of ['body', 'status', 'scheduleText', 'cron', 'timezone']) {
+    assert.ok(update.inputSchema.properties[key], `${key} is advertised`);
+  }
+  assert.deepEqual(update.inputSchema.properties.status.enum, ['active', 'paused']);
+
+  for (const args of [
+    { id: 'mon_001', status: 'paused' },
+    { id: 'mon_001', scheduleText: 'every 6 hours', timezone: 'Europe/Berlin' },
+    {
+      id: 'mon_001',
+      cron: '0 9 * * 1',
+      status: 'active',
+      body: {
+        name: 'Pricing watch',
+        status: 'paused',
+        schedule: { text: 'every hour', timezone: 'Asia/Tokyo' },
+      },
+    },
+    { id: 'mon_001', body: { schedule: { cron: '0 * * * *' } }, timezone: 'UTC' },
+    { id: 'mon_001', body: { name: 'Renamed' } },
+    {
+      id: 'mon_001',
+      scheduleText: 'every day at 9am',
+      body: { schedule: { text: 'every hour', cron: '0 * * * *' } },
+    },
+  ]) {
+    const result = await client.request('tools/call', {
+      arguments: args,
+      name: 'firecrawl_monitor_update',
+    });
+    assert.notEqual(result.isError, true, JSON.stringify(result));
+  }
+
+  const patches = fakeApi.requests.filter(
+    (request) => request.method === 'PATCH' && request.url === '/v2/monitor/mon_001'
+  );
+  assert.deepEqual(
+    patches.map((request) => request.body),
+    [
+      { status: 'paused' },
+      { schedule: { text: 'every 6 hours', timezone: 'Europe/Berlin' } },
+      {
+        name: 'Pricing watch',
+        status: 'active',
+        schedule: { cron: '0 9 * * 1', timezone: 'Asia/Tokyo' },
+      },
+      { schedule: { cron: '0 * * * *', timezone: 'UTC' } },
+      { name: 'Renamed' },
+      { schedule: { text: 'every day at 9am' } },
+    ]
+  );
 });
 
 test('developer search serves server-shaped passages uncapped', async (t) => {

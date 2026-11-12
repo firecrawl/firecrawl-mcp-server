@@ -29,13 +29,19 @@ async function startRefusingApi(t, status, body) {
   return `http://127.0.0.1:${server.address().port}`;
 }
 
-async function connect(t, { apiUrl, session, registerExtraTools, onToolResult, fileAccess }) {
+async function connect(t, { apiUrl, session, registerExtraTools, onToolResult, fileAccess, legacySurface }) {
   const port = await getFreePort();
   const instance = createFirecrawlMcpServer({
     transport: 'httpStream',
     apiUrl,
     fileAccess,
-    unstable_hooks: { authenticate: async () => ({ ...session }), registerExtraTools, onToolResult },
+    unstable_hooks: {
+      authenticate: async () => ({ ...session }),
+      registerExtraTools,
+      onToolResult,
+      // A surface with a fixed tool list keeps firecrawl_find_tools listed.
+      ...(legacySurface ? { toolFilter: (name) => !name.startsWith('alexandria_') } : {}),
+    },
   });
   await instance.start({
     transportType: 'httpStream',
@@ -49,8 +55,8 @@ async function connect(t, { apiUrl, session, registerExtraTools, onToolResult, f
   return { client, tools };
 }
 
-async function assertReadableError(t, { apiUrl, session, name, args, includes, registerExtraTools, onToolResult, fileAccess }) {
-  const { client, tools } = await connect(t, { apiUrl, session, registerExtraTools, onToolResult, fileAccess });
+async function assertReadableError(t, { apiUrl, session, name, args, includes, registerExtraTools, onToolResult, fileAccess, legacySurface }) {
+  const { client, tools } = await connect(t, { apiUrl, session, registerExtraTools, onToolResult, fileAccess, legacySurface });
   assert.ok(tools.find((tool) => tool.name === name)?.outputSchema, `${name} declares an outputSchema`);
   const result = await client.callTool({ name, arguments: args });
   assert.equal(result.isError, true, JSON.stringify(result));
@@ -262,14 +268,19 @@ const JSON_FORMAT_MESSAGE =
   'formats "json" needs jsonOptions with a prompt or a schema. To ask a question about the page, use formats ["query"] with queryOptions.prompt instead.';
 const QUERY_FORMAT_MESSAGE = 'formats "query" needs queryOptions with a non-empty prompt.';
 
-for (const { name, args, message, code } of [
+for (const { name, args, message, code, legacySurface } of [
   { name: 'firecrawl_scrape', args: { url: 'https://example.com', formats: ['query'] }, message: QUERY_FORMAT_MESSAGE, code: 'invalid_request' },
   { name: 'firecrawl_scrape', args: { url: 'https://example.com', formats: ['query'], queryOptions: { prompt: ' ' } }, message: QUERY_FORMAT_MESSAGE, code: 'invalid_request' },
   { name: 'firecrawl_interact', args: { url: 'https://example.com', prompt: 'Read the title', scrapeOptions: { formats: ['json'] } }, message: JSON_FORMAT_MESSAGE, code: 'invalid_request' },
   { name: 'firecrawl_interact', args: { url: 'https://example.com', prompt: 'Read the title', scrapeOptions: { formats: ['query'] } }, message: QUERY_FORMAT_MESSAGE, code: 'invalid_request' },
-  { name: 'firecrawl_find_tools', args: { level: 'categories', categories: ['finance'] }, message: 'Category index accepts only level, limit and offset. Select a category to browse providers.', code: 'invalid_input' },
+  { name: 'firecrawl_find_tools', args: { level: 'categories', categories: ['finance'] }, message: 'Category index accepts only level, limit and offset. Select a category to browse providers.', code: 'invalid_input', legacySurface: true },
   { name: 'firecrawl_monitor_create', args: { goal: 'Track pricing' }, message: 'firecrawl_monitor_create requires either `body`, `page`/`pages`, or `queries`.', code: 'invalid_input' },
   { name: 'firecrawl_monitor_create', args: { page: 'https://example.com' }, message: 'firecrawl_monitor_create shorthand requires `goal`. Use `body` for advanced requests without a goal.', code: 'invalid_input' },
+  { name: 'firecrawl_monitor_update', args: { id: 'mon_001' }, message: 'firecrawl_monitor_update needs at least one change: `status`, `scheduleText`, `cron`, `timezone`, or `body`.', code: 'invalid_input' },
+  { name: 'firecrawl_monitor_update', args: { id: 'mon_001', scheduleText: 'every hour', cron: '0 * * * *' }, message: 'firecrawl_monitor_update takes either `scheduleText` or `cron`, not both.', code: 'invalid_input' },
+  { name: 'firecrawl_monitor_update', args: { id: 'mon_001', timezone: 'Europe/Berlin' }, message: 'firecrawl_monitor_update replaces the whole schedule, so `timezone` needs `scheduleText` or `cron` with it.', code: 'invalid_input' },
+  { name: 'firecrawl_monitor_update', args: { id: 'mon_001', body: { schedule: { text: 'every hour', cron: '0 * * * *' } } }, message: 'firecrawl_monitor_update takes a schedule with either `text` or `cron`, not both.', code: 'invalid_input' },
+  { name: 'firecrawl_monitor_update', args: { id: 'mon_001', timezone: 'UTC', body: { schedule: { text: 'every hour', cron: '0 * * * *' } } }, message: 'firecrawl_monitor_update takes a schedule with either `text` or `cron`, not both.', code: 'invalid_input' },
   { name: 'firecrawl_credit_usage', args: { view: 'current', bin: 'day' }, message: 'bin can only be used with view "historical" or with view omitted.', code: 'invalid_input' },
   { name: 'firecrawl_credit_usage', args: { byApiKey: true, byEndpoint: true }, message: 'byApiKey and byEndpoint cannot be combined.', code: 'invalid_input' },
 ]) {
@@ -281,6 +292,7 @@ for (const { name, args, message, code } of [
       name,
       args,
       includes: message,
+      legacySurface,
       onToolResult: (event) => events.push(event),
     });
     assert.equal(result.content[0].text, message);
@@ -395,4 +407,18 @@ for (const { name, payload, delivered } of [
       }
     });
   }
+}
+
+for (const [name, args] of [
+  ['alexandria_library_read', { calls: [{ provider: 'fred', capability: 'series/observations' }] }],
+  ['alexandria_library_search', { command: 'ls /library' }],
+  // The alexandria body of firecrawl_scrape, listed beside alexandria_library_read.
+  ['firecrawl_scrape', { alexandria: [{ provider: 'fred', capability: 'series/observations' }] }],
+]) {
+  test(`a refused Alexandria request reaches an SDK client with its message (${name})`, async (t) => {
+    const apiUrl = await startRefusingApi(t, 403, { success: false, error: 'Exchange is not enabled for this team.', code: 'exchange_disabled' });
+    const result = await assertReadableError(t, { apiUrl, session: apiKey, name, args, includes: 'Exchange is not enabled for this team.' });
+    assert.deepEqual(Object.keys(result.structuredContent).sort(), ['message', 'requestId']);
+    assert.equal(result.structuredContent.message, 'Exchange is not enabled for this team.');
+  });
 }

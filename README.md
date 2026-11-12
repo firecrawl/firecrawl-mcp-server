@@ -16,7 +16,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 
 - Search the web, optionally with full page content for each result
 - Search indexes for developer sources (GitHub issues, merged pull requests, READMEs, and docs), US government sources, and scientific papers (PubMed, bioRxiv, medRxiv, arXiv)
-- Scrape any URL into clean Markdown or structured JSON
+- Scrape any URL into clean Markdown
 - Parse PDFs and documents
 - Crawl a site for content from many pages, or map it to discover its URLs
 - Interact with pages in a real browser: click, type, fill forms, and navigate dynamic pages
@@ -31,7 +31,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 
 ## When to Use This Server
 
-- Use `firecrawl_scrape` when you have a known URL and want its content as markdown or as JSON matching a schema you supply.
+- Use `firecrawl_scrape` when you have a known URL and want its content as markdown, then extract the requested fields yourself.
 - Use `firecrawl_map` when you need to discover URLs on a site without fetching their content.
 - Use `firecrawl_crawl` when you need content from many pages under a site; set `limit`, `includePaths`/`excludePaths`, or `maxDiscoveryDepth` to bound it.
 - Use `firecrawl_search` when you're starting from a query rather than a URL and want ranked web results. Results carry excerpts; fetch full pages with `firecrawl_scrape` on the URLs you need. `scrapeOptions` fetches every result's page in the same call and bills each as a scrape, so keep it for the full text of a few results (the search-only endpoint never fetches content).
@@ -40,7 +40,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Use `firecrawl_credit_usage` to check credits left or what credits were spent on, by month or day, optionally broken down by endpoint or API key.
 - Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control. The session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
 
-This server lists 29 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 11 tools (search, developer, government, and research search, Alexandria catalogue lookup and execution, and people and company search and enrichment).
+This server lists 31 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 11 tools (search, developer, government, and research search, Alexandria catalogue lookup and execution, and people and company search and enrichment).
 
 ## Installation
 
@@ -294,6 +294,7 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 - `FIRECRAWL_API_URL` (Optional): Custom API endpoint for self-hosted instances
   - Example: `https://firecrawl.your-domain.com`
   - If not provided, the cloud API will be used (requires API key)
+  - Over stdio, Alexandria tools are sent to this endpoint even when no API key is set here, and it answers for the account. [Firecrawl Local](https://github.com/firecrawl/firecrawl/tree/main/apps/local) signs them with the login it holds
 - `FIRECRAWL_INTEGRATION` (Optional): Integration tag for apps that launch this server, such as an editor extension
   - Sent as the `integration` field of scrape, batch scrape, crawl, map, search, extract, agent, parse, interact and feedback requests
   - Use a value that starts with `_`, for example `_zed`
@@ -360,7 +361,7 @@ Add this to your `claude_desktop_config.json`:
 
 Use this guide to select the right tool for your task:
 
-- **If you know the exact URL you want:** use **scrape** (with JSON format for structured data)
+- **If you know the exact URL you want:** use **scrape**, then extract the requested fields from its markdown
 - **If you have multiple known URLs:** call **scrape** for each URL. If you specifically need one bulk API operation, use the Firecrawl API batch endpoint outside MCP.
 - **If you need to discover URLs on a site:** use **map**
 - **If you want to search the web for info:** use **search**
@@ -370,19 +371,20 @@ Use this guide to select the right tool for your task:
 - **If you need multi-source research that returns structured data, do not know the URLs, or the answer spans several sites** (an entity plus its fields, a list, a dataset): use **agent**
 - **If you want to analyze a whole site or section:** use **crawl** (with limits!)
 - **If you need interactive browser automation** (click, type, navigate): use **interact** with a URL for a fresh page, or **scrape** + **interact** when you already scraped the page or need tighter scrape control
-- **If you need data from a catalogued provider** (Alexandria): search with `sources: ["alexandria"]`, inspect the selected contract with **find_tools**, and execute it with **scrape** `alexandria`
+- **If you need data from a catalogued provider** (Alexandria): search with `sources: ["alexandria"]`, explore the library and read the contract with **alexandria_library_search**, and run it with **alexandria_library_read**
 
 ### Quick Reference Table
 
 | Tool      | Best for                                       | Returns                                          |
 | --------- | ---------------------------------------------- | ------------------------------------------------ |
-| scrape    | Single page content                            | JSON (preferred) or markdown                     |
+| scrape    | Single page content                            | Markdown by default                              |
 | interact  | Interact with a URL or scraped page            | Execution result + scrapeId for URL mode         |
 | map       | Discovering URLs on a site                     | URL[]                                            |
 | crawl     | Multi-page extraction (with limits)            | final crawl status/data after internal polling   |
 | parse     | Files and hosted upload refs                   | markdown, JSON, or document output               |
 | search    | Web search for info                            | results[]                                        |
-| find_tools | Alexandria catalogue browsing and URL lookup | providers, tool contracts and nextTool navigation |
+| alexandria_library_search | Exploring the Alexandria library with shell commands | command output: file paths, READMEs, contracts |
+| alexandria_library_read | Running Alexandria capabilities, up to ten per call | typed, sourced records |
 | developer | Programming questions over developer sources   | results[] with passages                          |
 | gov       | US primary law and regulatory material         | results[] with snippets                          |
 | agent     | Multi-source research, unknown or many sites   | JSON (structured data)                           |
@@ -393,8 +395,7 @@ Use this guide to select the right tool for your task:
 
 When using `scrape`, choose the right format:
 
-- **JSON format (recommended for most cases):** Use when you need specific data from a page. Define a schema based on what you need to extract. This keeps responses small and avoids context window overflow.
-- **Markdown format (use sparingly):** Only when you genuinely need the full page content, such as reading an entire article for summarization or analyzing page structure.
+- **Markdown format:** Read the page and extract the requested fields yourself.
 
 ## Available Tools
 
@@ -414,39 +415,24 @@ Scrape content from a single URL with advanced options.
 **Common mistakes:**
 
 - Passing a list of URLs to one scrape call. Call scrape once per URL in MCP. If you specifically need one bulk API operation, use the Firecrawl API batch endpoint outside MCP.
-- Using markdown format by default (use JSON format to extract only what you need).
+- Requesting `json` or `jsonOptions` for new MCP scrape calls. These inputs are hidden from discovery but remain accepted for compatibility with cached tool definitions.
 
 **Choosing the right format:**
 
-- **JSON format (preferred):** For most use cases, use JSON format with a schema to extract only the specific data needed. This keeps responses focused and prevents context window overflow.
-- **Markdown format:** Only when the task genuinely requires full page content (e.g., summarizing an entire article, analyzing page structure).
+- **Markdown format:** Read the returned content and extract the fields you need yourself.
 
 **Prompt Example:**
 
 > "Get the product details from https://example.com/product."
 
-**Usage Example (JSON format - preferred):**
+**Usage Example (read product details):**
 
 ```json
 {
   "name": "firecrawl_scrape",
   "arguments": {
     "url": "https://example.com/product",
-    "formats": [
-      {
-        "type": "json",
-        "prompt": "Extract the product information",
-        "schema": {
-          "type": "object",
-          "properties": {
-            "name": { "type": "string" },
-            "price": { "type": "number" },
-            "description": { "type": "string" }
-          },
-          "required": ["name", "price"]
-        }
-      }
-    ]
+    "formats": ["markdown"]
   }
 }
 ```
@@ -482,7 +468,7 @@ Scrape content from a single URL with advanced options.
 
 **Returns:**
 
-- JSON structured data, markdown, branding profile, or other formats as specified.
+- Markdown, branding profile, or other formats as specified.
 
 ### 2. Map Tool (`firecrawl_map`)
 
@@ -558,7 +544,7 @@ To get the full text of a few results in the same call, add `"scrapeOptions": { 
 
 Set `highlights` to `true` to request query-relevant highlights or `false` to keep the original search snippets. Omit it to use the API's default behavior.
 
-Add `"sources": ["alexandria"]` for semantic tool discovery in `data.tools`, optionally mixed with web/news/images. A query is required. Use `firecrawl_find_tools` for contextual lookup and progressive disclosure; see [Alexandria Tools](#15-alexandria-tools).
+Add `"sources": ["alexandria"]` for semantic tool discovery in `data.tools`, optionally mixed with web/news/images. A query is required. Use `alexandria_library_search` to explore the whole library and read contracts (`firecrawl_find_tools` on the search-only endpoint); see [Alexandria Tools](#15-alexandria-tools).
 
 For scientific papers, see [Research Tools](#12-research-tools-firecrawl_research_): they search paper abstracts and full text, while `categories: ["research"]` here filters ordinary web results to research-affiliated websites.
 
@@ -741,28 +727,16 @@ Parse local files or hosted upload references with Firecrawl's `/v2/parse` endpo
 
 **Returns:** Parsed document content or hosted upload instructions with a `nextToolCall`.
 
-### 7. Structured data with Scrape JSON
+### 7. Structured data from a known page
 
-For structured data from a known page, call `firecrawl_scrape` once per URL with `formats: ["json"]`. Put the extraction prompt and JSON schema in `jsonOptions`.
+Call `firecrawl_scrape` once per URL with `formats: ["markdown"]`, then extract the requested fields from the returned content yourself.
 
 ```json
 {
   "name": "firecrawl_scrape",
   "arguments": {
     "url": "https://example.com/product",
-    "formats": ["json"],
-    "jsonOptions": {
-      "prompt": "Extract the product name, price, and description.",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "name": { "type": "string" },
-          "price": { "type": "number" },
-          "description": { "type": "string" }
-        },
-        "required": ["name", "price"]
-      }
-    }
+    "formats": ["markdown"]
   }
 }
 ```
@@ -771,7 +745,7 @@ When the URLs are not known or the data spans several sites, use `firecrawl_agen
 
 ### 8. Agent Tool (`firecrawl_agent`)
 
-Autonomous web research agent that returns structured data when you do not know the URLs or the answer spans several sites. Describe the fields you need, optionally pass a JSON schema and seed URLs, and the agent searches, navigates, reads pages, and returns JSON assembled across sources. Use it for an entity plus its fields, for lists and datasets, and for pages that need navigation to reach the data. For one known URL use `firecrawl_scrape` with JSON format instead.
+Autonomous web research agent that returns structured data when you do not know the URLs or the answer spans several sites. Describe the fields you need, optionally pass a JSON schema and seed URLs, and the agent searches, navigates, reads pages, and returns JSON assembled across sources. Use it for an entity plus its fields, for lists and datasets, and for pages that need navigation to reach the data. For one known URL use `firecrawl_scrape` with markdown and extract the requested fields yourself.
 
 **How it works:**
 
@@ -793,7 +767,7 @@ The agent performs web searches, follows links, reads pages, and gathers data au
 
 **Not recommended for:**
 
-- Simple single-page scraping where you know the URL (use scrape with JSON format - faster and cheaper)
+- Simple single-page scraping where you know the URL (use scrape with markdown and extract the requested fields yourself)
 
 **Arguments:**
 
@@ -816,7 +790,7 @@ The agent performs web searches, follows links, reads pages, and gathers data au
 
 **Provider terms (ask mode):** there is no auto-accept mode. When a turn ends on a terms offer, the status result carries `pendingApproval` (`kind: "terms"`) and `exchange.requiresAction` with the `approvalId` and provider requirements. Any `terms/accept` descriptor in that API payload is unavailable through MCP. To use the provider:
 
-1. Show the user the terms (`terms/show` through `firecrawl_scrape` with `alexandria`).
+1. Show the user the terms (`terms/show` through `alexandria_library_read`).
 2. Direct an organization admin to accept the terms at the provider's URL, or [data sources settings](https://www.firecrawl.dev/app/settings?tab=data-sources). A data request is not consent.
 3. Wait for the admin to confirm acceptance in the dashboard.
 4. Continue the same thread: call `firecrawl_agent` with the same `threadId` and `exchange.approve: { "approvalId": "..." }`. This resumes research and does not accept terms.
@@ -1107,7 +1081,7 @@ The filters are optional and combine: a result must match every filter set. Filt
 
 ### 15. Alexandria Tools
 
-Firecrawl Alexandria is a catalogue of data providers reachable through the Firecrawl API with a Firecrawl API key on a team with Alexandria access. Keyless sessions (hosted or local) get `Alexandria requires an API key on a team with Alexandria access`; Alexandria discovery tools are not listed for hosted keyless sessions.
+Firecrawl Alexandria is a catalogue of data providers reachable through the Firecrawl API with a Firecrawl API key on a team with Alexandria access. Keyless sessions (hosted or local) get `Alexandria requires an API key on a team with Alexandria access`; Alexandria discovery tools are not listed for hosted keyless sessions. A stdio server pointed at its own API with `FIRECRAWL_API_URL` is the exception: it sends Alexandria tools to that API, which answers for the account.
 
 **Semantic discovery (`firecrawl_search`):**
 
@@ -1130,63 +1104,58 @@ query mentions and result URLs in that same array. Check `warning` for unavailab
 discovery. Search requires a query and does not accept catalogue traversal filters.
 This discovery works on both the full and search-only MCP surfaces.
 
-**Progressive disclosure (`firecrawl_find_tools`):**
+**Explore the library (`alexandria_library_search`):** the catalogue is a read-only filesystem, and the tool runs one shell command over it.
 
 ```json
 {
-  "name": "firecrawl_find_tools",
-  "arguments": {
-    "providers": ["particle"],
-    "capabilities": ["podcasts/episodes/search"],
-    "expand": ["options", "response", "examples"],
-    "limit": 2
-  }
+  "name": "alexandria_library_search",
+  "arguments": { "command": "grep -ril \"podcast\" /library | head -20" }
 }
 ```
 
-Start with no arguments for categories, then progressively narrow the catalogue:
-
-| Arguments | Result |
+| Path | Holds |
 | --- | --- |
-| `{}` | Categories and short descriptions |
-| `{"categories":["podcasts"]}` | Providers in that category |
-| `{"categories":["podcasts"],"providers":["particle"]}` | Compact tool names and descriptions |
-| `{"providers":["particle"],"capabilities":["podcasts/episodes/search"]}` | Complete selected inputs, constraints, response, and examples |
+| `/library/README.md` | Counts, the layout and every category |
+| `/library/<category>/README.md` | The category's providers |
+| `/library/<category>/<provider>/README.md` | The provider's capabilities |
+| `/library/<category>/<provider>/<capability>.md` | One contract: when to use it, inputs, outputs and the call that runs it |
+| `/examples/<provider>/<capability>.json` | A recorded response |
 
-No group hop is required. Explicit `level` supports `categories`, `providers`,
-`groups`, or `tools`; explicit `expand` selects contract sections. `expand: []`
-keeps results compact even when selecting a capability. For broad full contracts,
-explicitly request `level: "tools"` and `expand: ["options", "response", "examples"]`.
-URLs provide contextual discovery without fetching the page. Tool results omit
-per-capability credit prices unless `includeCosts: true` is set; follow-up
-`nextTool` arguments keep it.
+A file path is the execute address: `/library/finance/fred/series/observations.md` is provider `fred`, capability `series/observations`. Typical commands:
 
-Results are in `data.alexandria[0].data`. Follow an item's `nextTool` by calling
-its `name` with its `arguments`; the page's `nextTool` advances pagination.
-Existing `next` objects remain Alexandria discovery calls usable through
-`firecrawl_scrape`. Discovery costs zero credits and never executes the
-provider tools. Read the selected full contract before execution.
+| Intent | Command |
+| --- | --- |
+| What is in the library | `cat /library/README.md` |
+| Which providers cover a topic | `grep -ril "mortgage" /library \| head -20` |
+| What a provider offers | `cat /library/finance/fred/README.md` |
+| One contract | `cat /library/finance/fred/series/observations.md` |
+| What a response looks like | `head -c 2000 /examples/fred/series/observations.json` |
 
-These controls require the matching Alexandria API deployment.
+Commands are `ls`, `tree`, `cat`, `head`, `tail`, `grep`, `find`, `wc`, `sort`, `uniq`, `cut`, `tr`, `sed`, `jq` and `xargs`, with pipes. There is no network and the library cannot be written. The result is the command's output as text; `structuredContent` carries `stdout`, `stderr`, `exitCode`, and `truncated` when output was cut at 30,000 characters. A command that finds nothing is not an error: `grep` exits 1 and the text is `[no output; exit code 1]`. Library lookups cost zero credits and never run a provider. The files hold what the same account would see in discovery, without prices.
 
-**Execute (`firecrawl_scrape` with `alexandria`):** pass `alexandria` instead of `url` (exactly one of the two; requestId and timeout may also be supplied). A single call or an array of up to ten calls is accepted.
+This tool requires the Alexandria API deployment that serves `firecrawl/library`.
+
+**Execute (`alexandria_library_read`):** `calls` is an array of one to ten `{provider, capability, options}` entries, which may name different providers. `provider` and `capability` come from search results or a library path, and `options` follow the contract. `requestId` and `timeout` may also be supplied. Results come back in `data.alexandria` in the same order, and one call can fail while the others succeed.
 
 ```json
 {
-  "name": "firecrawl_scrape",
+  "name": "alexandria_library_read",
   "arguments": {
-    "alexandria": [
-      {
-        "provider": "fred",
-        "capability": "series/observations",
-        "options": { "series_id": "CPIAUCSL" }
-      }
+    "calls": [
+      { "provider": "fred", "capability": "series/observations", "options": { "series_id": "CPIAUCSL" } },
+      { "provider": "fred", "capability": "series/observations", "options": { "series_id": "MORTGAGE30US" } }
     ]
   }
 }
 ```
 
-**Returns:** `{ success, scrape_id, requestId, data: { alexandria: [...], creditsCost } }`. Each item is either a result (`provider`, `capability`, `data`, `records`, `upstreamStatus`) or an `error` with a `code`; the batch never fails as a whole for a provider error and `data.creditsCost` is the total charged for the request. Alexandria error bodies (403 without Alexandria access, and 402/409 billing statuses) are relayed in-band with their `code`.
+One call sent as the arguments themselves (`{provider, capability, options}`) is read as a `calls` array of one.
+
+**Earlier tools (`firecrawl_find_tools`, and `firecrawl_scrape` with `alexandria`):** this server still lists both beside the two new tools, with the definitions they had before them, for clients that take up a new or changed tool only after their own review. Both answer the calls they used to, so clients and prompts that learned them keep working; new ones should use `alexandria_library_search` and `alexandria_library_read`. `firecrawl_find_tools` browses the catalogue (`{}` for categories, then `categories`, `providers` and `capabilities` to narrow to one contract, or `query` and `urls` for lookup), and `firecrawl_scrape` takes `alexandria` in place of `url`, as one `{provider, capability, options}` call or an array of up to ten, with `requestId` and `timeout`.
+
+The search-only endpoint lists and documents the earlier tools, because its tool list is fixed by its connector listing. An embedder whose `toolFilter` leaves either new tool out gets the earlier tools too.
+
+**Returns:** `{ success, scrape_id, requestId, data: { alexandria: [...], creditsCost } }`. Each item is either a result (`provider`, `capability`, `data`, `records`, `upstreamStatus`) or an `error` with a `code`; a provider error is reported in its item, not as a failed call, and `data.creditsCost` is the total charged for the request. Alexandria error bodies (403 without Alexandria access, and 402/409 billing statuses) are relayed in-band with their `code`.
 
 Execution generates one `x-request-id` and returns it on success or failure. Retry
 the identical payload with that `requestId`; do not create a new ID after an
@@ -1213,52 +1182,58 @@ The tool result relays it as an error with `structuredContent` carrying `code`,
 `status: 403`, `requestId`, the `requiresAction` object unchanged, and
 `next_actions` (`human_action_required` then `retry_same_request`). Accepting
 terms is a legal act, so an organization admin accepts them in the Firecrawl dashboard, not
-through MCP. Use the returned `nextTool` call to read the agreement through `firecrawl_scrape`
-with `alexandria: [{provider: "firecrawl", capability: "terms/show", options: {provider: "<provider>"}}]`,
+through MCP. Use the returned `nextTool` call to read the agreement: `alexandria_library_read`
+with `calls: [{provider: "firecrawl", capability: "terms/show", options: {provider: "<provider>"}}]`
+(on the search-only endpoint, the same call through `firecrawl_scrape` with `alexandria`),
 sent separately from provider execution, and present it to the user. An organization admin then
 accepts it at `requiresAction.url`, or at https://www.firecrawl.dev/app/settings?tab=data-sources.
-`firecrawl_scrape` refuses every other `terms/*` capability, so it makes no account changes. A request
+Both tools refuse every other `terms/*` capability, so they make no account changes. A request
 for data is not consent, and no automatic acceptance or uncertain retries occur.
 No credits are charged for the blocked retrieval. After the admin confirms acceptance, call the same
 tool again with the identical payload and `requestId`.
 
 ### 15b. Enrich Tools
 
-People and company search and enrichment over Alexandria's B2B data providers (Apollo, FullEnrich, People Data Labs and Data Legion). Both tools are listed wherever the server has a credential: they are not listed in local keyless mode or to keyless sessions. The [search-only endpoint](#search-only-endpoint) includes them too. They need a Firecrawl credential (an API key or OAuth access) on a team with Alexandria access.
+People and company search and enrichment over Alexandria's B2B data providers. Both tools are listed wherever the server has a credential: they are not listed in local keyless mode or to keyless sessions. The [search-only endpoint](#search-only-endpoint) includes them too. They need a Firecrawl credential (an API key or OAuth access) on a team with Alexandria access.
 
 | Tool | Use it for | Providers |
 | --- | --- | --- |
-| `people_company_search` | Finding people (`entity: "person"`) by title, employer, location and more, or companies (`entity: "company"`) by industry, headcount, location, technology or founding year | apollo, fullenrich, people_data_labs |
-| `people_company_enrich` | Resolving known people to profiles and work history, or known companies to firmographics. With `contact_fields`, finding work email, personal email or mobile for known people | fullenrich, apollo, people_data_labs, datalegion |
+| `people_company_search` | Finding people (`entity: "person"`) by title, seniority, function, employer and location, or companies (`entity: "company"`) by industry, headcount, location, technology, keywords or founding year | Firecrawl's search waterfall picks them |
+| `people_company_enrich` | Resolving known people to profiles, or known companies to firmographics. With `contact_fields`, finding work email, personal email or mobile for known people | chosen by Firecrawl's enrichment waterfall |
 
-No parameter is shared between providers. Each provider block takes that provider's own parameters under its own names (Apollo's `person_titles`, FullEnrich's `current_position_titles`, a People Data Labs `sql` query or Elasticsearch `query`), so a filter a provider lacks is simply absent from its block. A provider runs only when the call includes its block; a call with no provider block (and, for `people_company_search`, no `firecrawl_search` block) fails with `no_provider` and the blocks the tool takes.
+#### people_company_search
 
-`people_company_search` takes `entity`, and each provider block then takes that provider's search filters for people or for companies. An optional `firecrawl_search` block runs a Firecrawl web search beside the providers, with `firecrawl_search`'s query parameters but no page fetching, and reports its results in its own `providers` entry. `people_company_enrich` takes, in each provider block, exactly one of `people` or `companies`: that provider's own list of inputs, 1 to 50 per call, and the same kind in every block. Adding `contact_fields` (`work_email`, `personal_email`, `mobile`) to a people enrichment runs the contact providers on the same people instead of the profile lookup; People Data Labs has no contact lookup and reports `skipped`.
+`people_company_search` takes one normalized input and sends it to Alexandria's search waterfall, `firecrawl/search/auto`, as a single request: `entity` (`"person"` or `"company"`, required), optional `query`, `filters` (`titles`, `seniority`, `functions`, `company_domains`, `locations`, `industries`, `technologies`, `keywords`, and `headcount` and `founded_year` as `{ "min", "max" }`), `limit` (1 to 100, default 10), `cursor`, `count_only` and `max_credits` (default 1000). For people, company filters describe the employer. The waterfall asks its providers one at a time in list-price order, and only those that apply every filter given; when none does, it searches companies first and then people at the domains it found, and a request no provider or chain covers is refused with `unsupported_filters`, naming the filter to drop. With `company_domains` it stops at the first provider that returns anyone; otherwise it fills `limit` across up to three providers, asking each only for the rows still missing, and drops duplicates. A row whose own title, employer domain, country or city, headcount or founding year fails a filter given, or whose title names another seniority level or function than those given (SVP, EVP and AVP meet `vp`), is dropped, and the search keeps filling from the next provider. Rows carry name, title (`title_match` is `current` or `past`), company, location, LinkedIn URL and `source`, and never emails or phones. A request that names one person is refused with `use_enrich` and pointed to `people_company_enrich`. `providers` lists each provider call with its status, rows, rows `dropped` for failing a filter, rows kept as `unverified` because their title names no level or function for a `seniority` or `functions` filter, credits and time. `provider` limits the call to one provider, and with `options` sends that provider's own search options as given.
 
 ```json
 {
-  "name": "people_company_enrich",
-  "arguments": {
-    "fullenrich": { "companies": [{ "domain": "example.com" }] },
-    "datalegion": { "companies": [{ "domain": "example.com" }, { "name": "Example Labs" }] }
-  }
+  "name": "people_company_search",
+  "arguments": { "entity": "person", "filters": { "titles": ["Head of Data"], "company_domains": ["example.com"] }, "limit": 10 }
 }
 ```
+
+#### people_company_enrich
+
+`people_company_enrich` takes records, not provider blocks, and runs Firecrawl's enrichment waterfall on them. `people` takes `name`, `first_name`, `last_name`, `company`, `domain`, `linkedin_url`, `email` and `phone`; each person needs a `linkedin_url`, `email` or `phone`, or a name with a `company` or `domain`. `companies` takes `domain`, `name` and a company `linkedin_url`, and each needs one of them. A call takes at most 10 records, people and companies together.
+
+Without `contact_fields` each person gets a profile and each company gets firmographics. `contact_fields` (`work_email`, `personal_email`, `mobile`) asks for those values for each person, together with the person's profile, found first so the contact lookups can use it (`profile: false` skips it); companies in the same call still get firmographics, and `contact_fields` with only companies fails with `invalid_input`. Mobile is opt-in: phone providers, the costliest lookups, run and bill only when `contact_fields` lists `mobile`.
+
+For each requested field, Firecrawl tries the providers that can use the record's inputs one at a time, ordered by listed price and past success rate, and stops at the first one that finds the field. A provider that has no match, errors or is rate limited is skipped for the next one, without retries. A person known only by an email or phone is first resolved to a profile, and the contact providers then use what it revealed.
 
 ```json
 {
   "name": "people_company_enrich",
   "arguments": {
     "contact_fields": ["work_email"],
-    "fullenrich": { "people": [{ "person_name": "Jane Doe", "company_domain": "example.com" }] },
-    "apollo": { "people": [{ "name": "Jane Doe", "domain": "example.com" }] }
+    "people": [{ "name": "Jane Doe", "domain": "example.com" }, { "linkedin_url": "https://www.linkedin.com/in/janedoe" }],
+    "companies": [{ "domain": "example.com" }]
   }
 }
 ```
 
-Enabled providers run in parallel, and nothing is merged. The response has one `providers` entry per provider with its `status`, records `returned`, `credits` and its own `results`; `people_company_enrich` results carry `input_index` into that provider's input list, and `unmatched` lists the inputs it missed. A failed provider has a `note`, and `retryable: true` when the provider may succeed on a later try. With `contact_fields`, an Apollo or Data Legion match (charged per match) that lacks a requested field lists it in `missing`; FullEnrich charges and returns only the values it finds, and a FullEnrich contact still running upstream is listed under `pending` (with a `next_tool` to read it later when one is available) instead of under `unmatched`. `credits_total` sums the charges. Tool descriptions list each provider's credit price.
+The response has `people` and `companies` lists with one entry per input, each with `input_index` and `results`: one `{ "provider", "data" }` entry per provider that found a requested field, where `data` is that provider's own response, unchanged. Each record also has `fields`: for each filled field, the `provider` behind it; for an email the chosen `value`, `verified` (the provider marked it deliverable) and `domain_match`; for a profile or firmographics `complete`, false when only a partial answer was found, and for firmographics `linkedin_confirmed`. A work email is never a free-mail or role address, and is on the company's domain when one is known; `verified_only: true` returns only verified emails. A record nothing was found for has empty `results`. `credits_used` is what the call charged: each provider that found something is charged its listed price, and misses are free. `max_credits` (at most 10,000) caps the call: a provider is tried only while its listed price still fits. Without it the call is uncapped. `stopped: "team_quota"` means the team ran out of credits during the call. To call one specific provider, use `firecrawl_scrape` with an `alexandria` body.
 
-Both tools take `max_credits` (default 1000). Before any provider runs, the call's most possible cost is estimated from those prices as if every record were found; a call whose estimate is higher fails with `max_credits_exceeded` and the estimate per provider, and a call that runs reports `credits_estimate` and `max_credits`. Both tools also accept, and drop, the `conversationId` and `objective` fields agents carry between Firecrawl tools, and repair common near-miss shapes before validating: a single item where a list is expected, plain strings for FullEnrich `{"value"}` filters, `"51-200"` for FullEnrich ranges, and a provider block sent as a one-item list or under an extra key. An argument that still fails names the field, the fields its block takes, and an example call.
+Both tools also accept, and drop, the `conversationId` and `objective` fields agents carry between Firecrawl tools.
 
 ### 16. Credit Usage Tool
 
@@ -1397,24 +1372,26 @@ MIT License - see LICENSE file for details
 
 ### Structured data and large results
 
-Authenticated search defaults to web results, semantic Alexandria tools, and domain matches. Start with the actual question. Use `firecrawl_find_tools` for direct semantic tool lookup, selected contracts, or progressive browsing: categories → providers → compact tools → selected contract. Execute tools through `firecrawl_scrape`; ordinary URL scraping and search never automatically execute provider tools.
+Authenticated search defaults to web results, semantic Alexandria tools, and domain matches. Start with the actual question. Use `alexandria_library_search` to check whether a provider covers the data and to read a selected contract: the library README, a category, a provider, then one capability file. Run capabilities through `alexandria_library_read`; URL scraping and search never execute provider tools. The search-only endpoint has `firecrawl_find_tools` and `firecrawl_scrape` with `alexandria` for these two steps.
 
-For selected contracts, prefer `expand: ["options", "response"]` and request examples only if the input shape is unclear. Inspect related capabilities together and reuse the returned contracts.
+Read the recorded example under `/examples` only if the input or output shape is unclear. Inspect related capabilities together, for example `cat` two contracts in one command, and reuse what you read.
 
 For a potentially large workflow result, supply and preserve a top-level `requestId` before execution. That ID remains available even if the client rejects the response. Regular URL scrapes use the returned scrape ID instead.
 
-For a large retained workflow or regular scrape result, call `firecrawl_scrape` with:
+For a large retained workflow or regular scrape result, call `alexandria_library_read` with:
 
 ```json
 {
-  "alexandria": {
-    "provider": "firecrawl",
-    "capability": "bash",
-    "options": {
-      "requestId": "<source-request-or-scrape-id>",
-      "command": "ls -lh"
+  "calls": [
+    {
+      "provider": "firecrawl",
+      "capability": "bash",
+      "options": {
+        "requestId": "<source-request-or-scrape-id>",
+        "command": "ls -lh"
+      }
     }
-  }
+  ]
 }
 ```
 
@@ -1430,13 +1407,13 @@ The CLI discovery sequence maps to these MCP calls:
 | --- | --- | --- |
 | Web + semantic + domain tools | `firecrawl_search` | `{"query":"<user question>"}` |
 | Semantic tools only | `firecrawl_search` | `{"query":"<user question>","sources":["alexandria"]}` |
-| Categories | `firecrawl_find_tools` | `{}` |
-| Providers in a category | `firecrawl_find_tools` | `{"categories":["<category-id>"]}` |
-| Compact provider tools | `firecrawl_find_tools` | `{"providers":["<provider-id>"]}` |
-| Selected contract | `firecrawl_find_tools` | `{"providers":["<provider-id>"],"capabilities":["<capability-id>"]}` |
-| Execute | `firecrawl_scrape` | `{"alexandria":{"provider":"<provider-id>","capability":"<capability-id>","options":{"<required-field>":"<value>"}}}` |
+| Categories | `alexandria_library_search` | `{"command":"cat /library/README.md"}` |
+| Providers in a category | `alexandria_library_search` | `{"command":"cat /library/<category-id>/README.md"}` |
+| A provider's capabilities | `alexandria_library_search` | `{"command":"cat /library/*/<provider-id>/README.md"}` |
+| Selected contract | `alexandria_library_search` | `{"command":"cat /library/*/<provider-id>/<capability-id>.md"}` |
+| Execute | `alexandria_library_read` | `{"calls":[{"provider":"<provider-id>","capability":"<capability-id>","options":{"<required-field>":"<value>"}}]}` |
 
-Find Tools and execution are available on both the full surface and the search surface. Reuse a complete contract from search when present rather than making another discovery call. Follow returned `nextTool` navigation only when more results are needed.
+The search surface keeps `firecrawl_find_tools` and `firecrawl_scrape` with `alexandria` for the last five rows. Reuse a complete contract from search when present rather than making another lookup.
 
 ### Alexandria session feedback
 

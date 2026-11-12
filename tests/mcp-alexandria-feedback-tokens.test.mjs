@@ -10,7 +10,7 @@ const FEEDBACK = {
   rationale: 'It worked.',
 };
 
-const execute = (client) => client.request('tools/call', { name: 'firecrawl_scrape', arguments: { alexandria: EXCHANGE_CALL } });
+const execute = (client) => client.request('tools/call', { name: 'alexandria_library_read', arguments: { calls: [EXCHANGE_CALL] } });
 const feedback = (client, args = {}) => client.request('tools/call', { name: 'firecrawl_feedback', arguments: { ...FEEDBACK, ...args } });
 const feedbackBodies = (api) => api.requests.filter((request) => request.url === '/v2/feedback').map((request) => request.body);
 

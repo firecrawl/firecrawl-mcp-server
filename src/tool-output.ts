@@ -27,6 +27,7 @@
 
 import { z } from 'zod';
 import type { ContentResult } from './mcp/runtime.js';
+import { ALEXANDRIA_ENRICH_ROUTING } from './alexandria.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -87,6 +88,7 @@ const warning = str('Non-fatal warning about the result.');
 /** Keys every Alexandria-capable response can carry (see `alexandriaOutput`). */
 const alexandriaEnvelope = {
   requestId: str('Identifier of this Alexandria execution.'),
+  retryable: bool('Whether resending the same request can succeed; set when the API refused before any provider ran.'),
   scrape_id: str('Identifier of the underlying scrape.'),
   receipt: unknown('Billing receipt for the execution.'),
   creditsCost: num('Credits this call consumed.'),
@@ -139,6 +141,29 @@ export const scrapeOutputSchema = z
   })
   .describe('A scraped document, or the Alexandria execution envelope when `alexandria` was passed.');
 
+export const alexandriaReadOutputSchema = z
+  .object({
+    success,
+    error,
+    data: unknown('One result per call, in the same order, in `data.alexandria`, each with `data`, `records`, or an `error` with a code.'),
+    ...alexandriaEnvelope,
+  })
+  .describe('The results of the Alexandria capabilities that ran, or a pointer to them when they were retained.');
+
+export const libraryOutputSchema = z
+  .object({
+    stdout: str("The command's standard output, cut at the output limit."),
+    stderr: str("The command's standard error, including a notice when stdout was cut."),
+    exitCode: num("The command's exit code; grep exits 1 when nothing matched."),
+    truncated: bool('True when stdout was cut; narrow the command.'),
+    catalogueVersion: str('Opaque fingerprint of the library files; compare for equality to detect changes.'),
+    success,
+    error,
+    requestId: alexandriaEnvelope.requestId,
+    message: alexandriaEnvelope.message,
+  })
+  .describe('The output of one shell command over the Alexandria library.');
+
 export const mapOutputSchema = z
   .object({
     links: unknown('URLs discovered under the website.'),
@@ -157,7 +182,7 @@ export const searchOutputSchema = z
     warning,
     id: str('Search identifier, for optional `firecrawl_search_feedback`.'),
     creditsUsed: num('Credits this search consumed.'),
-    tools: unknown('Domain-matched Alexandria tools for the results.'),
+    tools: unknown('Domain-matched Alexandria tools for the results. ' + ALEXANDRIA_ENRICH_ROUTING),
     nextTool: unknown('A follow-up tool call that continues this search.'),
     feedbackTool: unknown('Pointer to the feedback tool for this search.'),
   })
@@ -265,8 +290,9 @@ export const interactOutputSchema = z
     stderr: str('Standard error of the executed code.'),
     exitCode: num('Exit status of the executed code.'),
     data: unknown('Payload returned by the interaction.'),
-    sessionUrl: str('URL for viewing the live session.'),
-    liveUrl: str('URL for viewing the live session.'),
+    sessionId: str('Browser session behind this scrape.'),
+    liveViewUrl: str('Read-only live view of the browser session.'),
+    interactiveLiveViewUrl: str('Live view the user can use to control the browser session.'),
   })
   .describe('Result of a browser interaction, with the session identifier to continue or stop it.');
 

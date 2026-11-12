@@ -433,14 +433,10 @@ test('search surface lists exactly the nine contracted tools', async (t) => {
   const names = tools.map((tool) => tool.name);
   const search = tools.find((tool) => tool.name === 'firecrawl_search');
   assert.ok(search);
-  for (const name of ['firecrawl_search', 'firecrawl_scrape']) {
+  for (const name of ['firecrawl_search', 'firecrawl_scrape', 'firecrawl_find_tools']) {
     const tool = tools.find((item) => item.name === name);
     assert.equal(tool?._meta?.['anthropic/alwaysLoad'], true, name);
   }
-  assert.equal(
-    tools.find((tool) => tool.name === 'firecrawl_find_tools')?._meta?.['anthropic/alwaysLoad'],
-    undefined
-  );
   assert.match(
     search.description,
     /categories: \["developer"\].*data\.web.*category.*developer/is
@@ -454,7 +450,7 @@ test('search surface lists exactly the nine contracted tools', async (t) => {
   assert.doesNotMatch(search.description, /scrapeOptions/);
   assert.match(search.description, /firecrawl_scrape with an alexandria body/);
   assert.match(search.description, /firecrawl_find_tools/);
-  assert.match(search.description, /ranked results with query-relevant highlights\./i);
+  assert.match(search.description, /ranked results with query-relevant highlights[.;]/i);
   assert.match(
     search.inputSchema.properties.highlights.description,
     /highlights appear in web `description` and news `snippet`; otherwise, original snippets are returned/i
@@ -1315,7 +1311,7 @@ test('account (mcp-oauth) full-surface instructions satisfy the same metadata po
     assert.equal(tool?._meta?.['anthropic/alwaysLoad'], true, name);
   }
 
-  assertAlexandriaMetadata(tools, initialize.instructions, { hosted: true });
+  assertAlexandriaMetadata(tools, initialize.instructions, { hosted: true, tools: 'dedicated' });
   assertAgentMetadataPolicy(
     [initialize.instructions, ...tools.map((tool) => tool.description ?? '')],
     assert

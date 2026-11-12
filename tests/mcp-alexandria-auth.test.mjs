@@ -16,11 +16,14 @@ test('local keyless stdio refuses every Exchange path with the explanatory error
       arguments: { query: 'nvidia', sources: [{ type: 'exchange' }] },
       name: 'firecrawl_search',
     },
+    { arguments: { calls: [EXCHANGE_CALL] }, name: 'alexandria_library_read' },
+    { arguments: { command: 'cat /library/finance/README.md' }, name: 'alexandria_library_search' },
+    // Unlisted, and still refused the same way when called.
     { arguments: { alexandria: [EXCHANGE_CALL] }, name: 'firecrawl_scrape' },
     { arguments: { categories: ['finance'] }, name: 'firecrawl_find_tools' },
     { arguments: {}, name: 'firecrawl_find_tools' },
-    { arguments: { alexandria: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } }] }, name: 'firecrawl_scrape' },
-    { arguments: { alexandria: [{ provider: 'firecrawl', capability: 'terms/accept', options: { provider: 'benzinga', version: 'v1', digest: 'a'.repeat(64), confirmed: true } }] }, name: 'firecrawl_scrape' },
+    { arguments: { calls: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } }] }, name: 'alexandria_library_read' },
+    { arguments: { calls: [{ provider: 'firecrawl', capability: 'terms/accept', options: { provider: 'benzinga', version: 'v1', digest: 'a'.repeat(64), confirmed: true } }] }, name: 'alexandria_library_read' },
   ]) {
     const result = await client.request('tools/call', params);
     assert.equal(result.isError, true, JSON.stringify(result));
@@ -34,6 +37,41 @@ test('local keyless stdio refuses every Exchange path with the explanatory error
       params.name === 'firecrawl_search' ? undefined : { message: EXCHANGE_KEY_REQUIRED_MESSAGE },
       params.name
     );
+  }
+});
+
+const ALEXANDRIA_CALLS = [
+  { name: 'alexandria_library_read', arguments: { calls: [EXCHANGE_CALL] } },
+  { name: 'firecrawl_scrape', arguments: { alexandria: [EXCHANGE_CALL] } },
+  { name: 'firecrawl_find_tools', arguments: { categories: ['finance'] } },
+];
+const NO_CREDENTIAL = { FIRECRAWL_API_KEY: '', FIRECRAWL_OAUTH_TOKEN: '' };
+
+test('a stdio server pointed at its own API sends Alexandria calls there without a key', async (t) => {
+  const { api, client } = await startStdioWithApi(t, { env: NO_CREDENTIAL });
+  for (const params of ALEXANDRIA_CALLS) {
+    const before = api.requests.length;
+    const result = await client.request('tools/call', params);
+    assert.notEqual(result.isError, true, `${params.name}: ${JSON.stringify(result)}`);
+    assert.ok(api.requests.length > before, `${params.name} made no request`);
+    for (const request of api.requests.slice(before)) {
+      assert.doesNotMatch(request.headers.authorization ?? '', /fc-/, params.name);
+    }
+  }
+});
+
+test('that API\'s refusal reaches the agent in its own words', async (t) => {
+  const refusal = 'An API key is required for provider tools. Run `firecrawl-local login` to sign in.';
+  const { client } = await startStdioWithApi(t, {
+    apiStatus: 403,
+    apiError: refusal,
+    env: NO_CREDENTIAL,
+  });
+  for (const params of ALEXANDRIA_CALLS) {
+    const result = await client.request('tools/call', params);
+    assert.equal(result.isError, true, params.name);
+    assert.match(result.content[0].text, /firecrawl-local login/, params.name);
+    assert.doesNotMatch(result.content[0].text, new RegExp(EXCHANGE_KEY_REQUIRED_MESSAGE), params.name);
   }
 });
 
@@ -60,8 +98,8 @@ test('a hosted API key header reaches the Exchange', async (t) => {
         id: 4,
         headers: { 'x-api-key': 'fc-exchange-header' },
         params: {
-          arguments: { alexandria: [EXCHANGE_CALL] },
-          name: 'firecrawl_scrape',
+          arguments: { calls: [EXCHANGE_CALL] },
+          name: 'alexandria_library_read',
         },
       })
     ).text()
@@ -85,10 +123,13 @@ test('a hosted API key header reaches the Exchange', async (t) => {
 test('rejected API keys return in-band errors without leaking credentials on Alexandria paths', async (t) => {
   const { api, client, getStderr } = await startStdioWithApi(t, { apiStatus: 401 });
   for (const params of [
+    { name: 'alexandria_library_search', arguments: { command: 'cat /library/finance/README.md' } },
     { name: 'firecrawl_find_tools', arguments: { categories: ['finance'] } },
     { name: 'firecrawl_search', arguments: { query: 'rates', sources: ['alexandria'] } },
+    { name: 'alexandria_library_read', arguments: { calls: [EXCHANGE_CALL] } },
+    // The body firecrawl_scrape no longer lists.
     { name: 'firecrawl_scrape', arguments: { alexandria: [EXCHANGE_CALL] } },
-    { name: 'firecrawl_scrape', arguments: { alexandria: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } }] } },
+    { name: 'alexandria_library_read', arguments: { calls: [{ provider: 'firecrawl', capability: 'terms/show', options: { provider: 'benzinga' } }] } },
   ]) {
     const before = api.requests.length;
     const result = await client.request('tools/call', params);

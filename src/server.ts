@@ -30,12 +30,14 @@ import { z } from 'zod';
 import {
   agentOutputSchema,
   agentStatusOutputSchema,
+  alexandriaReadOutputSchema,
   crawlOutputSchema,
   deprecatedToolOutputSchema,
   feedbackOutputSchema,
   findToolsOutputSchema,
   interactOutputSchema,
   interactStopOutputSchema,
+  libraryOutputSchema,
   mapOutputSchema,
   parseOutputSchema,
   scrapeOutputSchema,
@@ -58,12 +60,19 @@ import {
   withAlexandriaSource,
   enterpriseAllowsAlexandria,
   searchQueryIsValid,
-  ALEXANDRIA_SEARCH_LEAD,
+  ALEXANDRIA_SEARCH_INSTRUCTIONS,
   ALEXANDRIA_CONTRACT_GUIDANCE,
   ALEXANDRIA_TERMS_GUIDANCE,
   ALEXANDRIA_CATALOGUE_SENTENCE,
   ALEXANDRIA_CATALOGUE_VERTICALS,
   ALEXANDRIA_SOURCES_ALWAYS_ON,
+  ALEXANDRIA_DEDICATED_SEARCH_INSTRUCTIONS,
+  ALEXANDRIA_READ_DESCRIPTION,
+  ALEXANDRIA_READ_TOOL,
+  ALEXANDRIA_LIBRARY_DESCRIPTION,
+  ALEXANDRIA_LIBRARY_TOOL,
+  libraryToolSchema,
+  type AlexandriaTools,
 } from './alexandria';
 import { alexandriaOutput } from './alexandria-output';
 import { FeedbackTokenRegistry, FeedbackTokenStore, withFeedbackRefs } from './alexandria-feedback-tokens.js';
@@ -94,6 +103,7 @@ import {
 import {
   assertExchangeCredential as assertExchangeCredentialPresent,
   DATA_SOURCES_SETTINGS_URL,
+  EXCHANGE_MAX_CALLS,
   exchangeCallSchema,
   exchangeCallsSchema,
   isTermsWrite,
@@ -107,6 +117,7 @@ import {
   annotateResultPositions,
   searchCategoriesAreCompatible,
   searchDomainsAreExclusive,
+  dedicatedSearchToolFields,
   searchToolBaseFields,
   termsWriteError,
 } from './tool-helpers.js';
@@ -525,6 +536,7 @@ export {
   withAlexandriaSource,
   enterpriseAllowsAlexandria,
   searchQueryIsValid,
+  type AlexandriaTools,
 } from './alexandria.js';
 export { searchOutputSchema } from './tool-output.js';
 export {
@@ -624,29 +636,30 @@ class ConsoleLogger implements Logger {
 // Leads both profiles so clients that cut server instructions short keep it.
 const OUT_OF_CREDITS_INSTRUCTION =
   'If Firecrawl reports that credits ran out or the daily limit without an account was reached, end your final answer with the line it provides, link included.';
-const FULL_PROFILE_INSTRUCTIONS =
-  `${OUT_OF_CREDITS_INSTRUCTION} Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. Authenticated firecrawl_search returns web results together with matching Alexandria providers in data.tools. ${ALEXANDRIA_CATALOGUE_SENTENCE} A matching provider can return the same fields across several entities, provenance, exact figures or timestamps, or a large set of records through firecrawl_scrape with its published contract. If web results already answer the question, use them. For the same fields across multiple pages, firecrawl_find_tools offers free provider discovery. Use firecrawl_find_tools to read a contract that was not returned in full or to browse the catalogue by category. ${ALEXANDRIA_SOURCES_ALWAYS_ON} If no provider fits, continue with web search or firecrawl_agent. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question (code behaviour, a library or framework, an API contract, an error message, or a known bug), firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of public repositories, GitHub issues, merged pull requests, READMEs, and code documentation. For a legal or regulatory question, firecrawl_gov_search searches primary law and regulatory material from US federal, state, and local government sources: statutes, regulations, codes, court opinions, and other government publications; firecrawl_search with categories: ["gov"] reaches the same sources and cannot be combined with other categories. firecrawl_search with sources: [{type: "alexandria"}] returns compact tool summaries in data.tools; toolDetail: "full" includes contracts, firecrawl_find_tools starts with categories, lists providers, then compact tools, and expands the selected full contract, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities and returns their results. Provide only the required inputs and account for stated network or external side effects.`;
-const KEYLESS_PROFILE_INSTRUCTIONS = `${OUT_OF_CREDITS_INSTRUCTION} Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. Alexandria provider calls require a Firecrawl API key and are not included in the hosted keyless tier. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: ["gov"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page and can return JSON matching a supplied schema. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index research, firecrawl_developer_search for Developer Index searches of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.`;
+// The Alexandria sentences name the tools a surface registers; everything else is shared.
+const fullProfileInstructions = (tools: AlexandriaTools) =>
+  `${OUT_OF_CREDITS_INSTRUCTION} Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. Authenticated firecrawl_search returns web results together with matching Alexandria providers in data.tools. ${ALEXANDRIA_CATALOGUE_SENTENCE} A matching provider can return the same fields across several entities, provenance, exact figures or timestamps, or a large set of records through ${tools === 'dedicated'
+    ? 'alexandria_library_read with its published contract. If web results already answer the question, use them. Before scraping the same fields from several pages, alexandria_library_search checks for free whether a provider covers them: it explores the whole library as a read-only filesystem with shell commands, and reads a contract that was not returned in full.'
+    : 'firecrawl_scrape with its published contract. If web results already answer the question, use them. For the same fields across multiple pages, firecrawl_find_tools offers free provider discovery. Use firecrawl_find_tools to read a contract that was not returned in full or to browse the catalogue by category.'} ${ALEXANDRIA_SOURCES_ALWAYS_ON} If no provider fits, continue with web search or firecrawl_agent. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question (code behaviour, a library or framework, an API contract, an error message, or a known bug), firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of public repositories, GitHub issues, merged pull requests, READMEs, and code documentation. For a legal or regulatory question, firecrawl_gov_search searches primary law and regulatory material from US federal, state, and local government sources: statutes, regulations, codes, court opinions, and other government publications; firecrawl_search with categories: ["gov"] reaches the same sources and cannot be combined with other categories. firecrawl_search with sources: [{type: "alexandria"}] returns compact tool summaries in data.tools; toolDetail: "full" includes contracts, ${tools === 'dedicated'
+    ? 'alexandria_library_search holds each contract at /library/<category>/<provider>/<capability>.md, and alexandria_library_read with calls: [{provider, capability, options}] runs up to ten capabilities and returns their results.'
+    : 'firecrawl_find_tools starts with categories, lists providers, then compact tools, and expands the selected full contract, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities and returns their results.'} Provide only the required inputs and account for stated network or external side effects.`;
+const keylessProfileInstructions = (tools: AlexandriaTools) =>
+  `${OUT_OF_CREDITS_INSTRUCTION} Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. Alexandria provider calls require a Firecrawl API key and are not included in the hosted keyless tier. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: ["gov"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index research, firecrawl_developer_search for Developer Index searches of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and ${tools === 'dedicated'
+    ? 'alexandria_library_search and alexandria_library_read for exploring and running catalogued Alexandria data providers, alongside the Alexandria results of firecrawl_search.'
+    : 'firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.'}`;
 
 function deprecatedExtractPayload() {
   return {
     code: 'DEPRECATED_TOOL',
     message:
-      'firecrawl_extract is deprecated and unavailable through MCP. For structured data from a known page, call firecrawl_scrape once per URL with formats: ["json"] and jsonOptions containing the prompt and schema. When the URLs are not known or the data spans several sites, use firecrawl_agent for multi-source research.',
+      'firecrawl_extract is deprecated and unavailable through MCP. For structured data from a known page, call firecrawl_scrape once per URL with formats: ["markdown"] and extract the requested fields from the returned content yourself. When the URLs are not known or the data spans several sites, use firecrawl_agent for multi-source research.',
     replacement: {
       name: 'firecrawl_scrape',
       instructions:
-        'Call once per known URL. Set formats to ["json"] and pass the extraction prompt and JSON schema in jsonOptions.',
+        'Call once per known URL with formats: ["markdown"] and extract the requested fields from the returned content yourself.',
       example_arguments: {
         url: 'https://example.com/page',
-        formats: ['json'],
-        jsonOptions: {
-          prompt: 'Extract the requested fields from this page.',
-          schema: {
-            type: 'object',
-            properties: {},
-          },
-        },
+        formats: ['markdown'],
       },
     },
     docs_url: 'https://docs.firecrawl.dev/developer-guides/usage-guides/choosing-the-data-extractor',
@@ -664,15 +677,34 @@ export function createFirecrawlMcpServer(
     safeMode: options.safeMode ?? false,
     fileAccess: options.fileAccess ?? 'local',
     requireCredential: options.requireCredential ?? false,
+    // A stdio server pointed at an API of its own, such as Firecrawl Local or
+    // a self-hosted instance. That API may hold the account itself, so it is
+    // the one to say who may use Alexandria. Never for HTTP, where each
+    // session brings its own credential.
+    ownApi:
+      (options.transport ?? 'stdio') !== 'httpStream' &&
+      Boolean(normalizeHeader(options.apiUrl)),
     searchFeedback: options.searchFeedback ?? true,
     endpointFeedback: options.endpointFeedback ?? true,
     integration: integrationFrom(options.integration),
   };
   const logging = options.logging ?? config.transport === 'httpStream';
 
+  // Which names the Alexandria tools go by. `dedicated`: alexandria_library_search
+  // and alexandria_library_read, with firecrawl_find_tools and firecrawl_scrape's
+  // alexandria body still listed beside them as they were before. `legacy`:
+  // firecrawl_find_tools and firecrawl_scrape with an alexandria body only, for
+  // a surface whose tool filter leaves either new tool out; its descriptions and
+  // follow-up calls would otherwise name a tool it does not list.
+  const alexandriaTools: AlexandriaTools = [ALEXANDRIA_READ_TOOL, ALEXANDRIA_LIBRARY_TOOL].every(
+    (name) => hooks.toolFilter?.(name) ?? true
+  )
+    ? 'dedicated'
+    : 'legacy';
+  const dedicatedAlexandria = alexandriaTools === 'dedicated';
   const instructionDefaults: InstructionDefaults = {
-    authenticated: FULL_PROFILE_INSTRUCTIONS,
-    keyless: KEYLESS_PROFILE_INSTRUCTIONS,
+    authenticated: fullProfileInstructions(alexandriaTools),
+    keyless: keylessProfileInstructions(alexandriaTools),
   };
   const instructions =
     typeof hooks.instructions === 'function'
@@ -810,6 +842,10 @@ export function createFirecrawlMcpServer(
   }
 
   function assertExchangeCredential(session?: SessionData): void {
+    // The server's own API decides who may use Alexandria, and its answer
+    // says what to do: Firecrawl Local signs requests with the user's saved
+    // login and says how to sign in when there is none.
+    if (config.ownApi) return;
     assertExchangeCredentialPresent(hasCredential(session));
   }
 
@@ -1143,6 +1179,13 @@ export function createFirecrawlMcpServer(
       return { url: webhook, headers };
     }
     return webhook;
+  }
+
+  function refuseNestedZeroDataRetention(args: unknown, instead: string): undefined {
+    const scrapeOptions = (args as { scrapeOptions?: Record<string, unknown> } | undefined)?.scrapeOptions;
+    if (scrapeOptions?.zeroDataRetention !== true) return undefined;
+    const message = `scrapeOptions.zeroDataRetention is not supported. ${instead}`;
+    throw new UserError(message, { success: false, error: { code: 'invalid_request', message } });
   }
 
   function transformScrapeParams(
@@ -1735,7 +1778,7 @@ export function createFirecrawlMcpServer(
       destructiveHint: false, // Does not modify, delete, or write to external websites.
     },
     description: `
-Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, a targeted answer, or JSON matching a supplied schema. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use \`firecrawl_search\` when additional web sources are needed; on an authenticated session, \`firecrawl_map\` lists a site's URLs and \`firecrawl_crawl\` collects a set of pages. \`url\` may omit the scheme (\`example.com/page\`); it is read as https.
+Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, or a targeted answer. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use \`firecrawl_search\` when additional web sources are needed; on an authenticated session, \`firecrawl_map\` lists a site's URLs and \`firecrawl_crawl\` collects a set of pages. \`url\` may omit the scheme (\`example.com/page\`); it is read as https.
 
 Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch or a smaller \`maxAge\` to bound staleness. A successful response does not by itself confirm the page is still current. ${SAFE_MODE ? 'A named browser profile loads saved session data without saving changes to it.' : 'Browser actions can change the live page when interactive actions are enabled.'} Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback.
 
@@ -1745,6 +1788,18 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
 `,
     outputSchema: scrapeOutputSchema,
     parameters: scrapeToolParamsSchema,
+    // Listed with the definition it had before the library tools, alexandria
+    // body included, as firecrawl_find_tools is: a client that takes up a new or
+    // changed tool only after its own review keeps a listed way to run a provider.
+    transformInputSchema: (schema) => {
+      const properties = schema.properties as {
+        jsonOptions?: unknown;
+        formats: { items: { enum: string[] } };
+      };
+      delete properties.jsonOptions;
+      properties.formats.items.enum = properties.formats.items.enum.filter((format) => format !== 'json');
+      return schema;
+    },
     execute: async (args: unknown, { session, sessionId, log, client: mcpClient }): Promise<ContentResult> => {
       const origin = requestOrigin(mcpClient, session);
       const {
@@ -1766,7 +1821,7 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
           count: Array.isArray(alexandria) ? alexandria.length : 1,
         });
         return structuredJsonText(
-          await executeExchangeCalls(session, alexandria, suppliedRequestId, options.timeout as number | undefined, origin, false, feedbackStoreFor(session, sessionId))
+          await executeExchangeCalls(session, alexandria, suppliedRequestId, options.timeout as number | undefined, origin, false, feedbackStoreFor(session, sessionId), 'firecrawl_scrape')
         );
       }
       const transformed = transformScrapeParams(
@@ -1798,7 +1853,7 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
             ...cleaned,
             origin,
           } as any),
-        { tool: 'firecrawl_scrape' }
+        { tool: 'firecrawl_scrape', alexandriaTools }
       );
       return structuredText(withoutDiscoveredToolPrices(res));
     },
@@ -1849,6 +1904,7 @@ Enumerate URLs indexed under one website through Firecrawl without fetching each
     },
   });
 
+  const searchFields = dedicatedAlexandria ? dedicatedSearchToolFields : searchToolBaseFields;
   const searchTool = {
     name: 'firecrawl_search',
     _meta: { 'anthropic/alwaysLoad': true },
@@ -1859,20 +1915,22 @@ Enumerate URLs indexed under one website through Firecrawl without fetching each
       destructiveHint: false, // Query-only; no destructive side effects on external entities.
     },
     description: `
-Search web, news, or image sources and return ranked results with query-relevant highlights. Use it for current information, or to list businesses, people, products, jobs or events with websites, prices or contacts. Each web result is a title, URL, and description; use \`firecrawl_scrape\` on a result URL when the excerpt is not enough.
+Use this when you need current or specific information from the web: recent events, latest releases and versions, prices, people and companies, statistics, or any fact that may have changed since your training data or that you are not sure of. Returns ranked results with query-relevant highlights; each web result is a title, URL, and description. Operators include quoted phrases, \`-term\`, \`site:host\`, \`inurl:term\`, \`intitle:term\`, and \`related:host\`; the set is non-exhaustive. \`includeDomains\` and \`excludeDomains\` are mutually exclusive hostname filters; categories limit result types to \`research\`, \`pdf\`, \`developer\`, or \`gov\`.
 
-${ALEXANDRIA_SEARCH_LEAD}
+For a programming question, add \`categories: ["developer"]\`. It searches an index of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and returns the results in \`data.web\` with \`category: "developer"\`.
 
-On an authenticated session, tool matches describe available capabilities; \`firecrawl_find_tools\` returns their contracts and \`firecrawl_scrape\` with an \`alexandria\` body executes a selected capability. Keyless sessions get no Alexandria matches in data.tools.
+For a legal or regulatory question, \`categories: ["gov"]\` returns results in \`data.web\` with \`category: "gov"\` and cannot be combined with other categories; authenticated sessions also have \`firecrawl_gov_search\` as the dedicated tool. Verify gov results' issuer, jurisdiction, status, and version before citing current law.
 
-For a programming question, add \`categories: ["developer"]\`; its hits return in \`data.web\` with \`category: "developer"\`. For a legal or regulatory question, \`categories: ["gov"]\` returns hits in \`data.web\` with \`category: "gov"\` and cannot be combined with other categories; authenticated sessions also have \`firecrawl_gov_search\` as the dedicated tool. Verify gov results' issuer, jurisdiction, status, and version before citing current law. \`categories: ["research"]\` restricts web results to research-affiliated websites; the \`firecrawl_research_*\` tools are a separate surface over paper abstracts and full text (PubMed, bioRxiv, medRxiv, arXiv). Returns source-type result groups and usage metadata. Authenticated responses can include an \`id\` for optional search feedback.
+${dedicatedAlexandria ? ALEXANDRIA_DEDICATED_SEARCH_INSTRUCTIONS : ALEXANDRIA_SEARCH_INSTRUCTIONS}
+
+Returns result groups in \`data\` and an operation \`id\`.
 `,
     outputSchema: searchOutputSchema,
     parameters: z
       .object({
-        ...searchToolBaseFields,
+        ...searchFields,
         scrapeOptions: scrapeParamsSchema
-          .omit({ url: true })
+          .omit({ url: true, zeroDataRetention: true })
           .extend(SAFE_MODE ? { profile: readOnlyProfileSchema } : {})
           .partial()
           .optional()
@@ -1882,7 +1940,14 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       .refine(searchCategoriesAreCompatible, SEARCH_CATEGORIES_CONFLICT_MESSAGE)
       .refine(
         searchQueryIsValid,
-        'A query is required. Use Find Tools for catalogue lookup.'
+        dedicatedAlexandria
+          ? `A query is required. Use ${ALEXANDRIA_LIBRARY_TOOL} to browse the library.`
+          : 'A query is required. Use Find Tools for catalogue lookup.'
+      ),
+    beforeValidate: (args: unknown) =>
+      refuseNestedZeroDataRetention(
+        args,
+        'For zero data retention on firecrawl_search, set enterprise: ["zdr"] instead; it requires an account where Zero Data Retention is enabled.'
       ),
     execute: async (args: unknown, { session, log, client: mcpClient }: ToolContext, tool = 'firecrawl_search'): Promise<ContentResult> => {
       const { query, ...opts } = args as Record<string, unknown>;
@@ -1944,7 +2009,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
           addsAlexandria && opts.domainTools !== true,
           requestedSources
         );
-      const httpRes = await relayExchangeError(postSearch, { tool });
+      const httpRes = await relayExchangeError(postSearch, { tool, alexandriaTools });
       return searchResult(httpRes?.data ?? {});
     },
   } satisfies RegisteredTool;
@@ -1965,26 +2030,44 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
     timeout?: number,
     origin = requestOrigin(undefined, session),
     includeCosts = false,
-    feedbackStore: FeedbackTokenStore = new FeedbackTokenStore()
+    feedbackStore: FeedbackTokenStore = new FeedbackTokenStore(),
+    // The tool a refusal tells the caller to call again.
+    tool = dedicatedAlexandria ? ALEXANDRIA_READ_TOOL : 'firecrawl_scrape'
   ): Promise<string> {
     assertExchangeCredential(session);
     const client = getClient(session);
     const requestId = suppliedRequestId ?? randomUUID();
+    // The library tool takes a command and nothing else, so a refusal cannot ask for the
+    // request ID to be sent again.
+    const resendsRequestId = tool !== ALEXANDRIA_LIBRARY_TOOL;
     try {
-      const response = await relayExchangeError(() =>
-        (client as any).http.post(
-          '/v2/scrape',
-          {
-            alexandria,
-            origin,
-            ...(timeout !== undefined ? { timeout } : {}),
-          },
-          {
-            headers: { 'x-request-id': requestId },
-            ...(timeout !== undefined ? { timeoutMs: timeout + 5000 } : {}),
-          }
-        ),
-        { tool: 'firecrawl_scrape', requestId, providers: (Array.isArray(alexandria) ? alexandria : [alexandria]).map(call => call.provider) }
+      const response = await relayExchangeError(
+        (attempt) => {
+          // A resend gets the time the caller has left, keeping the 5 s margin above the API's deadline.
+          const budget =
+            timeout === undefined ? undefined : Math.min(timeout, (attempt?.remainingMs ?? Infinity) - 5000);
+          return (client as any).http.post(
+            '/v2/scrape',
+            {
+              alexandria,
+              origin,
+              ...(budget !== undefined ? { timeout: budget } : {}),
+            },
+            {
+              headers: { 'x-request-id': requestId },
+              ...(budget !== undefined ? { timeoutMs: budget + 5000 } : {}),
+            }
+          );
+        },
+        {
+          tool,
+          ...(resendsRequestId ? { requestId } : {}),
+          providers: (Array.isArray(alexandria) ? alexandria : [alexandria]).map(call => call.provider),
+          // The API answers a repeat of this request id from its record, so a resend cannot run twice.
+          resend: true,
+          ...(timeout !== undefined ? { budgetMs: timeout + 5000 } : {}),
+          alexandriaTools,
+        }
       );
       const calls = Array.isArray(alexandria) ? alexandria : [alexandria];
       return alexandriaOutput(
@@ -2007,12 +2090,13 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         randomUUID(),
         alexandriaFeedbackAvailable() && alexandriaCallsWarrantFeedback(calls)
           ? { feedbackTool: ALEXANDRIA_FEEDBACK_HINT }
-          : {}
+          : {},
+        alexandriaTools
       );
     } catch (error) {
       if ((error as any)?.response?.status === 401) throw error;
       throw new UserError(
-        `${error instanceof Error ? error.message : String(error)} Request ID: ${requestId}. Reuse this ID only with the identical payload.`,
+        `${error instanceof Error ? error.message : String(error)} Request ID: ${requestId}.${resendsRequestId ? ' Reuse this ID only with the identical payload.' : ''}`,
         { ...(error instanceof UserError ? error.extras : {}), requestId }
       );
     }
@@ -2020,6 +2104,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
 
   const findToolsTool: RegisteredTool = {
     name: 'firecrawl_find_tools',
+    _meta: { 'anthropic/alwaysLoad': true },
     annotations: {
       title: 'Find Tools',
       readOnlyHint: true,
@@ -2028,7 +2113,7 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       idempotentHint: true,
     },
     description:
-      'Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers ' + ALEXANDRIA_CATALOGUE_VERTICALS + ': typed, sourced records through published contracts. Prefer normal firecrawl_search for a data task; it already returns matching providers. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Use query for semantic discovery or urls to find providers for a website. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.',
+      'Browse Alexandria data providers and workflows or read a selected contract. Alexandria covers ' + ALEXANDRIA_CATALOGUE_VERTICALS + ': typed, sourced records through published contracts. Use this tool when the contract you need was not returned in full, to browse a category when search found nothing, or before scraping the same fields from several pages. Discovery is free. Use query for semantic discovery or urls to find providers for a website. With no arguments, browse categories, then providers and tools. Contracts describe the inputs and outputs for execution through firecrawl_scrape. nextTool identifies further discovery or pagination. Discovery does not execute providers. Use firecrawl_search when you also need web results.',
     outputSchema: findToolsOutputSchema,
     parameters: findToolsSchema,
     execute: async (args, { session, client: mcpClient }) => {
@@ -2041,7 +2126,8 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
         assertExchangeCredential(session);
         const response = await relayExchangeError(
           () => (getClient(session) as any).http.get('/exchange/discover', originHeaders(origin)),
-          { tool: 'firecrawl_find_tools', requestId: session?.requestId }
+          // An idempotent read, so a resend is safe.
+          { tool: 'firecrawl_find_tools', requestId: session?.requestId, resend: true }
         );
         const rows = response?.data?.cohorts;
         if (!Array.isArray(rows) || rows.some((row: any) => typeof row?.cohort !== 'string' || typeof row?.about !== 'string')) {
@@ -2061,7 +2147,143 @@ For a programming question, add \`categories: ["developer"]\`; its hits return i
       return structuredCompact(withFindToolsNavigation(carry.includeCosts ? envelope : withoutFindToolsPrices(envelope), carry));
     },
   };
+
+  // Listed beside alexandria_library_search with the definition it had before
+  // the library tools. A client that takes up a new or changed tool only after
+  // its own review still holds the earlier firecrawl_scrape definition, so this
+  // one keeps naming firecrawl_scrape, which still runs an alexandria body.
   server.addTool(findToolsTool);
+
+  const alexandriaReadSchema = z
+    .object({
+      calls: z
+        .array(exchangeCallSchema.strict())
+        .min(1)
+        .max(EXCHANGE_MAX_CALLS)
+        .describe(
+          `The capabilities to run, 1-${EXCHANGE_MAX_CALLS}, each {provider, capability, options}. Results come back in the same order.`
+        ),
+      requestId: z
+        .string()
+        .regex(/^[A-Za-z0-9._:-]{1,128}$/)
+        .optional()
+        .describe('Idempotency key bound to one execution payload. Generated when omitted and returned with the result.'),
+      timeout: z.number().int().positive().optional().describe('Execution timeout in milliseconds.'),
+    })
+    .strict();
+
+  const libraryText = ({ stdout, stderr, exitCode }: { stdout: string; stderr: string; exitCode?: number }) => {
+    if (!stdout.trim() && !stderr.trim()) return `[no output; exit code ${exitCode ?? 0}]`;
+    return [stdout.replace(/\n+$/, ''), ...(stderr.trim() ? [`[stderr] ${stderr.trim()}`] : [])].filter(Boolean).join('\n');
+  };
+
+  if (dedicatedAlexandria) {
+    server.addTool({
+      name: ALEXANDRIA_LIBRARY_TOOL,
+      _meta: { 'anthropic/alwaysLoad': true },
+      annotations: {
+        title: 'Alexandria library search',
+        readOnlyHint: true, // Reads the catalogue; the filesystem cannot be written.
+        openWorldHint: false, // No network: the commands see the library files only.
+        destructiveHint: false,
+        idempotentHint: true,
+      },
+      description: ALEXANDRIA_LIBRARY_DESCRIPTION,
+      outputSchema: libraryOutputSchema,
+      parameters: libraryToolSchema,
+      execute: async (args, { session, client: mcpClient }): Promise<ContentResult> => {
+        const { command } = args as z.infer<typeof libraryToolSchema>;
+        const envelope = JSON.parse(
+          await executeExchangeCalls(
+            session,
+            { provider: 'firecrawl', capability: 'library', options: { command } },
+            undefined,
+            undefined,
+            requestOrigin(mcpClient, session),
+            false,
+            undefined,
+            // A refusal names this tool as the one to call again.
+            ALEXANDRIA_LIBRARY_TOOL
+          )
+        );
+        const entry = envelope?.data?.alexandria?.[0];
+        if (entry?.error || typeof entry?.data?.exitCode !== 'number') {
+          const message = typeof entry?.error?.message === 'string' ? entry.error.message : 'The library returned no result.';
+          throw new UserError(message, { success: false, message, requestId: envelope?.requestId });
+        }
+        const { stdout = '', stderr = '', exitCode, truncated, catalogueVersion } = entry.data;
+        return withStructured(libraryText({ stdout, stderr, exitCode }), {
+          stdout,
+          stderr,
+          exitCode,
+          ...(truncated ? { truncated: true } : {}),
+          ...(catalogueVersion ? { catalogueVersion } : {}),
+        });
+      },
+    });
+
+    server.addTool({
+      name: ALEXANDRIA_READ_TOOL,
+      _meta: { 'anthropic/alwaysLoad': true },
+      annotations: {
+        title: 'Alexandria library read',
+        // Provider terms writes are refused before execution; capabilities
+        // return records and change no account state.
+        readOnlyHint: true,
+        openWorldHint: true, // Providers read third-party sources.
+        destructiveHint: false,
+      },
+      description: ALEXANDRIA_READ_DESCRIPTION,
+      outputSchema: alexandriaReadOutputSchema,
+      parameters: alexandriaReadSchema,
+      beforeValidate: (args: unknown) => {
+        if (typeof args !== 'object' || args === null) return undefined;
+        const input = args as Record<string, unknown>;
+        // Agents carry these over from firecrawl_search; they mean nothing here.
+        for (const key of ALEXANDRIA_IGNORED_SCRAPE_OPTIONS) delete input[key];
+        // Shapes that are not listed and still run: the firecrawl_scrape
+        // body, and one call sent as the arguments themselves. Each becomes
+        // `calls`; a key that belongs to neither is left for the strict
+        // schema to refuse by name.
+        if (input.calls === undefined) {
+          if (input.alexandria !== undefined && input.provider === undefined) {
+            input.calls = input.alexandria;
+            delete input.alexandria;
+          } else if (input.provider !== undefined || input.capability !== undefined) {
+            const call: Record<string, unknown> = {};
+            for (const key of Object.keys(exchangeCallSchema.shape)) {
+              if (input[key] === undefined) continue;
+              call[key] = input[key];
+              delete input[key];
+            }
+            input.calls = call;
+          }
+        }
+        const calls = input.calls;
+        if (typeof calls === 'object' && calls !== null && !Array.isArray(calls)) input.calls = [calls];
+        return undefined;
+      },
+      execute: async (args, { session, sessionId, log, client: mcpClient }): Promise<ContentResult> => {
+        const { requestId, timeout, calls } = args as z.infer<typeof alexandriaReadSchema>;
+        assertExchangeCredential(session);
+        if (calls.some(isTermsWrite)) throw termsWriteError();
+        log.info('Executing Alexandria capabilities', {
+          calls: calls.map(call => `${call.provider}/${call.capability}`),
+        });
+        return structuredJsonText(
+          await executeExchangeCalls(
+            session,
+            calls,
+            requestId,
+            timeout,
+            requestOrigin(mcpClient, session),
+            false,
+            feedbackStoreFor(session, sessionId)
+          )
+        );
+      },
+    });
+  }
   const DEFAULT_CLOUD_API_URL = 'https://api.firecrawl.dev';
 
   function resolveApiBaseUrl(): string {
@@ -2679,7 +2901,7 @@ Returns submission status, feedback ID, and accounting fields.
     description: `
 Start a multi-page crawl at a website URL, poll it to a terminal state, and return the final status and collected data. Scope can be bounded with include/exclude paths, depth, page limit, subdomain/external-link controls, sitemap handling, delay, and scrape options.
 
-Crawl results can be large; use conservative limits when full-site coverage is unnecessary. Webhooks and interactive scrape actions are unavailable in safe mode. Returns the crawl ID, status, and page data.
+Crawl results can be large; use conservative limits when full-site coverage is unnecessary. Webhooks and interactive scrape actions are unavailable in safe mode. \`zeroDataRetention\` runs the crawl with zero data retention and requires an eligible authenticated account. Returns the crawl ID, status, and page data.
 `,
     parameters: z.object({
       url: z.string(),
@@ -2702,9 +2924,18 @@ Crawl results can be large; use conservative limits when full-site coverage is u
           }),
       deduplicateSimilarURLs: z.boolean().optional(),
       ignoreQueryParameters: z.boolean().optional(),
-      scrapeOptions: scrapeParamsSchema.omit({ url: true }).partial().optional(),
+      zeroDataRetention: z.boolean().optional(),
+      scrapeOptions: scrapeParamsSchema
+        .omit({ url: true, zeroDataRetention: true })
+        .partial()
+        .optional(),
     }),
     outputSchema: crawlOutputSchema,
+    beforeValidate: (args: unknown) =>
+      refuseNestedZeroDataRetention(
+        args,
+        'Set zeroDataRetention at the top level of firecrawl_crawl instead.'
+      ),
     execute: async (args, { session, log, client: mcpClient, task }): Promise<ContentResult> => {
       const origin = requestOrigin(mcpClient, session);
       const { url, ...options } = args as Record<string, unknown>;
@@ -2792,13 +3023,13 @@ Retrieve the current status, progress, and available results for an existing cra
   server.addTool({
     name: 'firecrawl_extract',
     annotations: {
-      title: 'Firecrawl extract (deprecated: use scrape JSON)',
+      title: 'Firecrawl extract (deprecated: use scrape)',
       readOnlyHint: true,
       openWorldHint: true,
       destructiveHint: false,
     },
     description: `
-Deprecated compatibility entry point. Use firecrawl_scrape once per known URL with formats: ["json"] and jsonOptions containing the prompt and schema. Use firecrawl_agent for multi-source research when the URLs are not known or the data spans several sites.
+Deprecated compatibility entry point. Use firecrawl_scrape once per known URL with formats: ["markdown"] and extract the requested fields from the returned content yourself. Use firecrawl_agent for multi-source research when the URLs are not known or the data spans several sites.
 `,
     outputSchema: deprecatedToolOutputSchema,
     parameters: z.object({
@@ -2882,7 +3113,7 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
     name: 'firecrawl_agent',
     annotations: {
       title: 'Firecrawl agent',
-      readOnlyHint: false, // Starts an autonomous research agent job on the Firecrawl API.
+      readOnlyHint: true, // Researches and returns data; the job it starts changes nothing on the web or in the account.
       openWorldHint: true, // The agent browses and searches the open web to fulfill the prompt.
       destructiveHint: false, // Gathers information only; does not delete external data or user resources.
       idempotentHint: false, // Each call starts a new research job and is billed again.
@@ -2890,7 +3121,7 @@ Deprecated compatibility entry point. Use firecrawl_scrape once per known URL wi
     description: `
 Run web research that returns structured data when the URLs are not known or the answer spans several sites. Describe the fields you need in \`prompt\`, optionally pass a JSON \`schema\` and seed \`urls\`, and the research agent searches, navigates, reads pages, and returns JSON assembled across sources. Use it to research an entity plus its fields (founders, pricing, contact details), to build lists and datasets (companies, people, products, jobs, papers), and for pages that need navigation or interaction to reach the data. Optional \`effort\` sets the reasoning budget, \`maxCredits\` caps spend, and \`strictConstrainToURLs\` keeps the agent to the supplied \`urls\`.
 
-This call returns only a job ID, not the research result. Read the job with \`firecrawl_agent_status\` until it reaches \`completed\` or \`failed\`; a typical research run takes one to three minutes. For one known URL use \`firecrawl_scrape\` (with formats: ["json"] for structured output); for a plain lookup that a results page answers, use \`firecrawl_search\`.
+This call returns only a job ID, not the research result. Read the job with \`firecrawl_agent_status\` until it reaches \`completed\` or \`failed\`; a typical research run takes one to three minutes. For one known URL use \`firecrawl_scrape\` (with formats: ["markdown"], then extract the requested fields yourself); for a plain lookup that a results page answers, use \`firecrawl_search\`.
 
 The job also returns a \`threadId\`. To continue that thread, pass it with a follow-up \`prompt\`; omitted \`mode\`, \`urls\`, \`schema\` and exchange settings carry over from the previous turn.
 
@@ -2933,7 +3164,21 @@ The agent only calls Alexandria providers whose terms the team has accepted. \`e
           '"extract" (default) returns the complete structured result every turn. "chat" lets a follow-up that asks no new data get a short reply in message instead of a re-run; required for exchange.requireApproval. Omitted on a follow-up keeps the previous turn\'s mode.'
         ),
       exchange: agentExchangeSchema.optional(),
+      zeroDataRetention: z
+        .boolean()
+        .optional()
+        .describe(
+          'Run with zero data retention. Requires an eligible authenticated account with Zero Data Retention enabled for both scrape and search. Cannot be combined with threadId.'
+        ),
     })
+    .refine(
+      (data) => !(data.zeroDataRetention && data.threadId),
+      {
+        message:
+          'zeroDataRetention cannot continue a thread: remove threadId to start a new run.',
+        path: ['threadId'],
+      }
+    )
     .refine(
       (data) => !(data.exchange?.approve && data.exchange?.decline),
       {
@@ -2985,6 +3230,7 @@ The agent only calls Alexandria providers whose terms the team has accepted. \`e
         // Forwarded verbatim: the agent service owns the defaults and the
         // per-thread inheritance.
         exchange: a.exchange as Record<string, unknown> | undefined,
+        zeroDataRetention: a.zeroDataRetention as boolean | undefined,
       });
       const res = await (client as any).startAgent({
         ...agentBody,
@@ -3086,7 +3332,7 @@ Returns job status, progress information, and result data when completed.
     description: `
 Open or reuse a live browser session to navigate a page, click controls, fill and submit forms, or run browser code. Provide either \`url\` (the scheme may be omitted) or \`scrapeId\`, and either a natural-language \`prompt\` or executable \`code\`; code can run as Bash, Python, or Node with a bounded timeout.
 
-The session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped \`scrapeOptions.profile\` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs.
+The session runs in an isolated Firecrawl-hosted browser that never receives the end user's own browser cookies or credentials. By default it starts with no cookies or saved sessions; an optional team-scoped \`scrapeOptions.profile\` reuses state saved by the team's earlier sessions. Actions run on the live site, so submitting a form can have effects on that site. Returns execution output, stdout/stderr, exit status, and session viewing URLs. When the page needs the user to act, share \`interactiveLiveViewUrl\` with the user only, so they can take over the session.
 `,
     outputSchema: interactOutputSchema,
     parameters: z
@@ -3169,16 +3415,12 @@ The session runs in an isolated Firecrawl-hosted browser that never receives the
       if (language) interactArgs.language = language;
       if (timeout != null) interactArgs.timeout = timeout;
       const res = await client.interact(activeScrapeId, interactArgs as any);
-      if (openedFromUrl && res && typeof res === 'object' && !Array.isArray(res)) {
-        return structuredText({
-          ...(res as unknown as Record<string, unknown>),
-          scrapeId: activeScrapeId,
-        });
+      if (!res || typeof res !== 'object' || Array.isArray(res)) {
+        return structuredText(openedFromUrl ? { scrapeId: activeScrapeId, result: res } : res);
       }
-      if (openedFromUrl) {
-        return structuredText({ scrapeId: activeScrapeId, result: res });
-      }
-      return structuredText(res);
+      const payload = { ...(res as unknown as Record<string, unknown>) };
+      delete payload.cdpUrl;
+      return structuredText(openedFromUrl ? { ...payload, scrapeId: activeScrapeId } : payload);
     },
   });
 
@@ -3332,14 +3574,7 @@ Set \`redactPII\` to request redaction of personally identifiable information in
   registerDeveloperTools(server, getClient);
   registerGovTools(server, getClient);
   if (!isLocalKeylessStartup()) {
-    registerEnrichTools(server, getClient, assertExchangeCredential, hasCredential, {
-      parameters: z
-        .object({ ...searchToolBaseFields })
-        .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE)
-        .refine(searchCategoriesAreCompatible, SEARCH_CATEGORIES_CONFLICT_MESSAGE)
-        .refine(searchQueryIsValid, 'A query is required.'),
-      run: (args, context) => searchTool.execute(args, context, 'people_company_search'),
-    });
+    registerEnrichTools(server, getClient, assertExchangeCredential, hasCredential, alexandriaTools);
   }
   registerUsageTools(server, getClient);
 

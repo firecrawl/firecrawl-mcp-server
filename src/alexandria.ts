@@ -84,6 +84,8 @@ export const ALEXANDRIA_SEARCH_LEAD =
   'Authenticated search also returns matching Alexandria data providers in data.tools (' + ALEXANDRIA_CATALOGUE_VERTICALS + '). Prefer a provider over scraping pages when the task needs the same fields across several entities, exact figures or timestamps, provenance, or many records; use web results when they already answer the question. ' + ALEXANDRIA_SOURCES_ALWAYS_ON;
 export const ALEXANDRIA_CONTRACT_GUIDANCE =
   'The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and a key field under response (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination.';
+export const ALEXANDRIA_ENRICH_ROUTING =
+  'For people and company enrichment or search, use people_company_enrich or people_company_search when they are listed; call a provider here directly only when the user asks for that provider.';
 export const ALEXANDRIA_TERMS_GUIDANCE =
   'Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.';
 
@@ -118,8 +120,11 @@ export function withFindToolsNavigation(envelope: any, carry: Record<string, unk
   return envelope;
 }
 
+// What authenticated search returns; each surface appends the tools that take it from there.
+const ALEXANDRIA_SEARCH_LEAD_INSTRUCTIONS =
+  'Authenticated search combines web results, semantic tool summaries and domain matches. Use sources: ["alexandria"] for semantic tools only. ' + ALEXANDRIA_SOURCES_ALWAYS_ON + ' On an authenticated session, tool matches describe available structured-data capabilities, not executed data. toolDetail: "compact" (default) returns only provider, capability and description; "summary" adds metadata; "full" includes their input and output contracts.';
 export const ALEXANDRIA_SEARCH_INSTRUCTIONS =
-  'Authenticated search combines web results, semantic tool summaries and domain matches. Use sources: ["alexandria"] for semantic tools only. ' + ALEXANDRIA_SOURCES_ALWAYS_ON + ' Tool matches describe available structured-data capabilities, not executed data. toolDetail: "compact" (default) returns only provider, capability and description; "summary" adds metadata; "full" includes their input and output contracts. firecrawl_scrape with an alexandria body executes a selected capability; firecrawl_find_tools provides catalogue browsing and full contracts.';
+  ALEXANDRIA_SEARCH_LEAD_INSTRUCTIONS + ' firecrawl_scrape with an alexandria body executes a selected capability; firecrawl_find_tools provides catalogue browsing and full contracts.';
 
 const TOOL_PRICE_KEYS = ['creditsCost', 'perRecord', 'billing', 'recordsPerUnit', 'zeroDataRetentionCreditsCost'];
 
@@ -179,3 +184,50 @@ export function withoutFindToolsPrices(envelope: any) {
   delete data.creditsCost;
   return { ...stripped, data };
 }
+
+/**
+ * How a surface names the Alexandria tools. `dedicated` is alexandria_library_search
+ * and alexandria_library_read. `legacy` is firecrawl_find_tools and firecrawl_scrape
+ * with an alexandria body: the search surface's tool list is fixed by its
+ * connector listing, so it keeps those names and their copy.
+ */
+export type AlexandriaTools = 'dedicated' | 'legacy';
+
+export const ALEXANDRIA_READ_TOOL = 'alexandria_library_read';
+export const ALEXANDRIA_LIBRARY_TOOL = 'alexandria_library_search';
+
+type AlexandriaCall = { provider: string; capability: string; options?: unknown; version?: string };
+
+/** The tool call that runs one capability on a surface. `list` keeps the legacy body an array where it always was one. */
+export function executeToolCall(tools: AlexandriaTools, call: AlexandriaCall | Record<string, unknown>, list = false) {
+  return tools === 'dedicated'
+    ? { name: ALEXANDRIA_READ_TOOL, arguments: { calls: [call] } }
+    : { name: 'firecrawl_scrape', arguments: { alexandria: list ? [call] : call } };
+}
+
+export const ALEXANDRIA_DEDICATED_SEARCH_INSTRUCTIONS =
+  ALEXANDRIA_SEARCH_LEAD_INSTRUCTIONS + ' ' + ALEXANDRIA_READ_TOOL + ' runs a selected capability; ' + ALEXANDRIA_LIBRARY_TOOL + ' explores the whole library and reads full contracts.';
+
+// The category folders of /library, so an agent can open one without listing
+// first. They come from the Exchange catalogue; a category added there is
+// missing here until this list is updated, and `ls /library` always has it.
+// The category folders of the deployed library (`ls /library`, 2026-11-10).
+export const ALEXANDRIA_LIBRARY_CATEGORIES = [
+  'agriculture', 'ai-models', 'apps', 'automotive', 'community', 'companies', 'developer',
+  'digital-intelligence', 'education', 'energy', 'entertainment', 'finance', 'game-development',
+  'government', 'health', 'healthcare', 'jobs', 'knowledge', 'life-sciences', 'marketing', 'music',
+  'news', 'people', 'places', 'podcasts', 'political-science', 'real-estate', 'research',
+  'restaurants', 'shopping', 'skills', 'social', 'software', 'sports', 'travel',
+];
+
+export const ALEXANDRIA_LIBRARY_DESCRIPTION =
+  "Explore the Alexandria library: Firecrawl's catalogue of data providers that return typed, sourced records (" + ALEXANDRIA_CATALOGUE_VERTICALS + ') as a read-only filesystem, using shell commands. Use this to find out whether a provider covers the data a task needs, and to read its contract before alexandria_library_read. Layout: /library/<category>/<provider>/<capability>.md, one file per capability holding its contract (when to use it, inputs, outputs, and the call to send); /library, each category folder and each provider folder has a README.md describing what is inside. Category folders: ' + ALEXANDRIA_LIBRARY_CATEGORIES.join(', ') + '; `ls /library` shows any added since. Available commands: ls, tree, cat, head, tail, grep, find, wc, sort, uniq, cut, tr, sed, jq, xargs, with pipes. Typical starts: `ls /library`, `cat /library/README.md`, or `grep -ril "mortgage" /library`. A file path is the execute address: /library/finance/fred/series/observations.md is provider "fred", capability "series/observations". Recorded example responses are under /examples/<provider>/<capability>.json. Free; does not run providers.';
+
+export const ALEXANDRIA_READ_DESCRIPTION =
+  "Run capabilities of Alexandria data providers and return their typed, sourced records: one, or up to ten in one call when a task needs several lookups. Alexandria is Firecrawl's library of data providers across " + ALEXANDRIA_CATALOGUE_VERTICALS + '. ' + ALEXANDRIA_ENRICH_ROUTING + ' Each entry of `calls` is {provider, capability, options}: `provider` and `capability` come from firecrawl_search results or alexandria_library_search, and `options` follow the capability\'s contract, which marks required inputs and any requiresOneOf groups (at least one member per group). Where the contract declares pagination, its fields page through results with the same filters. Returns one result per call, in the same order, in data.alexandria, each with data, records, or an error with a code; one call can fail while the others succeed, and an invalid call returns an error naming the valid options. A result too large to return inline is retained, and nextTool reads it in slices. Billed per executed capability; discovery is free. ' + ALEXANDRIA_TERMS_GUIDANCE;
+
+export const libraryToolSchema = z
+  .object({
+    command: z.string().trim().min(1).max(4096).describe('Shell command to run inside the read-only library, e.g. `grep -ril "rental" /library | head -20`.'),
+  })
+  .strict();

@@ -10,8 +10,21 @@ import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
 
 const ENRICH_TOOLS = ['people_company_search', 'people_company_enrich'];
 
+const WATERFALL_RESULT = {
+  people: [{
+    input_index: 0,
+    results: [{ provider: 'blitzapi', data: { found: true, email: 'ada@acme.example' } }],
+    fields: { work_email: { provider: 'blitzapi', value: 'ada@acme.example', verified: true, domain_match: true } },
+  }],
+  companies: [{ input_index: 0, results: [] }],
+  credits_used: 2,
+};
+
 function answer(call) {
   const { provider, capability, options } = call;
+  if (provider === 'firecrawl' && capability === 'enrich/auto') {
+    return { creditsCost: 0, data: { ...WATERFALL_RESULT, max_credits: options.max_credits } };
+  }
   if (provider === 'fullenrich' && capability === 'companies/lookup') {
     return options.domain === 'acme.example'
       ? { creditsCost: 10, data: { companies: [{ name: 'Acme', domain: 'acme.example', headcount: 120, industry: { main_industry: 'Software Development' } }] } }
@@ -36,8 +49,10 @@ function answer(call) {
   if (provider === 'fullenrich' && capability === 'contacts/work-email' && options.first_name === 'Unread') {
     return { creditsCost: 0, error: { code: 'job_pending', message: 'Upstream job e2 is still running; repeating this call starts another one.' } };
   }
-  if (provider === 'apollo' && capability === 'people/search') {
-    return { creditsCost: 0, data: { people: [{ id: 'a1', first_name: 'Ada', last_name_obfuscated: 'L***e', title: 'Head of Data', organization: { name: 'Acme' } }] } };
+  if (provider === 'firecrawl' && capability === 'search/auto') {
+    if (options.filters?.technologies) return { creditsCost: 0, error: { code: 'unsupported_filters', message: 'No provider applies every filter sent. Drop or reword technologies.' } };
+    const row = { name: 'Ada Lovelace', title: 'Head of Data', title_match: 'current', company_domain: 'acme.example', linkedin_url: 'https://www.linkedin.com/in/ada', source: 'leadsforge' };
+    return { creditsCost: 0, data: { results: [row], count: 1, providers: [{ name: 'leadsforge', capability: 'people/search', status: 'rows', returned: 1, credits: 0 }], credits: 0 } };
   }
   return { error: { code: 'not_found', message: 'No match.' } };
 }
@@ -45,16 +60,13 @@ function answer(call) {
 async function startApi(t, respond) {
   const calls = [];
   const bodies = [];
+  const headers = [];
   const server = createServer(async (req, res) => {
+    headers.push(req.headers);
     let raw = '';
     for await (const chunk of req) raw += chunk;
     const body = raw ? JSON.parse(raw) : {};
     bodies.push(body);
-    if (req.url.startsWith('/v2/search')) {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ success: true, creditsUsed: 2, data: { web: [{ url: 'https://acme.example/team', title: 'Acme team' }] } }));
-      return;
-    }
     const batch = Array.isArray(body.alexandria) ? body.alexandria : [body.alexandria];
     calls.push(...batch);
     const { status = 200, json } = respond?.(batch) ?? {};
@@ -63,15 +75,15 @@ async function startApi(t, respond) {
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
-  return { url: 'http://127.0.0.1:' + server.address().port, calls, bodies };
+  return { url: 'http://127.0.0.1:' + server.address().port, calls, bodies, headers };
 }
 
-async function connect(t, options, session = { authType: 'api-key', firecrawlApiKey: 'fc-test' }) {
+async function connect(t, { onToolResult, ...options }, session = { authType: 'api-key', firecrawlApiKey: 'fc-test' }) {
   const port = await getFreePort();
   const instance = createFirecrawlMcpServer({
     transport: 'httpStream',
     ...options,
-    unstable_hooks: { authenticate: async () => session },
+    unstable_hooks: { authenticate: async () => session, onToolResult },
   });
   await instance.start({ transportType: 'httpStream', httpStream: { port, host: '127.0.0.1', endpoint: '/mcp', stateless: true } });
   t.after(() => instance.stop());
@@ -93,7 +105,7 @@ test('the enrich tools are listed by default', async (t) => {
     assert.match(tool.description, /Example: \{/);
   }
   const hints = Object.fromEntries(tools.map((tool) => [tool.name, tool.annotations?.readOnlyHint]));
-  assert.deepEqual(hints, { people_company_search: true, people_company_enrich: false });
+  assert.deepEqual(hints, { people_company_search: true, people_company_enrich: true });
 });
 
 test('the CLI server with an API key lists the enrich tools', async (t) => {
@@ -109,128 +121,15 @@ test('a keyless session does not list the enrich tools', async (t) => {
   for (const name of ENRICH_TOOLS) assert.ok(!names.includes(name), name + ' is not listed');
 });
 
-test('an input without an identifier is refused before any provider runs', async (t) => {
-  const api = await startApi(t);
-  const client = await connect(t, { apiUrl: api.url });
-  const result = await client.callTool({ name: 'people_company_enrich', arguments: { fullenrich: { people: [{ person_name: 'Jane Doe' }] } } });
-  assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /fullenrich\.people\.0: Each fullenrich person needs/);
-  assert.equal(api.calls.length, 0);
-});
-
-test('a call with no provider block is refused before any provider runs', async (t) => {
-  const api = await startApi(t);
-  const client = await connect(t, { apiUrl: api.url });
-  const result = await client.callTool({ name: 'people_company_enrich', arguments: {} });
-  assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /No provider given/);
-  assert.equal(api.calls.length, 0);
-});
-
-test('company enrichment runs each provider on its own inputs and reports them separately', async (t) => {
-  const api = await startApi(t);
-  const client = await connect(t, { apiUrl: api.url });
-  const result = await client.callTool({
-    name: 'people_company_enrich',
-    arguments: {
-      fullenrich: { companies: [{ domain: 'acme.example' }, { domain: 'missing.example' }] },
-      apollo: { companies: [{ domain: 'globex.example' }] },
-    },
-  });
-  assert.notEqual(result.isError, true, JSON.stringify(result));
-  const data = result.structuredContent;
-  assert.equal(data.results, undefined);
-  const [fullenrich, apollo, pdl, datalegion] = data.providers;
-  assert.deepEqual([fullenrich.name, fullenrich.status, fullenrich.credits, fullenrich.unmatched], ['fullenrich', 'ok', 10, [1]]);
-  assert.deepEqual(fullenrich.results.map((r) => [r.input_index, r.name]), [[0, 'Acme']]);
-  assert.deepEqual(apollo.results.map((r) => [r.input_index, r.name]), [[0, 'Globex']]);
-  assert.deepEqual(api.calls.find((call) => call.provider === 'apollo').options.details, [{ domain: 'globex.example' }]);
-  assert.deepEqual([pdl.status, datalegion.status], ['not_requested', 'not_requested']);
-  assert.equal(data.credits_total, 40);
-});
-
-test('people search passes a provider its own parameters unchanged', async (t) => {
-  const api = await startApi(t);
-  const client = await connect(t, { apiUrl: api.url });
-  const result = await client.callTool({
-    name: 'people_company_search',
-    arguments: {
-      entity: 'person',
-      apollo: { person_titles: ['Head of Data'], q_organization_domains_list: ['acme.example'] },
-      fullenrich: {},
-    },
-  });
-  const data = result.structuredContent;
-  const apollo = data.providers.find((p) => p.name === 'apollo');
-  assert.equal(apollo.results[0].apollo_id, 'a1');
-  assert.deepEqual(api.calls[0].options, { person_titles: ['Head of Data'], q_organization_domains_list: ['acme.example'], per_page: 10 });
-  const fullenrich = data.providers.find((p) => p.name === 'fullenrich');
-  assert.equal(fullenrich.status, 'skipped');
-  assert.equal(api.calls.length, 1);
-});
-
-test('search refuses a provider block written for the other entity', async (t) => {
-  const api = await startApi(t);
-  const client = await connect(t, { apiUrl: api.url });
-  const result = await client.callTool({
-    name: 'people_company_search',
-    arguments: { entity: 'company', apollo: { person_titles: ['Head of Data'] } },
-  });
-  assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /person_titles/);
-  assert.equal(api.calls.length, 0);
-});
-
-test('enrich refuses people and companies in one call', async (t) => {
-  const api = await startApi(t);
-  const client = await connect(t, { apiUrl: api.url });
-  const result = await client.callTool({
-    name: 'people_company_enrich',
-    arguments: { fullenrich: { companies: [{ domain: 'acme.example' }] }, apollo: { people: [{ email: 'ada@acme.example' }] } },
-  });
-  assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /separate calls: fullenrich has companies, apollo has people/);
-  assert.equal(api.calls.length, 0);
-});
-
-test('contact_fields runs the contact providers on the same people', async (t) => {
-  const api = await startApi(t);
-  const client = await connect(t, { apiUrl: api.url });
-  const result = await client.callTool({
-    name: 'people_company_enrich',
-    arguments: {
-      contact_fields: ['work_email'],
-      fullenrich: { people: [{ person_name: 'Ada Lovelace', company_domain: 'acme.example' }] },
-      apollo: { people: [{ email: 'ada@acme.example' }] },
-      people_data_labs: { people: [{ email: 'ada@acme.example' }] },
-    },
-  });
-  assert.notEqual(result.isError, true, JSON.stringify(result));
-  const providers = result.structuredContent.providers;
-  assert.deepEqual(providers.map((p) => [p.name, p.status]), [
-    ['fullenrich', 'empty'],
-    ['datalegion', 'not_requested'],
-    ['apollo', 'empty'],
-    ['people_data_labs', 'skipped'],
-  ]);
-  const fullenrich = api.calls.find((call) => call.provider === 'fullenrich');
-  assert.equal(fullenrich.capability, 'contacts/work-email');
-  assert.deepEqual(fullenrich.options, { first_name: 'Ada', last_name: 'Lovelace', domain: 'acme.example' });
-  const apollo = api.calls.find((call) => call.provider === 'apollo');
-  assert.equal(apollo.capability, 'people/bulk-match');
-  assert.deepEqual(apollo.options.details, [{ email: 'ada@acme.example' }]);
-  assert.equal(api.calls.length, 2);
-});
-
 test('conversationId and objective are accepted and not sent to providers', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { apiUrl: api.url });
   const result = await client.callTool({
     name: 'people_company_search',
-    arguments: { conversationId: 'c-1', objective: 'Find data leaders', entity: 'person', apollo: { person_titles: ['Head of Data'] } },
+    arguments: { conversationId: 'c-1', objective: 'Find data leaders', entity: 'person', filters: { titles: ['Head of Data'] } },
   });
   assert.notEqual(result.isError, true, JSON.stringify(result));
-  assert.deepEqual(api.calls[0].options, { person_titles: ['Head of Data'], per_page: 10 });
+  assert.deepEqual(api.calls[0].options, { entity: 'person', filters: { titles: ['Head of Data'] } });
   assert.ok(!JSON.stringify(api.bodies).includes('c-1') && !JSON.stringify(api.bodies).includes('Find data leaders'));
 });
 
@@ -239,245 +138,193 @@ test('near-miss shapes are repaired before validation', async (t) => {
   const client = await connect(t, { apiUrl: api.url });
   const result = await client.callTool({
     name: 'people_company_search',
-    arguments: {
-      entity: 'people',
-      providers: [{ provider: 'full-enrich', options: { current_position_titles: 'Product Manager', current_company_headcounts: ['51-200', '1000+'], limit: '2' } }],
-      apollo: [{ options: { person_titles: 'Head of Data' } }],
-    },
+    arguments: { entity: 'people', filters: { titles: 'Product Manager', locations: 'Germany' }, limit: '5' },
   });
   assert.notEqual(result.isError, true, JSON.stringify(result));
-  assert.deepEqual(api.calls.find((call) => call.provider === 'fullenrich').options, {
-    current_position_titles: [{ value: 'Product Manager' }],
-    current_company_headcounts: [{ min: 51, max: 200 }, { min: 1000 }],
-    limit: 2,
-  });
-  assert.deepEqual(api.calls.find((call) => call.provider === 'apollo').options, { person_titles: ['Head of Data'], per_page: 10 });
-
-  const lookup = await client.callTool({ name: 'people_company_enrich', arguments: { fullenrich: { companies: { domain: 'acme.example' } } } });
-  assert.notEqual(lookup.isError, true, JSON.stringify(lookup));
-  assert.equal(lookup.structuredContent.providers[0].returned, 1);
+  assert.deepEqual(api.calls[0].options, { entity: 'person', filters: { titles: ['Product Manager'], locations: ['Germany'] }, limit: 5 });
 });
 
 test('an invalid argument names the field, what the block takes and an example', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { apiUrl: api.url });
-  const result = await client.callTool({
-    name: 'people_company_search',
-    arguments: { entity: 'person', people_data_labs: { sql: "SELECT * FROM person WHERE job_title = 'cto'", size: 2 } },
-  });
+  const result = await client.callTool({ name: 'people_company_search', arguments: { entity: 'person', filters: { titles: ['CTO'], region: 'US' } } });
   assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /people_data_labs: unknown field size; takes sql, query, limit/);
+  assert.match(result.content[0].text, /filters: unknown field region; takes titles, seniority, functions/);
   assert.match(result.content[0].text, /Example: \{"entity":"person"/);
 
-  const entity = await client.callTool({ name: 'people_company_search', arguments: { entity: 'lead', apollo: { person_titles: ['CTO'] } } });
-  assert.equal(entity.isError, true);
-  assert.match(entity.content[0].text, /entity: /);
-
-  const seniority = await client.callTool({
-    name: 'people_company_search',
-    arguments: { entity: 'person', fullenrich: { current_position_seniority_level: [{ value: 'CXO' }] } },
-  });
+  const seniority = await client.callTool({ name: 'people_company_search', arguments: { entity: 'person', filters: { seniority: ['cxo'] } } });
   assert.equal(seniority.isError, true);
-  assert.match(seniority.content[0].text, /current_position_seniority_level\.0: One of Owner, Founder, C-Level/);
+  assert.match(seniority.content[0].text, /filters\.seniority\.0/);
   assert.equal(api.calls.length, 0);
 });
 
-test('max_credits refuses a call that could cost more, before any provider runs', async (t) => {
-  const api = await startApi(t);
-  const client = await connect(t, { apiUrl: api.url });
-  const people = Array.from({ length: 40 }, (_, i) => ({ person_professional_network_url: 'https://www.linkedin.com/in/p' + i }));
-  const refused = await client.callTool({ name: 'people_company_enrich', arguments: { contact_fields: ['work_email'], fullenrich: { people } } });
-  assert.equal(refused.isError, true);
-  assert.match(refused.content[0].text, /could cost up to 1200 credits \(fullenrich 1200\), above max_credits 1000/);
-  assert.equal(api.calls.length, 0);
-
-  const allowed = await client.callTool({ name: 'people_company_enrich', arguments: { max_credits: 1200, contact_fields: ['work_email'], fullenrich: { people } } });
-  assert.notEqual(allowed.isError, true, JSON.stringify(allowed));
-  assert.equal(allowed.structuredContent.credits_estimate, 1200);
-  assert.equal(allowed.structuredContent.max_credits, 1200);
-});
-
-test('the firecrawl_search block runs a web search beside the providers and reports it separately', async (t) => {
-  const api = await startApi(t);
-  const client = await connect(t, { apiUrl: api.url });
-  const result = await client.callTool({
-    name: 'people_company_search',
-    arguments: { entity: 'person', apollo: { person_titles: ['Head of Data'] }, firecrawl_search: { query: 'Acme head of data', limit: 5 } },
-  });
-  assert.notEqual(result.isError, true, JSON.stringify(result));
-  const data = result.structuredContent;
-  assert.deepEqual(data.providers.map((p) => p.name), ['apollo', 'fullenrich', 'people_data_labs', 'firecrawl_search']);
-  const web = data.providers[3];
-  assert.deepEqual([web.status, web.returned, web.credits], ['ok', 1, 2]);
-  assert.equal(web.results[0].url, 'https://acme.example/team');
-  assert.equal(data.credits_estimate, 12);
-  assert.equal(data.credits_total, 2);
-  assert.equal(api.bodies.find((body) => body.query).query, 'Acme head of data');
-
-  const alone = await client.callTool({ name: 'people_company_search', arguments: { entity: 'company', firecrawl_search: { query: 'Acme' } } });
-  assert.notEqual(alone.isError, true, JSON.stringify(alone));
-  assert.equal(alone.structuredContent.providers.at(-1).returned, 1);
-
-  const none = await client.callTool({ name: 'people_company_search', arguments: { entity: 'person' } });
-  assert.match(none.content[0].text, /No provider given.*firecrawl_search/);
-});
-
-test('a provider block that will not run adds nothing to the estimate', async (t) => {
-  const api = await startApi(t);
-  const client = await connect(t, { apiUrl: api.url });
-  const result = await client.callTool({ name: 'people_company_search', arguments: { entity: 'company', max_credits: 0, fullenrich: {}, apollo: {} } });
-  assert.notEqual(result.isError, true, JSON.stringify(result));
-  assert.equal(result.structuredContent.credits_estimate, 0);
-  assert.equal(api.calls.length, 0);
-});
-
-test('provider errors carry the tool name, a hint and retryable', async (t) => {
-  const terms = { success: false, error: 'Terms required.', code: 'THIRD_PARTY_DATA_TERMS_REQUIRED', requiresAction: { type: 'accept_terms', terms: 'apollo', version: '1', url: 'https://example.com/terms' } };
-  const api = await startApi(t, (batch) => {
-    if (batch[0].provider === 'apollo') return { status: 403, json: terms };
-    return {
-      json: {
-        success: true,
-        data: { alexandria: batch.map(() => ({ error: { code: 'provider_error', message: 'We couldn’t complete this request. Please try again later.' }, creditsCost: 0 })) },
-      },
-    };
-  });
-  const client = await connect(t, { apiUrl: api.url });
-  const result = await client.callTool({
-    name: 'people_company_search',
-    arguments: { entity: 'company', apollo: { q_organization_name: 'Acme' }, fullenrich: { industries: [{ value: 'Computer Software' }], limit: 1 } },
-  });
-  const [apollo, fullenrich] = result.structuredContent.providers;
-  assert.match(apollo.note, /call people_company_search again/);
-  assert.equal(fullenrich.status, 'error');
-  assert.equal(fullenrich.retryable, true);
-  assert.match(fullenrich.note, /^provider_error: We couldn’t complete this request\. Please try again later\. FullEnrich answers this way when a filter value/);
-});
-
-test('a contact lookup skips a FullEnrich person it cannot identify and still runs the other providers', async (t) => {
-  const api = await startApi(t);
-  const client = await connect(t, { apiUrl: api.url });
-  const result = await client.callTool({
-    name: 'people_company_enrich',
-    arguments: {
-      contact_fields: ['work_email'],
-      fullenrich: { people: [{ person_name: 'Ada Lovelace', company_professional_network_url: 'https://www.linkedin.com/company/acme' }] },
-      apollo: { people: [{ email: 'ada@acme.example' }] },
-    },
-  });
-  assert.notEqual(result.isError, true, JSON.stringify(result));
-  const fullenrich = result.structuredContent.providers.find((p) => p.name === 'fullenrich');
-  assert.match(fullenrich.note, /Skipped inputs 0/);
-  assert.deepEqual(api.calls.map((call) => call.provider), ['apollo']);
-});
-
-test('Apollo runs a contact lookup only for the fields it has, and keeps only matches that carry them', async (t) => {
-  const api = await startApi(t);
-  const client = await connect(t, { apiUrl: api.url });
-  const mobile = await client.callTool({ name: 'people_company_enrich', arguments: { contact_fields: ['mobile'], apollo: { people: [{ email: 'ada@acme.example' }] } } });
-  assert.notEqual(mobile.isError, true, JSON.stringify(mobile));
-  const apollo = mobile.structuredContent.providers.find((p) => p.name === 'apollo');
-  assert.deepEqual([apollo.status, apollo.note], ['skipped', 'Apollo has no mobile lookup.']);
-  assert.equal(mobile.structuredContent.credits_estimate, 0);
-  assert.equal(api.calls.length, 0);
-});
-
-test('an Alexandria-only web search block adds nothing to the estimate', async (t) => {
-  const api = await startApi(t);
-  const client = await connect(t, { apiUrl: api.url });
-  const result = await client.callTool({ name: 'people_company_search', arguments: { entity: 'company', max_credits: 0, firecrawl_search: { query: 'Acme', sources: ['alexandria'] } } });
-  assert.notEqual(result.isError, true, JSON.stringify(result));
-  assert.equal(result.structuredContent.credits_estimate, 0);
-});
+const APOLLO_TERMS = { success: false, error: 'Terms required.', code: 'THIRD_PARTY_DATA_TERMS_REQUIRED', requiresAction: { type: 'accept_terms', terms: 'apollo', version: '1', url: 'https://example.com/terms' } };
 
 test('the published schema carries the identifier rules', async (t) => {
   const client = await connect(t, {});
   const { tools } = await client.listTools();
   const enrich = tools.find((tool) => tool.name === 'people_company_enrich');
   const nonBlank = (...keys) => ({ required: keys, properties: Object.fromEntries(keys.map((key) => [key, { pattern: '\\S' }])) });
-  assert.deepEqual(enrich.inputSchema.properties.fullenrich.properties.people.items.anyOf, [
-    nonBlank('person_professional_network_url'),
-    nonBlank('person_name', 'company_domain'),
-    nonBlank('person_name', 'company_professional_network_url'),
+  assert.deepEqual(enrich.inputSchema.properties.people.items.anyOf, [
+    nonBlank('linkedin_url'),
+    nonBlank('email'),
+    nonBlank('phone'),
+    nonBlank('name', 'company'),
+    nonBlank('name', 'domain'),
+    nonBlank('first_name', 'last_name', 'company'),
+    nonBlank('first_name', 'last_name', 'domain'),
   ]);
-  const search = tools.find((tool) => tool.name === 'people_company_search');
-  const pdl = search.inputSchema.properties.people_data_labs.anyOf;
-  for (const branch of pdl) assert.deepEqual(branch.oneOf, [{ required: ['sql'] }, { required: ['query'] }]);
 });
 
-
-test('an Apollo contact match without the requested fields stays a match and lists them as missing', async (t) => {
+test('people search sends one search/auto call with the normalized input and returns its rows and trace', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { apiUrl: api.url });
   const result = await client.callTool({
-    name: 'people_company_enrich',
-    arguments: { contact_fields: ['work_email', 'mobile'], apollo: { people: [{ email: 'grace@acme.example' }] } },
-  });
-  assert.notEqual(result.isError, true, JSON.stringify(result));
-  const apollo = result.structuredContent.providers.find((p) => p.name === 'apollo');
-  assert.deepEqual([apollo.status, apollo.returned, apollo.credits, apollo.unmatched], ['ok', 1, 30, undefined]);
-  assert.equal(apollo.results[0].name, 'Grace Hopper');
-  assert.deepEqual(apollo.results[0].missing, ['work_email', 'mobile']);
-  assert.equal('work_email' in apollo.results[0], false);
-});
-
-test('a FullEnrich contact still running upstream is reported as pending, not unmatched', async (t) => {
-  const api = await startApi(t);
-  const client = await connect(t, { apiUrl: api.url });
-  const result = await client.callTool({
-    name: 'people_company_enrich',
-    arguments: {
-      contact_fields: ['work_email'],
-      fullenrich: {
-        people: [
-          { person_name: 'Pending Person', company_domain: 'acme.example' },
-          { person_name: 'Unread Person', company_domain: 'acme.example' },
-          { person_name: 'Parked Person', company_domain: 'acme.example' },
-        ],
-      },
-    },
-  });
-  assert.notEqual(result.isError, true, JSON.stringify(result));
-  const fullenrich = result.structuredContent.providers[0];
-  assert.deepEqual([fullenrich.status, fullenrich.unmatched, fullenrich.credits], ['pending', undefined, 0]);
-  assert.deepEqual(fullenrich.pending[0], {
-    input_index: 0,
-    field: 'work_email',
-    job_id: 'j1',
-    poll_after_seconds: 60,
-    next_tool: { name: 'firecrawl_scrape', arguments: { alexandria: { provider: 'firecrawl', capability: 'job-status', options: { id: 'j1' } } } },
-  });
-  assert.deepEqual(fullenrich.pending[1], { input_index: 1, field: 'work_email', note: 'Upstream job e2 is still running; repeating this call starts another one.' });
-  assert.deepEqual(fullenrich.pending[2], {
-    input_index: 2,
-    field: 'work_email',
-    next_tool: { name: 'firecrawl_scrape', arguments: { alexandria: { provider: 'firecrawl', capability: 'job-status', options: { id: 'j3' } } } },
-  });
-  assert.match(fullenrich.note, /Read each entry that has a next_tool with it after poll_after_seconds; an entry without one cannot be read later/);
-  assert.equal(fullenrich.retryable, undefined);
-});
-
-test('the web search estimate covers enterprise zdr pricing and threat scanning', async (t) => {
-  const api = await startApi(t);
-  const client = await connect(t, { apiUrl: api.url });
-  const refused = await client.callTool({
     name: 'people_company_search',
-    arguments: { entity: 'company', max_credits: 29, firecrawl_search: { query: 'Acme', limit: 10, enterprise: ['zdr'] } },
+    arguments: { entity: 'person', filters: { titles: ['Head of Data'], company_domains: ['acme.example'] }, limit: 5, max_credits: 50 },
   });
-  assert.equal(refused.isError, true);
-  assert.match(refused.content[0].text, /could cost up to 30 credits \(firecrawl_search 30\)/);
-  assert.equal(api.bodies.length, 0);
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  assert.deepEqual(api.calls, [
+    { provider: 'firecrawl', capability: 'search/auto', options: { entity: 'person', filters: { titles: ['Head of Data'], company_domains: ['acme.example'] }, limit: 5, max_credits: 50 } },
+  ]);
+  const data = result.structuredContent;
+  assert.equal(data.results[0].source, 'leadsforge');
+  assert.equal(data.providers[0].status, 'rows');
+  assert.doesNotMatch(JSON.stringify(data.results), /@/);
 });
 
-test('a DataLegion person needs an identifier or a full name with context', async (t) => {
+test('a search refusal from the waterfall reaches the agent with its code', async (t) => {
+  const api = await startApi(t);
+  const events = [];
+  const client = await connect(t, { apiUrl: api.url, onToolResult: (event) => events.push(event) });
+  const result = await client.callTool({ name: 'people_company_search', arguments: { entity: 'person', filters: { titles: ['CTO'], technologies: ['Snowflake'] } } });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /Drop or reword technologies/);
+  assert.equal(events.find((event) => event.status === 'error').error.extras.code, 'unsupported_filters');
+});
+
+test('search takes a provider with its own options, and refuses options without a provider', async (t) => {
   const api = await startApi(t);
   const client = await connect(t, { apiUrl: api.url });
-  for (const person of [{ full_name: 'Ada Lovelace' }, { first_name: 'Ada', last_name: 'Lovelace' }, { first_name: 'Ada', company: 'Acme' }]) {
-    const result = await client.callTool({ name: 'people_company_enrich', arguments: { datalegion: { people: [person] } } });
+  const passthrough = await client.callTool({ name: 'people_company_search', arguments: { entity: 'person', provider: 'prospeo', options: { filters: { person_job_title: { include: ['CTO'] } } } } });
+  assert.notEqual(passthrough.isError, true, JSON.stringify(passthrough));
+  assert.deepEqual(api.calls[0].options, { entity: 'person', provider: 'prospeo', options: { filters: { person_job_title: { include: ['CTO'] } } } });
+  const orphan = await client.callTool({ name: 'people_company_search', arguments: { entity: 'person', options: { q: 'CTO' } } });
+  assert.equal(orphan.isError, true);
+  assert.match(orphan.content[0].text, /options needs provider/);
+  assert.equal(api.calls.length, 1);
+});
+
+test('a missing entity is refused with an example', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { apiUrl: api.url });
+  const result = await client.callTool({ name: 'people_company_search', arguments: { filters: { titles: ['CTO'] } } });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /entity/);
+  assert.match(result.content[0].text, /Example: \{"entity":"person"/);
+  assert.equal(api.calls.length, 0);
+});
+
+test('enrich sends every record to the waterfall in one call and returns its attributed raw results', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { apiUrl: api.url });
+  const people = [{ name: 'Ada Lovelace', domain: 'acme.example' }, { linkedin_url: 'https://www.linkedin.com/in/grace' }, { email: 'alan@acme.example' }];
+  const companies = [{ domain: 'globex.example' }, { name: 'Initech' }];
+  const result = await client.callTool({ name: 'people_company_enrich', arguments: { contact_fields: ['work_email'], people, companies } });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  assert.deepEqual(api.calls, [{ provider: 'firecrawl', capability: 'enrich/auto', options: { people, companies, contact_fields: ['work_email'], profile: true } }]);
+  assert.equal(api.bodies[0].timeout, 120000);
+  assert.deepEqual(result.structuredContent, WATERFALL_RESULT);
+});
+
+test('max_credits passes through, and conversationId and objective are dropped', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { apiUrl: api.url });
+  const result = await client.callTool({
+    name: 'people_company_enrich',
+    arguments: { conversationId: 'c-1', objective: 'Find a mobile', max_credits: 400, contact_fields: ['mobile'], people: [{ phone: '+1 415 555 0100' }] },
+  });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  assert.deepEqual(api.calls[0].options, { people: [{ phone: '+1 415 555 0100' }], contact_fields: ['mobile'], profile: true, max_credits: 400 });
+  assert.equal(result.structuredContent.max_credits, 400);
+  assert.ok(!JSON.stringify(api.bodies).includes('c-1') && !JSON.stringify(api.bodies).includes('Find a mobile'));
+});
+
+test('verified_only passes through and the per-field flags come back', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { apiUrl: api.url });
+  const people = [{ name: 'Ada Lovelace', domain: 'acme.example' }];
+  const result = await client.callTool({ name: 'people_company_enrich', arguments: { contact_fields: ['work_email'], verified_only: true, people } });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  assert.deepEqual(api.calls[0].options, { people, contact_fields: ['work_email'], profile: true, verified_only: true });
+  assert.deepEqual(result.structuredContent.people[0].fields.work_email, { provider: 'blitzapi', value: 'ada@acme.example', verified: true, domain_match: true });
+});
+
+test('a record without an identifier is refused before the waterfall runs', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { apiUrl: api.url });
+  for (const person of [{ name: 'Jane Doe' }, { first_name: 'Jane', company: 'Acme' }, { company: 'Acme' }]) {
+    const result = await client.callTool({ name: 'people_company_enrich', arguments: { people: [person] } });
     assert.equal(result.isError, true, JSON.stringify(person));
-    assert.match(result.content[0].text, /Each datalegion person needs/);
+    assert.match(result.content[0].text, /Each person needs a linkedin_url, email or phone/);
   }
-  const ok = await client.callTool({ name: 'people_company_enrich', arguments: { datalegion: { people: [{ first_name: 'Ada', last_name: 'Lovelace', company: 'Acme' }] } } });
-  assert.notEqual(ok.isError, true, JSON.stringify(ok));
-  assert.deepEqual(api.calls.map((call) => call.options.company), ['Acme']);
+  const company = await client.callTool({ name: 'people_company_enrich', arguments: { companies: [{ industry: 'Software' }] } });
+  assert.equal(company.isError, true);
+  assert.equal(api.calls.length, 0);
+});
+
+test('enrich shape errors are refused before the waterfall runs', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { apiUrl: api.url });
+  const none = await client.callTool({ name: 'people_company_enrich', arguments: {} });
+  assert.match(none.content[0].text, /Give people, companies or both\. Example: \{/);
+  const fieldsOnly = await client.callTool({ name: 'people_company_enrich', arguments: { contact_fields: ['work_email'] } });
+  assert.match(fieldsOnly.content[0].text, /Give people, companies or both/);
+  const people = Array.from({ length: 6 }, (_, i) => ({ email: 'p' + i + '@acme.example' }));
+  const companies = Array.from({ length: 5 }, (_, i) => ({ domain: 'c' + i + '.example' }));
+  const many = await client.callTool({ name: 'people_company_enrich', arguments: { people, companies } });
+  assert.match(many.content[0].text, /At most 10 people and companies per call, got 11/);
+  const contact = await client.callTool({ name: 'people_company_enrich', arguments: { contact_fields: ['work_email'], companies: [{ domain: 'acme.example' }] } });
+  assert.match(contact.content[0].text, /contact_fields applies to people only/);
+  const block = await client.callTool({ name: 'people_company_enrich', arguments: { fullenrich: { people: [{ person_name: 'Ada', company_domain: 'acme.example' }] } } });
+  assert.equal(block.isError, true);
+  assert.match(block.content[0].text, /unknown field fullenrich; takes people, companies, contact_fields, profile, verified_only, max_credits/);
+  for (const result of [none, fieldsOnly, many, contact]) assert.equal(result.isError, true);
+  assert.equal(api.calls.length, 0);
+});
+
+test('a waterfall refusal is relayed with its code and retryable', async (t) => {
+  const api = await startApi(t, (batch) => ({
+    json: { success: true, data: { alexandria: batch.map(() => ({ creditsCost: 0, error: { code: 'provider_unavailable', message: 'Enrichment is unavailable right now.' } })) } },
+  }));
+  const events = [];
+  const client = await connect(t, { apiUrl: api.url, onToolResult: (event) => events.push(event) });
+  const result = await client.callTool({ name: 'people_company_enrich', arguments: { people: [{ linkedin_url: 'https://www.linkedin.com/in/ada' }] } });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /Enrichment is unavailable right now\./);
+  const extras = events.find((event) => event.status === 'error').error.extras;
+  assert.deepEqual([extras.code, extras.retryable], ['provider_unavailable', true]);
+});
+
+test('near-miss shapes are repaired before validation', async (t) => {
+  const api = await startApi(t);
+  const client = await connect(t, { apiUrl: api.url });
+  const result = await client.callTool({ name: 'people_company_enrich', arguments: { people: { email: 'ada@acme.example' }, contact_fields: 'mobile' } });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  assert.deepEqual(api.calls[0].options, { people: [{ email: 'ada@acme.example' }], contact_fields: ['mobile'], profile: true });
+});
+
+test('a retryable refusal before the waterfall ran is resent once under the same request id', async (t) => {
+  let refused = false;
+  const api = await startApi(t, () => {
+    if (refused) return undefined;
+    refused = true;
+    return { status: 503, json: { success: false, code: 'precheck_unavailable', error: 'Try again.', retryable: true } };
+  });
+  const client = await connect(t, { apiUrl: api.url });
+  const result = await client.callTool({ name: 'people_company_enrich', arguments: { people: [{ email: 'ada@acme.example' }] } });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  assert.equal(api.calls.length, 2);
+  assert.equal(api.headers[0]['x-request-id'], api.headers[1]['x-request-id']);
+  assert.ok(api.bodies[1].timeout < 120000 && api.bodies[1].timeout > 100000, String(api.bodies[1].timeout));
 });
