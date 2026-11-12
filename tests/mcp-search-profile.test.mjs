@@ -195,17 +195,36 @@ async function startFakeBackend(options = {}) {
     }
 
     if (req.method === 'GET' && req.url?.startsWith('/v2/search/gov')) {
+      if (
+        options.govRefusesSources &&
+        new URL(req.url, 'http://localhost').searchParams.has('sources')
+      ) {
+        res.writeHead(400, { 'content-type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            success: false,
+            error: 'Bad Request',
+            details: [{ code: 'unrecognized_keys', keys: ['sources'] }],
+          })
+        );
+        return;
+      }
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify({
           success: true,
           data: {
-            web: [
+            [options.govGroup ?? 'gov']: [
               {
                 description: 'The matched snippet.',
                 position: 1,
                 title: '21 CFR Part 101 -- Food Labeling',
                 url: 'https://www.ecfr.gov/current/title-21/part-101',
+                jurisdiction: 'us',
+                cites: ['us:usc:21:343'],
+                citedAs: ['us:cfr:21:101'],
+                lang: 'en',
+                updatedAt: 1700000000000,
               },
             ],
           },
@@ -800,6 +819,43 @@ test('search firecrawl_developer_search queries the developer index and returns 
   assert.equal(skillsQuery.get('query'), 'retry loop backoff');
 });
 
+test('search firecrawl_gov_search reads web results from an API without sources', async (t) => {
+  const backend = await startFakeBackend({
+    govGroup: 'web',
+    govRefusesSources: true,
+  });
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, {
+    FIRECRAWL_API_URL: backend.url,
+  });
+
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 45,
+    method: 'tools/call',
+    params: {
+      arguments: { query: 'food labeling requirements', k: 1 },
+      name: 'firecrawl_gov_search',
+    },
+    headers: { 'x-api-key': 'fc-search-key' },
+  });
+  assert.equal(res.status, 200);
+  const message = parseSseJson(await res.text());
+  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+  assert.deepEqual(
+    message.result.structuredContent.results.map((result) => result.url),
+    ['https://www.ecfr.gov/current/title-21/part-101']
+  );
+  const govCalls = backend.requests.filter((request) =>
+    request.url?.startsWith('/v2/search/gov')
+  );
+  assert.deepEqual(
+    govCalls.map((request) =>
+      new URL(request.url, 'http://localhost').searchParams.get('sources')
+    ),
+    ['gov', null]
+  );
+});
+
 test('search firecrawl_gov_search queries the Government Index', async (t) => {
   const backend = await startFakeBackend();
   t.after(() => backend.close());
@@ -827,12 +883,25 @@ test('search firecrawl_gov_search queries the Government Index', async (t) => {
   const query = new URL(calls[0].url, 'http://localhost').searchParams;
   assert.equal(query.get('query'), 'food labeling requirements');
   assert.equal(query.get('k'), '1');
+  assert.deepEqual(query.getAll('sources'), ['gov']);
 
   assert.equal(
     message.result.content[0].text,
     '## 1. 21 CFR Part 101 -- Food Labeling\nhttps://www.ecfr.gov/current/title-21/part-101\nThe matched snippet.'
   );
-  assert.equal(message.result.structuredContent.results.length, 1);
+  assert.deepEqual(message.result.structuredContent.results, [
+    {
+      description: 'The matched snippet.',
+      position: 1,
+      title: '21 CFR Part 101 -- Food Labeling',
+      url: 'https://www.ecfr.gov/current/title-21/part-101',
+      jurisdiction: 'us',
+      cites: ['us:usc:21:343'],
+      citedAs: ['us:cfr:21:101'],
+      lang: 'en',
+      updatedAt: 1700000000000,
+    },
+  ]);
   assert.equal(backend.requests.some((request) => request.url === '/v2/search'), false);
 });
 
