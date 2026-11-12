@@ -5129,7 +5129,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_research_lookup_protein@6ee4f6018586": {
+  "firecrawl_research_lookup_protein@a620938ea74c": {
     "annotations": {
       "title": "Firecrawl protein lookup",
       "readOnlyHint": true,
@@ -5145,7 +5145,8 @@
         "protein": {
           "description": "One protein identifier: a UniProt accession (`P05771`; an isoform ID such as `P05771-2` resolves to its entry), an entry name (`KPCB_HUMAN`), a gene symbol (`PRKCB`), or the exact protein name (`Protein kinase C beta type`). Not a question or a sentence.",
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 200
         },
         "organism": {
           "description": "Organism that scopes a gene symbol or protein name: an NCBI taxon ID (`10090`), a scientific name (`Mus musculus`), or a UniProt common name (`Mouse`). Defaults to human (`9606`). Accessions and entry names ignore it.",
@@ -5603,7 +5604,7 @@
                         ]
                       },
                       "paperIds": {
-                        "description": "Papers cited for the term.",
+                        "description": "Papers cited for the term. Empty when none is loaded for it; only GO terms of human entries have paper IDs.",
                         "anyOf": [
                           {
                             "type": "array",

@@ -244,6 +244,7 @@ interface ProteinEntry extends ProteinCandidate {
 
 interface ProteinLookup {
   release?: string;
+  notice?: string;
   match?: string;
   protein?: ProteinEntry;
   candidates?: ProteinCandidate[];
@@ -316,7 +317,7 @@ function fmtStatements(statements?: ProteinStatement[]): string[] {
   });
 }
 
-function fmtProtein(release: string | undefined, protein: ProteinEntry): string {
+function fmtProtein(notice: string | undefined, protein: ProteinEntry): string {
   const ids = protein.gene
     ? `${protein.gene} (${protein.accession}, ${protein.entryName})`
     : `${protein.accession} (${protein.entryName})`;
@@ -343,14 +344,14 @@ function fmtProtein(release: string | undefined, protein: ProteinEntry): string 
     );
   }
   lines.push(
-    `Source: UniProtKB/Swiss-Prot ${release}, ${protein.url}. CC BY 4.0.`
+    `Source: ${protein.url}. ${notice}`
   );
   return lines.join('\n');
 }
 
 function fmtProteinLookup(protein: string, data?: ProteinLookup): string {
   if (data?.match === 'found' && data.protein) {
-    return fmtProtein(data.release, data.protein);
+    return fmtProtein(data.notice, data.protein);
   }
   if (data?.match === 'ambiguous') {
     const candidates = data.candidates ?? [];
@@ -366,7 +367,7 @@ function fmtProteinLookup(protein: string, data?: ProteinLookup): string {
           `- ${[candidate.accession, candidate.entryName, candidate.gene ?? '-', candidate.name, candidate.organism?.scientificName].join(', ')}`
       ),
       'Call firecrawl_research_lookup_protein again with one accession as `protein`.',
-      `Source: UniProtKB/Swiss-Prot ${data.release}. CC BY 4.0.`,
+      data.notice,
     ].join('\n');
   }
   // Any other body would read as "no entry matches", a false negative for a protein that exists.
@@ -684,6 +685,7 @@ Not for free-text questions, topics, diseases, or lists of proteins (use firecra
         .string()
         .trim()
         .min(1)
+        .max(200)
         .describe(
           'One protein identifier: a UniProt accession (`P05771`; an isoform ID such as `P05771-2` resolves to its entry), an entry name (`KPCB_HUMAN`), a gene symbol (`PRKCB`), or the exact protein name (`Protein kinase C beta type`). Not a question or a sentence.'
         ),

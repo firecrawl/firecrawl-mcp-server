@@ -51,7 +51,9 @@ const EXAMPLE = {
       },
     ],
     function: [{ text: 'Binds example ligands.', note: false, evidence: [{ kind: 'untagged' }] }],
-    goCellularComponent: [],
+    goCellularComponent: [
+      { id: 'GO:0005737', term: 'cytoplasm', code: 'IDA', assignedBy: 'UniProt', paperIds: [] },
+    ],
     paperIds: ['pmid:1'],
   },
   notice: NOTICE,
@@ -93,7 +95,7 @@ test('a found protein prints location, GO terms and function with evidence label
       'Function',
       `- ${RPUSD3.protein.function[0].text}. Experimental [pmid:27667664, pmid:27974379]`,
       'Open a cited paper with firecrawl_research_inspect_paper or firecrawl_research_read_paper.',
-      'Source: UniProtKB/Swiss-Prot 2026_04, https://www.uniprot.org/uniprotkb/Q6P087/entry. CC BY 4.0.',
+      `Source: https://www.uniprot.org/uniprotkb/Q6P087/entry. ${NOTICE}`,
     ].join('\n')
   );
   assert.deepEqual(result.structuredContent, RPUSD3);
@@ -114,11 +116,11 @@ test('experimental statements print first, and the rest keep their label, relate
       '- Cytoplasm. Inferred from a related protein [X00002]',
       '- [molecule: Isoform 2] Membrane (topology: Peripheral membrane protein; orientation: Cytoplasmic side). Inferred from a related protein',
       'GO cellular component (experimental)',
-      '- No experimental term in this entry.',
+      '- cytoplasm (GO:0005737), IDA, UniProt',
       'Function',
       '- Binds example ligands. No evidence tag',
       'Open a cited paper with firecrawl_research_inspect_paper or firecrawl_research_read_paper.',
-      'Source: UniProtKB/Swiss-Prot 2026_04, https://www.uniprot.org/uniprotkb/X00001/entry. CC BY 4.0.',
+      `Source: https://www.uniprot.org/uniprotkb/X00001/entry. ${NOTICE}`,
     ].join('\n')
   );
   assert.equal(query.has('organism'), false);
@@ -155,7 +157,7 @@ test('an entry without its arrays still prints, with every block marked empty', 
       '- No experimental term in this entry.',
       'Function',
       '- No statement in this entry.',
-      'Source: UniProtKB/Swiss-Prot 2026_04, https://www.uniprot.org/uniprotkb/X00001/entry. CC BY 4.0.',
+      `Source: https://www.uniprot.org/uniprotkb/X00001/entry. ${NOTICE}`,
     ].join('\n')
   );
 });
@@ -196,7 +198,7 @@ test('an ambiguous symbol prints its candidates and says to call again with one 
       '- C0HLS1, OSCRI_HUMAN, SCRIB, SCRIB overlapping open reading frame protein, Homo sapiens',
       '- Q14160, SCRIB_HUMAN, SCRIB, Protein scribble homolog, Homo sapiens',
       'Call firecrawl_research_lookup_protein again with one accession as `protein`.',
-      'Source: UniProtKB/Swiss-Prot 2026_04. CC BY 4.0.',
+      NOTICE,
     ].join('\n')
   );
   assert.deepEqual(result.structuredContent, ambiguous);
