@@ -214,7 +214,7 @@ interface ProteinStatement {
   molecule?: string;
   topology?: string;
   orientation?: string;
-  evidence?: ProteinEvidence[];
+  evidence: ProteinEvidence[];
 }
 
 interface ProteinGoTerm {
@@ -222,7 +222,7 @@ interface ProteinGoTerm {
   term?: string;
   code?: string;
   assignedBy?: string;
-  paperIds?: string[];
+  paperIds: string[];
 }
 
 interface ProteinCandidate {
@@ -236,10 +236,10 @@ interface ProteinCandidate {
 
 interface ProteinEntry extends ProteinCandidate {
   url?: string;
-  subcellularLocation?: ProteinStatement[];
-  function?: ProteinStatement[];
-  goCellularComponent?: ProteinGoTerm[];
-  paperIds?: string[];
+  subcellularLocation: ProteinStatement[];
+  function: ProteinStatement[];
+  goCellularComponent: ProteinGoTerm[];
+  paperIds: string[];
 }
 
 interface ProteinLookup {
@@ -278,13 +278,11 @@ function measuredFirst<T>(items: T[], measured: (item: T) => boolean): T[] {
   return [...items.filter(measured), ...items.filter((item) => !measured(item))];
 }
 
-const fmtIds = (ids?: string[]) => (ids?.length ? ` [${ids.join(', ')}]` : '');
+const fmtIds = (ids: string[]) => (ids.length ? ` [${ids.join(', ')}]` : '');
 
-function fmtEvidence(evidence?: ProteinEvidence[]): string {
+function fmtEvidence(evidence: ProteinEvidence[]): string {
   const idsByKind = new Map<string, string[]>();
-  for (const { kind, paperId, fromProtein } of evidence?.length
-    ? evidence
-    : [{ kind: 'untagged' } as ProteinEvidence]) {
+  for (const { kind, paperId, fromProtein } of evidence) {
     const ids = idsByKind.get(kind) ?? [];
     const id = paperId ?? fromProtein;
     if (id && !ids.includes(id)) ids.push(id);
@@ -295,10 +293,10 @@ function fmtEvidence(evidence?: ProteinEvidence[]): string {
     .join('; ');
 }
 
-function fmtStatements(statements?: ProteinStatement[]): string[] {
-  if (!statements?.length) return ['- No statement in this entry.'];
+function fmtStatements(statements: ProteinStatement[]): string[] {
+  if (!statements.length) return ['- No statement in this entry.'];
   return measuredFirst(statements, (statement) =>
-    (statement.evidence ?? []).some(({ kind }) => isMeasured(kind))
+    statement.evidence.some(({ kind }) => isMeasured(kind))
   ).map((statement) => {
     const qualifiers = [
       statement.topology && `topology: ${statement.topology}`,
@@ -329,7 +327,7 @@ function fmtProtein(notice: string | undefined, protein: ProteinEntry): string {
     'Subcellular location',
     ...fmtStatements(protein.subcellularLocation),
     'GO cellular component (experimental)',
-    ...(protein.goCellularComponent?.length
+    ...(protein.goCellularComponent.length
       ? protein.goCellularComponent.map(
           (go) =>
             `- ${go.term} (${go.id}), ${go.code}, ${go.assignedBy}${fmtIds(go.paperIds)}`
@@ -338,14 +336,12 @@ function fmtProtein(notice: string | undefined, protein: ProteinEntry): string {
     'Function',
     ...fmtStatements(protein.function),
   ];
-  if (protein.paperIds?.length) {
+  if (protein.paperIds.length) {
     lines.push(
       'Open a cited paper with firecrawl_research_inspect_paper or firecrawl_research_read_paper.'
     );
   }
-  lines.push(
-    `Source: ${protein.url}. ${notice}`
-  );
+  lines.push(`Source: ${protein.url}. ${notice}`);
   return lines.join('\n');
 }
 

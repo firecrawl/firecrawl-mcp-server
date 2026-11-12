@@ -41,7 +41,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Use `firecrawl_credit_usage` to check credits left or what credits were spent on, by month or day, optionally broken down by endpoint or API key.
 - Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control. The session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
 
-This server lists 33 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 12 tools (search, developer, government, and research search, Alexandria catalogue lookup and execution, people and company search and enrichment, and job postings).
+This server lists 34 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 12 tools (search, developer, government, and research search, Alexandria catalogue lookup and execution, people and company search and enrichment, and job postings).
 
 ## Installation
 
@@ -394,7 +394,7 @@ Use this guide to select the right tool for your task:
 | agent     | Multi-source research, unknown or many sites   | JSON (structured data)                           |
 | monitor   | Recurring page checks                          | monitor/check metadata and diffs                 |
 | research  | Paper research (developer for repositories)    | research results                                 |
-| protein lookup | One protein's curated UniProt annotation  | location, function, and GO terms with evidence   |
+| protein   | One protein's curated UniProt annotation       | location, function, and GO terms with evidence   |
 
 ### Format Selection Guide
 

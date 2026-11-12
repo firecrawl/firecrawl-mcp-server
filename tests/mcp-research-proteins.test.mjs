@@ -136,11 +136,17 @@ test('a field the API adds to the entry is left out of structuredContent, which 
   assert.deepEqual(result.structuredContent, EXAMPLE);
 });
 
-test('an entry without its arrays still prints, with every block marked empty', async (t) => {
-  const { accession, entryName, name, matchedBy, url } = EXAMPLE.protein;
+test('an entry with empty arrays prints every block marked empty', async (t) => {
+  const empty = {
+    ...EXAMPLE.protein,
+    subcellularLocation: [],
+    function: [],
+    goCellularComponent: [],
+    paperIds: [],
+  };
   const { result, text } = await lookup(
     t,
-    { protein: { ...EXAMPLE, protein: { accession, entryName, name, matchedBy, url } } },
+    { protein: { ...EXAMPLE, protein: empty } },
     { protein: 'X00001' }
   );
 
@@ -148,7 +154,7 @@ test('an entry without its arrays still prints, with every block marked empty', 
   assert.equal(
     text,
     [
-      '# X00001 (EXMPL_HUMAN)',
+      '# X00001 (EXMPL_HUMAN), Homo sapiens',
       'Example protein. Matched by accession.',
       '',
       'Subcellular location',
