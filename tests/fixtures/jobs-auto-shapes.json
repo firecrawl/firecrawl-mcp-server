@@ -732,10 +732,10 @@
       "status": "unresolved",
       "steps": [
         {
-          "step": "probe",
-          "outcome": "resolver not installed",
+          "step": "name_to_domain",
+          "outcome": "no site carries this name; a domain is needed",
           "ms": 0,
-          "credits": 0
+          "credits": 2
         }
       ],
       "fallback": "market"
@@ -746,7 +746,7 @@
         "capability": "jobs/resolve",
         "status": "empty",
         "returned": 0,
-        "credits": 0,
+        "credits": 2,
         "ms": 0
       },
       {
@@ -766,9 +766,10 @@
         "ms": 0
       }
     ],
-    "credits": 5,
+    "credits": 7,
     "notes": [
       "No job board resolved for Acme; these rows come from aggregators and may be incomplete.",
+      "The name Acme alone did not identify one employer site; send the company's domain to have its own job board read.",
       "1 of 1 rows come from aggregators or indexes and were not confirmed against the employer's own board."
     ]
   },
