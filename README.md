@@ -1081,7 +1081,7 @@ The filters are optional and combine: a result must match every filter set. Filt
 
 ### 15. Alexandria Tools
 
-Firecrawl Alexandria is a catalogue of data providers reachable through the Firecrawl API with a Firecrawl API key on a team with Alexandria access. Keyless sessions (hosted or local) get `Alexandria requires an API key on a team with Alexandria access`; Alexandria discovery tools are not listed for hosted keyless sessions.
+Firecrawl Alexandria is a catalogue of data providers reachable through the Firecrawl API with a Firecrawl API key on a team with Alexandria access. Keyless sessions (hosted or local) get `Alexandria requires an API key on a team with Alexandria access`; Alexandria discovery tools are not listed for hosted keyless sessions. A stdio server pointed at its own API with `FIRECRAWL_API_URL` is the exception: it sends Alexandria tools to that API, which answers for the account.
 
 **Semantic discovery (`firecrawl_search`):**
 
