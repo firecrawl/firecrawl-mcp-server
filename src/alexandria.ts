@@ -57,7 +57,8 @@ export const findToolsSchema = z
       .array(httpUrl())
       .min(1)
       .max(100)
-      .optional(),
+      .optional()
+      .describe('URLs related to the question, such as web search results or a page the data comes from. With query, tools for those sites rank first and the rest of the catalogue still matches.'),
     providers: z.array(z.string().min(1)).min(1).max(50).optional().describe('Values from each listed tool\'s `provider` field (e.g. "apps-apple-com"). Alone, lists that provider\'s compact tools; with capabilities, scopes them.'),
     categories: z.array(z.string().min(1)).min(1).max(50).optional().describe('Category IDs returned by an empty call. Lists providers by default.'),
     groups: z.array(z.string().min(1)).min(1).max(50).optional().describe('Optional group IDs for explicit group browsing.'),
