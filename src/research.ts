@@ -1,7 +1,7 @@
 /**
  * Firecrawl Research tools (experimental).
  *
- * Thin MCP wrappers over the `/v2/search/research/*` paper endpoints.
+ * Thin MCP wrappers over the `/v2/search/research/*` paper and protein endpoints.
  *
  * Calls the endpoints directly through the SDK's HTTP layer (auth + retries)
  * via `client.http.get(...)`, mirroring how the search tool reaches
@@ -12,9 +12,11 @@
 import { z } from 'zod';
 import { type ContentResult, type McpRuntime, UserError } from './mcp/runtime.js';
 import { originHeaders, requestOrigin } from './origin';
+import { relayBadRequest } from './tool-helpers';
 import {
   deprecatedToolOutputSchema,
   researchPaperOutputSchema,
+  researchProteinOutputSchema,
   researchReadOutputSchema,
   researchRelatedOutputSchema,
   researchSearchOutputSchema,
@@ -198,6 +200,179 @@ function fmtPaperMetadata(paper?: PaperHit): string {
   lines.push('## Abstract');
   lines.push((paper.abstract || '(no abstract)').replace(/\s+/g, ' '));
   return lines.join('\n');
+}
+
+interface ProteinEvidence {
+  kind: string;
+  paperId?: string;
+  fromProtein?: string;
+}
+
+interface ProteinStatement {
+  text?: string;
+  note?: boolean;
+  molecule?: string;
+  topology?: string;
+  orientation?: string;
+  evidence: ProteinEvidence[];
+}
+
+interface ProteinGoTerm {
+  id?: string;
+  term?: string;
+  code?: string;
+  assignedBy?: string;
+  paperIds: string[];
+}
+
+interface ProteinCandidate {
+  accession?: string;
+  entryName?: string;
+  gene?: string;
+  name?: string;
+  organism?: { scientificName?: string };
+  matchedBy?: string;
+}
+
+interface ProteinEntry extends ProteinCandidate {
+  url?: string;
+  subcellularLocation: ProteinStatement[];
+  function: ProteinStatement[];
+  goCellularComponent: ProteinGoTerm[];
+  paperIds: string[];
+}
+
+interface ProteinLookup {
+  release?: string;
+  notice?: string;
+  match?: string;
+  protein?: ProteinEntry;
+  candidates?: ProteinCandidate[];
+  candidateCount?: number;
+}
+
+const EVIDENCE_LABELS: Record<string, string> = {
+  experimental: 'Experimental',
+  large_scale_experimental: 'Experimental, large-scale',
+  author_statement: 'Author statement',
+  curator_inference: 'Curator inference',
+  by_similarity: 'Inferred from a related protein',
+  sequence_analysis: 'Predicted from sequence',
+  imported: 'Imported from another database',
+  untagged: 'No evidence tag',
+};
+
+const MATCHED_BY_LABELS: Record<string, string> = {
+  accession: 'accession',
+  secondary_accession: 'secondary accession',
+  entry_name: 'entry name',
+  gene: 'gene symbol',
+  synonym: 'gene synonym',
+  name: 'protein name',
+};
+
+const isMeasured = (kind: string) =>
+  kind === 'experimental' || kind === 'large_scale_experimental';
+
+function measuredFirst<T>(items: T[], measured: (item: T) => boolean): T[] {
+  return [...items.filter(measured), ...items.filter((item) => !measured(item))];
+}
+
+const fmtIds = (ids: string[]) => (ids.length ? ` [${ids.join(', ')}]` : '');
+
+function fmtEvidence(evidence: ProteinEvidence[]): string {
+  const idsByKind = new Map<string, string[]>();
+  for (const { kind, paperId, fromProtein } of evidence) {
+    const ids = idsByKind.get(kind) ?? [];
+    const id = paperId ?? fromProtein;
+    if (id && !ids.includes(id)) ids.push(id);
+    idsByKind.set(kind, ids);
+  }
+  return measuredFirst([...idsByKind], ([kind]) => isMeasured(kind))
+    .map(([kind, ids]) => `${EVIDENCE_LABELS[kind] ?? kind}${fmtIds(ids)}`)
+    .join('; ');
+}
+
+function fmtStatements(statements: ProteinStatement[]): string[] {
+  if (!statements.length) return ['- No statement in this entry.'];
+  return measuredFirst(statements, (statement) =>
+    statement.evidence.some(({ kind }) => isMeasured(kind))
+  ).map((statement) => {
+    const qualifiers = [
+      statement.topology && `topology: ${statement.topology}`,
+      statement.orientation && `orientation: ${statement.orientation}`,
+    ]
+      .filter(Boolean)
+      .join('; ');
+    return [
+      '- ',
+      statement.molecule ? `[molecule: ${statement.molecule}] ` : '',
+      statement.note ? 'Note: ' : '',
+      (statement.text ?? '').replace(/\.$/, ''),
+      qualifiers ? ` (${qualifiers})` : '',
+      `. ${fmtEvidence(statement.evidence)}`,
+    ].join('');
+  });
+}
+
+function fmtProtein(notice: string | undefined, protein: ProteinEntry): string {
+  const ids = protein.gene
+    ? `${protein.gene} (${protein.accession}, ${protein.entryName})`
+    : `${protein.accession} (${protein.entryName})`;
+  const matchedBy = protein.matchedBy ?? '';
+  const lines = [
+    `# ${[ids, protein.organism?.scientificName].filter(Boolean).join(', ')}`,
+    `${protein.name}. Matched by ${MATCHED_BY_LABELS[matchedBy] ?? matchedBy}.`,
+    '',
+    'Subcellular location',
+    ...fmtStatements(protein.subcellularLocation),
+    'GO cellular component (experimental)',
+    ...(protein.goCellularComponent.length
+      ? protein.goCellularComponent.map(
+          (go) =>
+            `- ${go.term} (${go.id}), ${go.code}, ${go.assignedBy}${fmtIds(go.paperIds)}`
+        )
+      : ['- No experimental term in this entry.']),
+    'Function',
+    ...fmtStatements(protein.function),
+  ];
+  if (protein.paperIds.length) {
+    lines.push(
+      'Open a cited paper with firecrawl_research_inspect_paper or firecrawl_research_read_paper.'
+    );
+  }
+  lines.push(`Source: ${protein.url}. ${notice}`);
+  return lines.join('\n');
+}
+
+function fmtProteinLookup(protein: string, data?: ProteinLookup): string {
+  if (data?.match === 'found' && data.protein) {
+    return fmtProtein(data.notice, data.protein);
+  }
+  if (data?.match === 'ambiguous') {
+    const candidates = data.candidates ?? [];
+    const candidateCount = data.candidateCount ?? candidates.length;
+    const listed =
+      candidateCount > candidates.length
+        ? `${candidateCount} candidates, the first ${candidates.length} listed`
+        : `${candidateCount} ${candidateCount === 1 ? 'candidate' : 'candidates'}`;
+    return [
+      `${JSON.stringify(protein)} does not resolve to one UniProtKB/Swiss-Prot entry in the requested organism (human unless \`organism\` is set). ${listed}, as accession, entry name, gene, name, organism:`,
+      ...candidates.map(
+        (candidate) =>
+          `- ${[candidate.accession, candidate.entryName, candidate.gene ?? '-', candidate.name, candidate.organism?.scientificName].join(', ')}`
+      ),
+      'Call firecrawl_research_lookup_protein again with one accession as `protein`.',
+      data.notice,
+    ].join('\n');
+  }
+  // Any other body would read as "no entry matches", a false negative for a protein that exists.
+  if (data?.match !== 'not_found') {
+    throw new Error(
+      `The protein lookup returned an unexpected response (match: ${JSON.stringify(data?.match)}).`
+    );
+  }
+  return `No UniProtKB/Swiss-Prot entry matches ${JSON.stringify(protein)}. Pass a UniProt accession (P05771), an entry name (KPCB_HUMAN), or a gene symbol with its \`organism\`. Only reviewed entries are covered. For a free-text question, use firecrawl_research_search_papers.`;
 }
 
 function deprecatedGithubPayload() {
@@ -482,6 +657,62 @@ Returns matching passages or a notice when full text is unavailable.
           : '(no full-text passages available for this paper)',
         { passages }
       );
+    },
+  });
+
+  server.addTool({
+    name: 'firecrawl_research_lookup_protein',
+    annotations: {
+      title: 'Firecrawl protein lookup',
+      readOnlyHint: true,
+      openWorldHint: true,
+      destructiveHint: false,
+    },
+    description: `
+Look up one protein in UniProtKB/Swiss-Prot, the reviewed section of UniProt, and return what its curators state: subcellular location, function, and GO cellular-component terms. Use this when the question is where a named protein is located in the cell, what it does, or which compartment terms it has, and you have a UniProt accession (P05771), an entry name (KPCB_HUMAN), a gene symbol (PRKCB), or the exact protein name. One protein per call; \`organism\` defaults to human.
+
+Each location and function statement carries an evidence label and, where UniProt cites one, a \`pmid:\` paper ID. Among these statements, only those whose label starts with "Experimental" are measurements. Every other label, such as "Inferred from a related protein", "Curator inference", "Predicted from sequence", or "No evidence tag", is not, so report the label with the statement. The GO cellular-component terms carry no such label. Every GO term listed has experimental evidence, shown by its GO code (IDA and the like) and the group that assigned it. When a location statement and a GO term name the same compartment with different evidence, say which one the compartment rests on, for example "curated location has no evidence tag; GO term mitochondrion is experimental, IDA, HPA". Open a cited paper with firecrawl_research_inspect_paper or firecrawl_research_read_paper.
+
+Not for free-text questions, topics, diseases, or lists of proteins (use firecrawl_research_search_papers), and not for structures, compounds, interactions, or unreviewed entries. If a symbol names several proteins, the result lists candidates; call again with one accession.
+`,
+    outputSchema: researchProteinOutputSchema,
+    parameters: z.strictObject({
+      protein: z
+        .string()
+        .trim()
+        .min(1)
+        .max(200)
+        .describe(
+          'One protein identifier: a UniProt accession (`P05771`; an isoform ID such as `P05771-2` resolves to its entry), an entry name (`KPCB_HUMAN`), a gene symbol (`PRKCB`), or the exact protein name (`Protein kinase C beta type`). Not a question or a sentence.'
+        ),
+      organism: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .describe(
+          'Organism that scopes a gene symbol or protein name: an NCBI taxon ID (`10090`), a scientific name (`Mus musculus`), or a UniProt common name (`Mouse`). Defaults to human (`9606`). Accessions and entry names ignore it.'
+        ),
+    }),
+    execute: async (
+      args: unknown,
+      { session, client: mcpClient }
+    ): Promise<ContentResult> => {
+      const { protein, organism } = args as {
+        protein: string;
+        organism?: string;
+      };
+      const params = new URLSearchParams();
+      appendParam(params, 'protein', protein);
+      appendParam(params, 'organism', organism);
+      const client = getClient(session) as ClientLike;
+      const res = await client.http
+        .get<ProteinLookup>(
+          withQuery(`${BASE}/proteins`, params),
+          originHeaders(requestOrigin(mcpClient, session))
+        )
+        .catch(relayBadRequest);
+      return withStructured(fmtProteinLookup(protein, res.data), res.data);
     },
   });
 

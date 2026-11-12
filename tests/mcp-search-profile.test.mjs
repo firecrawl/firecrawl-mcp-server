@@ -50,6 +50,7 @@ const EXCLUDED_TOOLS = [
   'firecrawl_search_feedback',
   'firecrawl_feedback',
   'firecrawl_research_search_github',
+  'firecrawl_research_lookup_protein',
 ];
 
 const SEARCH_ENDPOINT = '/v2/mcp-search';

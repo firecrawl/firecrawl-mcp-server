@@ -1,0 +1,101 @@
+{
+  "success": true,
+  "release": "2026_04",
+  "match": "found",
+  "protein": {
+    "accession": "Q6P087",
+    "entryName": "RUSD3_HUMAN",
+    "gene": "RPUSD3",
+    "synonyms": [],
+    "name": "Mitochondrial mRNA pseudouridine synthase RPUSD3",
+    "organism": {
+      "taxonId": 9606,
+      "scientificName": "Homo sapiens",
+      "commonName": "Human"
+    },
+    "matchedBy": "gene",
+    "url": "https://www.uniprot.org/uniprotkb/Q6P087/entry",
+    "subcellularLocation": [
+      {
+        "text": "Mitochondrion matrix",
+        "note": false,
+        "evidence": [
+          {
+            "kind": "experimental",
+            "eco": "ECO:0000269",
+            "paperId": "pmid:27974379"
+          }
+        ]
+      },
+      {
+        "text": "Localizes to mitochondrial RNA granules, platforms for post-transcriptional RNA modification and ribosome assembly",
+        "note": true,
+        "evidence": [
+          {
+            "kind": "experimental",
+            "eco": "ECO:0000269",
+            "paperId": "pmid:27974379"
+          },
+          {
+            "kind": "experimental",
+            "eco": "ECO:0000269",
+            "paperId": "pmid:28082677"
+          }
+        ]
+      }
+    ],
+    "function": [
+      {
+        "text": "Catalyzes uridine to pseudouridine isomerization (pseudouridylation) of specific mitochondrial mRNAs (mt-mRNAs), a post-transcriptional modification necessary for their translation. Acts at position 390 in COXI mt-mRNA and at position 697-699 in mitochondrial COXIII mt-mRNA (PubMed:27974379). As a component of a functional protein-RNA module, consisting of RCC1L, NGRN, RPUSD3, RPUSD4, TRUB2, FASTKD2 and 16S mitochondrial ribosomal RNA (16S mt-rRNA), controls 16S mt-rRNA abundance and may play a role in mitochondrial ribosome biogenesis (PubMed:27667664)",
+        "note": false,
+        "evidence": [
+          {
+            "kind": "experimental",
+            "eco": "ECO:0000269",
+            "paperId": "pmid:27667664"
+          },
+          {
+            "kind": "experimental",
+            "eco": "ECO:0000269",
+            "paperId": "pmid:27974379"
+          }
+        ]
+      }
+    ],
+    "goCellularComponent": [
+      {
+        "id": "GO:0005759",
+        "term": "mitochondrial matrix",
+        "code": "IDA",
+        "assignedBy": "FlyBase",
+        "paperIds": [
+          "pmid:27974379"
+        ]
+      },
+      {
+        "id": "GO:0005739",
+        "term": "mitochondrion",
+        "code": "IDA",
+        "assignedBy": "FlyBase",
+        "paperIds": [
+          "pmid:28082677"
+        ]
+      },
+      {
+        "id": "GO:0035770",
+        "term": "ribonucleoprotein granule",
+        "code": "IDA",
+        "assignedBy": "FlyBase",
+        "paperIds": [
+          "pmid:28082677"
+        ]
+      }
+    ],
+    "paperIds": [
+      "pmid:27974379",
+      "pmid:28082677",
+      "pmid:27667664"
+    ]
+  },
+  "notice": "Protein data from UniProtKB/Swiss-Prot release 2026_04. Copyright UniProt Consortium, https://www.uniprot.org. CC BY 4.0, https://creativecommons.org/licenses/by/4.0/. No warranty, see https://www.uniprot.org/help/license. Selected fields, reformatted."
+}
