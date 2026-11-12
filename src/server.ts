@@ -685,6 +685,13 @@ export function createFirecrawlMcpServer(
     safeMode: options.safeMode ?? false,
     fileAccess: options.fileAccess ?? 'local',
     requireCredential: options.requireCredential ?? false,
+    // A stdio server pointed at an API of its own, such as Firecrawl Local or
+    // a self-hosted instance. That API may hold the account itself, so it is
+    // the one to say who may use Alexandria. Never for HTTP, where each
+    // session brings its own credential.
+    ownApi:
+      (options.transport ?? 'stdio') !== 'httpStream' &&
+      Boolean(normalizeHeader(options.apiUrl)),
     searchFeedback: options.searchFeedback ?? true,
     endpointFeedback: options.endpointFeedback ?? true,
     integration: integrationFrom(options.integration),
@@ -843,6 +850,10 @@ export function createFirecrawlMcpServer(
   }
 
   function assertExchangeCredential(session?: SessionData): void {
+    // The server's own API decides who may use Alexandria, and its answer
+    // says what to do: Firecrawl Local signs requests with the user's saved
+    // login and says how to sign in when there is none.
+    if (config.ownApi) return;
     assertExchangeCredentialPresent(hasCredential(session));
   }
 
