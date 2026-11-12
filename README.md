@@ -294,6 +294,9 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 - `FIRECRAWL_API_URL` (Optional): Custom API endpoint for self-hosted instances
   - Example: `https://firecrawl.your-domain.com`
   - If not provided, the cloud API will be used (requires API key)
+- `FIRECRAWL_API_HOLDS_CREDENTIAL` (Optional): Set to `true` when `FIRECRAWL_API_URL` points at an API that signs requests with its own Firecrawl login, as [Firecrawl Local](https://github.com/firecrawl/firecrawl/tree/main/apps/local) does
+  - Alexandria tools are then sent to that API without an API key here, and it answers for the account, including how to sign in when there is none
+  - Applies to stdio only, and only when `FIRECRAWL_API_URL` is set
 - `FIRECRAWL_INTEGRATION` (Optional): Integration tag for apps that launch this server, such as an editor extension
   - Sent as the `integration` field of scrape, batch scrape, crawl, map, search, extract, agent, parse, interact and feedback requests
   - Use a value that starts with `_`, for example `_zed`

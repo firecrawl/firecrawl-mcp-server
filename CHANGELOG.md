@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `FIRECRAWL_API_HOLDS_CREDENTIAL=true` (`apiHoldsCredential` for embedders) tells a stdio server that the API at `FIRECRAWL_API_URL` signs requests with its own Firecrawl login, as Firecrawl Local does. Alexandria tools are then sent to that API without an API key in the server's own environment, where before they were refused with "Alexandria requires an API key on a team with Alexandria access" and no request was made. Signing in on the API's side takes effect without restarting the server, and a refusal from the API is relayed with its own wording. Without the setting, and for HTTP transports, nothing changes.
+
 ### Fixed
 
 - `people_company_search` declares `credits_pending` (top level and on each provider) in its output schema. A search where a provider timed out now returns its result instead of failing the client's output-schema check.

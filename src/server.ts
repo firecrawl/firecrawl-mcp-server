@@ -448,6 +448,14 @@ export interface FirecrawlMcpServerOptions {
   fileAccess?: 'local' | 'upload';
   /** Refuse Firecrawl API calls from sessions without a credential. */
   requireCredential?: boolean;
+  /**
+   * The API at `apiUrl` holds the Firecrawl credential itself and signs the
+   * requests it passes on, as Firecrawl Local does with the user's saved
+   * login. Alexandria tools are then sent to it without a credential here,
+   * and it answers for the account. Applies to stdio with `apiUrl` set.
+   * Defaults to false.
+   */
+  apiHoldsCredential?: boolean;
   /** Register firecrawl_search_feedback. Defaults to true. */
   searchFeedback?: boolean;
   /** Register firecrawl_feedback. Defaults to true. */
@@ -677,6 +685,12 @@ export function createFirecrawlMcpServer(
     safeMode: options.safeMode ?? false,
     fileAccess: options.fileAccess ?? 'local',
     requireCredential: options.requireCredential ?? false,
+    // Never for HTTP, where each session brings its own credential, and never
+    // without an API of our own to defer to.
+    apiHoldsCredential:
+      options.apiHoldsCredential === true &&
+      (options.transport ?? 'stdio') !== 'httpStream' &&
+      Boolean(normalizeHeader(options.apiUrl)),
     searchFeedback: options.searchFeedback ?? true,
     endpointFeedback: options.endpointFeedback ?? true,
     integration: integrationFrom(options.integration),
@@ -835,6 +849,9 @@ export function createFirecrawlMcpServer(
   }
 
   function assertExchangeCredential(session?: SessionData): void {
+    // An API that signs requests itself decides who may use Alexandria, and
+    // its answer says how to sign in there.
+    if (config.apiHoldsCredential) return;
     assertExchangeCredentialPresent(hasCredential(session));
   }
 
