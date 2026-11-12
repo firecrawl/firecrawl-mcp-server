@@ -294,6 +294,7 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 - `FIRECRAWL_API_URL` (Optional): Custom API endpoint for self-hosted instances
   - Example: `https://firecrawl.your-domain.com`
   - If not provided, the cloud API will be used (requires API key)
+  - Over stdio, Alexandria tools are sent to this endpoint even when no API key is set here, and it answers for the account. [Firecrawl Local](https://github.com/firecrawl/firecrawl/tree/main/apps/local) signs them with the login it holds
 - `FIRECRAWL_INTEGRATION` (Optional): Integration tag for apps that launch this server, such as an editor extension
   - Sent as the `integration` field of scrape, batch scrape, crawl, map, search, extract, agent, parse, interact and feedback requests
   - Use a value that starts with `_`, for example `_zed`
@@ -1080,7 +1081,7 @@ The filters are optional and combine: a result must match every filter set. Filt
 
 ### 15. Alexandria Tools
 
-Firecrawl Alexandria is a catalogue of data providers reachable through the Firecrawl API with a Firecrawl API key on a team with Alexandria access. Keyless sessions (hosted or local) get `Alexandria requires an API key on a team with Alexandria access`; Alexandria discovery tools are not listed for hosted keyless sessions.
+Firecrawl Alexandria is a catalogue of data providers reachable through the Firecrawl API with a Firecrawl API key on a team with Alexandria access. Keyless sessions (hosted or local) get `Alexandria requires an API key on a team with Alexandria access`; Alexandria discovery tools are not listed for hosted keyless sessions. A stdio server pointed at its own API with `FIRECRAWL_API_URL` is the exception: it sends Alexandria tools to that API, which answers for the account.
 
 **Semantic discovery (`firecrawl_search`):**
 
