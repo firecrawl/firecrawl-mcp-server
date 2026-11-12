@@ -10,10 +10,9 @@
  */
 
 import { z } from 'zod';
-import { type ContentResult, type McpRuntime, UserError } from './mcp/runtime.js';
+import { type ContentResult, type McpRuntime } from './mcp/runtime.js';
 import { originHeaders, requestOrigin } from './origin';
 import {
-  deprecatedToolOutputSchema,
   researchPaperOutputSchema,
   researchReadOutputSchema,
   researchRelatedOutputSchema,
@@ -198,23 +197,6 @@ function fmtPaperMetadata(paper?: PaperHit): string {
   lines.push('## Abstract');
   lines.push((paper.abstract || '(no abstract)').replace(/\s+/g, ' '));
   return lines.join('\n');
-}
-
-function deprecatedGithubPayload() {
-  return {
-    code: 'DEPRECATED_TOOL',
-    message:
-      "firecrawl_research_search_github is deprecated and unavailable through MCP. Use firecrawl_developer_search, which searches GitHub issues, pull requests, and READMEs plus code documentation and returns matched passages. It does not carry over this tool's score breakdown or its web fallback results.",
-    replacement: {
-      name: 'firecrawl_developer_search',
-      instructions:
-        'Pass the same natural-language query. Optionally set k to control the number of results, or set skills to "only" to search only agent-skill files.',
-      example_arguments: {
-        query: 'pysam VCF parsing memory leak',
-      },
-    },
-    docs_url: 'https://docs.firecrawl.dev/features/developer',
-  };
 }
 
 export function registerResearchTools(
@@ -482,43 +464,6 @@ Returns matching passages or a notice when full text is unavailable.
           : '(no full-text passages available for this paper)',
         { passages }
       );
-    },
-  });
-
-  // --- search_github: deprecated compatibility entry point ---
-  // Hidden from tools/list so new sessions never see it, still callable so a
-  // session holding a cached tool list gets a pointer to the replacement
-  // instead of an unknown-tool error. Same shape as firecrawl_extract.
-  // Hiding or removing a tool here also changes the search surface's
-  // published tool list; see the note on SEARCH_PROFILE_TOOLS in index.ts.
-  server.addTool({
-    name: 'firecrawl_research_search_github',
-    annotations: {
-      title: 'Firecrawl GitHub history search',
-      readOnlyHint: true,
-      openWorldHint: true,
-      destructiveHint: false,
-    },
-    description: `
-Deprecated compatibility entry point. Use firecrawl_developer_search for GitHub issues, pull requests, and READMEs, plus code documentation, returned as matched passages.
-`,
-    outputSchema: deprecatedToolOutputSchema,
-    parameters: z.object({
-      query: z.string().min(1),
-      k: z.number().int().min(1).max(100).optional(),
-    }),
-    canList: () => false,
-    beforeValidate: () => {
-      const payload = deprecatedGithubPayload();
-      return {
-        content: [{ type: 'text' as const, text: payload.message }],
-        isError: true,
-        structuredContent: payload,
-      };
-    },
-    execute: async (): Promise<string> => {
-      const payload = deprecatedGithubPayload();
-      throw new UserError(payload.message, payload);
     },
   });
 }
