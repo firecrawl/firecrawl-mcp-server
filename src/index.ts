@@ -62,7 +62,6 @@ const options: FirecrawlMcpServerOptions = {
   safeMode: hosted,
   fileAccess: hosted ? 'upload' : 'local',
   requireCredential: hosted,
-  apiHoldsCredential: process.env.FIRECRAWL_API_HOLDS_CREDENTIAL === 'true',
   searchFeedback: !searchFeedbackDisabled,
   endpointFeedback: !endpointFeedbackDisabled,
   integration: process.env.FIRECRAWL_INTEGRATION,

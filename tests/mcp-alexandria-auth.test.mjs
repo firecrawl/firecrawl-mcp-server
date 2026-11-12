@@ -47,10 +47,8 @@ const ALEXANDRIA_CALLS = [
 ];
 const NO_CREDENTIAL = { FIRECRAWL_API_KEY: '', FIRECRAWL_OAUTH_TOKEN: '' };
 
-test('a stdio server whose API holds the credential sends Alexandria calls on without a key', async (t) => {
-  const { api, client } = await startStdioWithApi(t, {
-    env: { ...NO_CREDENTIAL, FIRECRAWL_API_HOLDS_CREDENTIAL: 'true' },
-  });
+test('a stdio server pointed at its own API sends Alexandria calls there without a key', async (t) => {
+  const { api, client } = await startStdioWithApi(t, { env: NO_CREDENTIAL });
   for (const params of ALEXANDRIA_CALLS) {
     const before = api.requests.length;
     const result = await client.request('tools/call', params);
@@ -67,26 +65,13 @@ test('that API\'s refusal reaches the agent in its own words', async (t) => {
   const { client } = await startStdioWithApi(t, {
     apiStatus: 403,
     apiError: refusal,
-    env: { ...NO_CREDENTIAL, FIRECRAWL_API_HOLDS_CREDENTIAL: 'true' },
+    env: NO_CREDENTIAL,
   });
   for (const params of ALEXANDRIA_CALLS) {
     const result = await client.request('tools/call', params);
     assert.equal(result.isError, true, params.name);
     assert.match(result.content[0].text, /firecrawl-local login/, params.name);
     assert.doesNotMatch(result.content[0].text, new RegExp(EXCHANGE_KEY_REQUIRED_MESSAGE), params.name);
-  }
-});
-
-test('without the setting, a keyless stdio server pointed at its own API still refuses Alexandria with no request', async (t) => {
-  for (const env of [NO_CREDENTIAL, { ...NO_CREDENTIAL, FIRECRAWL_API_HOLDS_CREDENTIAL: 'false' }]) {
-    const { api, client } = await startStdioWithApi(t, { env });
-    for (const params of ALEXANDRIA_CALLS) {
-      const before = api.requests.length;
-      const result = await client.request('tools/call', params);
-      assert.equal(result.isError, true, params.name);
-      assert.equal(result.content[0].text, EXCHANGE_KEY_REQUIRED_MESSAGE, params.name);
-      assert.equal(api.requests.length, before, `${params.name} made a request`);
-    }
   }
 });
 
