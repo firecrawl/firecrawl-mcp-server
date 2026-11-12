@@ -497,7 +497,7 @@ export const researchProteinOutputSchema = z
               term: str('GO term name.'),
               code: str('GO evidence code, such as `IDA`.'),
               assignedBy: str('Database that assigned the term.'),
-              paperIds: z.array(z.string()).nullable().optional().describe('Papers cited for the term.'),
+              paperIds: z.array(z.string()).nullable().optional().describe('Papers cited for the term. Empty when none is loaded for it; only GO terms of human entries have paper IDs.'),
             })
           )
           .nullable()

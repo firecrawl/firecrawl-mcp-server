@@ -987,7 +987,7 @@ GO cellular component (experimental)
 Function
 - Catalyzes uridine to pseudouridine isomerization (pseudouridylation) of specific mitochondrial mRNAs (mt-mRNAs) [...]. Experimental [pmid:27667664, pmid:27974379]
 Open a cited paper with firecrawl_research_inspect_paper or firecrawl_research_read_paper.
-Source: UniProtKB/Swiss-Prot 2026_04, https://www.uniprot.org/uniprotkb/Q6P087/entry. CC BY 4.0.
+Source: https://www.uniprot.org/uniprotkb/Q6P087/entry. Protein data from UniProtKB/Swiss-Prot release 2026_04. Copyright UniProt Consortium, https://www.uniprot.org. CC BY 4.0, https://creativecommons.org/licenses/by/4.0/. No warranty, see https://www.uniprot.org/help/license. Selected fields, reformatted.
 ```
 
 Every location and function statement carries an evidence label. Among these statements, only those whose label starts with `Experimental` (`Experimental` and `Experimental, large-scale`) are measurements. `Inferred from a related protein`, `Curator inference`, `Predicted from sequence`, `Author statement`, `Imported from another database`, and `No evidence tag` are not. A statement inferred from a related protein names that entry's accession when UniProt gives one, and the `pmid:` IDs open with `firecrawl_research_inspect_paper` and `firecrawl_research_read_paper`.
