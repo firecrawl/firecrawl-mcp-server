@@ -392,7 +392,7 @@ Use this guide to select the right tool for your task:
 | agent     | Multi-source research, unknown or many sites   | JSON (structured data)                           |
 | monitor   | Recurring page checks                          | monitor/check metadata and diffs                 |
 | research  | Paper research (developer for repositories)    | research results                                 |
-| protein lookup | One protein's curated UniProt annotation  | location, function, and GO terms with evidence   |
+| protein   | One protein's curated UniProt annotation       | location, function, and GO terms with evidence   |
 
 ### Format Selection Guide
 
