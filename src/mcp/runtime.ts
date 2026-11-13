@@ -57,6 +57,60 @@ function closeObjects(schema: JsonObject): JsonObject {
 }
 
 /**
+ * Fields agents carry over from an earlier tool definition or from another
+ * Firecrawl tool. The tools drop them on purpose, so a call shaped that way
+ * keeps working: the field is still dropped, but only where it was accepted
+ * before (see the tolerated list in #681 for the full rationale).
+ */
+const CARRIED_TOP_LEVEL_ARGUMENTS = new Set([
+  'objective',
+  'clientModel',
+  'conversationId',
+  'sessionId',
+]);
+
+/**
+ * The advertised input schema says `additionalProperties: false` (closeObjects), so
+ * validation has to reject unknown top-level keys the same way instead of
+ * stripping them: a misspelled option must fail the call, not silently drop
+ * and report success. `firecrawl_gov_search` already behaves this way. Fields
+ * a tool tolerates on purpose (carried-over context, browser `actions` the
+ * safe-mode scrape schema omits) are removed first so they stay accepted.
+ */
+function strictParameters(tool: string, schema: StandardSchemaV1): StandardSchemaV1 {
+  const zod = schema as unknown as {
+    _zod?: { def?: { type?: string; shape?: Record<string, unknown> } };
+    strict?: () => StandardSchemaV1;
+  };
+  const def = zod._zod?.def;
+  if (def?.type !== 'object' || typeof zod.strict !== 'function') return schema;
+  const strict = zod.strict.call(schema);
+  const tolerated = new Set(CARRIED_TOP_LEVEL_ARGUMENTS);
+  // Safe mode omits browser actions from the scrape schema, but a call shaped
+  // by the fuller definition still drops them instead of failing.
+  if (tool === 'firecrawl_scrape') tolerated.add('actions');
+  const strip = (arguments_: unknown): unknown => {
+    if (arguments_ === null || typeof arguments_ !== 'object' || Array.isArray(arguments_)) {
+      return arguments_;
+    }
+    const shape = def.shape ?? {};
+    const copy = { ...(arguments_ as Record<string, unknown>) };
+    for (const key of Object.keys(copy)) {
+      if (tolerated.has(key) && !Object.hasOwn(shape, key)) delete copy[key];
+    }
+    return copy;
+  };
+  return {
+    '~standard': {
+      version: 1,
+      vendor: 'firecrawl-mcp',
+      validate: (input: unknown): Promise<StandardSchemaV1.Result<unknown>> =>
+        strict['~standard'].validate(strip(input)) as Promise<StandardSchemaV1.Result<unknown>>,
+    },
+  };
+}
+
+/**
  * An open map's `additionalProperties: {}` is listed as `true`. Both accept any value, but some clients read the
  * empty object as false (it is falsy in Python) and then refuse every key, such as each key of an extraction schema.
  */
@@ -641,7 +695,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
       }
       let args: unknown = undefined;
       if (tool.parameters) {
-        const parsed = await tool.parameters['~standard'].validate(request.params.arguments);
+        const parsed = await strictParameters(name, tool.parameters)['~standard'].validate(request.params.arguments);
         if (parsed.issues) {
           throw mcpError(
             -32602,
