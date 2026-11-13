@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- A keyed `firecrawl_scrape` of a URL names an Alexandria provider for the page's site in `agent_hints`, when one covers it, with the `alexandria_library_search` call that lists its capabilities and the `alexandria_library_read` call that runs one, or the `firecrawl_find_tools` and `firecrawl_scrape` calls on a surface whose `toolFilter` leaves either library tool out. The lookup runs beside the scrape, sends only the host to `/exchange/skills/resolve`, is cached per credential and host for 10 minutes, and is dropped when it is not back within 500 ms of the scrape starting. `domainTools`, `lockdown` and `zeroDataRetention` skip it. The stdio and local HTTP server turn it on against the Firecrawl cloud; embedders opt in with the `scrapeProviderHints` option. The scrape output schema now declares `agent_hints`.
+
 ### Changed
 
 - `firecrawl_gov_search` asks `/v2/search/gov` for `sources=gov` and returns the `gov` results. Each row in `structuredContent.results` keeps `url`, `title`, `description` and `position`, and also carries the index's labels when it has them: `jurisdiction`, `court`, `courtType`, `cites`, `citedAs`, `lang` and `updatedAt`. The text block, the tool description and the input schema are unchanged. An API that does not accept `sources` yet refuses it with a 400; the tool then repeats the call without it and returns the `web` results as before.
