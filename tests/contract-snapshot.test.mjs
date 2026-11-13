@@ -48,6 +48,8 @@ const BASE_ENV = {
   FIRECRAWL_OAUTH_INTROSPECT_SECRET: '',
   FIRECRAWL_OAUTH_ISSUER: '',
   FIRECRAWL_OAUTH_TOKEN: '',
+  // The skills preload would call the API at startup; snapshots never reach the network.
+  FIRECRAWL_SKILLS_PRELOAD: '0',
   HOST: '127.0.0.1',
   HTTP_STREAMABLE_SERVER: '',
   KEYLESS_PROXY_SECRET: '',

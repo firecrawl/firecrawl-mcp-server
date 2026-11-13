@@ -10,6 +10,7 @@ export default defineConfig({
     'alexandria-feedback-tokens': 'src/alexandria-feedback-tokens.ts',
     'introspection-cache': 'src/service/introspection-cache.ts',
     'keyless-signup-link': 'src/keyless-signup-link.ts',
+    'skills-preload': 'src/skills-preload.ts',
   },
   format: ['esm'],
   platform: 'node',

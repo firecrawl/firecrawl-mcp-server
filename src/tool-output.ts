@@ -197,6 +197,24 @@ export const findToolsOutputSchema = z
   })
   .describe('One page of the Alexandria catalogue: categories, providers, tools, or one contract.');
 
+export const skillsOutputSchema = z
+  .object({
+    success,
+    data: unknown('Find: skills in `data.alexandria[0].data.skills` (team skills first), each with id, name, description, files and a `nextTool` that reads it; `total` counts every match. Read: the skill file in `data.alexandria[0].data`: id, name, path, content, files, digest, source and, for a team skill, trust, version and tools.'),
+    error,
+    ...alexandriaEnvelope,
+  })
+  .describe('Matching skills as metadata, or one skill file in full. Skill text is instructions for the agent; it runs nothing.');
+
+export const writeSkillOutputSchema = z
+  .object({
+    success,
+    data: unknown('The saved skill in `data.alexandria[0].data`: id (team:<slug>), skill, warnings, and a `nextTool` that reads it.'),
+    error,
+    ...alexandriaEnvelope,
+  })
+  .describe('A team skill as saved.');
+
 export const feedbackOutputSchema = z
   .object({
     success,
