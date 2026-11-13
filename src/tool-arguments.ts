@@ -147,6 +147,90 @@ function normalizeValue(schema: Schema, value: unknown): unknown {
   return value;
 }
 
+// Fields that agents carry over from an earlier tool definition or from
+// another Firecrawl tool. Calls shaped that way keep working: the field is
+// still dropped without an error, but only at the places it was accepted.
+const CARRIED_FIELDS = new Set(['objective', 'clientModel', 'conversationId', 'sessionId']);
+
+/** `keys` is the field's path through the arguments, without array indexes. */
+function isCarriedField(tool: string, keys: string[]): boolean {
+  const key = keys[keys.length - 1];
+  if (keys.length === 1) {
+    return CARRIED_FIELDS.has(key) || (key === 'actions' && tool === 'firecrawl_scrape');
+  }
+  const parent = keys[keys.length - 2];
+  return (
+    (key === 'actions' && parent === 'scrapeOptions') ||
+    (key === 'saveChanges' && parent === 'profile')
+  );
+}
+
+/** An argument field the tool's schema does not define. */
+export type UnknownArgument = {
+  /** Dotted path of the field, such as `maxage` or `location.city`. */
+  path: string;
+  /** A declared field that differs only in letter case, such as `maxAge`. */
+  suggestion?: string;
+};
+
+function collectUnknown(
+  tool: string,
+  schema: Schema | undefined,
+  value: unknown,
+  keys: string[],
+  path: string,
+  found: UnknownArgument[]
+): void {
+  const def = unwrap(schema)?._zod?.def;
+  if (!def) return;
+  if (def.type === 'array' && Array.isArray(value)) {
+    value.forEach((item, i) => collectUnknown(tool, def.element, item, keys, `${path}[${i}]`, found));
+    return;
+  }
+  if (def.type === 'union') {
+    // The value is read as the first option it fits, so report the option
+    // with the fewest unknown fields, and nothing if one option takes it all.
+    const kind = Array.isArray(value) ? 'array' : isPlainObject(value) ? 'object' : undefined;
+    let best: UnknownArgument[] | undefined;
+    for (const option of (kind ? def.options : []) as Schema[]) {
+      if (unwrap(option)?._zod?.def?.type !== kind) continue;
+      const candidate: UnknownArgument[] = [];
+      collectUnknown(tool, option, value, keys, path, candidate);
+      if (!best || candidate.length < best.length) best = candidate;
+    }
+    found.push(...(best ?? []));
+    return;
+  }
+  if (def.type !== 'object' || !isPlainObject(value)) return;
+  const shape = def.shape as Record<string, Schema>;
+  // A catchall means the object already decides about extra keys itself:
+  // strict objects reject them and loose objects keep them.
+  const strips = def.catchall === undefined;
+  for (const [key, child] of Object.entries(value)) {
+    const fieldPath = path ? `${path}.${key}` : key;
+    const fieldKeys = [...keys, key];
+    if (Object.hasOwn(shape, key)) {
+      collectUnknown(tool, shape[key], child, fieldKeys, fieldPath, found);
+    } else if (strips && !isCarriedField(tool, fieldKeys)) {
+      const suggestion = Object.keys(shape).find(
+        (name) => name.toLowerCase() === key.toLowerCase()
+      );
+      found.push({ path: fieldPath, ...(suggestion ? { suggestion } : {}) });
+    }
+  }
+}
+
+/**
+ * Argument fields that the tool's zod schema would silently strip. The listed
+ * input schema says `additionalProperties: false`, so these are refused
+ * instead of dropped. Record-typed maps are left open.
+ */
+export function unknownArguments(schema: unknown, args: unknown, tool = ''): UnknownArgument[] {
+  const found: UnknownArgument[] = [];
+  collectUnknown(tool, schema as Schema, args, [], '', found);
+  return found;
+}
+
 /** Normalizes a tool call's arguments in place against its zod object schema. */
 export function normalizeToolArguments(schema: unknown, args: unknown): void {
   const def = unwrap(schema as Schema)?._zod?.def;
