@@ -101,6 +101,8 @@ function spawnServer(env) {
       ...process.env,
       FIRECRAWL_API_KEY: '',
       FIRECRAWL_OAUTH_TOKEN: '',
+      // The skills preload calls the API at startup; these tests count every request.
+      FIRECRAWL_SKILLS_PRELOAD: '0',
       MCP_DELEGATED_CREDENTIAL_SECRET:
         'test-mcp-delegated-credential-secret-32',
       ...env,
