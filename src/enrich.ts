@@ -13,14 +13,14 @@ import { requestOrigin } from './origin';
 import { relayExchangeError } from './tool-helpers.js';
 import { withStructured } from './tool-output';
 
-interface SessionData {
+export interface SessionData {
   firecrawlApiKey?: string;
   clientUserAgent?: string;
   [key: string]: unknown;
 }
 
-type GetClient = (session?: SessionData) => unknown;
-type AssertCredential = (session?: SessionData) => void;
+export type GetClient = (session?: SessionData) => unknown;
+export type AssertCredential = (session?: SessionData) => void;
 
 // ---------- Input schemas ----------
 
@@ -42,20 +42,20 @@ const NAME_SETS = (names: string[][], others: string[]) => names.flatMap((name) 
 
 const CONTACT_FIELDS = ['work_email', 'personal_email', 'mobile'] as const;
 
-const str = (value: unknown): string | undefined =>
+export const str = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim() ? value.trim() : undefined;
 
-function compact<T extends object>(record: T): T {
+export function compact<T extends object>(record: T): T {
   return Object.fromEntries(
     Object.entries(record).filter(([, v]) => v !== undefined && !(Array.isArray(v) && v.length === 0))
   ) as T;
 }
 
-const RETRYABLE = new Set(['provider_error', 'provider_unavailable', 'provider_rate_limited', 'request_timeout', 'precheck_unavailable', 'billing_unavailable']);
+export const RETRYABLE = new Set(['provider_error', 'provider_unavailable', 'provider_rate_limited', 'request_timeout', 'precheck_unavailable', 'billing_unavailable']);
 
 // ---------- Argument repair ----------
 
-const isPlain = (value: unknown): value is Record<string, any> => typeof value === 'object' && value !== null && !Array.isArray(value);
+export const isPlain = (value: unknown): value is Record<string, any> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 function defOf(schema: any): any {
   let def = schema?._zod?.def;
@@ -75,7 +75,7 @@ const RANGE = /^\s*(\d+)\s*(?:[-–,]\s*(\d+)|\+)\s*$/;
  * where a list takes {"value"} items, "51-200" where it takes {"min", "max"}, and
  * a numeric string where a number is expected. Validation still runs afterwards.
  */
-function repair(schema: unknown, value: unknown): unknown {
+export function repair(schema: unknown, value: unknown): unknown {
   const def = defOf(schema);
   if (def?.type === 'number' && typeof value === 'string' && /^\d+$/.test(value.trim())) return Number(value);
   if (def?.type === 'array' && value !== undefined && value !== null) {
@@ -103,7 +103,7 @@ function fieldsAt(schema: unknown, path: PropertyKey[]): string[] {
   return Object.keys(shapeOf(current) ?? {});
 }
 
-function checkArguments(tool: string, schema: z.ZodType, args: unknown, example: object): void {
+export function checkArguments(tool: string, schema: z.ZodType, args: unknown, example: object): void {
   const parsed = schema.safeParse(args);
   if (parsed.success) return;
   const issues = parsed.error.issues.map((issue) => {
@@ -119,7 +119,7 @@ function checkArguments(tool: string, schema: z.ZodType, args: unknown, example:
 }
 
 /** Drops the session fields agents carry between Firecrawl tools; no provider takes them. */
-function dropSessionFields(args: Record<string, any>): void {
+export function dropSessionFields(args: Record<string, any>): void {
   delete args.conversationId;
   delete args.objective;
 }
