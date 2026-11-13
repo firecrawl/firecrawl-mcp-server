@@ -1,0 +1,19 @@
+tests/contract-snapshots/tool-definitions.json
+  s_ddc191cef37fb6::t_09eed3403d5b37 8712,8714,8716-8717,8719-8720,8725-8733,8735,8737-8745,8750,8752-8755
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9790f522e11ef4cf2429df19ae75d8be0924b127",
+  "prompts": {},
+  "sessions": {
+    "s_ddc191cef37fb6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6c7e3b82-f300-4e11-ba7e-951b71b017b5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Developers Digest <124798203+developersdigest@users.noreply.github.com>"
+    }
+  }
+}
