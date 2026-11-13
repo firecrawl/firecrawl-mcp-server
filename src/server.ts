@@ -35,6 +35,7 @@ import {
   deprecatedToolOutputSchema,
   feedbackOutputSchema,
   findToolsOutputSchema,
+  saveSkillOutputSchema,
   interactOutputSchema,
   interactStopOutputSchema,
   libraryOutputSchema,
@@ -50,6 +51,8 @@ import {
 import {
   findToolsSchema,
   findToolsOptions,
+  saveSkillSchema,
+  withSkillNavigation,
   withFindToolsNavigation,
   withoutDiscoveredToolPrices,
   withoutFindToolsPrices,
@@ -642,7 +645,7 @@ const fullProfileInstructions = (tools: AlexandriaTools) =>
     ? 'alexandria_library_read with its published contract. If web results already answer the question, use them. Before scraping the same fields from several pages, alexandria_library_search checks for free whether a provider covers them: it explores the whole library as a read-only filesystem with shell commands, and reads a contract that was not returned in full.'
     : 'firecrawl_scrape with its published contract. If web results already answer the question, use them. For the same fields across multiple pages, firecrawl_find_tools offers free provider discovery. Use firecrawl_find_tools to read a contract that was not returned in full or to browse the catalogue by category.'} ${ALEXANDRIA_SOURCES_ALWAYS_ON} If no provider fits, continue with web search or firecrawl_agent. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question (code behaviour, a library or framework, an API contract, an error message, or a known bug), firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of public repositories, GitHub issues, merged pull requests, READMEs, and code documentation. For a legal or regulatory question, firecrawl_gov_search searches primary law and regulatory material from US federal, state, and local government sources: statutes, regulations, codes, court opinions, and other government publications; firecrawl_search with categories: ["gov"] reaches the same sources and cannot be combined with other categories. firecrawl_search with sources: [{type: "alexandria"}] returns compact tool summaries in data.tools; toolDetail: "full" includes contracts, ${tools === 'dedicated'
     ? 'alexandria_library_search holds each contract at /library/<category>/<provider>/<capability>.md, and alexandria_library_read with calls: [{provider, capability, options}] runs up to ten capabilities and returns their results.'
-    : 'firecrawl_find_tools starts with categories, lists providers, then compact tools, and expands the selected full contract, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities and returns their results.'} Provide only the required inputs and account for stated network or external side effects.`;
+    : 'firecrawl_find_tools starts with categories, lists providers, then compact tools, and expands the selected full contract, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities and returns their results.'} ${tools === 'dedicated' ? 'alexandria_library_search' : 'The library capability (firecrawl/library)'} also holds skills, written instructions for a task that name the capabilities to call (Firecrawl's and the team's own), under /skills: grep /skills/INDEX (or cat /skills/search/<words> for a ranked list), then cat the path. firecrawl_save_skill creates a team skill (written out or copied from one) or changes one; it is free. Alexandria access needs an API key on a team with it enabled. Provide only the required inputs and account for stated network or external side effects.`;
 const keylessProfileInstructions = (tools: AlexandriaTools) =>
   `${OUT_OF_CREDITS_INSTRUCTION} Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. Alexandria provider calls require a Firecrawl API key and are not included in the hosted keyless tier. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: ["gov"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index research, firecrawl_developer_search for Developer Index searches of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and ${tools === 'dedicated'
     ? 'alexandria_library_search and alexandria_library_read for exploring and running catalogued Alexandria data providers, alongside the Alexandria results of firecrawl_search.'
@@ -2037,9 +2040,9 @@ Returns result groups in \`data\` and an operation \`id\`.
     assertExchangeCredential(session);
     const client = getClient(session);
     const requestId = suppliedRequestId ?? randomUUID();
-    // The library tool takes a command and nothing else, so a refusal cannot ask for the
-    // request ID to be sent again.
-    const resendsRequestId = tool !== ALEXANDRIA_LIBRARY_TOOL;
+    // The library and skill tools take no request ID, so a refusal cannot ask for it to be
+    // sent again.
+    const resendsRequestId = ![ALEXANDRIA_LIBRARY_TOOL, 'firecrawl_save_skill'].includes(tool);
     try {
       const response = await relayExchangeError(
         (attempt) => {
@@ -2284,6 +2287,30 @@ Returns result groups in \`data\` and an operation \`id\`.
       },
     });
   }
+
+  const saveSkillTool: RegisteredTool = {
+    name: 'firecrawl_save_skill',
+    annotations: {
+      title: 'Save Skill',
+      readOnlyHint: false,
+      openWorldHint: false,
+      // An update can overwrite a skill or turn it off.
+      destructiveHint: true,
+      idempotentHint: false,
+    },
+    description:
+      'Create or change one of the user\'s team skills: instructions an agent follows, naming capabilities as @provider/capability. Without id, creates one: write name, description and body, or copy a skill under /skills with from (its id: <id> for /skills/library/<id>, team:<slug> for /skills/team/<slug>); fields you also give override the copy, and a library skill copies its SKILL.md only. The new skill is enabled and listed in /skills/INDEX as /skills/team/<slug>; a taken slug is a conflict. With id (team:<slug>) and baseVersion, the version: in its SKILL.md, changes its name, description or body (a new version), or whether it is enabled or listed; a skill changed since is refused with conflict, so read it again and reapply. Library skills cannot be changed; copy one. Skills cannot be deleted here. Returns the saved skill\'s path and the command that reads it. Save only what the user asked for. Free.',
+    outputSchema: saveSkillOutputSchema,
+    canList: (session: SessionData) => !isKeylessMode(session),
+    parameters: saveSkillSchema,
+    execute: async (args, { session, client: mcpClient }) => {
+      const origin = requestOrigin(mcpClient, session);
+      const capability = (args as z.infer<typeof saveSkillSchema>).id === undefined ? 'create-skill' : 'update-skill';
+      const result = await executeExchangeCalls(session, { provider: 'firecrawl', capability, options: args as Record<string, unknown> }, undefined, undefined, origin, false, undefined, 'firecrawl_save_skill');
+      return structuredCompact(withSkillNavigation(JSON.parse(result), alexandriaTools));
+    },
+  };
+  server.addTool(saveSkillTool);
   const DEFAULT_CLOUD_API_URL = 'https://api.firecrawl.dev';
 
   function resolveApiBaseUrl(): string {
