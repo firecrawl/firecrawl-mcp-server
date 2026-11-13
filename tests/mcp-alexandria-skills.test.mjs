@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { callExpectingError, startStdio, startStdioWithApi, toolText } from './helpers/exchange-mcp.mjs';
 import { CLAUDE_CODE_TEXT_CAP } from './helpers/description-budget.mjs';
-import { teamSkillsListing } from '../dist/skills-preload.js';
+import { fetchTeamSkills, teamSkillsListing } from '../dist/skills-preload.js';
 
 const data = result => toolText(result).data.alexandria[0].data;
 const READ = id => ({ name: 'firecrawl_skills', arguments: { id } });
@@ -148,4 +148,19 @@ test('the listing names team skills only and stops at its budget', () => {
   assert.match(listing, /\n- team:skill-0: Skill 0\. x{200}\n/);
   assert.equal(teamSkillsListing([{ id: 'deep-research', source: 'library' }], 700), '');
   assert.equal(teamSkillsListing(many, 20), '');
+});
+
+test('the startup skills fetch reads a blank API URL as the cloud and tags the integration', async () => {
+  const requests = [];
+  const fetch = async (url, init) => {
+    requests.push({ url, body: JSON.parse(init.body) });
+    return new Response(JSON.stringify({ data: { alexandria: [{ data: { skills: [{ id: 'team:weekly-digest', source: 'team' }, { id: 'deep-research', source: 'library' }] } }] } }));
+  };
+  const skills = await fetchTeamSkills({ apiKey: 'fc-test', apiUrl: '  ', integration: ' my-editor ', fetch });
+  assert.deepEqual(skills.map(skill => skill.id), ['team:weekly-digest']);
+  assert.equal(requests[0].url, 'https://api.firecrawl.dev/v2/scrape');
+  assert.equal(requests[0].body.integration, 'my-editor');
+  await fetchTeamSkills({ apiKey: 'fc-test', apiUrl: 'http://localhost:3002/', fetch });
+  assert.equal(requests[1].url, 'http://localhost:3002/v2/scrape');
+  assert.equal(requests[1].body.integration, undefined);
 });

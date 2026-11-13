@@ -77,7 +77,11 @@ const skillsPreloadOff = ['0', 'false', 'no', 'off'].includes(
   (process.env.FIRECRAWL_SKILLS_PRELOAD || '').trim().toLowerCase()
 );
 const teamSkills =
-  hosted || skillsPreloadOff ? [] : await fetchTeamSkills({ apiKey, apiUrl });
+  hosted || skillsPreloadOff ? [] : await fetchTeamSkills({
+        apiKey,
+        apiUrl,
+        integration: process.env.FIRECRAWL_INTEGRATION,
+      });
 
 const { start } = createFirecrawlMcpServer({
   ...options,

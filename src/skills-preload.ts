@@ -1,4 +1,5 @@
 import { SKILLS_TOOL } from './alexandria.js';
+import { integrationFrom, withIntegration } from './integration.js';
 
 const DEFAULT_CLOUD_API_URL = 'https://api.firecrawl.dev';
 const DESCRIPTION_MAX_CHARS = 200;
@@ -14,6 +15,8 @@ export interface ListedSkill {
 export interface TeamSkillsOptions {
   apiKey?: string;
   apiUrl?: string;
+  /** FIRECRAWL_INTEGRATION, sent as the request's integration tag. */
+  integration?: string;
   timeoutMs?: number;
   fetch?: typeof fetch;
 }
@@ -28,21 +31,28 @@ export async function fetchTeamSkills(
   if (!options.apiKey) return [];
   const fetchImpl = options.fetch ?? fetch;
   try {
+    // A blank FIRECRAWL_API_URL means the cloud, as resolveApiBaseUrl reads it.
+    const url = `${(options.apiUrl?.trim() || DEFAULT_CLOUD_API_URL).replace(/\/+$/, '')}/v2/scrape`;
+    const body = withIntegration(
+      url,
+      {
+        alexandria: {
+          provider: 'firecrawl',
+          capability: 'find-skills',
+          options: { limit: 50 },
+        },
+      },
+      integrationFrom(options.integration)
+    );
     const response = await fetchImpl(
-      `${(options.apiUrl ?? DEFAULT_CLOUD_API_URL).replace(/\/+$/, '')}/v2/scrape`,
+      url,
       {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
           authorization: `Bearer ${options.apiKey}`,
         },
-        body: JSON.stringify({
-          alexandria: {
-            provider: 'firecrawl',
-            capability: 'find-skills',
-            options: { limit: 50 },
-          },
-        }),
+        body: JSON.stringify(body),
         signal: AbortSignal.timeout(options.timeoutMs ?? 4000),
       }
     );
