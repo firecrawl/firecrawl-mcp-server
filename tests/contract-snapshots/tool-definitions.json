@@ -243,7 +243,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "alexandria_library_search@6756500c6c74": {
+  "alexandria_library_search@37ed2f131b2d": {
     "annotations": {
       "title": "Alexandria library search",
       "readOnlyHint": true,
@@ -252,7 +252,7 @@
       "idempotentHint": true
     },
     "title": "Alexandria library search",
-    "description": "Explore the Alexandria library: Firecrawl's catalogue of data providers that return typed, sourced records (companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more) as a read-only filesystem, using shell commands. Use this to find out whether a provider covers the data a task needs, and to read its contract before alexandria_library_read. Layout: /library/<category>/<provider>/<capability>.md, one file per capability holding its contract (when to use it, inputs, outputs, and the call to send); /library, each category folder and each provider folder has a README.md describing what is inside. Category folders: agriculture, ai-models, apps, automotive, community, companies, developer, digital-intelligence, education, energy, entertainment, finance, game-development, government, health, healthcare, jobs, knowledge, life-sciences, marketing, music, news, people, places, podcasts, political-science, real-estate, research, restaurants, shopping, skills, social, software, sports, travel; `ls /library` shows any added since. Available commands: ls, tree, cat, head, tail, grep, find, wc, sort, uniq, cut, tr, sed, jq, xargs, with pipes. Typical starts: `ls /library`, `cat /library/README.md`, or `grep -ril \"mortgage\" /library`. A file path is the execute address: /library/finance/fred/series/observations.md is provider \"fred\", capability \"series/observations\". Recorded example responses are under /examples/<provider>/<capability>.json. Free; does not run providers.",
+    "description": "Explore the Alexandria library: Firecrawl's catalogue of data providers that return typed, sourced records (companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more) as a read-only filesystem, using shell commands. Use this to find out whether a provider covers the data a task needs, and to read its contract before alexandria_library_read. Layout: /library/<category>/<provider>/<capability>.md, one file per capability holding its contract (when to use it, inputs, outputs, and the call to send); /library, each category folder and each provider folder has a README.md describing what is inside. Category folders: agriculture, ai-models, apps, automotive, community, companies, developer, digital-intelligence, education, energy, entertainment, finance, game-development, government, health, healthcare, jobs, knowledge, life-sciences, marketing, music, news, people, places, podcasts, political-science, real-estate, research, restaurants, shopping, skills, social, software, sports, travel; `ls /library` shows any added since. Available commands: ls, tree, cat, head, tail, grep, find, wc, sort, uniq, cut, tr, sed, jq, xargs, with pipes. Typical starts: `ls /library`, `cat /library/README.md`, or `grep -ril \"mortgage\" /library`. A file path is the execute address: /library/finance/fred/series/observations.md is provider \"fred\", capability \"series/observations\". Recorded example responses are under /examples/<provider>/<capability>.json. Skills, written instructions for tasks (your team's and Firecrawl's), are under /skills: `grep -i \"<word>\" /skills/INDEX` lists them one per line (path, marker, name: when to use it), your team's first; when that lists many, `cat /skills/search/<a-few-words-from-the-task>` (joined by hyphens) ranks the best; cat the path to read one, and prefer a team skill that fits. Free; does not run providers.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5538,6 +5538,245 @@
       "required": [
         "results"
       ],
+      "additionalProperties": false
+    }
+  },
+  "firecrawl_save_skill@434befd26d6b": {
+    "annotations": {
+      "title": "Save Skill",
+      "readOnlyHint": false,
+      "openWorldHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false
+    },
+    "title": "Save Skill",
+    "description": "Create or change one of the user's team skills: instructions an agent follows, naming capabilities as @provider/capability. Without id, creates one: write name, description and body, or copy a skill under /skills with from (its id: <id> for /skills/library/<id>, team:<slug> for /skills/team/<slug>); fields you also give override the copy, and a library skill copies its SKILL.md only. The new skill is enabled and listed in /skills/INDEX as /skills/team/<slug>; a taken slug is a conflict. With id (team:<slug>) and baseVersion, the version: in its SKILL.md, changes its name, description or body (a new version), or whether it is enabled or listed; a skill changed since is refused with conflict, so read it again and reapply. Library skills cannot be changed; copy one. Skills cannot be deleted here. Returns the saved skill's path and the command that reads it. Save only what the user asked for. Free.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Update: the team:<slug> skill to change. Omit to create a skill.",
+          "type": "string",
+          "maxLength": 100,
+          "pattern": "^team:[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "baseVersion": {
+          "description": "Update, required: the version: in the skill's SKILL.md. A skill changed since is refused with conflict: read it again and reapply.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "from": {
+          "description": "Create: the skill to copy, by id: <id> for /skills/library/<id>, team:<slug> for /skills/team/<slug>. Fields you also give override the copy.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "name": {
+          "description": "Skill name; required to create without from.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "description": {
+          "description": "When to use the skill; required to create without from.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 5000
+        },
+        "body": {
+          "description": "The instructions in full, in Markdown; required to create without from. Reference capabilities as @provider/capability.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200000,
+          "pattern": "\\S"
+        },
+        "slug": {
+          "description": "Create: lowercase words joined by hyphens; defaults to one made from the name.",
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "enabled": {
+          "description": "Update: turn the skill on or off.",
+          "type": "boolean"
+        },
+        "discoverable": {
+          "description": "Update: whether /skills/INDEX lists it.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "name": "firecrawl_save_skill",
+    "outputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "A team skill as saved.",
+      "type": "object",
+      "properties": {
+        "success": {
+          "description": "Whether the API call succeeded.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "data": {
+          "description": "The saved skill in `data.alexandria[0].data`: id (team:<slug>, owned by the caller's team), skill (its version, enabled, discoverable and authors), warnings, `path` (its SKILL.md under /skills) and a `nextTool` that reads it."
+        },
+        "error": {
+          "description": "Error message or error object when the call did not succeed."
+        },
+        "requestId": {
+          "description": "Identifier of this Alexandria execution.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retryable": {
+          "description": "Whether resending the same request can succeed; set when the API refused before any provider ran.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scrape_id": {
+          "description": "Identifier of the underlying scrape.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "receipt": {
+          "description": "Billing receipt for the execution."
+        },
+        "creditsCost": {
+          "description": "Credits this call consumed.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "delivery": {
+          "description": "`retained` when the full result stayed server-side instead of being inlined.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "responseBytes": {
+          "description": "Size of the full result in bytes.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "estimatedTokens": {
+          "description": "Estimated token cost of the full result.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tokenEstimateMethod": {
+          "description": "How `estimatedTokens` was derived.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inlineTokenBudget": {
+          "description": "Token budget above which a result is retained rather than inlined.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "workspaceId": {
+          "description": "Workspace holding a retained result, for inspection through virtual Bash.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "idleTtlSeconds": {
+          "description": "Seconds a retained workspace stays available while idle.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "description": "Guidance that accompanies the result.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nextTool": {
+          "description": "A follow-up tool call (`{name, arguments}`) that continues or inspects this result."
+        },
+        "feedbackTool": {
+          "description": "Pointer to the feedback tool for reporting how this result served the task."
+        },
+        "feedbackRefs": {
+          "description": "Retained results only: `[{provider, capability, feedbackRef}]` per call; pass a ref in `callRatings` of the feedback tool to rate that call."
+        }
+      },
       "additionalProperties": false
     }
   },

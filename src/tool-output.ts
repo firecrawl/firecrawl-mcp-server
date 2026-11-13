@@ -197,6 +197,15 @@ export const findToolsOutputSchema = z
   })
   .describe('One page of the Alexandria catalogue: categories, providers, tools, or one contract.');
 
+export const saveSkillOutputSchema = z
+  .object({
+    success,
+    data: unknown('The saved skill in `data.alexandria[0].data`: id (team:<slug>, owned by the caller\'s team), skill (its version, enabled, discoverable and authors), warnings, `path` (its SKILL.md under /skills) and a `nextTool` that reads it.'),
+    error,
+    ...alexandriaEnvelope,
+  })
+  .describe('A team skill as saved.');
+
 export const feedbackOutputSchema = z
   .object({
     success,
