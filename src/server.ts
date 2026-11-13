@@ -82,6 +82,7 @@ import { FeedbackTokenRegistry, FeedbackTokenStore, withFeedbackRefs } from './a
 import { registerDeveloperTools } from './developer';
 import { registerGovTools } from './gov';
 import { registerEnrichTools } from './enrich';
+import { registerJobsTools } from './jobs';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
 import { fitSearchResponse, searchByteBudget } from './search-budget';
@@ -3602,6 +3603,7 @@ Set \`redactPII\` to request redaction of personally identifiable information in
   registerGovTools(server, getClient);
   if (!isLocalKeylessStartup()) {
     registerEnrichTools(server, getClient, assertExchangeCredential, hasCredential, alexandriaTools);
+    registerJobsTools(server, getClient, assertExchangeCredential, hasCredential);
   }
   registerUsageTools(server, getClient);
 
