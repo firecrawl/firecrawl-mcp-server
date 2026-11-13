@@ -15,7 +15,7 @@
         }
       },
       "tools": [
-        "firecrawl_scrape@0f86098ecdc5",
+        "firecrawl_scrape@f693fc60f238",
         "firecrawl_map@3214f5d6a1a4",
         "firecrawl_search@28eda5ff5b97",
         "firecrawl_find_tools@d138e7a0897b",
@@ -23,8 +23,8 @@
         "alexandria_library_read@1455f18d2189",
         "firecrawl_search_feedback@6ca0521ad2bd",
         "firecrawl_feedback@771747894435",
-        "firecrawl_crawl@7ebcf738dc74",
-        "firecrawl_check_crawl_status@723e60af703e",
+        "firecrawl_crawl@00e69374a573",
+        "firecrawl_check_crawl_status@0ec1a4c87d28",
         "firecrawl_agent@10301d46e090",
         "firecrawl_agent_status@6c6e5f971f8e",
         "firecrawl_interact@8040e21dad51",
@@ -65,7 +65,7 @@
         }
       },
       "tools": [
-        "firecrawl_scrape@0f86098ecdc5",
+        "firecrawl_scrape@f693fc60f238",
         "firecrawl_search@28eda5ff5b97",
         "firecrawl_parse@bd79ed89827b"
       ]

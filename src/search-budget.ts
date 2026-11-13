@@ -31,14 +31,15 @@ function resultBytes(response: unknown): number {
   return Buffer.byteLength(JSON.stringify(structuredCompact(response)));
 }
 
-function cutString(value: string, limit: number, url: unknown): string {
+/** `value` cut to `limit` characters, ending with a marker that says how much is shown and what to do next. */
+export function cutString(value: string, limit: number, hint: string): string {
   let cut = value.slice(0, limit);
   if (/[\uD800-\uDBFF]$/.test(cut)) cut = cut.slice(0, -1);
-  const where = typeof url === 'string' ? ` on ${url}` : '';
-  return `${cut}\n\n[Truncated: ${cut.length} of ${value.length} characters shown. Call firecrawl_scrape${where} for the full page.]`;
+  return `${cut}\n\n[Truncated: ${cut.length} of ${value.length} characters shown. ${hint}]`;
 }
 
-function cutArray(value: unknown[], limit: number): unknown[] {
+/** The leading items of `value` whose JSON fits in `limit` characters. */
+export function cutArray(value: unknown[], limit: number): unknown[] {
   let used = 0;
   let kept = 0;
   for (const item of value) {
@@ -57,7 +58,8 @@ function cutResult(result: unknown, limit: number): unknown {
   for (const field of CONTENT_FIELDS) {
     const value = result[field];
     if (typeof value === 'string' && value.length > limit) {
-      cut[field] = cutString(value, limit, result.url);
+      const where = typeof result.url === 'string' ? ` on ${result.url}` : '';
+      cut[field] = cutString(value, limit, `Call firecrawl_scrape${where} for the full page.`);
       fields.push(field);
     } else if (Array.isArray(value) && JSON.stringify(value).length > limit) {
       cut[field] = cutArray(value, limit);
@@ -85,7 +87,8 @@ function shape(response: Json, data: Json, limit: number, keep: number): Json {
   return { ...response, data: groups };
 }
 
-function largestFitting(low: number, high: number, fits: (n: number) => boolean): number {
+/** The largest n in [low, high] for which `fits(n)` holds, given that `fits(low)` does and `fits` is monotonic. */
+export function largestFitting(low: number, high: number, fits: (n: number) => boolean): number {
   while (low < high) {
     const mid = Math.ceil((low + high) / 2);
     if (fits(mid)) low = mid;

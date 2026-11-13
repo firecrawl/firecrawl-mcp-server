@@ -464,6 +464,7 @@ Scrape content from a single URL with advanced options.
 
 **Branding format:** Extracts comprehensive brand identity (colors, fonts, typography, spacing, logo, UI components) for design analysis or style replication.
 **Privacy:** Set `redactPII: true` to return content with personally identifiable information redacted.
+**Size:** `markdown`, `html` and `rawHtml` are cut at `maxCharacters` (default 40,000, up to 500,000), and `links` and `images` lists shortened the same way, so a long page stays under the size clients such as Claude Code keep inline (50,000 characters). A cut result ends each cut field with a `[Truncated: ...]` marker and sets `truncated`, `totalLength` and a `warning`. `json`, `answer`, `summary` and `metadata` are never cut. With an API key, a cut result also returns `scrapeId` and `nextStartIndex`: call `firecrawl_scrape` with `{ "scrapeId": ..., "startIndex": nextStartIndex }` for the next window of the page text. That reads the stored result (kept 24 hours, not with zero data retention) instead of scraping again.
 **With `CLOUD_SERVICE=true`:** scrape is read-only. It takes no browser `actions` and cannot accept provider terms. A named `profile` loads saved browser state without saving changes to it, and the full endpoint's `firecrawl_search` treats `scrapeOptions.profile` the same way. To save browser state to a profile, open the page with `firecrawl_interact` (see below). An organization admin accepts terms in the dashboard.
 
 **Returns:**
@@ -683,6 +684,7 @@ Starts a crawl job, polls until it reaches a terminal state, and returns the fin
 **Returns:**
 
 - Final crawl status and data after internal polling, including `id`, `status`, `completed`, `total`, `creditsUsed`, `expiresAt`, `next`, and `data`. Use the returned `id` with `firecrawl_check_crawl_status` if you need to re-check the job later.
+- Each page is cut at `maxCharacters` (default 40,000) as in `firecrawl_scrape`, and pages are inlined until the result reaches `maxCharacters` plus 5,000 characters. Pages past that are left out: the result sets `truncated`, `omittedPages` and a `warning` listing their URLs. `firecrawl_check_crawl_status` takes the same `maxCharacters`.
 
 ### 5. Check Crawl Status (`firecrawl_check_crawl_status`)
 
