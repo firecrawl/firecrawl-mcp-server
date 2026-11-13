@@ -40,7 +40,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Use `firecrawl_credit_usage` to check credits left or what credits were spent on, by month or day, optionally broken down by endpoint or API key.
 - Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control. The session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
 
-This server lists 31 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 11 tools (search, developer, government, and research search, Alexandria catalogue lookup and execution, and people and company search and enrichment).
+This server lists 33 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 12 tools (search, developer, government, and research search, Alexandria catalogue lookup and execution, people and company search and enrichment, and job postings).
 
 ## Installation
 
@@ -88,7 +88,7 @@ A fixed-scope search surface is also hosted at:
 https://mcp.firecrawl.dev/v2/mcp-search
 ```
 
-It exposes a fixed set of eleven tools: `firecrawl_search`, `firecrawl_developer_search`, `firecrawl_gov_search`, the four `firecrawl_research_*` tools, the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`, and the [enrich tools](#15b-enrich-tools) `people_company_search` and `people_company_enrich`. Its `firecrawl_search` fetches no page content.
+It exposes a fixed set of twelve tools: `firecrawl_search`, `firecrawl_developer_search`, `firecrawl_gov_search`, the four `firecrawl_research_*` tools, the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`, and the [enrich tools](#15b-enrich-tools) `people_company_search` and `people_company_enrich`, and the [jobs tool](#15c-jobs-tool-jobs_search) `jobs_search`. Its `firecrawl_search` fetches no page content.
 
 ### Running with npx
 
@@ -1234,6 +1234,29 @@ For each requested field, Firecrawl tries the providers that can use the record'
 The response has `people` and `companies` lists with one entry per input, each with `input_index` and `results`: one `{ "provider", "data" }` entry per provider that found a requested field, where `data` is that provider's own response, unchanged. Each record also has `fields`: for each filled field, the `provider` behind it; for an email the chosen `value`, `verified` (the provider marked it deliverable) and `domain_match`; for a profile or firmographics `complete`, false when only a partial answer was found, and for firmographics `linkedin_confirmed`. A work email is never a free-mail or role address, and is on the company's domain when one is known; `verified_only: true` returns only verified emails. A record nothing was found for has empty `results`. `credits_used` is what the call charged: each provider that found something is charged its listed price, and misses are free. `max_credits` (at most 10,000) caps the call: a provider is tried only while its listed price still fits. Without it the call is uncapped. `stopped: "team_quota"` means the team ran out of credits during the call. To call one specific provider, use `firecrawl_scrape` with an `alexandria` body.
 
 Both tools also accept, and drop, the `conversationId` and `objective` fields agents carry between Firecrawl tools.
+
+### 15c. Jobs Tool (`jobs_search`)
+
+`jobs_search` finds job postings and tells whether a posting is still open. It is listed wherever the enrich tools are, the [search-only endpoint](#search-only-endpoint) included, and needs the same credential. It sends its input as a single request to Alexandria's jobs route, `firecrawl/jobs/auto`, which picks the mode and the providers:
+
+| Input | What it does |
+| --- | --- |
+| `url`, or `urls` (up to 10) | Reads each posting and returns its status. One `url` also returns the description |
+| `company` (a name or domain) | Lists the company's open roles from its own job board; add `query` for one role there |
+| `query` (a title or keywords) | Searches postings by role, with `location`, `remote` and `posted_within_days`; `group_by: "employer"` groups them by employer, and `boards_only` searches employers' own boards only |
+
+At least one of `query`, `company`, `url` or `urls` is required. `max_credits` (default 200) and `include_description` apply to every mode. `limit` (1 to 100, default 10) applies to a search by `query` or `company`, and `cursor`, `provider`, `group_by` and `boards_only` to a search by `query` alone; a read by `url` or `urls` takes none of them.
+
+```json
+{
+  "name": "jobs_search",
+  "arguments": { "query": "data engineer", "location": "Berlin", "posted_within_days": 14 }
+}
+```
+
+Every row has the same fields: `title`, `company`, `company_domain`, `location`, `remote`, `employment_type`, `posted_at` (as the board states it), `url`, `apply_url`, `source`, `source_type` (`employer_board`, `employer_site`, `aggregator` or `index`), `board`, `status` and `checked_at`, plus `description`, `salary` and `requirements` where they apply, and `reason` on a posting that is `closed`, `not_found`, `error` or `unverified` after a read by URL. `status` is `open` when the posting was read from the employer's board or live posting page in this call, and `unverified` when it comes from a job site and was not confirmed on the employer's board; a posting checked by URL can also be `closed`, `not_found` or `error`.
+
+The response also carries `mode`, `count`, `next_cursor`, `providers` (each provider call with its `status`, the rows it `returned` and `dropped`, and its `credits`), `credits`, `credits_pending`, `stopped` and `notes`; `employers` with `group_by`; and, for a company, `boards` (the boards read and what each covers) and `resolution` (how the board was found). When no board is found for a company, the rows come from job sites and `notes` says so. Against a Firecrawl API that does not serve the route yet, the tool fails with `jobs_search_unavailable`.
 
 ### 16. Credit Usage Tool
 
