@@ -107,6 +107,37 @@ interface GovHit {
   position?: number;
 }
 
+/** A `gov` result: a hit plus the index's labels, each absent when unknown. */
+interface LabeledGovHit extends GovHit {
+  jurisdiction?: string;
+  court?: string;
+  courtType?: string;
+  cites?: string[];
+  citedAs?: string[];
+  lang?: string;
+  updatedAt?: number;
+}
+
+/** Whether the API refused `sources` as an unknown parameter, as an API released before it does. */
+function refusesSources(error: unknown): boolean {
+  const response = (
+    error as
+      | { response?: { status?: number; data?: { details?: unknown } } }
+      | undefined
+  )?.response;
+  const details = response?.data?.details;
+  return (
+    response?.status === 400 &&
+    Array.isArray(details) &&
+    details.some(
+      (detail: { code?: unknown; keys?: unknown }) =>
+        detail?.code === 'unrecognized_keys' &&
+        Array.isArray(detail.keys) &&
+        detail.keys.includes('sources')
+    )
+  );
+}
+
 /** Render hits as `## <position>. <title>` / url / description blocks. */
 function fmtGov(results?: GovHit[]): string {
   if (!results || results.length === 0) return '(no results)';
@@ -151,13 +182,16 @@ Returns ranked results with a position, title, URL, and matched snippet. Results
         if (value != null) params.append(key, String(value));
       }
       const client = getClient(session) as ClientLike;
-      const res = await client.http
-        .get<{
-          data?: { web?: GovHit[] };
-        }>(
-          `${BASE}?${params.toString()}`,
-          originHeaders(requestOrigin(mcpClient, session))
-        )
+      const headers = originHeaders(requestOrigin(mcpClient, session));
+      const search = (qs: string) =>
+        client.http.get<{
+          data?: { gov?: LabeledGovHit[]; web?: GovHit[] };
+        }>(`${BASE}?${qs}`, headers);
+      const res = await search(`${params.toString()}&sources=gov`)
+        .catch((error: unknown) => {
+          if (!refusesSources(error)) throw error;
+          return search(params.toString());
+        })
         .catch((error: unknown) => {
           const response = (
             error as
@@ -170,7 +204,8 @@ Returns ranked results with a position, title, URL, and matched snippet. Results
           }
           throw new UserError(message, { status: 400, error: message });
         });
-      const results = res.data?.data?.web ?? [];
+      // An API without `sources` answers in `web`.
+      const results = res.data?.data?.gov ?? res.data?.data?.web ?? [];
       return withStructured(fmtGov(results), { results });
     },
   });

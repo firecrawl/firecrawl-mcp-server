@@ -6,6 +6,10 @@
 
 - `jobs_search`: one tool for job postings over Alexandria's jobs route, `firecrawl/jobs/auto`, listed wherever the enrich tools are, including the search-only endpoint, whose fixed tool set grows from eleven to twelve. `query` with `location`, `remote` and `posted_within_days` searches postings by role and place; `url` reads one posting and tells whether it is still open; `urls` checks up to 10 postings in one call; `company` lists a company's open roles from its own job board; `group_by: "employer"` shows who is hiring for a role. Rows are normalized and carry `source`, `posted_at`, a `status` (`open` or `unverified`, and for a posting checked by URL `closed`, `not_found` or `error`) and `checked_at`. Against a Firecrawl API that does not serve the route yet, the tool fails with `jobs_search_unavailable`. `alexandria_library_read` and the `tools` field of `firecrawl_search` results point job postings to `jobs_search`.
 
+### Changed
+
+- `firecrawl_gov_search` asks `/v2/search/gov` for `sources=gov` and returns the `gov` results. Each row in `structuredContent.results` keeps `url`, `title`, `description` and `position`, and also carries the index's labels when it has them: `jurisdiction`, `court`, `courtType`, `cites`, `citedAs`, `lang` and `updatedAt`. The text block, the tool description and the input schema are unchanged. An API that does not accept `sources` yet refuses it with a 400; the tool then repeats the call without it and returns the `web` results as before.
+
 ## [3.40.0] - 2026-11-12
 
 ### Added
