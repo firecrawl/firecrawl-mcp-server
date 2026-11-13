@@ -1,0 +1,68 @@
+tests/mcp-search-profile.test.mjs
+  s_ddc191cef37fb6::t_4d63b7ebea3c7c 106-107
+tests/contract-snapshots/hosted-full.json
+  s_ddc191cef37fb6::t_09eed3403d5b37 24-25
+tests/contract-snapshots/stdio-self-hosted.json
+  s_ddc191cef37fb6::t_09eed3403d5b37 22-23
+tests/contract-snapshots/tool-definitions.json
+  s_ddc191cef37fb6::t_09eed3403d5b37 2487,2489,2495-2496,2502,2507-2513,2515-2523,5005,5007,5009-5010,5012-5013,5018-5019,5021,5025,5029,5032,5035-5048,5352-5735,5737-5738,5748-5757,5759-5768,5770-5771,5773-5774,5776-5777,8920,8922-8923,8925-8926,8928-8929,8934-8935,8937-8938,8940-8941,8944,8946-8947,8950,8952-8953,8956,8958-8962,8967,8970,8985
+src/index.ts
+  s_ddc191cef37fb6::t_cc7e2f7aa1f027 7
+  s_ddc191cef37fb6::t_7839143b3bfb04 73,76-78,81
+  s_ddc191cef37fb6::t_6d522b92c9aca1 74-75,79-80,84
+tests/mcp-smoke.test.mjs
+  s_ddc191cef37fb6::t_d50c92fcd51ba5 104-105
+tests/contract-snapshots/http-self-hosted.json
+  s_ddc191cef37fb6::t_09eed3403d5b37 22-23
+src/alexandria.ts
+  s_ddc191cef37fb6::t_1cf796a1c4d932 73-74,76-77,79-83,86-95,97-100,102-110,113-126,130-131
+  s_ddc191cef37fb6::t_5412ba8185318a 143
+tests/contract-snapshot.test.mjs
+  s_ddc191cef37fb6::t_026f4ca79394e8 51-52
+src/tool-output.ts
+  s_ddc191cef37fb6::t_076ee5873e0a54 200,203,207
+tests/helpers/exchange-mcp.mjs
+  s_ddc191cef37fb6::t_7d0c83151d0a0d 57-58
+tests/contract-snapshots/stdio-api-key.json
+  s_ddc191cef37fb6::t_09eed3403d5b37 8,22-23
+tsup.config.ts
+  s_ddc191cef37fb6::t_648d9543680d43 13
+tests/contract-snapshots/hosted-account.json
+  s_ddc191cef37fb6::t_09eed3403d5b37 9,23-24
+CHANGELOG.md
+  s_ddc191cef37fb6::t_28f24eba435cd0 148-149
+src/skills-preload.ts
+  s_ddc191cef37fb6::t_152eede6a7d0ca 25-27,31-48,50-56,62-65,71-74,80-83
+  s_ddc191cef37fb6::t_dcc519e2a6922a 1-4,13,15-21,24,29-30,57,59-61,76,78-79,86-87,89
+  s_ddc191cef37fb6::t_a6de910cf082f6 5-12,14,22-23,28,49,58,66-70,75,77,84-85,88
+tests/mcp-alexandria-skills.test.mjs
+  s_ddc191cef37fb6::t_e44d6a5b49098b 4,7-11,13-25,30-37,40,42,48,50,62,65-73,80,83,85-86,89,91,94,96,99,102,105-119,122,127,135-136,139,141-142,144
+  s_ddc191cef37fb6::t_df94e70b99fc36 123-126,128-134,137-138,140,143,145-150
+src/server.ts
+  s_ddc191cef37fb6::t_a682e060392698 568-571
+  s_ddc191cef37fb6::t_21c69757f4a3df 55-58
+  s_ddc191cef37fb6::t_8494ccdab6e58d 689
+  s_ddc191cef37fb6::t_703c3bc136606f 472-476
+  s_ddc191cef37fb6::t_7dcc4872cfa7f4 2298
+  s_ddc191cef37fb6::t_b210dbb21510aa 38
+  s_ddc191cef37fb6::t_c5c296587dc959 2308
+  s_ddc191cef37fb6::t_68e399d266a7e4 2296-2297
+  s_ddc191cef37fb6::t_7412c1f1c15265 2294-2295,2299-2300,2302,2309,2312,2315-2317,2321,2323-2324,2326,2329,2334,2336,2340-2342,2346
+  s_ddc191cef37fb6::t_b8a59c0c022819 661
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2cad0ca38f2fb008f695f6a5811796418f8d4ee6",
+  "prompts": {},
+  "sessions": {
+    "s_ddc191cef37fb6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6c7e3b82-f300-4e11-ba7e-951b71b017b5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Developers Digest <124798203+developersdigest@users.noreply.github.com>"
+    }
+  }
+}
