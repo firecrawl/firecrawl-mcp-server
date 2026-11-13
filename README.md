@@ -40,7 +40,7 @@ A Model Context Protocol (MCP) server that brings [Firecrawl](https://github.com
 - Use `firecrawl_credit_usage` to check credits left or what credits were spent on, by month or day, optionally broken down by endpoint or API key.
 - Consider something else when you need to hold a browser session open across many of your own steps with your own retry and termination logic: each `firecrawl_interact` call runs one `prompt` or `code` turn to completion and returns control. The session can persist across calls via `scrapeId` and ends with `firecrawl_interact_stop`, but you cannot drive it interactively step-by-step from the client side within a single call.
 
-This server lists 31 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 11 tools (search, developer, government, and research search, Alexandria catalogue lookup and execution, and people and company search and enrichment).
+This server lists 33 tools when the full profile registers with default settings (feedback tools included, not running in local-keyless mode). Setting `FIRECRAWL_NO_SEARCH_FEEDBACK=1` and/or `FIRECRAWL_NO_ENDPOINT_FEEDBACK=1` removes the corresponding feedback tools and reduces this count, as does local keyless startup. For clients with a tool-slot limit: the hosted keyless endpoint (`https://mcp.firecrawl.dev/v2/mcp`, no API key) exposes only 3 (`firecrawl_scrape`, `firecrawl_search`, `firecrawl_parse`), and the dedicated [search-only endpoint](#search-only-endpoint) (`https://mcp.firecrawl.dev/v2/mcp-search`) exposes a fixed set of 12 tools (search, developer, government, and research search, Alexandria catalogue lookup and execution, people and company search and enrichment, and job postings).
 
 ## Installation
 
@@ -88,7 +88,7 @@ A fixed-scope search surface is also hosted at:
 https://mcp.firecrawl.dev/v2/mcp-search
 ```
 
-It exposes a fixed set of eleven tools: `firecrawl_search`, `firecrawl_developer_search`, `firecrawl_gov_search`, the four `firecrawl_research_*` tools, the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`, and the [enrich tools](#15b-enrich-tools) `people_company_search` and `people_company_enrich`. Its `firecrawl_search` fetches no page content.
+It exposes a fixed set of twelve tools: `firecrawl_search`, `firecrawl_developer_search`, `firecrawl_gov_search`, the four `firecrawl_research_*` tools, the two Alexandria tools `firecrawl_find_tools` and `firecrawl_scrape`, and the [enrich tools](#15b-enrich-tools) `people_company_search` and `people_company_enrich`, and the [jobs tool](#15c-jobs-tool-jobs_search) `jobs_search`. Its `firecrawl_search` fetches no page content.
 
 ### Running with npx
 
@@ -294,6 +294,7 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 - `FIRECRAWL_API_URL` (Optional): Custom API endpoint for self-hosted instances
   - Example: `https://firecrawl.your-domain.com`
   - If not provided, the cloud API will be used (requires API key)
+  - Over stdio, Alexandria tools are sent to this endpoint even when no API key is set here, and it answers for the account. [Firecrawl Local](https://github.com/firecrawl/firecrawl/tree/main/apps/local) signs them with the login it holds
 - `FIRECRAWL_INTEGRATION` (Optional): Integration tag for apps that launch this server, such as an editor extension
   - Sent as the `integration` field of scrape, batch scrape, crawl, map, search, extract, agent, parse, interact and feedback requests
   - Use a value that starts with `_`, for example `_zed`
@@ -1080,7 +1081,7 @@ The filters are optional and combine: a result must match every filter set. Filt
 
 ### 15. Alexandria Tools
 
-Firecrawl Alexandria is a catalogue of data providers reachable through the Firecrawl API with a Firecrawl API key on a team with Alexandria access. Keyless sessions (hosted or local) get `Alexandria requires an API key on a team with Alexandria access`; Alexandria discovery tools are not listed for hosted keyless sessions.
+Firecrawl Alexandria is a catalogue of data providers reachable through the Firecrawl API with a Firecrawl API key on a team with Alexandria access. Keyless sessions (hosted or local) get `Alexandria requires an API key on a team with Alexandria access`; Alexandria discovery tools are not listed for hosted keyless sessions. A stdio server pointed at its own API with `FIRECRAWL_API_URL` is the exception: it sends Alexandria tools to that API, which answers for the account.
 
 **Semantic discovery (`firecrawl_search`):**
 
@@ -1197,18 +1198,19 @@ People and company search and enrichment over Alexandria's B2B data providers. B
 
 | Tool | Use it for | Providers |
 | --- | --- | --- |
-| `people_company_search` | Finding people (`entity: "person"`) by title, employer, location and more, or companies (`entity: "company"`) by industry, headcount, location, technology or founding year | apollo, fullenrich, people_data_labs, chosen by the caller |
+| `people_company_search` | Finding people (`entity: "person"`) by title, seniority, function, employer and location, or companies (`entity: "company"`) by industry, headcount, location, technology, keywords or founding year | Firecrawl's search waterfall picks them |
 | `people_company_enrich` | Resolving known people to profiles, or known companies to firmographics. With `contact_fields`, finding work email, personal email or mobile for known people | chosen by Firecrawl's enrichment waterfall |
 
 #### people_company_search
 
-No parameter is shared between providers. Each provider block takes that provider's own parameters under its own names (Apollo's `person_titles`, FullEnrich's `current_position_titles`, a People Data Labs `sql` query or Elasticsearch `query`), so a filter a provider lacks is simply absent from its block. A provider runs only when the call includes its block; a call with no provider block and no `firecrawl_search` block fails with `no_provider` and the blocks the tool takes. A call whose every provider block errors or is skipped fails with `no_provider_ran`, each provider's reason, the credits charged and an example of a working call, and still carries the per-provider report in `structuredContent`.
+`people_company_search` takes one normalized input and sends it to Alexandria's search waterfall, `firecrawl/search/auto`, as a single request: `entity` (`"person"` or `"company"`, required), optional `query`, `filters` (`titles`, `seniority`, `functions`, `company_domains`, `locations`, `industries`, `technologies`, `keywords`, and `headcount` and `founded_year` as `{ "min", "max" }`), `limit` (1 to 100, default 10), `cursor`, `count_only` and `max_credits` (default 1000). For people, company filters describe the employer. The waterfall asks its providers one at a time in list-price order, and only those that apply every filter given; when none does, it searches companies first and then people at the domains it found, and a request no provider or chain covers is refused with `unsupported_filters`, naming the filter to drop. With `company_domains` it stops at the first provider that returns anyone; otherwise it fills `limit` across up to three providers, asking each only for the rows still missing, and drops duplicates. A row whose own title, employer domain, country or city, headcount or founding year fails a filter given, or whose title names another seniority level or function than those given (SVP, EVP and AVP meet `vp`), is dropped, and the search keeps filling from the next provider. Rows carry name, title (`title_match` is `current` or `past`), company, location, LinkedIn URL and `source`, and never emails or phones. A request that names one person is refused with `use_enrich` and pointed to `people_company_enrich`. `providers` lists each provider call with its status, rows, rows `dropped` for failing a filter, rows kept as `unverified` because their title names no level or function for a `seniority` or `functions` filter, credits and time. `provider` limits the call to one provider, and with `options` sends that provider's own search options as given.
 
-`entity` is required; a call without it, or with another value, fails with `invalid_input`, the unknown top-level fields and an example call. A page size above its maximum (Apollo `per_page` 25, FullEnrich `limit` 25, People Data Labs `limit` 10) runs at the maximum, with a `note` on that provider's entry. An optional `firecrawl_search` block runs a Firecrawl web search beside the providers, with `firecrawl_search`'s query parameters but no page fetching, and reports its results in its own `providers` entry.
-
-Enabled providers run in parallel, and nothing is merged. The response has one `providers` entry per provider with its `status`, records `returned`, `credits` and its own `results`. A failed provider has a `note`, and `retryable: true` when the provider may succeed on a later try. `credits_total` sums the charges. The tool description lists each provider's credit price.
-
-`max_credits` defaults to 1000; 0 runs only free calls. Before any provider runs, the call's most possible cost is estimated from those prices as if every record were found; a call whose estimate is higher fails with `max_credits_exceeded`, the estimate per provider and the minimum `max_credits` (with the same call raised to it when the call is short enough to quote), and a call that runs reports `credits_estimate` and `max_credits`. The `firecrawl_search` block is estimated at its listed price, 2 credits per 10 results (10 with enterprise zdr). The tool repairs common near-miss shapes before validating: a single item where a list is expected, plain strings for FullEnrich `{"value"}` filters, `"51-200"` for FullEnrich ranges, and a provider block sent as a one-item list or under an extra key. An argument that still fails schema validation names every invalid field, the fields its block takes, and an example call; a missing or invalid `entity` is reported with the unknown top-level fields before the provider blocks are checked.
+```json
+{
+  "name": "people_company_search",
+  "arguments": { "entity": "person", "filters": { "titles": ["Head of Data"], "company_domains": ["example.com"] }, "limit": 10 }
+}
+```
 
 #### people_company_enrich
 
@@ -1232,6 +1234,29 @@ For each requested field, Firecrawl tries the providers that can use the record'
 The response has `people` and `companies` lists with one entry per input, each with `input_index` and `results`: one `{ "provider", "data" }` entry per provider that found a requested field, where `data` is that provider's own response, unchanged. Each record also has `fields`: for each filled field, the `provider` behind it; for an email the chosen `value`, `verified` (the provider marked it deliverable) and `domain_match`; for a profile or firmographics `complete`, false when only a partial answer was found, and for firmographics `linkedin_confirmed`. A work email is never a free-mail or role address, and is on the company's domain when one is known; `verified_only: true` returns only verified emails. A record nothing was found for has empty `results`. `credits_used` is what the call charged: each provider that found something is charged its listed price, and misses are free. `max_credits` (at most 10,000) caps the call: a provider is tried only while its listed price still fits. Without it the call is uncapped. `stopped: "team_quota"` means the team ran out of credits during the call. To call one specific provider, use `firecrawl_scrape` with an `alexandria` body.
 
 Both tools also accept, and drop, the `conversationId` and `objective` fields agents carry between Firecrawl tools.
+
+### 15c. Jobs Tool (`jobs_search`)
+
+`jobs_search` finds job postings and tells whether a posting is still open. It is listed wherever the enrich tools are, the [search-only endpoint](#search-only-endpoint) included, and needs the same credential. It sends its input as a single request to Alexandria's jobs route, `firecrawl/jobs/auto`, which picks the mode and the providers:
+
+| Input | What it does |
+| --- | --- |
+| `url`, or `urls` (up to 10) | Reads each posting and returns its status. One `url` also returns the description |
+| `company` (a name or domain) | Lists the company's open roles from its own job board; add `query` for one role there |
+| `query` (a title or keywords) | Searches postings by role, with `location`, `remote` and `posted_within_days`; `group_by: "employer"` groups them by employer, and `boards_only` searches employers' own boards only |
+
+At least one of `query`, `company`, `url` or `urls` is required. `max_credits` (default 200) and `include_description` apply to every mode. `limit` (1 to 100, default 10) applies to a search by `query` or `company`, and `cursor`, `provider`, `group_by` and `boards_only` to a search by `query` alone; a read by `url` or `urls` takes none of them.
+
+```json
+{
+  "name": "jobs_search",
+  "arguments": { "query": "data engineer", "location": "Berlin", "posted_within_days": 14 }
+}
+```
+
+Every row has the same fields: `title`, `company`, `company_domain`, `location`, `remote`, `employment_type`, `posted_at` (as the board states it), `url`, `apply_url`, `source`, `source_type` (`employer_board`, `employer_site`, `aggregator` or `index`), `board`, `status` and `checked_at`, plus `description`, `salary` and `requirements` where they apply, and `reason` on a posting that is `closed`, `not_found`, `error` or `unverified` after a read by URL. `status` is `open` when the posting was read from the employer's board or live posting page in this call, and `unverified` when it comes from a job site and was not confirmed on the employer's board; a posting checked by URL can also be `closed`, `not_found` or `error`.
+
+The response also carries `mode`, `count`, `next_cursor`, `providers` (each provider call with its `status`, the rows it `returned` and `dropped`, and its `credits`), `credits`, `credits_pending`, `stopped` and `notes`; `employers` with `group_by`; and, for a company, `boards` (the boards read and what each covers) and `resolution` (how the board was found). When no board is found for a company, the rows come from job sites and `notes` says so. Against a Firecrawl API that does not serve the route yet, the tool fails with `jobs_search_unavailable`.
 
 ### 16. Credit Usage Tool
 

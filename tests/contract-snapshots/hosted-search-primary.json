@@ -20,9 +20,10 @@
       "firecrawl_research_read_paper@b0cd84d8908a",
       "firecrawl_developer_search@e9810e540216",
       "firecrawl_gov_search@b020bd420f91",
-      "people_company_search@7b68fb08e95d",
+      "people_company_search@f92da903a36f",
       "people_company_enrich@d72635ff6928",
-      "firecrawl_search@74db515821a1",
+      "jobs_search@206a7e3f525b",
+      "firecrawl_search@ef815c4a2cea",
       "firecrawl_find_tools@d138e7a0897b",
       "firecrawl_scrape@9f6e2f7369b9"
     ]

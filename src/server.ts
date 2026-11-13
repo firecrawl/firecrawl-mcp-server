@@ -86,6 +86,7 @@ import { FeedbackTokenRegistry, FeedbackTokenStore, withFeedbackRefs } from './a
 import { registerDeveloperTools } from './developer';
 import { registerGovTools } from './gov';
 import { registerEnrichTools } from './enrich';
+import { registerJobsTools } from './jobs';
 import { registerMonitorTools } from './monitor';
 import { registerResearchTools } from './research';
 import { fitSearchResponse, searchByteBudget } from './search-budget';
@@ -694,6 +695,13 @@ export function createFirecrawlMcpServer(
     safeMode: options.safeMode ?? false,
     fileAccess: options.fileAccess ?? 'local',
     requireCredential: options.requireCredential ?? false,
+    // A stdio server pointed at an API of its own, such as Firecrawl Local or
+    // a self-hosted instance. That API may hold the account itself, so it is
+    // the one to say who may use Alexandria. Never for HTTP, where each
+    // session brings its own credential.
+    ownApi:
+      (options.transport ?? 'stdio') !== 'httpStream' &&
+      Boolean(normalizeHeader(options.apiUrl)),
     searchFeedback: options.searchFeedback ?? true,
     endpointFeedback: options.endpointFeedback ?? true,
     integration: integrationFrom(options.integration),
@@ -852,6 +860,10 @@ export function createFirecrawlMcpServer(
   }
 
   function assertExchangeCredential(session?: SessionData): void {
+    // The server's own API decides who may use Alexandria, and its answer
+    // says what to do: Firecrawl Local signs requests with the user's saved
+    // login and says how to sign in when there is none.
+    if (config.ownApi) return;
     assertExchangeCredentialPresent(hasCredential(session));
   }
 
@@ -3634,14 +3646,8 @@ Set \`redactPII\` to request redaction of personally identifiable information in
   registerDeveloperTools(server, getClient);
   registerGovTools(server, getClient);
   if (!isLocalKeylessStartup()) {
-    registerEnrichTools(server, getClient, assertExchangeCredential, hasCredential, {
-      parameters: z
-        .object({ ...searchFields })
-        .refine(searchDomainsAreExclusive, SEARCH_DOMAINS_CONFLICT_MESSAGE)
-        .refine(searchCategoriesAreCompatible, SEARCH_CATEGORIES_CONFLICT_MESSAGE)
-        .refine(searchQueryIsValid, 'A query is required.'),
-      run: (args, context) => searchTool.execute(args, context, 'people_company_search'),
-    }, alexandriaTools);
+    registerEnrichTools(server, getClient, assertExchangeCredential, hasCredential, alexandriaTools);
+    registerJobsTools(server, getClient, assertExchangeCredential, hasCredential);
   }
   registerUsageTools(server, getClient);
 

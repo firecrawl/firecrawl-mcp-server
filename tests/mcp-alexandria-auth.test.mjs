@@ -40,6 +40,41 @@ test('local keyless stdio refuses every Exchange path with the explanatory error
   }
 });
 
+const ALEXANDRIA_CALLS = [
+  { name: 'alexandria_library_read', arguments: { calls: [EXCHANGE_CALL] } },
+  { name: 'firecrawl_scrape', arguments: { alexandria: [EXCHANGE_CALL] } },
+  { name: 'firecrawl_find_tools', arguments: { categories: ['finance'] } },
+];
+const NO_CREDENTIAL = { FIRECRAWL_API_KEY: '', FIRECRAWL_OAUTH_TOKEN: '' };
+
+test('a stdio server pointed at its own API sends Alexandria calls there without a key', async (t) => {
+  const { api, client } = await startStdioWithApi(t, { env: NO_CREDENTIAL });
+  for (const params of ALEXANDRIA_CALLS) {
+    const before = api.requests.length;
+    const result = await client.request('tools/call', params);
+    assert.notEqual(result.isError, true, `${params.name}: ${JSON.stringify(result)}`);
+    assert.ok(api.requests.length > before, `${params.name} made no request`);
+    for (const request of api.requests.slice(before)) {
+      assert.doesNotMatch(request.headers.authorization ?? '', /fc-/, params.name);
+    }
+  }
+});
+
+test('that API\'s refusal reaches the agent in its own words', async (t) => {
+  const refusal = 'An API key is required for provider tools. Run `firecrawl-local login` to sign in.';
+  const { client } = await startStdioWithApi(t, {
+    apiStatus: 403,
+    apiError: refusal,
+    env: NO_CREDENTIAL,
+  });
+  for (const params of ALEXANDRIA_CALLS) {
+    const result = await client.request('tools/call', params);
+    assert.equal(result.isError, true, params.name);
+    assert.match(result.content[0].text, /firecrawl-local login/, params.name);
+    assert.doesNotMatch(result.content[0].text, new RegExp(EXCHANGE_KEY_REQUIRED_MESSAGE), params.name);
+  }
+});
+
 test('a hosted API key header reaches the Exchange', async (t) => {
   const backend = await startFakeExchangeApi();
   t.after(() => backend.close());
