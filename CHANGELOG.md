@@ -6,6 +6,10 @@
 
 - Alexandria skills as files, plus `firecrawl_save_skill` to write them. `alexandria_library_search` (and the `firecrawl/library` capability on surfaces without it) describes a `/skills` tree beside `/library`: `grep -i "<word>" /skills/INDEX` lists skills one per line (path, a `[team-authored vN]` or `[firecrawl]` marker, `name: description`, the team's own first), and `cat` reads the path; when grep lists many, `cat /skills/search/<words>` lists the best matches ranked, the team's first; an earlier version of a team skill is at `/skills/versions/<slug>/<n>.md`. `firecrawl_save_skill` writes: without `id` it creates a team skill through `firecrawl/create-skill`, written out or copied `from` a skill under `/skills` (`<id>` for `/skills/library/<id>`, `team:<slug>` for `/skills/team/<slug>`); with `id` and `baseVersion` (the `version:` in the skill's SKILL.md) it changes one through `firecrawl/update-skill`, and a stale `baseVersion` is a conflict. It returns the saved skill's `path` and a `nextTool` that reads it through the library. Its schema refuses an update without `baseVersion` or a create with update-only fields before Exchange is called, and it is marked destructive because an update can overwrite or turn off a skill. There is no delete. It is free, needs an API key, and is hidden from keyless sessions.
 
+### Changed
+
+- `firecrawl_gov_search` asks `/v2/search/gov` for `sources=gov` and returns the `gov` results. Each row in `structuredContent.results` keeps `url`, `title`, `description` and `position`, and also carries the index's labels when it has them: `jurisdiction`, `court`, `courtType`, `cites`, `citedAs`, `lang` and `updatedAt`. The text block, the tool description and the input schema are unchanged. An API that does not accept `sources` yet refuses it with a 400; the tool then repeats the call without it and returns the `web` results as before.
+
 ## [3.40.0] - 2026-11-12
 
 ### Added
