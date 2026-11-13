@@ -70,55 +70,65 @@ export const findToolsSchema = z
   })
   .strict();
 
-export const findSkillsSchema = z
-  .object({
-    query: z.string().trim().min(1).max(2000).optional().describe('Words that must all appear in a skill\'s id, name or description. Omit to list every skill.'),
-    limit: z.number().int().min(1).max(50).optional().describe('Most skills to return; defaults to 20.'),
-  })
-  .strict();
+export const SKILLS_TOOL = 'firecrawl_skills';
+export const SAVE_SKILL_TOOL = 'firecrawl_save_skill';
 
-export const readSkillSchema = z
+/** firecrawl_skills: with id, reads one skill; otherwise finds skills (all of them without query). */
+export const skillsSchema = z
   .object({
-    id: z.string().trim().min(1).max(200).describe('Skill ID from firecrawl_find_skills; team:<slug> for a team skill.'),
-    path: z.string().trim().min(1).max(500).optional().describe('A file from the skill\'s files list; defaults to SKILL.md.'),
-    version: z.number().int().min(1).optional().describe('A team skill only: an earlier kept version; defaults to the current one.'),
-  })
-  .strict();
-
-export const createSkillSchema = z
-  .object({
-    from: z.string().trim().min(1).max(100).optional().describe('A skill ID from firecrawl_find_skills to copy: a library skill or team:<slug>. Fields you also give override the copy.'),
-    name: z.string().trim().min(1).max(1000).optional().describe('Skill name; required without from.'),
-    description: z.string().trim().min(1).max(5000).optional().describe('When to use the skill; required without from.'),
-    body: z.string().min(1).max(200_000).optional().describe('The instructions, in Markdown; required without from. Reference capabilities as @provider/capability.'),
-    slug: z.string().trim().max(64).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'slug is lowercase letters and digits in words joined by single hyphens').optional().describe('Lowercase words joined by hyphens; defaults to one made from the name.'),
+    query: z.string().trim().min(1).max(2000).optional().describe('Find: a few words from the task, matched against each skill\'s id, name and description. Omit query and id to list every skill.'),
+    limit: z.number().int().min(1).max(50).optional().describe('Find: most skills to return; defaults to 20.'),
+    id: z.string().trim().min(1).max(200).optional().describe('Read: a skill id from a listing (team:<slug> for a team skill). Returns that skill in full.'),
+    path: z.string().trim().min(1).max(500).optional().describe('Read: a file from the skill\'s files list; defaults to SKILL.md.'),
+    version: z.number().int().min(1).optional().describe('Read, team skills only: an earlier kept version; defaults to the current one.'),
   })
   .strict()
-  .refine(
-    (value) => value.from !== undefined || (value.name !== undefined && value.description !== undefined && value.body !== undefined),
-    { message: 'Give name, description and body, or from to copy a skill.' }
-  );
+  .superRefine((value, ctx) => {
+    const refuse = (message: string) => ctx.addIssue({ code: 'custom', message });
+    if (value.id !== undefined && value.query !== undefined) return refuse('Give query to find skills or id to read one, not both.');
+    if (value.id === undefined) {
+      const readOnly = (['path', 'version'] as const).filter((key) => value[key] !== undefined);
+      if (readOnly.length) return refuse(`Only a read takes ${readOnly.join(' and ')}: give the skill's id too.`);
+    } else if (value.limit !== undefined) {
+      return refuse('Only a find takes limit: omit id to find skills.');
+    }
+  });
 
-export const updateSkillSchema = z
+const SKILL_CHANGES = ['name', 'description', 'body', 'enabled', 'discoverable'] as const;
+
+/** firecrawl_save_skill: without id, creates a team skill; with id and baseVersion, changes one. */
+export const saveSkillSchema = z
   .object({
-    id: z.string().trim().max(100).regex(/^team:[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Only team skills (team:<slug>) can be changed; copy a library skill with firecrawl_create_skill.').describe('team:<slug> from firecrawl_find_skills. Library skills cannot be changed; copy one with firecrawl_create_skill.'),
-    baseVersion: z.number().int().min(1).describe('The version firecrawl_read_skill returned. A skill changed since is refused with conflict: read it again and reapply.'),
-    name: z.string().trim().min(1).max(1000).optional(),
-    description: z.string().trim().min(1).max(5000).optional(),
-    body: z.string().min(1).max(200_000).optional().describe('New instructions, in full.'),
-    enabled: z.boolean().optional().describe('Turn the skill on or off.'),
-    discoverable: z.boolean().optional().describe('Whether firecrawl_find_skills lists it.'),
+    id: z.string().trim().max(100).regex(/^team:[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Only team skills (team:<slug>) can be changed; copy a library skill with from.').optional().describe('Update: the team:<slug> skill to change. Omit to create a skill.'),
+    baseVersion: z.number().int().min(1).optional().describe('Update, required: the version firecrawl_skills returned when it read the skill. A skill changed since is refused with conflict: read it again and reapply.'),
+    from: z.string().trim().min(1).max(100).optional().describe('Create: a skill id to copy, a library skill or team:<slug>. Fields you also give override the copy.'),
+    name: z.string().trim().min(1).max(1000).optional().describe('Skill name; required to create without from.'),
+    description: z.string().trim().min(1).max(5000).optional().describe('When to use the skill; required to create without from.'),
+    body: z.string().min(1).max(200_000).regex(/\S/, 'body must not be blank').optional().describe('The instructions in full, in Markdown; required to create without from. Reference capabilities as @provider/capability.'),
+    slug: z.string().trim().max(64).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'slug is lowercase letters and digits in words joined by single hyphens').optional().describe('Create: lowercase words joined by hyphens; defaults to one made from the name.'),
+    enabled: z.boolean().optional().describe('Update: turn the skill on or off.'),
+    discoverable: z.boolean().optional().describe('Update: whether firecrawl_skills lists it.'),
   })
   .strict()
-  .refine(
-    (value) => ['name', 'description', 'body', 'enabled', 'discoverable'].some((key) => value[key as keyof typeof value] !== undefined),
-    { message: 'Nothing to change: give name, description, body, enabled or discoverable.' }
-  );
+  .superRefine((value, ctx) => {
+    const given = (keys: readonly (keyof typeof value)[]) => keys.filter((key) => value[key] !== undefined);
+    const refuse = (message: string) => ctx.addIssue({ code: 'custom', message });
+    if (value.id === undefined) {
+      const updateOnly = given(['baseVersion', 'enabled', 'discoverable']);
+      if (updateOnly.length) return refuse(`Only an update takes ${updateOnly.join(', ')}: give the skill's id too.`);
+      if (value.from === undefined && given(['name', 'description', 'body']).length < 3) return refuse('To create a skill, give name, description and body, or from to copy one.');
+      return;
+    }
+    const createOnly = given(['from', 'slug']);
+    if (createOnly.length) return refuse(`Only a create takes ${createOnly.join(' and ')}: omit id to create a skill.`);
+    if (value.baseVersion === undefined) return refuse('An update needs baseVersion: the version firecrawl_skills returned when it read the skill.');
+    if (!given(SKILL_CHANGES).length) return refuse('Nothing to change: give name, description, body, enabled or discoverable.');
+  });
 
 const toolFor = (request: any) => {
   if (request?.provider !== 'firecrawl' || !request.options) return undefined;
-  if (request.capability === 'read-skill') return { name: 'firecrawl_read_skill', arguments: request.options };
-  if (request.capability === 'create-skill') return { name: 'firecrawl_create_skill', arguments: request.options };
+  if (request.capability === 'read-skill') return { name: SKILLS_TOOL, arguments: request.options };
+  if (request.capability === 'create-skill') return { name: SAVE_SKILL_TOOL, arguments: request.options };
   return undefined;
 };
 
@@ -130,7 +140,7 @@ export function withSkillNavigation(envelope: any) {
   const data = envelope?.data?.alexandria?.[0]?.data;
   if (!data) return envelope;
   for (const skill of Array.isArray(data.skills) ? data.skills : []) {
-    if (typeof skill?.id === 'string') skill.nextTool = { name: 'firecrawl_read_skill', arguments: { id: skill.id } };
+    if (typeof skill?.id === 'string') skill.nextTool = { name: SKILLS_TOOL, arguments: { id: skill.id } };
     const create = toolFor(skill?.create);
     if (create) skill.createTool = create;
   }

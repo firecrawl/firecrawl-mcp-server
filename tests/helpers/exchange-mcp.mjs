@@ -54,6 +54,8 @@ function spawnServer(env, entry = 'dist/index.js') {
       ...process.env,
       MCP_DELEGATED_CREDENTIAL_SECRET:
         'test-mcp-delegated-credential-secret-32',
+      // Off unless a test turns it on: the skills preload calls the API at startup.
+      FIRECRAWL_SKILLS_PRELOAD: '0',
       ...env,
     },
     stdio: ['pipe', 'pipe', 'pipe'],

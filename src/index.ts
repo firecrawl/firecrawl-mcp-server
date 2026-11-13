@@ -4,6 +4,7 @@ import {
   type FirecrawlMcpServerOptions,
   type FirecrawlMcpServerStartArgs,
 } from './server.js';
+import { fetchTeamSkills } from './skills-preload.js';
 import {
   createServiceHooks,
   makePrimaryProfile,
@@ -69,8 +70,18 @@ const options: FirecrawlMcpServerOptions = {
 const serviceSettings = { hosted, transport, apiKey, apiUrl } as const;
 
 const primaryHooks = createServiceHooks(primaryProfile, serviceSettings);
+
+// A local server started with one API key names that team's skills in the firecrawl_skills
+// description. A hosted server serves many teams from one process, so it does not.
+const skillsPreloadOff = ['0', 'false', 'no', 'off'].includes(
+  (process.env.FIRECRAWL_SKILLS_PRELOAD || '').trim().toLowerCase()
+);
+const teamSkills =
+  hosted || skillsPreloadOff ? [] : await fetchTeamSkills({ apiKey, apiUrl });
+
 const { start } = createFirecrawlMcpServer({
   ...options,
+  teamSkills,
   unstable_hooks: {
     ...primaryHooks,
     configureHttp: (app) => {
