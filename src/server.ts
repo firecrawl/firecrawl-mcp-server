@@ -53,6 +53,7 @@ import {
   findToolsOptions,
   saveSkillSchema,
   withSkillNavigation,
+  skillPath,
   withFindToolsNavigation,
   withoutDiscoveredToolPrices,
   withoutFindToolsPrices,
@@ -2180,6 +2181,54 @@ Returns result groups in \`data\` and an operation \`id\`.
     return [stdout.replace(/\n+$/, ''), ...(stderr.trim() ? [`[stderr] ${stderr.trim()}`] : [])].filter(Boolean).join('\n');
   };
 
+  // Skills that fit the goal of a library lookup, listed under its output, so a
+  // caller looking for a provider also sees the written instructions for the task.
+  const RELATED_SKILL_MIN_SIMILARITY = 0.42;
+  const relatedSkills = async (
+    session: SessionData | undefined,
+    command: string,
+    origin: ReturnType<typeof requestOrigin>
+  ): Promise<string> => {
+    if (command.includes('/skills')) return '';
+    // The call's stated goal, when the embedding server keeps one on the session.
+    const goalKey = session
+      ? Object.getOwnPropertySymbols(session).find((key) => /objective/i.test(key.description ?? ''))
+      : undefined;
+    const goal = goalKey ? (session as unknown as Record<symbol, unknown>)[goalKey] : undefined;
+    const quoted = (command.match(/"[^"]+"|'[^']+'/g) ?? []).join(' ').replace(/["'\\|]/g, ' ');
+    const query = (typeof goal === 'string' && goal.trim() ? goal : quoted).replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (query.length < 8) return '';
+    try {
+      const found = JSON.parse(
+        await executeExchangeCalls(
+          session,
+          { provider: 'firecrawl', capability: 'find-skills', options: { query } },
+          undefined,
+          undefined,
+          origin,
+          false,
+          undefined,
+          ALEXANDRIA_LIBRARY_TOOL
+        )
+      );
+      const skills = (found?.data?.alexandria?.[0]?.data?.skills ?? [])
+        .filter(
+          (skill: any) =>
+            typeof skill?.id === 'string' &&
+            typeof skill?.similarity === 'number' &&
+            skill.similarity >= RELATED_SKILL_MIN_SIMILARITY
+        )
+        .slice(0, 3);
+      if (!skills.length) return '';
+      return [
+        '[skills] Written instructions that fit this task. Read the best match before going further and follow it instead of improvising: it names the capabilities to call and what to return.',
+        ...skills.map((skill: any) => `- ${skill.name}: ${skill.description} Read it: cat ${skillPath(skill.id)}`),
+      ].join('\n');
+    } catch {
+      return '';
+    }
+  };
+
   if (dedicatedAlexandria) {
     server.addTool({
       name: ALEXANDRIA_LIBRARY_TOOL,
@@ -2196,31 +2245,35 @@ Returns result groups in \`data\` and an operation \`id\`.
       parameters: libraryToolSchema,
       execute: async (args, { session, client: mcpClient }): Promise<ContentResult> => {
         const { command } = args as z.infer<typeof libraryToolSchema>;
-        const envelope = JSON.parse(
-          await executeExchangeCalls(
+        const origin = requestOrigin(mcpClient, session);
+        const [raw, skills] = await Promise.all([
+          executeExchangeCalls(
             session,
             { provider: 'firecrawl', capability: 'library', options: { command } },
             undefined,
             undefined,
-            requestOrigin(mcpClient, session),
+            origin,
             false,
             undefined,
             // A refusal names this tool as the one to call again.
             ALEXANDRIA_LIBRARY_TOOL
-          )
-        );
+          ),
+          relatedSkills(session, command, origin),
+        ]);
+        const envelope = JSON.parse(raw);
         const entry = envelope?.data?.alexandria?.[0];
         if (entry?.error || typeof entry?.data?.exitCode !== 'number') {
           const message = typeof entry?.error?.message === 'string' ? entry.error.message : 'The library returned no result.';
           throw new UserError(message, { success: false, message, requestId: envelope?.requestId });
         }
         const { stdout = '', stderr = '', exitCode, truncated, catalogueVersion } = entry.data;
-        return withStructured(libraryText({ stdout, stderr, exitCode }), {
+        return withStructured(libraryText({ stdout, stderr, exitCode }) + (skills ? `\n\n${skills}` : ''), {
           stdout,
           stderr,
           exitCode,
           ...(truncated ? { truncated: true } : {}),
           ...(catalogueVersion ? { catalogueVersion } : {}),
+          ...(skills ? { message: skills } : {}),
         });
       },
     });
