@@ -70,6 +70,29 @@ export const findToolsSchema = z
   })
   .strict();
 
+export const SKILLS_TOOL = 'firecrawl_skills';
+
+/** firecrawl_skills: with id, reads one skill; otherwise finds skills (all of them without query). */
+export const skillsSchema = z
+  .object({
+    query: z.string().trim().min(1).max(2000).optional().describe('Find: a few words from the task, matched against each skill\'s id, name and description. Omit query and id to list every skill.'),
+    limit: z.number().int().min(1).max(50).optional().describe('Find: most skills to return; defaults to 20.'),
+    id: z.string().trim().min(1).max(200).optional().describe('Read: a skill id from a listing (team:<slug> for a team skill). Returns that skill in full.'),
+    path: z.string().trim().min(1).max(500).optional().describe('Read: a file from the skill\'s files list; defaults to SKILL.md.'),
+    version: z.number().int().min(1).optional().describe('Read, team skills only: an earlier kept version; defaults to the current one.'),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const refuse = (message: string) => ctx.addIssue({ code: 'custom', message });
+    if (value.id !== undefined && value.query !== undefined) return refuse('Give query to find skills or id to read one, not both.');
+    if (value.id === undefined) {
+      const readOnly = (['path', 'version'] as const).filter((key) => value[key] !== undefined);
+      if (readOnly.length) return refuse(`Only a read takes ${readOnly.join(' and ')}: give the skill's id too.`);
+    } else if (value.limit !== undefined) {
+      return refuse('Only a find takes limit: omit id to find skills.');
+    }
+  });
+
 const SKILL_CHANGES = ['name', 'description', 'body', 'enabled', 'discoverable'] as const;
 
 export const saveSkillSchema = z

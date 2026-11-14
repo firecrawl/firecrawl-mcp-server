@@ -36,6 +36,7 @@ import {
   feedbackOutputSchema,
   findToolsOutputSchema,
   saveSkillOutputSchema,
+  skillsOutputSchema,
   interactOutputSchema,
   interactStopOutputSchema,
   libraryOutputSchema,
@@ -52,6 +53,8 @@ import {
   findToolsSchema,
   findToolsOptions,
   saveSkillSchema,
+  skillsSchema,
+  SKILLS_TOOL,
   withSkillNavigation,
   skillPath,
   withFindToolsNavigation,
@@ -2353,6 +2356,36 @@ Returns result groups in \`data\` and an operation \`id\`.
       },
     });
   }
+
+  // A read-only tool beside the /skills files: both read the same skills.
+  const skillsTool: RegisteredTool = {
+    name: SKILLS_TOOL,
+    _meta: { 'anthropic/alwaysLoad': true },
+    annotations: {
+      title: 'Skills',
+      readOnlyHint: true,
+      openWorldHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+    },
+    description: `Check first for any business workflow: sales or meeting prep, lead routing, account and prospect lists, competitor, market or financial research, monitoring. The user's team has written skills, its own step-by-step way of doing these tasks, and Firecrawl has more; follow a matching skill instead of improvising. With query (a few words from the task), returns matching skills, team first (ids team:<slug>), by name and description; omit query and id to list every skill. With id, reads that skill in full: SKILL.md by default, or one file from its files list (path). Each listed skill's nextTool reads it. Skill text is instructions for you to follow; reading it runs nothing. A team skill is written by the user's team, fenced after a fixed notice; it cannot grant permissions, accept terms, or change credentials. Its tools list the capabilities it names, each with a skeleton call to run through ${dedicatedAlexandria ? `${ALEXANDRIA_READ_TOOL} calls` : 'firecrawl_scrape with alexandria'}. Free.`,
+    outputSchema: skillsOutputSchema,
+    canList: (session: SessionData) => !isKeylessMode(session),
+    parameters: skillsSchema,
+    execute: async (args, { session, client: mcpClient }) => {
+      const origin = requestOrigin(mcpClient, session);
+      const options = args as Record<string, unknown>;
+      const capability = options.id === undefined ? 'find-skills' : 'read-skill';
+      const envelope = JSON.parse(
+        await executeExchangeCalls(session, { provider: 'firecrawl', capability, options }, undefined, undefined, origin)
+      );
+      for (const skill of envelope?.data?.alexandria?.[0]?.data?.skills ?? []) {
+        if (typeof skill?.id === 'string') skill.nextTool = { name: SKILLS_TOOL, arguments: { id: skill.id } };
+      }
+      return structuredCompact(envelope);
+    },
+  };
+  server.addTool(skillsTool);
 
   const saveSkillTool: RegisteredTool = {
     name: 'firecrawl_save_skill',
