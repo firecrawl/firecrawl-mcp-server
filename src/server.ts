@@ -2181,7 +2181,26 @@ Returns result groups in \`data\` and an operation \`id\`.
     return [stdout.replace(/\n+$/, ''), ...(stderr.trim() ? [`[stderr] ${stderr.trim()}`] : [])].filter(Boolean).join('\n');
   };
 
-  // Skills that fit the goal of a library lookup, listed under its output, so a
+  // What a library command is looking for: its search patterns and path
+  // segments, without the shell around them.
+  const COMMAND_NOISE = new Set(
+    'cat ls grep egrep find head tail wc sort uniq sed awk xargs echo cd tree less more cut tr for do done then else test true false null dev and not name iname path ipath type maxdepth mindepth print exec library skills search index readme md json txt com www org net gov io co the of in to a an or'.split(
+      ' '
+    )
+  );
+  const commandWords = (command: string): string => {
+    const words: string[] = [];
+    const text = command
+      .replace(/(^|[\s;|&(])-{1,2}[A-Za-z][A-Za-z-]*/g, '$1 ')
+      .replace(/\b\d?>\s*\/dev\/null|2>&1/g, ' ');
+    for (const word of text.toLowerCase().split(/[^a-z0-9]+/)) {
+      if (word.length < 3 || /^\d+$/.test(word) || COMMAND_NOISE.has(word) || words.includes(word)) continue;
+      words.push(word);
+    }
+    return words.join(' ').slice(0, 200).trim();
+  };
+
+  // Skills that match what a library command looks for, listed under its output, so a
   // caller looking for a provider also sees the written instructions for the task.
   const RELATED_SKILL_MIN_SIMILARITY = 0.42;
   const relatedSkills = async (
@@ -2190,13 +2209,7 @@ Returns result groups in \`data\` and an operation \`id\`.
     origin: ReturnType<typeof requestOrigin>
   ): Promise<string> => {
     if (command.includes('/skills')) return '';
-    // The call's stated goal, when the embedding server keeps one on the session.
-    const goalKey = session
-      ? Object.getOwnPropertySymbols(session).find((key) => /objective/i.test(key.description ?? ''))
-      : undefined;
-    const goal = goalKey ? (session as unknown as Record<symbol, unknown>)[goalKey] : undefined;
-    const quoted = (command.match(/"[^"]+"|'[^']+'/g) ?? []).join(' ').replace(/["'\\|]/g, ' ');
-    const query = (typeof goal === 'string' && goal.trim() ? goal : quoted).replace(/\s+/g, ' ').trim().slice(0, 200);
+    const query = commandWords(command);
     if (query.length < 8) return '';
     try {
       const found = JSON.parse(
