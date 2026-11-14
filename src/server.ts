@@ -53,6 +53,7 @@ import {
   findToolsOptions,
   saveSkillSchema,
   withSkillNavigation,
+  skillPath,
   withFindToolsNavigation,
   withoutDiscoveredToolPrices,
   withoutFindToolsPrices,
@@ -641,7 +642,7 @@ const OUT_OF_CREDITS_INSTRUCTION =
   'If Firecrawl reports that credits ran out or the daily limit without an account was reached, end your final answer with the line it provides, link included.';
 // The Alexandria sentences name the tools a surface registers; everything else is shared.
 const fullProfileInstructions = (tools: AlexandriaTools) =>
-  `${OUT_OF_CREDITS_INSTRUCTION} Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. Authenticated firecrawl_search returns web results together with matching Alexandria providers in data.tools. ${ALEXANDRIA_CATALOGUE_SENTENCE} A matching provider can return the same fields across several entities, provenance, exact figures or timestamps, or a large set of records through ${tools === 'dedicated'
+  `${tools === 'dedicated' ? 'Check /skills in alexandria_library_search first for any business workflow (sales or meeting prep, prospect lists, competitor, market or financial research, monitoring) and follow a matching skill instead of improvising. ' : ''}${OUT_OF_CREDITS_INSTRUCTION} Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. Authenticated firecrawl_search returns web results together with matching Alexandria providers in data.tools. ${ALEXANDRIA_CATALOGUE_SENTENCE} A matching provider can return the same fields across several entities, provenance, exact figures or timestamps, or a large set of records through ${tools === 'dedicated'
     ? 'alexandria_library_read with its published contract. If web results already answer the question, use them. Before scraping the same fields from several pages, alexandria_library_search checks for free whether a provider covers them: it explores the whole library as a read-only filesystem with shell commands, and reads a contract that was not returned in full.'
     : 'firecrawl_scrape with its published contract. If web results already answer the question, use them. For the same fields across multiple pages, firecrawl_find_tools offers free provider discovery. Use firecrawl_find_tools to read a contract that was not returned in full or to browse the catalogue by category.'} ${ALEXANDRIA_SOURCES_ALWAYS_ON} If no provider fits, continue with web search or firecrawl_agent. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question (code behaviour, a library or framework, an API contract, an error message, or a known bug), firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of public repositories, GitHub issues, merged pull requests, READMEs, and code documentation. For a legal or regulatory question, firecrawl_gov_search searches primary law and regulatory material from US federal, state, and local government sources: statutes, regulations, codes, court opinions, and other government publications; firecrawl_search with categories: ["gov"] reaches the same sources and cannot be combined with other categories. firecrawl_search with sources: [{type: "alexandria"}] returns compact tool summaries in data.tools; toolDetail: "full" includes contracts, ${tools === 'dedicated'
     ? 'alexandria_library_search holds each contract at /library/<category>/<provider>/<capability>.md, and alexandria_library_read with calls: [{provider, capability, options}] runs up to ten capabilities and returns their results.'
@@ -2180,6 +2181,54 @@ Returns result groups in \`data\` and an operation \`id\`.
     return [stdout.replace(/\n+$/, ''), ...(stderr.trim() ? [`[stderr] ${stderr.trim()}`] : [])].filter(Boolean).join('\n');
   };
 
+  // Skills that fit the goal of a library lookup, listed under its output, so a
+  // caller looking for a provider also sees the written instructions for the task.
+  const RELATED_SKILL_MIN_SIMILARITY = 0.42;
+  const relatedSkills = async (
+    session: SessionData | undefined,
+    command: string,
+    origin: ReturnType<typeof requestOrigin>
+  ): Promise<string> => {
+    if (command.includes('/skills')) return '';
+    // The call's stated goal, when the embedding server keeps one on the session.
+    const goalKey = session
+      ? Object.getOwnPropertySymbols(session).find((key) => /objective/i.test(key.description ?? ''))
+      : undefined;
+    const goal = goalKey ? (session as unknown as Record<symbol, unknown>)[goalKey] : undefined;
+    const quoted = (command.match(/"[^"]+"|'[^']+'/g) ?? []).join(' ').replace(/["'\\|]/g, ' ');
+    const query = (typeof goal === 'string' && goal.trim() ? goal : quoted).replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (query.length < 8) return '';
+    try {
+      const found = JSON.parse(
+        await executeExchangeCalls(
+          session,
+          { provider: 'firecrawl', capability: 'find-skills', options: { query } },
+          undefined,
+          undefined,
+          origin,
+          false,
+          undefined,
+          ALEXANDRIA_LIBRARY_TOOL
+        )
+      );
+      const skills = (found?.data?.alexandria?.[0]?.data?.skills ?? [])
+        .filter(
+          (skill: any) =>
+            typeof skill?.id === 'string' &&
+            typeof skill?.similarity === 'number' &&
+            skill.similarity >= RELATED_SKILL_MIN_SIMILARITY
+        )
+        .slice(0, 3);
+      if (!skills.length) return '';
+      return [
+        '[skills] Written instructions that fit this task. Read the best match before going further and follow it instead of improvising: it names the capabilities to call and what to return.',
+        ...skills.map((skill: any) => `- ${skill.name}: ${skill.description} Read it: cat ${skillPath(skill.id)}`),
+      ].join('\n');
+    } catch {
+      return '';
+    }
+  };
+
   if (dedicatedAlexandria) {
     server.addTool({
       name: ALEXANDRIA_LIBRARY_TOOL,
@@ -2196,31 +2245,35 @@ Returns result groups in \`data\` and an operation \`id\`.
       parameters: libraryToolSchema,
       execute: async (args, { session, client: mcpClient }): Promise<ContentResult> => {
         const { command } = args as z.infer<typeof libraryToolSchema>;
-        const envelope = JSON.parse(
-          await executeExchangeCalls(
+        const origin = requestOrigin(mcpClient, session);
+        const [raw, skills] = await Promise.all([
+          executeExchangeCalls(
             session,
             { provider: 'firecrawl', capability: 'library', options: { command } },
             undefined,
             undefined,
-            requestOrigin(mcpClient, session),
+            origin,
             false,
             undefined,
             // A refusal names this tool as the one to call again.
             ALEXANDRIA_LIBRARY_TOOL
-          )
-        );
+          ),
+          relatedSkills(session, command, origin),
+        ]);
+        const envelope = JSON.parse(raw);
         const entry = envelope?.data?.alexandria?.[0];
         if (entry?.error || typeof entry?.data?.exitCode !== 'number') {
           const message = typeof entry?.error?.message === 'string' ? entry.error.message : 'The library returned no result.';
           throw new UserError(message, { success: false, message, requestId: envelope?.requestId });
         }
         const { stdout = '', stderr = '', exitCode, truncated, catalogueVersion } = entry.data;
-        return withStructured(libraryText({ stdout, stderr, exitCode }), {
+        return withStructured(libraryText({ stdout, stderr, exitCode }) + (skills ? `\n\n${skills}` : ''), {
           stdout,
           stderr,
           exitCode,
           ...(truncated ? { truncated: true } : {}),
           ...(catalogueVersion ? { catalogueVersion } : {}),
+          ...(skills ? { message: skills } : {}),
         });
       },
     });
