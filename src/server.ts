@@ -2309,6 +2309,7 @@ Returns result groups in \`data\` and an operation \`id\`.
   const skillsListing = teamSkillsListing(teamSkills, TOOL_DESCRIPTION_CAP - skillsDescription.length);
   const skillsTool: RegisteredTool = {
     name: SKILLS_TOOL,
+    _meta: { 'anthropic/alwaysLoad': true },
     annotations: {
       title: 'Skills',
       readOnlyHint: true,
