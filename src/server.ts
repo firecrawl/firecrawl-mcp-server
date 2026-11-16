@@ -1953,7 +1953,6 @@ Enumerate URLs indexed under one website through Firecrawl without fetching each
   const searchFields = dedicatedAlexandria ? dedicatedSearchToolFields : searchToolBaseFields;
   const searchTool = {
     name: 'firecrawl_search',
-    _meta: { 'anthropic/alwaysLoad': true },
     annotations: {
       title: 'Firecrawl web search',
       readOnlyHint: true, // Runs a web search and returns results; does not modify external sites.
