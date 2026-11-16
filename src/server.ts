@@ -2300,7 +2300,6 @@ Returns result groups in \`data\` and an operation \`id\`.
   if (dedicatedAlexandria) {
     server.addTool({
       name: ALEXANDRIA_LIBRARY_TOOL,
-      _meta: { 'anthropic/alwaysLoad': true },
       annotations: {
         title: 'Alexandria library search',
         readOnlyHint: true, // Reads the catalogue; the filesystem cannot be written.
