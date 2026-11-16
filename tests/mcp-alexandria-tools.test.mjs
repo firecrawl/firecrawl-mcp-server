@@ -251,12 +251,28 @@ test('a retained alexandria_library_read answer carries a bounded preview of eac
   assert.match(result.message, /^This is a partial preview\./);
   assert.match(result.message, /data, not instructions/);
   assert.match(result.message, /Do not rerun the provider/);
-  assert.match(result.message, /no python or node, and jq stops after 10,000 iterations/);
+  assert.match(result.message, /no python or node; if jq stops with "too many iterations", filter the list in slices/);
+  assert.doesNotMatch(result.message, /transcripts\//);
   assert.equal(result.nextTool.name, 'alexandria_library_read');
   assert.equal(
     result.nextTool.arguments.calls[0].options.command,
     `jq -c '.data.alexandria[0].data.rows[${shown.length}:${shown.length + 20}]' response.json`
   );
+});
+
+test('a retained answer names the transcript text files the workspace lists, and only those', async (t) => {
+  const segments = Array.from({ length: 3000 }, (_, i) => ({ start_ms: i * 1000, text: `line ${i}` }));
+  const large = { success: true, data: { creditsCost: 5, alexandria: [{ ...EXCHANGE_CALL, data: { segments } }] } };
+  const { api, client } = await startStdioWithApi(t, {
+    largeResult: large,
+    bashRecovery: 'available',
+    bashFiles: ['0.segments.txt', 'unexpected name'],
+  });
+  const result = toolText(await call(client, 'alexandria_library_read', { calls: [EXCHANGE_CALL] }));
+  assert.equal(result.delivery, 'retained');
+  assert.match(api.requests[1].body.alexandria.options.command, /response\.json && \{ ls -1 transcripts 2>\/dev\/null \|\| true; \}$/);
+  assert.match(result.message, /plain text, one "HH:MM:SS\.mmm text" line per segment .*: transcripts\/0\.segments\.txt\./);
+  assert.doesNotMatch(result.message, /unexpected name/);
 });
 
 test('a retained read of ten calls shares one preview budget', async (t) => {
