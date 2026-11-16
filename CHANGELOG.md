@@ -12,6 +12,10 @@
 - On the full surface (stdio, `/v2/mcp` with or without an API key, `/v2/mcp-oauth`), `firecrawl_find_tools` is no longer listed, and `firecrawl_scrape` no longer lists or describes `alexandria` and `requestId`: its listed schema takes `url`, and its description points to `alexandria_library_search` and `alexandria_library_read`. Both still answer the calls they used to, so sessions and prompts that learned them keep working. `toolDetail` and `domainTools` stay on `firecrawl_scrape` for the website-matched tools of a scraped page. The search-only endpoint and surfaces whose `toolFilter` leaves a library tool out keep listing both, unchanged.
 - `firecrawl_gov_search` asks `/v2/search/gov` for `sources=gov` and returns the `gov` results. Each row in `structuredContent.results` keeps `url`, `title`, `description` and `position`, and also carries the index's labels when it has them: `jurisdiction`, `court`, `courtType`, `cites`, `citedAs`, `lang` and `updatedAt`. The text block, the tool description and the input schema are unchanged. An API that does not accept `sources` yet refuses it with a 400; the tool then repeats the call without it and returns the `web` results as before.
 
+### Fixed
+
+- `pdfOptions` reach the API when the call does not also set `parsers`. They were sent only when the call listed `parsers: ["pdf"]`, so `pdfOptions.maxPages` on its own did not limit the pages parsed. `firecrawl_scrape`, `firecrawl_parse` and the `scrapeOptions` of `firecrawl_search`, `firecrawl_crawl` and `firecrawl_interact` now send `parsers: [{"type": "pdf", "maxPages": n}]` in both cases. Tool definitions are unchanged.
+
 ## [3.40.0] - 2026-11-12
 
 ### Added
