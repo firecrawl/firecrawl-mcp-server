@@ -1178,22 +1178,22 @@ export function createFirecrawlMcpServer(
     }
   }
 
+  // The API parses PDFs unless `parsers` leaves them out, so pdfOptions apply
+  // with or without a `parsers` list and are sent as the pdf parser's options.
   function buildParsersArray(
     args: Record<string, unknown>
-  ): Record<string, unknown>[] | undefined {
-    const parsers = args.parsers as string[] | undefined;
-    if (!parsers || parsers.length === 0) return undefined;
-
-    const result: Record<string, unknown>[] = [];
-    for (const p of parsers) {
-      if (p === 'pdf' && args.pdfOptions) {
-        const pdfOpts = args.pdfOptions as Record<string, unknown>;
-        result.push({ type: 'pdf', ...pdfOpts });
-      } else {
-        result.push(p as unknown as Record<string, unknown>);
-      }
+  ): (string | Record<string, unknown>)[] | undefined {
+    const parsers = (args.parsers as string[] | undefined) ?? [];
+    const pdfOptions = removeEmptyTopLevel(
+      (args.pdfOptions as Record<string, unknown> | undefined) ?? {}
+    );
+    if (Object.keys(pdfOptions).length === 0) {
+      return parsers.length > 0 ? parsers : undefined;
     }
-    return result;
+    return [
+      { type: 'pdf', ...pdfOptions },
+      ...parsers.filter((parser) => parser !== 'pdf'),
+    ];
   }
 
   function buildWebhook(
