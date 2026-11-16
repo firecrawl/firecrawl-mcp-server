@@ -381,6 +381,20 @@ test('a toolFilter that leaves alexandria_library_read out keeps firecrawl_scrap
   assert.equal('alexandria' in open.scrape.inputSchema.properties, false);
 });
 
+test('listEarlierAlexandriaTools keeps firecrawl_find_tools and the scrape alexandria body listed beside the library tools', async (t) => {
+  const listed = async (unstable_hooks) => {
+    const port = await startEmbedded(t, { apiUrl: 'http://127.0.0.1:9', apiKey: 'fc-configured', unstable_hooks });
+    const { tools } = await rpc(port, 'tools/list');
+    return Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+  };
+  const kept = await listed({ listEarlierAlexandriaTools: true });
+  const earlier = await listed({ toolFilter: (name) => name.startsWith('firecrawl_') });
+  assert.ok(kept.alexandria_library_read && kept.alexandria_library_search);
+  // The same definitions a surface without the library tools lists, always-load mark included.
+  assert.deepEqual(kept.firecrawl_find_tools, earlier.firecrawl_find_tools);
+  assert.deepEqual(kept.firecrawl_scrape, earlier.firecrawl_scrape);
+});
+
 test('a field an embedder requires on firecrawl_scrape stays required where the alexandria body is unlisted', async (t) => {
   const port = await startEmbedded(t, {
     apiUrl: 'http://127.0.0.1:9',
