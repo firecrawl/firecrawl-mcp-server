@@ -214,7 +214,7 @@ interface ProteinStatement {
   molecule?: string;
   topology?: string;
   orientation?: string;
-  evidence: ProteinEvidence[];
+  evidence?: ProteinEvidence[] | null;
 }
 
 interface ProteinGoTerm {
@@ -222,7 +222,7 @@ interface ProteinGoTerm {
   term?: string;
   code?: string;
   assignedBy?: string;
-  paperIds: string[];
+  paperIds?: string[] | null;
 }
 
 interface ProteinCandidate {
@@ -236,10 +236,9 @@ interface ProteinCandidate {
 
 interface ProteinEntry extends ProteinCandidate {
   url?: string;
-  subcellularLocation: ProteinStatement[];
-  function: ProteinStatement[];
-  goCellularComponent: ProteinGoTerm[];
-  paperIds: string[];
+  subcellularLocation?: ProteinStatement[] | null;
+  function?: ProteinStatement[] | null;
+  goCellularComponent?: ProteinGoTerm[] | null;
 }
 
 interface ProteinLookup {
@@ -280,9 +279,9 @@ function measuredFirst<T>(items: T[], measured: (item: T) => boolean): T[] {
 
 const fmtIds = (ids: string[]) => (ids.length ? ` [${ids.join(', ')}]` : '');
 
-function fmtEvidence(evidence: ProteinEvidence[]): string {
+function fmtEvidence(evidence: ProteinEvidence[] | null | undefined): string {
   const idsByKind = new Map<string, string[]>();
-  for (const { kind, paperId, fromProtein } of evidence) {
+  for (const { kind, paperId, fromProtein } of evidence ?? []) {
     const ids = idsByKind.get(kind) ?? [];
     const id = paperId ?? fromProtein;
     if (id && !ids.includes(id)) ids.push(id);
@@ -293,10 +292,10 @@ function fmtEvidence(evidence: ProteinEvidence[]): string {
     .join('; ');
 }
 
-function fmtStatements(statements: ProteinStatement[]): string[] {
-  if (!statements.length) return ['- No statement in this entry.'];
+function fmtStatements(statements: ProteinStatement[] | null | undefined): string[] {
+  if (!statements?.length) return ['- No statement in this entry.'];
   return measuredFirst(statements, (statement) =>
-    statement.evidence.some(({ kind }) => isMeasured(kind))
+    (statement.evidence ?? []).some(({ kind }) => isMeasured(kind))
   ).map((statement) => {
     const qualifiers = [
       statement.topology && `topology: ${statement.topology}`,
@@ -310,7 +309,7 @@ function fmtStatements(statements: ProteinStatement[]): string[] {
       statement.note ? 'Note: ' : '',
       (statement.text ?? '').replace(/\.$/, ''),
       qualifiers ? ` (${qualifiers})` : '',
-      `. ${fmtEvidence(statement.evidence)}`,
+      `. ${fmtEvidence(statement.evidence) || EVIDENCE_LABELS.untagged}`,
     ].join('');
   });
 }
@@ -320,6 +319,8 @@ function fmtProtein(notice: string | undefined, protein: ProteinEntry): string {
     ? `${protein.gene} (${protein.accession}, ${protein.entryName})`
     : `${protein.accession} (${protein.entryName})`;
   const matchedBy = protein.matchedBy ?? '';
+  const statements = [...(protein.subcellularLocation ?? []), ...(protein.function ?? [])];
+  const goTerms = protein.goCellularComponent ?? [];
   const lines = [
     `# ${[ids, protein.organism?.scientificName].filter(Boolean).join(', ')}`,
     `${protein.name}. Matched by ${MATCHED_BY_LABELS[matchedBy] ?? matchedBy}.`,
@@ -327,16 +328,19 @@ function fmtProtein(notice: string | undefined, protein: ProteinEntry): string {
     'Subcellular location',
     ...fmtStatements(protein.subcellularLocation),
     'GO cellular component (experimental)',
-    ...(protein.goCellularComponent.length
-      ? protein.goCellularComponent.map(
+    ...(goTerms.length
+      ? goTerms.map(
           (go) =>
-            `- ${go.term} (${go.id}), ${go.code}, ${go.assignedBy}${fmtIds(go.paperIds)}`
+            `- ${go.term} (${go.id}), ${go.code}, ${go.assignedBy}${fmtIds(go.paperIds ?? [])}`
         )
       : ['- No experimental term in this entry.']),
     'Function',
     ...fmtStatements(protein.function),
   ];
-  if (protein.paperIds.length) {
+  if (
+    statements.some(({ evidence }) => (evidence ?? []).some(({ paperId }) => paperId)) ||
+    goTerms.some(({ paperIds }) => paperIds?.length)
+  ) {
     lines.push(
       'Open a cited paper with firecrawl_research_inspect_paper or firecrawl_research_read_paper.'
     );
