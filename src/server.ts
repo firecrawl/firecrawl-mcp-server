@@ -544,6 +544,7 @@ export {
 export {
   ALEXANDRIA_CATALOGUE_VERTICALS,
   ALEXANDRIA_SEARCH_INSTRUCTIONS,
+  ALEXANDRIA_DEDICATED_SEARCH_INSTRUCTIONS,
   defaultDomainTools,
   hasAlexandria,
   normalizeSearchSources,
@@ -564,6 +565,7 @@ export {
   searchCategoriesAreCompatible,
   searchDomainsAreExclusive,
   searchToolBaseFields,
+  dedicatedSearchToolFields,
   SEARCH_RESULT_SOURCES,
   annotateResultPositions,
 } from './tool-helpers.js';
