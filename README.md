@@ -1363,7 +1363,7 @@ Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`,
 | `authenticate(request)` | Resolve the session for a request; throw a `Response` to reject it. |
 | `wrapTool(tool)` | Decorate every registered tool. |
 | `onToolResult(event)` | Observe the start and outcome of each tool call. |
-| `instructions` | Server instructions, or a function choosing from the defaults. |
+| `instructions` | Server instructions, or a function choosing from the defaults; it may return a function of the session to give each session its own. |
 | `registerExtraTools(registrar, context)` | Add tools after the built-in ones. |
 | `outboundRequest(session)` | Credential and extra headers for each Firecrawl API request. |
 | `beforeKeylessRequest(session, origin)` | Refuse a keyless request by throwing. |

@@ -415,8 +415,17 @@ export interface FirecrawlMcpServerHooks {
    * for a task that is still running.
    */
   taskResult?: (event: TaskResultEvent) => Promise<ToolResult>;
-  /** Server instructions, or a function choosing them from the defaults. */
-  instructions?: string | ((defaults: InstructionDefaults) => string);
+  /**
+   * Server instructions, or a function choosing them from the defaults. The
+   * function runs once, when the server is created; it may return a function
+   * instead of a string, which is then called with each session's data as the
+   * server opens it.
+   */
+  instructions?:
+    | string
+    | ((
+        defaults: InstructionDefaults
+      ) => string | ((session: SessionData | undefined) => string));
   /** Adds tools after the built-in ones. They bypass `toolFilter`. */
   registerExtraTools?: (
     registrar: ToolRegistrar,
