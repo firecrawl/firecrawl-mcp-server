@@ -15,8 +15,8 @@ test('skills are read through alexandria_library_search; firecrawl_save_skill wr
   for (const name of ['firecrawl_skills', 'firecrawl_find_skills', 'firecrawl_read_skill', 'firecrawl_create_skill', 'firecrawl_update_skill']) assert(!tools.some(tool => tool.name === name), name);
   assert.deepEqual(tools.find(tool => tool.name === 'firecrawl_save_skill')?.annotations, { title: 'Save Skill', readOnlyHint: false, openWorldHint: false, destructiveHint: true, idempotentHint: false });
   const library = tools.find(tool => tool.name === 'alexandria_library_search');
-  assert.match(library.description, /^Check \/library\/how-to first for any business workflow/);
-  assert.match(library.description, /`cat \/library\/how-to\/search\/<a-few-words-from-the-task>` \(joined by hyphens\) ranks them, your team's first; cat the path to read one\./);
+  assert.match(library.description, /^Check \/library\/skills first for any business workflow/);
+  assert.match(library.description, /`cat \/library\/skills\/search\/<a-few-words-from-the-task>` \(joined by hyphens\) ranks them, your team's first; cat the path to read one\./);
 });
 
 test('keyless sessions do not list firecrawl_save_skill', async (t) => {
@@ -31,8 +31,8 @@ test('firecrawl_save_skill without id creates a skill and returns its path and t
   const copied = data(await call({ from: 'deep-research', slug: 'our-research' }));
   assert.deepEqual(api.requests.at(-1).body.alexandria, { provider: 'firecrawl', capability: 'create-skill', options: { from: 'deep-research', slug: 'our-research' } });
   assert.equal(copied.id, 'team:our-research');
-  assert.equal(copied.path, '/library/how-to/team/our-research/SKILL.md');
-  assert.deepEqual(copied.nextTool, readCommand('/library/how-to/team/our-research/SKILL.md'));
+  assert.equal(copied.path, '/library/skills/team/our-research/SKILL.md');
+  assert.deepEqual(copied.nextTool, readCommand('/library/skills/team/our-research/SKILL.md'));
   await call({ name: 'Digest', description: 'Summarise.', body: 'Run @fred/series/observations.' });
   assert.deepEqual(api.requests.at(-1).body.alexandria, { provider: 'firecrawl', capability: 'create-skill', options: { name: 'Digest', description: 'Summarise.', body: 'Run @fred/series/observations.' } });
 });
@@ -42,8 +42,8 @@ test('firecrawl_save_skill with id updates the skill from its baseVersion', asyn
   const saved = data(await client.request('tools/call', { name: 'firecrawl_save_skill', arguments: { id: 'team:weekly-digest', baseVersion: 2, enabled: false } }));
   assert.deepEqual(api.requests.at(-1).body.alexandria, { provider: 'firecrawl', capability: 'update-skill', options: { id: 'team:weekly-digest', baseVersion: 2, enabled: false } });
   assert.equal(saved.skill.version, 3);
-  assert.equal(saved.path, '/library/how-to/team/weekly-digest/SKILL.md');
-  assert.deepEqual(saved.nextTool, readCommand('/library/how-to/team/weekly-digest/SKILL.md'));
+  assert.equal(saved.path, '/library/skills/team/weekly-digest/SKILL.md');
+  assert.deepEqual(saved.nextTool, readCommand('/library/skills/team/weekly-digest/SKILL.md'));
 });
 
 test('a surface without the library tools reads the saved skill through firecrawl_scrape', async (t) => {
@@ -65,7 +65,7 @@ test('a surface without the library tools reads the saved skill through firecraw
   t.after(() => client.close());
   const result = await client.callTool({ name: 'firecrawl_save_skill', arguments: { id: 'team:weekly-digest', baseVersion: 2, name: 'Digest' } });
   const saved = JSON.parse(result.content[0].text).data.alexandria[0].data;
-  assert.deepEqual(saved.nextTool, { name: 'firecrawl_scrape', arguments: { alexandria: { provider: 'firecrawl', capability: 'library', options: { command: 'cat /library/how-to/team/weekly-digest/SKILL.md' } } } });
+  assert.deepEqual(saved.nextTool, { name: 'firecrawl_scrape', arguments: { alexandria: { provider: 'firecrawl', capability: 'library', options: { command: 'cat /library/skills/team/weekly-digest/SKILL.md' } } } });
 });
 
 test('firecrawl_save_skill refuses invalid combinations before calling Exchange', async (t) => {

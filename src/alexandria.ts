@@ -71,7 +71,7 @@ export const findToolsSchema = z
   .strict();
 
 /** The library folder that holds skills; renaming it is this one line. */
-const SKILLS_FOLDER = 'how-to';
+const SKILLS_FOLDER = 'skills';
 /** Where skills sit in the library filesystem; every skills path below is built from it. */
 export const SKILLS_ROOT = `/library/${SKILLS_FOLDER}`;
 
@@ -261,18 +261,22 @@ export const ALEXANDRIA_DEDICATED_SEARCH_INSTRUCTIONS =
 // The category folders of /library, so an agent can open one without listing
 // first. They come from the Exchange catalogue; a category added there is
 // missing here until this list is updated, and `ls /library` always has it.
-// The category folders of the deployed library (`ls /library`, 2026-11-10).
+// The category folders of the deployed library (`ls /library`, 2026-11-10). The
+// skills folder sits beside them and is not one.
 export const ALEXANDRIA_LIBRARY_CATEGORIES = [
   'agriculture', 'ai-models', 'apps', 'automotive', 'community', 'companies', 'developer',
   'digital-intelligence', 'education', 'energy', 'entertainment', 'finance', 'game-development',
   'government', 'health', 'healthcare', 'jobs', 'knowledge', 'life-sciences', 'marketing', 'music',
   'news', 'people', 'places', 'podcasts', 'political-science', 'real-estate', 'research',
-  'restaurants', 'shopping', 'skills', 'social', 'software', 'sports', 'travel',
+  'restaurants', 'shopping', 'social', 'software', 'sports', 'travel',
 ];
 
-export const ALEXANDRIA_LIBRARY_DESCRIPTION =
-  `Check ${SKILLS_ROOT} first for any business workflow (sales or meeting prep, prospect lists, competitor, market or financial research, monitoring): it holds your team's skills and Firecrawl's, step-by-step instructions for these tasks; follow a matching one instead of improvising. \`cat ${SKILLS_ROOT}/search/<a-few-words-from-the-task>\` (joined by hyphens) ranks them, your team's first; cat the path to read one. ` +
+// The library without its skills, for a server started with librarySkills: false.
+export const ALEXANDRIA_LIBRARY_CATALOGUE_DESCRIPTION =
   "Explore the Alexandria library: Firecrawl's catalogue of data providers that return typed, sourced records (" + ALEXANDRIA_CATALOGUE_VERTICALS + ') as a read-only filesystem, using shell commands. Use this to find out whether a provider covers the data a task needs, and to read its contract before alexandria_library_read. Layout: /library/<category>/<provider>/<capability>.md, one file per capability holding its contract (when to use it, inputs, outputs, and the call to send); /library, each category folder and each provider folder has a README.md describing what is inside. Category folders: ' + ALEXANDRIA_LIBRARY_CATEGORIES.join(', ') + '; `ls /library` shows any added since. Available commands: ls, tree, cat, head, tail, grep, find, wc, sort, uniq, cut, tr, sed, jq, xargs, with pipes. Typical starts: `ls /library`, `cat /library/README.md`, or `grep -ril "mortgage" /library`. A file path is the execute address: /library/finance/fred/series/observations.md is provider "fred", capability "series/observations". Recorded example responses are under /examples/<provider>/<capability>.json. Free; does not run providers.';
+
+export const ALEXANDRIA_LIBRARY_DESCRIPTION =
+  `Check ${SKILLS_ROOT} first for any business workflow (sales or meeting prep, prospect lists, competitor, market or financial research, monitoring): it holds your team's and Firecrawl's step-by-step instructions for these tasks; follow a matching one instead of improvising. \`cat ${SKILLS_ROOT}/search/<a-few-words-from-the-task>\` (joined by hyphens) ranks them, your team's first; cat the path to read one. ` + ALEXANDRIA_LIBRARY_CATALOGUE_DESCRIPTION;
 
 export const ALEXANDRIA_READ_DESCRIPTION =
   "Run capabilities of Alexandria data providers and return their typed, sourced records: one, or up to ten in one call when a task needs several lookups. Alexandria is Firecrawl's library of data providers across " + ALEXANDRIA_CATALOGUE_VERTICALS + '. ' + ALEXANDRIA_ENRICH_ROUTING + ' Each entry of `calls` is {provider, capability, options}: `provider` and `capability` come from firecrawl_search results or alexandria_library_search, and `options` follow the capability\'s contract, which marks required inputs and any requiresOneOf groups (at least one member per group). Where the contract declares pagination, its fields page through results with the same filters. Returns one result per call, in the same order, in data.alexandria, each with data, records, or an error with a code; one call can fail while the others succeed, and an invalid call returns an error naming the valid options. A result too large to return inline is retained, and nextTool reads it in slices. Billed per executed capability; discovery is free. ' + ALEXANDRIA_TERMS_GUIDANCE;

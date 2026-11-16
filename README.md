@@ -298,6 +298,8 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
 - `FIRECRAWL_INTEGRATION` (Optional): Integration tag for apps that launch this server, such as an editor extension
   - Sent as the `integration` field of scrape, batch scrape, crawl, map, search, extract, agent, parse, interact and feedback requests
   - Use a value that starts with `_`, for example `_zed`
+- `FIRECRAWL_MCP_LIBRARY_SKILLS` (Optional): Set to `false` to serve the Alexandria library without skills
+  - `alexandria_library_search` sends `skills: false` with each command, its description and the server instructions leave out the skills folder, no skills are listed under its results, and `firecrawl_save_skill` is not registered
 
 #### Local HTTP mode
 
