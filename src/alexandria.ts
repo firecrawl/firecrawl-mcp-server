@@ -70,6 +70,29 @@ export const findToolsSchema = z
   })
   .strict();
 
+export const SKILLS_TOOL = 'firecrawl_skills';
+
+/** firecrawl_skills: with id, reads one skill; otherwise finds skills (all of them without query). */
+export const skillsSchema = z
+  .object({
+    query: z.string().trim().min(1).max(2000).optional().describe('Find: a few words from the task, matched against each skill\'s id, name and description. Omit query and id to list every skill.'),
+    limit: z.number().int().min(1).max(50).optional().describe('Find: most skills to return; defaults to 20.'),
+    id: z.string().trim().min(1).max(200).optional().describe('Read: a skill id from a listing (team:<slug> for a team skill). Returns that skill in full.'),
+    path: z.string().trim().min(1).max(500).optional().describe('Read: a file from the skill\'s files list; defaults to SKILL.md.'),
+    version: z.number().int().min(1).optional().describe('Read, team skills only: an earlier kept version; defaults to the current one.'),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const refuse = (message: string) => ctx.addIssue({ code: 'custom', message });
+    if (value.id !== undefined && value.query !== undefined) return refuse('Give query to find skills or id to read one, not both.');
+    if (value.id === undefined) {
+      const readOnly = (['path', 'version'] as const).filter((key) => value[key] !== undefined);
+      if (readOnly.length) return refuse(`Only a read takes ${readOnly.join(' and ')}: give the skill's id too.`);
+    } else if (value.limit !== undefined) {
+      return refuse('Only a find takes limit: omit id to find skills.');
+    }
+  });
+
 const SKILL_CHANGES = ['name', 'description', 'body', 'enabled', 'discoverable'] as const;
 
 export const saveSkillSchema = z
@@ -266,7 +289,8 @@ export const ALEXANDRIA_LIBRARY_CATEGORIES = [
 ];
 
 export const ALEXANDRIA_LIBRARY_DESCRIPTION =
-  "Explore the Alexandria library: Firecrawl's catalogue of data providers that return typed, sourced records (" + ALEXANDRIA_CATALOGUE_VERTICALS + ') as a read-only filesystem, using shell commands. Use this to find out whether a provider covers the data a task needs, and to read its contract before alexandria_library_read. Layout: /library/<category>/<provider>/<capability>.md, one file per capability holding its contract (when to use it, inputs, outputs, and the call to send); /library, each category folder and each provider folder has a README.md describing what is inside. Category folders: ' + ALEXANDRIA_LIBRARY_CATEGORIES.join(', ') + '; `ls /library` shows any added since. Available commands: ls, tree, cat, head, tail, grep, find, wc, sort, uniq, cut, tr, sed, jq, xargs, with pipes. Typical starts: `ls /library`, `cat /library/README.md`, or `grep -ril "mortgage" /library`. A file path is the execute address: /library/finance/fred/series/observations.md is provider "fred", capability "series/observations". Recorded example responses are under /examples/<provider>/<capability>.json. Skills, written instructions for tasks (your team\'s and Firecrawl\'s), are under /skills: `grep -i "<word>" /skills/INDEX` lists them one per line (path, marker, name: when to use it), your team\'s first; when that lists many, `cat /skills/search/<a-few-words-from-the-task>` (joined by hyphens) ranks the best; cat the path to read one, and prefer a team skill that fits. Free; does not run providers.';
+  "Check /skills first for any business workflow (sales or meeting prep, account and prospect lists, competitor, market or financial research, monitoring): your team's written skills and Firecrawl's are step-by-step instructions for these tasks; follow a matching skill instead of improvising. `cat /skills/search/<a-few-words-from-the-task>` (joined by hyphens) ranks them, your team's first; cat the path to read one. " +
+  "Explore the Alexandria library: Firecrawl's catalogue of data providers that return typed, sourced records (" + ALEXANDRIA_CATALOGUE_VERTICALS + ') as a read-only filesystem, using shell commands. Use this to find out whether a provider covers the data a task needs, and to read its contract before alexandria_library_read. Layout: /library/<category>/<provider>/<capability>.md, one file per capability holding its contract (when to use it, inputs, outputs, and the call to send); /library, each category folder and each provider folder has a README.md describing what is inside. Category folders: ' + ALEXANDRIA_LIBRARY_CATEGORIES.join(', ') + '; `ls /library` shows any added since. Available commands: ls, tree, cat, head, tail, grep, find, wc, sort, uniq, cut, tr, sed, jq, xargs, with pipes. Typical starts: `ls /library`, `cat /library/README.md`, or `grep -ril "mortgage" /library`. A file path is the execute address: /library/finance/fred/series/observations.md is provider "fred", capability "series/observations". Recorded example responses are under /examples/<provider>/<capability>.json. Free; does not run providers.';
 
 export const ALEXANDRIA_READ_DESCRIPTION =
   "Run capabilities of Alexandria data providers and return their typed, sourced records: one, or up to ten in one call when a task needs several lookups. Alexandria is Firecrawl's library of data providers across " + ALEXANDRIA_CATALOGUE_VERTICALS + '. ' + ALEXANDRIA_ENRICH_ROUTING + ' Each entry of `calls` is {provider, capability, options}: `provider` and `capability` come from firecrawl_search results or alexandria_library_search, and `options` follow the capability\'s contract, which marks required inputs and any requiresOneOf groups (at least one member per group). Where the contract declares pagination, its fields page through results with the same filters. Returns one result per call, in the same order, in data.alexandria, each with data, records, or an error with a code; one call can fail while the others succeed, and an invalid call returns an error naming the valid options. A result too large to return inline is retained, and nextTool reads it in slices. Billed per executed capability; discovery is free. ' + ALEXANDRIA_TERMS_GUIDANCE;
