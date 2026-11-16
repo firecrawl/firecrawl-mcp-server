@@ -1915,7 +1915,6 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
   };
   server.addTool({
     ...scrapeTool,
-    _meta: { 'anthropic/alwaysLoad': true },
   });
 
   server.addTool({
@@ -1962,7 +1961,6 @@ Enumerate URLs indexed under one website through Firecrawl without fetching each
   const searchFields = dedicatedAlexandria ? dedicatedSearchToolFields : searchToolBaseFields;
   const searchTool = {
     name: 'firecrawl_search',
-    _meta: { 'anthropic/alwaysLoad': true },
     annotations: {
       title: 'Firecrawl web search',
       readOnlyHint: true, // Runs a web search and returns results; does not modify external sites.
@@ -2166,7 +2164,6 @@ Returns result groups in \`data\` and an operation \`id\`.
 
   const findToolsTool: RegisteredTool = {
     name: 'firecrawl_find_tools',
-    _meta: { 'anthropic/alwaysLoad': true },
     annotations: {
       title: 'Find Tools',
       readOnlyHint: true,
@@ -2309,7 +2306,6 @@ Returns result groups in \`data\` and an operation \`id\`.
   if (dedicatedAlexandria) {
     server.addTool({
       name: ALEXANDRIA_LIBRARY_TOOL,
-      _meta: { 'anthropic/alwaysLoad': true },
       annotations: {
         title: 'Alexandria library search',
         readOnlyHint: true, // Reads the catalogue; the filesystem cannot be written.
@@ -2363,7 +2359,6 @@ Returns result groups in \`data\` and an operation \`id\`.
 
     server.addTool({
       name: ALEXANDRIA_READ_TOOL,
-      _meta: { 'anthropic/alwaysLoad': true },
       annotations: {
         title: 'Alexandria library read',
         // Provider terms writes are refused before execution; capabilities
