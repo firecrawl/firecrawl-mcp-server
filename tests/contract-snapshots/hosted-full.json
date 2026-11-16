@@ -15,10 +15,9 @@
         }
       },
       "tools": [
-        "firecrawl_scrape@f693fc60f238",
+        "firecrawl_scrape@c0bb90d2953c",
         "firecrawl_map@3214f5d6a1a4",
         "firecrawl_search@28eda5ff5b97",
-        "firecrawl_find_tools@d138e7a0897b",
         "alexandria_library_search@9b357b3159f5",
         "alexandria_library_read@1455f18d2189",
         "firecrawl_save_skill@67f227c5ab59",
@@ -66,7 +65,7 @@
         }
       },
       "tools": [
-        "firecrawl_scrape@f693fc60f238",
+        "firecrawl_scrape@c0bb90d2953c",
         "firecrawl_search@28eda5ff5b97",
         "firecrawl_parse@bd79ed89827b"
       ]
