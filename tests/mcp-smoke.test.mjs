@@ -2040,11 +2040,13 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
     name: 'firecrawl_search',
   });
 
-  assert.equal(fakeApi.requests.length, 1);
-  assert.equal(fakeApi.requests[0].method, 'POST');
-  assert.equal(fakeApi.requests[0].url, '/v2/search');
-  assert.equal(fakeApi.requests[0].headers.authorization, 'Bearer fc-test');
-  assert.deepEqual(fakeApi.requests[0].body, {
+  // The skills lookup that runs beside the search is a scrape call.
+  const searches = fakeApi.requests.filter((request) => request.url === '/v2/search');
+  assert.equal(searches.length, 1);
+  assert.equal(searches[0].method, 'POST');
+  assert.equal(searches[0].url, '/v2/search');
+  assert.equal(searches[0].headers.authorization, 'Bearer fc-test');
+  assert.deepEqual(searches[0].body, {
     limit: 1,
     origin: `mcp-firecrawl-mcp-tool-e2e@${serverVersion}`,
     sources: ['web', 'alexandria'],
