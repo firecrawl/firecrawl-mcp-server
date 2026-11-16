@@ -9,6 +9,10 @@ const found = (skills) => ({ findSkills: { provider: 'firecrawl', capability: 'f
 const FITS = { id: 'fomc-odds-cross-check', name: 'FOMC odds cross-check', description: 'Compare market-implied rate odds with the Fed statement.', files: ['SKILL.md'], source: 'library', similarity: 0.61 };
 const LOOSE = { id: 'weekly-digest', name: 'Weekly digest', description: 'Summarise the week.', files: ['SKILL.md'], source: 'library', similarity: 0.3 };
 const OUTPUT = '/library/finance/fred/series/observations.md';
+// Exchange matches a team skill on every word of the query and gives it no similarity.
+const teamSkill = (slug, name) => ({ id: `team:${slug}`, name, description: `Our ${name.toLowerCase()} steps.`, files: ['SKILL.md'], source: 'team', version: 1 });
+const library_ = (id, similarity) => ({ id, name: id, description: `About ${id}.`, files: ['SKILL.md'], source: 'library', similarity });
+const listed = (text) => text.split('\n').filter((line) => line.startsWith('- ')).map((line) => line.match(/cat (\S+)$/)[1]);
 
 test('a library command lists the skills that fit its words under its output', async (t) => {
   const { api, client } = await startStdioWithApi(t, found([FITS, LOOSE]));
@@ -26,6 +30,43 @@ test('a library command lists the skills that fit its words under its output', a
   ]);
   const commands = api.requests.filter((request) => request.body?.alexandria?.capability === 'library');
   assert.deepEqual(commands.map((request) => request.body.alexandria.options), [{ command: 'grep -ril "fedwatch rate odds" /library | head -20' }]);
+});
+
+test('a team skill Exchange matched without a similarity is listed first; library skills under the bar are not', async (t) => {
+  const { client } = await startStdioWithApi(t, found([FITS, teamSkill('fed-odds-brief', 'Fed odds brief'), LOOSE]));
+  const result = await library(client, 'grep -ril "fedwatch rate odds" /library | head -20');
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  assert.deepEqual(listed(result.content[0].text), [
+    '/library/skills/team/fed-odds-brief/SKILL.md',
+    '/library/skills/firecrawl/fomc-odds-cross-check/SKILL.md',
+  ]);
+  assert.match(result.content[0].text, /- Fed odds brief: Our fed odds brief steps\. Read it: cat /);
+});
+
+test('the block lists three skills at most: team skills first, then the library skills that clear the bar', async (t) => {
+  const team = (n) => teamSkill(`fed-odds-${n}`, `Fed odds ${n}`);
+  const libraries = [library_('rate-odds-a', 0.7), library_('rate-odds-b', 0.6), library_('rate-odds-c', 0.5)];
+  const two = await startStdioWithApi(t, found([team('one'), team('two'), ...libraries]));
+  assert.deepEqual(listed((await library(two.client, 'grep -ril "fedwatch rate odds" /library')).content[0].text), [
+    '/library/skills/team/fed-odds-one/SKILL.md',
+    '/library/skills/team/fed-odds-two/SKILL.md',
+    '/library/skills/firecrawl/rate-odds-a/SKILL.md',
+  ]);
+  const four = await startStdioWithApi(t, found([...libraries, team('one'), team('two'), team('three'), team('four')]));
+  assert.deepEqual(listed((await library(four.client, 'grep -ril "fedwatch rate odds" /library')).content[0].text), [
+    '/library/skills/team/fed-odds-one/SKILL.md',
+    '/library/skills/team/fed-odds-two/SKILL.md',
+    '/library/skills/team/fed-odds-three/SKILL.md',
+  ]);
+});
+
+test('without team skills the three best library skills fill the block', async (t) => {
+  const { client } = await startStdioWithApi(t, found([library_('rate-odds-a', 0.7), library_('rate-odds-b', 0.6), library_('rate-odds-c', 0.5), library_('rate-odds-d', 0.45)]));
+  assert.deepEqual(listed((await library(client, 'grep -ril "fedwatch rate odds" /library')).content[0].text), [
+    '/library/skills/firecrawl/rate-odds-a/SKILL.md',
+    '/library/skills/firecrawl/rate-odds-b/SKILL.md',
+    '/library/skills/firecrawl/rate-odds-c/SKILL.md',
+  ]);
 });
 
 test('no lookup for a command under the skills folder or one with too few search words', async (t) => {

@@ -5541,7 +5541,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_save_skill@c4617a855703": {
+  "firecrawl_save_skill@67f227c5ab59": {
     "annotations": {
       "title": "Save Skill",
       "readOnlyHint": false,
@@ -5550,7 +5550,7 @@
       "idempotentHint": false
     },
     "title": "Save Skill",
-    "description": "Create or change one of the user's team skills: instructions an agent follows, naming capabilities as @provider/capability. Without id, creates one: write name, description and body, or copy a skill under /library/skills with from (its id: <id> for /library/skills/firecrawl/<id>, team:<slug> for /library/skills/team/<slug>); fields you also give override the copy, and a library skill copies its SKILL.md only. The new skill is enabled and listed in /library/skills/INDEX as /library/skills/team/<slug>; a taken slug is a conflict. With id (team:<slug>) and baseVersion, the version: in its SKILL.md, changes its name, description or body (a new version), or whether it is enabled or listed; a skill changed since is refused with conflict, so read it again and reapply. Library skills cannot be changed; copy one. Skills cannot be deleted here. Returns the saved skill's path and the command that reads it. Save only what the user asked for. Free.",
+    "description": "Create or change one of the user's team skills: instructions an agent follows, naming capabilities as @provider/capability. Without id, creates one: write name, description and body, or copy a skill under /library/skills with from (its id: <id> for /library/skills/firecrawl/<id>, team:<slug> for /library/skills/team/<slug>); fields you also give override the copy, and a library skill copies its SKILL.md only. The new skill is enabled and listed in /library/skills/INDEX as /library/skills/team/<slug>; a taken slug is a conflict. With id (team:<slug>) and baseVersion, the version: in its SKILL.md, changes its name, description or body (a new version), or whether it is enabled or listed; a skill changed since is refused with conflict, so read it again and reapply. A body edited from the text you read must write each capability as @provider/capability again: the plain code it shows saves no reference. Library skills cannot be changed; copy one. Skills cannot be deleted here. Returns the saved skill's path and the command that reads it. Save only what the user asked for. Free.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",

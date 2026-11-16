@@ -2226,7 +2226,11 @@ Returns result groups in \`data\` and an operation \`id\`.
   // caller looking for a provider also sees the written instructions for the task. The
   // lookup is asked with the command's words only, runs beside the command, and is left
   // out when it fails or is still running RELATED_SKILLS_WAIT_MS after the command answers.
+  // A skill with a similarity needs RELATED_SKILL_MIN_SIMILARITY. A team skill comes back
+  // without one when it matched every word of the query, and is kept. Team skills come
+  // first and may fill every line.
   const RELATED_SKILL_MIN_SIMILARITY = 0.42;
+  const RELATED_SKILLS = 3;
   const RELATED_SKILLS_WAIT_MS = 250;
   const relatedSkills = async (
     session: SessionData | undefined,
@@ -2249,14 +2253,15 @@ Returns result groups in \`data\` and an operation \`id\`.
           ALEXANDRIA_LIBRARY_TOOL
         )
       );
-      const skills = (found?.data?.alexandria?.[0]?.data?.skills ?? [])
-        .filter(
-          (skill: any) =>
-            typeof skill?.id === 'string' &&
-            typeof skill?.similarity === 'number' &&
-            skill.similarity >= RELATED_SKILL_MIN_SIMILARITY
-        )
-        .slice(0, 3);
+      const team = (skill: any) => skill.id.startsWith('team:');
+      const fits = (found?.data?.alexandria?.[0]?.data?.skills ?? []).filter((skill: any) =>
+        typeof skill?.id !== 'string'
+          ? false
+          : typeof skill.similarity === 'number'
+            ? skill.similarity >= RELATED_SKILL_MIN_SIMILARITY
+            : team(skill)
+      );
+      const skills = [...fits.filter(team), ...fits.filter((skill: any) => !team(skill))].slice(0, RELATED_SKILLS);
       if (!skills.length) return '';
       return [
         '[skills] Written instructions that fit this task. Read the best match before going further and follow it instead of improvising: it names the capabilities to call and what to return.',
@@ -2396,15 +2401,22 @@ Returns result groups in \`data\` and an operation \`id\`.
       idempotentHint: false,
     },
     description:
-      `Create or change one of the user's team skills: instructions an agent follows, naming capabilities as @provider/capability. Without id, creates one: write name, description and body, or copy a skill under ${SKILLS_ROOT} with from (its id: <id> for ${SKILLS_ROOT}/firecrawl/<id>, team:<slug> for ${SKILLS_ROOT}/team/<slug>); fields you also give override the copy, and a library skill copies its SKILL.md only. The new skill is enabled and listed in ${SKILLS_ROOT}/INDEX as ${SKILLS_ROOT}/team/<slug>; a taken slug is a conflict. With id (team:<slug>) and baseVersion, the version: in its SKILL.md, changes its name, description or body (a new version), or whether it is enabled or listed; a skill changed since is refused with conflict, so read it again and reapply. Library skills cannot be changed; copy one. Skills cannot be deleted here. Returns the saved skill's path and the command that reads it. Save only what the user asked for. Free.`,
+      `Create or change one of the user's team skills: instructions an agent follows, naming capabilities as @provider/capability. Without id, creates one: write name, description and body, or copy a skill under ${SKILLS_ROOT} with from (its id: <id> for ${SKILLS_ROOT}/firecrawl/<id>, team:<slug> for ${SKILLS_ROOT}/team/<slug>); fields you also give override the copy, and a library skill copies its SKILL.md only. The new skill is enabled and listed in ${SKILLS_ROOT}/INDEX as ${SKILLS_ROOT}/team/<slug>; a taken slug is a conflict. With id (team:<slug>) and baseVersion, the version: in its SKILL.md, changes its name, description or body (a new version), or whether it is enabled or listed; a skill changed since is refused with conflict, so read it again and reapply. A body edited from the text you read must write each capability as @provider/capability again: the plain code it shows saves no reference. Library skills cannot be changed; copy one. Skills cannot be deleted here. Returns the saved skill's path and the command that reads it. Save only what the user asked for. Free.`,
     outputSchema: saveSkillOutputSchema,
     canList: (session: SessionData) => !isKeylessMode(session),
     parameters: saveSkillSchema,
     execute: async (args, { session, client: mcpClient }) => {
       const origin = requestOrigin(mcpClient, session);
       const capability = (args as z.infer<typeof saveSkillSchema>).id === undefined ? 'create-skill' : 'update-skill';
-      const result = await executeExchangeCalls(session, { provider: 'firecrawl', capability, options: args as Record<string, unknown> }, undefined, undefined, origin, false, undefined, 'firecrawl_save_skill');
-      return structuredCompact(withSkillNavigation(JSON.parse(result), alexandriaTools));
+      const envelope = JSON.parse(
+        await executeExchangeCalls(session, { provider: 'firecrawl', capability, options: args as Record<string, unknown> }, undefined, undefined, origin, false, undefined, 'firecrawl_save_skill')
+      );
+      const error = envelope?.data?.alexandria?.[0]?.error;
+      if (error) {
+        const message = typeof error.message === 'string' ? error.message : 'The skill was not saved.';
+        throw new UserError(message, { success: false, error, requestId: envelope?.requestId });
+      }
+      return structuredCompact(withSkillNavigation(envelope, alexandriaTools));
     },
   };
   if (config.librarySkills) server.addTool(saveSkillTool);

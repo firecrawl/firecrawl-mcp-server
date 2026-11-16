@@ -98,3 +98,13 @@ test('a refused skill write names no request ID to resend, since firecrawl_save_
   assert.match(result.content[0].text, /^conflict: team:weekly-digest is at version 3 Request ID: /);
   assert.doesNotMatch(result.content[0].text, /Reuse this ID/);
 });
+
+test('a save Exchange refuses, such as a stale baseVersion, is a tool error that keeps the refusal', async (t) => {
+  const refusal = { code: 'conflict', message: 'This skill changed since version 2; it is now at version 3. Reload it and apply your change again.', status: 409 };
+  const { client } = await startStdioWithApi(t, { saveSkillError: refusal });
+  const result = await client.request('tools/call', { name: 'firecrawl_save_skill', arguments: { id: 'team:weekly-digest', baseVersion: 2, enabled: false } });
+  assert.equal(result.isError, true);
+  assert.equal(result.content[0].text, refusal.message);
+  assert.equal(result.structuredContent.success, false);
+  assert.deepEqual(result.structuredContent.error, refusal);
+});
