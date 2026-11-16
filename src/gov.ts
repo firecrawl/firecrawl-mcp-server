@@ -6,8 +6,9 @@
  */
 
 import { z } from 'zod';
-import { type ContentResult, type McpRuntime, UserError } from './mcp/runtime.js';
+import { type ContentResult, type McpRuntime } from './mcp/runtime.js';
 import { originHeaders, requestOrigin } from './origin';
+import { relayBadRequest } from './tool-helpers';
 import { govSearchOutputSchema, withStructured } from './tool-output';
 
 interface SessionData {
@@ -192,18 +193,7 @@ Returns ranked results with a position, title, URL, and matched snippet. Results
           if (!refusesSources(error)) throw error;
           return search(params.toString());
         })
-        .catch((error: unknown) => {
-          const response = (
-            error as
-              | { response?: { status?: number; data?: { error?: unknown } } }
-              | undefined
-          )?.response;
-          const message = response?.data?.error;
-          if (response?.status !== 400 || typeof message !== 'string') {
-            throw error;
-          }
-          throw new UserError(message, { status: 400, error: message });
-        });
+        .catch(relayBadRequest);
       // An API without `sources` answers in `web`.
       const results = res.data?.data?.gov ?? res.data?.data?.web ?? [];
       return withStructured(fmtGov(results), { results });
