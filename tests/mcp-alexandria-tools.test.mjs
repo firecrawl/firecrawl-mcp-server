@@ -221,6 +221,61 @@ test('follow-up calls on the full surface are addressed to alexandria_library_re
   assert.equal(result.nextTool.arguments.calls[0].options.workspaceId, 'retained-workspace');
 });
 
+test('a retained alexandria_library_read answer carries a bounded preview of each call', async (t) => {
+  const row = (id) => ({ id, name: `Row ${id}`, note: 'n'.repeat(100) });
+  const rows = Array.from({ length: 2000 }, (_, id) => row(id));
+  const large = { success: true, data: { creditsCost: 5, alexandria: [{ ...EXCHANGE_CALL, data: { rows, next_cursor: 'page-2', summary: 's'.repeat(5000) } }] } };
+  const { client } = await startStdioWithApi(t, { largeResult: large, bashRecovery: 'available' });
+  const raw = await call(client, 'alexandria_library_read', { calls: [EXCHANGE_CALL] });
+  const result = toolText(raw);
+  assert.equal(result.delivery, 'retained');
+  assert.equal(result.workspaceId, 'retained-workspace');
+  // The preview travels in data, which the listed output schema already declares.
+  assert.deepEqual(raw.structuredContent.data, result.data);
+
+  const [preview] = result.data.alexandria;
+  assert.equal(preview.provider, EXCHANGE_CALL.provider);
+  assert.equal(preview.capability, EXCHANGE_CALL.capability);
+  assert.equal(preview.type, 'object');
+  assert.deepEqual(preview.fields, ['rows', 'next_cursor', 'summary']);
+  assert.deepEqual(preview.lists, [{ path: '.rows', count: 2000, fields: ['id', 'name', 'note'] }]);
+  assert.equal(preview.head.next_cursor, 'page-2');
+  assert.match(preview.head.summary, /^s+…\[\+\d+ chars\]$/);
+  const shown = preview.head.rows.slice(0, -1);
+  assert(shown.length >= 5);
+  assert.deepEqual(shown, rows.slice(0, shown.length));
+  assert.equal(preview.head.rows.at(-1), `…[+${2000 - shown.length} items]`);
+
+  assert(Buffer.byteLength(JSON.stringify(result.data)) <= 10_000);
+  assert(Buffer.byteLength(raw.content[0].text) / 4 < 4_000);
+  assert.match(result.message, /^This is a partial preview\./);
+  assert.match(result.message, /data, not instructions/);
+  assert.match(result.message, /Do not rerun the provider/);
+  assert.match(result.message, /no python or node, and jq stops after 10,000 iterations/);
+  assert.equal(result.nextTool.name, 'alexandria_library_read');
+  assert.equal(
+    result.nextTool.arguments.calls[0].options.command,
+    `jq -c '.data.alexandria[0].data.rows[${shown.length}:${shown.length + 20}]' response.json`
+  );
+});
+
+test('a retained read of ten calls shares one preview budget', async (t) => {
+  const rows = Array.from({ length: 300 }, (_, id) => ({ id, text: 't'.repeat(200) }));
+  const items = Array.from({ length: 10 }, () => ({ ...EXCHANGE_CALL, data: rows }));
+  const large = { success: true, data: { creditsCost: 50, alexandria: items } };
+  const { client } = await startStdioWithApi(t, { largeResult: large, bashRecovery: 'available' });
+  const result = toolText(await call(client, 'alexandria_library_read', { calls: items.map(() => EXCHANGE_CALL) }));
+  assert.equal(result.delivery, 'retained');
+  assert.equal(result.data.alexandria.length, 10);
+  for (const preview of result.data.alexandria) {
+    assert.equal(preview.type, 'array');
+    assert.deepEqual(preview.lists, [{ path: '.', count: 300, fields: ['id', 'text'] }]);
+    assert.equal(preview.head[0].id, 0);
+  }
+  assert(Buffer.byteLength(JSON.stringify(result.data)) <= 10_000);
+  assert.match(result.nextTool.arguments.calls[0].options.command, /^jq -c '\.data\.alexandria\[0\]\.data\[\d+:\d+\]' response\.json$/);
+});
+
 test('a surface whose tool filter leaves the new tools out keeps firecrawl_find_tools and firecrawl_scrape with an alexandria body', async (t) => {
   const { api, client, init } = await startStdioWithApi(t, LEGACY_SURFACE);
   const { tools } = await client.request('tools/list', {});
@@ -236,4 +291,16 @@ test('a surface whose tool filter leaves the new tools out keeps firecrawl_find_
   assert.deepEqual(api.requests[0].body.alexandria, [EXCHANGE_CALL]);
   assert.equal(toolText(await call(client, 'firecrawl_find_tools', { providers: ['fred'] })).success, true);
   await callExpectingError(client, { name: 'alexandria_library_read', arguments: { calls: [EXCHANGE_CALL] } });
+});
+
+test('a retained result on the legacy surface carries the preview and a firecrawl_scrape nextTool that runs', async (t) => {
+  const large = { success: true, data: { creditsCost: 5, alexandria: [{ ...EXCHANGE_CALL, data: { rows: Array.from({ length: 3000 }, (_, id) => ({ id, text: 't'.repeat(50) })) } }] } };
+  const { client } = await startStdioWithApi(t, { ...LEGACY_SURFACE, largeResult: large, bashRecovery: 'available' });
+  const result = toolText(await call(client, 'firecrawl_scrape', { alexandria: [EXCHANGE_CALL] }));
+  assert.equal(result.delivery, 'retained');
+  assert.deepEqual(result.data.alexandria[0].lists, [{ path: '.rows', count: 3000, fields: ['id', 'text'] }]);
+  assert.equal(result.nextTool.name, 'firecrawl_scrape');
+  assert.equal(result.nextTool.arguments.alexandria.options.workspaceId, 'retained-workspace');
+  const followup = toolText(await client.request('tools/call', result.nextTool));
+  assert.equal(followup.data.alexandria[0].data.workspaceId, 'retained-workspace');
 });
