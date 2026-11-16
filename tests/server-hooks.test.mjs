@@ -591,6 +591,41 @@ test('instructions, configureHttp and oauth metadata hooks shape the instance', 
   assert.deepEqual(body.authorization_servers, ['https://issuer.example']);
 });
 
+test('an instructions hook that returns a function chooses the instructions for each session', async (t) => {
+  const sessions = [];
+  const port = await startEmbedded(t, {
+    apiUrl: 'http://127.0.0.1:9',
+    unstable_hooks: {
+      instructions: (defaults) => (session) => {
+        sessions.push(session);
+        return session?.firecrawlApiKey ? defaults.authenticated : defaults.keyless;
+      },
+    },
+  });
+  const initialize = (headers) =>
+    rpc(
+      port,
+      'initialize',
+      {
+        capabilities: {},
+        clientInfo: { name: 'hooks-test', version: '1.0.0' },
+        protocolVersion: '2025-06-18',
+      },
+      headers
+    );
+
+  const keyless = await initialize();
+  const keyed = await initialize({ 'x-firecrawl-api-key': 'fc-hooks-test' });
+  const keylessAgain = await initialize();
+
+  assert.match(keyless.instructions, /keyless/);
+  assert.match(keyed.instructions, /alexandria_library_search/);
+  assert.doesNotMatch(keyed.instructions, /Hosted keyless sessions/);
+  assert.equal(keylessAgain.instructions, keyless.instructions);
+  assert.equal(sessions.length, 3);
+  assert.equal(sessions[1].firecrawlApiKey, 'fc-hooks-test');
+});
+
 test('a 401 from an added tool is not treated as a Firecrawl credential rejection', async (t) => {
   const port = await startEmbedded(t, {
     apiUrl: 'http://127.0.0.1:9',
