@@ -24,8 +24,8 @@ test('every tool description fits the 2,048-character cap and keeps the routing 
   assert.match(scrape, /^Scrape one URL and return its content/);
   // firecrawl_scrape keeps the routing copy it had before the library tools.
   assert.match(scrape, /`firecrawl_search` and `firecrawl_find_tools` can discover providers for the same fields across several pages/);
-  // What each Alexandria tool is for leads its description.
-  assert.match(byName.get('alexandria_library_search'), /^Explore the Alexandria library: Firecrawl's catalogue of data providers/);
+  // What each Alexandria tool is for leads its description, after the library's line on skills.
+  assert.match(byName.get('alexandria_library_search'), /^Check \/library\/skills first for any business workflow[^]*\. Explore the Alexandria library: Firecrawl's catalogue of data providers/);
   assert.match(byName.get('alexandria_library_search'), /read-only filesystem, using shell commands/);
   assert.match(byName.get('alexandria_library_read'), /^Run capabilities of Alexandria data providers/);
 });
