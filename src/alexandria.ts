@@ -70,8 +70,10 @@ export const findToolsSchema = z
   })
   .strict();
 
+/** The library folder that holds skills; renaming it is this one line. */
+const SKILLS_FOLDER = 'how-to';
 /** Where skills sit in the library filesystem; every skills path below is built from it. */
-export const SKILLS_ROOT = '/skills';
+export const SKILLS_ROOT = `/library/${SKILLS_FOLDER}`;
 
 const SKILL_CHANGES = ['name', 'description', 'body', 'enabled', 'discoverable'] as const;
 
@@ -79,7 +81,7 @@ export const saveSkillSchema = z
   .object({
     id: z.string().trim().max(100).regex(/^team:[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Only team skills (team:<slug>) can be changed; copy a library skill with from.').optional().describe('Update: the team:<slug> skill to change. Omit to create a skill.'),
     baseVersion: z.number().int().min(1).optional().describe('Update, required: the version: in the skill\'s SKILL.md. A skill changed since is refused with conflict: read it again and reapply.'),
-    from: z.string().trim().min(1).max(100).optional().describe(`Create: the skill to copy, by id: <id> for ${SKILLS_ROOT}/library/<id>, team:<slug> for ${SKILLS_ROOT}/team/<slug>. Fields you also give override the copy.`),
+    from: z.string().trim().min(1).max(100).optional().describe(`Create: the skill to copy, by id: <id> for ${SKILLS_ROOT}/firecrawl/<id>, team:<slug> for ${SKILLS_ROOT}/team/<slug>. Fields you also give override the copy.`),
     name: z.string().trim().min(1).max(1000).optional().describe('Skill name; required to create without from.'),
     description: z.string().trim().min(1).max(5000).optional().describe('When to use the skill; required to create without from.'),
     body: z.string().min(1).max(200_000).regex(/\S/, 'body must not be blank').optional().describe('The instructions in full, in Markdown; required to create without from. Reference capabilities as @provider/capability.'),
@@ -105,7 +107,7 @@ export const saveSkillSchema = z
 
 /** Where a skill's SKILL.md sits in the library's skills tree. */
 export function skillPath(id: string): string {
-  return id.startsWith('team:') ? `${SKILLS_ROOT}/team/${id.slice(5)}/SKILL.md` : `${SKILLS_ROOT}/library/${id}/SKILL.md`;
+  return id.startsWith('team:') ? `${SKILLS_ROOT}/team/${id.slice(5)}/SKILL.md` : `${SKILLS_ROOT}/firecrawl/${id}/SKILL.md`;
 }
 
 /** A saved skill names its file and the library command that reads it. */
@@ -269,7 +271,7 @@ export const ALEXANDRIA_LIBRARY_CATEGORIES = [
 ];
 
 export const ALEXANDRIA_LIBRARY_DESCRIPTION =
-  `Check ${SKILLS_ROOT} first for any business workflow (sales or meeting prep, account and prospect lists, competitor, market or financial research, monitoring): your team's written skills and Firecrawl's are step-by-step instructions for these tasks; follow a matching skill instead of improvising. \`cat ${SKILLS_ROOT}/search/<a-few-words-from-the-task>\` (joined by hyphens) ranks them, your team's first; cat the path to read one. ` +
+  `Check ${SKILLS_ROOT} first for any business workflow (sales or meeting prep, prospect lists, competitor, market or financial research, monitoring): it holds your team's skills and Firecrawl's, step-by-step instructions for these tasks; follow a matching one instead of improvising. \`cat ${SKILLS_ROOT}/search/<a-few-words-from-the-task>\` (joined by hyphens) ranks them, your team's first; cat the path to read one. ` +
   "Explore the Alexandria library: Firecrawl's catalogue of data providers that return typed, sourced records (" + ALEXANDRIA_CATALOGUE_VERTICALS + ') as a read-only filesystem, using shell commands. Use this to find out whether a provider covers the data a task needs, and to read its contract before alexandria_library_read. Layout: /library/<category>/<provider>/<capability>.md, one file per capability holding its contract (when to use it, inputs, outputs, and the call to send); /library, each category folder and each provider folder has a README.md describing what is inside. Category folders: ' + ALEXANDRIA_LIBRARY_CATEGORIES.join(', ') + '; `ls /library` shows any added since. Available commands: ls, tree, cat, head, tail, grep, find, wc, sort, uniq, cut, tr, sed, jq, xargs, with pipes. Typical starts: `ls /library`, `cat /library/README.md`, or `grep -ril "mortgage" /library`. A file path is the execute address: /library/finance/fred/series/observations.md is provider "fred", capability "series/observations". Recorded example responses are under /examples/<provider>/<capability>.json. Free; does not run providers.';
 
 export const ALEXANDRIA_READ_DESCRIPTION =

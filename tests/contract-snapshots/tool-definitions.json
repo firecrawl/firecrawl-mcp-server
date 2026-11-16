@@ -243,7 +243,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "alexandria_library_search@5549b7696f97": {
+  "alexandria_library_search@73bbf8681214": {
     "annotations": {
       "title": "Alexandria library search",
       "readOnlyHint": true,
@@ -252,7 +252,7 @@
       "idempotentHint": true
     },
     "title": "Alexandria library search",
-    "description": "Check /skills first for any business workflow (sales or meeting prep, account and prospect lists, competitor, market or financial research, monitoring): your team's written skills and Firecrawl's are step-by-step instructions for these tasks; follow a matching skill instead of improvising. `cat /skills/search/<a-few-words-from-the-task>` (joined by hyphens) ranks them, your team's first; cat the path to read one. Explore the Alexandria library: Firecrawl's catalogue of data providers that return typed, sourced records (companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more) as a read-only filesystem, using shell commands. Use this to find out whether a provider covers the data a task needs, and to read its contract before alexandria_library_read. Layout: /library/<category>/<provider>/<capability>.md, one file per capability holding its contract (when to use it, inputs, outputs, and the call to send); /library, each category folder and each provider folder has a README.md describing what is inside. Category folders: agriculture, ai-models, apps, automotive, community, companies, developer, digital-intelligence, education, energy, entertainment, finance, game-development, government, health, healthcare, jobs, knowledge, life-sciences, marketing, music, news, people, places, podcasts, political-science, real-estate, research, restaurants, shopping, skills, social, software, sports, travel; `ls /library` shows any added since. Available commands: ls, tree, cat, head, tail, grep, find, wc, sort, uniq, cut, tr, sed, jq, xargs, with pipes. Typical starts: `ls /library`, `cat /library/README.md`, or `grep -ril \"mortgage\" /library`. A file path is the execute address: /library/finance/fred/series/observations.md is provider \"fred\", capability \"series/observations\". Recorded example responses are under /examples/<provider>/<capability>.json. Free; does not run providers.",
+    "description": "Check /library/how-to first for any business workflow (sales or meeting prep, prospect lists, competitor, market or financial research, monitoring): it holds your team's skills and Firecrawl's, step-by-step instructions for these tasks; follow a matching one instead of improvising. `cat /library/how-to/search/<a-few-words-from-the-task>` (joined by hyphens) ranks them, your team's first; cat the path to read one. Explore the Alexandria library: Firecrawl's catalogue of data providers that return typed, sourced records (companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more) as a read-only filesystem, using shell commands. Use this to find out whether a provider covers the data a task needs, and to read its contract before alexandria_library_read. Layout: /library/<category>/<provider>/<capability>.md, one file per capability holding its contract (when to use it, inputs, outputs, and the call to send); /library, each category folder and each provider folder has a README.md describing what is inside. Category folders: agriculture, ai-models, apps, automotive, community, companies, developer, digital-intelligence, education, energy, entertainment, finance, game-development, government, health, healthcare, jobs, knowledge, life-sciences, marketing, music, news, people, places, podcasts, political-science, real-estate, research, restaurants, shopping, skills, social, software, sports, travel; `ls /library` shows any added since. Available commands: ls, tree, cat, head, tail, grep, find, wc, sort, uniq, cut, tr, sed, jq, xargs, with pipes. Typical starts: `ls /library`, `cat /library/README.md`, or `grep -ril \"mortgage\" /library`. A file path is the execute address: /library/finance/fred/series/observations.md is provider \"fred\", capability \"series/observations\". Recorded example responses are under /examples/<provider>/<capability>.json. Free; does not run providers.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5541,7 +5541,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_save_skill@434befd26d6b": {
+  "firecrawl_save_skill@164f9d0b6e34": {
     "annotations": {
       "title": "Save Skill",
       "readOnlyHint": false,
@@ -5550,7 +5550,7 @@
       "idempotentHint": false
     },
     "title": "Save Skill",
-    "description": "Create or change one of the user's team skills: instructions an agent follows, naming capabilities as @provider/capability. Without id, creates one: write name, description and body, or copy a skill under /skills with from (its id: <id> for /skills/library/<id>, team:<slug> for /skills/team/<slug>); fields you also give override the copy, and a library skill copies its SKILL.md only. The new skill is enabled and listed in /skills/INDEX as /skills/team/<slug>; a taken slug is a conflict. With id (team:<slug>) and baseVersion, the version: in its SKILL.md, changes its name, description or body (a new version), or whether it is enabled or listed; a skill changed since is refused with conflict, so read it again and reapply. Library skills cannot be changed; copy one. Skills cannot be deleted here. Returns the saved skill's path and the command that reads it. Save only what the user asked for. Free.",
+    "description": "Create or change one of the user's team skills: instructions an agent follows, naming capabilities as @provider/capability. Without id, creates one: write name, description and body, or copy a skill under /library/how-to with from (its id: <id> for /library/how-to/firecrawl/<id>, team:<slug> for /library/how-to/team/<slug>); fields you also give override the copy, and a library skill copies its SKILL.md only. The new skill is enabled and listed in /library/how-to/INDEX as /library/how-to/team/<slug>; a taken slug is a conflict. With id (team:<slug>) and baseVersion, the version: in its SKILL.md, changes its name, description or body (a new version), or whether it is enabled or listed; a skill changed since is refused with conflict, so read it again and reapply. Library skills cannot be changed; copy one. Skills cannot be deleted here. Returns the saved skill's path and the command that reads it. Save only what the user asked for. Free.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -5568,7 +5568,7 @@
           "maximum": 9007199254740991
         },
         "from": {
-          "description": "Create: the skill to copy, by id: <id> for /skills/library/<id>, team:<slug> for /skills/team/<slug>. Fields you also give override the copy.",
+          "description": "Create: the skill to copy, by id: <id> for /library/how-to/firecrawl/<id>, team:<slug> for /library/how-to/team/<slug>. Fields you also give override the copy.",
           "type": "string",
           "minLength": 1,
           "maxLength": 100
@@ -5603,7 +5603,7 @@
           "type": "boolean"
         },
         "discoverable": {
-          "description": "Update: whether /skills/INDEX lists it.",
+          "description": "Update: whether /library/how-to/INDEX lists it.",
           "type": "boolean"
         }
       },
@@ -5627,7 +5627,7 @@
           ]
         },
         "data": {
-          "description": "The saved skill in `data.alexandria[0].data`: id (team:<slug>, owned by the caller's team), skill (its version, enabled, discoverable and authors), warnings, `path` (its SKILL.md under /skills) and a `nextTool` that reads it."
+          "description": "The saved skill in `data.alexandria[0].data`: id (team:<slug>, owned by the caller's team), skill (its version, enabled, discoverable and authors), warnings, `path` (its SKILL.md under /library/how-to) and a `nextTool` that reads it."
         },
         "error": {
           "description": "Error message or error object when the call did not succeed."

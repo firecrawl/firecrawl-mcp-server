@@ -16,7 +16,7 @@ test('a library command lists the skills that fit its words under its output', a
   assert.notEqual(result.isError, true, JSON.stringify(result));
   const text = result.content[0].text;
   assert.ok(text.startsWith(`${OUTPUT}\n\n[skills] `), text);
-  assert.match(text, /- FOMC odds cross-check: Compare market-implied rate odds with the Fed statement\. Read it: cat \/skills\/library\/fomc-odds-cross-check\/SKILL\.md/);
+  assert.match(text, /- FOMC odds cross-check: Compare market-implied rate odds with the Fed statement\. Read it: cat \/library\/how-to\/firecrawl\/fomc-odds-cross-check\/SKILL\.md/);
   assert.doesNotMatch(text, /Weekly digest/);
   assert.equal(result.structuredContent.stdout, `${OUTPUT}\n`);
   assert.match(result.structuredContent.message, /^\[skills\] /);
@@ -28,9 +28,9 @@ test('a library command lists the skills that fit its words under its output', a
   assert.deepEqual(commands.map((request) => request.body.alexandria.options), [{ command: 'grep -ril "fedwatch rate odds" /library | head -20' }]);
 });
 
-test('no lookup for a command under /skills or one with too few search words', async (t) => {
+test('no lookup for a command under the skills folder or one with too few search words', async (t) => {
   const { api, client } = await startStdioWithApi(t, found([FITS]));
-  for (const command of ['cat /skills/search/fed-rate-odds', 'grep -i fed /skills/INDEX', 'ls /library', 'cat /library/README.md', 'grep -ril "cpi" /library']) {
+  for (const command of ['cat /library/how-to/search/fed-rate-odds', 'grep -i fed /library/how-to/INDEX', 'cat /library/how-to/firecrawl/fomc-odds-cross-check/SKILL.md', 'ls /library', 'cat /library/README.md', 'grep -ril "cpi" /library']) {
     const result = await library(client, command);
     assert.equal(result.content[0].text, OUTPUT, command);
     assert.equal(result.structuredContent.message, undefined, command);
@@ -78,7 +78,7 @@ test('alexandria_library_search is always loaded and opens with the line to chec
   const { tools } = await client.request('tools/list', {});
   const library = tools.find((tool) => tool.name === 'alexandria_library_search');
   assert.equal(library._meta?.['anthropic/alwaysLoad'], true);
-  assert.match(library.description, /^Check \/skills first for any business workflow/);
-  assert.match(init.instructions, /Check \/skills in alexandria_library_search first for any business workflow/);
+  assert.match(library.description, /^Check \/library\/how-to first for any business workflow/);
+  assert.match(init.instructions, /Check \/library\/how-to through alexandria_library_search first for any business workflow/);
   assert(!tools.some((tool) => tool.name === 'firecrawl_skills'));
 });
