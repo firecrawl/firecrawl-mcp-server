@@ -518,6 +518,23 @@ test('an account out of credits sees the API text from search, scrape, map and c
   }
 });
 
+test('a toolFilter that leaves firecrawl_save_skill out keeps it out of the instructions', async (t) => {
+  const surface = async (unstable_hooks) => {
+    const port = await startEmbedded(t, { apiUrl: 'http://127.0.0.1:9', apiKey: 'fc-configured', unstable_hooks });
+    const { tools } = await rpc(port, 'tools/list');
+    const { instructions } = await rpc(port, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } });
+    return { instructions, names: tools.map((tool) => tool.name) };
+  };
+  const filtered = await surface({ toolFilter: (name) => name !== 'firecrawl_save_skill' });
+  assert.equal(filtered.names.includes('firecrawl_save_skill'), false);
+  assert.doesNotMatch(filtered.instructions, /firecrawl_save_skill/);
+  assert.match(filtered.instructions, /grep \/library\/skills\/INDEX/);
+
+  const open = await surface({});
+  assert.ok(open.names.includes('firecrawl_save_skill'));
+  assert.match(open.instructions, /firecrawl_save_skill creates a team skill/);
+});
+
 test('instructions, configureHttp and oauth metadata hooks shape the instance', async (t) => {
   let defaults;
   const port = await startEmbedded(t, {
