@@ -1950,6 +1950,22 @@ Enumerate URLs indexed under one website through Firecrawl without fetching each
     },
   });
 
+  const providerLead = (found: unknown): string => {
+    if (!Array.isArray(found)) return '';
+    const matches = found
+      .filter((t: any) => typeof t?.provider === 'string' && typeof t?.capability === 'string')
+      .slice(0, 3);
+    if (!matches.length) return '';
+    return [
+      'Alexandria providers matched this query. A provider that covers the request returns typed, sourced records in one call, which beats assembling the answer from web pages. Read the contract, then run it:',
+      ...matches.map((t: any) => {
+        const desc = typeof t.description === 'string' ? ' ' + t.description : '';
+        return '- ' + t.provider + '/' + t.capability + ':' + desc + ' Contract: ' + ALEXANDRIA_LIBRARY_TOOL + ' {"command":"cat /library/*/' + t.provider + '/' + t.capability + '.md"}. Run: ' + ALEXANDRIA_READ_TOOL + ' {"calls":[{"provider":"' + t.provider + '","capability":"' + t.capability + '","options":{}}]}';
+      }),
+      'If none covers what was asked, use the web results below.',
+    ].join(String.fromCharCode(10));
+  };
+
   const searchFields = dedicatedAlexandria ? dedicatedSearchToolFields : searchToolBaseFields;
   const searchTool = {
     name: 'firecrawl_search',
@@ -2029,7 +2045,9 @@ Returns result groups in \`data\` and an operation \`id\`.
       const byteBudget = searchByteBudget(session?.clientUserAgent);
       const searchResult = (response: unknown) => {
         const shown = annotateResultPositions(withoutDiscoveredToolPrices(response));
-        return structuredCompact(byteBudget ? fitSearchResponse(shown, byteBudget) : shown);
+        const result = structuredCompact(byteBudget ? fitSearchResponse(shown, byteBudget) : shown);
+        const lead = dedicatedAlexandria ? providerLead((shown as any)?.data?.tools) : '';
+        return lead ? { ...result, content: [{ type: 'text' as const, text: lead }, ...result.content] } : result;
       };
       const exchangeSource = hasAlexandria(searchBody.sources);
       if (exchangeSource || searchBody.domainTools)
