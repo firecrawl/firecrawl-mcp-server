@@ -1987,9 +1987,26 @@ Returns result groups in \`data\` and an operation \`id\`.
         origin: requestOrigin(mcpClient, session),
       };
       const byteBudget = searchByteBudget(session?.clientUserAgent);
-      const searchResult = (response: unknown) => {
+      const searchResult = (response: unknown, skills: any[] = []) => {
         const shown = annotateResultPositions(withoutDiscoveredToolPrices(response));
-        return structuredCompact(byteBudget ? fitSearchResponse(shown, byteBudget) : shown);
+        const fitted: any = byteBudget ? fitSearchResponse(shown, byteBudget) : shown;
+        if (!skills.length || !fitted?.data || typeof fitted.data !== 'object' || Array.isArray(fitted.data)) return structuredCompact(fitted);
+        // Skills that fit the query lead the results, each with the call that reads it.
+        return structuredCompact({
+          ...fitted,
+          data: {
+            skills: {
+              instruction:
+                'Written instructions that fit this search. Read the best match before going further and follow it instead of improvising: it names the capabilities to call and what to return.',
+              matches: skills.map((skill: any) => ({
+                name: skill.name,
+                description: skill.description,
+                nextTool: { name: ALEXANDRIA_LIBRARY_TOOL, arguments: { command: `cat ${skillPath(skill.id)}` } },
+              })),
+            },
+            ...fitted.data,
+          },
+        });
       };
       const exchangeSource = hasAlexandria(searchBody.sources);
       if (exchangeSource || searchBody.domainTools)
@@ -2008,6 +2025,14 @@ Returns result groups in \`data\` and an operation \`id\`.
       // high-level `search()` helper strips `id` and `creditsUsed`, which
       // supports the optional authenticated `firecrawl_search_feedback` workflow.
       const client = getClient(session);
+      // The skills lookup is asked with the query only and runs beside the search: it
+      // never fails the search, and is left out when it is still running
+      // RELATED_SKILLS_WAIT_MS after the search answers.
+      const skillsQuery = searchQuery.trim().slice(0, 200);
+      const skillsLookup =
+        dedicatedAlexandria && hasCredential(session) && enterpriseAllowsAlexandria(opts.enterprise) && skillsQuery.length >= 8
+          ? matchingSkills(session, skillsQuery, SEARCH_SKILL_MIN_SIMILARITY, searchBody.origin, tool)
+          : undefined;
       const postSearch = () =>
         postSearchWithFallback(
           client,
@@ -2016,7 +2041,7 @@ Returns result groups in \`data\` and an operation \`id\`.
           requestedSources
         );
       const httpRes = await relayExchangeError(postSearch, { tool, alexandriaTools });
-      return searchResult(httpRes?.data ?? {});
+      return searchResult(httpRes?.data ?? {}, skillsLookup ? await withinSkillsWait(skillsLookup, []) : []);
     },
   } satisfies RegisteredTool;
   server.addTool(searchTool);
@@ -2207,16 +2232,20 @@ Returns result groups in \`data\` and an operation \`id\`.
   // lookup is asked with the command's words only, runs beside the command, and is left
   // out when it fails or is still running RELATED_SKILLS_WAIT_MS after the command answers.
   const RELATED_SKILL_MIN_SIMILARITY = 0.42;
+  // A search query names the subject more than the task, so loosely related skills score
+  // closer to fitting ones than they do for a library command: the bar is higher.
+  const SEARCH_SKILL_MIN_SIMILARITY = 0.45;
   const RELATED_SKILLS_WAIT_MS = 250;
-  const relatedSkills = async (
+  // Up to three skills that fit a few words closely enough, best first; none when the
+  // lookup fails or is refused.
+  const matchingSkills = async (
     session: SessionData | undefined,
-    command: string,
-    origin: ReturnType<typeof requestOrigin>
-  ): Promise<string> => {
+    query: string,
+    minSimilarity: number,
+    origin: ReturnType<typeof requestOrigin>,
+    tool: string
+  ): Promise<any[]> => {
     try {
-      if (command.includes(SKILLS_ROOT)) return '';
-      const query = commandWords(command);
-      if (query.length < 8) return '';
       const found = JSON.parse(
         await executeExchangeCalls(
           session,
@@ -2226,17 +2255,40 @@ Returns result groups in \`data\` and an operation \`id\`.
           origin,
           false,
           undefined,
-          ALEXANDRIA_LIBRARY_TOOL
+          tool
         )
       );
-      const skills = (found?.data?.alexandria?.[0]?.data?.skills ?? [])
+      return (found?.data?.alexandria?.[0]?.data?.skills ?? [])
         .filter(
           (skill: any) =>
             typeof skill?.id === 'string' &&
             typeof skill?.similarity === 'number' &&
-            skill.similarity >= RELATED_SKILL_MIN_SIMILARITY
+            skill.similarity >= minSimilarity
         )
         .slice(0, 3);
+    } catch {
+      return [];
+    }
+  };
+  // The lookup's answer, or late when it is still running RELATED_SKILLS_WAIT_MS from now.
+  const withinSkillsWait = <T>(lookup: Promise<T>, late: T): Promise<T> =>
+    new Promise<T>((resolve) => {
+      const timer = setTimeout(() => resolve(late), RELATED_SKILLS_WAIT_MS);
+      void lookup.then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      });
+    });
+  const relatedSkills = async (
+    session: SessionData | undefined,
+    command: string,
+    origin: ReturnType<typeof requestOrigin>
+  ): Promise<string> => {
+    try {
+      if (command.includes(SKILLS_ROOT)) return '';
+      const query = commandWords(command);
+      if (query.length < 8) return '';
+      const skills = await matchingSkills(session, query, RELATED_SKILL_MIN_SIMILARITY, origin, ALEXANDRIA_LIBRARY_TOOL);
       if (!skills.length) return '';
       return [
         '[skills] Written instructions that fit this task. Read the best match before going further and follow it instead of improvising: it names the capabilities to call and what to return.',
@@ -2283,13 +2335,7 @@ Returns result groups in \`data\` and an operation \`id\`.
           const message = typeof entry?.error?.message === 'string' ? entry.error.message : 'The library returned no result.';
           throw new UserError(message, { success: false, message, requestId: envelope?.requestId });
         }
-        const skills = await new Promise<string>((resolve) => {
-          const late = setTimeout(() => resolve(''), RELATED_SKILLS_WAIT_MS);
-          void related.then((text) => {
-            clearTimeout(late);
-            resolve(text);
-          });
-        });
+        const skills = await withinSkillsWait(related, '');
         const { stdout = '', stderr = '', exitCode, truncated, catalogueVersion } = entry.data;
         return withStructured(libraryText({ stdout, stderr, exitCode }) + (skills ? `\n\n${skills}` : ''), {
           stdout,
