@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { callExpectingError, startStdio, startStdioWithApi, toolText } from './helpers/exchange-mcp.mjs';
+import { callExpectingError, startStdioWithApi } from './helpers/exchange-mcp.mjs';
 
 const call = (client, name, args) => client.request('tools/call', { name, arguments: args });
 const library = (client, command) => call(client, 'alexandria_library_search', { command });
@@ -73,36 +73,12 @@ test('a failed library command still fails at once, whatever the lookup does', a
   assert.match(failed.content[0].text, /ran past its deadline/);
 });
 
-test('firecrawl_skills is always loaded and read-only, and lists first the instruction to check skills', async (t) => {
+test('alexandria_library_search is always loaded and opens with the line to check skills first; no separate skills read tool is listed', async (t) => {
   const { client, init } = await startStdioWithApi(t);
   const { tools } = await client.request('tools/list', {});
-  const skills = tools.find((tool) => tool.name === 'firecrawl_skills');
-  assert.deepEqual(skills._meta, { 'anthropic/alwaysLoad': true });
-  assert.deepEqual(skills.annotations, { title: 'Skills', readOnlyHint: true, openWorldHint: false, destructiveHint: false, idempotentHint: true });
-  assert.match(skills.description, /^Check first for any business workflow/);
-  assert.match(tools.find((tool) => tool.name === 'alexandria_library_search').description, /^Check \/skills first for any business workflow/);
+  const library = tools.find((tool) => tool.name === 'alexandria_library_search');
+  assert.equal(library._meta?.['anthropic/alwaysLoad'], true);
+  assert.match(library.description, /^Check \/skills first for any business workflow/);
   assert.match(init.instructions, /Check \/skills in alexandria_library_search first for any business workflow/);
-});
-
-test('firecrawl_skills finds skills with query and reads one with id', async (t) => {
-  const { api, client } = await startStdioWithApi(t);
-  const listed = toolText(await call(client, 'firecrawl_skills', { query: 'weekly summary' }));
-  assert.deepEqual(api.requests.at(-1).body.alexandria, { provider: 'firecrawl', capability: 'find-skills', options: { query: 'weekly summary' } });
-  assert.deepEqual(listed.data.alexandria[0].data.skills.map((skill) => skill.nextTool), [
-    { name: 'firecrawl_skills', arguments: { id: 'team:weekly-digest' } },
-    { name: 'firecrawl_skills', arguments: { id: 'deep-research' } },
-  ]);
-  const read = toolText(await call(client, 'firecrawl_skills', { id: 'deep-research', path: 'references/sources.md' }));
-  assert.deepEqual(api.requests.at(-1).body.alexandria, { provider: 'firecrawl', capability: 'read-skill', options: { id: 'deep-research', path: 'references/sources.md' } });
-  assert.equal(read.data.alexandria[0].data.path, 'references/sources.md');
-  const before = api.requests.length;
-  for (const args of [{ query: 'a', id: 'deep-research' }, { path: 'SKILL.md' }, { version: 2 }, { id: 'deep-research', limit: 3 }, { extra: 1 }])
-    await callExpectingError(client, { name: 'firecrawl_skills', arguments: args });
-  assert.equal(api.requests.length, before);
-});
-
-test('keyless sessions do not list firecrawl_skills', async (t) => {
-  const { client } = await startStdio(t, { CLOUD_SERVICE: 'false', FIRECRAWL_API_KEY: '', FIRECRAWL_API_URL: '' });
-  const { tools } = await client.request('tools/list', {});
   assert(!tools.some((tool) => tool.name === 'firecrawl_skills'));
 });

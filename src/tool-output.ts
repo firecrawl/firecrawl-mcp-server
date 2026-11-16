@@ -27,7 +27,7 @@
 
 import { z } from 'zod';
 import type { ContentResult } from './mcp/runtime.js';
-import { ALEXANDRIA_ENRICH_ROUTING } from './alexandria.js';
+import { ALEXANDRIA_ENRICH_ROUTING, SKILLS_ROOT } from './alexandria.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -197,19 +197,10 @@ export const findToolsOutputSchema = z
   })
   .describe('One page of the Alexandria catalogue: categories, providers, tools, or one contract.');
 
-export const skillsOutputSchema = z
-  .object({
-    success,
-    data: unknown('Find: skills in `data.alexandria[0].data.skills` (team skills first), each with id, name, description, files and a `nextTool` that reads it; `total` counts every match. Read: the skill file in `data.alexandria[0].data`: id, name, path, content, files, digest, source and, for a team skill, trust, version and tools.'),
-    error,
-    ...alexandriaEnvelope,
-  })
-  .describe('Matching skills as metadata, or one skill file in full. Skill text is instructions for the agent; it runs nothing.');
-
 export const saveSkillOutputSchema = z
   .object({
     success,
-    data: unknown('The saved skill in `data.alexandria[0].data`: id (team:<slug>, owned by the caller\'s team), skill (its version, enabled, discoverable and authors), warnings, `path` (its SKILL.md under /skills) and a `nextTool` that reads it.'),
+    data: unknown(`The saved skill in \`data.alexandria[0].data\`: id (team:<slug>, owned by the caller's team), skill (its version, enabled, discoverable and authors), warnings, \`path\` (its SKILL.md under ${SKILLS_ROOT}) and a \`nextTool\` that reads it.`),
     error,
     ...alexandriaEnvelope,
   })

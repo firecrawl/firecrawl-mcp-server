@@ -9,11 +9,10 @@ import { callExpectingError, getFreePort, startStdio, startStdioWithApi, toolTex
 const data = result => toolText(result).data.alexandria[0].data;
 const readCommand = path => ({ name: 'alexandria_library_search', arguments: { command: `cat ${path}` } });
 
-test('skills are read through alexandria_library_search and firecrawl_skills; firecrawl_save_skill writes', async (t) => {
+test('skills are read through alexandria_library_search; firecrawl_save_skill writes', async (t) => {
   const { client } = await startStdioWithApi(t);
   const { tools } = await client.request('tools/list', {});
-  assert(tools.some(tool => tool.name === 'firecrawl_skills'));
-  for (const name of ['firecrawl_find_skills', 'firecrawl_read_skill', 'firecrawl_create_skill', 'firecrawl_update_skill']) assert(!tools.some(tool => tool.name === name), name);
+  for (const name of ['firecrawl_skills', 'firecrawl_find_skills', 'firecrawl_read_skill', 'firecrawl_create_skill', 'firecrawl_update_skill']) assert(!tools.some(tool => tool.name === name), name);
   assert.deepEqual(tools.find(tool => tool.name === 'firecrawl_save_skill')?.annotations, { title: 'Save Skill', readOnlyHint: false, openWorldHint: false, destructiveHint: true, idempotentHint: false });
   const library = tools.find(tool => tool.name === 'alexandria_library_search');
   assert.match(library.description, /^Check \/skills first for any business workflow/);

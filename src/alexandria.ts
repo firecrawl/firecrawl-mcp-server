@@ -70,28 +70,8 @@ export const findToolsSchema = z
   })
   .strict();
 
-export const SKILLS_TOOL = 'firecrawl_skills';
-
-/** firecrawl_skills: with id, reads one skill; otherwise finds skills (all of them without query). */
-export const skillsSchema = z
-  .object({
-    query: z.string().trim().min(1).max(2000).optional().describe('Find: a few words from the task, matched against each skill\'s id, name and description. Omit query and id to list every skill.'),
-    limit: z.number().int().min(1).max(50).optional().describe('Find: most skills to return; defaults to 20.'),
-    id: z.string().trim().min(1).max(200).optional().describe('Read: a skill id from a listing (team:<slug> for a team skill). Returns that skill in full.'),
-    path: z.string().trim().min(1).max(500).optional().describe('Read: a file from the skill\'s files list; defaults to SKILL.md.'),
-    version: z.number().int().min(1).optional().describe('Read, team skills only: an earlier kept version; defaults to the current one.'),
-  })
-  .strict()
-  .superRefine((value, ctx) => {
-    const refuse = (message: string) => ctx.addIssue({ code: 'custom', message });
-    if (value.id !== undefined && value.query !== undefined) return refuse('Give query to find skills or id to read one, not both.');
-    if (value.id === undefined) {
-      const readOnly = (['path', 'version'] as const).filter((key) => value[key] !== undefined);
-      if (readOnly.length) return refuse(`Only a read takes ${readOnly.join(' and ')}: give the skill's id too.`);
-    } else if (value.limit !== undefined) {
-      return refuse('Only a find takes limit: omit id to find skills.');
-    }
-  });
+/** Where skills sit in the library filesystem; every skills path below is built from it. */
+export const SKILLS_ROOT = '/skills';
 
 const SKILL_CHANGES = ['name', 'description', 'body', 'enabled', 'discoverable'] as const;
 
@@ -99,13 +79,13 @@ export const saveSkillSchema = z
   .object({
     id: z.string().trim().max(100).regex(/^team:[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Only team skills (team:<slug>) can be changed; copy a library skill with from.').optional().describe('Update: the team:<slug> skill to change. Omit to create a skill.'),
     baseVersion: z.number().int().min(1).optional().describe('Update, required: the version: in the skill\'s SKILL.md. A skill changed since is refused with conflict: read it again and reapply.'),
-    from: z.string().trim().min(1).max(100).optional().describe('Create: the skill to copy, by id: <id> for /skills/library/<id>, team:<slug> for /skills/team/<slug>. Fields you also give override the copy.'),
+    from: z.string().trim().min(1).max(100).optional().describe(`Create: the skill to copy, by id: <id> for ${SKILLS_ROOT}/library/<id>, team:<slug> for ${SKILLS_ROOT}/team/<slug>. Fields you also give override the copy.`),
     name: z.string().trim().min(1).max(1000).optional().describe('Skill name; required to create without from.'),
     description: z.string().trim().min(1).max(5000).optional().describe('When to use the skill; required to create without from.'),
     body: z.string().min(1).max(200_000).regex(/\S/, 'body must not be blank').optional().describe('The instructions in full, in Markdown; required to create without from. Reference capabilities as @provider/capability.'),
     slug: z.string().trim().max(64).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'slug is lowercase letters and digits in words joined by single hyphens').optional().describe('Create: lowercase words joined by hyphens; defaults to one made from the name.'),
     enabled: z.boolean().optional().describe('Update: turn the skill on or off.'),
-    discoverable: z.boolean().optional().describe('Update: whether /skills/INDEX lists it.'),
+    discoverable: z.boolean().optional().describe(`Update: whether ${SKILLS_ROOT}/INDEX lists it.`),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -123,9 +103,9 @@ export const saveSkillSchema = z
     if (!given(SKILL_CHANGES).length) return refuse('Nothing to change: give name, description, body, enabled or discoverable.');
   });
 
-/** Where a skill's SKILL.md sits in the library's /skills tree. */
+/** Where a skill's SKILL.md sits in the library's skills tree. */
 export function skillPath(id: string): string {
-  return id.startsWith('team:') ? `/skills/team/${id.slice(5)}/SKILL.md` : `/skills/library/${id}/SKILL.md`;
+  return id.startsWith('team:') ? `${SKILLS_ROOT}/team/${id.slice(5)}/SKILL.md` : `${SKILLS_ROOT}/library/${id}/SKILL.md`;
 }
 
 /** A saved skill names its file and the library command that reads it. */
@@ -289,7 +269,7 @@ export const ALEXANDRIA_LIBRARY_CATEGORIES = [
 ];
 
 export const ALEXANDRIA_LIBRARY_DESCRIPTION =
-  "Check /skills first for any business workflow (sales or meeting prep, account and prospect lists, competitor, market or financial research, monitoring): your team's written skills and Firecrawl's are step-by-step instructions for these tasks; follow a matching skill instead of improvising. `cat /skills/search/<a-few-words-from-the-task>` (joined by hyphens) ranks them, your team's first; cat the path to read one. " +
+  `Check ${SKILLS_ROOT} first for any business workflow (sales or meeting prep, account and prospect lists, competitor, market or financial research, monitoring): your team's written skills and Firecrawl's are step-by-step instructions for these tasks; follow a matching skill instead of improvising. \`cat ${SKILLS_ROOT}/search/<a-few-words-from-the-task>\` (joined by hyphens) ranks them, your team's first; cat the path to read one. ` +
   "Explore the Alexandria library: Firecrawl's catalogue of data providers that return typed, sourced records (" + ALEXANDRIA_CATALOGUE_VERTICALS + ') as a read-only filesystem, using shell commands. Use this to find out whether a provider covers the data a task needs, and to read its contract before alexandria_library_read. Layout: /library/<category>/<provider>/<capability>.md, one file per capability holding its contract (when to use it, inputs, outputs, and the call to send); /library, each category folder and each provider folder has a README.md describing what is inside. Category folders: ' + ALEXANDRIA_LIBRARY_CATEGORIES.join(', ') + '; `ls /library` shows any added since. Available commands: ls, tree, cat, head, tail, grep, find, wc, sort, uniq, cut, tr, sed, jq, xargs, with pipes. Typical starts: `ls /library`, `cat /library/README.md`, or `grep -ril "mortgage" /library`. A file path is the execute address: /library/finance/fred/series/observations.md is provider "fred", capability "series/observations". Recorded example responses are under /examples/<provider>/<capability>.json. Free; does not run providers.';
 
 export const ALEXANDRIA_READ_DESCRIPTION =
