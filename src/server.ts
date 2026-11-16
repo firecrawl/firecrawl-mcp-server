@@ -1838,7 +1838,8 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
         const required = Array.isArray(schema.required) ? (schema.required as string[]) : [];
         schema.required = ['url', ...required.filter((name) => name !== 'url' && name in properties)];
         for (const key of ALEXANDRIA_IGNORED_SCRAPE_OPTIONS) {
-          const field = properties[key] as { description: string };
+          const field = properties[key] as { description?: unknown } | undefined;
+          if (typeof field?.description !== 'string') continue;
           const text = field.description.replace(/^URL mode only: /, '').replace(/ Ignored with alexandria\.$/, '');
           field.description = text[0].toUpperCase() + text.slice(1);
         }

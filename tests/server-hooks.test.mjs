@@ -390,6 +390,7 @@ test('listEarlierAlexandriaTools keeps firecrawl_find_tools and the scrape alexa
   const kept = await listed({ listEarlierAlexandriaTools: true });
   const earlier = await listed({ toolFilter: (name) => name.startsWith('firecrawl_') });
   assert.ok(kept.alexandria_library_read && kept.alexandria_library_search);
+  for (const name of ['firecrawl_find_tools', 'firecrawl_scrape']) assert.ok(kept[name] && earlier[name], name);
   // The same definitions a surface without the library tools lists, always-load mark included.
   assert.deepEqual(kept.firecrawl_find_tools, earlier.firecrawl_find_tools);
   assert.deepEqual(kept.firecrawl_scrape, earlier.firecrawl_scrape);
