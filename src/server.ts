@@ -1915,7 +1915,6 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
   };
   server.addTool({
     ...scrapeTool,
-    _meta: { 'anthropic/alwaysLoad': true },
   });
 
   server.addTool({
