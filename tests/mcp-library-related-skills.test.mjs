@@ -100,4 +100,9 @@ test('FIRECRAWL_MCP_LIBRARY_SKILLS=false serves the library without skills', asy
   assert.equal(lookups(api).length, 0);
   const commands = api.requests.filter((request) => request.body?.alexandria?.capability === 'library');
   assert.deepEqual(commands.map((request) => request.body.alexandria.options), [{ command, skills: false }]);
+
+  await call(client, 'alexandria_library_read', { calls: [{ provider: 'firecrawl', capability: 'library', options: { command: 'cat /library/README.md' } }] });
+  const read = api.requests.filter((request) => JSON.stringify(request.body?.alexandria ?? '').includes('cat /library/README.md'));
+  assert.equal(read.length, 1);
+  assert.deepEqual([read[0].body.alexandria].flat().map((entry) => entry.options), [{ command: 'cat /library/README.md', skills: false }]);
 });

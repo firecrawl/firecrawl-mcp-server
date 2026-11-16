@@ -464,8 +464,8 @@ export interface FirecrawlMcpServerOptions {
   /**
    * Serve the library's skills: the skills folder and the lines that point to
    * it, the skills listed under library results, and firecrawl_save_skill.
-   * false sends `skills: false` with each alexandria_library_search command and
-   * leaves the rest out. Defaults to true.
+   * false sends `skills: false` with every firecrawl/library call, whichever
+   * tool makes it, and leaves the rest out. Defaults to true.
    */
   librarySkills?: boolean;
   /**
@@ -2050,6 +2050,13 @@ Returns result groups in \`data\` and an operation \`id\`.
     tool = dedicatedAlexandria ? ALEXANDRIA_READ_TOOL : 'firecrawl_scrape'
   ): Promise<string> {
     assertExchangeCredential(session);
+    if (!config.librarySkills) {
+      const withoutSkills = (call: z.infer<typeof exchangeCallSchema>) =>
+        call.provider === 'firecrawl' && call.capability === 'library'
+          ? { ...call, options: { ...call.options, skills: false } }
+          : call;
+      alexandria = Array.isArray(alexandria) ? alexandria.map(withoutSkills) : withoutSkills(alexandria);
+    }
     const client = getClient(session);
     const requestId = suppliedRequestId ?? randomUUID();
     // The library and skill tools take no request ID, so a refusal cannot ask for it to be
@@ -2277,7 +2284,7 @@ Returns result groups in \`data\` and an operation \`id\`.
         const envelope = JSON.parse(
           await executeExchangeCalls(
             session,
-            { provider: 'firecrawl', capability: 'library', options: config.librarySkills ? { command } : { command, skills: false } },
+            { provider: 'firecrawl', capability: 'library', options: { command } },
             undefined,
             undefined,
             origin,
