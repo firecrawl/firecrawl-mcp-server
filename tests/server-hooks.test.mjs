@@ -368,7 +368,7 @@ test('a toolFilter that leaves alexandria_library_read out keeps firecrawl_scrap
   assert.ok('alexandria' in fixed.scrape.inputSchema.properties);
   assert.doesNotMatch([fixed.instructions, fixed.scrape.description].join('\n'), /alexandria_library_read/);
 
-  // Admitting one of the two new tools is not enough: the surface keeps the earlier names and copy.
+  // Admitting one of the two new tools is not enough: find_tools would be unlisted with nothing in its place.
   const half = await listed({ toolFilter: (name) => name !== 'alexandria_library_search' });
   assert.equal(half.names.includes('alexandria_library_read'), false);
   assert.ok(half.names.includes('firecrawl_find_tools'));
@@ -377,12 +377,26 @@ test('a toolFilter that leaves alexandria_library_read out keeps firecrawl_scrap
   const open = await listed({});
   assert.ok(open.names.includes('alexandria_library_read'));
   assert.ok(open.names.includes('alexandria_library_search'));
-  assert.ok(open.names.includes('firecrawl_find_tools'));
-  // The alexandria body stays listed beside the library tools, with the same definition.
-  assert.deepEqual(open.scrape, fixed.scrape);
+  assert.equal(open.names.includes('firecrawl_find_tools'), false);
+  assert.equal('alexandria' in open.scrape.inputSchema.properties, false);
 });
 
-test('a field an embedder requires on firecrawl_scrape is its only required field, beside url and alexandria', async (t) => {
+test('listEarlierAlexandriaTools keeps firecrawl_find_tools and the scrape alexandria body listed beside the library tools', async (t) => {
+  const listed = async (unstable_hooks) => {
+    const port = await startEmbedded(t, { apiUrl: 'http://127.0.0.1:9', apiKey: 'fc-configured', unstable_hooks });
+    const { tools } = await rpc(port, 'tools/list');
+    return Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+  };
+  const kept = await listed({ listEarlierAlexandriaTools: true });
+  const earlier = await listed({ toolFilter: (name) => name.startsWith('firecrawl_') });
+  assert.ok(kept.alexandria_library_read && kept.alexandria_library_search);
+  for (const name of ['firecrawl_find_tools', 'firecrawl_scrape']) assert.ok(kept[name] && earlier[name], name);
+  // The same definitions a surface without the library tools lists, always-load mark included.
+  assert.deepEqual(kept.firecrawl_find_tools, earlier.firecrawl_find_tools);
+  assert.deepEqual(kept.firecrawl_scrape, earlier.firecrawl_scrape);
+});
+
+test('a field an embedder requires on firecrawl_scrape stays required where the alexandria body is unlisted', async (t) => {
   const port = await startEmbedded(t, {
     apiUrl: 'http://127.0.0.1:9',
     apiKey: 'fc-configured',
@@ -393,8 +407,8 @@ test('a field an embedder requires on firecrawl_scrape is its only required fiel
   });
   const { tools } = await rpc(port, 'tools/list');
   const { inputSchema } = tools.find((tool) => tool.name === 'firecrawl_scrape');
-  assert.deepEqual(inputSchema.required, ['purpose']);
-  assert.ok('url' in inputSchema.properties && 'alexandria' in inputSchema.properties);
+  assert.deepEqual(inputSchema.required, ['url', 'purpose']);
+  assert.equal('alexandria' in inputSchema.properties, false);
 });
 
 test('outboundRequest credential and headers reach SDK and fetch-based API calls', async (t) => {
@@ -518,6 +532,23 @@ test('an account out of credits sees the API text from search, scrape, map and c
   }
 });
 
+test('a toolFilter that leaves firecrawl_save_skill out keeps it out of the instructions', async (t) => {
+  const surface = async (unstable_hooks) => {
+    const port = await startEmbedded(t, { apiUrl: 'http://127.0.0.1:9', apiKey: 'fc-configured', unstable_hooks });
+    const { tools } = await rpc(port, 'tools/list');
+    const { instructions } = await rpc(port, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } });
+    return { instructions, names: tools.map((tool) => tool.name) };
+  };
+  const filtered = await surface({ toolFilter: (name) => name !== 'firecrawl_save_skill' });
+  assert.equal(filtered.names.includes('firecrawl_save_skill'), false);
+  assert.doesNotMatch(filtered.instructions, /firecrawl_save_skill/);
+  assert.match(filtered.instructions, /grep \/library\/skills\/INDEX/);
+
+  const open = await surface({});
+  assert.ok(open.names.includes('firecrawl_save_skill'));
+  assert.match(open.instructions, /firecrawl_save_skill creates a team skill/);
+});
+
 test('instructions, configureHttp and oauth metadata hooks shape the instance', async (t) => {
   let defaults;
   const port = await startEmbedded(t, {
@@ -558,6 +589,41 @@ test('instructions, configureHttp and oauth metadata hooks shape the instance', 
   const body = await metadata.json();
   assert.equal(body.resource, 'https://mcp.example/mcp');
   assert.deepEqual(body.authorization_servers, ['https://issuer.example']);
+});
+
+test('an instructions hook that returns a function chooses the instructions for each session', async (t) => {
+  const sessions = [];
+  const port = await startEmbedded(t, {
+    apiUrl: 'http://127.0.0.1:9',
+    unstable_hooks: {
+      instructions: (defaults) => (session) => {
+        sessions.push(session);
+        return session?.firecrawlApiKey ? defaults.authenticated : defaults.keyless;
+      },
+    },
+  });
+  const initialize = (headers) =>
+    rpc(
+      port,
+      'initialize',
+      {
+        capabilities: {},
+        clientInfo: { name: 'hooks-test', version: '1.0.0' },
+        protocolVersion: '2025-06-18',
+      },
+      headers
+    );
+
+  const keyless = await initialize();
+  const keyed = await initialize({ 'x-firecrawl-api-key': 'fc-hooks-test' });
+  const keylessAgain = await initialize();
+
+  assert.match(keyless.instructions, /keyless/);
+  assert.match(keyed.instructions, /alexandria_library_search/);
+  assert.doesNotMatch(keyed.instructions, /Hosted keyless sessions/);
+  assert.equal(keylessAgain.instructions, keyless.instructions);
+  assert.equal(sessions.length, 3);
+  assert.equal(sessions[1].firecrawlApiKey, 'fc-hooks-test');
 });
 
 test('a 401 from an added tool is not treated as a Firecrawl credential rejection', async (t) => {

@@ -70,6 +70,56 @@ export const findToolsSchema = z
   })
   .strict();
 
+/** The library folder that holds skills; renaming it is this one line. */
+const SKILLS_FOLDER = 'skills';
+/** Where skills sit in the library filesystem; every skills path below is built from it. */
+export const SKILLS_ROOT = `/library/${SKILLS_FOLDER}`;
+
+const SKILL_CHANGES = ['name', 'description', 'body', 'enabled', 'discoverable'] as const;
+
+export const saveSkillSchema = z
+  .object({
+    id: z.string().trim().max(100).regex(/^team:[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Only team skills (team:<slug>) can be changed; copy a library skill with from.').optional().describe('Update: the team:<slug> skill to change. Omit to create a skill.'),
+    baseVersion: z.number().int().min(1).optional().describe('Update, required: the version: in the skill\'s SKILL.md. A skill changed since is refused with conflict: read it again and reapply.'),
+    from: z.string().trim().min(1).max(100).optional().describe(`Create: the skill to copy, by id: <id> for ${SKILLS_ROOT}/firecrawl/<id>, team:<slug> for ${SKILLS_ROOT}/team/<slug>. Fields you also give override the copy.`),
+    name: z.string().trim().min(1).max(1000).optional().describe('Skill name; required to create without from.'),
+    description: z.string().trim().min(1).max(5000).optional().describe('When to use the skill; required to create without from.'),
+    body: z.string().min(1).max(200_000).regex(/\S/, 'body must not be blank').optional().describe('The instructions in full, in Markdown; required to create without from. Reference capabilities as @provider/capability.'),
+    slug: z.string().trim().max(64).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'slug is lowercase letters and digits in words joined by single hyphens').optional().describe('Create: lowercase words joined by hyphens; defaults to one made from the name.'),
+    enabled: z.boolean().optional().describe('Update: turn the skill on or off.'),
+    discoverable: z.boolean().optional().describe(`Update: whether ${SKILLS_ROOT}/INDEX lists it.`),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const given = (keys: readonly (keyof typeof value)[]) => keys.filter((key) => value[key] !== undefined);
+    const refuse = (message: string) => ctx.addIssue({ code: 'custom', message });
+    if (value.id === undefined) {
+      const updateOnly = given(['baseVersion', 'enabled', 'discoverable']);
+      if (updateOnly.length) return refuse(`Only an update takes ${updateOnly.join(', ')}: give the skill's id too.`);
+      if (value.from === undefined && given(['name', 'description', 'body']).length < 3) return refuse('To create a skill, give name, description and body, or from to copy one.');
+      return;
+    }
+    const createOnly = given(['from', 'slug']);
+    if (createOnly.length) return refuse(`Only a create takes ${createOnly.join(' and ')}: omit id to create a skill.`);
+    if (value.baseVersion === undefined) return refuse('An update needs baseVersion: the version: in the skill\'s SKILL.md.');
+    if (!given(SKILL_CHANGES).length) return refuse('Nothing to change: give name, description, body, enabled or discoverable.');
+  });
+
+/** Where a skill's SKILL.md sits in the library's skills tree. */
+export function skillPath(id: string): string {
+  return id.startsWith('team:') ? `${SKILLS_ROOT}/team/${id.slice(5)}/SKILL.md` : `${SKILLS_ROOT}/firecrawl/${id}/SKILL.md`;
+}
+
+/** A saved skill names its file and the library command that reads it. */
+export function withSkillNavigation(envelope: any, tools: AlexandriaTools) {
+  const data = envelope?.data?.alexandria?.[0]?.data;
+  if (typeof data?.id !== 'string') return envelope;
+  data.path = skillPath(data.id);
+  const read = { provider: 'firecrawl', capability: 'library', options: { command: `cat ${data.path}` } };
+  data.nextTool = tools === 'dedicated' ? { name: ALEXANDRIA_LIBRARY_TOOL, arguments: read.options } : executeToolCall(tools, read);
+  return envelope;
+}
+
 export const ALEXANDRIA_CATALOGUE_VERTICALS =
   'companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more';
 export const ALEXANDRIA_CATALOGUE_SENTENCE =
@@ -85,7 +135,7 @@ export const ALEXANDRIA_SEARCH_LEAD =
 export const ALEXANDRIA_CONTRACT_GUIDANCE =
   'The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and a key field under response (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination.';
 export const ALEXANDRIA_ENRICH_ROUTING =
-  'For people and company enrichment or search, use people_company_enrich or people_company_search when they are listed; call a provider here directly only when the user asks for that provider.';
+  'For people and company enrichment or search, use people_company_enrich or people_company_search when they are listed, and for job postings use jobs_search when it is listed; call a provider here directly only when the user asks for that provider.';
 export const ALEXANDRIA_TERMS_GUIDANCE =
   'Some providers require accepted terms; when a response reports a terms requirement, direct the user to the Firecrawl dashboard URL in that response.';
 
@@ -211,17 +261,22 @@ export const ALEXANDRIA_DEDICATED_SEARCH_INSTRUCTIONS =
 // The category folders of /library, so an agent can open one without listing
 // first. They come from the Exchange catalogue; a category added there is
 // missing here until this list is updated, and `ls /library` always has it.
-// The category folders of the deployed library (`ls /library`, 2026-11-10).
+// The category folders of the deployed library (`ls /library`, 2026-11-10). The
+// skills folder sits beside them and is not one.
 export const ALEXANDRIA_LIBRARY_CATEGORIES = [
   'agriculture', 'ai-models', 'apps', 'automotive', 'community', 'companies', 'developer',
   'digital-intelligence', 'education', 'energy', 'entertainment', 'finance', 'game-development',
   'government', 'health', 'healthcare', 'jobs', 'knowledge', 'life-sciences', 'marketing', 'music',
   'news', 'people', 'places', 'podcasts', 'political-science', 'real-estate', 'research',
-  'restaurants', 'shopping', 'skills', 'social', 'software', 'sports', 'travel',
+  'restaurants', 'shopping', 'social', 'software', 'sports', 'travel',
 ];
 
-export const ALEXANDRIA_LIBRARY_DESCRIPTION =
+// The library without its skills, for a server started with librarySkills: false.
+export const ALEXANDRIA_LIBRARY_CATALOGUE_DESCRIPTION =
   "Explore the Alexandria library: Firecrawl's catalogue of data providers that return typed, sourced records (" + ALEXANDRIA_CATALOGUE_VERTICALS + ') as a read-only filesystem, using shell commands. Use this to find out whether a provider covers the data a task needs, and to read its contract before alexandria_library_read. Layout: /library/<category>/<provider>/<capability>.md, one file per capability holding its contract (when to use it, inputs, outputs, and the call to send); /library, each category folder and each provider folder has a README.md describing what is inside. Category folders: ' + ALEXANDRIA_LIBRARY_CATEGORIES.join(', ') + '; `ls /library` shows any added since. Available commands: ls, tree, cat, head, tail, grep, find, wc, sort, uniq, cut, tr, sed, jq, xargs, with pipes. Typical starts: `ls /library`, `cat /library/README.md`, or `grep -ril "mortgage" /library`. A file path is the execute address: /library/finance/fred/series/observations.md is provider "fred", capability "series/observations". Recorded example responses are under /examples/<provider>/<capability>.json. Free; does not run providers.';
+
+export const ALEXANDRIA_LIBRARY_DESCRIPTION =
+  `Check ${SKILLS_ROOT} first for any business workflow (sales or meeting prep, prospect lists, competitor, market or financial research, monitoring): it holds your team's and Firecrawl's step-by-step instructions for these tasks; follow a matching one instead of improvising. \`cat ${SKILLS_ROOT}/search/<a-few-words-from-the-task>\` (joined by hyphens) ranks them, your team's first; cat the path to read one. ` + ALEXANDRIA_LIBRARY_CATALOGUE_DESCRIPTION;
 
 export const ALEXANDRIA_READ_DESCRIPTION =
   "Run capabilities of Alexandria data providers and return their typed, sourced records: one, or up to ten in one call when a task needs several lookups. Alexandria is Firecrawl's library of data providers across " + ALEXANDRIA_CATALOGUE_VERTICALS + '. ' + ALEXANDRIA_ENRICH_ROUTING + ' Each entry of `calls` is {provider, capability, options}: `provider` and `capability` come from firecrawl_search results or alexandria_library_search, and `options` follow the capability\'s contract, which marks required inputs and any requiresOneOf groups (at least one member per group). Where the contract declares pagination, its fields page through results with the same filters. Returns one result per call, in the same order, in data.alexandria, each with data, records, or an error with a code; one call can fail while the others succeed, and an invalid call returns an error naming the valid options. A result too large to return inline is retained, and nextTool reads it in slices. Billed per executed capability; discovery is free. ' + ALEXANDRIA_TERMS_GUIDANCE;

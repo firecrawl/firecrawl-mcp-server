@@ -35,6 +35,8 @@ const SEARCH_TOOLS = [
   // Alexandria people and company search and enrichment.
   'people_company_search',
   'people_company_enrich',
+  // Job postings over Alexandria's jobs route.
+  'jobs_search',
 ];
 
 // A representative sample of the full-surface tools that must NOT leak here.
@@ -50,6 +52,7 @@ const EXCLUDED_TOOLS = [
   'firecrawl_search_feedback',
   'firecrawl_feedback',
   'firecrawl_research_search_github',
+  'firecrawl_research_lookup_protein',
 ];
 
 const SEARCH_ENDPOINT = '/v2/mcp-search';

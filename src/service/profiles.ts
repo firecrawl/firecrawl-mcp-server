@@ -84,6 +84,8 @@ export const SEARCH_PROFILE_TOOLS = new Set<string>([
   // Alexandria people and company search and enrichment.
   'people_company_search',
   'people_company_enrich',
+  // Job postings over Alexandria's jobs route.
+  'jobs_search',
   // Registered so cached sessions get a DEPRECATED_TOOL payload, hidden from
   // tools/list via canList. See registerResearchTools.
   'firecrawl_research_search_github',
