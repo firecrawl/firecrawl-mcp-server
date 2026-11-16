@@ -601,7 +601,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
 
     server.setRequestHandler('tools/list', async () => {
       toolList ??= await Promise.all(
-        listed.map(async (tool) => ({
+        [...listed].sort((a, b) => Number(b.name.startsWith('alexandria_')) - Number(a.name.startsWith('alexandria_'))).map(async (tool) => ({
           annotations: tool.annotations,
           ...(tool.annotations?.title && { title: tool.annotations.title }),
           ...(tool.icons && { icons: tool.icons }),
