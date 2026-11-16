@@ -2258,7 +2258,7 @@ Returns result groups in \`data\` and an operation \`id\`.
   const RELATED_SKILLS = 3;
   // A search query names the subject more than the task, so loosely related skills score
   // closer to fitting ones than they do for a library command: the bar is higher.
-  const SEARCH_SKILL_MIN_SIMILARITY = 0.45;
+  const SEARCH_SKILL_MIN_SIMILARITY = 0.42;
   const RELATED_SKILLS_WAIT_MS = 250;
   // Up to three skills that fit a few words closely enough, the team's first; none when the
   // lookup fails or is refused.
