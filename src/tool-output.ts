@@ -27,7 +27,7 @@
 
 import { z } from 'zod';
 import type { ContentResult } from './mcp/runtime.js';
-import { ALEXANDRIA_ENRICH_ROUTING } from './alexandria.js';
+import { ALEXANDRIA_ENRICH_ROUTING, SKILLS_ROOT } from './alexandria.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -196,6 +196,15 @@ export const findToolsOutputSchema = z
     ...alexandriaEnvelope,
   })
   .describe('One page of the Alexandria catalogue: categories, providers, tools, or one contract.');
+
+export const saveSkillOutputSchema = z
+  .object({
+    success,
+    data: unknown(`The saved skill in \`data.alexandria[0].data\`: id (team:<slug>, owned by the caller's team), skill (its version, enabled, discoverable and authors), warnings, \`path\` (its SKILL.md under ${SKILLS_ROOT}) and a \`nextTool\` that reads it.`),
+    error,
+    ...alexandriaEnvelope,
+  })
+  .describe('A team skill as saved.');
 
 export const feedbackOutputSchema = z
   .object({
