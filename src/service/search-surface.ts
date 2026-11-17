@@ -61,7 +61,6 @@ function registerMarketplaceSearchTool(
 ): void {
   registrar.addTool({
     name: 'firecrawl_search',
-    _meta: { 'anthropic/alwaysLoad': true },
     annotations: {
       title: 'Firecrawl web search',
       readOnlyHint: true,
@@ -215,14 +214,12 @@ export function searchSurfaceTools({
     if (findTools) {
       surface.addTool({
         ...findTools,
-        _meta: { 'anthropic/alwaysLoad': true },
         description: SEARCH_SURFACE_FIND_TOOLS_DESCRIPTION,
       });
     }
     if (scrape) {
       surface.addTool({
         ...scrape,
-        _meta: { 'anthropic/alwaysLoad': true },
         description: searchSurfaceScrapeDescription(safeMode),
       });
     }
