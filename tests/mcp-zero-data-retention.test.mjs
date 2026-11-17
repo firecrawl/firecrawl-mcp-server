@@ -134,10 +134,13 @@ test('firecrawl_search sends a top-level zeroDataRetention as the zdr enterprise
   }
 
   for (const zeroDataRetention of [false, undefined]) {
-    await client.request('tools/call', {
+    const before = sent('/v2/search').length;
+    const result = await client.request('tools/call', {
       name: 'firecrawl_search',
       arguments: { query: 'example', ...(zeroDataRetention === undefined ? {} : { zeroDataRetention }) },
     });
+    assert.notEqual(result.isError, true, JSON.stringify(result));
+    assert.equal(sent('/v2/search').length, before + 1);
     const body = sent('/v2/search').at(-1).body;
     assert.equal('enterprise' in body, false);
     assert.equal('zeroDataRetention' in body, false);
