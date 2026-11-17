@@ -99,6 +99,7 @@ async function startFakeExchangeApi(options = {}) {
       return json(200, {
         success: true,
         feedbackId: 'fb-1',
+        message: 'Feedback recorded. 1 credit refunded.',
         creditsRefunded: 1,
         ...(options.rejectedTokens !== undefined ? { rejectedTokens: options.rejectedTokens } : {}),
       });

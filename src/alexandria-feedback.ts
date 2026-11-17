@@ -70,7 +70,7 @@ export const alexandriaFeedbackFields = {
 /** Appended to Alexandria results so the pointer travels with the data the agent is reading. */
 export const ALEXANDRIA_FEEDBACK_HINT = {
   name: 'firecrawl_feedback',
-  when: 'After task completion, within 20 minutes of your last Alexandria call. Free, optional, refunds 1 credit, No job ID needed.',
+  when: 'After task completion, within 20 minutes of your last Alexandria call. Free, optional, can refund 1 credit once per call and website. No job ID needed.',
   arguments: {
     endpoint: 'alexandria',
     rating: '<good | partial | bad>',
@@ -103,6 +103,16 @@ export function withAlexandriaFeedbackHint<T>(
 ): T {
   if (!enabled || !envelope || typeof envelope !== 'object') return envelope;
   return { ...envelope, feedbackTool: ALEXANDRIA_FEEDBACK_HINT };
+}
+
+/** Drops the API's own pointer at firecrawl_feedback, for an instance that does not serve the tool. */
+export function withoutFeedbackNextStep<T>(body: T): T {
+  const items = (body as any)?.data?.alexandria;
+  if (!Array.isArray(items) || !items.some((item) => item?.nextStep)) return body;
+  return {
+    ...body,
+    data: { ...(body as any).data, alexandria: items.map(({ nextStep: _nextStep, ...item }) => item) },
+  };
 }
 
 /** The session's call tokens and per-call ratings in the shape the feedback API takes; unknown refs are reported back. */

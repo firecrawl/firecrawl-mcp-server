@@ -13,7 +13,7 @@ function assertFeedbackHint(payload) {
   assert.equal(payload.feedbackTool.arguments.endpoint, 'alexandria');
   assert.match(payload.feedbackTool.arguments.requestedWebsite.url, /website/i);
   assert.match(payload.feedbackTool.arguments.objective, /goal/i);
-  assert.match(payload.feedbackTool.when, /^After task completion, within 20 minutes of your last Alexandria call/i);
+  assert.match(payload.feedbackTool.when, /^After task completion, within 20 minutes of your last Alexandria call\. Free, optional, can refund 1 credit once per call and website\./);
 }
 
 test('Alexandria selection metadata omits feedback workflow', async (t) => {
@@ -24,7 +24,7 @@ test('Alexandria selection metadata omits feedback workflow', async (t) => {
   assert(byName.has('firecrawl_feedback'));
   assert.match(
     byName.get('firecrawl_feedback').description,
-    /alexandria.*eligible feedback can refund 1 credit.*daily caps per website and per team/is
+    /alexandria.*eligible feedback can refund 1 credit, once per call and website; refunds are subject to daily caps per website and per team\. The response's `message` reports whether a refund was applied/is
   );
   assert.doesNotMatch(byName.get('firecrawl_feedback').description, /no credit refund|no job-age deadline/i);
   assert.match(byName.get('firecrawl_feedback').description, /within 20 minutes of the team's latest Alexandria/i);

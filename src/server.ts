@@ -5,6 +5,7 @@ import {
   alexandriaFeedbackTokens,
   alexandriaSessionFeedbackSchema,
   withAlexandriaFeedbackHint,
+  withoutFeedbackNextStep,
 } from './alexandria-feedback.js';
 import FirecrawlApp from 'firecrawl';
 import type { Hono } from 'hono';
@@ -2132,10 +2133,11 @@ Returns result groups in \`data\` and an operation \`id\`.
         }
       );
       const calls = Array.isArray(alexandria) ? alexandria : [alexandria];
+      const answered = alexandriaFeedbackAvailable() ? (response?.data ?? {}) : withoutFeedbackNextStep(response?.data ?? {});
       return alexandriaOutput(
         {
           ...withFeedbackRefs(
-            includeCosts ? (response?.data ?? {}) : withoutResultPrices(response?.data ?? {}),
+            includeCosts ? answered : withoutResultPrices(answered),
             feedbackStore
           ),
           requestId,
@@ -2900,7 +2902,7 @@ Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\
       description: `
 Submit concise quality feedback for a completed search, scrape, parse, or map job. Provide the endpoint, job ID, rating, and relevant issue codes or small contextual fields; omit large page contents and raw outputs.
 
-For an Alexandria session, set endpoint to \`alexandria\`, omit jobId, and provide requestedWebsite (url and requestedFunctionality), objective, rationale, and rating. objective is the underlying goal behind the session: what you or your user were ultimately trying to accomplish (for example, "shortlist federal IT contracts to bid on this quarter"), not only what was needed from this website. Optional providerFeedback and capabilityFeedback describe gaps or errors. Capability issues: new_capability_request (requires requestedFunctionality), missing_capability, insufficient_functionality, incorrect_result, execution_error, other. Alexandria results carry a feedbackRef per call. The overall rating covers every call in this session; callRatings [{ref, rating}] rate individual calls by feedbackRef. Alexandria feedback must arrive within 20 minutes of the team's latest Alexandria search, discovery, or execution; later feedback is rejected. Eligible feedback can refund 1 credit; refunds are subject to daily caps per website and per team.
+For an Alexandria session, set endpoint to \`alexandria\`, omit jobId, and provide requestedWebsite (url and requestedFunctionality), objective, rationale, and rating. objective is the underlying goal behind the session: what you or your user were ultimately trying to accomplish (for example, "shortlist federal IT contracts to bid on this quarter"), not only what was needed from this website. Optional providerFeedback and capabilityFeedback describe gaps or errors. Capability issues: new_capability_request (requires requestedFunctionality), missing_capability, insufficient_functionality, incorrect_result, execution_error, other. Alexandria results carry a feedbackRef per call. The overall rating covers every call in this session; callRatings [{ref, rating}] rate individual calls by feedbackRef. Alexandria feedback must arrive within 20 minutes of the team's latest Alexandria search, discovery, or execution; later feedback is rejected. Eligible feedback can refund 1 credit, once per call and website; refunds are subject to daily caps per website and per team. The response's \`message\` reports whether a refund was applied.
 
 Returns submission status, feedback ID, and accounting fields.
 `,

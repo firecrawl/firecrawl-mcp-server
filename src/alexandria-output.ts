@@ -15,10 +15,13 @@ export async function alexandriaOutput(
   // Which tool the retained result's nextTool is addressed to.
   tools: AlexandriaTools = 'legacy'
 ): Promise<string> {
-  const serialized = JSON.stringify({ ...payload, ...extras });
+  const items = payload?.data?.alexandria;
+  // A result that carries the API's own nextStep already points at feedback.
+  const inlineExtras =
+    Array.isArray(items) && items.some((item: any) => item?.nextStep) ? { ...extras, feedbackTool: undefined } : extras;
+  const serialized = JSON.stringify({ ...payload, ...inlineExtras });
   const responseBytes = Buffer.byteLength(serialized, 'utf8');
   const estimatedTokens = Math.ceil(responseBytes / 4);
-  const items = payload?.data?.alexandria;
   if (
     estimatedTokens <= INLINE_TOKEN_BUDGET ||
     payload?.success !== true ||
