@@ -90,8 +90,17 @@ test('oversized Alexandria results hand off only after retention is confirmed an
   assert.equal(result.delivery, 'retained');
   assert.equal(result.inlineTokenBudget, 20000);
   assert(result.estimatedTokens > 20000);
-  assert(JSON.stringify(result).length < 2000);
+  assert(JSON.stringify(result).length < 6000);
   assert.equal(result.creditsCost, 5);
+  assert.deepEqual(result.data.alexandria, [{
+    provider: EXCHANGE_CALL.provider,
+    capability: EXCHANGE_CALL.capability,
+    type: 'object',
+    fields: ['text'],
+    lists: [],
+    head: { text: `${'x'.repeat(2000)}…[+88000 chars]` },
+  }]);
+  assert.match(result.nextTool.arguments.calls[0].options.command, /^jq '\.data\.alexandria\[\] \| \{provider, capability/);
   assert.equal(api.requests.length, 2);
   assert.equal(api.requests[1].body.alexandria.options.requestId, result.requestId);
   assert.notEqual(api.requests[1].headers['x-request-id'], result.requestId);
