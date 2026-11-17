@@ -43,13 +43,11 @@ function findLists(value: unknown, path = '', keys: string[] = [], lists: Found[
   return lists;
 }
 
-// How many rows of a list the clipped head shows: 0 when clipping left the list out.
-function shownRows(head: unknown, keys: string[]): number {
+// How many rows of a list a head clipped to `rows` shows: 0 when clipping left the list out.
+function shownRows(head: unknown, list: Found, rows: number): number {
   let value = head;
-  for (const key of keys) value = isObject(value) ? value[key] : undefined;
-  if (!Array.isArray(value)) return 0;
-  const last = value.at(-1);
-  return typeof last === 'string' && last.startsWith('…[+') ? value.length - 1 : value.length;
+  for (const key of list.keys) value = isObject(value) ? value[key] : undefined;
+  return Array.isArray(value) ? Math.min(rows, list.count) : 0;
 }
 
 function clip(value: unknown, limits: Limits, depth = 0): unknown {
@@ -85,7 +83,7 @@ function previewItem(item: any, maxBytes: number) {
   const fits = (preview: unknown) => Buffer.byteLength(JSON.stringify(preview), 'utf8') <= maxBytes;
   for (const limits of HEAD_LIMITS) {
     const preview = { ...shape, head: clip(data, limits) };
-    if (fits(preview)) return { preview, found };
+    if (fits(preview)) return { preview, found, rows: limits.rows };
   }
   // No head fits: keep as much of the shape as fits, and mark the head as left out.
   const fallbacks = [
@@ -93,7 +91,7 @@ function previewItem(item: any, maxBytes: number) {
     { ...base, lists: found.map(({ path, count }) => ({ path, count })), head: '…' },
     { ...base, head: '…' },
   ];
-  return { preview: fallbacks.find(fits) ?? fallbacks.at(-1)!, found };
+  return { preview: fallbacks.find(fits) ?? fallbacks.at(-1)!, found, rows: 0 };
 }
 
 export async function alexandriaOutput(
@@ -163,8 +161,8 @@ export async function alexandriaOutput(
     );
     // The rows after those the head shows of the longest list, or each call's fields when no call has a list.
     const next = previews
-      .flatMap(({ preview, found }, index) =>
-        found.map((list) => ({ index, list, rows: shownRows(preview.head, list.keys) }))
+      .flatMap(({ preview, found, rows }, index) =>
+        found.map((list) => ({ index, list, rows: shownRows(preview.head, list, rows) }))
       )
       .filter(({ list, rows }) => list.count > rows)
       .sort((a, b) => b.list.count - a.list.count)[0];

@@ -272,6 +272,16 @@ test('a retained answer quotes odd keys safely and reads a list the head left ou
   assert.equal(result.nextTool.arguments.calls[0].options.command, `jq -c '.data.alexandria[0].data["it'\\''s rows"][0:20]' response.json`);
 });
 
+test('nextTool starts after the rows the head shows even when a row looks like a cut marker', async (t) => {
+  const rows = Array.from({ length: 2000 }, (_, id) => (id === 19 ? '…[+1 items]' : `row ${id} ${'r'.repeat(100)}`));
+  const large = { success: true, data: { creditsCost: 5, alexandria: [{ ...EXCHANGE_CALL, data: { rows } }] } };
+  const { client } = await startStdioWithApi(t, { largeResult: large, bashRecovery: 'available' });
+  const result = toolText(await call(client, 'alexandria_library_read', { calls: [EXCHANGE_CALL] }));
+  assert.equal(result.delivery, 'retained');
+  assert.deepEqual(result.data.alexandria[0].head.rows.slice(0, 20), rows.slice(0, 20));
+  assert.equal(result.nextTool.arguments.calls[0].options.command, "jq -c '.data.alexandria[0].data.rows[20:40]' response.json");
+});
+
 test('a retained answer whose shape alone is over the budget keeps a bounded preview', async (t) => {
   const data = Object.fromEntries(Array.from({ length: 60 }, (_, i) => [`${'f'.repeat(300)}${i}`, Array.from({ length: 40 }, (_, j) => ({ [`${'c'.repeat(200)}${j}`]: j }))]));
   data.pad = 'p'.repeat(100_000);
