@@ -667,6 +667,12 @@ class ConsoleLogger implements Logger {
 const OUT_OF_CREDITS_INSTRUCTION =
   'If Firecrawl reports that credits ran out or the daily limit without an account was reached, end your final answer with the line it provides, link included.';
 // The Alexandria sentences name the tools a surface registers; everything else is shared.
+// Opens the authenticated profile so clients that load web tools on demand know when to reach for them.
+const WEB_ROUTING_INSTRUCTION =
+  'Use Firecrawl instead of a built-in web search when a web lookup needs the full content of a page rather than a snippet, a page a plain fetch cannot read (JavaScript-rendered, blocked or a PDF), forum and community threads, or product spec and manual pages.';
+// A short authenticated profile for clients that cut long server instructions.
+const compactProfileInstructions = (skills: boolean) =>
+  `${WEB_ROUTING_INSTRUCTION} ${OUT_OF_CREDITS_INSTRUCTION} ${skills ? `Check ${SKILLS_ROOT} through alexandria_library_search first for any business workflow (sales or meeting prep, prospect lists, competitor, market or financial research, monitoring) and follow a matching skill instead of improvising. ` : ''}firecrawl_search searches the web and also returns matching Alexandria data providers in data.tools. firecrawl_scrape retrieves one supplied page, firecrawl_map lists URLs under a site without retrieving them, and firecrawl_agent runs multi-source research that returns structured data when the URLs are not known; read its result with firecrawl_agent_status. If web results already answer the question, use them. For the same fields across several entities, exact figures or a large set of records, alexandria_library_search explores the library for free (contracts at /library/<category>/<provider>/<capability>.md${skills ? `, skills under ${SKILLS_ROOT}` : ''}) and alexandria_library_read runs up to ten capabilities with their published contracts.`;
 const fullProfileInstructions = (tools: AlexandriaTools, skills: boolean, saveSkill: boolean) =>
   `${OUT_OF_CREDITS_INSTRUCTION} ${tools === 'dedicated' && skills ? `Check ${SKILLS_ROOT} through alexandria_library_search first for any business workflow (sales or meeting prep, prospect lists, competitor, market or financial research, monitoring) and follow a matching skill instead of improvising. ` : ''}Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. Authenticated firecrawl_search returns web results together with matching Alexandria providers in data.tools. ${ALEXANDRIA_CATALOGUE_SENTENCE} A matching provider can return the same fields across several entities, provenance, exact figures or timestamps, or a large set of records through ${tools === 'dedicated'
     ? 'alexandria_library_read with its published contract. If web results already answer the question, use them. Before scraping the same fields from several pages, alexandria_library_search checks for free whether a provider covers them: it explores the whole library as a read-only filesystem with shell commands, and reads a contract that was not returned in full.'
@@ -735,11 +741,13 @@ export function createFirecrawlMcpServer(
   const dedicatedAlexandria = alexandriaTools === 'dedicated';
   const unlistEarlierAlexandria = dedicatedAlexandria && !hooks.listEarlierAlexandriaTools;
   const instructionDefaults: InstructionDefaults = {
-    authenticated: fullProfileInstructions(
-      alexandriaTools,
-      config.librarySkills,
-      hooks.toolFilter?.('firecrawl_save_skill') ?? true
-    ),
+    authenticated: dedicatedAlexandria
+      ? compactProfileInstructions(config.librarySkills)
+      : fullProfileInstructions(
+          alexandriaTools,
+          config.librarySkills,
+          hooks.toolFilter?.('firecrawl_save_skill') ?? true
+        ),
     keyless: keylessProfileInstructions(alexandriaTools),
   };
   const instructions =
