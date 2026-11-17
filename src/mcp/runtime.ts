@@ -605,7 +605,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
           annotations: tool.annotations,
           ...(tool.annotations?.title && { title: tool.annotations.title }),
           ...(tool.icons && { icons: tool.icons }),
-          description: tool.description,
+          description: tool.description?.trim(),
           inputSchema: tool.parameters
             ? openMaps(closeObjects((tool.transformInputSchema ?? ((schema) => schema))(
                 (await toJsonSchema(tool.parameters as never)) as JsonObject
