@@ -39,7 +39,7 @@ async function startApi(t) {
   return { client, sent };
 }
 
-test('crawl and agent list zeroDataRetention at the top level and search and crawl no longer nest it', async (t) => {
+test('crawl, agent and search list zeroDataRetention at the top level and search and crawl no longer nest it', async (t) => {
   const { client } = await startApi(t);
   const { tools } = await client.request('tools/list');
   const input = Object.fromEntries(tools.map((tool) => [tool.name, tool.inputSchema]));
@@ -52,7 +52,7 @@ test('crawl and agent list zeroDataRetention at the top level and search and cra
     assert.ok(scrapeOptions.formats, `${name} scrapeOptions lost its other fields`);
     assert.equal('zeroDataRetention' in scrapeOptions, false, `${name} still nests zeroDataRetention`);
   }
-  assert.equal('zeroDataRetention' in input.firecrawl_search.properties, false);
+  assert.equal(input.firecrawl_search.properties.zeroDataRetention.type, 'boolean');
 });
 
 test('firecrawl_crawl sends zeroDataRetention at the top level of /v2/crawl', async (t) => {
@@ -112,5 +112,34 @@ test('a nested scrapeOptions.zeroDataRetention is refused with the supported alt
     assert.match(result.content[0].text, alternative);
     assert.equal(result.structuredContent?.error?.code, 'invalid_request');
     assert.equal(sent(path).length, 0, `${name} reached the API`);
+  }
+});
+
+test('firecrawl_search sends a top-level zeroDataRetention as the zdr enterprise mode', async (t) => {
+  const { client, sent } = await startApi(t);
+  for (const [args, enterprise] of [
+    [{ zeroDataRetention: true }, ['zdr']],
+    [{ zeroDataRetention: true, enterprise: ['zdr'] }, ['zdr']],
+    [{ zeroDataRetention: true, enterprise: ['default'] }, ['default', 'zdr']],
+  ]) {
+    const result = await client.request('tools/call', {
+      name: 'firecrawl_search',
+      arguments: { query: 'example', ...args },
+    });
+    assert.notEqual(result.isError, true, JSON.stringify(result));
+    const body = sent('/v2/search').at(-1).body;
+    assert.deepEqual(body.enterprise, enterprise);
+    assert.equal('zeroDataRetention' in body, false);
+    assert.equal(JSON.stringify(body.sources).includes('alexandria'), false);
+  }
+
+  for (const zeroDataRetention of [false, undefined]) {
+    await client.request('tools/call', {
+      name: 'firecrawl_search',
+      arguments: { query: 'example', ...(zeroDataRetention === undefined ? {} : { zeroDataRetention }) },
+    });
+    const body = sent('/v2/search').at(-1).body;
+    assert.equal('enterprise' in body, false);
+    assert.equal('zeroDataRetention' in body, false);
   }
 });

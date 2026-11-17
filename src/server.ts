@@ -126,6 +126,7 @@ import {
   searchDomainsAreExclusive,
   dedicatedSearchToolFields,
   searchToolBaseFields,
+  searchEnterprise,
   termsWriteError,
 } from './tool-helpers.js';
 import { httpUrl, normalizeToolArguments } from './tool-arguments.js';
@@ -580,6 +581,7 @@ export {
   searchCategoriesAreCompatible,
   searchDomainsAreExclusive,
   searchToolBaseFields,
+  searchEnterprise,
   SEARCH_RESULT_SOURCES,
   annotateResultPositions,
 } from './tool-helpers.js';
@@ -2002,10 +2004,11 @@ Returns result groups in \`data\` and an operation \`id\`.
     beforeValidate: (args: unknown) =>
       refuseNestedZeroDataRetention(
         args,
-        'For zero data retention on firecrawl_search, set enterprise: ["zdr"] instead; it requires an account where Zero Data Retention is enabled.'
+        'For zero data retention on firecrawl_search, set zeroDataRetention: true at the top level or enterprise: ["zdr"] instead; it requires an account where Zero Data Retention is enabled.'
       ),
     execute: async (args: unknown, { session, log, client: mcpClient }: ToolContext, tool = 'firecrawl_search'): Promise<ContentResult> => {
-      const { query, ...opts } = args as Record<string, unknown>;
+      const { query, zeroDataRetention, ...rest } = args as Record<string, unknown>;
+      const opts: Record<string, unknown> = { ...rest, enterprise: searchEnterprise(rest.enterprise, zeroDataRetention) };
 
       const requestedSources = normalizeSearchSources(
         Array.isArray(opts.sources) && opts.sources.length ? opts.sources : ['web']

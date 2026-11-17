@@ -21,6 +21,7 @@ import {
   searchOutputSchema,
   searchQueryIsValid,
   searchToolBaseFields,
+  searchEnterprise,
   structuredCompact,
   type ToolRegistrar,
   type ToolResult,
@@ -111,7 +112,8 @@ Returns result groups in \`data\` and an operation \`id\`.
         sources,
         categories,
         highlights,
-        enterprise,
+        enterprise: requestedEnterprise,
+        zeroDataRetention,
         domainTools,
         toolDetail,
       } = args as {
@@ -128,7 +130,9 @@ Returns result groups in \`data\` and an operation \`id\`.
         categories?: string[];
         highlights?: boolean;
         enterprise?: string[];
+        zeroDataRetention?: boolean;
       };
+      const enterprise = searchEnterprise(requestedEnterprise, zeroDataRetention);
 
       const searchQuery = query ?? '';
       const requestedSources = normalizeSearchSources(

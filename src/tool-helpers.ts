@@ -86,7 +86,18 @@ export const searchToolBaseFields = {
       'Limit results to specific source types. `research` restricts ordinary web results to research-affiliated websites and returns page snippets, which is separate from the `firecrawl_research_*` tools that search paper abstracts and full text across biomedical (PubMed, bioRxiv, medRxiv) and arXiv literature; `pdf` searches PDF results; `developer` searches an index built for coding agents over public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation; `gov` searches the Government Index of US federal, state, and local legal and regulatory sources, the index behind firecrawl_gov_search, and cannot be combined with other categories; gov hits can include historical versions, bill text, agency guidance, and third-party reproductions, so verify the issuer, jurisdiction, enacted/effective status, and version before citing current governing law, clarify a missing jurisdiction or ambiguous as-of date, and use general search for non-US questions or missing coverage (no hits does not establish that no applicable law exists). `developer` and `gov` return hits in `data.web` with `category` set to their name; the other categories also filter `data.web`.'
     ),
   enterprise: z.array(z.enum(['default', 'anon', 'zdr'])).optional(),
+  zeroDataRetention: z
+    .boolean()
+    .optional()
+    .describe('Run the search with zero data retention, the same as enterprise: ["zdr"]. Requires an account where Zero Data Retention is enabled.'),
 };
+
+/** The API takes zero data retention on search as the "zdr" enterprise mode, so a top-level flag joins that list. */
+export function searchEnterprise(enterprise: unknown, zeroDataRetention: unknown): unknown {
+  if (zeroDataRetention !== true) return enterprise;
+  const modes = Array.isArray(enterprise) ? enterprise : [];
+  return modes.includes('zdr') ? modes : [...modes, 'zdr'];
+}
 
 /** The same fields where Alexandria has its own tools: the two descriptions that name the catalogue tool. */
 export const dedicatedSearchToolFields = {
