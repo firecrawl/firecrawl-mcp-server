@@ -117,7 +117,7 @@ async function startFakeExchangeApi(options = {}) {
       if (options.bashRecovery && termsCall?.capability === 'bash') {
         if (options.bashRecovery === 'missing') return json(200, { success: true, data: { alexandria: [{ error: { code: 'result_unavailable' } }] } });
         const identities = options.bashRecovery === 'partial' ? [] : options.largeResult.data.alexandria.map(item => [item.provider, item.capability]);
-        return json(200, { success: true, data: { alexandria: [{ provider: 'firecrawl', capability: 'bash', data: { workspaceId: 'retained-workspace', exitCode: 0, stdout: JSON.stringify(identities), idleTtlSeconds: 300 } }] } });
+        return json(200, { success: true, data: { alexandria: [{ provider: 'firecrawl', capability: 'bash', data: { workspaceId: 'retained-workspace', exitCode: 0, stdout: [JSON.stringify(identities), ...(options.bashFiles ?? [])].join('\n'), idleTtlSeconds: 300 } }] } });
       }
       if (options.largeResult) return json(200, options.largeResult);
       if (options.saveSkillError && parsedBody.alexandria?.provider === 'firecrawl' && ['create-skill', 'update-skill'].includes(parsedBody.alexandria.capability)) return json(200, { success: true, data: { creditsCost: 0, alexandria: [{ provider: 'firecrawl', capability: parsedBody.alexandria.capability, error: options.saveSkillError }] } });
