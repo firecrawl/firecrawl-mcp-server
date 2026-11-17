@@ -240,11 +240,10 @@ test('a retained alexandria_library_read answer carries a bounded preview of eac
   assert.deepEqual(preview.fields, ['rows', 'next_cursor', 'summary']);
   assert.deepEqual(preview.lists, [{ path: '.rows', count: 2000, fields: ['id', 'name', 'note'] }]);
   assert.equal(preview.head.next_cursor, 'page-2');
-  assert.match(preview.head.summary, /^s+…\[\+\d+ chars\]$/);
+  assert.equal(preview.head.summary, `${'s'.repeat(2000)}…[+3000 chars]`);
   const shown = preview.head.rows.slice(0, -1);
-  assert(shown.length >= 5);
-  assert.deepEqual(shown, rows.slice(0, shown.length));
-  assert.equal(preview.head.rows.at(-1), `…[+${2000 - shown.length} items]`);
+  assert.deepEqual(shown, rows.slice(0, 20));
+  assert.equal(preview.head.rows.at(-1), '…[+1980 items]');
 
   assert(Buffer.byteLength(JSON.stringify(result.data)) <= 10_000);
   assert(Buffer.byteLength(raw.content[0].text) / 4 < 4_000);
@@ -256,8 +255,35 @@ test('a retained alexandria_library_read answer carries a bounded preview of eac
   assert.equal(result.nextTool.name, 'alexandria_library_read');
   assert.equal(
     result.nextTool.arguments.calls[0].options.command,
-    `jq -c '.data.alexandria[0].data.rows[${shown.length}:${shown.length + 20}]' response.json`
+    "jq -c '.data.alexandria[0].data.rows[20:40]' response.json"
   );
+});
+
+test('a retained answer quotes odd keys safely and reads a list the head left out from its first row', async (t) => {
+  const keys = Object.fromEntries(Array.from({ length: 45 }, (_, i) => [`k${String(i).padStart(2, '0')}`, i]));
+  const rows = Array.from({ length: 1000 }, (_, id) => ({ id, text: 't'.repeat(200) }));
+  const large = { success: true, data: { creditsCost: 5, alexandria: [{ ...EXCHANGE_CALL, data: { ...keys, "it's rows": rows } }] } };
+  const { client } = await startStdioWithApi(t, { largeResult: large, bashRecovery: 'available' });
+  const result = toolText(await call(client, 'alexandria_library_read', { calls: [EXCHANGE_CALL] }));
+  assert.equal(result.delivery, 'retained');
+  const [preview] = result.data.alexandria;
+  assert.deepEqual(preview.lists.map((list) => list.path), ['["it\'s rows"]']);
+  assert.equal(preview.head["it's rows"], undefined);
+  assert.equal(result.nextTool.arguments.calls[0].options.command, `jq -c '.data.alexandria[0].data["it'\\''s rows"][0:20]' response.json`);
+});
+
+test('a retained answer whose shape alone is over the budget keeps a bounded preview', async (t) => {
+  const data = Object.fromEntries(Array.from({ length: 60 }, (_, i) => [`${'f'.repeat(300)}${i}`, Array.from({ length: 40 }, (_, j) => ({ [`${'c'.repeat(200)}${j}`]: j }))]));
+  data.pad = 'p'.repeat(100_000);
+  const items = Array.from({ length: 10 }, () => ({ ...EXCHANGE_CALL, data }));
+  const large = { success: true, data: { creditsCost: 50, alexandria: items } };
+  const { client } = await startStdioWithApi(t, { largeResult: large, bashRecovery: 'available' });
+  const result = toolText(await call(client, 'alexandria_library_read', { calls: items.map(() => EXCHANGE_CALL) }));
+  assert.equal(result.delivery, 'retained');
+  for (const preview of result.data.alexandria) {
+    assert.equal(preview.head, '…');
+    assert(Buffer.byteLength(JSON.stringify(preview)) <= 1_000);
+  }
 });
 
 test('a retained answer names the transcript text files the workspace lists, and only those', async (t) => {
@@ -289,7 +315,9 @@ test('a retained read of ten calls shares one preview budget', async (t) => {
     assert.equal(preview.head[0].id, 0);
   }
   assert(Buffer.byteLength(JSON.stringify(result.data)) <= 10_000);
-  assert.match(result.nextTool.arguments.calls[0].options.command, /^jq -c '\.data\.alexandria\[0\]\.data\[\d+:\d+\]' response\.json$/);
+  const shown = result.data.alexandria[0].head.length - 1;
+  assert.equal(result.data.alexandria[0].head.at(-1), `…[+${300 - shown} items]`);
+  assert.equal(result.nextTool.arguments.calls[0].options.command, `jq -c '.data.alexandria[0].data[${shown}:${shown + 20}]' response.json`);
 });
 
 test('a surface whose tool filter leaves the new tools out keeps firecrawl_find_tools and firecrawl_scrape with an alexandria body', async (t) => {

@@ -21,6 +21,7 @@ type Call = { provider: string; capability: string };
 type Post = (body: unknown, requestId: string) => Promise<any>;
 type Limits = (typeof HEAD_LIMITS)[number];
 type List = { path: string; count: number; fields?: string[] };
+type Found = List & { keys: string[] };
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -35,11 +36,20 @@ function rowFields(rows: unknown[]): string[] | undefined {
 }
 
 // Arrays in the data, outside other arrays, with the jq path that reaches them.
-function findLists(value: unknown, path = '', depth = 0, lists: List[] = []): List[] {
-  if (Array.isArray(value)) lists.push({ path: path || '.', count: value.length, fields: rowFields(value) });
-  else if (isObject(value) && depth < 3)
-    for (const [key, entry] of Object.entries(value)) findLists(entry, jqPath(path, key), depth + 1, lists);
+function findLists(value: unknown, path = '', keys: string[] = [], lists: Found[] = []): Found[] {
+  if (Array.isArray(value)) lists.push({ path: path || '.', count: value.length, fields: rowFields(value), keys });
+  else if (isObject(value) && keys.length < 3)
+    for (const [key, entry] of Object.entries(value)) findLists(entry, jqPath(path, key), [...keys, key], lists);
   return lists;
+}
+
+// How many rows of a list the clipped head shows: 0 when clipping left the list out.
+function shownRows(head: unknown, keys: string[]): number {
+  let value = head;
+  for (const key of keys) value = isObject(value) ? value[key] : undefined;
+  if (!Array.isArray(value)) return 0;
+  const last = value.at(-1);
+  return typeof last === 'string' && last.startsWith('…[+') ? value.length - 1 : value.length;
 }
 
 function clip(value: unknown, limits: Limits, depth = 0): unknown {
@@ -61,18 +71,29 @@ function clip(value: unknown, limits: Limits, depth = 0): unknown {
 // Shape and first rows of one call's data, cut to fit maxBytes.
 function previewItem(item: any, maxBytes: number) {
   const data = item.data;
-  const shape = {
+  const found = findLists(data).filter((list) => list.count > 0).sort((a, b) => b.count - a.count).slice(0, 8);
+  const base = {
     provider: item.provider,
     capability: item.capability,
     type: Array.isArray(data) ? 'array' : data === null ? 'null' : typeof data,
-    ...(isObject(data) ? { fields: Object.keys(data).slice(0, 60) } : {}),
-    lists: findLists(data).filter((list) => list.count > 0).sort((a, b) => b.count - a.count).slice(0, 8),
   };
+  const shape = {
+    ...base,
+    ...(isObject(data) ? { fields: Object.keys(data).slice(0, 60) } : {}),
+    lists: found.map(({ keys, ...list }) => list),
+  };
+  const fits = (preview: unknown) => Buffer.byteLength(JSON.stringify(preview), 'utf8') <= maxBytes;
   for (const limits of HEAD_LIMITS) {
     const preview = { ...shape, head: clip(data, limits) };
-    if (Buffer.byteLength(JSON.stringify(preview), 'utf8') <= maxBytes) return { preview, rows: limits.rows };
+    if (fits(preview)) return { preview, found };
   }
-  return { preview: shape, rows: 0 };
+  // No head fits: keep as much of the shape as fits, and mark the head as left out.
+  const fallbacks = [
+    { ...shape, head: '…' },
+    { ...base, lists: found.map(({ path, count }) => ({ path, count })), head: '…' },
+    { ...base, head: '…' },
+  ];
+  return { preview: fallbacks.find(fits) ?? fallbacks.at(-1)!, found };
 }
 
 export async function alexandriaOutput(
@@ -140,15 +161,15 @@ export async function alexandriaOutput(
     const previews = items.map((item: any) =>
       previewItem(item, Math.floor((PREVIEW_TOKEN_BUDGET * 4) / items.length))
     );
-    // The next rows of the longest list, or each call's fields when no call has a list.
+    // The rows after those the head shows of the longest list, or each call's fields when no call has a list.
     const next = previews
-      .flatMap(({ preview, rows }, index) =>
-        preview.lists.map((list: List) => ({ index, list, rows }))
+      .flatMap(({ preview, found }, index) =>
+        found.map((list) => ({ index, list, rows: shownRows(preview.head, list.keys) }))
       )
       .filter(({ list, rows }) => list.count > rows)
       .sort((a, b) => b.list.count - a.list.count)[0];
     const command = next
-      ? `jq -c '.data.alexandria[${next.index}].data${next.list.path === '.' ? '' : next.list.path}[${next.rows}:${next.rows + NEXT_ROWS}]' response.json`
+      ? `jq -c '${`.data.alexandria[${next.index}].data${next.list.path === '.' ? '' : next.list.path}[${next.rows}:${next.rows + NEXT_ROWS}]`.replace(/'/g, "'\\''")}' response.json`
       : "jq '.data.alexandria[] | {provider, capability, type: (.data | type), fields: (.data | if type == \"object\" then keys else null end)}' response.json";
 
     return JSON.stringify({
