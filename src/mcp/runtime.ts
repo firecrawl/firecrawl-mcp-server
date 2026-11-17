@@ -274,7 +274,8 @@ export interface McpExtension<Auth> {
 export interface RuntimeOptions<Auth> {
   name: string;
   version: string;
-  instructions?: string;
+  /** Server instructions, or a function choosing them for each session. */
+  instructions?: string | ((session: Auth | undefined) => string | undefined);
   logger: Logger;
   authenticate?: (request: AuthenticateRequest) => Promise<Auth>;
   oauth?: { protectedResource: ProtectedResource };
@@ -549,7 +550,10 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
               }
             : {}),
         },
-        instructions: options.instructions,
+        instructions:
+          typeof options.instructions === 'function'
+            ? options.instructions(session)
+            : options.instructions,
       }
     );
     server.onerror = (error) => {
@@ -601,7 +605,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
           annotations: tool.annotations,
           ...(tool.annotations?.title && { title: tool.annotations.title }),
           ...(tool.icons && { icons: tool.icons }),
-          description: tool.description,
+          description: tool.description?.trim(),
           inputSchema: tool.parameters
             ? openMaps(closeObjects((tool.transformInputSchema ?? ((schema) => schema))(
                 (await toJsonSchema(tool.parameters as never)) as JsonObject

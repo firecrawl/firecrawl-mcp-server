@@ -1492,7 +1492,7 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   );
   assert.match(
     init.instructions,
-    /firecrawl_research_\* tools search a paper index of abstracts and full text/i
+    /firecrawl_research_\* paper tools search an index of abstracts and full text/i
   );
   assert.match(
     byName.get('firecrawl_research_related_papers').description,
