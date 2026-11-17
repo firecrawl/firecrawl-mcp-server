@@ -16,7 +16,7 @@
 
 ### Fixed
 
-- `firecrawl_search` takes a top-level `zeroDataRetention` on the full surface and the search-only endpoint. It was dropped without an error before, so the search ran without zero data retention. `zeroDataRetention: true` is sent as the `"zdr"` mode in `enterprise`, added once beside any modes the call sets, and the field itself is not sent. Calls without it send the same request as before. The refusal of `scrapeOptions.zeroDataRetention` now names both forms.
+- `firecrawl_search` takes a top-level `zeroDataRetention` on the full surface and the search-only endpoint. The full surface used to drop it without an error, so the search ran without zero data retention, and the search-only endpoint refused it as an unknown field. `zeroDataRetention: true` is sent as the `"zdr"` mode in `enterprise`, added once beside any modes the call sets, and the field itself is not sent. Calls without it send the same request as before. The refusal of `scrapeOptions.zeroDataRetention` now names both forms.
 - `pdfOptions` reach the API when the call does not also set `parsers`. They were sent only when the call listed `parsers: ["pdf"]`, so `pdfOptions.maxPages` on its own did not limit the pages parsed. `firecrawl_scrape`, `firecrawl_parse` and the `scrapeOptions` of `firecrawl_search`, `firecrawl_crawl` and `firecrawl_interact` now send `parsers: [{"type": "pdf", "maxPages": n}]` in both cases. Tool definitions are unchanged.
 
 ## [3.40.0] - 2026-11-12
