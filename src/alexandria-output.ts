@@ -1,4 +1,5 @@
 import { executeToolCall, type AlexandriaTools } from './alexandria.js';
+import { nextStepPointsAtFeedback } from './alexandria-feedback.js';
 
 const INLINE_TOKEN_BUDGET = 20_000;
 // Shared by every call in one read; measured as UTF-8 bytes / 4 like the inline budget.
@@ -105,9 +106,9 @@ export async function alexandriaOutput(
   tools: AlexandriaTools = 'legacy'
 ): Promise<string> {
   const items = payload?.data?.alexandria;
-  // A result that carries the API's own nextStep already points at feedback.
+  // A result whose own nextStep points at feedback needs no second pointer.
   const inlineExtras =
-    Array.isArray(items) && items.some((item: any) => item?.nextStep) ? { ...extras, feedbackTool: undefined } : extras;
+    Array.isArray(items) && items.some(nextStepPointsAtFeedback) ? { ...extras, feedbackTool: undefined } : extras;
   const serialized = JSON.stringify({ ...payload, ...inlineExtras });
   const responseBytes = Buffer.byteLength(serialized, 'utf8');
   const estimatedTokens = Math.ceil(responseBytes / 4);

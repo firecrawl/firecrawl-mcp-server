@@ -105,13 +105,30 @@ export function withAlexandriaFeedbackHint<T>(
   return { ...envelope, feedbackTool: ALEXANDRIA_FEEDBACK_HINT };
 }
 
-/** Drops the API's own pointer at firecrawl_feedback, for an instance that does not serve the tool. */
+/** Whether a result item's nextStep, as the API sent it, points at firecrawl_feedback. */
+export function nextStepPointsAtFeedback(item: any): boolean {
+  return item?.nextStep?.tool === ALEXANDRIA_FEEDBACK_HINT.name;
+}
+
+/**
+ * Removes the API's pointer at firecrawl_feedback from each result, for an instance that does not serve the tool.
+ * Whatever else a nextStep carries stays; a nextStep left empty is dropped.
+ */
 export function withoutFeedbackNextStep<T>(body: T): T {
   const items = (body as any)?.data?.alexandria;
-  if (!Array.isArray(items) || !items.some((item) => item?.nextStep)) return body;
+  if (!Array.isArray(items) || !items.some(nextStepPointsAtFeedback)) return body;
   return {
     ...body,
-    data: { ...(body as any).data, alexandria: items.map(({ nextStep: _nextStep, ...item }) => item) },
+    data: {
+      ...(body as any).data,
+      alexandria: items.map((item) => {
+        if (!nextStepPointsAtFeedback(item)) return item;
+        const { instruction: _instruction, tool: _tool, arguments: _arguments, ...rest } = item.nextStep;
+        if (Object.keys(rest).length) return { ...item, nextStep: rest };
+        const { nextStep: _nextStep, ...bare } = item;
+        return bare;
+      }),
+    },
   };
 }
 
