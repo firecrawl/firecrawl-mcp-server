@@ -5002,7 +5002,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_research_inspect_paper@ee63ff8d6e52": {
+  "firecrawl_research_inspect_paper@411cfef56572": {
     "annotations": {
       "title": "Firecrawl inspect research paper",
       "readOnlyHint": true,
@@ -5074,6 +5074,17 @@
             },
             "abstract": {
               "description": "Paper abstract.",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "passage": {
+              "description": "Body passage that best matches the query, present only for papers with licensed full text.",
               "anyOf": [
                 {
                   "type": "string"
@@ -5813,7 +5824,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_research_related_papers@f3564b29cad4": {
+  "firecrawl_research_related_papers@0dea59a6c585": {
     "annotations": {
       "title": "Firecrawl related research papers",
       "readOnlyHint": true,
@@ -5921,6 +5932,17 @@
                   }
                 ]
               },
+              "passage": {
+                "description": "Body passage that best matches the query, present only for papers with licensed full text.",
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "authors": {
                 "description": "Authors, as a list of names or a comma-joined string."
               },
@@ -5987,7 +6009,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_research_search_papers@b87270f75611": {
+  "firecrawl_research_search_papers@4778e1d0ea9b": {
     "annotations": {
       "title": "Firecrawl research paper search",
       "readOnlyHint": true,
@@ -5995,7 +6017,7 @@
       "destructiveHint": false
     },
     "title": "Firecrawl research paper search",
-    "description": "Search paper metadata and abstracts with a natural-language query across the indexed corpus, which spans biomedical, life-science, and clinical literature (PubMed, bioRxiv, medRxiv) alongside arXiv and other scientific sources. Optional author, category, date, and sort options constrain or reorder results.\n\nSeveral distinct framings of the same question surface different papers than a single query does.\n\nReturns ranked papers with canonical IDs, titles, authors, and abstracts.",
+    "description": "Search paper metadata and abstracts with a natural-language query across the indexed corpus, which spans biomedical, life-science, and clinical literature (PubMed, bioRxiv, medRxiv) alongside arXiv and other scientific sources. Optional author, category, date, and sort options constrain or reorder results.\n\nSeveral distinct framings of the same question surface different papers than a single query does.\n\nReturns ranked papers with canonical IDs, titles, authors, and abstracts. Papers with licensed full text also carry the body passage that best matches the query.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6097,6 +6119,17 @@
               },
               "abstract": {
                 "description": "Paper abstract.",
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "passage": {
+                "description": "Body passage that best matches the query, present only for papers with licensed full text.",
                 "anyOf": [
                   {
                     "type": "string"
