@@ -1,0 +1,41 @@
+tests/contract-snapshots/hosted-search-primary.json
+  s_2a56bdb4351c48::t_5064828f63ad82 28
+tests/contract-snapshots/stdio-api-key.json
+  s_2a56bdb4351c48::t_5064828f63ad82 16
+tests/contract-snapshots/hosted-full.json
+  s_2a56bdb4351c48::t_5064828f63ad82 18,69
+tests/mcp-alexandria-scrape.test.mjs
+  s_2a56bdb4351c48::t_5064828f63ad82 218,232-241
+tests/contract-snapshots/hosted-account.json
+  s_2a56bdb4351c48::t_5064828f63ad82 17
+tests/contract-snapshots/hosted-search-companion.json
+  s_2a56bdb4351c48::t_5064828f63ad82 28
+tests/contract-snapshots/stdio-keyless.json
+  s_2a56bdb4351c48::t_5064828f63ad82 16
+tests/contract-snapshots/http-self-hosted.json
+  s_2a56bdb4351c48::t_5064828f63ad82 16
+tests/contract-snapshots/stdio-self-hosted.json
+  s_2a56bdb4351c48::t_5064828f63ad82 16
+src/tool-helpers.ts
+  s_2a56bdb4351c48::t_8827853f3a0af6 391-398,410
+src/server.ts
+  s_2a56bdb4351c48::t_5064828f63ad82 1381,1914
+tests/contract-snapshots/tool-definitions.json
+  s_2a56bdb4351c48::t_5064828f63ad82 6398,6669,6975,6978,6983,7100-7149,7200-7202,7217,7526,7529,7534,7697,7716
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "706058162b4f8ac594f4dc194e10e7c23e324ede",
+  "prompts": {},
+  "sessions": {
+    "s_2a56bdb4351c48": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "161e359a-67b8-49a1-ae95-d4a0b6d2a473",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Developers Digest <124798203+developersdigest@users.noreply.github.com>"
+    }
+  }
+}
