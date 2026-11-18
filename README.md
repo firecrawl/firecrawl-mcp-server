@@ -301,6 +301,7 @@ Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace
   - Use a value that starts with `_`, for example `_zed`
 - `FIRECRAWL_MCP_LIBRARY_SKILLS` (Optional): Set to `false` to serve the Alexandria library without skills
   - Every `firecrawl/library` call carries `skills: false` (through `alexandria_library_search`, `alexandria_library_read` or a `firecrawl_scrape` alexandria body), the library description and the server instructions leave out the skills folder, no skills are listed under its results, and `firecrawl_save_skill` is not registered
+- `FIRECRAWL_MCP_MODERN_PROTOCOL` (Optional): Set to `true` to enable MCP protocol revision `2026-07-28` (including `server/discover`) alongside the 2025 revisions across HTTP and stdio transports; defaults to `false`
 
 #### Local HTTP mode
 
