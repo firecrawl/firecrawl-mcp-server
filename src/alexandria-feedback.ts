@@ -123,9 +123,13 @@ export function withoutFeedbackNextStep<T>(body: T): T {
       ...(body as any).data,
       alexandria: items.map((item) => {
         if (!nextStepPointsAtFeedback(item)) return item;
-        const { instruction: _instruction, tool: _tool, arguments: _arguments, ...rest } = item.nextStep;
+        const rest = { ...item.nextStep };
+        delete rest.instruction;
+        delete rest.tool;
+        delete rest.arguments;
         if (Object.keys(rest).length) return { ...item, nextStep: rest };
-        const { nextStep: _nextStep, ...bare } = item;
+        const bare = { ...item };
+        delete bare.nextStep;
         return bare;
       }),
     },
