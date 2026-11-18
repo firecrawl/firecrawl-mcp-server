@@ -1378,7 +1378,7 @@ export function createFirecrawlMcpServer(
             ' Returns per-capability results in data.alexandria with data, records, or an error with a code; individual capabilities can fail even when the outer response succeeds. ' +
             ALEXANDRIA_TERMS_GUIDANCE
         ),
-      toolDetail: z.enum(['compact', 'summary', 'full']).optional().describe('URL mode only: domain discovery detail, compact by default; compact returns provider/capability/description, summary adds metadata, full includes contracts. Ignored with alexandria.'),
+      toolDetail: z.enum(['compact', 'summary', 'full']).optional().describe('URL mode only: domain discovery detail, compact by default whenever discovery runs; compact returns provider/capability/description, summary adds metadata, full includes contracts. Ignored with alexandria.'),
       domainTools: z
         .boolean()
         .optional()
@@ -1911,7 +1911,7 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
         hasCredential(session) &&
         !cleaned.zeroDataRetention &&
         !cleaned.lockdown;
-      if (implicitTools) cleaned.toolDetail ??= 'compact';
+      if (implicitTools || cleaned.domainTools === true) cleaned.toolDetail ??= 'compact';
       const res = await relayTermsRequired(
         () =>
           scrapeWithDomainToolsFallback(

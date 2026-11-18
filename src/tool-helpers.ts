@@ -388,6 +388,14 @@ function relayed(error: unknown, context: ExchangeErrorContext): unknown {
   });
 }
 
+/** API refusals meaning the team cannot run provider discovery, so a request that added it implicitly is retried without. */
+const DISCOVERY_UNAVAILABLE_ERRORS = [
+  'Provider discovery does not support zero data retention.',
+  'Provider discovery requires access and does not support zero data retention.',
+  'This endpoint is not enabled for this team.',
+  'Exchange is not enabled for this team.',
+];
+
 /** Retries without Alexandria, on fallbackSources, when tools the caller did not ask for are refused. */
 export async function postSearchWithFallback(
   client: any,
@@ -399,11 +407,7 @@ export async function postSearchWithFallback(
     return await client.http.post('/v2/search', body);
   } catch (error) {
     const response = (error as any)?.response;
-    const unavailable = [
-      'Provider discovery requires access and does not support zero data retention.',
-      'This endpoint is not enabled for this team.',
-      'Exchange is not enabled for this team.',
-    ].includes(response?.data?.error);
+    const unavailable = DISCOVERY_UNAVAILABLE_ERRORS.includes(response?.data?.error);
     if (!implicitTools || response?.status !== 403 || !unavailable) throw error;
     return client.http.post('/v2/search', {
       ...body,
@@ -413,12 +417,6 @@ export async function postSearchWithFallback(
   }
 }
 
-const DISCOVERY_UNAVAILABLE_ERRORS = [
-  'Provider discovery does not support zero data retention.',
-  'Provider discovery requires access and does not support zero data retention.',
-  'This endpoint is not enabled for this team.',
-  'Exchange is not enabled for this team.',
-];
 
 /**
  * Runs a URL scrape and, when domain discovery was turned on by default rather

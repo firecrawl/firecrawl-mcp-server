@@ -215,7 +215,7 @@ test('a default-on scrape retries without discovery when the team cannot use it'
   const bodies = scrapeBodies(api);
   assert.equal(bodies.length, 2);
   assert.equal(bodies[0].domainTools, true);
-  assert.equal('domainTools' in bodies[1], false);
+  assert.notEqual(bodies[1].domainTools, true);
 });
 
 test('an explicit domainTools: true is not retried when discovery is refused', async (t) => {
@@ -228,4 +228,15 @@ test('an explicit domainTools: true is not retried when discovery is refused', a
   });
   assert.equal(result.isError, true);
   assert.equal(scrapeBodies(api).length, 1);
+});
+
+test('an explicit domainTools: true also defaults toolDetail to compact', async (t) => {
+  const { api, client } = await startStdioWithApi(t);
+  await client.request('tools/call', {
+    name: 'firecrawl_scrape',
+    arguments: { url: 'https://example.com', domainTools: true },
+  });
+  const [sent] = scrapeBodies(api);
+  assert.equal(sent.domainTools, true);
+  assert.equal(sent.toolDetail, 'compact');
 });
