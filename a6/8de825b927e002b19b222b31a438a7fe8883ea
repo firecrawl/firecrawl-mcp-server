@@ -1,0 +1,33 @@
+tests/contract-snapshots/stdio-keyless.json
+  s_2a56bdb4351c48::t_f4e963603d6952 16
+tests/contract-snapshots/stdio-self-hosted.json
+  s_2a56bdb4351c48::t_f4e963603d6952 16
+tests/contract-snapshots/tool-definitions.json
+  s_2a56bdb4351c48::t_f4e963603d6952 6975,6978,6983,7146,7474,7477,7482,7599-7648,7699-7701
+tests/contract-snapshots/hosted-full.json
+  s_2a56bdb4351c48::t_f4e963603d6952 18,69
+tests/contract-snapshots/http-self-hosted.json
+  s_2a56bdb4351c48::t_f4e963603d6952 16
+src/server.ts
+  s_2a56bdb4351c48::t_f4e963603d6952 1825-1826
+tests/contract-snapshots/stdio-api-key.json
+  s_2a56bdb4351c48::t_f4e963603d6952 16
+tests/contract-snapshots/hosted-account.json
+  s_2a56bdb4351c48::t_f4e963603d6952 17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a68de825b927e002b19b222b31a438a7fe8883ea",
+  "prompts": {},
+  "sessions": {
+    "s_2a56bdb4351c48": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "161e359a-67b8-49a1-ae95-d4a0b6d2a473",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Developers Digest <124798203+developersdigest@users.noreply.github.com>"
+    }
+  }
+}
