@@ -6972,15 +6972,15 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_scrape@840b292e21e7": {
+  "firecrawl_scrape@6d77dea30d39": {
     "annotations": {
       "title": "Firecrawl scrape",
-      "readOnlyHint": false,
+      "readOnlyHint": true,
       "openWorldHint": true,
       "destructiveHint": false
     },
     "title": "Firecrawl scrape",
-    "description": "Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, or a targeted answer. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages. `url` may omit the scheme (`example.com/page`); it is read as https.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. Browser actions can change the live page when interactive actions are enabled. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session, `firecrawl_search` and `alexandria_library_search` can discover Alexandria providers for the same fields across several pages; a matching provider returns typed records in one `alexandria_library_read` call.",
+    "description": "Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, or a targeted answer. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages. `url` may omit the scheme (`example.com/page`); it is read as https.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session, `firecrawl_search` and `alexandria_library_search` can discover Alexandria providers for the same fields across several pages; a matching provider returns typed records in one `alexandria_library_read` call. A scraped page with a matching provider lists its capabilities in `tools`: read the chosen one's inputs with `alexandria_library_search` (`cat /library/*/<provider>/<capability>.md`), then run it with `alexandria_library_read`.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -7097,56 +7097,6 @@
         "waitFor": {
           "type": "number"
         },
-        "actions": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": [
-                  "wait",
-                  "screenshot",
-                  "scroll",
-                  "scrape",
-                  "click",
-                  "write",
-                  "press",
-                  "executeJavascript",
-                  "generatePDF"
-                ]
-              },
-              "selector": {
-                "type": "string"
-              },
-              "milliseconds": {
-                "type": "number"
-              },
-              "text": {
-                "type": "string"
-              },
-              "key": {
-                "type": "string"
-              },
-              "direction": {
-                "type": "string",
-                "enum": [
-                  "up",
-                  "down"
-                ]
-              },
-              "script": {
-                "type": "string"
-              },
-              "fullPage": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "type"
-            ]
-          }
-        },
         "mobile": {
           "type": "boolean"
         },
@@ -7193,13 +7143,11 @@
           ]
         },
         "profile": {
+          "description": "Loads a saved browser profile without saving changes to it.",
           "type": "object",
           "properties": {
             "name": {
               "type": "string"
-            },
-            "saveChanges": {
-              "type": "boolean"
             }
           },
           "required": [
@@ -7523,15 +7471,15 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_scrape@fd831b8d100c": {
+  "firecrawl_scrape@d3a1f8ec3caa": {
     "annotations": {
       "title": "Firecrawl scrape",
-      "readOnlyHint": true,
+      "readOnlyHint": false,
       "openWorldHint": true,
       "destructiveHint": false
     },
     "title": "Firecrawl scrape",
-    "description": "Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, or a targeted answer. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages. `url` may omit the scheme (`example.com/page`); it is read as https.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. A named browser profile loads saved session data without saving changes to it. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session, `firecrawl_search` and `alexandria_library_search` can discover Alexandria providers for the same fields across several pages; a matching provider returns typed records in one `alexandria_library_read` call.",
+    "description": "Scrape one URL and return its content: markdown by default, or HTML, links, screenshots, branding data, or a targeted answer. Use it when the request identifies a page and needs its content or defined fields: the user gives a URL or names a page or PDF and wants it read or summarized, or wants prices, specs, contact details or a table from it. Use `firecrawl_search` when additional web sources are needed; on an authenticated session, `firecrawl_map` lists a site's URLs and `firecrawl_crawl` collects a set of pages. `url` may omit the scheme (`example.com/page`); it is read as https.\n\nFirecrawl may serve recently indexed content; set `maxAge: 0` for a live fetch or a smaller `maxAge` to bound staleness. A successful response does not by itself confirm the page is still current. Browser actions can change the live page when interactive actions are enabled. Authenticated responses can include a `metadata.scrapeId` for optional scrape feedback.\n\nOn an authenticated session, `firecrawl_search` and `alexandria_library_search` can discover Alexandria providers for the same fields across several pages; a matching provider returns typed records in one `alexandria_library_read` call. A scraped page with a matching provider lists its capabilities in `tools`: read the chosen one's inputs with `alexandria_library_search` (`cat /library/*/<provider>/<capability>.md`), then run it with `alexandria_library_read`.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -7648,6 +7596,56 @@
         "waitFor": {
           "type": "number"
         },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "wait",
+                  "screenshot",
+                  "scroll",
+                  "scrape",
+                  "click",
+                  "write",
+                  "press",
+                  "executeJavascript",
+                  "generatePDF"
+                ]
+              },
+              "selector": {
+                "type": "string"
+              },
+              "milliseconds": {
+                "type": "number"
+              },
+              "text": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "up",
+                  "down"
+                ]
+              },
+              "script": {
+                "type": "string"
+              },
+              "fullPage": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        },
         "mobile": {
           "type": "boolean"
         },
@@ -7694,11 +7692,13 @@
           ]
         },
         "profile": {
-          "description": "Loads a saved browser profile without saving changes to it.",
           "type": "object",
           "properties": {
             "name": {
               "type": "string"
+            },
+            "saveChanges": {
+              "type": "boolean"
             }
           },
           "required": [

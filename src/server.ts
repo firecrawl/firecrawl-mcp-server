@@ -1822,8 +1822,8 @@ Scrape one URL and return its content: markdown by default, or HTML, links, scre
 Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch or a smaller \`maxAge\` to bound staleness. A successful response does not by itself confirm the page is still current. ${SAFE_MODE ? 'A named browser profile loads saved session data without saving changes to it.' : 'Browser actions can change the live page when interactive actions are enabled.'} Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback.
 
 ${unlistEarlierAlexandria
-  ? `On an authenticated session, \`firecrawl_search\` and \`${ALEXANDRIA_LIBRARY_TOOL}\` can discover Alexandria providers for the same fields across several pages; a matching provider returns typed records in one \`${ALEXANDRIA_READ_TOOL}\` call.`
-  : `On an authenticated session, \`firecrawl_search\` and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.
+  ? `On an authenticated session, \`firecrawl_search\` and \`${ALEXANDRIA_LIBRARY_TOOL}\` can discover Alexandria providers for the same fields across several pages; a matching provider returns typed records in one \`${ALEXANDRIA_READ_TOOL}\` call. A scraped page with a matching provider lists its capabilities in \`tools\`: read the chosen one's inputs with \`${ALEXANDRIA_LIBRARY_TOOL}\` (\`cat /library/*/<provider>/<capability>.md\`), then run it with \`${ALEXANDRIA_READ_TOOL}\`.`
+  : `On an authenticated session, \`firecrawl_search\` and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching provider returns typed records in one call. A scraped page with a matching provider lists its capabilities in \`tools\`: read the chosen one's inputs with \`firecrawl_find_tools\` (providers and capabilities), then run it with \`alexandria\` here.
 
 With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capabilities instead of fetching a page. ${ALEXANDRIA_TERMS_GUIDANCE}`}
 `,
