@@ -1,0 +1,47 @@
+src/tool-helpers.ts
+  s_2a56bdb4351c48::t_c57af990058f88 416-442
+tests/contract-snapshots/http-self-hosted.json
+  s_2a56bdb4351c48::t_6b967b51a37fe5 16
+tests/contract-snapshots/stdio-api-key.json
+  s_2a56bdb4351c48::t_6b967b51a37fe5 16
+tests/contract-snapshots/hosted-account.json
+  s_2a56bdb4351c48::t_6b967b51a37fe5 17
+tests/contract-snapshots/stdio-keyless.json
+  s_2a56bdb4351c48::t_6b967b51a37fe5 16
+src/server.ts
+  s_2a56bdb4351c48::t_2bcd47da61f7fa 1906-1914,1917-1925
+  s_2a56bdb4351c48::t_1ddcef92b82c64 121
+  s_2a56bdb4351c48::t_8044d7034c732f 1381,1386
+tests/contract-snapshots/stdio-self-hosted.json
+  s_2a56bdb4351c48::t_6b967b51a37fe5 16
+tests/contract-snapshots/tool-definitions.json
+  s_2a56bdb4351c48::t_6b967b51a37fe5 6398,6669,6678,6794,6975,7217,7226,7345,7526,7716,7725,7844
+tests/contract-snapshots/hosted-search-companion.json
+  s_2a56bdb4351c48::t_6b967b51a37fe5 28
+tests/helpers/exchange-api.mjs
+  s_2a56bdb4351c48::t_a4a21ead2e65da 190-192
+src/tool-output.ts
+  s_2a56bdb4351c48::t_4d4506c8a2c090 134
+tests/contract-snapshots/hosted-search-primary.json
+  s_2a56bdb4351c48::t_6b967b51a37fe5 28
+tests/contract-snapshots/hosted-full.json
+  s_2a56bdb4351c48::t_6b967b51a37fe5 18,69
+tests/mcp-alexandria-scrape.test.mjs
+  s_2a56bdb4351c48::t_a4a21ead2e65da 160-231
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9ed6c195999d6995fe2bf366e2f981e5264f24ba",
+  "prompts": {},
+  "sessions": {
+    "s_2a56bdb4351c48": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "161e359a-67b8-49a1-ae95-d4a0b6d2a473",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Developers Digest <124798203+developersdigest@users.noreply.github.com>"
+    }
+  }
+}
