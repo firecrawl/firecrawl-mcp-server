@@ -6,7 +6,7 @@ import { assertAlexandriaMetadata } from './helpers/alexandria-metadata.mjs';
 
 // Claude Code truncates each tool description (and server instructions) at 2,048
 // characters. The routing copy that changed agent behaviour in the AX runs has to
-// land inside that window: the Alexandria noun, the always-on sources note, and the
+// land inside that window: the Alexandria noun, the run-a-provider line, and the
 // scrape-first pointer; the scrape tool has to read first as one URL -> the page.
 
 test('every tool description fits the 2,048-character cap and keeps the routing copy inside it', async (t) => {
@@ -19,7 +19,8 @@ test('every tool description fits the 2,048-character cap and keeps the routing 
   const byName = new Map(tools.map((tool) => [tool.name, tool.description.trim()]));
   const search = byName.get('firecrawl_search');
   assert.match(search, /tool matches describe available structured-data capabilities/i);
-  assert.match(search, /Authenticated searches always add alexandria to the sources, so sources: \["web"\] also returns providers/);
+  assert.match(search, /If a result names a provider that has the data you need, run it instead of scraping the page\./);
+  assert.doesNotMatch(search, /domainTools: false/);
   const scrape = byName.get('firecrawl_scrape');
   assert.match(scrape, /^Scrape one URL and return its content/);
   assert.match(scrape, /`firecrawl_search` and `alexandria_library_search` can discover Alexandria providers for the same fields across several pages/);
