@@ -413,7 +413,33 @@ export async function postSearchWithFallback(
   }
 }
 
-export const SEARCH_RESULT_SOURCES = ['web', 'images', 'news'] as const;
+const DISCOVERY_UNAVAILABLE_ERRORS = [
+  'Provider discovery does not support zero data retention.',
+  'Provider discovery requires access and does not support zero data retention.',
+  'This endpoint is not enabled for this team.',
+  'Exchange is not enabled for this team.',
+];
+
+/**
+ * Runs a URL scrape and, when domain discovery was turned on by default rather
+ * than by the caller, retries without it if the team cannot use discovery (for
+ * example a team with zero data retention forced on), so the page still comes back.
+ */
+export async function scrapeWithDomainToolsFallback<T>(
+  scrape: (domainTools: boolean) => Promise<T>,
+  implicitTools: boolean
+): Promise<T> {
+  try {
+    return await scrape(implicitTools);
+  } catch (error) {
+    const status = (error as any)?.status ?? (error as any)?.response?.status;
+    const message = (error as any)?.response?.data?.error ?? (error as Error)?.message;
+    if (!implicitTools || status !== 403 || !DISCOVERY_UNAVAILABLE_ERRORS.includes(message)) throw error;
+    return scrape(false);
+  }
+}
+
+export const SEARCH_RESULT_SOURCES =['web', 'images', 'news'] as const;
 
 // Stamp each search result with its `source` and 1-indexed `position` so the
 // model can copy both straight into `firecrawl_search_feedback.valuableResults`

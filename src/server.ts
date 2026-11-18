@@ -118,6 +118,7 @@ import {
   relayExchangeError,
   relayTermsRequired,
   removeEmptyTopLevel,
+  scrapeWithDomainToolsFallback,
   SEARCH_CATEGORIES_CONFLICT_MESSAGE,
   SEARCH_DOMAINS_CONFLICT_MESSAGE,
   SEARCH_RESULT_SOURCES,
@@ -1377,12 +1378,12 @@ export function createFirecrawlMcpServer(
             ' Returns per-capability results in data.alexandria with data, records, or an error with a code; individual capabilities can fail even when the outer response succeeds. ' +
             ALEXANDRIA_TERMS_GUIDANCE
         ),
-      toolDetail: z.enum(['compact', 'summary', 'full']).optional().describe('URL mode only: domain discovery detail, summary by default; compact returns provider/capability/description, full includes contracts. Ignored with alexandria.'),
+      toolDetail: z.enum(['compact', 'summary', 'full']).optional().describe('URL mode only: domain discovery detail, compact by default; compact returns provider/capability/description, summary adds metadata, full includes contracts. Ignored with alexandria.'),
       domainTools: z
         .boolean()
         .optional()
         .describe(
-          'URL mode only: include domain-matched Alexandria tools for the page in tools on the returned document. Ignored with alexandria.'
+          'URL mode only: include domain-matched Alexandria tools for the page in tools on the returned document. On by default for authenticated scrapes without zeroDataRetention or lockdown; set false to skip discovery. Ignored with alexandria.'
         ),
     })
     .refine(
@@ -1902,12 +1903,26 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
       }
       assertFormatOptions(cleaned.formats);
       const client = getClient(session);
+      // Like search, an authenticated scrape lists domain-matched providers
+      // unless the caller opts out. Zero data retention and lockdown scrapes
+      // cannot run discovery, so they keep it off.
+      const implicitTools =
+        cleaned.domainTools === undefined &&
+        hasCredential(session) &&
+        !cleaned.zeroDataRetention &&
+        !cleaned.lockdown;
+      if (implicitTools) cleaned.toolDetail ??= 'compact';
       const res = await relayTermsRequired(
         () =>
-          client.scrape(String(url), {
-            ...cleaned,
-            origin,
-          } as any),
+          scrapeWithDomainToolsFallback(
+            (domainTools) =>
+              client.scrape(String(url), {
+                ...cleaned,
+                ...(implicitTools ? { domainTools } : {}),
+                origin,
+              } as any),
+            implicitTools
+          ),
         { tool: 'firecrawl_scrape', alexandriaTools }
       );
       return structuredText(withoutDiscoveredToolPrices(res));

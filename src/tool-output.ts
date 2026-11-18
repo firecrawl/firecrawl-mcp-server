@@ -131,7 +131,7 @@ export const scrapeOutputSchema = z
     changeTracking: unknown('Change-tracking comparison against the previous scrape.'),
     branding: unknown('Branding data extracted from the page.'),
     metadata: unknown('Page metadata; authenticated responses can include `metadata.scrapeId` for scrape feedback.'),
-    tools: unknown('Domain-matched Alexandria tools for the page, when `domainTools` is set.'),
+    tools: unknown('Domain-matched Alexandria tools for the page, when domain discovery runs (on by default for authenticated scrapes).'),
     warning,
     // Alexandria mode and error envelopes.
     success,
