@@ -124,14 +124,14 @@ export const ALEXANDRIA_CATALOGUE_VERTICALS =
   'companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more';
 export const ALEXANDRIA_CATALOGUE_SENTENCE =
   "Alexandria is Firecrawl's catalogue of data providers and workflows across " + ALEXANDRIA_CATALOGUE_VERTICALS + '; providers return typed, sourced records through published contracts.';
-export const ALEXANDRIA_SOURCES_ALWAYS_ON =
-  'Authenticated searches always add alexandria to the sources, so sources: ["web"] also returns providers; domainTools: false turns off website-matched tools only.';
+export const ALEXANDRIA_RUN_PROVIDER_GUIDANCE =
+  'If a result names a provider that has the data you need, run it instead of scraping the page.';
 
 // Claude Code truncates each tool description at 2,048 characters, so the routing
 // copy that changes behaviour sits in the first lines of each description and the
 // mechanics live on the parameters they describe.
 export const ALEXANDRIA_SEARCH_LEAD =
-  'Authenticated search also returns matching Alexandria data providers in data.tools (' + ALEXANDRIA_CATALOGUE_VERTICALS + '). Prefer a provider over scraping pages when the task needs the same fields across several entities, exact figures or timestamps, provenance, or many records; use web results when they already answer the question. ' + ALEXANDRIA_SOURCES_ALWAYS_ON;
+  'Authenticated search also returns matching Alexandria data providers in data.tools (' + ALEXANDRIA_CATALOGUE_VERTICALS + '). Prefer a provider over scraping pages when the task needs the same fields across several entities, exact figures or timestamps, provenance, or many records; use web results when they already answer the question. ' + ALEXANDRIA_RUN_PROVIDER_GUIDANCE;
 export const ALEXANDRIA_CONTRACT_GUIDANCE =
   'The selected contract marks required inputs and any requiresOneOf groups (at least one member per group); it may include example.request/example.response and a key field under response (which may differ from records). Where pagination is declared, its fields govern paging with the same filters; catalogue next is separate from provider pagination.';
 export const ALEXANDRIA_ENRICH_ROUTING =
@@ -172,7 +172,7 @@ export function withFindToolsNavigation(envelope: any, carry: Record<string, unk
 
 // What authenticated search returns; each surface appends the tools that take it from there.
 const ALEXANDRIA_SEARCH_LEAD_INSTRUCTIONS =
-  'Authenticated search combines web results, semantic tool summaries and domain matches. Use sources: ["alexandria"] for semantic tools only. ' + ALEXANDRIA_SOURCES_ALWAYS_ON + ' On an authenticated session, tool matches describe available structured-data capabilities, not executed data. toolDetail: "compact" (default) returns only provider, capability and description; "summary" adds metadata; "full" includes their input and output contracts.';
+  'Authenticated search combines web results, semantic tool summaries and domain matches. Use sources: ["alexandria"] for semantic tools only. ' + ALEXANDRIA_RUN_PROVIDER_GUIDANCE + ' On an authenticated session, tool matches describe available structured-data capabilities, not executed data. toolDetail: "compact" (default) returns only provider, capability and description; "summary" adds metadata; "full" includes their input and output contracts.';
 export const ALEXANDRIA_SEARCH_INSTRUCTIONS =
   ALEXANDRIA_SEARCH_LEAD_INSTRUCTIONS + ' firecrawl_scrape with an alexandria body executes a selected capability; firecrawl_find_tools provides catalogue browsing and full contracts.';
 

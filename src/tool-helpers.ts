@@ -1,6 +1,6 @@
 import { UserError } from './mcp/runtime.js';
 import { z } from 'zod';
-import { searchSourceSchema, ALEXANDRIA_READ_TOOL, ALEXANDRIA_LIBRARY_TOOL, ALEXANDRIA_SOURCES_ALWAYS_ON, executeToolCall, type AlexandriaTools } from './alexandria';
+import { searchSourceSchema, ALEXANDRIA_READ_TOOL, ALEXANDRIA_LIBRARY_TOOL, ALEXANDRIA_RUN_PROVIDER_GUIDANCE, executeToolCall, type AlexandriaTools } from './alexandria';
 import { MCP_CONNECTION_GUIDE_URL } from './recovery.js';
 
 export function removeEmptyTopLevel<T extends Record<string, any>>(
@@ -78,7 +78,7 @@ export const searchToolBaseFields = {
   sources: z
     .array(searchSourceSchema)
     .optional()
-    .describe('Search sources; authenticated sessions default to web + alexandria, keyless sessions to web only. ' + ALEXANDRIA_SOURCES_ALWAYS_ON + ' enterprise zdr or anon searches do not add it. Use ["alexandria"] alone for provider discovery without web results.'),
+    .describe('Search sources; authenticated sessions default to web + alexandria, keyless sessions to web only. ' + ALEXANDRIA_RUN_PROVIDER_GUIDANCE + ' enterprise zdr or anon searches do not add alexandria. Use ["alexandria"] alone for provider discovery without web results.'),
   categories: z
     .array(z.enum(['research', 'pdf', 'developer', 'gov']))
     .optional()

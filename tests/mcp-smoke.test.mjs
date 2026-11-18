@@ -1366,15 +1366,12 @@ test('stdio transport initializes and lists Firecrawl tools', async (t) => {
   assert.match(instructionsHead, OUT_OF_CREDITS_LEAD);
   assert.match(instructionsHead, /Alexandria is Firecrawl's catalogue of data providers/);
   assert.match(instructionsHead, /Before scraping the same fields from several pages, alexandria_library_search checks for free whether a provider covers them/);
-  assert.match(instructionsHead, /Authenticated searches always add alexandria to the sources/);
+  assert.match(instructionsHead, /If a result names a provider that has the data you need, run it instead of scraping the page\./);
   assert.match(
     init.instructions,
     /Alexandria is Firecrawl's catalogue of data providers and workflows.*alexandria_library_read with calls: \[\{provider, capability, options\}\] runs up to ten capabilities/is
   );
-  assert.match(
-    init.instructions,
-    /Authenticated searches always add alexandria to the sources, so sources: \["web"\] also returns providers; domainTools: false turns off website-matched tools only/
-  );
+  assert.doesNotMatch(init.instructions, /domainTools: false/);
   assert.match(
     init.instructions,
     /alexandria_library_search holds each contract at \/library\/<category>\/<provider>\/<capability>\.md/
