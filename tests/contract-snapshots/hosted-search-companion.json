@@ -14,9 +14,9 @@
       }
     },
     "tools": [
-      "firecrawl_research_search_papers@b87270f75611",
-      "firecrawl_research_inspect_paper@ee63ff8d6e52",
-      "firecrawl_research_related_papers@f3564b29cad4",
+      "firecrawl_research_search_papers@4778e1d0ea9b",
+      "firecrawl_research_inspect_paper@411cfef56572",
+      "firecrawl_research_related_papers@0dea59a6c585",
       "firecrawl_research_read_paper@ed42c5997595",
       "firecrawl_developer_search@10c89c8f8c30",
       "firecrawl_gov_search@75d315dc41e7",
