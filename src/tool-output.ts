@@ -422,6 +422,7 @@ const paperSchema = z.looseObject({
   ids: unknown('Source identifiers by namespace, such as `arxiv`, `doi`, or `pmid`.'),
   title: str('Paper title.'),
   abstract: str('Paper abstract.'),
+  passage: str('Body passage that best matches the query, present only for papers with licensed full text.'),
   authors: unknown('Authors, as a list of names or a comma-joined string.'),
   categories: z.array(z.string()).nullable().optional().describe('Paper categories, such as `cs.LG`.'),
   createdDate: str('Date the paper was first indexed or published (`YYYY-MM-DD`).'),
