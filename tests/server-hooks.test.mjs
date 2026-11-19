@@ -475,7 +475,7 @@ async function startErrorApi(t, status, body) {
   return `http://127.0.0.1:${api.address().port}`;
 }
 
-test('a keyless quota 429 gives the sign-up link and the OAuth reconnect, and tells the agent to stop', async (t) => {
+test('a keyless quota 429 gives the sign-up link and the OAuth reconnect', async (t) => {
   let reason = 'credits';
   const apiUrl = await startErrorApi(t, 429, () => ({ success: false, error: 'limit', reason, retry_after_seconds: 3600 }));
   // Upload file access is how hosted keyless sessions reach /v2/parse.
@@ -487,9 +487,8 @@ test('a keyless quota 429 gives the sign-up link and the OAuth reconnect, and te
   const signupUrl =
     'https://www.firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp&redirect=%2Fapp%2Fapi-keys';
   const expected =
-    `Firecrawl's daily limit without an account was reached. Free account, 1,000 credits a month, no card: ${signupUrl}\n\n` +
-    'After signing up, the user changes this server\'s URL to https://mcp.firecrawl.dev/v2/mcp-oauth and reconnects through OAuth (no key to copy). Tell the user this and offer to continue once it is done.' +
-    " Stop here and don't finish the task another way.";
+    `Firecrawl's daily limit without an account was reached. Free Firecrawl account (1,000 credits a month): ${signupUrl}\n\n` +
+    'After signing up, the user changes this server\'s URL to https://mcp.firecrawl.dev/v2/mcp-oauth and reconnects through OAuth (no key to copy). Tell the user this and offer to continue once it is done.';
   for (const [name, args] of [
     ['firecrawl_search', { query: 'example', sources: ['web'] }],
     ['firecrawl_scrape', { url: 'https://example.com' }],
