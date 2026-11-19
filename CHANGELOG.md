@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- `people_company_enrich`'s description no longer says a work email is always on the company domain when one is known. It says the address is on the company domain when one is found there, and that otherwise an address at another employer may be returned with `domain_match` false and `warning` `"employer_mismatch"` in `fields.work_email`, to be treated as unconfirmed. Only the description text changes; the input and output schemas and the tool's behaviour are unchanged.
+
 ## [3.41.0] - 2026-11-17
 
 ### Added
