@@ -9,6 +9,10 @@ import { checkKeylessSignupUrl } from './keyless-signup-link';
 // not an MCP endpoint.
 export const MCP_CONNECTION_GUIDE_URL = 'https://docs.firecrawl.dev/mcp-server';
 
+// Kept here rather than imported from service/profiles.ts, which imports the
+// server and so this module.
+const MCP_OAUTH_URL = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
+
 export const KEYLESS_TOOL_NAMES = new Set([
   'firecrawl_scrape',
   'firecrawl_search',
@@ -55,7 +59,7 @@ export function keylessSignupUrlFrom(value: unknown): string | undefined {
 // 1,000 credits a month with no card. After sign-up the user reconnects the
 // server through OAuth, so there is no key to copy into a header.
 function keylessSignup(signupUrl: string): string {
-  return `Free account, 1,000 credits a month, no card: ${signupUrl}\n\nAfter signing up, the user reconnects this server through OAuth at https://mcp.firecrawl.dev/v2/mcp-oauth (no key to copy). Tell the user this and offer to continue once it is done.`;
+  return `Free account, 1,000 credits a month, no card: ${signupUrl}\n\nAfter signing up, the user changes this server's URL to ${MCP_OAUTH_URL} and reconnects through OAuth (no key to copy). Tell the user this and offer to continue once it is done.`;
 }
 const keylessQuotaMessage = (signupUrl: string) =>
   `Firecrawl's daily limit without an account was reached. ${keylessSignup(signupUrl)} Stop here and don't finish the task another way.`;
@@ -68,8 +72,7 @@ const keylessAccessMessage = (signupUrl: string) =>
   `Anonymous keyless access is unavailable for this request. ${keylessSignup(signupUrl)}`;
 export const INVALID_API_KEY_MESSAGE =
   'The Firecrawl API key is invalid or revoked.\nFix: Replace the key on the existing Firecrawl MCP server, then start a new session. Get an API key at https://www.firecrawl.dev/app/api-keys';
-const INVALID_OAUTH_MESSAGE =
-  'This Firecrawl account connection is no longer valid.\nFix: Reconnect the existing Firecrawl server in the client, or set that existing server URL to https://mcp.firecrawl.dev/v2/mcp-oauth, then start a new session.';
+const INVALID_OAUTH_MESSAGE = `This Firecrawl account connection is no longer valid.\nFix: Reconnect the existing Firecrawl server in the client, or set that existing server URL to ${MCP_OAUTH_URL}, then start a new session.`;
 
 function connectionRecoveryPayload(params: {
   code: string;

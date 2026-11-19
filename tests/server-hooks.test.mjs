@@ -488,7 +488,7 @@ test('a keyless quota 429 gives the sign-up link and the OAuth reconnect, and te
     'https://www.firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp&redirect=%2Fapp%2Fapi-keys';
   const expected =
     `Firecrawl's daily limit without an account was reached. Free account, 1,000 credits a month, no card: ${signupUrl}\n\n` +
-    'After signing up, the user reconnects this server through OAuth at https://mcp.firecrawl.dev/v2/mcp-oauth (no key to copy). Tell the user this and offer to continue once it is done.' +
+    'After signing up, the user changes this server\'s URL to https://mcp.firecrawl.dev/v2/mcp-oauth and reconnects through OAuth (no key to copy). Tell the user this and offer to continue once it is done.' +
     " Stop here and don't finish the task another way.";
   for (const [name, args] of [
     ['firecrawl_search', { query: 'example', sources: ['web'] }],
