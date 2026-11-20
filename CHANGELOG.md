@@ -4,6 +4,7 @@
 
 ### Changed
 
+- `alexandria_library_search`'s description opens with the data source instead of the skills. Its first sentence now says to find the data source for the task first, with `grep -ril "<word>" /library`; the skills under `/library/skills` come second, for a step-by-step workflow or to explore, with the same `cat /library/skills/search/<words>` lookup. The server instructions of sessions that list the skills change the same way: their sentence on checking `/library/skills` first now names the data source first and the skills second. The opening is as long as before, everything after it is unchanged, and so are the input schema, the annotations and the tool's behaviour.
 - `people_company_enrich`'s description no longer says a work email is always on the company domain when one is known. It says the address is on the company domain when one is found there, and that otherwise an address at another employer may be returned with `domain_match` false and `warning` `"employer_mismatch"` in `fields.work_email`, to be treated as unconfirmed. Only the description text changes; the input and output schemas and the tool's behaviour are unchanged.
 
 ## [3.41.0] - 2026-11-17
