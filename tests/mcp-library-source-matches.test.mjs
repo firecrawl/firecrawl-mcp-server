@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { callExpectingError, startStdioWithApi } from './helpers/exchange-mcp.mjs';
+import { createFirecrawlMcpServer } from '../dist/server.js';
+import { startFakeExchangeApi } from './helpers/exchange-api.mjs';
+import { callExpectingError, getFreePort, parseSseJson, startStdioWithApi } from './helpers/exchange-mcp.mjs';
 
 const call = (client, name, args) => client.request('tools/call', { name, arguments: args });
 const library = (client, command) => call(client, 'alexandria_library_search', { command });
@@ -228,6 +230,53 @@ test('a server without the library skills asks for no sources', async (t) => {
   assert.ok(performance.now() - started < 1000);
   assert.equal(result.content[0].text, RANKED);
   assert.equal(lookups(api).length, 0);
+});
+
+test('the librarySourceMatches hook decides per session whether a lookup lists sources', async (t) => {
+  const api = await startFakeExchangeApi({ ...skillsOutput(), ...page([TRENDING]), findToolsDelayMs: 300 });
+  t.after(() => api.close());
+  const seen = [];
+  const port = await getFreePort();
+  const instance = createFirecrawlMcpServer({
+    transport: 'httpStream',
+    apiUrl: api.url,
+    logging: false,
+    unstable_hooks: {
+      authenticate: async (request) => ({ authType: 'api-key', firecrawlApiKey: 'fc-test', group: request?.headers['x-group'] }),
+      librarySourceMatches: (session) => {
+        seen.push(session?.group);
+        return session?.group === 'listed';
+      },
+    },
+  });
+  await instance.start({ transportType: 'httpStream', httpStream: { port, host: '127.0.0.1', endpoint: '/mcp', stateless: true } });
+  t.after(() => instance.stop());
+  const lookup = async (group, command) => {
+    const response = await fetch('http://127.0.0.1:' + port + '/mcp', {
+      method: 'POST',
+      headers: { accept: 'application/json, text/event-stream', 'content-type': 'application/json', 'x-group': group },
+      body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'tools/call', params: { name: 'alexandria_library_search', arguments: { command } } }),
+    });
+    assert.equal(response.status, 200);
+    return parseSseJson(await response.text()).result;
+  };
+  const listed = await lookup('listed', SEARCH);
+  assert.equal(listed.content[0].text, RANKED + '\n\n' + [HEADER, TRENDING_LINE].join('\n'));
+  assert.equal(lookups(api).length, 1);
+
+  // A session the hook turns down answers as the lookup did before: skills alone, no source lookup, no wait for one.
+  const started = performance.now();
+  const plain = await lookup('plain', SEARCH);
+  assert.ok(performance.now() - started < 250, 'took ' + Math.round(performance.now() - started) + ' ms');
+  assert.equal(plain.content[0].text, RANKED);
+  assert.equal(plain.structuredContent.message, undefined);
+  assert.equal(lookups(api).length, 1);
+  assert.equal(sent(api, 'find-skills').length, 0);
+
+  // The hook is asked about lookups among the skills only.
+  await lookup('listed', 'ls /library');
+  await lookup('listed', 'cat /library/skills/firecrawl/freshly-funded-hiring-shortlist/SKILL.md');
+  assert.deepEqual(seen, ['listed', 'plain']);
 });
 
 test('adding the sources changes no tool definition: alexandria_library_search lists the same input and output', async (t) => {
