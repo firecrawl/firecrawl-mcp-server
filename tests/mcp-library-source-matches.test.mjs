@@ -72,6 +72,33 @@ test('a call carries the inputs the contract requires as placeholders, and no op
   assert.match(text, /\n- marketdata\/equities\/quote: Latest price\. Call: /);
 });
 
+test('a written call never carries an example or default value: every input is a blank named by its key', async (t) => {
+  // A contract as full as the catalogue can return it, with example and default values on every level.
+  const flights = tool('faredata', 'flights/search', 'Search flights', 'Fares between two airports.', {
+    requiresOneOf: [['departure_date', 'month']],
+    example: { request: { origin: 'JFK', destination: 'LAX', departure_date: '2026-01-15' }, response: { fares: [{ price: 199 }] } },
+    examples: [{ origin: 'JFK', destination: 'LAX' }],
+    options: [
+      { name: 'origin', type: 'string', required: true, example: 'JFK', default: 'JFK', about: 'IATA code, e.g. JFK.' },
+      { name: 'destination', type: 'string', required: true, example: 'LAX', examples: ['LAX', 'SFO'] },
+      { name: 'departure_date', type: 'string', example: '2026-01-15' },
+      { name: 'month', type: 'string', example: '2026-01' },
+      { name: 'cabin', type: 'string', default: 'economy', oneOf: ['economy', 'business'] },
+    ],
+  });
+  const { api, client } = await startStdioWithApi(t, { ...skillsOutput(), ...page([flights]) });
+  const text = (await library(client, 'cat /library/skills/search/flight-prices-manchester-lahore')).content[0].text;
+  assert.deepEqual(written(text), [
+    { calls: [{ provider: 'faredata', capability: 'flights/search', options: { origin: '<string>', destination: '<string>', departure_date: '<string; or send month instead>' } }] },
+  ]);
+  const block = text.slice(text.indexOf('[sources]'));
+  for (const value of ['JFK', 'LAX', 'SFO', '2026-01', 'economy', '199']) assert.ok(!block.includes(value), value);
+  // Nor is a blank filled from the lookup's own words.
+  for (const word of ['manchester', 'lahore']) assert.ok(!block.toLowerCase().includes(word), word);
+  // Example payloads are not asked for in the first place.
+  assert.deepEqual(lookups(api)[0].body.alexandria.options.expand, ['options']);
+});
+
 test('the block lists three sources at most, in the order the catalogue ranked them, and cuts a long description', async (t) => {
   const long = 'Reported figures by period as filed. '.repeat(12).trim();
   const { client } = await startStdioWithApi(t, { ...skillsOutput(), ...page([tool('a', 'one/get', 'One', long), TRENDING, LAST_RESORT, ROUNDS, HISTORY]) });
