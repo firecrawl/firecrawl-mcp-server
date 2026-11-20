@@ -1368,7 +1368,6 @@ Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`,
 | `outboundRequest(session)` | Credential and extra headers for each Firecrawl API request. |
 | `beforeKeylessRequest(session, origin)` | Refuse a keyless request by throwing. |
 | `toolFilter(name)` | Leave built-in tools out of the instance. |
-| `librarySourceMatches(session)` | Whether a lookup among the library's skills in this session also lists matching sources; unset, every session gets them. |
 | `configureHttp(app)` | Add HTTP routes. |
 | `oauth.protectedResource` | Serve OAuth protected-resource metadata. |
 

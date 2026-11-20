@@ -452,12 +452,6 @@ export interface FirecrawlMcpServerHooks {
    * fixed elsewhere. Unset, both are unlisted there and still answer.
    */
   listEarlierAlexandriaTools?: boolean;
-  /**
-   * Whether a lookup among the library's skills in this session also lists the
-   * sources that match it. Called once per such lookup; return false to answer
-   * with the skills alone. Unset, every session gets the sources.
-   */
-  librarySourceMatches?: (session: SessionData | undefined) => boolean;
   /** Adds HTTP routes. Runs before the built-in routes, so its routes win. */
   configureHttp?: (app: HttpApp) => void;
   /** Serve OAuth protected-resource metadata for this instance. */
@@ -2437,8 +2431,7 @@ Returns result groups in \`data\` and an operation \`id\`.
         const origin = requestOrigin(mcpClient, session);
         // A lookup among the skills is answered with matching sources, any other
         // command with matching skills; each waits its own time for the block.
-        const lookupWords = config.librarySkills ? skillsLookupWords(command) : '';
-        const sourceWords = lookupWords && (hooks.librarySourceMatches?.(session) ?? true) ? lookupWords : '';
+        const sourceWords = config.librarySkills ? skillsLookupWords(command) : '';
         const sourcesUntil = Date.now() + SOURCE_MATCHES_WAIT_MS;
         const related = sourceWords
           ? relatedSources(session, sourceWords, origin)
