@@ -67,6 +67,7 @@ import {
   searchQueryIsValid,
   ALEXANDRIA_SEARCH_INSTRUCTIONS,
   ALEXANDRIA_CONTRACT_GUIDANCE,
+  ALEXANDRIA_ENRICH_ROUTING,
   ALEXANDRIA_TERMS_GUIDANCE,
   ALEXANDRIA_CATALOGUE_SENTENCE,
   ALEXANDRIA_CATALOGUE_VERTICALS,
@@ -78,6 +79,7 @@ import {
   ALEXANDRIA_LIBRARY_DESCRIPTION,
   ALEXANDRIA_LIBRARY_TOOL,
   libraryToolSchema,
+  executeToolCall,
   type AlexandriaTools,
 } from './alexandria';
 import { alexandriaOutput } from './alexandria-output';
@@ -2306,6 +2308,110 @@ Returns result groups in \`data\` and an operation \`id\`.
     }
   };
 
+  // Sources that match what a lookup among the skills looks for, listed under its
+  // output. Such a lookup answers with written instructions only, so a caller that
+  // needs data also sees the sources that return it, each with the call that runs it.
+  // The catalogue's own lookup (firecrawl/find-tools, free) is asked with the lookup's
+  // words, beside the command, and its reranker decides whether anything fits: sources
+  // are listed only when it picked one. Nothing is added when it found none or did not
+  // run, or when the lookup fails or is still running SOURCE_MATCHES_WAIT_MS after the
+  // call started.
+  const SOURCE_MATCHES = 3;
+  const SOURCE_MATCHES_WAIT_MS = 1500;
+  const SOURCE_ABOUT_LENGTH = 200;
+  const LIBRARY_PATHS = /\/(?:library|examples)(?:\/[^\s'"`|;&<>()]*)?/g;
+  const SKILL_FOLDERS = new RegExp(`${SKILLS_ROOT}/(?:firecrawl|team)(?![\\w-])`, 'g');
+  const ONE_SKILL = new RegExp(`^${SKILLS_ROOT}/(?:firecrawl|team)/[^/]`);
+  // Capabilities the jobs and people tools cover, which the read tool's description sends there.
+  const TYPED_TOOL_SOURCES = /^(?:jobs?|job-postings|people|person|contacts?)\/|^compan(?:y|ies)\/(?:search|enrich)/;
+
+  // The words of a lookup among the skills: a command whose library paths all sit under
+  // the skills folder and none inside one skill, which is a read of that skill. Empty
+  // for every other command.
+  const skillsLookupWords = (command: string): string => {
+    const paths = command.match(LIBRARY_PATHS) ?? [];
+    if (!paths.length || !paths.every((path) => path === SKILLS_ROOT || path.startsWith(`${SKILLS_ROOT}/`))) return '';
+    if (paths.some((path) => ONE_SKILL.test(path))) return '';
+    return commandWords(command.replace(SKILL_FOLDERS, ' '));
+  };
+
+  // The alexandria_library_read arguments that run a source: its required inputs and
+  // one member of each requiresOneOf group as placeholders, and nothing else.
+  const sourceCall = (source: any): string => {
+    const options: any[] = Array.isArray(source.options) ? source.options : [];
+    const placeholder = (name: string, alternatives: string[] = []) => {
+      const option = options.find((entry) => entry?.name === name);
+      const value =
+        Array.isArray(option?.oneOf) && option.oneOf.length && option.oneOf.length <= 8
+          ? option.oneOf.join('|')
+          : typeof option?.type === 'string'
+            ? option.type
+            : 'value';
+      return `<${value}${alternatives.length ? `; or send ${alternatives.join(' or ')} instead` : ''}>`;
+    };
+    const inputs: Record<string, string> = {};
+    for (const option of options) {
+      if (option?.required === true && typeof option.name === 'string') inputs[option.name] = placeholder(option.name);
+    }
+    for (const group of Array.isArray(source.requiresOneOf) ? source.requiresOneOf : []) {
+      const names: string[] = Array.isArray(group) ? group.filter((name) => typeof name === 'string') : [];
+      if (!names.length || names.some((name) => name in inputs)) continue;
+      inputs[names[0]] = placeholder(names[0], names.slice(1));
+    }
+    return JSON.stringify(
+      executeToolCall('dedicated', { provider: source.provider, capability: source.capability, options: inputs }).arguments
+    );
+  };
+
+  const relatedSources = async (
+    session: SessionData | undefined,
+    query: string,
+    origin: ReturnType<typeof requestOrigin>
+  ): Promise<string> => {
+    try {
+      const found = JSON.parse(
+        await executeExchangeCalls(
+          session,
+          {
+            provider: 'firecrawl',
+            capability: 'find-tools',
+            options: { query, level: 'tools', expand: ['options'], limit: SOURCE_MATCHES },
+          },
+          undefined,
+          undefined,
+          origin,
+          false,
+          undefined,
+          ALEXANDRIA_LIBRARY_TOOL
+        )
+      );
+      const page = found?.data?.alexandria?.[0]?.data;
+      if (page?.reranking?.status !== 'reranked' || !Array.isArray(page.items)) return '';
+      const sources = page.items
+        .filter(
+          (item: any) => typeof item?.provider === 'string' && typeof item.capability === 'string' && !item.lastResort
+        )
+        .slice(0, SOURCE_MATCHES);
+      if (!sources.length) return '';
+      const about = (source: any) => {
+        const text = typeof source.description === 'string' ? source.description.replace(/\s+/g, ' ').trim() : '';
+        if (text.length <= SOURCE_ABOUT_LENGTH) return text;
+        const cut = text.slice(0, SOURCE_ABOUT_LENGTH).replace(/[\uD800-\uDBFF]$/, '');
+        return `${cut.lastIndexOf(' ') > 0 ? cut.slice(0, cut.lastIndexOf(' ')) : cut}…`;
+      };
+      return [
+        `[sources] Library data sources that match this lookup. Each returns typed, sourced records in one call: if the task needs that data, send the call to ${ALEXANDRIA_READ_TOOL} (replace each <...>; \`cat /library/*/<provider>/<capability>.md\` shows the full contract) rather than collecting it from web pages. Leave them if none fits.`,
+        ...sources.map(
+          (source: any) =>
+            `- ${typeof source.name === 'string' && source.name ? `${source.name} (${source.provider})` : `${source.provider}/${source.capability}`}: ${about(source)} Call: ${sourceCall(source)}`
+        ),
+        ...(sources.some((source: any) => TYPED_TOOL_SOURCES.test(source.capability)) ? [ALEXANDRIA_ENRICH_ROUTING] : []),
+      ].join('\n');
+    } catch {
+      return '';
+    }
+  };
+
   if (dedicatedAlexandria) {
     server.addTool({
       name: ALEXANDRIA_LIBRARY_TOOL,
@@ -2323,7 +2429,13 @@ Returns result groups in \`data\` and an operation \`id\`.
       execute: async (args, { session, client: mcpClient }): Promise<ContentResult> => {
         const { command } = args as z.infer<typeof libraryToolSchema>;
         const origin = requestOrigin(mcpClient, session);
-        const related = relatedSkills(session, command, origin);
+        // A lookup among the skills is answered with matching sources, any other
+        // command with matching skills; each waits its own time for the block.
+        const sourceWords = config.librarySkills ? skillsLookupWords(command) : '';
+        const sourcesUntil = Date.now() + SOURCE_MATCHES_WAIT_MS;
+        const related = sourceWords
+          ? relatedSources(session, sourceWords, origin)
+          : relatedSkills(session, command, origin);
         const envelope = JSON.parse(
           await executeExchangeCalls(
             session,
@@ -2342,21 +2454,24 @@ Returns result groups in \`data\` and an operation \`id\`.
           const message = typeof entry?.error?.message === 'string' ? entry.error.message : 'The library returned no result.';
           throw new UserError(message, { success: false, message, requestId: envelope?.requestId });
         }
-        const skills = await new Promise<string>((resolve) => {
-          const late = setTimeout(() => resolve(''), RELATED_SKILLS_WAIT_MS);
+        const block = await new Promise<string>((resolve) => {
+          const late = setTimeout(
+            () => resolve(''),
+            sourceWords ? Math.max(0, sourcesUntil - Date.now()) : RELATED_SKILLS_WAIT_MS
+          );
           void related.then((text) => {
             clearTimeout(late);
             resolve(text);
           });
         });
         const { stdout = '', stderr = '', exitCode, truncated, catalogueVersion } = entry.data;
-        return withStructured(libraryText({ stdout, stderr, exitCode }) + (skills ? `\n\n${skills}` : ''), {
+        return withStructured(libraryText({ stdout, stderr, exitCode }) + (block ? `\n\n${block}` : ''), {
           stdout,
           stderr,
           exitCode,
           ...(truncated ? { truncated: true } : {}),
           ...(catalogueVersion ? { catalogueVersion } : {}),
-          ...(skills ? { message: skills } : {}),
+          ...(block ? { message: block } : {}),
         });
       },
     });
