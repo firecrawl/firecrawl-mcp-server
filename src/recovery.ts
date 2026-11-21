@@ -9,6 +9,10 @@ import { checkKeylessSignupUrl } from './keyless-signup-link';
 // not an MCP endpoint.
 export const MCP_CONNECTION_GUIDE_URL = 'https://docs.firecrawl.dev/mcp-server';
 
+// Kept here rather than imported from service/profiles.ts, which imports the
+// server and so this module.
+const MCP_OAUTH_URL = 'https://mcp.firecrawl.dev/v2/mcp-oauth';
+
 export const KEYLESS_TOOL_NAMES = new Set([
   'firecrawl_scrape',
   'firecrawl_search',
@@ -51,24 +55,23 @@ export function keylessSignupUrlFrom(value: unknown): string | undefined {
   return undefined;
 }
 
-function keylessAccountFix(signupUrl: string): string {
-  return `Fix: Create an API key at ${signupUrl} and then:\n- Set the header: Authorization: Bearer YOUR_API_KEY on https://mcp.firecrawl.dev/v2/mcp\nThen start a new session.`;
+// Use without an account is capped per IP each day. After sign-up the user
+// reconnects the server through OAuth, so there is no key to copy into a header.
+function keylessSignup(signupUrl: string): string {
+  return `Free Firecrawl account (1,000 credits a month): ${signupUrl}\n\nAfter signing up, the user changes this server's URL to ${MCP_OAUTH_URL} and reconnects through OAuth (no key to copy). Tell the user this and offer to continue once it is done.`;
 }
-// Use without an account is capped per IP each day; a free account gets
-// 1,000 credits a month. The relay line comes last so the agent ends on it.
 const keylessQuotaMessage = (signupUrl: string) =>
-  `Firecrawl's daily limit without an account was reached.\n\n${keylessAccountFix(signupUrl)}\n\nStop here and don't finish the task another way. Tell the user the Fix above and offer to continue once it is set up, then end your answer with this line:\nYou've reached Firecrawl's daily limit without an account. Sign up free for 1,000 credits a month: ${signupUrl}`;
+  `Firecrawl's daily limit without an account was reached. ${keylessSignup(signupUrl)}`;
 // A 429 without a known reason may be transient, so it states no cause.
 const keylessLimitMessage = (signupUrl: string) =>
-  `Firecrawl limited this request made without an account.\n\n${keylessAccountFix(signupUrl)}`;
+  `Firecrawl limited this request made without an account. ${keylessSignup(signupUrl)}`;
 const keylessToolMessage = (signupUrl: string) =>
-  `This tool needs a Firecrawl account.\n\n${keylessAccountFix(signupUrl)}`;
+  `This tool needs a Firecrawl account. ${keylessSignup(signupUrl)}`;
 const keylessAccessMessage = (signupUrl: string) =>
-  `Anonymous keyless access is unavailable for this request.\n\n${keylessAccountFix(signupUrl)}`;
+  `Anonymous keyless access is unavailable for this request. ${keylessSignup(signupUrl)}`;
 export const INVALID_API_KEY_MESSAGE =
   'The Firecrawl API key is invalid or revoked.\nFix: Replace the key on the existing Firecrawl MCP server, then start a new session. Get an API key at https://www.firecrawl.dev/app/api-keys';
-const INVALID_OAUTH_MESSAGE =
-  'This Firecrawl account connection is no longer valid.\nFix: Reconnect the existing Firecrawl server in the client, or set that existing server URL to https://mcp.firecrawl.dev/v2/mcp-oauth, then start a new session.';
+const INVALID_OAUTH_MESSAGE = `This Firecrawl account connection is no longer valid.\nFix: Reconnect the existing Firecrawl server in the client, or set that existing server URL to ${MCP_OAUTH_URL}, then start a new session.`;
 
 function connectionRecoveryPayload(params: {
   code: string;

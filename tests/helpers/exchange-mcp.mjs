@@ -7,7 +7,7 @@ import { startFakeExchangeApi } from './exchange-api.mjs';
 const EXCHANGE_KEY_REQUIRED_MESSAGE =
   'Alexandria requires an API key on a team with Alexandria access';
 const KEYLESS_TOOL_MESSAGE =
-  'This tool needs a Firecrawl account.\n\nFix: Create an API key at https://www.firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp&redirect=%2Fapp%2Fapi-keys and then:\n- Set the header: Authorization: Bearer YOUR_API_KEY on https://mcp.firecrawl.dev/v2/mcp\nThen start a new session.';
+  'This tool needs a Firecrawl account. Free Firecrawl account (1,000 credits a month): https://www.firecrawl.dev/signin?utm_source=keyless&utm_medium=mcp&redirect=%2Fapp%2Fapi-keys\n\nAfter signing up, the user changes this server\'s URL to https://mcp.firecrawl.dev/v2/mcp-oauth and reconnects through OAuth (no key to copy). Tell the user this and offer to continue once it is done.';
 
 async function getFreePort() {
   const server = net.createServer();
