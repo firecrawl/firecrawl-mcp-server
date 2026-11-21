@@ -2563,7 +2563,11 @@ Returns result groups in \`data\` and an operation \`id\`.
 
     const docs = initialDocs.slice();
     let current = body.next as string | null;
-    while (current) {
+    // A self-hosted crawl that never finishes can keep returning a `next`
+    // cursor that makes no progress; stop instead of refetching it forever.
+    const visited = new Set<string>();
+    while (current && !visited.has(current)) {
+      visited.add(current);
       const pageRes = await (client as any).http.get(
         current,
         originHeaders(origin)
