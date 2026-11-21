@@ -157,3 +157,86 @@ test('alexandria execution ignores URL-mode discovery options instead of rejecti
   assert.equal('domainTools' in sent, false);
   assert.deepEqual(Object.keys(sent).sort(), ['alexandria', 'origin']);
 });
+
+const scrapeBodies = (api) =>
+  api.requests.filter((request) => request.url === '/v2/scrape').map((request) => request.body);
+
+test('authenticated URL scrapes list domain-matched tools by default, compact', async (t) => {
+  const { api, client } = await startStdioWithApi(t);
+  const result = toolText(await client.request('tools/call', {
+    name: 'firecrawl_scrape',
+    arguments: { url: 'https://example.com' },
+  }));
+  const [sent] = scrapeBodies(api);
+  assert.equal(sent.domainTools, true);
+  assert.equal(sent.toolDetail, 'compact');
+  assert.equal(result.tools.length, 1);
+});
+
+test('domainTools: false, zeroDataRetention and lockdown keep URL-scrape discovery off', async (t) => {
+  for (const args of [
+    { domainTools: false },
+    { zeroDataRetention: true },
+    { lockdown: true },
+  ]) {
+    const { api, client } = await startStdioWithApi(t);
+    const result = toolText(await client.request('tools/call', {
+      name: 'firecrawl_scrape',
+      arguments: { url: 'https://example.com', ...args },
+    }));
+    const [sent] = scrapeBodies(api);
+    assert.equal('domainTools' in sent, false, JSON.stringify(args));
+    assert.equal('toolDetail' in sent, false, JSON.stringify(args));
+    assert.equal(result.tools, undefined);
+  }
+});
+
+test('an explicit toolDetail is kept when discovery is on by default', async (t) => {
+  const { api, client } = await startStdioWithApi(t);
+  await client.request('tools/call', {
+    name: 'firecrawl_scrape',
+    arguments: { url: 'https://example.com', toolDetail: 'full' },
+  });
+  const [sent] = scrapeBodies(api);
+  assert.equal(sent.domainTools, true);
+  assert.equal(sent.toolDetail, 'full');
+});
+
+test('a default-on scrape retries without discovery when the team cannot use it', async (t) => {
+  const { api, client } = await startStdioWithApi(t, {
+    scrapeRefusal: 'Provider discovery does not support zero data retention.',
+  });
+  const result = await client.request('tools/call', {
+    name: 'firecrawl_scrape',
+    arguments: { url: 'https://example.com' },
+  });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  assert.equal(toolText(result).markdown, '# hi');
+  const bodies = scrapeBodies(api);
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[0].domainTools, true);
+  assert.notEqual(bodies[1].domainTools, true);
+});
+
+test('an explicit domainTools: true is not retried when discovery is refused', async (t) => {
+  const { api, client } = await startStdioWithApi(t, {
+    scrapeRefusal: 'Provider discovery does not support zero data retention.',
+  });
+  const result = await client.request('tools/call', {
+    name: 'firecrawl_scrape',
+    arguments: { url: 'https://example.com', domainTools: true },
+  });
+  assert.equal(result.isError, true);
+  assert.equal(scrapeBodies(api).length, 1);
+});
+
+test('an explicit domainTools: true also defaults toolDetail to compact', async (t) => {
+  const { api, client } = await startStdioWithApi(t);
+  await client.request('tools/call', {
+    name: 'firecrawl_scrape',
+    arguments: { url: 'https://example.com', domainTools: true },
+  });
+  const [sent] = scrapeBodies(api);
+  assert.equal(sent.domainTools, true);
+  assert.equal(sent.toolDetail, 'compact');
+});
