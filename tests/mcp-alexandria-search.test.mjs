@@ -71,28 +71,30 @@ test('added alexandria falls back to the requested sources on discovery refusal;
   const { api, client } = await startStdioWithApi(t, {
     searchRefusal: 'Provider discovery requires access and does not support zero data retention.',
   });
+  // The skills lookup that runs beside a search is a scrape call, not a search.
+  const searches = (from = api) => from.requests.filter((request) => request.body?.alexandria?.capability !== 'find-skills');
   for (const [overrides, fallback] of [[{}, ['web']], [{ sources: ['news'] }, ['news']], [{ sources: [{ type: 'web' }] }, [{ type: 'web' }]]]) {
-    const before = api.requests.length;
+    const before = searches().length;
     const result = await client.request('tools/call', {
       name: 'firecrawl_search', arguments: { query: 'company news', ...overrides },
     });
     assert.notEqual(result.isError, true);
-    assert.equal(api.requests.length, before + 2);
-    assert.deepEqual(api.requests.at(-1).body.sources, fallback);
-    assert.equal(api.requests.at(-1).body.domainTools, false);
+    assert.equal(searches().length, before + 2);
+    assert.deepEqual(searches().at(-1).body.sources, fallback);
+    assert.equal(searches().at(-1).body.domainTools, false);
   }
   for (const explicit of [{ sources: ['alexandria'] }, { sources: ['web', 'alexandria'] }, { domainTools: true }]) {
-    const before = api.requests.length;
+    const before = searches().length;
     await callExpectingError(client, {
       name: 'firecrawl_search', arguments: { query: 'company news', ...explicit },
     });
-    assert.equal(api.requests.length, before + 1);
+    assert.equal(searches().length, before + 1);
   }
   const other = await startStdioWithApi(t, { searchRefusal: 'Permission denied.' });
   await callExpectingError(other.client, {
     name: 'firecrawl_search', arguments: { query: 'company news' },
   });
-  assert.equal(other.api.requests.length, 1);
+  assert.equal(searches(other.api).length, 1);
 });
 
 test('search relays the API error message whatever sources are requested', async (t) => {
