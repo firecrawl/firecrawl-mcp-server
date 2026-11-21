@@ -51,8 +51,12 @@ function shownRows(head: unknown, list: Found, rows: number): number {
 }
 
 function clip(value: unknown, limits: Limits, depth = 0): unknown {
-  if (typeof value === 'string')
-    return value.length > limits.chars ? `${value.slice(0, limits.chars)}…[+${value.length - limits.chars} chars]` : value;
+  if (typeof value === 'string') {
+    if (value.length <= limits.chars) return value;
+    let head = value.slice(0, limits.chars);
+    if (/[\uD800-\uDBFF]$/.test(head)) head = head.slice(0, -1);
+    return `${head}…[+${value.length - head.length} chars]`;
+  }
   if (depth >= 6 && (Array.isArray(value) || isObject(value))) return '…';
   if (Array.isArray(value)) {
     const head = value.slice(0, limits.rows).map((entry) => clip(entry, limits, depth + 1));
