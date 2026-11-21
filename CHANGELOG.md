@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- A keyed `firecrawl_scrape` of a URL names an Alexandria provider for the page's site in `agent_hints`, when one covers it, with the `alexandria_library_search` call that lists its capabilities and the `alexandria_library_read` call that runs one, or the `firecrawl_find_tools` and `firecrawl_scrape` calls on a surface whose `toolFilter` leaves either library tool out. The lookup runs beside the scrape, sends only the host to `/exchange/skills/resolve`, is cached per credential and host for 10 minutes, and is dropped when it is not back within 500 ms of the scrape starting. `domainTools`, `lockdown` and `zeroDataRetention` skip it. The stdio and local HTTP server turn it on against the Firecrawl cloud; embedders opt in with the `scrapeProviderHints` option. The scrape output schema now declares `agent_hints`.
+
 ### Changed
 
 - `alexandria_library_search`'s description opens with the data source instead of the skills. Its first sentence now says to find the data source for the task first, with `grep -ril "<word>" /library`; the skills under `/library/skills` come second, for a step-by-step workflow or to explore, with the same `cat /library/skills/search/<words>` lookup. The server instructions of sessions that list the skills change the same way: their sentence on checking `/library/skills` first now names the data source first and the skills second. The opening is as long as before, everything after it is unchanged, and so are the input schema, the annotations and the tool's behaviour.

@@ -65,6 +65,7 @@ const options: FirecrawlMcpServerOptions = {
   searchFeedback: !searchFeedbackDisabled,
   endpointFeedback: !endpointFeedbackDisabled,
   integration: process.env.FIRECRAWL_INTEGRATION,
+  scrapeProviderHints: !hosted && !apiUrl,
   librarySkills: process.env.FIRECRAWL_MCP_LIBRARY_SKILLS !== 'false',
 };
 const serviceSettings = { hosted, transport, apiKey, apiUrl } as const;
