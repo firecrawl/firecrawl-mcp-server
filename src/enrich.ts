@@ -200,7 +200,12 @@ const searchRow = z.looseObject({
   source: z.string().describe('The provider that returned the row.'),
 });
 
-const searchResultSchema = z.looseObject({
+/**
+ * The advertised schema refuses keys it does not name at the top level and inside `chain`, so both are parsed
+ * closed: a key the API adds is dropped from structured content instead of failing a client that validates the
+ * result against the advertised schema. The text block carries the whole answer.
+ */
+const searchResultSchema = z.object({
   results: z.array(searchRow).optional().describe('People or companies, deduplicated, with no emails or phones.'),
   count: z.number().optional().describe('Rows returned; with count_only, how many records match.'),
   next_cursor: z.string().optional().describe('Pass as cursor, with the same filters, for more rows.'),
@@ -208,7 +213,7 @@ const searchResultSchema = z.looseObject({
     .array(z.looseObject({ name: z.string(), capability: z.string(), leg: z.string().optional(), status: z.string(), returned: z.number(), dropped: z.number().optional(), unverified: z.number().optional(), credits: z.number(), credits_pending: z.number().optional(), ms: z.number().optional(), error: z.string().optional() }))
     .optional()
     .describe('Each provider call in order. leg is company or people when a company search fed a people search.'),
-  chain: z.looseObject({}).optional().describe('When set, the filters the company search and the people search each applied.'),
+  chain: z.object({}).optional().describe('When set, the filters the company search and the people search each applied.'),
   credits: z.number().optional().describe('Credits charged by the provider calls.'),
   credits_pending: z.number().optional().describe('The most that calls whose charge was not confirmed, such as a timeout, can still bill.'),
   stopped: z.string().optional().describe('max_credits when a provider was not started for the cap, team_quota when the team ran out of credits.'),
@@ -289,7 +294,8 @@ const enrichRecord = z.looseObject({
     .describe('Per filled field (work_email, personal_email, mobile, profile, firmographics), what backs the answer.'),
 });
 
-const enrichResultSchema = z.looseObject({
+/** Parsed closed at the top level, as it is advertised; see searchResultSchema. */
+const enrichResultSchema = z.object({
   people: z.array(enrichRecord).optional(),
   companies: z.array(enrichRecord).optional(),
   credits_used: z.number().optional().describe('Credits charged: the listed price of each provider that found something.'),

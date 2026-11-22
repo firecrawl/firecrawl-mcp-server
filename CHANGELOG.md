@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- `people_company_search` results that chained a company search into a people search reach clients that check a result against the listed output schema. The schema lists `chain` as an object with no keys of its own, while the result carried the filters each search applied inside it, so those clients refused the whole call with `Structured content does not match the tool's output schema: data/chain must NOT have additional properties`. `chain` is now `{}` in `structuredContent` when a chain ran; `providers[].leg` still says which search each provider call belonged to, and the text block still carries the filters. For the same reason, a key the listed schema does not name is now left out of `structuredContent` instead of failing the call: at the top level of `people_company_search` and `people_company_enrich` results, and inside `paper` for `firecrawl_research_inspect_paper`. The text blocks and the tool definitions are unchanged.
+
 ### Changed
 
 - `alexandria_library_search`'s description opens with the data source instead of the skills. Its first sentence now says to find the data source for the task first, with `grep -ril "<word>" /library`; the skills under `/library/skills` come second, for a step-by-step workflow or to explore, with the same `cat /library/skills/search/<words>` lookup. The server instructions of sessions that list the skills change the same way: their sentence on checking `/library/skills` first now names the data source first and the skills second. The opening is as long as before, everything after it is unchanged, and so are the input schema, the annotations and the tool's behaviour.
