@@ -2675,7 +2675,7 @@ Returns result groups in \`data\` and an operation \`id\`.
         destructiveHint: false, // Additive only; records feedback and may refund credits, does not delete data.
       },
       description: `
-Records schema-validated quality feedback for a prior \`firecrawl_search\` UUID \`searchId\`. A \`good\` rating requires a valuable result or a valuable source, \`partial\` either of those or at least one \`missingContent\` entry, and \`bad\` at least one \`missingContent\` entry or a query suggestion; caps are 50 \`valuableResults\`, 50 \`valuableSources\`, and 20 \`missingContent\` entries.
+Records schema-validated quality feedback for a prior \`firecrawl_search\` UUID \`searchId\`. A \`good\` rating can stand alone but earns a refund only with a valuable result or a valuable source; \`partial\` needs either of those or at least one \`missingContent\` entry, and \`bad\` at least one \`missingContent\` entry or a query suggestion; caps are 50 \`valuableResults\`, 50 \`valuableSources\`, and 20 \`missingContent\` entries.
 
 Eligibility is limited to successful searches within the feedback age window. The record is idempotent per search ID. Eligible first feedback for a search can refund 1 credit; refunds are subject to the team's daily cap. The response reports whether a refund was applied, along with submission and daily-cap status.
 
@@ -2907,7 +2907,11 @@ Returns submission status, feedback ID, and accounting fields.
       outputSchema: feedbackOutputSchema,
       parameters: z.object({
         endpoint: z.enum(['search', 'scrape', 'parse', 'map', 'alexandria']),
-        jobId: z.string().uuid('jobId must be the UUID returned by Firecrawl').optional(),
+        jobId: z
+          .string()
+          .uuid('jobId must be the UUID returned by Firecrawl')
+          .or(z.literal(''))
+          .optional(),
         ...alexandriaFeedbackFields,
         rating: z.enum(['good', 'bad', 'partial']),
         issues: z.array(feedbackIssueSchema).max(20).optional(),
@@ -2919,7 +2923,10 @@ Returns submission status, feedback ID, and accounting fields.
         url: z.string().url().optional(),
         pageNumbers: z.array(z.number().int().positive()).max(100).optional(),
         metadata: z.record(z.string(), z.unknown()).optional(),
-      }).superRefine((value, ctx) => {
+      })
+      // Clients that fill every field send "" for an omitted jobId.
+      .transform(({ jobId, ...rest }) => (jobId ? { ...rest, jobId } : rest))
+      .superRefine((value, ctx) => {
         if (value.endpoint === 'alexandria') {
           const parsed = alexandriaSessionFeedbackSchema.safeParse(value);
           if (!parsed.success) for (const issue of parsed.error.issues) ctx.addIssue({ code: 'custom', path: issue.path, message: issue.message });

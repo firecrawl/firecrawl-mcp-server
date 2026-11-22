@@ -2022,7 +2022,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_feedback@fa308d351208": {
+  "firecrawl_feedback@40febc60c29a": {
     "annotations": {
       "title": "Firecrawl feedback",
       "readOnlyHint": false,
@@ -2046,9 +2046,17 @@
           ]
         },
         "jobId": {
-          "type": "string",
-          "format": "uuid",
-          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|<uuid>|<uuid>)$"
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|<uuid>|<uuid>)$"
+            },
+            {
+              "type": "string",
+              "const": ""
+            }
+          ]
         },
         "requestedWebsite": {
           "type": "object",
@@ -8055,7 +8063,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "firecrawl_search_feedback@f7c77007feea": {
+  "firecrawl_search_feedback@0706b6a60b77": {
     "annotations": {
       "title": "Firecrawl search feedback",
       "readOnlyHint": false,
@@ -8063,7 +8071,7 @@
       "destructiveHint": false
     },
     "title": "Firecrawl search feedback",
-    "description": "Records schema-validated quality feedback for a prior `firecrawl_search` UUID `searchId`. A `good` rating requires a valuable result or a valuable source, `partial` either of those or at least one `missingContent` entry, and `bad` at least one `missingContent` entry or a query suggestion; caps are 50 `valuableResults`, 50 `valuableSources`, and 20 `missingContent` entries.\n\nEligibility is limited to successful searches within the feedback age window. The record is idempotent per search ID. Eligible first feedback for a search can refund 1 credit; refunds are subject to the team's daily cap. The response reports whether a refund was applied, along with submission and daily-cap status.\n\nMark useful returned results in `valuableResults` as `{\"source\", \"position\"}` copied off the result. Groups are numbered from 1 independently, so `{\"source\":\"web\",\"position\":1}` and `{\"source\":\"news\",\"position\":1}` are different results. Be exhaustive — results you do not list are treated as not useful. Reserve `valuableSources` for useful URLs that were NOT among the returned results; never report one result in both fields.",
+    "description": "Records schema-validated quality feedback for a prior `firecrawl_search` UUID `searchId`. A `good` rating can stand alone but earns a refund only with a valuable result or a valuable source; `partial` needs either of those or at least one `missingContent` entry, and `bad` at least one `missingContent` entry or a query suggestion; caps are 50 `valuableResults`, 50 `valuableSources`, and 20 `missingContent` entries.\n\nEligibility is limited to successful searches within the feedback age window. The record is idempotent per search ID. Eligible first feedback for a search can refund 1 credit; refunds are subject to the team's daily cap. The response reports whether a refund was applied, along with submission and daily-cap status.\n\nMark useful returned results in `valuableResults` as `{\"source\", \"position\"}` copied off the result. Groups are numbered from 1 independently, so `{\"source\":\"web\",\"position\":1}` and `{\"source\":\"news\",\"position\":1}` are different results. Be exhaustive — results you do not list are treated as not useful. Reserve `valuableSources` for useful URLs that were NOT among the returned results; never report one result in both fields.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",

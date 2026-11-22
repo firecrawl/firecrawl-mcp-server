@@ -2170,8 +2170,14 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
   assert.notEqual(withoutObjectiveResult.isError, true);
   const sentWithoutObjective = fakeApi.requests.filter(request => request.url === '/v2/feedback').at(-1).body;
   assert.deepEqual(sentWithoutObjective, { ...withoutObjective, origin: sentWithoutObjective.origin });
+  // Clients that fill every field send "" for an omitted jobId.
+  const emptyJobIdResult = await client.request('tools/call', { name: 'firecrawl_feedback', arguments: { ...sessionFeedback, jobId: '' } });
+  assert.notEqual(emptyJobIdResult.isError, true);
+  const sentEmptyJobId = fakeApi.requests.filter(request => request.url === '/v2/feedback').at(-1).body;
+  assert.deepEqual(sentEmptyJobId, { ...sessionFeedback, origin: sentEmptyJobId.origin });
   for (const invalid of [
     { endpoint: 'scrape', rating: 'good' },
+    { endpoint: 'scrape', jobId: '', rating: 'bad', note: 'Missing table' },
     { endpoint: 'alexandria', rating: 'good' },
     { ...sessionFeedback, objective: ' ' },
     { ...sessionFeedback, jobId: '00000000-0000-4000-8000-000000000010' },
