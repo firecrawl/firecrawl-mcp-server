@@ -3443,13 +3443,12 @@ Returns job status, progress information, and result data when completed.
   /**
    * A run that hit its maxCredits ends `failed`, and the API may attach a
    * best-effort `partial`. Lead with a plain notice so the calling model does not
-   * mistake the partial for a finished answer or miss how to continue. Any other
-   * status passes through unchanged.
+   * mistake the partial for a finished answer or miss how to continue.
    */
-  function agentStatusResult(
-    jobId: string,
-    data: Record<string, unknown>
-  ): ContentResult {
+  function agentStatusResult(jobId: string, data: unknown): ContentResult {
+    if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+      return structuredText(data);
+    }
     // The API status body need not echo the ID. Keep the ID from the successful
     // lookup, not the research thread ID or MCP task ID.
     const run: Record<string, unknown> = { id: jobId, ...data };

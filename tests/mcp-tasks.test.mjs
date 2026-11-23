@@ -25,6 +25,7 @@ async function startApi(t) {
     agent: { status: 'processing', creditsUsed: 12 },
     crawl: 'scraping',
     agentStatusCode: 200,
+    agentStatusBody: undefined,
     crawlPageCode: 200,
   };
   const server = createServer(async (req, res) => {
@@ -52,6 +53,9 @@ async function startApi(t) {
           success: false,
           error: 'unavailable',
         });
+      if (state.agentStatusBody !== undefined) {
+        return json(200, state.agentStatusBody);
+      }
       return json(200, {
         success: true,
         expiresAt: EXPIRES_AT,
@@ -432,6 +436,17 @@ for (const [transport, connect] of [
     assert.equal(polled.structuredContent.threadId, THREAD_ID);
     assert.equal(polled.structuredContent.id, id);
     assert.equal(JSON.parse(polled.content[0].text).id, id);
+  });
+
+  test(`${transport}: malformed Agent status bodies remain text-only`, async (t) => {
+    const api = await startApi(t);
+    const mcp = await connect(t, api);
+    for (const body of ['upstream returned a string', ['unexpected array']]) {
+      api.state.agentStatusBody = body;
+      const status = await callTool(mcp, 'firecrawl_agent_status', { id: AGENT_ID });
+      assert.equal(status.structuredContent, undefined);
+      assert.deepEqual(JSON.parse(status.content[0].text), body);
+    }
   });
 
   test(`${transport}: 2025-era clients see no tasks extension and the original schemas`, async (t) => {
