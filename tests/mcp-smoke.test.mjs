@@ -4045,6 +4045,7 @@ test('firecrawl_agent_status flags a credit-limit stop and keeps its partial', a
   const status = async (id) => {
     const result = await client.request('tools/call', { arguments: { id }, name: 'firecrawl_agent_status' });
     assert.notEqual(result.isError, true);
+    assert.equal(result.structuredContent.id, id);
     return result;
   };
 
@@ -4091,9 +4092,10 @@ test('firecrawl_agent_status flags a credit-limit stop and keeps its partial', a
   assert.match(bareNotice, /start a new firecrawl_agent run with a higher maxCredits/);
   assert.equal('partial' in bare.structuredContent, false);
 
-  // Any other failure (and every completed run) is passed through unchanged.
+  // Other failures and completed runs add the job ID without a credit-limit notice.
   const ordinary = await status('00000000-0000-4000-8000-000000000043');
   const ordinaryPayload = {
+    id: '00000000-0000-4000-8000-000000000043',
     error: 'Agent failed',
     expiresAt: '2026-10-01T00:00:00.000Z',
     status: 'failed',
@@ -4104,7 +4106,7 @@ test('firecrawl_agent_status flags a credit-limit stop and keeps its partial', a
   assert.equal(ordinary.content[0].text, JSON.stringify(ordinaryPayload, null, 2));
   assert.deepEqual(ordinary.structuredContent, ordinaryPayload);
   const completed = await status('00000000-0000-4000-8000-000000000030');
-  assert.ok(completed.content[0].text.startsWith('{\n  "creditsUsed": 5,'));
+  assert.equal(JSON.parse(completed.content[0].text).creditsUsed, 5);
   assert.equal('notice' in completed.structuredContent, false);
 });
 
