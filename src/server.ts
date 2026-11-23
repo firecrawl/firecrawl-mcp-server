@@ -3436,7 +3436,7 @@ Returns job status, progress information, and result data when completed.
         `/v2/agent/${encodeURIComponent(id)}`,
         originHeaders(requestOrigin(mcpClient, session))
       );
-      return agentStatusResult(res?.data ?? {});
+      return agentStatusResult(id, res?.data ?? {});
     },
   });
 
@@ -3446,15 +3446,16 @@ Returns job status, progress information, and result data when completed.
    * mistake the partial for a finished answer or miss how to continue. Any other
    * status passes through unchanged.
    */
-  function agentStatusResult(data: unknown): ContentResult {
-    const run = data as Record<string, unknown> | null;
-    if (
-      !run ||
-      typeof run !== 'object' ||
-      run.status !== 'failed' ||
-      run.stopReason !== 'credit_limit_reached'
-    ) {
-      return structuredText(data);
+  function agentStatusResult(
+    jobId: string,
+    data: Record<string, unknown>
+  ): ContentResult {
+    // The API status body need not echo the ID. Keep the ID from the successful
+    // lookup, not the research thread ID or MCP task ID.
+    const run: Record<string, unknown> = { id: jobId, ...data };
+    run.id = jobId;
+    if (run.status !== 'failed' || run.stopReason !== 'credit_limit_reached') {
+      return structuredText(run);
     }
     const lines = [
       'This agent run stopped at its credit limit (maxCredits) before finishing.',
@@ -3484,7 +3485,7 @@ Returns job status, progress information, and result data when completed.
     );
     const notice = lines.join(' ');
     return withStructured(
-      `${notice}\n\n${JSON.stringify(data, null, 2)}`,
+      `${notice}\n\n${JSON.stringify(run, null, 2)}`,
       { ...run, notice }
     );
   }

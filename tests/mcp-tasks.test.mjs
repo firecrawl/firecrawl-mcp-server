@@ -15,6 +15,7 @@ import { getFreePort, parseSseJson } from './helpers/exchange-mcp.mjs';
 
 const TASKS = 'io.modelcontextprotocol/tasks';
 const AGENT_ID = '019a1b2c-3d4e-7f00-8a00-0000000000a1';
+const THREAD_ID = '019a1b2c-3d4e-7f00-8a00-0000000000b1';
 const CRAWL_ID = '019a1b2c-3d4e-7f00-8a00-0000000000c1';
 const EXPIRES_AT = '2099-01-01T00:00:00.000Z';
 
@@ -268,6 +269,7 @@ for (const [transport, connect] of [
 
     api.state.agent = {
       status: 'completed',
+      threadId: THREAD_ID,
       data: { founders: ['Caleb', 'Eric', 'Nick'] },
       creditsUsed: 40,
       internalOnly: true,
@@ -283,7 +285,17 @@ for (const [transport, connect] of [
       undefined,
       'structured content follows the advertised schema'
     );
-    assert.equal(JSON.parse(done.result.content[0].text).status, 'completed');
+    const text = JSON.parse(done.result.content[0].text);
+    assert.equal(text.status, 'completed');
+    assert.equal(text.id, AGENT_ID);
+    assert.equal(done.result.structuredContent.id, AGENT_ID);
+    assert.equal(done.result.structuredContent.threadId, THREAD_ID);
+
+    const checked = await callTool(mcp, 'firecrawl_agent_status', { id: text.id });
+    assert.equal(checked.structuredContent.status, 'completed');
+    assert.equal(checked.structuredContent.id, AGENT_ID);
+    assert.equal(JSON.parse(checked.content[0].text).id, AGENT_ID);
+    assert.equal(api.requests.at(-1).url, `/v2/agent/${AGENT_ID}`);
   });
 
   test(`${transport}: a failed agent run completes the task with an isError result`, async (t) => {
@@ -301,6 +313,8 @@ for (const [transport, connect] of [
     assert.equal(failed.status, 'completed');
     assert.equal(failed.result.isError, true);
     assert.match(failed.result.content[0].text, /stopped at its credit limit/);
+    assert.equal(failed.result.structuredContent.id, AGENT_ID);
+    assert.match(failed.result.content[0].text, new RegExp(AGENT_ID));
   });
 
   test(`${transport}: firecrawl_crawl returns a task without waiting, then completes with every page`, async (t) => {
@@ -402,6 +416,22 @@ for (const [transport, connect] of [
     assert.deepEqual(error.data.requiredCapabilities, {
       extensions: { [TASKS]: {} },
     });
+  });
+
+  test(`${transport}: legacy start and status use the same Agent job ID`, async (t) => {
+    const api = await startApi(t);
+    const mcp = await connect(t, api, { legacy: true });
+    const started = await callTool(mcp, 'firecrawl_agent', { prompt: 'Start only' });
+    const { id } = JSON.parse(started.content[0].text);
+    assert.equal(id, AGENT_ID);
+    assert.equal(started.structuredContent.id, id);
+    assert.equal(api.requests.filter((r) => r.method === 'GET').length, 0);
+    api.state.agent = { ...api.state.agent, threadId: THREAD_ID };
+    const polled = await callTool(mcp, 'firecrawl_agent_status', { id });
+    assert.equal(polled.structuredContent.status, 'processing');
+    assert.equal(polled.structuredContent.threadId, THREAD_ID);
+    assert.equal(polled.structuredContent.id, id);
+    assert.equal(JSON.parse(polled.content[0].text).id, id);
   });
 
   test(`${transport}: 2025-era clients see no tasks extension and the original schemas`, async (t) => {
