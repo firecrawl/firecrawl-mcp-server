@@ -21,6 +21,7 @@ import {
   UserError as RuntimeUserError,
 } from './mcp/runtime.js';
 import { jobFailed, tasksExtension, type TaskHandler } from './tasks.js';
+import { loadSkillCatalog, skillsExtension, type SkillDefinition } from './skills.js';
 import { strictJsonSchema, toJsonSchema } from 'xsschema';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
@@ -433,6 +434,15 @@ export interface FirecrawlMcpServerHooks {
     context: ExtraToolsContext
   ) => void;
   registerResources?: (registrar: ResourceRegistrar) => void;
+  /**
+   * Agent Skills served through the Skills extension
+   * (`io.modelcontextprotocol/skills`) on protocol revision 2026-07-28, with
+   * `modernProtocol` on. `skills/list` keeps this order. A skill that breaks
+   * the Agent Skills format makes `start` reject.
+   */
+  skills?: SkillDefinition[];
+  /** Whether a session is served `skills`; unset, every 2026-07-28 session is. */
+  serveSkills?: (session: SessionData | undefined) => boolean;
   /** Credential and headers for each Firecrawl API request of a session. */
   outboundRequest?: (
     session: SessionData | undefined
@@ -547,6 +557,7 @@ export { normalizeHeader, withoutTrailingSlash } from './headers.js';
 export { acceptedContent, inputRequired, inputResponse, ProtocolError } from '@modelcontextprotocol/server';
 export type { DeferredResult, McpExtension, ModernRequest } from './mcp/runtime.js';
 export type { TaskCaller, TaskHandler, TaskState } from './tasks.js';
+export type { SkillDefinition } from './skills.js';
 export { TASKS_EXTENSION } from './tasks.js';
 export { escapeWWWAuthenticateValue } from './mcp/www-authenticate.js';
 export {
@@ -801,6 +812,8 @@ export function createFirecrawlMcpServer(
   }
 
   const taskHandlers: TaskHandler<SessionData>[] = [];
+  const skillCatalog = hooks.skills?.length ? loadSkillCatalog(hooks.skills) : undefined;
+  skillCatalog?.catch(() => {});
   const server = new McpRuntime<SessionData>({
     name: 'firecrawl-fastmcp',
     version: packageVersion,
@@ -856,6 +869,7 @@ export function createFirecrawlMcpServer(
         taskHandlers
       ),
       ...(hooks.extensions ?? []),
+      ...(skillCatalog ? [skillsExtension<SessionData>(skillCatalog, hooks.serveSkills)] : []),
     ],
     // Lightweight health endpoint for LB checks
     health: {
@@ -3789,8 +3803,9 @@ Set \`redactPII\` to request redaction of personally identifiable information in
   });
 
   return {
-    start: (args) =>
-      server.start(
+    start: async (args) => {
+      await skillCatalog;
+      return server.start(
         (args.transportType === 'httpStream'
           ? {
               ...args,
@@ -3800,7 +3815,8 @@ Set \`redactPII\` to request redaction of personally identifiable information in
               },
             }
           : args) as Parameters<typeof server.start>[0]
-      ),
+      );
+    },
     stop: () => server.stop(),
   };
 }
