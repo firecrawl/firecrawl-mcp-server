@@ -29,7 +29,7 @@ type SkillCatalog = {
 };
 
 const CACHE_HINT = { ttlMs: 300_000, cacheScope: 'private' } as const;
-const utf8 = new TextDecoder('utf-8', { fatal: true });
+const utf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
 function fileContent(uri: string, path: string, content: string | Uint8Array): ResourceResult {
   const mimeType = path.endsWith('.md') ? 'text/markdown' : undefined;
