@@ -85,11 +85,27 @@ test('an extension method is served when Mcp-Name mirrors params.name', async (t
 
 test('a missing or mismatched Mcp-Name is a 400 HeaderMismatch', async (t) => {
   const port = await start(t);
-  for (const headers of [{}, { 'mcp-name': 'other' }]) {
-    const { status, body } = await rpc(port, 'echo/say', { name: 'hello' }, headers);
-    assert.equal(status, 400);
+  for (const [params, headers] of [
+    [{ name: 'hello' }, {}],
+    [{ name: 'hello' }, { 'mcp-name': 'other' }],
+    [{ name: '' }, { 'mcp-name': '=?base64?A?=' }],
+    [{}, { 'mcp-name': 'hello' }],
+  ]) {
+    const { status, body } = await rpc(port, 'echo/say', params, headers);
+    assert.equal(status, 400, JSON.stringify(headers));
     assert.equal(body.error.code, -32020);
   }
+});
+
+test('an extension id registered twice fails at startup', () => {
+  assert.throws(
+    () =>
+      createFirecrawlMcpServer({
+        modernProtocol: true,
+        unstable_hooks: { extensions: [{ id: 'io.modelcontextprotocol/tasks' }] },
+      }),
+    /registered more than once/
+  );
 });
 
 test('a 2025-era request finds no extension method', async (t) => {

@@ -312,7 +312,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Credentials': 'true',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers':
-    'Content-Type, Authorization, Accept, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-Id',
+    'Content-Type, Authorization, Accept, Mcp-Session-Id, Mcp-Protocol-Version, Mcp-Method, Mcp-Name, Last-Event-Id',
   'Access-Control-Expose-Headers': 'Mcp-Session-Id',
 };
 
@@ -404,10 +404,14 @@ function nameHeaderMismatch<Auth>(
     ?.nameHeaders?.[method];
   if (field === undefined) return undefined;
   const value = typeof params === 'object' && params !== null ? (params as Record<string, unknown>)[field] : undefined;
-  if (typeof value !== 'string') return undefined;
+  if (typeof value !== 'string') {
+    return typeof header === 'string' ? `the Mcp-Name header is sent but params.${field} is not a string` : undefined;
+  }
   if (typeof header !== 'string') return `the Mcp-Name header is required for ${method}`;
   const sentinel = BASE64_SENTINEL.exec(header);
-  const decoded = sentinel ? Buffer.from(sentinel[1], 'base64').toString('utf8') : header;
+  const bytes = sentinel ? Buffer.from(sentinel[1], 'base64') : undefined;
+  if (sentinel && bytes?.toString('base64') !== sentinel[1]) return 'the Mcp-Name header carries an invalid Base64 sentinel value';
+  const decoded = bytes ? bytes.toString('utf8') : header;
   return decoded === value
     ? undefined
     : `the Mcp-Name header carries ${JSON.stringify(decoded)} but params.${field} is ${JSON.stringify(value)}`;
@@ -542,6 +546,9 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
   #stdio: { close(): Promise<void> } | undefined;
 
   constructor(options: RuntimeOptions<Auth>) {
+    const ids = (options.extensions ?? []).map((extension) => extension.id);
+    const repeated = ids.find((id, index) => ids.indexOf(id) !== index);
+    if (repeated) throw new Error(`Extension '${repeated}' is registered more than once.`);
     this.#options = options;
   }
 
