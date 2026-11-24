@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- The `skills` hook of `unstable_hooks` serves Agent Skills through the MCP Skills extension (`io.modelcontextprotocol/skills`, SEP-2640) on protocol revision 2026-07-28, with `modernProtocol` on. Each skill is `{ path, files }`: `skills/list` returns the entries in the order given, each with its frontmatter and the digest and size of every file, `skills/get` returns one by its `skill://<path>/SKILL.md` URI (an unknown URI is `-32602`), and `resources/read` serves the files. `server/discover` declares the extension and `resources`; skill files are not added to `resources/list`. `serveSkills(session)` limits the skills to the sessions it returns true for; other sessions see neither the extension nor the files. A skill that breaks the Agent Skills format makes `start` reject. Servers without the hook, and every 2025-era session, are unchanged: same `initialize` result, tools, resources and instructions.
+
+### Changed
+
+- `@modelcontextprotocol/server` and `@modelcontextprotocol/client` 2.4.0, the release that adds the Skills extension.
+
 ### Fixed
 
 - `firecrawl_search_feedback` says which ID it takes when the API finds no search for the one it was given. Agents send it a scrape or map job's ID, or an all-zero placeholder, and the answer was only `search job not found for this team.`, so the next call repeated the mistake. The `error` of a `SEARCH_NOT_FOUND` rejection now ends with: `searchId` is the top-level `id` of a `firecrawl_search` result, and a scrape, map or parse job is rated with `firecrawl_feedback` and that job's ID (the second part only where `firecrawl_feedback` is registered). The call is still rejected, every other rejection reads as before, and the tool definitions are unchanged.
