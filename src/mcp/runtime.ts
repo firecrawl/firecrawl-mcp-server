@@ -249,6 +249,8 @@ export interface McpExtension<Auth> {
   id: string;
   /** Settings advertised with the identifier. */
   settings?: Record<string, unknown>;
+  /** Whether instances for this session get the extension; unset, every one does. */
+  enabled?(session: Auth | undefined): boolean;
   /**
    * Output schemas by tool name, advertised and enforced in place of the
    * tool's own on the instances the extension is set up on.
@@ -256,6 +258,12 @@ export interface McpExtension<Auth> {
   outputSchemas?(): Record<string, StandardSchemaV1>;
   /** Registers the extension's own methods on a server instance. */
   register?(server: Server, session: Auth | undefined): void;
+  /**
+   * Answers `resources/read` for a URI the extension serves, ahead of the
+   * registered resources; undefined passes the read on. Instances it is set
+   * up on declare the `resources` capability.
+   */
+  readResource?(uri: string, session: Auth | undefined): Promise<ResourceResult[] | undefined>;
   /**
    * Answers a `tools/call` whose arguments passed validation. `run` runs the
    * tool with the given context additions and returns its result; undefined
@@ -274,7 +282,8 @@ export interface McpExtension<Auth> {
 export interface RuntimeOptions<Auth> {
   name: string;
   version: string;
-  instructions?: string;
+  /** Server instructions, or a function choosing them for each session. */
+  instructions?: string | ((session: Auth | undefined) => string | undefined);
   logger: Logger;
   authenticate?: (request: AuthenticateRequest) => Promise<Auth>;
   oauth?: { protectedResource: ProtectedResource };
@@ -531,14 +540,17 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
    */
   createServer(session: Auth | undefined, sessionId?: string, modern = false): Server {
     const options = this.#options;
-    const extensions = modern ? (options.extensions ?? []) : [];
+    const extensions = modern
+      ? (options.extensions ?? []).filter((extension) => extension.enabled?.(session) ?? true)
+      : [];
     const resources = this.#resources;
+    const extensionResources = extensions.some((extension) => extension.readResource);
     const server = new Server(
       { name: options.name, version: options.version },
       {
         capabilities: {
           ...(this.#tools.length ? { tools: {} } : {}),
-          ...(resources.length ? { resources: {} } : {}),
+          ...(resources.length || extensionResources ? { resources: {} } : {}),
           logging: {},
           completions: {},
           ...(extensions.length
@@ -549,7 +561,10 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
               }
             : {}),
         },
-        instructions: options.instructions,
+        instructions:
+          typeof options.instructions === 'function'
+            ? options.instructions(session)
+            : options.instructions,
       }
     );
     server.onerror = (error) => {
@@ -568,7 +583,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
       );
     });
     if (this.#tools.length) this.#setUpTools(server, session, sessionId, extensions);
-    if (resources.length) this.#setUpResources(server, session);
+    if (resources.length || extensionResources) this.#setUpResources(server, session, extensions);
     for (const extension of extensions) extension.register?.(server, session);
     return server;
   }
@@ -601,7 +616,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
           annotations: tool.annotations,
           ...(tool.annotations?.title && { title: tool.annotations.title }),
           ...(tool.icons && { icons: tool.icons }),
-          description: tool.description,
+          description: tool.description?.trim(),
           inputSchema: tool.parameters
             ? openMaps(closeObjects((tool.transformInputSchema ?? ((schema) => schema))(
                 (await toJsonSchema(tool.parameters as never)) as JsonObject
@@ -781,7 +796,7 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     });
   }
 
-  #setUpResources(server: Server, session: Auth | undefined): void {
+  #setUpResources(server: Server, session: Auth | undefined, extensions: McpExtension<Auth>[]): void {
     const resources = new Map(this.#resources.map((resource) => [resource.uri, resource]));
     server.setRequestHandler('resources/list', async () => ({
       resources: [...resources.values()].map((resource) => ({
@@ -792,6 +807,13 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
       })),
     }));
     server.setRequestHandler('resources/read', async (request) => {
+      for (const extension of extensions) {
+        const contents = await extension.readResource?.(request.params.uri, session);
+        if (contents)
+          return {
+            contents: contents.map((entry) => ({ ...entry, uri: entry.uri ?? request.params.uri })),
+          } as never;
+      }
       const resource = resources.get(request.params.uri);
       if (!resource) {
         throw mcpError(

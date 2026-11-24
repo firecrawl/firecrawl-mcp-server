@@ -20,6 +20,7 @@ import {
   UserError as RuntimeUserError,
 } from './mcp/runtime.js';
 import { jobFailed, tasksExtension, type TaskHandler } from './tasks.js';
+import { loadSkillCatalog, skillsExtension, type SkillDefinition } from './skills.js';
 import { strictJsonSchema, toJsonSchema } from 'xsschema';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
@@ -415,14 +416,32 @@ export interface FirecrawlMcpServerHooks {
    * for a task that is still running.
    */
   taskResult?: (event: TaskResultEvent) => Promise<ToolResult>;
-  /** Server instructions, or a function choosing them from the defaults. */
-  instructions?: string | ((defaults: InstructionDefaults) => string);
+  /**
+   * Server instructions, or a function choosing them from the defaults. The
+   * function runs once, when the server is created; it may return a function
+   * instead of a string, which is then called with each session's data as the
+   * server opens it.
+   */
+  instructions?:
+    | string
+    | ((
+        defaults: InstructionDefaults
+      ) => string | ((session: SessionData | undefined) => string));
   /** Adds tools after the built-in ones. They bypass `toolFilter`. */
   registerExtraTools?: (
     registrar: ToolRegistrar,
     context: ExtraToolsContext
   ) => void;
   registerResources?: (registrar: ResourceRegistrar) => void;
+  /**
+   * Agent Skills served through the Skills extension
+   * (`io.modelcontextprotocol/skills`) on protocol revision 2026-07-28, with
+   * `modernProtocol` on. `skills/list` keeps this order. A skill that breaks
+   * the Agent Skills format makes `start` reject.
+   */
+  skills?: SkillDefinition[];
+  /** Whether a session is served `skills`; unset, every 2026-07-28 session is. */
+  serveSkills?: (session: SessionData | undefined) => boolean;
   /** Credential and headers for each Firecrawl API request of a session. */
   outboundRequest?: (
     session: SessionData | undefined
@@ -532,6 +551,7 @@ export { normalizeHeader, withoutTrailingSlash } from './headers.js';
 export { acceptedContent, inputRequired, inputResponse } from '@modelcontextprotocol/server';
 export type { DeferredResult, ModernRequest } from './mcp/runtime.js';
 export type { TaskCaller, TaskHandler, TaskState } from './tasks.js';
+export type { SkillDefinition } from './skills.js';
 export { TASKS_EXTENSION } from './tasks.js';
 export { escapeWWWAuthenticateValue } from './mcp/www-authenticate.js';
 export {
@@ -659,13 +679,13 @@ const OUT_OF_CREDITS_INSTRUCTION =
   'If Firecrawl reports that credits ran out or the daily limit without an account was reached, end your final answer with the line it provides, link included.';
 // The Alexandria sentences name the tools a surface registers; everything else is shared.
 const fullProfileInstructions = (tools: AlexandriaTools, skills: boolean, saveSkill: boolean) =>
-  `${OUT_OF_CREDITS_INSTRUCTION} ${tools === 'dedicated' && skills ? `Check ${SKILLS_ROOT} through alexandria_library_search first for any business workflow (sales or meeting prep, prospect lists, competitor, market or financial research, monitoring) and follow a matching skill instead of improvising. ` : ''}Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match the requested operation to the tool boundary: firecrawl_scrape retrieves one supplied page, firecrawl_map enumerates URLs under a site without retrieving their content, and firecrawl_agent runs multi-source research and returns structured data when the URLs are not known or the answer spans several sites (an entity plus its fields, a list, a dataset); its result is read with firecrawl_agent_status. Authenticated firecrawl_search returns web results together with matching Alexandria providers in data.tools. ${ALEXANDRIA_CATALOGUE_SENTENCE} A matching provider can return the same fields across several entities, provenance, exact figures or timestamps, or a large set of records through ${tools === 'dedicated'
-    ? 'alexandria_library_read with its published contract. If web results already answer the question, use them. Before scraping the same fields from several pages, alexandria_library_search checks for free whether a provider covers them: it explores the whole library as a read-only filesystem with shell commands, and reads a contract that was not returned in full.'
-    : 'firecrawl_scrape with its published contract. If web results already answer the question, use them. For the same fields across multiple pages, firecrawl_find_tools offers free provider discovery. Use firecrawl_find_tools to read a contract that was not returned in full or to browse the catalogue by category.'} ${ALEXANDRIA_SOURCES_ALWAYS_ON} If no provider fits, continue with web search or firecrawl_agent. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* tools search a paper index of abstracts and full text; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For a programming question (code behaviour, a library or framework, an API contract, an error message, or a known bug), firecrawl_developer_search (or firecrawl_search with categories: ["developer"]) searches an index of public repositories, GitHub issues, merged pull requests, READMEs, and code documentation. For a legal or regulatory question, firecrawl_gov_search searches primary law and regulatory material from US federal, state, and local government sources: statutes, regulations, codes, court opinions, and other government publications; firecrawl_search with categories: ["gov"] reaches the same sources and cannot be combined with other categories. firecrawl_search with sources: [{type: "alexandria"}] returns compact tool summaries in data.tools; toolDetail: "full" includes contracts, ${tools === 'dedicated'
-    ? 'alexandria_library_search holds each contract at /library/<category>/<provider>/<capability>.md, and alexandria_library_read with calls: [{provider, capability, options}] runs up to ten capabilities and returns their results.'
-    : 'firecrawl_find_tools starts with categories, lists providers, then compact tools, and expands the selected full contract, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities and returns their results.'}${skills ? ` ${tools === 'dedicated' ? 'alexandria_library_search' : 'The library capability (firecrawl/library)'} also holds skills, written instructions for a task that name the capabilities to call (Firecrawl's and the team's own), under ${SKILLS_ROOT}: grep ${SKILLS_ROOT}/INDEX (or cat ${SKILLS_ROOT}/search/<words> for a ranked list), then cat the path.${saveSkill ? ' firecrawl_save_skill creates a team skill (written out or copied from one) or changes one; it is free.' : ''}` : ''} Alexandria access needs an API key on a team with it enabled. Provide only the required inputs and account for stated network or external side effects.`;
+  `${OUT_OF_CREDITS_INSTRUCTION} ${tools === 'dedicated' && skills ? `Find a task's data source through alexandria_library_search first; for a step-by-step workflow (sales or meeting prep, prospect lists, competitor, market or financial research, monitoring) or to explore, check ${SKILLS_ROOT} there. ` : ''}Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match operation to tool: firecrawl_scrape retrieves one supplied page, firecrawl_map lists a site's URLs without content, and firecrawl_agent returns structured data from multi-source research when the URLs are unknown or the answer spans several sites, read with firecrawl_agent_status. Authenticated firecrawl_search also returns matching Alexandria providers in data.tools. ${ALEXANDRIA_CATALOGUE_SENTENCE} A matching provider returns the same fields for several entities, provenance, exact figures or timestamps, or many records through ${tools === 'dedicated' ? 'alexandria_library_read' : 'firecrawl_scrape'} with its published contract. If web results already answer the question, use them. ${tools === 'dedicated'
+    ? 'Before scraping the same fields from several pages, alexandria_library_search checks for free whether a provider covers them; a read-only shell over the library, it also reads a contract that was not returned in full.'
+    : 'For the same fields across several pages, firecrawl_find_tools offers free provider discovery and browses the catalogue by category.'} ${ALEXANDRIA_SOURCES_ALWAYS_ON} If no provider fits, continue with web search or firecrawl_agent. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* paper tools search an index of abstracts and full text and firecrawl_research_lookup_protein gives one named protein's UniProtKB/Swiss-Prot curated location and function; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For programming questions, firecrawl_developer_search or categories: ["developer"] on firecrawl_search searches public repos, GitHub issues, merged PRs, READMEs and code docs. For legal or regulatory questions, firecrawl_gov_search searches US federal, state and local primary law; categories: ["gov"] on firecrawl_search reaches the same sources and cannot be combined with others. ${tools === 'dedicated'
+    ? 'alexandria_library_search holds each contract at /library/<category>/<provider>/<capability>.md, and alexandria_library_read with calls: [{provider, capability, options}] runs up to ten capabilities.'
+    : 'firecrawl_find_tools goes from categories to providers, compact tools and the selected full contract, including one not returned in full, and firecrawl_scrape with alexandria: [{provider, capability, options}] executes up to ten capabilities.'}${skills ? ` ${tools === 'dedicated' ? 'Skills' : `The library capability (firecrawl/library) holds skills under ${SKILLS_ROOT}`} (Firecrawl's and team task instructions naming capabilities to call): grep ${SKILLS_ROOT}/INDEX (or cat ${SKILLS_ROOT}/search/<words> for a ranked list), then cat the path.${saveSkill ? ' firecrawl_save_skill creates a team skill (written out or copied) or changes one, free.' : ''}` : ''} Alexandria access needs an API key on a team with it enabled. Provide only the required inputs and account for stated network or external side effects.`;
 const keylessProfileInstructions = (tools: AlexandriaTools) =>
-  `${OUT_OF_CREDITS_INSTRUCTION} Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. Alexandria provider calls require a Firecrawl API key and are not included in the hosted keyless tier. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: ["gov"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for paper-index research, firecrawl_developer_search for Developer Index searches of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and ${tools === 'dedicated'
+  `${OUT_OF_CREDITS_INSTRUCTION} Hosted keyless sessions expose firecrawl_search, firecrawl_scrape, and firecrawl_parse with usage limits. Alexandria provider calls require a Firecrawl API key and are not included in the hosted keyless tier. firecrawl_search searches the web. For programming questions, firecrawl_search with categories: ["developer"] searches indexed public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation. For legal or regulatory questions, firecrawl_search with categories: ["gov"] searches US government legal and regulatory sources and cannot be combined with other categories. For biomedical, life-science, clinical, or arXiv literature, firecrawl_search with categories: ["research"] filters ordinary web results to research-affiliated websites. firecrawl_scrape retrieves one supplied page. firecrawl_parse processes supported local files through its two-phase upload flow. An Authorization bearer API key can provide higher usage limits and expose additional tools, subject to plan, deployment, and team policy, including firecrawl_map for site URL discovery, firecrawl_agent and firecrawl_agent_status for multi-source research that returns structured data when the URLs are not known, firecrawl_research_* for papers and proteins, firecrawl_developer_search for Developer Index searches of public repositories, GitHub issues, merged pull requests, repository READMEs, and code documentation, and ${tools === 'dedicated'
     ? 'alexandria_library_search and alexandria_library_read for exploring and running catalogued Alexandria data providers, alongside the Alexandria results of firecrawl_search.'
     : 'firecrawl_find_tools as the progressive Alexandria catalogue lookup alongside the Alexandria options of firecrawl_search and firecrawl_scrape for catalogued data providers.'}`;
 
@@ -786,6 +806,8 @@ export function createFirecrawlMcpServer(
   }
 
   const taskHandlers: TaskHandler<SessionData>[] = [];
+  const skillCatalog = hooks.skills?.length ? loadSkillCatalog(hooks.skills) : undefined;
+  skillCatalog?.catch(() => {});
   const server = new McpRuntime<SessionData>({
     name: 'firecrawl-fastmcp',
     version: packageVersion,
@@ -840,6 +862,7 @@ export function createFirecrawlMcpServer(
         },
         taskHandlers
       ),
+      ...(skillCatalog ? [skillsExtension<SessionData>(skillCatalog, hooks.serveSkills)] : []),
     ],
     // Lightweight health endpoint for LB checks
     health: {
@@ -1178,22 +1201,22 @@ export function createFirecrawlMcpServer(
     }
   }
 
+  // The API parses PDFs unless `parsers` leaves them out, so pdfOptions apply
+  // with or without a `parsers` list and are sent as the pdf parser's options.
   function buildParsersArray(
     args: Record<string, unknown>
-  ): Record<string, unknown>[] | undefined {
-    const parsers = args.parsers as string[] | undefined;
-    if (!parsers || parsers.length === 0) return undefined;
-
-    const result: Record<string, unknown>[] = [];
-    for (const p of parsers) {
-      if (p === 'pdf' && args.pdfOptions) {
-        const pdfOpts = args.pdfOptions as Record<string, unknown>;
-        result.push({ type: 'pdf', ...pdfOpts });
-      } else {
-        result.push(p as unknown as Record<string, unknown>);
-      }
+  ): (string | Record<string, unknown>)[] | undefined {
+    const parsers = (args.parsers as string[] | undefined) ?? [];
+    const pdfOptions = removeEmptyTopLevel(
+      (args.pdfOptions as Record<string, unknown> | undefined) ?? {}
+    );
+    if (Object.keys(pdfOptions).length === 0) {
+      return parsers.length > 0 ? parsers : undefined;
     }
-    return result;
+    return [
+      { type: 'pdf', ...pdfOptions },
+      ...parsers.filter((parser) => parser !== 'pdf'),
+    ];
   }
 
   function buildWebhook(
@@ -2868,11 +2891,12 @@ Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\
             status: response.status,
             feedbackErrorCode: parsed?.feedbackErrorCode,
           });
+          const error = feedbackRejectionError(parsed, response.status);
           return structuredText({
             success: false,
             status: response.status,
             feedbackErrorCode: parsed?.feedbackErrorCode,
-            error: feedbackRejectionError(parsed, response.status),
+            error: parsed?.feedbackErrorCode === 'SEARCH_NOT_FOUND' ? `${error} ${searchIdHint()}` : error,
             retryable: response.status >= 500,
           });
         }
@@ -2880,6 +2904,17 @@ Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\
         return structuredText(parsed);
       },
     });
+  }
+
+  /**
+   * Added to a search feedback rejection for an ID that is no search of the
+   * account: agents send a scrape or map job's ID, or a placeholder.
+   */
+  function searchIdHint(): string {
+    const hint = '`searchId` is the top-level `id` of a `firecrawl_search` result.';
+    return alexandriaFeedbackAvailable()
+      ? `${hint} To rate a scrape, map or parse job, call \`firecrawl_feedback\` with that job's ID.`
+      : hint;
   }
 
   /**
@@ -3474,25 +3509,25 @@ Returns job status, progress information, and result data when completed.
         `/v2/agent/${encodeURIComponent(id)}`,
         originHeaders(requestOrigin(mcpClient, session))
       );
-      return agentStatusResult(res?.data ?? {});
+      return agentStatusResult(id, res?.data ?? {});
     },
   });
 
   /**
    * A run that hit its maxCredits ends `failed`, and the API may attach a
    * best-effort `partial`. Lead with a plain notice so the calling model does not
-   * mistake the partial for a finished answer or miss how to continue. Any other
-   * status passes through unchanged.
+   * mistake the partial for a finished answer or miss how to continue.
    */
-  function agentStatusResult(data: unknown): ContentResult {
-    const run = data as Record<string, unknown> | null;
-    if (
-      !run ||
-      typeof run !== 'object' ||
-      run.status !== 'failed' ||
-      run.stopReason !== 'credit_limit_reached'
-    ) {
+  function agentStatusResult(jobId: string, data: unknown): ContentResult {
+    if (data === null || typeof data !== 'object' || Array.isArray(data)) {
       return structuredText(data);
+    }
+    // The API status body need not echo the ID. Keep the ID from the successful
+    // lookup, not the research thread ID or MCP task ID.
+    const run: Record<string, unknown> = { id: jobId, ...data };
+    run.id = jobId;
+    if (run.status !== 'failed' || run.stopReason !== 'credit_limit_reached') {
+      return structuredText(run);
     }
     const lines = [
       'This agent run stopped at its credit limit (maxCredits) before finishing.',
@@ -3522,7 +3557,7 @@ Returns job status, progress information, and result data when completed.
     );
     const notice = lines.join(' ');
     return withStructured(
-      `${notice}\n\n${JSON.stringify(data, null, 2)}`,
+      `${notice}\n\n${JSON.stringify(run, null, 2)}`,
       { ...run, notice }
     );
   }
@@ -3808,8 +3843,9 @@ Set \`redactPII\` to request redaction of personally identifiable information in
   });
 
   return {
-    start: (args) =>
-      server.start(
+    start: async (args) => {
+      await skillCatalog;
+      return server.start(
         (args.transportType === 'httpStream'
           ? {
               ...args,
@@ -3819,7 +3855,8 @@ Set \`redactPII\` to request redaction of personally identifiable information in
               },
             }
           : args) as Parameters<typeof server.start>[0]
-      ),
+      );
+    },
     stop: () => server.stop(),
   };
 }
