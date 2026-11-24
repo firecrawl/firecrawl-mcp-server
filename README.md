@@ -1368,6 +1368,7 @@ Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`,
 | `outboundRequest(session)` | Credential and extra headers for each Firecrawl API request. |
 | `beforeKeylessRequest(session, origin)` | Refuse a keyless request by throwing. |
 | `toolFilter(name)` | Leave built-in tools out of the instance. |
+| `skills` | Agent Skills to serve through the MCP Skills extension (`io.modelcontextprotocol/skills`) on protocol revision 2026-07-28 with `modernProtocol` on: each `{ path, files }` is listed by `skills/list` in the given order as `skill://<path>/SKILL.md`, and its files are read with `resources/read`. `serveSkills(session)` limits them to the sessions it returns true for. |
 | `configureHttp(app)` | Add HTTP routes. |
 | `oauth.protectedResource` | Serve OAuth protected-resource metadata. |
 
