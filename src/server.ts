@@ -2830,11 +2830,12 @@ Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\
             status: response.status,
             feedbackErrorCode: parsed?.feedbackErrorCode,
           });
+          const error = feedbackRejectionError(parsed, response.status);
           return structuredText({
             success: false,
             status: response.status,
             feedbackErrorCode: parsed?.feedbackErrorCode,
-            error: feedbackRejectionError(parsed, response.status),
+            error: parsed?.feedbackErrorCode === 'SEARCH_NOT_FOUND' ? `${error} ${searchIdHint()}` : error,
             retryable: response.status >= 500,
           });
         }
@@ -2842,6 +2843,17 @@ Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\
         return structuredText(parsed);
       },
     });
+  }
+
+  /**
+   * Added to a search feedback rejection for an ID that is no search of the
+   * account: agents send a scrape or map job's ID, or a placeholder.
+   */
+  function searchIdHint(): string {
+    const hint = '`searchId` is the top-level `id` of a `firecrawl_search` result.';
+    return alexandriaFeedbackAvailable()
+      ? `${hint} To rate a scrape, map or parse job, call \`firecrawl_feedback\` with that job's ID.`
+      : hint;
   }
 
   /**
