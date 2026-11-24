@@ -257,6 +257,11 @@ export interface McpExtension<Auth> {
   /** Registers the extension's own methods on a server instance. */
   register?(server: Server, session: Auth | undefined): void;
   /**
+   * The extension's methods whose `Mcp-Name` header mirrors a `params`
+   * field, by method. Streamable HTTP rejects a mismatch with 400 HeaderMismatch.
+   */
+  nameHeaders?: Record<string, string>;
+  /**
    * Answers a `tools/call` whose arguments passed validation. `run` runs the
    * tool with the given context additions and returns its result; undefined
    * lets the tool run as usual.
@@ -379,6 +384,33 @@ function urlHost(host: string): string {
 
 function jsonRpcError(code: number, message: string, id: unknown = null): string {
   return JSON.stringify({ error: { code, message }, id, jsonrpc: '2.0' });
+}
+
+const BASE64_SENTINEL = /^=\?base64\?([A-Za-z0-9+/]*={0,2})\?=$/;
+
+/**
+ * Why an extension method's `Mcp-Name` header fails to mirror its body, or
+ * undefined when it does or the method declares no header.
+ */
+function nameHeaderMismatch<Auth>(
+  extensions: readonly McpExtension<Auth>[],
+  body: unknown,
+  header: string | string[] | undefined
+): string | undefined {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) return undefined;
+  const { method, params } = body as { method?: unknown; params?: unknown };
+  if (typeof method !== 'string' || !('id' in body)) return undefined;
+  const field = extensions.find((extension) => extension.nameHeaders && Object.hasOwn(extension.nameHeaders, method))
+    ?.nameHeaders?.[method];
+  if (field === undefined) return undefined;
+  const value = typeof params === 'object' && params !== null ? (params as Record<string, unknown>)[field] : undefined;
+  if (typeof value !== 'string') return undefined;
+  if (typeof header !== 'string') return `the Mcp-Name header is required for ${method}`;
+  const sentinel = BASE64_SENTINEL.exec(header);
+  const decoded = sentinel ? Buffer.from(sentinel[1], 'base64').toString('utf8') : header;
+  return decoded === value
+    ? undefined
+    : `the Mcp-Name header carries ${JSON.stringify(decoded)} but params.${field} is ${JSON.stringify(value)}`;
 }
 
 export function formatIssues(issues: ReadonlyArray<StandardSchemaV1.Issue>): string {
@@ -1121,6 +1153,13 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     });
     const sessionId = [req.headers['mcp-session-id']].flat()[0];
     if (modern && !(await isLegacyRequest(request.clone(), body ?? undefined, { maxRequestBodySize: maxBodySize }))) {
+      const mismatch = nameHeaderMismatch(this.#options.extensions ?? [], body, req.headers['mcp-name']);
+      if (mismatch) {
+        res
+          .writeHead(400, { 'Content-Type': 'application/json' })
+          .end(jsonRpcError(-32020, `Bad Request: the request headers and body disagree: ${mismatch}`, id ?? null));
+        return;
+      }
       try {
         const response = await modern.fetch(request, {
           ...(body === null ? {} : { parsedBody: body }),

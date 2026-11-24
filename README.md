@@ -1369,6 +1369,7 @@ Options mirror the CLI's environment variables: `apiUrl`, `apiKey`, `transport`,
 | `beforeKeylessRequest(session, origin)` | Refuse a keyless request by throwing. |
 | `toolFilter(name)` | Leave built-in tools out of the instance. |
 | `configureHttp(app)` | Add HTTP routes. |
+| `extensions` | Extensions of protocol revision 2026-07-28 (`McpExtension`), advertised in `server/discover` and set up when `modernProtocol` is on. `nameHeaders` names the methods whose `Mcp-Name` header must mirror a `params` field. |
 | `oauth.protectedResource` | Serve OAuth protected-resource metadata. |
 
 The server is built on the official MCP TypeScript SDK (`@modelcontextprotocol/server`). Use the types exported from `firecrawl-mcp/server` (`Session`, `ToolDefinition`, `ToolRegistrar`, `FirecrawlMcpServerHooks` and others) rather than the SDK's own.
